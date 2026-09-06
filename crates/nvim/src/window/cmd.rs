@@ -563,8 +563,6 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
         if edit_file(ptr).is_err() {
             // Failed to open the file: close the window opened for it.
             close(Win::current(), false, false);
-            // SAFETY: upstream assumes both survive the failed edit, which only
-            // closed the window the split just above had made.
             goto_tab_win(oldtab, oldwin);
         } else {
             wp = Some(Win::current());

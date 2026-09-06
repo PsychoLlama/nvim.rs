@@ -381,7 +381,6 @@ pub unsafe fn pos_to_mark(buffer: Buf, fmp: *mut FileMark, pos: Pos) -> *mut Fil
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
-    // SAFETY: the caller promised a live buffer.
     fm.set_fnum(buffer.handle as c_int);
     fm.set_pos(pos);
     fm.raw()
@@ -494,7 +493,6 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 /// # Safety
 /// `buffer` must be a live buffer, and the editor's window list must be live.
 pub unsafe fn fmarks_check_names(buffer: Buf) {
-    // SAFETY: the caller promised a live buffer.
     let name = buffer.b_ffname;
     if name.is_null() {
         return;
@@ -601,7 +599,6 @@ pub(crate) unsafe fn mark_check_line_bounds(
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
-    // SAFETY: the caller promised a live buffer.
     for mark in buffer.named_marks() {
         mark.clear(timestamp);
     }
@@ -623,7 +620,6 @@ pub unsafe fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
 /// # Safety
 /// `win` must be a live window.
 pub unsafe fn set_last_cursor(win: Win) {
-    // SAFETY: the caller promised a live window.
     let Some(buf) = win.buffer_or_none() else {
         return;
     };

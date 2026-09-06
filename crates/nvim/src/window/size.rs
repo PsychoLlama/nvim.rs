@@ -84,7 +84,6 @@ pub fn win_setheight(height: c_int) {
 }
 
 pub unsafe fn win_setheight_win(height: c_int, win: Win) {
-    // SAFETY: the caller's promise -- a live window.
     setheight_win(height, win);
 }
 
@@ -256,7 +255,6 @@ pub fn win_setwidth(width: c_int) {
 }
 
 pub unsafe fn win_setwidth_win(width: c_int, window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     setwidth_win(width, window);
 }
 
@@ -418,7 +416,6 @@ pub unsafe fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub unsafe fn win_drag_status_line(dragwin: Win, offset: c_int) {
-    // SAFETY: the caller's promise -- a live window.
     drag_status_line(dragwin, offset);
 }
 
@@ -522,7 +519,6 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
 }
 
 pub unsafe fn win_drag_vsep_line(dragwin: Win, offset: c_int) {
-    // SAFETY: the caller's promise -- a live window.
     drag_vsep_line(dragwin, offset);
 }
 

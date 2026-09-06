@@ -127,10 +127,6 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             // Check for "else" at the start of the line and just before
             // the cursor.
             if try_match && keytyped == c_int::from(b'e') && Win::current().w_cursor.col >= 4 {
-                // SAFETY: the cursor is on a line of the current buffer and
-                // `get_cursor_line_ptr` hands back a NUL-terminated one; the
-                // `col >= 4` test the `&&` chain keeps in front is what says
-                // `col - 4` is a byte of it.
                 let back = (Win::current().w_cursor.col - 4) as isize;
                 let is_else = unsafe {
                     let p = get_cursor_line_ptr();

@@ -372,7 +372,6 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullna
 /// # Safety
 /// `window` is a live window.
 pub(crate) unsafe fn ses_do_win(win: Win) -> bool {
-    // SAFETY: caller contract; a window always has a buffer.
     if win.w_floating {
         return false;
     }
@@ -601,7 +600,6 @@ unsafe fn write_rc(
             // SAFETY: `fname` is NUL-terminated.
             failed |= unsafe { !write_session(out, fname) };
         } else {
-            // SAFETY: `curwin`/`curtab` are live.
             let (win, tab) = (Win::current_raw(), TabPage::current_raw());
             failed |= unsafe { !put_view(out, win, tab, !using_vdir, opts, -1) };
         }

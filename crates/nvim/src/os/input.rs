@@ -136,8 +136,6 @@ unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
     } else {
         AutoEvent::CursorHold
     } as AutoEvent;
-    // SAFETY: no pattern and no filename, which `apply_autocmds` documents as
-    // "match on the current buffer's name"; `curbuf` is always live.
     let buffer = Buf::current_raw();
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer) };
     did_cursorhold.set(true);

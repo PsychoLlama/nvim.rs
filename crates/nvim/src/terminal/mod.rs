@@ -575,7 +575,6 @@ pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
         {
             continue;
         }
-        // SAFETY: as above.
         let text_width = wp.w_view_width - wp.col_off();
         width = width.max(text_width.max(0));
         height = height.max(wp.w_view_height);

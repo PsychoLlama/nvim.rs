@@ -259,7 +259,6 @@ pub(crate) unsafe fn vcol2col(
     vcol: ColNr,
     coladdp: *mut ColNr,
 ) -> ColNr {
-    // SAFETY: the caller's promise.
     let (col, coladd) = vcol_to_col(window, lnum, vcol);
     if !coladdp.is_null() {
         // SAFETY: as above.

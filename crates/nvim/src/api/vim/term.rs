@@ -59,7 +59,6 @@ pub unsafe fn nvim_open_term(
     let chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
     unsafe { (*channel_internal(chan)).cb = cb };
     unsafe { (*channel_internal(chan)).closed = false };
-    // SAFETY: `curwin` names a live window for the editor's whole run.
     let (view_width, view_height, col_off) = (
         Win::current().w_view_width,
         Win::current().w_view_height,

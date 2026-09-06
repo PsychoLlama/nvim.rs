@@ -156,7 +156,6 @@ unsafe fn buf_findsign(buffer: Buf, id: c_int, group: *const c_char) -> c_int {
     let Some(ns) = (unsafe { placed_ns(group) }) else {
         return 0;
     };
-    // SAFETY: the caller's buffer.
     lookup_ns(buffer, ns, id.cast_unsigned(), false).pos.row + 1
 }
 
@@ -241,7 +240,6 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
     if ns < 0 {
         return FAIL;
     }
-    // SAFETY: the caller's buffer.
 
     let mut itr = MarkTreeIter::default();
     let row = if atlnum > 0 { atlnum - 1 } else { 0 };

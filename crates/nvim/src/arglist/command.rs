@@ -263,7 +263,6 @@ pub unsafe fn ex_next(args: *mut ExArg) {
     // redefined.
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
     let flags = CCGD_AW as c_int | CCGD_EXCMD as c_int | flag_if(forceit, CCGD_FORCEIT);
-    // SAFETY: `curbuf` is live; `check_changed` only reads it and may prompt.
     let buffer = Buf::current_raw();
     let blocked = unsafe { !buf_hide(buffer) && !is_snext && check_changed(buffer, flags) };
     if blocked {

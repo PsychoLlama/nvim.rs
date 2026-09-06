@@ -63,8 +63,6 @@ const TRY_STATE: TryState = TryState {
 use crate::api_error;
 
 pub unsafe fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
-    // SAFETY: the caller's promise -- a live window, a live buffer and a live
-    // `Error` to report through.
     set_buf(win, buffer, &mut *err);
 }
 
@@ -117,7 +115,6 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
 }
 
 pub unsafe fn win_fdccol_count(window: Win) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
     fdccol_count(window)
 }
 
@@ -184,7 +181,6 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // Telling the UI where a window sits
 
 pub unsafe fn ui_ext_win_position(window: Win, validate: bool) {
-    // SAFETY: the caller's promise -- a live window.
     ext_win_position(window, validate);
 }
 
@@ -372,7 +368,6 @@ fn anchor_to_window(
 }
 
 pub unsafe fn ui_ext_win_viewport(window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     ext_win_viewport(window);
 }
 

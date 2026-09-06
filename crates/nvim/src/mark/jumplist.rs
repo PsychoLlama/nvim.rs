@@ -246,7 +246,6 @@ pub unsafe fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
 /// # Safety
 /// `window` must be a live window and the editor's globals must be live.
 pub unsafe fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
-    // SAFETY: the caller promised a live window.
     if loadfiles {
         // Every entry that still names its file by name gets its buffer
         // loaded, so that the duplicate test below can compare buffers.
@@ -347,7 +346,6 @@ pub unsafe fn copy_jumplist(from: *mut Window, to: *mut Window) {
 /// # Safety
 /// `window` must be a live window whose jump list entries own their allocations.
 pub unsafe fn free_jumplist(mut window: Win) {
-    // SAFETY: the caller promised a live window.
     for jump in window.jumps() {
         // SAFETY: the entry is live and its allocations are the list's.
         unsafe { free_xfmark(jump.read()) };

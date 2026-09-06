@@ -134,8 +134,6 @@ impl Put {
                 // SAFETY: `lnum`/`col` is where the line changed.
                 unsafe { changed_bytes(lnum, col) };
                 let inserted = totlen as c_int;
-                // SAFETY: a live buffer; nothing was removed, so the splice
-                // is `inserted` bytes going in at `col`.
                 let buffer = Buf::current();
                 unsafe { extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo) };
                 if visual_active() {

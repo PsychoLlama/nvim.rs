@@ -415,7 +415,6 @@ pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
-    // SAFETY: the caller's buffer.
     changed_lines(buffer, lnum + 1, 0, lnum + 1, count, true);
 }
 
@@ -447,7 +446,6 @@ pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
-    // SAFETY: the caller's buffer.
     changed_lines(buffer, lnum, 0, lnum + count, -count, true);
 }
 

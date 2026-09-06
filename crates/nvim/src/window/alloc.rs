@@ -398,7 +398,6 @@ fn forget_wininfo(buffer: Buf, window: Win) {
 }
 
 pub unsafe fn win_free_grid(window: Win, reinit: bool) {
-    // SAFETY: the caller's promise -- a live window.
     free_grid(window, reinit);
 }
 

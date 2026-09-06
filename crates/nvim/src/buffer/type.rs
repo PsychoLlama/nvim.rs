@@ -256,7 +256,6 @@ pub unsafe fn buf_inc_changedtick(buffer: Buf) {
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
 pub unsafe fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
-    // SAFETY: the caller's promise -- a live buffer.
     let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
     b.changedtick_di.di_tv.vval.v_number = changedtick;

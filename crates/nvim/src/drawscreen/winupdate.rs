@@ -678,7 +678,6 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn plan_visual_area(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
-    // SAFETY: the caller's window, its buffer and the global Visual state.
     let shown = visual_selection().filter(|_| buffer == Win::current().w_buffer);
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
         return;
@@ -878,7 +877,6 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn remember_visual_area(mut window: Win, buffer: *mut Buffer) {
-    // SAFETY: the caller's window and the global Visual state.
     if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().w_buffer) {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
         window.w_old_cursor_lnum = Win::current().w_cursor.lnum;

@@ -51,8 +51,6 @@ pub unsafe fn extmark_splice_delete(
         row: u_row,
         col: u_col,
     };
-    // SAFETY: the caller's promise -- a live buffer, and a `uvp` that is NULL
-    // or an undo header's own extmark list.
     splice_delete(buffer, lo, hi, uvp, only_copy, op);
 }
 

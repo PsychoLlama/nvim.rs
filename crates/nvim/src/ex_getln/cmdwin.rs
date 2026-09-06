@@ -420,6 +420,5 @@ pub fn is_in_cmdwin() -> bool {
 /// window's buffer out, window-less and without forcing.
 fn wipe_buffer(buffer: Buf) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
-    // SAFETY: the callers have just asked `BufRef::valid` about `buffer`.
     close_buffer(None, buffer, wipe, false, false);
 }

@@ -158,7 +158,6 @@ pub unsafe fn mark_get_local(
     fmp: *mut FileMark,
     name: c_int,
 ) -> *mut FileMark {
-    // SAFETY: the caller promised a live buffer and window.
     let (bufh, winh) = (buffer, win);
     let mark: *mut FileMark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int).raw()
@@ -218,7 +217,6 @@ pub unsafe fn mark_get_motion(
     fmp: *mut FileMark,
     name: c_int,
 ) -> *mut FileMark {
-    // SAFETY: the caller promised a live window; `curwin` is live too.
     let (winh, mut cur) = (win, Win::current());
     // The motion is computed by *moving the cursor* and reading where it
     // landed, so the cursor is put back before answering. `listcmd_busy`
@@ -303,7 +301,6 @@ pub unsafe fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *
     if name != '<' as c_int && name != '>' as c_int {
         return ptr::null_mut();
     }
-    // SAFETY: the caller promised a live buffer.
     let bufh = buffer;
     let (start, end) = (bufh.b_visual.vi_start, bufh.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a

@@ -39,11 +39,6 @@ pub unsafe fn win_execute_before(
     args.cwd_status = Err(Failed);
     args.apply_acd = false;
     args.save_sfname = ptr::null_mut();
-    // SAFETY: live window and tab page handles, and the globals they are
-    // compared against are set from startup to exit.
-    // The working directory only has to be saved when running the code
-    // there could change it: a different window or tab page with a
-    // `:lcd`/`:tcd` of its own, or 'autochdir'.
     if !win.is_current()
         && (!Win::current().w_localdir.is_null()
             || !win.w_localdir.is_null()

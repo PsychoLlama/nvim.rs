@@ -25,7 +25,6 @@ use crate::types::{ColNr, MTKey, MarkTreeIter, uint32_t};
 ///
 /// Answers false when there is no such mark.
 pub unsafe fn extmark_del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
     del_id(buffer, ns_id, id)
 }
 
@@ -94,7 +93,6 @@ pub unsafe fn extmark_clear(
     u_row: c_int,
     u_col: ColNr,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
     if buffer.extmark_ns().is_empty() {
         return false;
     }

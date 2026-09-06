@@ -233,7 +233,6 @@ pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
 pub(super) unsafe fn regexec_at(regmatch: *mut RegMMatch, lnum: LineNr, col: ColNr) -> c_int {
-    // SAFETY: caller's contract; the current window and buffer are live.
     let (win, buffer) = (Win::current_raw(), Buf::current_raw());
     let (timeout, timed_out) = (ptr::null_mut(), ptr::null_mut());
     unsafe { vim_regexec_multi(regmatch, win, buffer, lnum, col, timeout, timed_out) }

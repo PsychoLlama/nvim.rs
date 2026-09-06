@@ -342,7 +342,6 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
     let stale = !cache_results
         || lnum != prev_lnum.get()
-        // SAFETY: the current buffer is live.
         || changedtick.get() != buf_get_changedtick(Buf::current())
         || fnum.get() != Buf::current().handle
         || diff_flags.get() != prev_diff_flags.get();
@@ -378,7 +377,6 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         });
         if cache_results {
             prev_lnum.set(lnum);
-            // SAFETY: the current buffer is live.
             changedtick.set(buf_get_changedtick(Buf::current()));
             fnum.set(Buf::current().handle);
             prev_diff_flags.set(diff_flags.get());

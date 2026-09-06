@@ -140,8 +140,6 @@ pub unsafe fn win_line(
 ) -> ::core::ffi::c_int {
     debug_assert!(startrow < endrow);
 
-    // SAFETY: the caller's live window.
-
     // Plain construction, so it sits outside the promise below.
     let mut wlv = WinLineVars {
         decor,

@@ -52,7 +52,6 @@ use crate::winlayer::graph::{
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
 pub unsafe fn unuse_tabpage(tabpage: TabPage) {
-    // SAFETY: the caller's promise -- a live tab page.
     stash_tabpage(tabpage);
 }
 
@@ -67,7 +66,6 @@ pub(crate) fn stash_tabpage(tabpage: TabPage) {
 }
 
 pub unsafe fn use_tabpage(tabpage: TabPage) {
-    // SAFETY: the caller's promise -- a live tab page.
     adopt_tabpage(tabpage);
 }
 
@@ -106,7 +104,6 @@ pub(crate) fn alloc_tabpage() -> TabPage {
 }
 
 pub unsafe fn free_tabpage(tabpage: TabPage) {
-    // SAFETY: the caller's promise -- a live tab page.
     free_tab(tabpage);
 }
 
@@ -359,7 +356,6 @@ pub fn valid_tabpage_win(tpc: *mut Tabpage) -> c_int {
 }
 
 pub unsafe fn close_tabpage(tab: TabPage) {
-    // SAFETY: the caller's promise -- a live tab page.
     close_tab(tab);
 }
 
@@ -639,7 +635,6 @@ pub unsafe fn goto_tabpage_tp(
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
-    // SAFETY: the caller's promise -- a live tab page.
     goto_tab(tabpage, trigger_enter_autocmds, trigger_leave_autocmds);
 }
 
@@ -686,7 +681,6 @@ pub(crate) fn goto_last_used_tab() -> bool {
 }
 
 pub unsafe fn goto_tabpage_win(tabpage: TabPage, window: Win) {
-    // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = (tabpage, window);
     goto_tab_win(tp, wp);
 }

@@ -172,8 +172,6 @@ unsafe fn ml_insert_in_block(
     new: &NewLine,
     space_needed: int64_t,
 ) {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let InsertAt { db_idx, line_count } = *at;
     let NewLine {
         text: line,
@@ -554,8 +552,6 @@ unsafe fn ml_pointer_add_entry(
     split: &SplitBlocks,
     stack_idx: c_int,
 ) {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mut b = buffer;
     let mfp = b.b_ml.ml_mfp;
     let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
@@ -780,8 +776,6 @@ pub(crate) unsafe fn ml_delete_int(
 /// # Safety
 /// `hp` must be the locked data block, and `buffer`'s stack the path to it.
 unsafe fn ml_free_data_block(buffer: Buf, mfp: *mut MemFile, hp: *mut BlockHdr) -> bool {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mut b = buffer;
     unsafe { mf_free(mfp, hp) }; // free the data block; the lines it owes the
     // pointer blocks above it survive it, and are paid below.

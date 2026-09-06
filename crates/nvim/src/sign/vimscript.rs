@@ -226,7 +226,6 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
 /// # Safety
 /// `buffer` must be live.
 pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> *mut List {
-    // SAFETY: the caller's buffer.
     let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
     let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };

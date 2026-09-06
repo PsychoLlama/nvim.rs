@@ -252,7 +252,6 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 /// # Safety
 /// `window` must be live.
 pub unsafe fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
-    // SAFETY: the caller's window.
     state.row = -1;
     state.win = window.raw();
 
@@ -300,7 +299,6 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 /// # Safety
 /// `window` must be live.
 pub unsafe fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef) -> bool {
-    // SAFETY: the caller's window.
     let buf = window.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
@@ -360,7 +358,6 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 /// # Safety
 /// `window` must be live.
 pub unsafe fn decor_redraw_line(window: Win, row: c_int, mut state: DecorStateRef) {
-    // SAFETY: the caller's window.
     decor_state_pack(state);
 
     if state.row == -1 {
@@ -682,7 +679,6 @@ pub unsafe fn decor_redraw_col_impl(
     mut state: DecorStateRef,
     max_col_last: c_int,
 ) -> c_int {
-    // SAFETY: the caller's window.
     let buf = window.buffer();
     let row = state.row;
     let mut col_last = max_col_last;

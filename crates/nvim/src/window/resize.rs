@@ -126,7 +126,6 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // The cursor's place in the window
 
 pub unsafe fn set_fraction(window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     save_fraction(window);
 }
 
@@ -235,7 +234,6 @@ pub(crate) fn fix_cursor(normal: bool) {
 }
 
 pub unsafe fn win_new_height(window: Win, height: c_int) {
-    // SAFETY: the caller's promise -- a live window.
     new_win_height(window, height);
 }
 
@@ -254,7 +252,6 @@ pub(crate) fn new_win_height(window: Win, height: c_int) {
 }
 
 pub unsafe fn scroll_to_fraction(window: Win, prev_height: c_int) {
-    // SAFETY: the caller's promise -- a live window.
     to_fraction(window, prev_height);
 }
 
@@ -346,7 +343,6 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
 }
 
 pub unsafe fn win_set_inner_size(window: Win, valid_cursor: bool) {
-    // SAFETY: the caller's promise -- a live window.
     set_inner_size(window, valid_cursor);
 }
 
@@ -434,7 +430,6 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
 }
 
 pub unsafe fn win_new_width(window: Win, width: c_int) {
-    // SAFETY: the caller's promise -- a live window.
     new_win_width(window, width);
 }
 
@@ -447,7 +442,6 @@ pub(crate) fn new_win_width(window: Win, width: c_int) {
 }
 
 pub unsafe fn win_default_scroll(window: Win) -> OptInt {
-    // SAFETY: the caller's promise -- a live window.
     default_scroll(window)
 }
 
@@ -458,7 +452,6 @@ pub(crate) fn default_scroll(window: Win) -> OptInt {
 }
 
 pub unsafe fn win_comp_scroll(window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     comp_scroll(window);
 }
 
@@ -564,7 +557,6 @@ pub(crate) fn update_last_status(morewin: bool) {
 }
 
 pub unsafe fn win_remove_status_line(window: Win, add_hsep: bool) {
-    // SAFETY: the caller's promise -- a live window.
     remove_status_line(window, add_hsep);
 }
 
@@ -675,7 +667,6 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
 }
 
 pub unsafe fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
     winbar_win(window, make_room, valid_cursor)
 }
 
@@ -780,7 +771,6 @@ fn first_window() -> Win {
 }
 
 pub unsafe fn min_rows(tabpage: TabPage) -> c_int {
-    // SAFETY: the caller's promise -- a live tab page.
     min_rows_of(tabpage)
 }
 

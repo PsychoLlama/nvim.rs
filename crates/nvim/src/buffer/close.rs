@@ -608,8 +608,6 @@ fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, tabpage: TabPage) {
     let Some(wp) = valid_win(the_curwin) else {
         return;
     };
-    // SAFETY: `the_curtab` was `curtab` when this call began and tab pages
-    // outlive the windows in them; `wp` has just been re-validated.
     block_autocmds_now();
     goto_win(tabpage, wp);
     unblock_autocmds_now();

@@ -386,7 +386,6 @@ pub fn get_last_winid() -> c_int {
 }
 
 pub unsafe fn win_locked(window: Win) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
     window.w_locked as c_int
 }
 

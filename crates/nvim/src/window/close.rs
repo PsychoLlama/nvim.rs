@@ -40,7 +40,6 @@ use crate::winlayer::graph::{
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: Win) {
-    // SAFETY: the caller's promise -- a live window.
     enter_window(win);
 }
 
@@ -90,7 +89,6 @@ fn is_prompt(win: Win) -> bool {
 }
 
 pub unsafe fn win_init_empty(window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     init_empty(window);
 }
 
@@ -120,7 +118,6 @@ pub fn curwin_init() {
 }
 
 pub unsafe fn close_windows(buffer: Buf, keep_curwin: bool) {
-    // SAFETY: the caller's promise -- a live buffer.
     close_all(buffer, keep_curwin);
 }
 
@@ -187,7 +184,6 @@ fn locked(window: Win) -> bool {
 }
 
 pub unsafe fn last_window(win: Win) -> bool {
-    // SAFETY: the caller's promise -- a live window.
     is_last_window(win)
 }
 
@@ -245,7 +241,6 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
 }
 
 pub unsafe fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
-    // SAFETY: the caller's promise -- a live window and a writable error slot.
     cmdwin_allows(win, &mut *err)
 }
 

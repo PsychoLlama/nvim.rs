@@ -61,7 +61,6 @@ unsafe fn win_config_split(
     let was_split = !unsafe { (*win).w_floating };
     let has_split = set(KEYSET_OPTIDX_win_config__split);
     let has_vertical = set(KEYSET_OPTIDX_win_config__vertical);
-    // SAFETY: the caller's window.
     let old_split = win_split_dir(w);
     if has_vertical && !has_split {
         fconfig.split = if config.vertical {
@@ -174,7 +173,6 @@ unsafe fn win_config_split(
                         if nested {
                             let ahead =
                                 fconfig.split == kWinSplitAbove || fconfig.split == kWinSplitLeft;
-                            // SAFETY: the caller's window.
                             let live = w;
                             neighbor = raw_win(if ahead { live.next() } else { live.prev() });
                         }
@@ -417,7 +415,6 @@ unsafe fn win_config_float_tp(
             set_must_redraw(UPD_NOT_VALID);
         }
         let config = (*fconfig).clone();
-        // SAFETY: the caller's window.
         win_config_float(w, config);
         return true;
     }

@@ -247,11 +247,9 @@ pub unsafe fn nvim_open_win(
             );
         } else {
             if style == kWinStyleMinimal {
-                // SAFETY: `wp` is live -- its tab page still holds it.
                 win_set_minimal_style(window);
                 // SAFETY: as above.
                 unsafe { didset_window_options(wp, true) };
-                // SAFETY: as above.
                 changed_window_setting(window);
             }
             // SAFETY: as above.

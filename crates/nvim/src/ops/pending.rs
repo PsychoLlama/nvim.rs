@@ -866,7 +866,6 @@ fn run_change(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
     // The user is about to edit: 'linebreak' has to look as it did.
     restore_lbr(lbr_saved != 0);
     // Trigger TextChangedI.
-    // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
 
     if unsafe { op_change(op.raw()) } != 0 {
@@ -884,7 +883,6 @@ fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
     restart_edit.set(0);
 
     restore_lbr(lbr_saved != 0);
-    // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
 
     unsafe { op_insert(op.raw(), cmd_arg.count1) };

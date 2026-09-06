@@ -344,7 +344,6 @@ pub(crate) unsafe fn show_sub(
                 )
             };
         }
-        // SAFETY: as above, over the buffer the match came from.
         let (start, end) = (m.start, m.end);
         unsafe { bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0) };
     }

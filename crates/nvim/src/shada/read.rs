@@ -497,7 +497,6 @@ unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry)
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
 unsafe fn insert_change(mut buffer: Buf, fm: FileMark) {
-    // SAFETY: the caller's promise — `buffer` is a live buffer.
     let mut i = buffer.b_changelistlen;
     while i > 0 {
         let existing = &buffer.b_changelist[i as usize - 1];

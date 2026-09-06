@@ -254,7 +254,6 @@ pub unsafe fn mark_adjust_buf(
         return;
     }
 
-    // SAFETY: the caller promised a live buffer.
     let fnum = buffer.handle as c_int;
     let shift = LineShift {
         line1,

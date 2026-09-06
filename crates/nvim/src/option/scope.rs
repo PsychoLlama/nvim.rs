@@ -367,7 +367,6 @@ pub(crate) unsafe fn get_varp_scope_from(
 
 /// [`get_varp_scope_from`] for the current buffer and window.
 pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptSlot {
-    // SAFETY: `curbuf`/`curwin` are live.
     let (buffer, win) = (Buf::current_raw(), Win::current_raw());
     unsafe { get_varp_scope_from(opt_idx, opt_flags, buffer, win) }
 }

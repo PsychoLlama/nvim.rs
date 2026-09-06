@@ -158,12 +158,10 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<Ap
     let d_dirty_bytes2 = unsafe { Object::integer((*b).deleted_bytes2 as Integer) };
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"dirty_bytes2", d_dirty_bytes2) };
-    // SAFETY: a live buffer, as above.
     let total = buf_meta_total(buffer, kMTMetaLines);
     let d_virt_blocks = Object::integer(total as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"virt_blocks", d_virt_blocks) };
-    // SAFETY: a live buffer, as above.
     let tip = buffer;
     if let Some(uhp) = tip
         .header(tip.b_u_curhead)

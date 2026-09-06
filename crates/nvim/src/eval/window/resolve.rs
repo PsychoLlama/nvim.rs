@@ -203,7 +203,6 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
     // is a whole-string one.
     let (tpr, twr) = (tabpage.raw(), twin.raw());
     let direction = match rest.map(CStr::to_bytes) {
-        // SAFETY: a live tab page and window.
         Some(b"j") => {
             Some(unsafe { win_vert_neighbor(TabPage::new(tpr), Win::new(twr), false, count) })
         }
@@ -291,7 +290,6 @@ pub unsafe fn f_win_id2tabwin(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// `win_id2win({winid})` — the window's number in the current tab page, or 0.
 pub unsafe fn f_win_id2win(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the arguments are live typvals and `curtab` is set.
     let tp = TabPage::current();
     let id = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
     let mut nr = 0;

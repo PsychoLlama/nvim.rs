@@ -738,8 +738,6 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         // SAFETY: `curwin` is set from startup to exit.
         if virtual_active(Win::current()) {
             let (mut cs, mut ce): (ColNr, ColNr) = (0, 0);
-            // SAFETY: the current window, `pos` lent for the call, and two
-            // columns of this frame's own.
             let win = Win::current();
             unsafe { getvcol(win, pos, &raw mut cs, ptr::null_mut(), &raw mut ce) };
             pos.coladd = ce - cs;

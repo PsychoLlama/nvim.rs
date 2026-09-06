@@ -244,7 +244,6 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
 }
 
 pub unsafe fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live window.
     splitmove(window, size, flags)
 }
 
@@ -302,7 +301,6 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
 }
 
 pub unsafe fn win_move_after(win1: Win, win2: Win) {
-    // SAFETY: the caller's promise -- two live windows.
     move_after(win1, win2);
 }
 

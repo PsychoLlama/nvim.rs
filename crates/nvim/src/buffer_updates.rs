@@ -297,7 +297,6 @@ pub unsafe fn buf_updates_register(
     cb: BufUpdateCallbacks,
     send_buffer: bool,
 ) -> bool {
-    // SAFETY: the caller's promise.
     register(buffer, channel_id, cb, send_buffer)
 }
 
@@ -372,7 +371,6 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_active(buffer: Buf) -> bool {
-    // SAFETY: the caller's promise.
     active(buffer)
 }
 
@@ -385,7 +383,6 @@ fn active(mut buffer: Buf) -> bool {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_send_end(buffer: Buf, channelid: uint64_t) {
-    // SAFETY: the caller's promise.
     send_end(buffer, channelid);
 }
 
@@ -400,7 +397,6 @@ fn send_end(buffer: Buf, channelid: uint64_t) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
-    // SAFETY: the caller's promise.
     unregister(buffer, channelid);
 }
 
@@ -443,7 +439,6 @@ fn unregister(mut buffer: Buf, channelid: uint64_t) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_free_callbacks(buffer: Buf) {
-    // SAFETY: the caller's promise.
     free_callbacks(buffer);
 }
 
@@ -464,7 +459,6 @@ fn free_callbacks(mut buffer: Buf) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_unload(buffer: Buf, can_reload: bool) {
-    // SAFETY: the caller's promise.
     unload(buffer, can_reload);
 }
 
@@ -529,7 +523,6 @@ pub unsafe fn buf_updates_send_changes(
     num_added: int64_t,
     num_removed: int64_t,
 ) {
-    // SAFETY: the caller's promise.
     send_changes(buffer, firstline, num_added, num_removed);
 }
 
@@ -651,7 +644,6 @@ pub unsafe fn buf_updates_send_splice(
     new_col: ColNr,
     new_byte: BCount,
 ) {
-    // SAFETY: the caller's promise.
     let start = Corner::new(start_row, start_col, start_byte);
     let old = Corner::new(old_row, old_col, old_byte);
     let new = Corner::new(new_row, new_col, new_byte);
@@ -720,7 +712,6 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_changedtick(buffer: Buf) {
-    // SAFETY: the caller's promise.
     changedtick_event(buffer);
 }
 
@@ -763,7 +754,6 @@ fn changedtick_event(mut buffer: Buf) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_changedtick_single(buffer: Buf, channel_id: uint64_t) {
-    // SAFETY: the caller's promise.
     changedtick_single(buffer, channel_id);
 }
 

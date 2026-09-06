@@ -773,7 +773,6 @@ fn size_horizontal(
 // Copying a window
 
 pub unsafe fn win_init(newp: Win, oldp: Win, flags: c_int) {
-    // SAFETY: the caller's promise -- two live windows.
     init(newp, oldp, flags);
 }
 

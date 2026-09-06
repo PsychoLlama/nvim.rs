@@ -100,7 +100,6 @@ pub unsafe fn next_virt_text_chunk(
 /// # Safety
 /// `buffer` must point to a live buffer.
 pub unsafe fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *mut DecorVirtText {
-    // SAFETY: the caller's buffer.
     let mut itr = MarkTreeIter::default();
     let mut walk = Cursor::in_buffer(buffer, &mut itr);
     walk.seek(row, 0);
@@ -132,7 +131,6 @@ pub unsafe fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *
 /// # Safety
 /// `window` must point to a live window; runs Lua through the providers.
 pub unsafe fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
-    // SAFETY: the caller's window.
     if row < 0
         || window.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
@@ -180,7 +178,6 @@ pub unsafe fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) ->
 /// # Safety
 /// `window` must point to a live window.
 pub unsafe fn win_lines_concealed(window: Win) -> bool {
-    // SAFETY: the caller's window.
     window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 

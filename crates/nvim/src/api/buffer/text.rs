@@ -373,7 +373,6 @@ pub unsafe fn nvim_buf_set_text(
 }
 
 pub(crate) unsafe fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
-    // SAFETY: the caller's promise -- `win` is a live window.
     if win.w_cursor.lnum >= lo {
         if win.w_cursor.lnum >= hi {
             win.w_cursor.lnum += extra;

@@ -344,7 +344,6 @@ pub unsafe fn plines_correct_topline(
     lnum: LineNr,
     limit_winheight: bool,
 ) -> (c_int, LineNr) {
-    // SAFETY: the caller's promise.
     let (n, next, _) = window.corrected_plines(lnum, limit_winheight);
     (n, next)
 }

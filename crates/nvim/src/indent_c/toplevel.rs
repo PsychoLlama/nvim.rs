@@ -115,10 +115,6 @@ unsafe fn search_backwards(line: &Line) -> c_int {
 
         // Skip preprocessor directives and blank lines.
         //
-        // SAFETY: `l` is the cursor's line, NUL-terminated.  Handing over a
-        // borrow of `w_cursor.lnum` reborrows the whole window, which is
-        // sound only because `cin_ispreproc_cont` reads the line it is given
-        // and the current *buffer*, never `curwin`.
         let lnum = &mut Win::current().w_cursor.lnum;
         let skipped = unsafe { cin_ispreproc_cont(&mut l, lnum, &mut amount) || cin_nocode(l) };
         if skipped {
@@ -217,8 +213,6 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             let curpos_save = Win::current().w_cursor;
             while Win::current().w_cursor.lnum > 1 {
                 Win::current().w_cursor.lnum -= 1;
-                // SAFETY: on the main thread with a current buffer; the
-                // window borrow is sound for the reason given above.
                 let lnum = &mut Win::current().w_cursor.lnum;
                 let keep_going = unsafe {
                     look = ml_get(*lnum);

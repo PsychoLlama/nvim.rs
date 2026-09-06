@@ -39,7 +39,6 @@ use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
 pub unsafe fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
-    // SAFETY: the caller's promise -- a live window.
     close(win, free_buf, force)
 }
 

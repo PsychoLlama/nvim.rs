@@ -45,7 +45,6 @@ use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
 pub unsafe fn win_goto(window: Win) {
-    // SAFETY: the caller's promise -- a live window.
     goto_win(window);
 }
 
@@ -161,7 +160,6 @@ pub unsafe fn win_vert_neighbor(
     up: bool,
     count: c_int,
 ) -> *mut Window {
-    // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = (tabpage, window);
     raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
 }
@@ -185,7 +183,6 @@ pub unsafe fn win_horz_neighbor(
     left: bool,
     count: c_int,
 ) -> *mut Window {
-    // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = (tabpage, window);
     raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
 }
@@ -265,7 +262,6 @@ fn neighbor(
 }
 
 pub unsafe fn win_enter(window: Win, undo_sync: bool) {
-    // SAFETY: the caller's promise -- a live window.
     enter(window, undo_sync);
 }
 
@@ -482,7 +478,6 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
 }
 
 pub unsafe fn buf_jump_open_win(buffer: Buf) -> *mut Window {
-    // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_win(buffer))
 }
 
@@ -499,7 +494,6 @@ pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
 }
 
 pub unsafe fn buf_jump_open_tab(buffer: Buf) -> *mut Window {
-    // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_tab(buffer))
 }
 

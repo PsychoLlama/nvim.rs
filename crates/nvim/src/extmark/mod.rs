@@ -438,7 +438,6 @@ pub unsafe fn extmark_adjust(
     amount_after: LineNr,
     undo: ExtmarkOp,
 ) {
-    // SAFETY: the caller's promise -- a live buffer.
     splice::adjust(buffer, line1, line2, amount, amount_after, undo);
 }
 
@@ -469,7 +468,6 @@ pub unsafe fn extmark_splice(
         col: new_col,
         byte: new_byte,
     };
-    // SAFETY: the caller's promise -- a live buffer.
     splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
@@ -493,7 +491,6 @@ pub unsafe fn extmark_splice_cols(
         col: new_col,
         byte: new_col as BCount,
     };
-    // SAFETY: the caller's promise -- a live buffer.
     splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
@@ -526,6 +523,5 @@ pub unsafe fn extmark_move_region(
         col: new_col,
         byte: new_byte,
     };
-    // SAFETY: the caller's promise -- a live buffer.
     splice::move_region(buffer, start, extent, new, undo);
 }

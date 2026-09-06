@@ -593,7 +593,6 @@ pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
 /// # Safety
 /// `window` must be a live window and `group` a writable `Hlf`.
 pub unsafe fn fillchar_status(group: *mut Hlf, window: Win) -> ScreenChar {
-    // SAFETY: the caller's promise.
     let (g, fillchar) = fillchar_status_of(window);
     // SAFETY: the caller's out-parameter.
     unsafe { *group = g };

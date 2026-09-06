@@ -192,7 +192,6 @@ pub unsafe fn decor_redraw_signs(
     cul_id: *mut c_int,
     num_id: *mut c_int,
 ) {
-    // SAFETY: the caller's window and buffer.
     let (wp, buf) = (window, buffer);
     if !buf.has_signs() {
         return;
@@ -300,7 +299,6 @@ pub unsafe fn buf_signcols_count_range(
     add: c_int,
     half: SignCountHalf,
 ) {
-    // SAFETY: the caller's buffer.
     buf_signcols_count(buffer, row1, row2, add, half);
 }
 

@@ -39,8 +39,6 @@ struct Landing {
 /// `oldp` must be the cursor line, NUL-terminated.
 unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     let mut csarg = CharsizeArg::default();
-    // SAFETY: a live window whose cursor is on `oldp`'s line, and `oldp` is
-    // that line's NUL-terminated text.
     let (win, lnum) = (Win::current(), Win::current().w_cursor.lnum);
     let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, oldp) };
 

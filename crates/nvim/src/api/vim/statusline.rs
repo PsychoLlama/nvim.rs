@@ -235,7 +235,6 @@ impl Context {
         ) {
             opts.maxwidth as c_int
         } else if statuscol_lnum != 0 {
-            // SAFETY: a live window.
             win.col_off()
         } else if opts.use_tabline || (!opts.use_winbar && stl_is_global()) {
             Columns.get()

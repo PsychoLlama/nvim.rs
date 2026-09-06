@@ -54,7 +54,6 @@ impl ShlWalk {
     /// `window` and `search_hl` must be live.
     #[inline(always)]
     unsafe fn new(window: Win, search_hl: *mut MatchState, order: Order) -> Self {
-        // SAFETY: the caller's promise -- a live window.
         Self {
             cur: window.w_match_head,
             search_hl,

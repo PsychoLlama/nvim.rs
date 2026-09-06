@@ -120,8 +120,6 @@ static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 /// # Safety
 /// `buffer` must point at a buffer.
 unsafe fn ml_get_placeholder(mut b: Buf, lnum: LineNr) -> *mut c_char {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     questions.set([b'?' as c_char, b'?' as c_char, b'?' as c_char, 0]);
     b.b_ml.set_cached_len(4);
     b.b_ml.set_cached_lnum(lnum);
@@ -585,8 +583,6 @@ pub(crate) unsafe fn ml_find_line(
 /// # Safety
 /// `buffer` must point at a buffer.
 pub(crate) unsafe fn ml_add_stack(mut b: Buf) -> usize {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     b.b_ml.stack_push()
 }
 
@@ -615,8 +611,6 @@ pub(crate) unsafe fn ml_lineadd(buffer: *mut Buffer, count: c_int) {
 /// `buffer` must point at a buffer whose memline is open, and `depth` must not
 /// exceed the stack's length.
 pub(crate) unsafe fn ml_lineadd_depth(mut b: Buf, count: c_int, depth: usize) {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
     let mfp = b.b_ml.ml_mfp;
     let mut idx = depth;
     while idx > 0 {

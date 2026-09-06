@@ -429,7 +429,6 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
         // An external grid is exactly the terminal's window, so the height
         // and width checks below only apply to the shared one.
         //
-        // SAFETY: a live window.
         let offset = mouse_win.col_off();
         let inside = row >= 0
             && (grid > 1 || row + mouse_win.w_winbar_height < mouse_win.w_height)

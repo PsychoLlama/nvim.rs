@@ -357,8 +357,6 @@ impl Cells {
         f: &LineFrame,
     ) {
         let mut line = linebuf();
-        // SAFETY: the caller's window, buffer and frame.
-        // The line may end left of the left margin.
         wlv.vcol = wlv.vcol.max(self.start_vcol + wlv.col - window.col_off());
         // Drop the bogus columns: 'cursorcolumn' wants drawing all the way
         // to the right edge.
