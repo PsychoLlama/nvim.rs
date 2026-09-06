@@ -321,8 +321,8 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         prevwin.set(curwin.get()); // remember for CTRL-W p
         cur_win().w_redr_status = true;
     }
-    curwin.set(window.raw());
-    curbuf.set(window.w_buffer);
+    window.make_current();
+    window.buffer().make_current();
 
     revalidate_cursor(cur_win());
     // SAFETY: a live window.

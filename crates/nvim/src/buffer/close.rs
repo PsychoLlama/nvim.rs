@@ -54,7 +54,7 @@ use crate::types::{
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
-use crate::winlayer::graph::{curbuf, curtab, curwin, firstbuf, lastbuf};
+use crate::winlayer::graph::{curbuf, curtab, curwin, firstbuf, lastbuf, leave_curbuf};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
@@ -837,7 +837,7 @@ fn free_buffer(mut buffer: Buf) {
         // The free: `Buffer`'s destructor runs and the memory goes back.
         drop(owned);
         if curbuf.get() == buffer.raw() {
-            curbuf.set(ptr::null_mut()); // make clear it's not to be used
+            leave_curbuf(); // make clear it's not to be used
         }
     }
 }

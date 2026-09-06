@@ -120,19 +120,18 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     // A window already showing `buffer` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
     // why `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` starts at `firstwin`.
-    let win: *mut Window = if same_buffer {
-        curwin.get()
+    let win: Option<Win> = if same_buffer {
+        // SAFETY: `curwin` is set from startup to exit.
+        Some(unsafe { Win::current() })
     } else {
-        windows()
-            .find(|wp| wp.w_buffer == buffer)
-            .map_or(::core::ptr::null_mut(), Win::raw)
+        windows().find(|wp| wp.w_buffer == buffer)
     };
 
     // Allocate an autocommand window when there is no window to use.
     let mut need_append = true;
     let mut auc_win: *mut Window = ::core::ptr::null_mut();
     let mut auc_idx = aucmd_wins().len();
-    if win.is_null() {
+    if win.is_none() {
         auc_idx = 0;
         while auc_idx < aucmd_wins().len() && unsafe { (*entry(auc_idx)).auc_win_used } {
             auc_idx += 1;
@@ -166,13 +165,17 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         unsafe { (*aco).save_prompt_insert = cur_buf().b_prompt_insert };
     }
 
-    if !win.is_null() {
+    if let Some(win) = win {
         unsafe { (*aco).use_aucmd_win_idx = -1 };
-        curwin.set(win);
+        win.make_current();
     } else {
         // No window shows "buf", so borrow the autocommand window and
         // put it in the current tab page.
         unsafe { (*aco).use_aucmd_win_idx = auc_idx as ::core::ffi::c_int };
+        // SAFETY: the slot's window, allocated or reused just above. The
+        // field writes below stay raw on purpose: `w_s` is handed a pointer
+        // *into* `buffer`, and a write through a handle would pop it.
+        let auc = unsafe { Win::new(auc_win) };
         unsafe { (*auc_win).w_buffer = buffer };
         unsafe { (*auc_win).w_s = &raw mut (*buffer).b_s };
         unsafe { (*buffer).b_nwindows += 1 };
@@ -193,7 +196,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
             // after: the list links are handles, so a window that is on one
             // has to be in the registry or the walk stops at it.
             // `aucmd_restbuf` takes it back out, after the `win_remove`.
-            register_window(unsafe { Win::new(auc_win) });
+            register_window(auc);
             let last = last_window().map_or(::core::ptr::null_mut(), Win::raw);
             unsafe { win_append(last, auc_win, ::core::ptr::null_mut()) };
             unsafe { win_config_float(Win::new(auc_win), (*auc_win).w_config.clone()) };
@@ -208,10 +211,11 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         drop(redraw_off);
         p_acd.set(save_acd);
         unsafe { unblock_autocmds() };
-        curwin.set(auc_win);
+        auc.make_current();
     }
 
-    curbuf.set(buffer);
+    // SAFETY: the caller's promise -- a live buffer.
+    unsafe { Buf::new(buffer) }.make_current();
     unsafe { (*aco).new_curwin_handle = cur_win().handle };
     unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 
@@ -268,15 +272,16 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         }
         unsafe { unblock_autocmds() };
 
-        let save_curwin = win_find_by_handle(unsafe { (*aco).save_curwin_handle });
+        // SAFETY: `aco` is the caller's, and `win_find_by_handle` answers a
+        // live window or null.
+        let save_curwin = unsafe { Win::from_raw(win_find_by_handle((*aco).save_curwin_handle)) };
         // The original window may have disappeared under the
-        // autocommand; the first one is then as good as any.
-        curwin.set(if save_curwin.is_null() {
-            first_window().map_or(::core::ptr::null_mut(), Win::raw)
-        } else {
-            save_curwin
-        });
-        curbuf.set(cur_win().w_buffer);
+        // autocommand; the first one is then as good as any. There being
+        // neither is the editor tearing itself down, and nothing to enter.
+        if let Some(landing) = save_curwin.or_else(first_window) {
+            landing.make_current();
+            landing.buffer().make_current();
+        }
         unsafe { entering_window(curwin.get()) };
         if buf_is_prompt(current_buf()) {
             cur_buf().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
@@ -308,28 +313,30 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     } else {
         // Restore `curwin` by handle: a window may have been closed and
         // its memory re-used for another one.
-        let save_curwin = win_find_by_handle(unsafe { (*aco).save_curwin_handle });
-        if !save_curwin.is_null() {
+        // SAFETY: `aco` is the caller's, and `win_find_by_handle` answers a
+        // live window or null.
+        let save_curwin = unsafe { Win::from_raw(win_find_by_handle((*aco).save_curwin_handle)) };
+        if let Some(save_curwin) = save_curwin {
             // Put back the buffer `curwin` was editing, if it changed
             // and we are still the same window with a valid buffer.
             // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
             let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
             if cur_win().handle == unsafe { (*aco).new_curwin_handle }
                 && curbuf.get() != new_curbuf.raw()
-                && new_curbuf.valid()
-                && !unsafe { (*new_curbuf.raw()).b_ml.ml_mfp.is_null() }
+                && let Some(mut new_curbuf) = new_curbuf.get()
+                && !new_curbuf.b_ml.ml_mfp.is_null()
             {
                 if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*curbuf.get()).b_s } {
-                    cur_win().w_s = unsafe { &raw mut (*new_curbuf.raw()).b_s };
+                    cur_win().w_s = &raw mut new_curbuf.b_s;
                 }
                 cur_buf().b_nwindows -= 1;
-                curbuf.set(new_curbuf.raw());
-                cur_win().w_buffer = curbuf.get();
+                new_curbuf.make_current();
+                cur_win().w_buffer = new_curbuf.raw();
                 cur_buf().b_nwindows += 1;
             }
 
-            curwin.set(save_curwin);
-            curbuf.set(cur_win().w_buffer);
+            save_curwin.make_current();
+            save_curwin.buffer().make_current();
             prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }));
 
             // The autocommand may have left the cursor where curbuf has

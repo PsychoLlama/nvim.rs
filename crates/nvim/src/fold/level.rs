@@ -25,7 +25,7 @@ use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::vim_strchr;
 use crate::syntax::syn_get_foldlevel;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -684,10 +684,8 @@ pub(super) unsafe fn foldlevel_diff(line: FLine) {
 /// `line` must name a line inside its window's buffer.
 pub(super) unsafe fn foldlevel_expr(line: FLine) {
     let lnum = line.lnum() + line.off();
-    let win = curwin.get();
     // The current window is restored below.
-    curwin.set(line.win().raw());
-    curbuf.set(line.win().w_buffer);
+    let saved = switch_to(line.win());
     unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
     line.set_start(0);
     line.set_had_end(line.end());
@@ -750,8 +748,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
             line.set_lvl_next(0);
         }
     }
-    curwin.set(win);
-    curbuf.set(cur_win().w_buffer);
+    saved.restore();
 }
 
 /// Low level function to get the foldlevel for the "syntax" method.
@@ -794,10 +791,4 @@ fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
     debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
     // SAFETY: the assertion above.
     unsafe { delete_fold_entry(folds, i, recursive) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

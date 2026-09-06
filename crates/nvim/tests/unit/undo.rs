@@ -118,7 +118,6 @@ mod write {
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
     use neovim::winlayer::Buf;
-    use neovim::winlayer::graph::curbuf;
 
     use crate::support::{Editor, editor_lock};
 
@@ -138,7 +137,7 @@ mod write {
         _udir: CString,
         ffname: Option<CString>,
         old_udir: *mut c_char,
-        old_curbuf: *mut Buffer,
+        old_curbuf: Buf,
     }
 
     impl Fixture {
@@ -168,11 +167,13 @@ mod write {
             buf.b_u_numhead = 1;
 
             let old_udir = p_udir.get();
-            let old_curbuf = curbuf.get();
+            // SAFETY: `curbuf` is the editor's own buffer, live under the lock.
+            let old_curbuf = unsafe { Buf::current() };
             p_udir.set(udir.as_ptr().cast_mut());
             // `u_write_undo` syncs the current buffer before serialising;
             // ours is already synced, so this only has to be non-NULL.
-            curbuf.set(&raw mut *buf);
+            // SAFETY: the fixture owns `buf` and outlives the case.
+            unsafe { Buf::new(&raw mut *buf) }.make_current();
 
             let mut fixture = Fixture {
                 _guard: guard,
@@ -233,7 +234,7 @@ mod write {
     impl Drop for Fixture {
         fn drop(&mut self) {
             p_udir.set(self.old_udir);
-            curbuf.set(self.old_curbuf);
+            self.old_curbuf.make_current();
             let _ = fs::remove_dir_all(&self.dir);
         }
     }

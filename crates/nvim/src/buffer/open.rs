@@ -448,9 +448,9 @@ fn open_buffer_inner(
 fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     close_buffer(None, cur_buf(), 0, false, false);
 
-    curbuf.set(ptr::null_mut::<Buffer>());
+    leave_curbuf();
     if let Some(buf) = buffers().find(|b| !b.b_ml.ml_mfp.is_null()) {
-        curbuf.set(buf.raw());
+        buf.make_current();
     }
 
     // If there is no memfile at all, exit.  This is OK, since there are no

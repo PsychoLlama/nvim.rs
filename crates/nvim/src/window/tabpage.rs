@@ -74,11 +74,11 @@ pub unsafe fn use_tabpage(tabpage: *mut Tabpage) {
 
 /// Point the layout globals at `tabpage`. May want to call [`stash_tabpage`] first.
 pub(crate) fn adopt_tabpage(tabpage: TabPage) {
-    curtab.set(tabpage.raw());
+    tabpage.make_current();
     topframe.set(tabpage.tp_topframe);
     firstwin.set(tabpage.tp_firstwin);
     lastwin.set(tabpage.tp_lastwin);
-    curwin.set(tabpage.tp_curwin);
+    tabpage.current_window().make_current();
 }
 
 /// Allocate a `Tabpage` and fill in its defaults.
@@ -196,7 +196,7 @@ pub(crate) fn new_tabpage(
     }
 
     newtp.tp_localdir = clone_dir(old_curtab.tp_localdir);
-    curtab.set(newtp.raw());
+    newtp.make_current();
 
     // Create a new empty window.
     // SAFETY: the old tab page's current window, which is live.

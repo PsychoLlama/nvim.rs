@@ -793,6 +793,20 @@ impl TabPage {
         // A live tab page's top frame is live.
         FrameRef(self.tp_topframe)
     }
+
+    /// The window this tab page is working in — the one it goes back to when
+    /// it is entered again, `tp_curwin` verbatim.
+    ///
+    /// Stale while the tab page *is* the current one: `curwin` is the answer
+    /// then, and `stash_tabpage` writes this field on the way out. Reading it
+    /// of the current tab page is what upstream's `tp_curwin` reads there
+    /// too, so the two agree — but a caller that wants "the window in use"
+    /// wants `Win::current()`.
+    #[inline(always)]
+    pub(crate) fn current_window(self) -> Win {
+        // A live tab page's `tp_curwin` is a live window.
+        Win(self.tp_curwin)
+    }
 }
 
 impl PosRef {

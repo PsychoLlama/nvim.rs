@@ -27,7 +27,6 @@ use crate::state::mode::did_syncbind;
 use crate::strings::vim_strchr;
 use crate::types::{Buffer, CmdArg, ColNr, Direction, LineNr, Window};
 use crate::window::goto_tabpage;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::c_int;
 
 use crate::keycodes::Ctrl_D;
@@ -94,14 +93,13 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
 pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // SAFETY (throughout): walks the current tab page's window list, restoring `curwin`
     // and `curbuf` before returning.
-    let old_curwin = curwin.get();
-    let old_curbuf = curbuf.get();
+    let (old_curwin, old_curbuf) = unsafe { (Win::current(), Buf::current()) };
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
-    let tgt_leftcol = unsafe { (*old_curwin).w_leftcol };
+    let tgt_leftcol = old_curwin.w_leftcol;
     // Two windows in diff mode are always bound vertically; otherwise
     // 'scrollopt' says so.
-    let want_ver = unsafe { (*old_curwin).w_onebuf_opt.wo_diff } != 0
+    let want_ver = old_curwin.w_onebuf_opt.wo_diff != 0
         || (!unsafe { vim_strchr(p_sbo.get(), 'v' as c_int) }.is_null() && vtopline_diff != 0);
     let want_hor = !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null()
         && (leftcol_diff != 0 || vtopline_diff != 0);
@@ -111,15 +109,13 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
     // Upstream asks `curtab == curtab`, so this always walks the current
     // tab page's windows however it reads. Nothing in the body can free one.
     for mut win in windows() {
-        curwin.set(win.raw());
-        curbuf.set(win.w_buffer);
-        if win.raw() != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
+        win.make_current();
+        win.buffer().make_current();
+        if win != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
             if want_ver {
-                if unsafe { (*old_curwin).w_onebuf_opt.wo_diff } != 0
-                    && win.w_onebuf_opt.wo_diff != 0
-                {
-                    // SAFETY: both windows are live for this walk.
-                    diff_set_topline(unsafe { Win::new(old_curwin) }, win);
+                if old_curwin.w_onebuf_opt.wo_diff != 0 && win.w_onebuf_opt.wo_diff != 0 {
+                    // Both windows are live for this walk.
+                    diff_set_topline(old_curwin, win);
                 } else {
                     // The bound position may run past the end of this
                     // window's buffer; the *position* keeps the overshoot
@@ -152,8 +148,8 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
 
     set_visual_select(old_visual_select);
     set_visual_active(old_visual_active);
-    curwin.set(old_curwin);
-    curbuf.set(old_curbuf);
+    old_curwin.make_current();
+    old_curbuf.make_current();
 }
 
 /// `CTRL-F` and `CTRL-B`: a page forwards or backwards. With CTRL held they

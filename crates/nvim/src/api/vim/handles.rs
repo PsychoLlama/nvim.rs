@@ -177,15 +177,11 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         );
     }
     if scratch {
-        let target = buf.cast::<::core::ffi::c_void>();
         let local = OptionSetFlags::LOCAL;
-        // SAFETY: as above; the two values borrow static literals.
-        unsafe {
-            let hide = string_optval(c"hide");
-            set_option_direct_for(kOptBufhidden, hide, local, 0, kOptScopeBuf, target);
-            let nofile = string_optval(c"nofile");
-            set_option_direct_for(kOptBuftype, nofile, local, 0, kOptScopeBuf, target);
-        }
+        let hide = string_optval(c"hide");
+        set_option_direct_for(kOptBufhidden, hide, local, 0, OptionTarget::Buf(b));
+        let nofile = string_optval(c"nofile");
+        set_option_direct_for(kOptBuftype, nofile, local, 0, OptionTarget::Buf(b));
         debug_assert!(
             // SAFETY: a buffer `ml_open` answered for has a memfile.
             unsafe { (*b.b_ml.ml_mfp).mf_fd } < 0 as ::core::ffi::c_int,

@@ -21,12 +21,26 @@ use crate::types::{
     Window, kErrorTypeNone,
 };
 use crate::window::win_find_tabpage;
-use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::{curbuf, curwin, switch_buffer, switch_to};
+use crate::winlayer::{Buf, Win};
 
 use super::{
     get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct, set_option_value_handle_tty,
 };
+
+/// Which window or buffer an option is written as, for
+/// [`set_option_direct_for`].
+///
+/// The scope and the thing it names travel together, so there is nothing to
+/// cast: the `OptScope` tag plus a `void *` this used to take could be
+/// mismatched at a call site and the mistake would only show as a window
+/// pointer being read as a buffer.
+pub(crate) enum OptionTarget {
+    /// A window, whose buffer comes with it — the option code reads both.
+    Win(Win),
+    /// A buffer, with the current window left where it is.
+    Buf(Buf),
+}
 
 /// [`set_option_direct`] with another window or buffer standing in for the
 /// current one.
@@ -35,32 +49,19 @@ use super::{
 /// has side effects of its own, and a direct write is supposed to have none.
 /// Swapping the two globals is enough because nothing on this path looks at
 /// anything else.
-///
-/// # Safety
-///
-/// `from` must be the live window or buffer `scope` names.
-pub(crate) unsafe fn set_option_direct_for(
+pub(crate) fn set_option_direct_for(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
     set_sid: ScriptId,
-    scope: OptScope,
-    from: *mut c_void,
+    target: OptionTarget,
 ) {
-    let save_curbuf = curbuf.get();
-    let save_curwin = curwin.get();
-    match scope {
-        kOptScopeWin => {
-            curwin.set(from.cast::<Window>());
-            // SAFETY: the caller's `from` is a live window.
-            curbuf.set(cur_win().w_buffer);
-        }
-        kOptScopeBuf => curbuf.set(from.cast::<Buffer>()),
-        _ => {}
-    }
+    let saved = match target {
+        OptionTarget::Win(win) => switch_to(win),
+        OptionTarget::Buf(buf) => switch_buffer(buf),
+    };
     set_option_direct(opt_idx, value, opt_flags, set_sid);
-    curwin.set(save_curwin);
-    curbuf.set(save_curbuf);
+    saved.restore();
 }
 
 /// Somewhere to stand while reading or writing another window's or buffer's
@@ -205,10 +206,4 @@ pub(crate) unsafe fn set_option_value_for(
         // SAFETY: `enter` reported a switch and nothing has moved since.
         unsafe { ctx.leave() };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

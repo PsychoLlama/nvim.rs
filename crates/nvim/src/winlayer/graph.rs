@@ -27,7 +27,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{BufId, TabId, WinId};
+use super::{Buf, BufId, TabId, TabPage, Win, WinId};
 use crate::global_cell::GlobalCell;
 use crate::types::{Buffer, Frame, Tabpage, Window};
 use core::ffi::c_int;
@@ -47,7 +47,8 @@ pub(crate) static lastused_tabpage: GlobalCell<*mut Tabpage> =
     GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
+pub(crate) static curbuf: GlobalCell<*mut Buffer> =
+    GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 pub(crate) static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -59,3 +60,143 @@ pub(crate) static cmdwin_old_curwin: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
 pub(crate) static cmdline_win: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
+
+// ---------------------------------------------------------------------------
+// Becoming current
+//
+// **Everything below is the only code in the tree that writes `curwin`,
+// `curbuf` or `curtab`.** Nothing else calls `.set()` on the three statics,
+// and that is the point: the next slice retypes them to
+// `GlobalCell<Option<WinId>>` and mirrors the `no_mangle` `curwin` pointer
+// beside the truth, which is a change to a handful of functions here rather
+// than to the 125 assignments that used to be spread over 33 files.
+//
+// The funnel takes handles, never raw pointers, so "make this current" cannot
+// be spelled with an address whose liveness nobody promised. Building a
+// `Win`/`Buf` out of the statics needs no `unsafe` *here* — this module is
+// inside `winlayer`, which is where the promise those types carry is made,
+// and `curwin`/`curbuf`/`curtab` are set from startup to exit, which is
+// exactly the promise `Win::current()` already takes.
+
+impl Win {
+    /// Make this the window the editor is working in.
+    ///
+    /// `curbuf` is left alone: a window and its buffer move together often
+    /// enough to have their own spelling ([`switch_to`]), and the callers
+    /// that move only one half mean it.
+    #[inline]
+    pub fn make_current(self) {
+        curwin.set(self.raw());
+    }
+}
+
+impl Buf {
+    /// Make this the buffer the editor is working in. [`Win::make_current`].
+    #[inline]
+    pub fn make_current(self) {
+        curbuf.set(self.raw());
+    }
+}
+
+impl TabPage {
+    /// Make this the tab page the editor is working in.
+    #[inline]
+    pub(crate) fn make_current(self) {
+        curtab.set(self.raw());
+    }
+}
+
+/// Leave the editor with no current buffer at all.
+///
+/// Three callers, all of them a moment the editor really has none:
+/// `close_windows` after the last buffer went, `no_memfile` between
+/// abandoning a buffer and finding another, and `free_buffer` freeing the
+/// one that was current. Everything in between reads `curbuf` as null and is
+/// expected to — which is why this is a name of its own rather than an
+/// `Option` argument that would read as ordinary.
+#[inline]
+pub(crate) fn leave_curbuf() {
+    curbuf.set(::core::ptr::null_mut::<Buffer>());
+}
+
+/// Stand in `win` and the buffer it shows, until [`Saved::restore`].
+///
+/// This is the editor's most common shape by far: some piece of code has to
+/// run against another window because what it calls reads `curwin`/`curbuf`
+/// rather than taking them as arguments. It is *not* `win_enter` — no
+/// autocommand fires, no option is copied, nothing is redrawn — so the pair
+/// must bracket a stretch that does none of those things either.
+#[inline]
+#[must_use = "the switch is undone by Saved::restore; dropping this leaves \
+              the editor standing in the wrong window"]
+pub(crate) fn switch_to(win: Win) -> Saved {
+    let saved = Saved(Displaced::WindowAndBuffer(Win(curwin.get())));
+    curwin.set(win.raw());
+    curbuf.set(win.w_buffer);
+    saved
+}
+
+/// [`switch_to`] for `curwin` alone, leaving `curbuf` where it is.
+#[inline]
+#[must_use = "the switch is undone by Saved::restore"]
+pub(crate) fn switch_window(win: Win) -> Saved {
+    let saved = Saved(Displaced::Window(Win(curwin.get())));
+    curwin.set(win.raw());
+    saved
+}
+
+/// [`switch_to`] for `curbuf` alone, leaving `curwin` where it is.
+#[inline]
+#[must_use = "the switch is undone by Saved::restore"]
+pub(crate) fn switch_buffer(buffer: Buf) -> Saved {
+    let saved = Saved(Displaced::Buffer(Buf(curbuf.get())));
+    curbuf.set(buffer.raw());
+    saved
+}
+
+/// What a switch displaced, and the only way to put it back.
+///
+/// # Why there is no `Drop`
+///
+/// A guard that restored itself would be wrong here, not merely
+/// unidiomatic. The editor re-enters itself constantly — an autocommand, a
+/// Lua callback, `:normal` — and a body between a switch and its restore
+/// may deliberately end somewhere else: `do_mousescroll` leaves `curwin`
+/// wherever the wheel took it and the caller reads that before putting the
+/// old one back, `aucmd_restbuf` decides *by handle* which window to return
+/// to because the saved one may have been closed, and several callers give
+/// the globals back early and then keep working. A `Drop` would fire at the
+/// end of the scope in every one of those, silently, after the code that
+/// cared had already moved on. Restoring is a statement the caller writes.
+pub(crate) struct Saved(Displaced);
+
+/// Which halves a switch took, and what they held.
+enum Displaced {
+    /// [`switch_to`]: the window, with `curbuf` following it back.
+    WindowAndBuffer(Win),
+    /// [`switch_window`]: the window alone.
+    Window(Win),
+    /// [`switch_buffer`]: the buffer alone.
+    Buffer(Buf),
+}
+
+impl Saved {
+    /// Put back exactly the halves the switch took.
+    ///
+    /// A window brings its buffer with it: `curbuf` is re-read from the
+    /// window being returned to rather than restored from a second saved
+    /// value, which is what the hand-written pairs this replaces did and is
+    /// the answer that stays right when the buffer behind that window
+    /// changed while the caller was away.
+    #[inline]
+    pub(crate) fn restore(self) {
+        match self.0 {
+            Displaced::WindowAndBuffer(win) => {
+                curwin.set(win.raw());
+                curbuf.set(win.w_buffer);
+            }
+            Displaced::Window(win) => curwin.set(win.raw()),
+            Displaced::Buffer(buf) => curbuf.set(buf.raw()),
+        }
+    }
+}

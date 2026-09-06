@@ -36,7 +36,7 @@ use crate::options::{
 };
 use crate::pos::MAXCOL;
 use crate::types::{NUL, OptionSetFlags, Tabpage, Window, int64_t};
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
@@ -249,9 +249,7 @@ unsafe fn put_alternate(out: SessionFile, window: *mut Window, opts: SessionOpts
 unsafe fn put_local_options(out: SessionFile, window: *mut Window, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
-    let save_curwin = curwin.get();
-    curwin.set(window);
-    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    let saved = switch_to(unsafe { Win::new(window) });
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
         // Store only the local values for a view, and for a session
         // whose 'sessionoptions' has no "options".
@@ -262,8 +260,7 @@ unsafe fn put_local_options(out: SessionFile, window: *mut Window, opts: Session
     } else {
         Ok(())
     };
-    curwin.set(save_curwin);
-    curbuf.set(unsafe { (*curwin.get()).w_buffer });
+    saved.restore();
     f.is_ok()
 }
 

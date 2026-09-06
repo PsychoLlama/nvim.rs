@@ -25,7 +25,7 @@ use crate::os::cshim::{ngettext, strstr};
 use crate::runtime::state::current_sctx;
 use crate::strings::vim_snprintf;
 use crate::types::Vv;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 use core::ptr;
@@ -85,10 +85,8 @@ pub unsafe fn get_foldtext(
         unsafe { set_vim_var_string(Vv::Folddashes, ds, level as ptrdiff_t) };
         unsafe { set_vim_var_nr(Vv::Foldlevel, level as VarNumber) };
         if !got_fdt_error.get() {
-            let save_curwin = curwin.get();
+            let saved = switch_to(window);
             let saved_sctx = current_sctx.get();
-            curwin.set(window.raw());
-            curbuf.set(win.w_buffer);
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
             let mut obj: Object = unsafe { eval_foldtext(window.raw()) };
@@ -113,8 +111,7 @@ pub unsafe fn get_foldtext(
             if text.is_null() || did_emsg.get() != 0 {
                 got_fdt_error.set(true);
             }
-            curwin.set(save_curwin);
-            curbuf.set(cur_win().w_buffer);
+            saved.restore();
             current_sctx.set(saved_sctx);
         }
         last_lnum.set(lnum);

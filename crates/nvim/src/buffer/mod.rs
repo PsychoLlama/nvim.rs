@@ -75,7 +75,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::{curbuf, curwin, leave_curbuf};
 use crate::winlayer::{Buf, Win, buffers_back, first_buffer, last_buffer};
 
 // The carve of the transpiled module; see each child's docs.

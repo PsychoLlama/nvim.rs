@@ -54,7 +54,7 @@ use crate::window::{
     self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
     win_enter, win_valid,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin};
+use crate::winlayer::graph::curtab;
 use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
@@ -558,7 +558,8 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
 /// # Safety
 /// `cmd_arg` must be a live command argument.
 pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
-    let old_curwin = curwin.get();
+    // SAFETY: `curwin` is live from startup to exit.
+    let old_curwin = unsafe { Win::current() };
 
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
@@ -567,16 +568,17 @@ pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
         let Some(win) = find_win_inner(&mut pos) else {
             return;
         };
-        curwin.set(win.raw());
-        curbuf.set(win.buffer().raw());
+        win.make_current();
+        win.buffer().make_current();
     }
 
     // SAFETY: the caller's promise, and `curwin` is a live window.
     unsafe { do_mousescroll(cmd_arg) };
     unsafe { Win::current() }.w_redr_status = true;
-    curwin.set(old_curwin);
-    // SAFETY: `old_curwin` was live and nothing above closes a window.
-    curbuf.set(unsafe { Win::current() }.buffer().raw());
+    // `old_curwin` was live when it was taken and nothing above closes a
+    // window, so it is still the window to go back to.
+    old_curwin.make_current();
+    old_curwin.buffer().make_current();
 }
 
 /// Mouse clicks and drags.

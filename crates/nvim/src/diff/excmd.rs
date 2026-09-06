@@ -22,6 +22,7 @@ use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
 use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
+use crate::winlayer::graph::{switch_to, switch_window};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -276,17 +277,14 @@ pub unsafe fn ex_diffthis(_args: *mut ExArg) {
 /// and `diff_buf_adjust` is suppressed so that the caller stays in charge of
 /// the buffer registry.
 fn set_diff_option(window: Win, value: bool) {
-    let old_curwin = curwin.get();
-    curwin.set(window.raw());
-    curbuf.set(cur_win().w_buffer);
+    let saved = switch_to(window);
     cur_buf().b_ro_locked += 1;
     // `curwin`/`curbuf` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = boolean_optval(Some(value));
     set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
     cur_buf().b_ro_locked -= 1;
-    curwin.set(old_curwin);
-    curbuf.set(cur_win().w_buffer);
+    saved.restore();
 }
 
 /// Put `window` into diff mode: the option set, and optionally its buffer.
@@ -298,11 +296,10 @@ fn set_diff_option(window: Win, value: bool) {
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_win_options(mut window: Win, addbuf: bool) {
-    let old_curwin = curwin.get();
-    curwin.set(window.raw());
+    let saved = switch_window(window);
     // SAFETY: `curwin` is `window`, which is live.
     unsafe { new_fold_level() };
-    curwin.set(old_curwin);
+    saved.restore();
 
     // Each option is saved only while the window is not already in diff
     // mode, so a second `:diffthis` cannot overwrite the saved values.
@@ -330,18 +327,13 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     }
     let foldmethod = OptVal::String(String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4));
     let scope = OptionSetFlags::LOCAL;
-    // SAFETY: a live window as the option's scope, and a static string as
-    // its value.
-    unsafe {
-        set_option_direct_for(
-            kOptFoldmethod,
-            foldmethod,
-            scope,
-            0 as ScriptId,
-            kOptScopeWin,
-            window.raw().cast::<c_void>(),
-        )
-    };
+    set_option_direct_for(
+        kOptFoldmethod,
+        foldmethod,
+        scope,
+        0 as ScriptId,
+        OptionTarget::Win(window),
+    );
     if first_time {
         window.w_onebuf_opt.wo_fen_save = window.w_onebuf_opt.wo_fen;
         window.w_onebuf_opt.wo_fdl_save = window.w_onebuf_opt.wo_fdl;

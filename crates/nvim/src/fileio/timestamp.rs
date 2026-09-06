@@ -16,6 +16,7 @@ use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::undo::UNDO_HASH_SIZE;
+use crate::winlayer::graph::switch_buffer;
 use crate::winlayer::{Buf, Win, first_buffer, tab_windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -183,11 +184,10 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
 ///
 /// Safe: both [`Buf`]s carry the whole of the promise this needs.
 fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
-    let tbuf = curbuf.get();
+    let saved = switch_buffer(tobuf);
     let mut retval = OK;
 
     // Copy the lines in "frombuf" to "tobuf".
-    curbuf.set(tobuf.raw());
     let mut lnum = 1;
     while lnum <= frombuf.b_ml.ml_line_count {
         let p = {
@@ -209,7 +209,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
 
     // Delete all the lines in "frombuf".
     if retval != FAIL {
-        curbuf.set(frombuf.raw());
+        frombuf.make_current();
         let mut lnum = cur_buf().b_ml.ml_line_count;
         while lnum > 0 {
             if unsafe { ml_delete(lnum) }.is_err() {
@@ -222,7 +222,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
         }
     }
 
-    curbuf.set(tbuf);
+    saved.restore();
     retval
 }
 
@@ -572,13 +572,16 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
         // SAFETY: `buflist_new` answers a live buffer or null.
-        bufref = BufRef::of_opt(unsafe { Buf::from_raw(savebuf) });
-        if !savebuf.is_null() && buffer.raw() == curbuf.get() {
+        let scratch = unsafe { Buf::from_raw(savebuf) };
+        bufref = BufRef::of_opt(scratch);
+        if let Some(scratch) = scratch
+            && buffer.raw() == curbuf.get()
+        {
             // Open the memline.
-            curbuf.set(savebuf);
+            scratch.make_current();
             cur_win().w_buffer = savebuf;
             saved = unsafe { ml_open(curbuf.get()) };
-            curbuf.set(buffer.raw());
+            buffer.make_current();
             cur_win().w_buffer = buffer.raw();
         }
         if savebuf.is_null()

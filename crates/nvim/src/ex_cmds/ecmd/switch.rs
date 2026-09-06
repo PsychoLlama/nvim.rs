@@ -40,7 +40,7 @@ use crate::terminal::terminal_running;
 use crate::types::{CmdModFlags, LineNr, Window};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf};
+use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
 use crate::winlayer::{Buf, Win};
 use ::libc::atol;
 use core::ffi::c_int;
@@ -347,7 +347,7 @@ unsafe fn leave_for_buffer(
         }
 
         cur_win().w_buffer = buffer.raw();
-        curbuf.set(buffer.raw());
+        buffer.make_current();
         cur_buf().b_nwindows += 1;
 
         // Set 'fileformat', 'binary' and 'fenc' when forced.

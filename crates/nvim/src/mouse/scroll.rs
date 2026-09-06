@@ -31,7 +31,6 @@ use crate::siemsg;
 use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
 use crate::types::{CmdArg, Direction, OpArg};
-use crate::winlayer::graph::{curbuf, curwin};
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
 /// bookkeeping back in order around the move.
@@ -53,8 +52,8 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
         if new_curwin != old_curwin && old_curwin.is_valid() {
             // Mouse took us to another window.  We need to go back to the
             // previous one to stop insert there properly.
-            curwin.set(old_curwin.raw());
-            curbuf.set(old_curwin.buffer().raw());
+            old_curwin.make_current();
+            old_curwin.buffer().make_current();
             if buf_is_prompt(old_curwin.buffer_or_none()) {
                 // Restart Insert mode when re-entering the prompt buffer.
                 old_curwin.buffer().b_prompt_insert = 'A' as c_int;
@@ -69,8 +68,8 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
         // cursor moved to another window".
         unsafe { start_arrow(end) };
         if !new_curwin.is_current() && new_curwin.is_valid() {
-            curwin.set(new_curwin.raw());
-            curbuf.set(new_curwin.buffer().raw());
+            new_curwin.make_current();
+            new_curwin.buffer().make_current();
         }
         set_can_cindent(true);
     }
@@ -156,7 +155,8 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         }
     };
 
-    let old_curwin = curwin.get();
+    // SAFETY: `curwin` is live from startup to exit.
+    let old_curwin = unsafe { Win::current() };
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore "curwin" to "old_curwin" before returning!
@@ -164,13 +164,13 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         let Some(win) = find_win_inner(&mut pos) else {
             return;
         };
-        curwin.set(win.raw());
-        curbuf.set(win.buffer().raw());
+        win.make_current();
+        win.buffer().make_current();
     }
 
     // SAFETY: `curwin` is live from startup to exit.
     let mut win = unsafe { Win::current() };
-    if win.raw() == old_curwin {
+    if win == old_curwin {
         // Don't scroll the current window if the popup menu is visible.
         if pum_visible() {
             return;
@@ -188,10 +188,11 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     // SAFETY: `curwin` may have moved under `do_mousescroll`.
     win = unsafe { Win::current() };
     win.w_redr_status = true;
-    curwin.set(old_curwin);
-    // SAFETY: `old_curwin` was live and nothing above closes a window.
-    let restored = unsafe { Win::current() };
-    curbuf.set(restored.buffer().raw());
+    // `old_curwin` was live when it was taken and nothing above closes a
+    // window, so it is still the window to go back to.
+    let restored = old_curwin;
+    restored.make_current();
+    restored.buffer().make_current();
 
     // Upstream compares the *restored* window's cursor against the cursor of
     // the window that was scrolled, which are two different windows whenever

@@ -35,7 +35,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
-    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
+    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, leave_curbuf,
 };
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
@@ -339,7 +339,10 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     // Make sure `curbuf` is valid: it can become invalid if 'bufhidden' is
     // "wipe".
     if !bufref.valid() {
-        curbuf.set(first_buffer().map_or(ptr::null_mut(), Buf::raw));
+        match first_buffer() {
+            Some(buf) => buf.make_current(),
+            None => leave_curbuf(),
+        }
     }
     retval
 }
@@ -357,7 +360,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
         win.w_buffer = first.raw();
         first.b_nwindows += 1;
         if win.is_current() {
-            curbuf.set(cur_win().w_buffer);
+            first.make_current();
         }
         init_empty(win);
         return;
@@ -398,8 +401,8 @@ fn close_all_others(message: bool, forceit: bool) {
         'skip: {
             // autocommands messed this one up
             if !old_curwin.is_current() && valid_win(old_curwin.raw()).is_some() {
-                curwin.set(old_curwin.raw());
-                curbuf.set(cur_win().w_buffer);
+                old_curwin.make_current();
+                old_curwin.buffer().make_current();
             }
             if wp.is_current() {
                 break 'skip; // don't close the current window

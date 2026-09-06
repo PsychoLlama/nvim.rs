@@ -43,7 +43,8 @@ use crate::types::{
     VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Window, int16_t,
 };
 use crate::ui::state::Columns;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, switch_to};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
@@ -874,32 +875,28 @@ fn keymap_unload() {
 /// `window` and its buffer must be valid; curwin/curbuf are restored before
 /// returning.
 pub unsafe fn keymap_str(window: *mut Window) -> Option<CString> {
-    // SAFETY: caller contract; the window's buffer is valid.
-    let buf = unsafe { (*window).w_buffer };
-    // SAFETY: as above.
-    if unsafe { (*buf).b_p_iminsert } != B_IMODE_LMAP {
+    // SAFETY: caller contract -- a live window whose buffer is valid.
+    let window = unsafe { Win::new(window) };
+    let buf = window.buffer();
+    if buf.b_p_iminsert != B_IMODE_LMAP {
         return None;
     }
-    let old_curbuf = curbuf.get();
-    let old_curwin = curwin.get();
     // Evaluate b:keymap_name in wp's buffer.
-    curbuf.set(buf);
-    curwin.set(window);
+    let saved = switch_to(window);
     let skipping = Suppress::emsg_skip();
     let mut expr = *b"b:keymap_name\0";
     // SAFETY: `expr` is NUL-terminated and outlives the call; the result is
     // an owned heap string or null.
     let s = unsafe { eval_to_string(expr.as_mut_ptr() as *mut c_char, false, false) };
     drop(skipping);
-    curbuf.set(old_curbuf);
-    curwin.set(old_curwin);
+    saved.restore();
     // SAFETY: `s` is null or NUL-terminated, and 'keymap' is an option
     // string; both are copied here, and `s` is ours to free afterwards.
     let name = unsafe {
         let name = if !s.is_null() && *s as c_int != NUL {
             CStr::from_ptr(s).to_owned()
-        } else if (*buf).b_kmap_state as c_int & KEYMAP_LOADED != 0 {
-            CStr::from_ptr((*buf).b_p_keymap).to_owned()
+        } else if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 {
+            CStr::from_ptr(buf.b_p_keymap).to_owned()
         } else {
             CString::new("lang").expect("no interior NUL")
         };

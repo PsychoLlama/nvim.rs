@@ -78,7 +78,7 @@ use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_cpo, p_lz};
-use crate::option::{buf_copy_options, set_option_direct_for};
+use crate::option::{OptionTarget, buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;
 use crate::os::cshim::snprintf;

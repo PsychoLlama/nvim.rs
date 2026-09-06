@@ -35,7 +35,7 @@ use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
 use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Pos, Window};
 use crate::ui::state::Rows;
-use crate::winlayer::graph::{curbuf, curwin, firstwin, lastwin};
+use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
 
 /// A command with nothing set, as C's `CmdArg ca = { 0 }` leaves it.
@@ -245,8 +245,8 @@ pub unsafe fn do_check_cursorbind() {
     // filled in when a tab page is left.
     let mut next = first_window();
     while let Some(mut win) = next {
-        curwin.set(win.raw());
-        curbuf.set(win.buffer().raw());
+        win.make_current();
+        win.buffer().make_current();
         // Skip the original window, and the ones with 'nocursorbind'.
         if win != old_curwin && win.w_onebuf_opt.wo_crb != 0 {
             win.w_cursor.lnum = if win.w_onebuf_opt.wo_diff != 0 {
@@ -288,6 +288,6 @@ pub unsafe fn do_check_cursorbind() {
 
     set_visual_select(old_visual_select);
     set_visual_active(old_visual_active);
-    curwin.set(old_curwin.raw());
-    curbuf.set(old_curbuf.raw());
+    old_curwin.make_current();
+    old_curbuf.make_current();
 }

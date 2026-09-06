@@ -87,7 +87,7 @@ use crate::types::{
     VarLock, VarNumber, Vv, Window, int64_t, size_t, stl_hlrec_t, typval_vval_union,
 };
 use crate::undo::buf_is_changed;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, Win};
 use ::libc::{atoi, toupper};
 
@@ -154,19 +154,23 @@ impl Env {
         set_str_var(c"g:actual_curbuf", real_buf.handle);
         set_str_var(c"g:actual_curwin", real_win.handle);
 
-        let (save_curbuf, save_curwin) = (curbuf.get(), curwin.get());
         let save_visual = visual_active();
-        curwin.set(self.win.raw());
-        curbuf.set(self.buf.raw());
-        if curwin.get() != save_curwin {
+        // Asked before the switch, because after it the answer is always yes.
+        let moved = !self.win.is_current();
+        // The window and the buffer move separately: a statusline is drawn
+        // for a (window, buffer) pair that need not be a window and the
+        // buffer it shows.
+        let saved_win = switch_window(self.win);
+        let saved_buf = switch_buffer(self.buf);
+        if moved {
             // Visual mode is only valid in the current window.
             set_visual_active(false);
         }
         // SAFETY: `expr` is NUL-terminated, and the result is a string this
         // frame owns.
         let str = unsafe { eval_to_string_safe(expr.as_ptr().cast_mut(), self.sandbox, false) };
-        curwin.set(save_curwin);
-        curbuf.set(save_curbuf);
+        saved_win.restore();
+        saved_buf.restore();
         set_visual_active(save_visual);
 
         unlet(c"g:actual_curbuf");

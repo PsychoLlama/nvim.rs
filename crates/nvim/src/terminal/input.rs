@@ -41,7 +41,7 @@ use crate::vterm::keyboard::{
     vterm_keyboard_unichar,
 };
 use crate::vterm::mouse::{vterm_mouse_button, vterm_mouse_move};
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -393,10 +393,7 @@ fn scroll_direction(c: c_int) -> Option<c_int> {
 /// Scroll `mouse_win` as the editor would if the mouse were over an
 /// ordinary buffer.
 fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
-    // SAFETY: `curwin` is set from startup to exit.
-    let save_curwin = unsafe { Win::current() };
-    curwin.set(mouse_win.raw());
-    curbuf.set(mouse_win.buffer().raw());
+    let saved = switch_to(mouse_win);
 
     // SAFETY: all-zeroes is what `clear_oparg` and the command argument
     // start from; every field of both is a scalar or a pointer.
@@ -416,8 +413,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     // SAFETY: `curwin` is set from startup to exit.
     let mut scrolled = unsafe { Win::current() };
     scrolled.w_redr_status = true;
-    curwin.set(save_curwin.raw());
-    curbuf.set(save_curwin.buffer().raw());
+    saved.restore();
 }
 
 /// Deal with a mouse event while a terminal has focus.

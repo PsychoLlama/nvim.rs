@@ -35,7 +35,7 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Frame, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::graph::{curbuf, curtab, curwin, first_tabpage, firstwin, lastwin};
+use crate::winlayer::graph::{curbuf, curtab, first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
 pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
@@ -198,11 +198,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // an error message, and `win_equal()` needs `curbuf` to be valid too.
     let close_curwin = was_current;
     if was_current {
-        curwin.set(wp.raw());
+        wp.make_current();
         if wp.w_onebuf_opt.wo_pvw != 0 || buf_is_quickfix(wp.buffer_or_none()) {
             wp = away_from_preview(wp);
         }
-        curbuf.set(cur_win().w_buffer);
+        cur_win().buffer().make_current();
         // The cursor position may be invalid if the buffer changed after the
         // window was last used.
         revalidate_cursor(cur_win());
@@ -389,7 +389,7 @@ fn away_from_preview(window: Win) -> Win {
         }
         let hidden = window.w_floating && (window.w_config.hide || !window.w_config.focusable);
         if window.w_onebuf_opt.wo_pvw == 0 && !buf_is_quickfix(window.buffer_or_none()) && !hidden {
-            curwin.set(window.raw());
+            window.make_current();
             return window;
         }
     }

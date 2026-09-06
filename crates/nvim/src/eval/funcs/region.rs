@@ -33,11 +33,11 @@ use crate::types::{
     BlockDef, Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0,
     TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
 };
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::graph::curbuf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 /// The zeroed position every local in this module starts from.
 const NOWHERE: Pos = Pos {
     lnum: 0,
@@ -107,7 +107,7 @@ struct Region {
 /// so that the line accessors answer for it, and both must put it back
 /// however they leave.
 struct BufferSwap {
-    buf: *mut Buffer,
+    buf: Buf,
     virtual_op: Option<bool>,
 }
 
@@ -116,7 +116,8 @@ impl BufferSwap {
     /// `curbuf` and `curwin` are live.
     unsafe fn save() -> Self {
         BufferSwap {
-            buf: curbuf.get(),
+            // SAFETY: the caller's promise -- `curbuf` is live.
+            buf: unsafe { Buf::new(curbuf.get()) },
             virtual_op: virtual_op.get(),
         }
     }
@@ -124,9 +125,9 @@ impl BufferSwap {
 
 impl Drop for BufferSwap {
     fn drop(&mut self) {
-        curbuf.set(self.buf);
-        // SAFETY: `curwin` is live for the whole of a builtin call.
-        unsafe { (*curwin.get()).w_buffer = self.buf };
+        self.buf.make_current();
+        // `curwin` is live for the whole of a builtin call.
+        cur_win().w_buffer = self.buf.raw();
         virtual_op.set(self.virtual_op);
     }
 }
@@ -180,15 +181,17 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     } else {
         curbuf.get()
     };
-    if findbuf.is_null() || unsafe { (*findbuf).b_ml.ml_mfp }.is_null() {
+    // SAFETY: `find_buf` and `curbuf` are both a live buffer or null.
+    let loaded = (unsafe { Buf::from_raw(findbuf) }).filter(|b| !b.b_ml.ml_mfp.is_null());
+    let Some(findbuf) = loaded else {
         emsg(gettext(e_buffer_is_not_loaded));
         return None;
-    }
-    unsafe { check_corner(findbuf, &mut p1) }?;
-    unsafe { check_corner(findbuf, &mut p2) }?;
+    };
+    unsafe { check_corner(findbuf.raw(), &mut p1) }?;
+    unsafe { check_corner(findbuf.raw(), &mut p2) }?;
 
-    curbuf.set(findbuf);
-    unsafe { (*curwin.get()).w_buffer = curbuf.get() };
+    findbuf.make_current();
+    cur_win().w_buffer = findbuf.raw();
     virtual_op.set(Some(virtual_active(cur_win())));
 
     // Columns are one-based on the way in and zero-based from here.

@@ -75,7 +75,7 @@ use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
 use crate::undo::u_sync_once;
-use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};
+use crate::winlayer::graph::{cmdwin_buf, curbuf};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};
@@ -137,7 +137,7 @@ pub(super) fn cur_buf() -> Buf {
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
 struct SavedBufferState {
-    curwin_save: *mut Window,
+    curwin_save: Win,
     aco: AcoSave,
     using_aco: bool,
     save_visual_active: bool,
@@ -162,8 +162,9 @@ impl SavedBufferState {
     unsafe fn prepare(&mut self, buffer: Buf) {
         self.save_visual_active = visual_active();
         set_visual_active(false);
-        self.curwin_save = curwin.get();
-        curbuf.set(buffer.raw());
+        // SAFETY: the caller's promise -- `curwin` is set.
+        self.curwin_save = unsafe { Win::current() };
+        buffer.make_current();
         // SAFETY: `curbuf` was just set to the caller's live buffer.
         unsafe { find_win_for_curbuf() };
         let current = cur_win();
@@ -171,7 +172,7 @@ impl SavedBufferState {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
             // window.
-            curbuf.set(current.w_buffer);
+            current.buffer().make_current();
             // SAFETY: `self.aco` is this frame's, and the buffer is live.
             unsafe { aucmd_prepbuf(&raw mut self.aco, buffer.raw()) };
             self.using_aco = true;
@@ -187,9 +188,9 @@ impl SavedBufferState {
             // SAFETY: the caller's obligation — `aco` is what `prepare` left.
             unsafe { aucmd_restbuf(&raw mut self.aco) };
         } else {
-            curwin.set(self.curwin_save);
-            // SAFETY: the saved window is live and so is its buffer.
-            curbuf.set(cur_win().w_buffer);
+            // The saved window is live and so is its buffer.
+            self.curwin_save.make_current();
+            self.curwin_save.buffer().make_current();
         }
         set_visual_active(self.save_visual_active);
     }
@@ -209,10 +210,12 @@ unsafe fn find_win_for_curbuf() {
     let wininfo = &buf.b_wininfo;
     for i in 0..wininfo.size {
         let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };
-        if !unsafe { (*wip).wi_win }.is_null()
-            && unsafe { (*(*wip).wi_win).w_buffer } == curbuf.get()
-        {
-            curwin.set(unsafe { (*wip).wi_win });
+        // SAFETY: an entry's `wi_win` is a live window or null.
+        let Some(win) = (unsafe { Win::from_raw((*wip).wi_win) }) else {
+            continue;
+        };
+        if win.w_buffer == curbuf.get() {
+            win.make_current();
             break;
         }
     }

@@ -187,8 +187,10 @@ pub unsafe fn switch_win_noblock(
     if !win_valid(win) {
         return Err(Failed);
     }
-    curwin.set(win);
-    curbuf.set(unsafe { Win::new(win) }.w_buffer);
+    // SAFETY: `win_valid` above says the window is live.
+    let win = unsafe { Win::new(win) };
+    win.make_current();
+    win.buffer().make_current();
     Ok(())
 }
 
@@ -233,7 +235,8 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
     // SAFETY: the saved window is live or freed, which `win_valid` tells
     // apart, and a live window's buffer is live.
     if win_valid(switchwin.sw_curwin) {
-        curwin.set(switchwin.sw_curwin);
-        curbuf.set(unsafe { Win::new(switchwin.sw_curwin) }.w_buffer);
+        let win = unsafe { Win::new(switchwin.sw_curwin) };
+        win.make_current();
+        win.buffer().make_current();
     }
 }

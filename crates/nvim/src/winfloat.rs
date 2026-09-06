@@ -38,16 +38,16 @@ use crate::message::emsg_ptr;
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::textpos2screenpos;
 use crate::option::vars::{p_ch, p_ls};
-use crate::option::{parse_winhl_opt, set_option_direct_for};
+use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
 use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptScope,
-    OptVal, OptionSetFlags, Pos, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit,
-    WinStyle, Window, WindowHandle, kErrorTypeException, kFloatRelativeCursor,
-    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
+    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
+    OptionSetFlags, Pos, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit, WinStyle,
+    Window, WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
+    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
@@ -69,7 +69,6 @@ const kAlignLeft: AlignTextPos = 0;
 const kWinSplitLeft: WinSplit = 0;
 const kWinStyleUnused: WinStyle = 0;
 const kWinStyleMinimal: WinStyle = 1;
-const kOptScopeBuf: OptScope = 2;
 const STATUS_HEIGHT: c_int = 1;
 
 /// An unset title/footer, and an error slot holding no error.
@@ -367,9 +366,8 @@ fn create_scratch_buffer(err: &mut Error) -> BufferHandle {
 fn set_bufhidden_wipe(buffer: Buf) {
     let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
     let wipe = OptVal::String(s);
-    let (opt, from) = (kOptBufhidden, buffer.raw().cast::<c_void>());
-    // SAFETY: `buffer` is the live buffer `kOptScopeBuf` names.
-    unsafe { set_option_direct_for(opt, wipe, OptionSetFlags::LOCAL, 0, kOptScopeBuf, from) };
+    let target = OptionTarget::Buf(buffer);
+    set_option_direct_for(kOptBufhidden, wipe, OptionSetFlags::LOCAL, 0, target);
 }
 
 // ---------------------------------------------------------------------------

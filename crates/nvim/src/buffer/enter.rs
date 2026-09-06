@@ -344,9 +344,11 @@ fn leave_prevbuf(
     };
     // SAFETY: `prevbuf` is still live, the guard above having said so.
     unsafe { close_buffer(Win::from_raw(win), Buf::new(prevraw), how, false, false) };
-    if curwin.get() != previouswin && valid_win(previouswin).is_some() {
+    if curwin.get() != previouswin
+        && let Some(previous) = valid_win(previouswin)
+    {
         // autocommands changed curwin, Grr!
-        curwin.set(previouswin);
+        previous.make_current();
     }
 }
 
@@ -363,7 +365,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     // Get the buffer in the current window.
     let mut win = cur_win();
     win.w_buffer = buffer.raw();
-    curbuf.set(buffer.raw());
+    buffer.make_current();
     buffer.b_nwindows += 1;
 
     // Copy buffer and window local option values.  Not for a help buffer.

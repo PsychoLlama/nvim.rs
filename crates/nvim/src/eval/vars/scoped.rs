@@ -18,7 +18,8 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::boolean_optval;
 use crate::types::{NUL, OptionSetFlags};
-use crate::winlayer::{TabPage, Win, WinId, first_window};
+use crate::winlayer::graph::switch_buffer;
+use crate::winlayer::{Buf, TabPage, Win, WinId, first_window};
 
 /// The zeroed `SwitchWin` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
@@ -74,10 +75,11 @@ unsafe fn get_var_from(
         {
             if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
-                let save_curbuf = curbuf.get();
-                if do_change_curbuf {
-                    curbuf.set(buffer);
-                }
+                let scoped = do_change_curbuf.then(|| {
+                    // SAFETY: `do_change_curbuf` is exactly "the caller
+                    // handed a buffer", and the caller's are live.
+                    switch_buffer(unsafe { Buf::new(buffer) })
+                });
                 if unsafe { *varname.add(1) } == NUL as c_char {
                     // A bare "&": every window- or buffer-local option.
                     let opts = get_winbuf_options(c_int::from(htname == b'b' as c_int));
@@ -88,7 +90,9 @@ unsafe fn get_var_from(
                 } else if unsafe { eval_option(&raw mut varname, result, true) }.is_ok() {
                     done = true;
                 }
-                curbuf.set(save_curbuf);
+                if let Some(scoped) = scoped {
+                    scoped.restore();
+                }
             } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
                 let v: *const ScopeDictDictItem = match htname as u8 {
@@ -472,10 +476,11 @@ pub unsafe fn f_setbufvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         unsafe { set_option_from_tv(varname.add(1), varp) };
         unsafe { aucmd_restbuf(&raw mut aco) };
     } else {
-        let save_curbuf = curbuf.get();
-        curbuf.set(buf);
+        // SAFETY: `tv_get_buf` answers a live buffer or null, and the null
+        // was ruled out above.
+        let saved = switch_buffer(unsafe { Buf::new(buf) });
         unsafe { set_scoped_var(c"b:", varname, varp) };
-        curbuf.set(save_curbuf);
+        saved.restore();
     }
 }
 

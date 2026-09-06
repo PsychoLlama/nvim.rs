@@ -45,7 +45,7 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{curbuf, curtab, curwin, firstwin, lastwin, prevwin, topframe};
+use crate::winlayer::graph::{firstwin, lastwin, leave_curbuf, prevwin, topframe};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
@@ -93,7 +93,7 @@ pub unsafe fn win_alloc_first() {
     }
     let first = alloc_tabpage();
     first_tabpage.set(Some(first.id()));
-    curtab.set(first.raw());
+    first.make_current();
     // SAFETY: the tab page just allocated.
     unsafe { unuse_tabpage(first.raw()) };
 }
@@ -128,18 +128,19 @@ pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut Window) -> Result<(), Faile
 fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     // SAFETY: `win_alloc` answers a live window.
     let mut win = unsafe { Win::new(win_alloc(ptr::null_mut::<Window>(), false)) };
-    curwin.set(win.raw());
+    win.make_current();
     match oldwin {
         None => {
             // Very first window: make a new empty buffer for it.
             // SAFETY: a new unnamed listed buffer.
             let buf =
                 unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_LISTED as c_int) };
-            curbuf.set(buf);
             // SAFETY: `buflist_new` answers a live buffer or null.
             let Some(mut buf) = (unsafe { Buf::from_raw(buf) }) else {
+                leave_curbuf();
                 return Err(Failed);
             };
+            buf.make_current();
             win.w_buffer = buf.raw();
             win.w_s = &raw mut buf.b_s;
             buf.b_nwindows = 1;

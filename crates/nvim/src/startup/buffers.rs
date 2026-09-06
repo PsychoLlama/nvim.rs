@@ -281,7 +281,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             if parm.window_layout == WIN_TABS as c_int {
                 goto_tabpage(1);
             } else {
-                curwin.set(first_win().raw());
+                first_win().make_current();
             }
         } else if parm.window_layout == WIN_TABS as c_int {
             if unsafe { TabPage::current() }.next().is_none() {
@@ -292,10 +292,10 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             let Some(next) = unsafe { Win::current() }.next() else {
                 break;
             };
-            curwin.set(next.raw());
+            next.make_current();
         }
         dorewind = false;
-        curbuf.set(cur_win().w_buffer);
+        cur_win().buffer().make_current();
 
         if cur_buf().b_ml.ml_mfp.is_null() {
             if p_fdls.get() >= 0 as OptInt {
@@ -335,9 +335,9 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     if parm.window_layout == WIN_TABS as c_int {
         goto_tabpage(1);
     } else {
-        curwin.set(first_win().raw());
+        first_win().make_current();
     }
-    curbuf.set(cur_win().w_buffer);
+    cur_win().buffer().make_current();
     drop(quiet);
 }
 

@@ -17,7 +17,7 @@ use std::ffi::c_int;
 
 use neovim::indent::{get_sts_value, indent_size_ts};
 use neovim::types::{Buffer, ColNr, OptInt};
-use neovim::winlayer::graph::curbuf;
+use neovim::winlayer::Buf;
 
 use crate::support::{Editor, Sandbox, cstr};
 
@@ -43,10 +43,12 @@ fn with_buffer(f: impl FnOnce(&mut Buffer)) {
             storage.assume_init()
         }
     };
-    let saved = curbuf.get();
-    curbuf.set(&raw mut *buf);
+    // SAFETY: `curbuf` is the editor's own buffer, live under the lock.
+    let saved = unsafe { Buf::current() };
+    // SAFETY: `buf` is this case's own and outlives the call below.
+    unsafe { Buf::new(&raw mut *buf) }.make_current();
     f(&mut buf);
-    curbuf.set(saved);
+    saved.make_current();
 }
 
 /// A non-negative 'softtabstop' is the answer, zero included.

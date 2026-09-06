@@ -12,7 +12,8 @@
 use super::*;
 use crate::semsg;
 use crate::types::Failed;
-use crate::winlayer::{Buf, Win, tabs, windows};
+use crate::winlayer::graph::{switch_buffer, switch_window};
+use crate::winlayer::{Buf, tabs, windows};
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -90,18 +91,18 @@ pub(crate) unsafe fn parse_diffanchors(
     } else {
         buffer.b_p_dia
     };
-    let orig_curbuf = curbuf.get();
-    let orig_curwin = curwin.get();
-
+    // `None` means "stay where you are": `check_only` resolves the address in
+    // the window the user is in, and the one case where no window shows the
+    // buffer is one the loop below never runs in.
     let bufwin = if check_only {
-        curwin.get()
+        None
     } else {
         let shown = windows().find(|w| w.w_buffer == buffer.raw() && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && unsafe { *dia } != 0 {
             emsg(gettext(e_diff_anchors_with_hidden_windows));
             return Err(Failed);
         }
-        shown.map_or(::core::ptr::null_mut(), Win::raw)
+        shown
     };
 
     let mut i = 0;
@@ -111,8 +112,8 @@ pub(crate) unsafe fn parse_diffanchors(
         if unsafe { *dia } == b',' as c_char {
             return Err(Failed);
         }
-        curbuf.set(buffer.raw());
-        curwin.set(bufwin);
+        let saved_buf = switch_buffer(buffer);
+        let saved_win = bufwin.map(switch_window);
         let mut errormsg = None;
         let lnum = unsafe {
             get_address(
@@ -126,8 +127,10 @@ pub(crate) unsafe fn parse_diffanchors(
                 &mut errormsg,
             )
         };
-        curbuf.set(orig_curbuf);
-        curwin.set(orig_curwin);
+        saved_buf.restore();
+        if let Some(saved_win) = saved_win {
+            saved_win.restore();
+        }
         if let Some(msg) = &errormsg {
             emsg(msg);
         }

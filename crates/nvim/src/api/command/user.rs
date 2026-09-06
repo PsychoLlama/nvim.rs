@@ -18,7 +18,8 @@ use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::types::{ExArgt, ExpandContext};
-use crate::winlayer::Live;
+use crate::winlayer::graph::switch_buffer;
+use crate::winlayer::{Buf, Live};
 
 /// The options keyset this family decodes, with checked field access.
 ///
@@ -59,12 +60,13 @@ pub unsafe fn nvim_buf_create_user_command(
     }
     // The command is added to whichever buffer is current, so the lookup's
     // answer stands in for the caller's for the length of the call.
-    let save_curbuf = curbuf.get();
-    curbuf.set(target_buf);
+    // SAFETY: `find_buffer_by_handle` answers a live buffer when it leaves
+    // the error unset, which the guard above checked.
+    let saved = switch_buffer(unsafe { Buf::new(target_buf) });
     let flags = UC_BUFFER as ::core::ffi::c_int;
     // SAFETY: `opts` is the caller's keydict and `error` this frame's slot.
     unsafe { create_user_command(channel_id, name, cmd, opts, flags, &mut error) };
-    curbuf.set(save_curbuf);
+    saved.restore();
     ().reported(error)
 }
 

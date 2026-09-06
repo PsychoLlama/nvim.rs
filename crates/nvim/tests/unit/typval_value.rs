@@ -22,7 +22,7 @@ use neovim::types::{
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Window, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, typval_vval_union,
 };
-use neovim::winlayer::graph::curwin;
+use neovim::winlayer::Win;
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Pt, Tv};
@@ -824,8 +824,10 @@ fn getting_a_line_number_resolves_the_cursor() {
     // so no `Window` value is produced or dropped here.
     let mut win = Box::new(std::mem::MaybeUninit::<Window>::zeroed());
     let wp = win.as_mut_ptr();
-    let saved_curwin = curwin.get();
-    curwin.set(wp);
+    // SAFETY: `curwin` is the editor's own window, live under the lock.
+    let saved_curwin = unsafe { Win::current() };
+    // SAFETY: `win` is this case's own and outlives the case.
+    unsafe { Win::new(wp) }.make_current();
 
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
@@ -860,7 +862,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         }
     }
 
-    curwin.set(saved_curwin);
+    saved_curwin.make_current();
 }
 
 /// `describe('float()') itp('works')`, spec line 3241: only a number and a

@@ -24,6 +24,7 @@ use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
 };
+use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -319,16 +320,16 @@ fn set_list_title(qfl: Qfl) {
 /// page.
 pub(crate) fn qf_update_win_titlevar(qi: Qi) {
     let qfl = qi.curlist();
-    let save_curwin = curwin.get();
+    let save_curwin = cur_win();
     // `set_list_title` only writes a window variable, so the window list is
     // stable across the walk.
     for win in tab_windows() {
         if is_qf_win(win, qi) {
-            curwin.set(win.raw());
+            win.make_current();
             set_list_title(qfl);
         }
     }
-    curwin.set(save_curwin);
+    save_curwin.make_current();
 }
 
 /// `:copen`/`:lopen`: open a window showing the list.
@@ -422,9 +423,7 @@ pub unsafe fn ex_cclose(args: *mut ExArg) {
 /// The window is made current for the cursor move only; nothing in between
 /// can leave it current.
 fn win_goto_line(mut win: Win, lnum: LineNr) {
-    let old_curwin = cur_win();
-    curwin.set(win.raw());
-    curbuf.set(win.w_buffer);
+    let saved = switch_to(win);
     win.w_cursor.lnum = lnum;
     win.w_cursor.col = 0;
     win.w_cursor.coladd = 0;
@@ -432,8 +431,7 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
     win.update_topline(); // scroll to show the line
     win.redraw_later(UPD_VALID);
     win.w_redr_status = true; // update ruler
-    curwin.set(old_curwin.raw());
-    curbuf.set(old_curwin.w_buffer);
+    saved.restore();
 }
 
 /// `:cbottom`/`:lbottom`: put the cursor on the last line of the window.

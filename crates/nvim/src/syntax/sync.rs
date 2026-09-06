@@ -18,6 +18,8 @@ use core::ffi::{CStr, c_char, c_int};
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::types::NUL;
+use crate::winlayer::Buf;
+use crate::winlayer::graph::{switch_buffer, switch_window};
 
 /// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
 /// and the current state to it.
@@ -37,6 +39,9 @@ pub(crate) unsafe fn syn_sync(window: *mut Window, start_lnum: LineNr, last_vali
 
     let flags = syn_block().b_syn_sync_flags;
     if flags & SF_CCOMMENT != 0 {
+        // SAFETY: the caller's promise -- a live window.
+        let window = unsafe { Win::new(window) };
+        // SAFETY: `syn_sync`'s own contract reaches its callee.
         unsafe { sync_by_ccomment(window, start_lnum) };
     } else if flags & SF_MATCH != 0 {
         unsafe { sync_by_match(start_lnum, last_valid) };
@@ -75,13 +80,13 @@ unsafe fn sync_backoff(start_lnum: LineNr) -> LineNr {
 
 /// Search backwards for the end of a C-style comment, and if the start line
 /// turns out to be inside one, push the syntax item that defines it.
-unsafe fn sync_by_ccomment(window: *mut Window, mut start_lnum: LineNr) {
+unsafe fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
     // `find_start_comment` works on the current buffer, so make syn_buf it
-    // for a moment.
-    let curwin_save = curwin.get();
-    curwin.set(window);
-    let curbuf_save = curbuf.get();
-    curbuf.set(syn_buf.get());
+    // for a moment. The window moves without its buffer: the parser's buffer
+    // is `syn_buf`, which need not be the one `window` shows.
+    let saved_win = switch_window(window);
+    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
+    let saved_buf = switch_buffer(unsafe { Buf::new(syn_buf.get()) });
 
     // Skip lines that end in a backslash.
     while start_lnum > 1 {
@@ -97,9 +102,9 @@ unsafe fn sync_by_ccomment(window: *mut Window, mut start_lnum: LineNr) {
     current_lnum.set(start_lnum);
 
     // Set the cursor to the start of the search.
-    let cursor_save = unsafe { (*window).w_cursor };
-    unsafe { (*window).w_cursor.lnum = start_lnum };
-    unsafe { (*window).w_cursor.col = 0 };
+    let cursor_save = window.w_cursor;
+    window.w_cursor.lnum = start_lnum;
+    window.w_cursor.col = 0;
 
     // Restrict the search for the end of the comment to "maxlines".
     if unsafe { find_start_comment(syn_block().b_syn_sync_maxlines as c_int) }.is_some() {
@@ -119,9 +124,9 @@ unsafe fn sync_by_ccomment(window: *mut Window, mut start_lnum: LineNr) {
         }
     }
 
-    unsafe { (*window).w_cursor = cursor_save };
-    curwin.set(curwin_save);
-    curbuf.set(curbuf_save);
+    window.w_cursor = cursor_save;
+    saved_win.restore();
+    saved_buf.restore();
 }
 
 /// Where a `:syntax sync match` matched, and what it said to do there.
