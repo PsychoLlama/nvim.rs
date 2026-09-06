@@ -238,6 +238,7 @@ pub(crate) unsafe fn getvcols(
 /// `wanted` picks which of start, cursor and end to ask for. The C spells
 /// "not this one" as a null pointer and skips the work for it, which is what
 /// the callers below were passing by hand.
+#[inline(always)]
 fn columns(win: Win, pos: PosRef, virtual_edit: bool, wanted: [bool; 3]) -> [ColNr; 3] {
     let (mut start, mut cursor, mut end) = (0 as ColNr, 0 as ColNr, 0 as ColNr);
     let pick = |want: bool, p: *mut ColNr| if want { p } else { ptr::null_mut() };
@@ -246,11 +247,16 @@ fn columns(win: Win, pos: PosRef, virtual_edit: bool, wanted: [bool; 3]) -> [Col
         pick(wanted[1], &raw mut cursor),
         pick(wanted[2], &raw mut end),
     );
-    let get: unsafe fn(Win, *mut Pos, *mut ColNr, *mut ColNr, *mut ColNr) =
-        if virtual_edit { getvvcol } else { getvcol };
-    // SAFETY: a live window, a live position in its buffer, and three
+    // Two arms rather than one call through a function pointer: an indirect
+    // call here is not inlined, and `getvcol` is on the cursor and statusline
+    // paths -- it cost 1.3% of `scrbench` when this was `let get = if ...`.
+    // SAFETY (both): a live window, a live position in its buffer, and three
     // out-parameters that are each null or a local of this frame.
-    unsafe { get(win, pos.raw(), s, c, e) };
+    if virtual_edit {
+        unsafe { getvvcol(win, pos.raw(), s, c, e) };
+    } else {
+        unsafe { getvcol(win, pos.raw(), s, c, e) };
+    }
     [start, cursor, end]
 }
 
