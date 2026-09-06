@@ -286,7 +286,7 @@ pub unsafe fn buflist_new(
     } else {
         // `fresh` is `Some` exactly when the buffer is not the reused
         // current one, which is the branch this is.
-        append_to_list(buf, fresh.take().expect("a fresh buffer was allocated"));
+        buf = append_to_list(buf, fresh.take().expect("a fresh buffer was allocated"));
         // Always copy the options from the current buffer.
         copy_options_into(buf, BCO_ALWAYS as c_int);
     }
@@ -423,13 +423,18 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
 
 /// Put a new buffer at the end of the buffer list, give it its number and
 /// hand its allocation to the registry, which owns it from here on.
-fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) {
+///
+/// Answers the buffer **with its number in it**: a [`Buf`] carries a copy of
+/// the number it was built with, and the caller's was built before there was
+/// one, so it must take this one back or its `id()` names nothing.
+#[must_use = "the caller's Buf predates the number; use the one this answers"]
+fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
     // The number and the registry entry come first, ahead of upstream's
     // order: from here on `buffer.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
-    buffer.handle = top_file_num.get() as Handle;
+    buffer.set_handle(top_file_num.get() as Handle);
     top_file_num.set(top_file_num.get() + 1);
-    register_buffer(buffer.handle, owned);
+    register_buffer(buffer.handle(), owned);
 
     buffer.b_next = None;
     match current_last() {
@@ -455,6 +460,7 @@ fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) {
         }
         top_file_num.set(1);
     }
+    buffer
 }
 
 fn init_hashtabs(mut buffer: Buf) {

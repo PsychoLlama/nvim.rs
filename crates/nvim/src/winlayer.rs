@@ -8,26 +8,22 @@
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
-//! [`FrameRef`], [`TabPage`], [`PosRef`] and [`Line`] each wrap one pointer and make
-//! its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`] give
-//! ordinary field access and the handful of accessors below give the
-//! projections a bare `&`/`&mut` cannot express — the buffer behind a window, a
-//! line of that buffer, the span of a fold. Every one of them rests on the
-//! single promise the constructor took, which each `pub unsafe fn` in a
-//! consumer restates in its own `# Safety` section.
+//! [`FrameRef`], [`TabPage`], [`PosRef`] and [`Line`] each wrap one pointer and
+//! make its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`]
+//! give ordinary field access and the accessors below give the projections a
+//! bare `&`/`&mut` cannot express — the buffer behind a window, a line of that
+//! buffer. Every one rests on the single promise the constructor took, which
+//! each `pub unsafe fn` in a consumer restates in its own `# Safety` section.
+//! A family adds the wrappers it needs as its own `impl Win` block (an
+//! inherent impl may live in any module of the defining crate) — the fold
+//! projections are in `fold`, the ones a registry needs in [`handles`] — so
+//! this module stays the shared minimum.
 //!
-//! Each family adds the wrappers it needs as its own `impl Win` block (an
-//! inherent impl may live in any module of the defining crate), so this module
-//! stays the shared minimum rather than growing a method per caller.
-//!
-//! The three **handle registries** live here too — see "Finding one by
-//! handle" below. They are the one place a `Win`/`Buf`/`TabPage` is built
-//! from a handle rather than from a pointer a caller already had, and
-//! because the registry's own invariant is that everything in it is live,
-//! [`window`], [`buffer`] and [`tabpage`] are **safe** functions.
-//!
-//! Its child [`handles`] holds the three registries and the deferred-free
-//! set.
+//! The three **handle registries** are that child [`handles`], along with the
+//! deferred-free set. They are the one place a `Win`/`Buf`/`TabPage` is built
+//! from a handle rather than from a pointer a caller already had, and because
+//! the registry's own invariant is that everything in it is live, [`window`],
+//! [`buffer`] and [`tabpage`] are **safe** functions.
 //!
 //! # Who owns the object
 //!
@@ -38,51 +34,36 @@
 //! **Windows are not there yet**: `aucmd_restbuf` takes the autocommand
 //! window out of the registry while it stays alive and `aucmd_prepbuf` puts
 //! it back, so "registered" and "owned" are different lifetimes for a
-//! `Window` until that idle window has a named owner. `registry`'s two types
-//! say which is which.
+//! `Window`. `registry`'s two types say which is which.
 //!
-//! **The five list links are handles all the same.** `b_next`/`b_prev`,
-//! `w_next`/`w_prev` and `tp_next` — and the six anchors `firstbuf`,
-//! `lastbuf`, `firstwin`, `lastwin`, `tp_firstwin`/`tp_lastwin` and
-//! `first_tabpage` — hold a [`BufId`]/[`WinId`]/[`TabId`], not an address,
-//! so the graph's *lists* are index-shaped whether or not the allocation
-//! has moved. Ownership is what a `Vec` inside the object needs; a handle
-//! link is what makes a stale link answer `None` instead of pointing into
-//! freed memory, and it is why the window list is safe to walk even though
-//! nobody owns a `Window` yet. The one thing it asks of the allocator is an
-//! order: **a window, buffer or tab page must be in the registry before it
-//! is spliced into a list, and must leave the list before it leaves the
-//! registry.** `buflist_new` and `aucmd_prepbuf` were both the other way
-//! round and were swapped for this.
+//! **The list links are handles all the same.** `b_next`/`b_prev`,
+//! `w_next`/`w_prev` and `tp_next`, and the anchors `firstbuf`/`lastbuf`,
+//! `firstwin`/`lastwin`, `tp_firstwin`/`tp_lastwin` and `first_tabpage`, hold
+//! a [`BufId`]/[`WinId`]/[`TabId`] rather than an address, so a stale link
+//! answers `None` instead of pointing into freed memory and the window list
+//! is safe to walk even though nobody owns a `Window` yet. The one thing that
+//! asks of the allocator is an order: **a window, buffer or tab page must be
+//! in the registry before it is spliced into a list, and must leave the list
+//! before it leaves the registry.** `buflist_new` and `aucmd_prepbuf` were
+//! both the other way round and were swapped for this.
 //!
-//! None of that changes what a [`Buf`] or a [`Win`] *is*. Both are still one
-//! address and building one still reads nothing: `Owned::address` hands back
-//! the pointer it was born with rather than borrowing the table, so the
-//! registry's copy, `curbuf` and every `w_buffer` are the same pointer and
-//! all of them stay usable. That is the whole reason the table holds an
-//! `Owned` rather than a `Box` — see its docs.
+//! None of that moves a [`Buf`] or a [`Win`]: `Owned::address` hands back the
+//! pointer it was born with rather than borrowing the table, so the
+//! registry's copy, `curbuf` and every `w_buffer` are the same pointer. That
+//! is why the table holds an `Owned` rather than a `Box` — see its docs.
 //!
 //! # The re-entry rule
 //!
 //! **A `Win`, `Buf` or `TabPage` held across a call that may fire an
 //! autocommand or enter Lua or Vimscript is re-derived from its handle
 //! afterwards, never reused. No `&mut` reached through one is held across
-//! such a call.**
-//!
-//! Everything below rests on the promise the constructor took — *this object
-//! stays live for as long as the value is used* — and an autocommand is
-//! exactly what breaks it. `:bwipeout` in a `BufLeave` handler frees the
-//! buffer a caller is holding; `WinClosed` closes windows; a Lua callback can
-//! do either. The value keeps pointing at memory that has gone back to the
+//! such a call.** `:bwipeout` in a `BufLeave` handler frees the buffer a
+//! caller is holding; `WinClosed` closes windows; a Lua callback can do
+//! either. The value keeps pointing at memory that has gone back to the
 //! allocator, and the next field access is a use-after-free.
 //!
-//! So the shape of every such caller is: **take the identity before, ask the
-//! registry after.** [`WinId`] and [`BufId`] are that identity — a `Handle`
-//! with the address dropped. (A `TabPageId` lands with its first caller;
-//! `dead_code` is `-D` here.)
-//!
 //! ```ignore
-//! let id = win.id();                  // while the window is provably live
+//! let id = win.id();                  // a field load; the address is dropped
 //! apply_autocmds(AutoEvent::BufLeave, ...);
 //! let Some(mut win) = id.get() else {
 //!     return;                         // it did not survive
@@ -90,60 +71,45 @@
 //! win.w_cursor.lnum = 1;              // a fresh value, freshly checked
 //! ```
 //!
-//! [`Win::id`] *reads the window*, which is why it must be taken before the
-//! call and not after — and why the identity is a separate value rather than
-//! a second field of [`Win`]. **Building a `Win` reads nothing**, and the
-//! editor depends on that: `win_valid` and `win_find_tabpage` are handed
-//! addresses an autocommand may already have freed, and only compare them.
-//! Reading a handle out of one to answer "is it still there?" is the very
-//! dereference those functions exist to avoid, so such a caller keeps the raw
-//! pointer and keeps the list walk.
+//! **The handle carries its own identity.** [`Win::new`] reads the window's
+//! handle at the one moment the caller promised the window is live and stores
+//! it beside the address, so [`Win::id`] is a field load and the validity
+//! predicates — `win_valid`, `win_valid_any_tab`, `win_find_tabpage`,
+//! `buf_valid`, `valid_tabpage` — walk the live lists comparing copies,
+//! reading nothing that may have been freed. Taking the id *ahead* of the
+//! call is therefore a narrowing rather than a safety step. While the
+//! identity lived only in the object it was neither: p28-6 asked `win.id()`
+//! at the check, and `just asan functionaltest` answered with 169
+//! heap-use-after-free reports.
 //!
-//! Four shapes of the rule are in the tree and worth copying:
+//! The other half of that hazard remains. A caller holding a bare
+//! `*mut Window` an autocommand may have freed still may not wrap it —
+//! [`Win::new`] is exactly the read a list walk exists to avoid — so
+//! [`window_at`], [`buffer_at`] and [`tabpage_at`] compare the address
+//! against the live lists instead. Shapes worth copying: `buffer::BufRef`
+//! (upstream's `BufferRef`), a saved `Handle` plus a registry lookup
+//! (`autocmd::aucmdwin`), a [`WinId`] in a struct (`terminal::mode`), and
+//! [`BufId::valid`].
 //!
-//! * `BufRef` (`buffer::BufRef`, upstream's `BufferRef`) — `BufRef::of`/`of_opt`
-//!   before, `BufRef::valid`/`get` after. `buffer::enter` uses it twice around
-//!   `BufLeave`.
-//! * A saved `Handle` plus a registry lookup — `autocmd::aucmdwin`'s
-//!   `save_curwin_handle`/`save_prevwin_handle`.
-//! * [`WinId`] held in a struct that outlives arbitrary re-entry —
-//!   `terminal::mode`'s `save_curwin`, restored with `.get()`.
-//! * [`BufId::valid`] — the same pair as a question; `buffer::enter` asks it
-//!   about a buffer it held across `BufLeave`.
-//!
-//! **This is not `win_valid()`.** They answer different questions and are
-//! not interchangeable — see [`WinId::get`]'s own docs and the comment above
-//! `window::win_valid`.
-//!
-//! On `&mut`: [`DerefMut`] hands out a borrow that lasts exactly as long as
-//! the field access asking for it, and nothing here offers a scoped
-//! `with_mut` that would stretch one across a callback. Phase 22's ruling 6
-//! — nothing an autocommand or Lua callback re-enters holds a `&mut` — is
-//! therefore a property of the API rather than of review.
+//! **This is not `win_valid()`.** They answer different questions — see
+//! [`WinId::get`]'s docs and the comment above `window::win_valid`.
 //!
 //! # On [`DerefMut`] and raw pointers into the same object
 //!
 //! **A `&mut` reached through [`DerefMut`] borrows the *whole struct*, not
 //! the field.** `win.w_cursor.lnum = 1` asks for `&mut Window` and projects;
 //! under Stacked and Tree Borrows that borrow pops every raw pointer
-//! previously derived from the same object off the tag stack, so a
-//! `*mut Pos` taken earlier from `&raw mut (*wp).w_cursor` — or any other
-//! interior pointer the transpiled code is still carrying — is **invalidated
-//! by the next write through the handle**, and using it afterwards is UB.
+//! previously derived from the same object, so an interior `*mut Pos` taken
+//! earlier is **invalidated by the next write through the handle**. Nothing
+//! warns but Miri, and only if a test walks that path (p23-5). So when a body
+//! holds an interior raw pointer across writes through a `Win`/`Buf`, derive
+//! the address with [`Win::cursor`] or [`Live::field_ptr`], which compute it
+//! from the base without forming a `&mut`, or re-derive it after each write.
+//! Retyping a `*mut Window` parameter to `Win` is not by itself enough.
 //!
-//! Nothing warns. `cargo check`, clippy and a release build are all silent;
-//! only Miri sees it, and only if a test happens to walk that path. p23-5
-//! found the same edge from the other side, and it is why the sweep that
-//! retired the raw `curwin`/`curbuf` reads left `&raw mut (*cur_win().raw())
-//! .field` alone rather than writing `&raw mut cur_win().field`: the address
-//! would take its provenance from a transient `&mut Window`.
-//!
-//! So when a body holds an interior raw pointer across writes through a
-//! `Win`/`Buf`, one of the two has to go: derive the address with
-//! [`Win::cursor`] or [`Live::field_ptr`], which compute it from the base
-//! *without* forming a `&mut` and so read nothing, or re-derive the interior
-//! pointer after each write. Converting a `*mut Window` parameter to `Win` is
-//! not by itself enough — check what else in the body still points inside.
+//! Nothing here offers a scoped `with_mut` that would stretch a borrow across
+//! a callback, so phase 22's ruling 6 — nothing an autocommand re-enters
+//! holds a `&mut` — is a property of the API rather than of review.
 //!
 //! The walks — [`windows`], [`windows_in_tab`], [`tab_windows`], [`buffers`]
 //! and [`frames`], plus [`tabs`] and [`frames_back`] under them — are the C's
@@ -183,29 +149,56 @@ use core::ops::{Deref, DerefMut};
 use core::ptr;
 
 use crate::drawscreen::redraw_later;
-use crate::fold::{has_any_folding, has_folding};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
-use crate::plines::{getvcol, getvvcol};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
 use crate::winlayer::graph::{curtab, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
 
-/// A window the caller has promised is live.
+/// A window the caller has promised is live: **its address and its identity,
+/// both taken at construction**.
 ///
-/// One pointer, and **building one reads nothing**: the editor passes these
-/// addresses around after an autocommand may already have freed them and only
-/// compares them (`win_valid`, `win_find_tabpage`). Identity that outlives the
-/// address is [`WinId`], taken while the window is live.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Win(*mut Window);
+/// [`Win::new`] is the one moment the window is promised live, so it is the
+/// one moment reading it is sound — and it is where the handle is read.
+/// Everything after that reads the copy: [`Win::id`] is a field load, so
+/// asking "is this window still there?" — `WinId::get`, then a compare of the
+/// address it answers with — touches nothing that may already have been
+/// freed. While the identity was a field *of the object*, every validity
+/// check read the very window it was asking about; p28-6 counted 169 heap
+/// use-after-frees from that shape.
+///
+/// Two handles are equal when they name the same **address**: a hand-written
+/// `PartialEq` rather than a derive, so that the comparison stays the C's
+/// `wp == curwin`.
+#[derive(Clone, Copy)]
+pub struct Win {
+    ptr: *mut Window,
+    /// The window's handle, read while it was live. Named `id` rather than
+    /// `handle` so that it cannot be confused with `Window`'s own field of
+    /// that name, which [`Deref`] still reaches: `win.handle` is a read of
+    /// the *window*, [`Win::handle`] a read of this copy.
+    ///
+    /// Zero means "no identity" — a null [`Win`], or a window whose handle
+    /// the allocator has not assigned yet — which is what [`Win::id`]
+    /// refuses.
+    id: Handle,
+}
 
 /// A buffer the caller has promised is live. [`Win`]'s shape.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Buf(*mut Buffer);
+///
+/// A `Buf` may be **null**: `w_buffer` is null for the moment between a
+/// window losing a buffer and being given another, and an empty `tp_diffbuf`
+/// slot is null too. A null one carries handle zero and may only be compared
+/// or tested — see [`Win::buffer_or_none`].
+#[derive(Clone, Copy)]
+pub struct Buf {
+    ptr: *mut Buffer,
+    /// The buffer's number, read while it was live. [`Win`]'s `id`.
+    id: Handle,
+}
 
 /// A frame of the window layout tree the caller has promised is live.
 ///
@@ -216,8 +209,31 @@ pub struct Buf(*mut Buffer);
 pub struct FrameRef(*mut Frame);
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TabPage(*mut Tabpage);
+#[derive(Clone, Copy)]
+pub struct TabPage {
+    ptr: *mut Tabpage,
+    /// The tab page's handle, read while it was live. [`Win`]'s `id`.
+    id: Handle,
+}
+
+// Address equality for all three, hand-written. A derive would compare the
+// cached handle too, making a copy taken before a reallocation unequal to one
+// taken after it at the same address — a distinction no caller asks for.
+// `wp == curwin` is an address test in the C and stays one here.
+macro_rules! address_eq {
+    ($($ty:ty),+) => { $(
+        impl PartialEq for $ty {
+            #[inline(always)]
+            fn eq(&self, other: &Self) -> bool {
+                ptr::eq(self.ptr, other.ptr)
+            }
+        }
+
+        impl Eq for $ty {}
+    )+ };
+}
+
+address_eq!(Win, Buf, TabPage);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -233,7 +249,7 @@ impl Deref for Win {
     #[inline(always)]
     fn deref(&self) -> &Window {
         // SAFETY: the constructor's promise — a live window.
-        unsafe { &*self.0 }
+        unsafe { &*self.ptr }
     }
 }
 
@@ -242,7 +258,7 @@ impl DerefMut for Win {
     fn deref_mut(&mut self) -> &mut Window {
         // SAFETY: the constructor's promise — a live window. The borrow lasts
         // only as long as the field access that asked for it.
-        unsafe { &mut *self.0 }
+        unsafe { &mut *self.ptr }
     }
 }
 
@@ -252,7 +268,7 @@ impl Deref for Buf {
     #[inline(always)]
     fn deref(&self) -> &Buffer {
         // SAFETY: the constructor's promise — a live buffer.
-        unsafe { &*self.0 }
+        unsafe { &*self.ptr }
     }
 }
 
@@ -260,7 +276,7 @@ impl DerefMut for Buf {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Buffer {
         // SAFETY: the constructor's promise — a live buffer.
-        unsafe { &mut *self.0 }
+        unsafe { &mut *self.ptr }
     }
 }
 
@@ -288,7 +304,7 @@ impl Deref for TabPage {
     #[inline(always)]
     fn deref(&self) -> &Tabpage {
         // SAFETY: the constructor's promise — a live tab page.
-        unsafe { &*self.0 }
+        unsafe { &*self.ptr }
     }
 }
 
@@ -296,7 +312,7 @@ impl DerefMut for TabPage {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Tabpage {
         // SAFETY: the constructor's promise — a live tab page.
-        unsafe { &mut *self.0 }
+        unsafe { &mut *self.ptr }
     }
 }
 
@@ -319,11 +335,25 @@ impl DerefMut for PosRef {
 }
 
 impl Win {
+    /// The window at `raw`, with its identity taken from it.
+    ///
+    /// **This reads the window** — its handle — which is exactly what the
+    /// caller's promise makes sound, and is the only read the value will ever
+    /// need. A null `raw` is tolerated and carries handle zero: the family's
+    /// "or null" spellings route through here.
+    ///
     /// # Safety
-    /// `raw` must stay a live window for as long as the value is used.
+    /// `raw` must be null, or stay a live window for as long as the value is
+    /// used.
     #[inline(always)]
-    pub const unsafe fn new(raw: *mut Window) -> Self {
-        Self(raw)
+    pub unsafe fn new(raw: *mut Window) -> Self {
+        // SAFETY: the caller's promise, and the null test that precedes it.
+        let id = if raw.is_null() {
+            0
+        } else {
+            unsafe { (*raw).handle }
+        };
+        Self { ptr: raw, id }
     }
 
     /// The window `raw` names, `None` for null.
@@ -332,8 +362,27 @@ impl Win {
     /// `raw` must be null, or stay a live window for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(raw: *mut Window) -> Option<Self> {
-        if raw.is_null() { None } else { Some(Self(raw)) }
+    pub unsafe fn from_raw(raw: *mut Window) -> Option<Self> {
+        // SAFETY: the caller's promise, narrowed by the null test.
+        (!raw.is_null()).then(|| unsafe { Self::new(raw) })
+    }
+
+    /// The window at `raw` with `handle` already known — a registry entry —
+    /// so **nothing is read**.
+    #[inline(always)]
+    pub(super) const fn at(raw: *mut Window, handle: Handle) -> Self {
+        Self {
+            ptr: raw,
+            id: handle,
+        }
+    }
+
+    /// The window a live frame's `fr_win` names, or a null [`Win`]. The
+    /// frame promised it, so reading it is sound.
+    #[inline(always)]
+    fn at_field(raw: *mut Window) -> Self {
+        // SAFETY: a live frame's `fr_win` is a live window or null.
+        unsafe { Self::new(raw) }
     }
 
     /// The window the editor is working in.
@@ -382,25 +431,43 @@ impl Win {
 
     #[inline(always)]
     pub fn raw(self) -> *mut Window {
-        self.0
+        self.ptr
     }
 
     /// This window's id: the handle the API, `win_getid()` and the registry
-    /// all name it by. **Reads the window**, so ask it while the window is
-    /// live — which is what the re-entry rule asks anyway: before the call
-    /// that might close it. [`Win::id`] wraps the answer in a type.
+    /// all name it by. A **field load** — the handle was read once, at
+    /// construction, while the window was provably live.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.handle
+        self.id
     }
 
-    /// This window's identity, taken while it is live: the value to hold
-    /// across anything that can re-enter the editor. See [`WinId`].
+    /// This window's identity: the value to hold across anything that can
+    /// re-enter the editor. See [`WinId`].
+    ///
+    /// # Panics
+    ///
+    /// When the handle is zero — a null [`Win`], or one built before the
+    /// allocator assigned a handle. Neither names a window, so neither has
+    /// an identity to hold.
     #[inline(always)]
     pub(crate) fn id(self) -> WinId {
         // A live window's handle is `last_win_id`, which is incremented
         // before it is read, so it is never zero.
-        WinId(NonZero::new(self.handle).expect("a live window has a handle"))
+        WinId(NonZero::new(self.id).expect("a live window has a handle"))
+    }
+
+    /// Give this window its handle, at the one moment it has none: the
+    /// allocator's, before anything can name it.
+    ///
+    /// Writes the object **and** the copy, which is why it is a method:
+    /// `win.handle = h` reaches `Window`'s own field through [`DerefMut`]
+    /// and would leave the copy at zero, so the next `win.id()` would name
+    /// nothing.
+    #[inline]
+    pub(crate) fn set_handle(&mut self, handle: Handle) {
+        DerefMut::deref_mut(self).handle = handle;
+        self.id = handle;
     }
 
     /// Whether this is the window the editor is working in.
@@ -409,7 +476,7 @@ impl Win {
     /// neither of them.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.0 == curwin.get()
+        self.ptr == curwin.get()
     }
 
     /// The buffer this window shows, or a null [`Buf`] for the moment between
@@ -424,7 +491,7 @@ impl Win {
     /// hand an `Option<Buf>`, and the two names differ so the grep is easy.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
-        Buf(self.w_buffer)
+        Buf::at_field(self.w_buffer)
     }
 
     /// The leaf frame this window sits in. Every window has one, floats
@@ -444,7 +511,7 @@ impl Win {
         // would, without asking the window to be readable to say where its
         // cursor is.
         PosRef(
-            self.0
+            self.ptr
                 .wrapping_byte_add(offset_of!(Window, w_cursor))
                 .cast(),
         )
@@ -456,7 +523,7 @@ impl Win {
     pub fn buffer_or_none(self) -> Option<Buf> {
         // A live window's `w_buffer` is a live buffer or null.
         let buf = self.w_buffer;
-        (!buf.is_null()).then_some(Buf(buf))
+        (!buf.is_null()).then(|| Buf::at_field(buf))
     }
 
     /// The next window in this tab page's list, if any.
@@ -471,121 +538,29 @@ impl Win {
         self.w_prev.and_then(WinId::get)
     }
 
-    /// First line of the fold containing `lnum`, if there is one.
-    #[inline(always)]
-    pub fn fold_first(self, lnum: LineNr) -> Option<LineNr> {
-        let mut first = lnum;
-        // `firstp` is written only when the answer is true, so the seed
-        // survives a line that is in no fold.
-        let folded = has_folding(self, lnum, Some(&mut first), None);
-        folded.then_some(first)
-    }
-
-    /// Last line of the fold containing `lnum`, or `lnum` when it is in none.
-    #[inline(always)]
-    pub fn fold_last(self, lnum: LineNr) -> LineNr {
-        let mut last = lnum;
-        // `lastp` is written only when folded.
-        has_folding(self, lnum, None, Some(&mut last));
-        last
-    }
-
-    /// Last line of the fold containing `lnum`, `None` when it is in none --
-    /// [`Win::fold_first`]'s partner at the other end.
-    #[inline(always)]
-    pub fn fold_end(self, lnum: LineNr) -> Option<LineNr> {
-        let (folded, _, last) = self.fold_span(lnum);
-        folded.then_some(last)
-    }
-
-    /// The whole fold containing `lnum`: whether there is one, and its first
-    /// and last line (both `lnum` when there is not).
-    #[inline(always)]
-    pub fn fold_span(self, lnum: LineNr) -> (bool, LineNr, LineNr) {
-        let (mut first, mut last) = (lnum, lnum);
-        // Both out-params are written only when folded.
-        let folded = has_folding(self, lnum, Some(&mut first), Some(&mut last));
-        (folded, first, last)
-    }
-
-    #[inline(always)]
-    pub fn has_any_folding(self) -> bool {
-        has_any_folding(self) != 0
-    }
-
-    /// First and last virtual column of the character at `pos`.
-    #[inline(always)]
-    pub fn vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
-        let (mut start, mut end) = (0, 0);
-        // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
-        (start, end)
-    }
-
-    /// Start, cursor and end virtual column of the character at `pos`.
-    #[inline(always)]
-    pub fn vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
-        let (mut start, mut cursor, mut end) = (0, 0, 0);
-        // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
-        (start, cursor, end)
-    }
-
-    /// The first virtual column of the character at `pos`.
-    #[inline(always)]
-    pub fn vcol(self, pos: PosRef) -> ColNr {
-        self.vcol_span(pos).0
-    }
-
-    /// [`Win::vcol_span`] with 'virtualedit' taken into account.
-    #[inline(always)]
-    pub fn virtual_vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
-        let (mut start, mut end) = (0, 0);
-        // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
-        (start, end)
-    }
-
-    /// [`Win::vcol_triple`] with 'virtualedit' taken into account.
-    #[inline(always)]
-    pub fn virtual_vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
-        let (mut start, mut cursor, mut end) = (0, 0, 0);
-        // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
-        (start, cursor, end)
-    }
-
-    /// The first virtual column of the character at `pos`, 'virtualedit'
-    /// included.
-    #[inline(always)]
-    pub fn virtual_vcol(self, pos: PosRef) -> ColNr {
-        self.virtual_vcol_span(pos).0
-    }
-
-    /// The virtual column the *cursor* shows at within the character at
-    /// `pos`, which is not its first column when the character is a tab.
-    #[inline(always)]
-    pub fn virtual_cursor_vcol(self, pos: PosRef) -> ColNr {
-        let mut cursor = 0;
-        let (none, c) = (ptr::null_mut(), &raw mut cursor);
-        // SAFETY: a live window and a live position in its buffer.
-        unsafe { getvvcol(self, pos.0, none, c, none) };
-        cursor
-    }
-
     #[inline(always)]
     pub fn redraw_later(self, redraw_type: ::core::ffi::c_int) {
         // SAFETY: a live window.
-        redraw_later(unsafe { Win::new(self.0) }, redraw_type);
+        redraw_later(self, redraw_type);
     }
 }
 
 impl Buf {
+    /// The buffer at `raw`, with its number taken from it. [`Win::new`],
+    /// including the null case.
+    ///
     /// # Safety
-    /// `raw` must stay a live buffer for as long as the value is used.
+    /// `raw` must be null, or stay a live buffer for as long as the value is
+    /// used.
     #[inline(always)]
-    pub const unsafe fn new(raw: *mut Buffer) -> Self {
-        Self(raw)
+    pub unsafe fn new(raw: *mut Buffer) -> Self {
+        // SAFETY: the caller's promise, and the null test that precedes it.
+        let id = if raw.is_null() {
+            0
+        } else {
+            unsafe { (*raw).handle }
+        };
+        Self { ptr: raw, id }
     }
 
     /// The buffer `raw` names, `None` for null.
@@ -594,8 +569,29 @@ impl Buf {
     /// `raw` must be null, or stay a live buffer for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(raw: *mut Buffer) -> Option<Self> {
-        if raw.is_null() { None } else { Some(Self(raw)) }
+    pub unsafe fn from_raw(raw: *mut Buffer) -> Option<Self> {
+        // SAFETY: the caller's promise, narrowed by the null test.
+        (!raw.is_null()).then(|| unsafe { Self::new(raw) })
+    }
+
+    /// [`Win::at`] for a buffer.
+    #[inline(always)]
+    pub(super) const fn at(raw: *mut Buffer, handle: Handle) -> Self {
+        Self {
+            ptr: raw,
+            id: handle,
+        }
+    }
+
+    /// The buffer a window's `w_buffer` or a tab page's `tp_diffbuf` slot
+    /// names, or a null [`Buf`]. The window or tab page promised it, so
+    /// reading it is sound; a caller whose *own* object may already be gone
+    /// holds a bare address and asks [`buffer_at`] instead.
+    #[inline(always)]
+    fn at_field(raw: *mut Buffer) -> Self {
+        // SAFETY: a live window's `w_buffer`, or a live tab page's diff
+        // slot, is a live buffer or null.
+        unsafe { Self::new(raw) }
     }
 
     /// The buffer the editor is working in. [`Win::current`].
@@ -626,23 +622,29 @@ impl Buf {
 
     #[inline(always)]
     pub fn raw(self) -> *mut Buffer {
-        self.0
+        self.ptr
     }
 
     /// This buffer's number: the handle the API and `:ls` show, and what the
-    /// registry finds it by. [`Win::handle`] for a buffer — it reads the
-    /// buffer, so ask it while the buffer is live.
+    /// registry finds it by. [`Win::handle`] for a buffer — a field load.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.handle
+        self.id
     }
 
-    /// This buffer's identity, taken while it is live. [`Win::id`].
+    /// This buffer's identity. [`Win::id`], panic included.
     #[inline(always)]
     pub fn id(self) -> BufId {
         // A live buffer's number is `top_file_num`, which is incremented
         // before it is read, so it is never zero.
-        BufId(NonZero::new(self.handle).expect("a live buffer has a number"))
+        BufId(NonZero::new(self.id).expect("a live buffer has a number"))
+    }
+
+    /// Give this buffer its number. [`Win::set_handle`].
+    #[inline]
+    pub(crate) fn set_handle(&mut self, handle: Handle) {
+        DerefMut::deref_mut(self).handle = handle;
+        self.id = handle;
     }
 
     #[inline(always)]
@@ -654,7 +656,7 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf(Buf::new(self.0), lnum) })
+        Line(unsafe { ml_get_buf(self, lnum) })
     }
 
     /// [`Buf::line`], marking the line dirty so the caller may write to it.
@@ -663,7 +665,7 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line_mut(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf_mut(Buf::new(self.0), lnum) })
+        Line(unsafe { ml_get_buf_mut(self, lnum) })
     }
 
     /// Bytes in line `lnum`, the terminating NUL excluded.
@@ -672,14 +674,14 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line_len(self, lnum: LineNr) -> ColNr {
-        unsafe { ml_get_buf_len(Buf::new(self.0), lnum) }
+        unsafe { ml_get_buf_len(self, lnum) }
     }
 
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
     pub fn snap_to_char(self, pos: PosRef) {
         // SAFETY: a live buffer and a live position in it.
-        unsafe { mark_mb_adjustpos(Buf::new(self.0), pos.0) };
+        unsafe { mark_mb_adjustpos(self, pos.0) };
     }
 
     /// The next buffer in the editor's buffer list, if any.
@@ -724,7 +726,7 @@ impl FrameRef {
         // A live leaf frame's `fr_win` is a live window; a row or column's is
         // null.
         let win = self.fr_win;
-        (!win.is_null()).then_some(Win(win))
+        (!win.is_null()).then(|| Win::at_field(win))
     }
 
     /// The frame this one is a child of — `None` only for the tab page's
@@ -769,11 +771,29 @@ impl FrameRef {
 }
 
 impl TabPage {
+    /// The tab page at `raw`, with its handle taken from it. [`Win::new`].
+    ///
     /// # Safety
-    /// `raw` must stay a live tab page for as long as the value is used.
+    /// `raw` must be null, or stay a live tab page for as long as the value
+    /// is used.
     #[inline(always)]
-    pub const unsafe fn new(raw: *mut Tabpage) -> Self {
-        Self(raw)
+    pub unsafe fn new(raw: *mut Tabpage) -> Self {
+        // SAFETY: the caller's promise, and the null test that precedes it.
+        let id = if raw.is_null() {
+            0
+        } else {
+            unsafe { (*raw).handle }
+        };
+        Self { ptr: raw, id }
+    }
+
+    /// [`Win::at`] for a tab page.
+    #[inline(always)]
+    pub(super) const fn at(raw: *mut Tabpage, handle: Handle) -> Self {
+        Self {
+            ptr: raw,
+            id: handle,
+        }
     }
 
     /// The tab page `raw` names, `None` for null — which is how the window
@@ -783,8 +803,9 @@ impl TabPage {
     /// `raw` must be null, or stay a live tab page for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(raw: *mut Tabpage) -> Option<Self> {
-        if raw.is_null() { None } else { Some(Self(raw)) }
+    pub unsafe fn from_raw(raw: *mut Tabpage) -> Option<Self> {
+        // SAFETY: the caller's promise, narrowed by the null test.
+        (!raw.is_null()).then(|| unsafe { Self::new(raw) })
     }
 
     /// The tab page the editor is working in. [`Win::current`].
@@ -815,7 +836,7 @@ impl TabPage {
 
     #[inline(always)]
     pub fn raw(self) -> *mut Tabpage {
-        self.0
+        self.ptr
     }
 
     /// One of the up-to-eight buffers this tab page is diffing, or a null
@@ -831,22 +852,29 @@ impl TabPage {
     /// When `idx` is not a diff slot.
     #[inline(always)]
     pub fn diffbuf(self, idx: usize) -> Buf {
-        Buf(self.tp_diffbuf[idx])
+        Buf::at_field(self.tp_diffbuf[idx])
     }
 
-    /// This tab page's id. [`Win::handle`] for a tab page.
+    /// This tab page's id. [`Win::handle`] for a tab page — a field load.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.handle
+        self.id
     }
 
     /// This tab page's identity, for the list links and for holding across
-    /// re-entry. [`Win::id`].
+    /// re-entry. [`Win::id`], panic included.
     #[inline(always)]
     pub(crate) fn id(self) -> TabId {
         // A live tab page's handle is `LAST_TP_HANDLE`, which is incremented
         // before it is read, so it is never zero.
-        TabId(NonZero::new(self.handle).expect("a live tab page has a handle"))
+        TabId(NonZero::new(self.id).expect("a live tab page has a handle"))
+    }
+
+    /// Give this tab page its handle. [`Win::set_handle`].
+    #[inline]
+    pub(crate) fn set_handle(&mut self, handle: Handle) {
+        DerefMut::deref_mut(self).handle = handle;
+        self.id = handle;
     }
 
     /// Whether this is the tab page the editor is working in.
@@ -855,7 +883,7 @@ impl TabPage {
     /// reads neither of them.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.0 == curtab.get()
+        self.ptr == curtab.get()
     }
 
     /// This tab page as the window family takes it in an argument: `None` when

@@ -55,22 +55,30 @@ static TABPAGES: GlobalCell<OwnedRegistry<Tabpage>> = GlobalCell::new(OwnedRegis
 /// The window `handle` names, `None` once it has been closed.
 #[inline]
 pub(crate) fn window(handle: Handle) -> Option<Win> {
-    // The borrow ends with the lookup, which cannot re-enter.
-    WINDOWS.with(|reg| reg.get(handle)).map(Win)
+    // The borrow ends with the lookup, which cannot re-enter. The handle is
+    // the key that found it, so the [`Win`] is assembled without reading the
+    // window: a lookup answers about an object it never touches.
+    WINDOWS
+        .with(|reg| reg.get(handle))
+        .map(|raw| Win::at(raw, handle))
 }
 
 /// The buffer numbered `handle`, `None` once it has been wiped.
 #[inline]
 pub(crate) fn buffer(handle: Handle) -> Option<Buf> {
     // As [`window`].
-    BUFFERS.with(|reg| reg.get(handle)).map(Buf)
+    BUFFERS
+        .with(|reg| reg.get(handle))
+        .map(|raw| Buf::at(raw, handle))
 }
 
 /// The tab page `handle` names, `None` once it has been closed.
 #[inline]
 pub(crate) fn tabpage(handle: Handle) -> Option<TabPage> {
     // As [`window`].
-    TABPAGES.with(|reg| reg.get(handle)).map(TabPage)
+    TABPAGES
+        .with(|reg| reg.get(handle))
+        .map(|raw| TabPage::at(raw, handle))
 }
 
 /// Record `win` as the live window its handle names.
@@ -94,7 +102,7 @@ pub(crate) fn forget_window(handle: Handle) {
 /// Called by the allocator once the buffer's number is assigned — `handle`
 /// is that number, which the caller has already written into the buffer.
 pub(crate) fn register_buffer(handle: Handle, buffer: Owned<Buffer>) -> Buf {
-    Buf(BUFFERS.with_mut(|reg| reg.register(handle, buffer)))
+    Buf::at(BUFFERS.with_mut(|reg| reg.register(handle, buffer)), handle)
 }
 
 /// Take the buffer `handle` names out of the registry, handing its
@@ -111,7 +119,10 @@ pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<Buffer>> {
 
 /// [`register_buffer`] for a tab page.
 pub(crate) fn register_tabpage(handle: Handle, tabpage: Owned<Tabpage>) -> TabPage {
-    TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tabpage)))
+    TabPage::at(
+        TABPAGES.with_mut(|reg| reg.register(handle, tabpage)),
+        handle,
+    )
 }
 
 /// [`forget_buffer`] for a tab page.
@@ -242,9 +253,10 @@ impl WinId {
     /// call I just made"; ask `win_valid` when the question is about layout —
     /// "is this window on screen, on this tab page". Reaching for the wrong
     /// one is a behaviour change, not a style choice. And a caller holding a
-    /// bare `*mut Window` that an autocommand may have freed cannot use this
-    /// at all: taking a [`WinId`] from one would read the window, the very
-    /// dereference the list walk exists to avoid.
+    /// bare `*mut Window` that an autocommand may have freed cannot get here
+    /// at all: **building** the [`Win`] reads the window's handle, which is
+    /// the very dereference the list walk exists to avoid. `window_at` is
+    /// that caller's answer.
     #[inline(always)]
     pub(crate) fn get(self) -> Option<Win> {
         window(self.0.get())

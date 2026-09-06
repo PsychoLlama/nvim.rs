@@ -196,7 +196,7 @@ fn first_win() -> Win {
 pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     let mut new_wp = zeroed_window();
     last_win_id.set(last_win_id.get() + 1);
-    new_wp.handle = last_win_id.get() as Handle;
+    new_wp.set_handle(last_win_id.get() as Handle);
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);

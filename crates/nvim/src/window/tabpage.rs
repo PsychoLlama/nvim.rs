@@ -94,8 +94,8 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // registry takes it over two lines below.
     let mut tp = unsafe { TabPage::new(owned.address()) };
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
-    tp.handle = LAST_TP_HANDLE.get() as Handle;
-    let mut tp = register_tabpage(tp.handle, owned);
+    tp.set_handle(LAST_TP_HANDLE.get() as Handle);
+    let mut tp = register_tabpage(tp.handle(), owned);
 
     // Init t: variables.
     // SAFETY: a fresh dictionary, which becomes the tab page's own.

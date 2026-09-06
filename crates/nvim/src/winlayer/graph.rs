@@ -182,6 +182,27 @@ pub(crate) fn leave_curbuf() {
     curbuf.set(::core::ptr::null_mut::<Buffer>());
 }
 
+/// The window the mirror names, whatever its identity.
+///
+/// The switch pair below saves what it displaces as a value rather than as an
+/// identity, exactly as the C saved the pointer: it is put back a few
+/// statements later with nothing in between that can free it. Reading the
+/// handle out of it is sound for the same reason.
+#[inline(always)]
+fn current_window() -> Win {
+    // SAFETY: the mirror is written only by the funnel above, beside the
+    // identity it mirrors, so it names the live current window or is null --
+    // and `Win::new` tolerates null.
+    unsafe { Win::new(curwin.get()) }
+}
+
+/// [`current_window`] for the buffer mirror.
+#[inline(always)]
+fn current_buffer() -> Buf {
+    // SAFETY: as [`current_window`]; `leave_curbuf` spells "none" as null.
+    unsafe { Buf::new(curbuf.get()) }
+}
+
 /// Stand in `win` and the buffer it shows, until [`Saved::restore`].
 ///
 /// This is the editor's most common shape by far: some piece of code has to
@@ -193,9 +214,9 @@ pub(crate) fn leave_curbuf() {
 #[must_use = "the switch is undone by Saved::restore; dropping this leaves \
               the editor standing in the wrong window"]
 pub(crate) fn switch_to(win: Win) -> Saved {
-    let saved = Saved(Displaced::WindowAndBuffer(Win(curwin.get())));
+    let saved = Saved(Displaced::WindowAndBuffer(current_window()));
     win.make_current();
-    Buf(win.w_buffer).make_current();
+    win.buffer().make_current();
     saved
 }
 
@@ -203,7 +224,7 @@ pub(crate) fn switch_to(win: Win) -> Saved {
 #[inline]
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_window(win: Win) -> Saved {
-    let saved = Saved(Displaced::Window(Win(curwin.get())));
+    let saved = Saved(Displaced::Window(current_window()));
     win.make_current();
     saved
 }
@@ -212,7 +233,7 @@ pub(crate) fn switch_window(win: Win) -> Saved {
 #[inline]
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_buffer(buffer: Buf) -> Saved {
-    let saved = Saved(Displaced::Buffer(Buf(curbuf.get())));
+    let saved = Saved(Displaced::Buffer(current_buffer()));
     buffer.make_current();
     saved
 }
@@ -256,7 +277,7 @@ impl Saved {
         match self.0 {
             Displaced::WindowAndBuffer(win) => {
                 win.make_current();
-                Buf(win.w_buffer).make_current();
+                win.buffer().make_current();
             }
             Displaced::Window(win) => win.make_current(),
             Displaced::Buffer(buf) => buf.make_current(),

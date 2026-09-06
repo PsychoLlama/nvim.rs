@@ -8,9 +8,12 @@
 //! functions.
 
 use super::*;
+use core::ptr;
+
 use crate::normal::{visual_active, visual_anchor};
 use crate::pos::MAXCOL;
 use crate::types::NUL;
+use crate::winlayer::PosRef;
 
 /// Virtual column of `pos`, in up to three flavours:
 ///
@@ -227,4 +230,82 @@ pub(crate) unsafe fn getvcols(
             to1
         }
     };
+}
+
+/// [`getvcol`]/[`getvvcol`] with the out-parameters as locals: the single
+/// `unsafe` the [`Win`] projections below share.
+///
+/// `wanted` picks which of start, cursor and end to ask for. The C spells
+/// "not this one" as a null pointer and skips the work for it, which is what
+/// the callers below were passing by hand.
+fn columns(win: Win, pos: PosRef, virtual_edit: bool, wanted: [bool; 3]) -> [ColNr; 3] {
+    let (mut start, mut cursor, mut end) = (0 as ColNr, 0 as ColNr, 0 as ColNr);
+    let pick = |want: bool, p: *mut ColNr| if want { p } else { ptr::null_mut() };
+    let (s, c, e) = (
+        pick(wanted[0], &raw mut start),
+        pick(wanted[1], &raw mut cursor),
+        pick(wanted[2], &raw mut end),
+    );
+    let get: unsafe fn(Win, *mut Pos, *mut ColNr, *mut ColNr, *mut ColNr) =
+        if virtual_edit { getvvcol } else { getvcol };
+    // SAFETY: a live window, a live position in its buffer, and three
+    // out-parameters that are each null or a local of this frame.
+    unsafe { get(win, pos.raw(), s, c, e) };
+    [start, cursor, end]
+}
+
+/// The virtual-column questions a caller asks *of a window*, as [`Win`]
+/// methods.
+///
+/// They live beside [`getvcol`] rather than in `winlayer` for the reason that
+/// module's docs give: a family hangs its own projections off `impl Win`, so
+/// the shared module stays the minimum.
+impl Win {
+    /// First and last virtual column of the character at `pos`.
+    #[inline(always)]
+    pub fn vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
+        let c = columns(self, pos, false, [true, false, true]);
+        (c[0], c[2])
+    }
+
+    /// Start, cursor and end virtual column of the character at `pos`.
+    #[inline(always)]
+    pub fn vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
+        let c = columns(self, pos, false, [true, true, true]);
+        (c[0], c[1], c[2])
+    }
+
+    /// The first virtual column of the character at `pos`.
+    #[inline(always)]
+    pub fn vcol(self, pos: PosRef) -> ColNr {
+        self.vcol_span(pos).0
+    }
+
+    /// [`Win::vcol_span`] with 'virtualedit' taken into account.
+    #[inline(always)]
+    pub fn virtual_vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
+        let c = columns(self, pos, true, [true, false, true]);
+        (c[0], c[2])
+    }
+
+    /// [`Win::vcol_triple`] with 'virtualedit' taken into account.
+    #[inline(always)]
+    pub fn virtual_vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
+        let c = columns(self, pos, true, [true, true, true]);
+        (c[0], c[1], c[2])
+    }
+
+    /// The first virtual column of the character at `pos`, 'virtualedit'
+    /// included.
+    #[inline(always)]
+    pub fn virtual_vcol(self, pos: PosRef) -> ColNr {
+        self.virtual_vcol_span(pos).0
+    }
+
+    /// The virtual column the *cursor* shows at within the character at
+    /// `pos`, which is not its first column when the character is a tab.
+    #[inline(always)]
+    pub fn virtual_cursor_vcol(self, pos: PosRef) -> ColNr {
+        columns(self, pos, true, [false, true, false])[1]
+    }
 }

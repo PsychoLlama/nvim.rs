@@ -173,6 +173,56 @@ pub unsafe fn copy_folding_state(mut wp_from: Win, mut wp_to: Win) {
     unsafe { clone_fold_list(&raw mut wp_from.w_folds, &raw mut wp_to.w_folds) };
 }
 
+/// The fold questions a caller asks *of a window*, as [`Win`] methods.
+///
+/// They live here rather than in `winlayer` for the reason that module's docs
+/// give: a family hangs its own projections off `impl Win`, so the shared
+/// module stays the minimum. Each is one call to [`has_folding`] with the
+/// out-parameters read back.
+impl Win {
+    /// First line of the fold containing `lnum`, if there is one.
+    #[inline(always)]
+    pub fn fold_first(self, lnum: LineNr) -> Option<LineNr> {
+        let mut first = lnum;
+        // `firstp` is written only when the answer is true, so the seed
+        // survives a line that is in no fold.
+        let folded = has_folding(self, lnum, Some(&mut first), None);
+        folded.then_some(first)
+    }
+
+    /// Last line of the fold containing `lnum`, or `lnum` when it is in none.
+    #[inline(always)]
+    pub fn fold_last(self, lnum: LineNr) -> LineNr {
+        let mut last = lnum;
+        // `lastp` is written only when folded.
+        has_folding(self, lnum, None, Some(&mut last));
+        last
+    }
+
+    /// Last line of the fold containing `lnum`, `None` when it is in none --
+    /// [`Win::fold_first`]'s partner at the other end.
+    #[inline(always)]
+    pub fn fold_end(self, lnum: LineNr) -> Option<LineNr> {
+        let (folded, _, last) = self.fold_span(lnum);
+        folded.then_some(last)
+    }
+
+    /// The whole fold containing `lnum`: whether there is one, and its first
+    /// and last line (both `lnum` when there is not).
+    #[inline(always)]
+    pub fn fold_span(self, lnum: LineNr) -> (bool, LineNr, LineNr) {
+        let (mut first, mut last) = (lnum, lnum);
+        // Both out-params are written only when folded.
+        let folded = has_folding(self, lnum, Some(&mut first), Some(&mut last));
+        (folded, first, last)
+    }
+
+    #[inline(always)]
+    pub fn has_any_folding(self) -> bool {
+        has_any_folding(self) != 0
+    }
+}
+
 /// Returns true if there may be folded lines in window "win".
 ///
 /// A window on screen always shows a buffer, which is what reading
