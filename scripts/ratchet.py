@@ -409,11 +409,22 @@ plus these whole-tree metrics, which are not per-file:
                         files is free and only deleting or renaming one
                         counts. `type` aliases are in deliberately: the
                         integer aliases are the bulk of phase 27's rename.
-                      raw_win_buf_sigs  `*mut Window`/`*mut Buffer`/
-                        `*mut Tabpage` inside a `fn` *signature* — the span
-                        from the `fn` keyword through the return type, so a
-                        parameter rustfmt wrapped onto its own line still
-                        counts and a local variable of that type does not.
+                      raw_win_buf_sigs  a raw `Window`/`Buffer`/`Tabpage`
+                        pointer, `*mut` or `*const`, inside a `fn`
+                        *signature* — the span from the `fn` keyword through
+                        the return type, so a parameter rustfmt wrapped onto
+                        its own line still counts and a local variable of that
+                        type does not.
+                      mut_win_buf_refs  `&mut Window`/`&mut Buffer`/
+                        `&mut Tabpage` over the same spans. The retype away
+                        from the raw pointers above has exactly one wrong
+                        landing place, and this is it: `&mut` is `noalias`,
+                        while `curwin`/`curbuf` alias every window and buffer
+                        the editor hands around, so such a parameter is
+                        undefined behaviour the moment its argument is the
+                        current one. The handle (`Win`/`Buf`/`TabPage`) is the
+                        parameter type — `Copy`, and borrowing only for the
+                        length of one field access.
                       abbrev_params   the transpiler's parameter
                         abbreviations (`wp`, `eap`, `rettv`, `ptr` …)
                         bound in a `fn` signature, over the same span, with
@@ -935,8 +946,19 @@ PUB_CONST_DECL = re.compile(
 T_SUFFIX_DECL = re.compile(
     r"\b(?:struct|enum|union|type)\s+([A-Za-z_][A-Za-z0-9_]*_T)\b"
 )
-# The raw graph pointers, counted inside `fn` signature spans only.
-RAW_WIN_BUF = re.compile(r"\*mut\s+(?:Window|Buffer|Tabpage)\b")
+# The raw graph pointers, counted inside `fn` signature spans only. `const`
+# as well as `mut`: a `*const Window` parameter is the same C vocabulary and
+# the same retype, and counting only the `mut` half would have let 37 of them
+# sit outside the number the exit clause is written against.
+RAW_WIN_BUF = re.compile(r"\*(?:mut|const)\s+(?:Window|Buffer|Tabpage)\b")
+# The graph objects behind an exclusive Rust borrow, same spans. `&mut` is
+# `noalias`, and `curwin`/`curbuf` alias every window and buffer the editor
+# passes around: 50 window-taking functions read `curwin` in the same body and
+# 19 of those also write a `w_` field, so a `&mut Window` parameter is UB the
+# moment the argument *is* the current window. The handle (`Win`/`Buf`/
+# `TabPage`) is the parameter type -- it is `Copy` and borrows per access --
+# and this number keeps the retype from landing on `&mut` by accident.
+MUT_WIN_BUF_REF = re.compile(r"&\s*mut\s+(?:Window|Buffer|Tabpage)\b")
 # The transpiler's parameter abbreviations, also inside `fn` signature spans
 # only: the leading `\b` plus the optional `_` catches both `buf:` and the
 # `_buf:` an unused parameter is spelled with, while keeping the needle off
@@ -1798,6 +1820,7 @@ def vocabulary(tree):
                 counts[name] += len(needle.findall(masked))
     names = set()
     signatures = 0
+    mut_refs = 0
     aliases = {}
     constants = []
     abbrevs = 0
@@ -1810,6 +1833,7 @@ def vocabulary(tree):
         declarations = list(fn_signatures(masked))
         spans = [sig for _, sig, _ in declarations]
         signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
+        mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             frozen = exported if file.startswith(API_DIR) else ()
             spans = [sig for name, sig, _ in declarations if name not in frozen]
@@ -1830,6 +1854,7 @@ def vocabulary(tree):
         "const_int_alias": sum(type_ in integral for type_ in constants),
         "t_suffix_types": len(names),
         "raw_win_buf_sigs": signatures,
+        "mut_win_buf_refs": mut_refs,
         "abbrev_params": abbrevs,
     }
 
@@ -2025,6 +2050,7 @@ WHOLE_TREE_LABEL = {
     "ptr_arith": "pointer-arithmetic method calls",
     "t_suffix_types": "distinct `_T` type declarations",
     "raw_win_buf_sigs": "raw win/buf/tabpage pointers in fn signatures",
+    "mut_win_buf_refs": "&mut win/buf/tabpage borrows in fn signatures",
     "abbrev_params": "transpiler parameter abbreviations in fn signatures",
     "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
 }
@@ -2036,6 +2062,7 @@ VOCABULARY_KEYS = (
     "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
+    "mut_win_buf_refs",
     "abbrev_params",
 )
 
@@ -2686,13 +2713,17 @@ SELF_TEST_VOCABULARY = [
         {"t_suffix_types": 3},
     ),
     (
+        # `*const` counts beside `*mut`; the local and the function-pointer
+        # type do not. `&mut` on the same three types is its own number, and
+        # `&Window` -- a shared borrow, which aliases legally -- is neither.
         {
             "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
-            "    buf: *mut Buffer,\n) -> *mut Tabpage {\n"
+            "    buf: *const Buffer,\n) -> *mut Tabpage {\n"
             "    let x: *mut Window = q;\n}\n"
             "type Cb = fn(*mut Window);\n"
+            "fn g(wp: &mut Window, other: &Window, tp: &mut Tabpage) {\n}\n"
         },
-        {"raw_win_buf_sigs": 3},
+        {"raw_win_buf_sigs": 3, "mut_win_buf_refs": 2},
     ),
     (
         # `_eap` counts, `old_buf` and the local `ptr` do not, and the two
