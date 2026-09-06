@@ -340,13 +340,17 @@ impl Win {
     /// raw pointer nobody promised. [`Win::current_or_none`] is the same
     /// question where the answer may be "none".
     ///
+    /// `inline(always)` on all three, as the `unsafe fn` this replaced was:
+    /// the draw benches read them thousands of times per redraw, and letting
+    /// the ordinary `inline` heuristic decide cost ~0.5% of `scrbench`.
+    ///
     /// # Panics
     ///
     /// When there is no current window — before `win_alloc_first` and after
     /// the last one goes — or when the window it names has been freed
     /// without anything being made current in its place. Both are a bug in
     /// whatever last called `Win::make_current`, which is the only writer.
-    #[inline]
+    #[inline(always)]
     pub fn current() -> Self {
         Self::current_or_none().expect("no current window: nothing called Win::make_current")
     }
@@ -355,7 +359,7 @@ impl Win {
     ///
     /// The `curwin != NULL` test, as a question with an answer: a caller
     /// that means to cope with having no window asks this one.
-    #[inline]
+    #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
         graph::CURRENT_WIN.get().and_then(WinId::get)
     }
@@ -368,7 +372,7 @@ impl Win {
     /// sites this exists for, and it retires with them: a signature that
     /// takes `Option<Win>` wants [`Win::current_or_none`], and a body that
     /// reads a field wants [`Win::current`].
-    #[inline]
+    #[inline(always)]
     pub fn current_raw() -> *mut Window {
         Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
     }
@@ -598,21 +602,21 @@ impl Buf {
     /// When there is none — the few statements after `leave_curbuf`, and
     /// startup before the first buffer exists. [`Buf::current_or_none`] is
     /// the form for the callers that mean to be there.
-    #[inline]
+    #[inline(always)]
     pub fn current() -> Self {
         Self::current_or_none().expect("no current buffer: see winlayer::graph::leave_curbuf")
     }
 
     /// The buffer the editor is working in, `None` where there is none.
     /// [`Win::current_or_none`].
-    #[inline]
+    #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
         graph::CURRENT_BUF.get().and_then(BufId::get)
     }
 
     /// The buffer's address, or null where there is none.
     /// [`Win::current_raw`].
-    #[inline]
+    #[inline(always)]
     pub fn current_raw() -> *mut Buffer {
         Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
     }
@@ -787,21 +791,21 @@ impl TabPage {
     /// When there is none, which is startup before `win_alloc_first` and
     /// nowhere else. [`TabPage::current_or_none`] for the two callers that
     /// run there.
-    #[inline]
+    #[inline(always)]
     pub fn current() -> Self {
         Self::current_or_none().expect("no current tab page: nothing called TabPage::make_current")
     }
 
     /// The tab page the editor is working in, `None` where there is none.
     /// [`Win::current_or_none`].
-    #[inline]
+    #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
         graph::CURRENT_TAB.get().and_then(TabId::get)
     }
 
     /// The tab page's address, or null where there is none.
     /// [`Win::current_raw`].
-    #[inline]
+    #[inline(always)]
     pub fn current_raw() -> *mut Tabpage {
         Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
     }
