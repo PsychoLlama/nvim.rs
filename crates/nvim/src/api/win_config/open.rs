@@ -39,7 +39,7 @@ pub unsafe fn nvim_open_win(
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as WindowHandle).reported(error);
     };
-    if cmdwin_type.get() != 0 && enter || b == unsafe { Buf::new(cmdwin_buf.get()) } {
+    if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return (0 as WindowHandle).reported(error);

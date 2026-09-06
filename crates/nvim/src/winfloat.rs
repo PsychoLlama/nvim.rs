@@ -52,8 +52,8 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{
-    last_status, lastwin_nofloating, merge_win_config, tabpage_win_valid, win_alloc, win_append,
-    win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
+    last_status, lastwin_nofloating, merge_win_config, win_alloc, win_append, win_close,
+    win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, winframe_remove,
 };
 use crate::winlayer::graph::{cmdwin_win, prevwin};
@@ -280,10 +280,6 @@ fn merge_config(win: &mut Win, fconfig: WinConfig) {
 fn valid_window(win: *mut Window) -> Option<Win> {
     windows().find(|wp| wp.raw() == win)
 }
-fn valid_in_tab(tabpage: TabPage, win: Win) -> Option<Win> {
-    tabpage_win_valid(tabpage, win.raw()).then_some(win)
-}
-
 /// Close a float, keeping its buffer and without forcing.
 ///
 /// Fires `WinClosed`/`WinLeave` and can re-enter this module, so nothing may
@@ -775,7 +771,7 @@ pub(crate) unsafe fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -
     };
 
     debug_assert!(!tp.is_current(), "tp != curtab");
-    let wp = valid_in_tab(tp, unsafe { Win::new(tp.tp_prevwin) });
+    let wp = windows_in_tab(tp).find(|wp| wp.raw() == tp.tp_prevwin);
     let first = tp
         .tp_firstwin
         .and_then(WinId::get)

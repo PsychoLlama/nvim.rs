@@ -36,7 +36,6 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
     Arena, BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
-    Window,
 };
 use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
@@ -160,7 +159,7 @@ pub unsafe fn draw_tabline() {
         // Use the 'tabline' option instead.
         // SAFETY: a null window means "the tab line"; this evaluates the
         // option.
-        unsafe { win_redr_custom(Win::new(ptr::null_mut::<Window>()), false, false, false) };
+        unsafe { win_redr_custom(None, false, false, false) };
     } else {
         // SAFETY: the editor's own lists.
         unsafe { draw_default_tabline() };

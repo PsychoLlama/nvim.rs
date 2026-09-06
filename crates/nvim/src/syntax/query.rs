@@ -169,7 +169,7 @@ pub(crate) unsafe fn syn_get_id(
 ) -> c_int {
     // Parsing has to restart unless this position is at or after the
     // current one, in the same line of the same window and buffer.
-    if window != unsafe { Win::new(syn_win.get()) }
+    if window.raw() != syn_win.get()
         || window.w_buffer != syn_buf.get()
         || lnum != current_lnum.get()
         || col < current_col.get()

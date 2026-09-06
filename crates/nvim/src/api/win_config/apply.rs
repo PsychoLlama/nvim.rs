@@ -508,7 +508,7 @@ pub unsafe fn nvim_win_set_config(
     }
     if fconfig._cmdline_offset < INT_MAX {
         cmdline_win.set(w.raw());
-    } else if w == unsafe { Win::new(cmdline_win.get()) } && fconfig._cmdline_offset == INT_MAX {
+    } else if w.raw() == cmdline_win.get() && fconfig._cmdline_offset == INT_MAX {
         cmdline_win.set(::core::ptr::null_mut::<Window>());
     }
     ().reported(error)

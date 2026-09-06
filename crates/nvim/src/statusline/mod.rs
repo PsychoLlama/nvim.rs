@@ -612,7 +612,7 @@ pub unsafe fn redraw_custom_statusline(window: Win) {
     }
     ENTERED.set(true);
     // SAFETY: the caller's promise.
-    unsafe { win_redr_custom(window, false, false, false) };
+    unsafe { win_redr_custom(Some(window), false, false, false) };
     ENTERED.set(false);
 }
 
