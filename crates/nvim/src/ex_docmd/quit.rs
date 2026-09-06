@@ -474,7 +474,7 @@ pub unsafe fn tabpage_close(forceit: c_int) {
     TabPage::current().tp_did_tabclosedpre = true;
     let save_curtab = TabPage::current_raw();
 
-    while cur_win().w_floating {
+    while Win::current().w_floating {
         unsafe { ex_win_close(forceit, Win::current_raw(), ptr::null_mut()) };
     }
     if firstwin.get() != lastwin.get() {
@@ -630,7 +630,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     not_exiting(save_exiting);
     win_close(
         Win::current_raw(),
-        !buf_hide(cur_win().w_buffer),
+        !buf_hide(Win::current().w_buffer),
         args.forceit != 0,
     );
 }
@@ -639,11 +639,6 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
 /// `first_tabpage->tp_next == NULL`, which it writes out four times here.
 fn only_tab() -> bool {
     first_tab().is_none_or(|tp| tp.next().is_none())
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `apply_autocmds()` as checked code.

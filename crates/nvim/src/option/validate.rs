@@ -123,7 +123,7 @@ pub(crate) unsafe fn check_num_option_bounds(
             }
         }
         kOptScroll => {
-            let height = cur_win().w_view_height;
+            let height = Win::current().w_view_height;
             if (*newval <= 0 || (*newval > height as OptInt && height > 0)) && full_screen.get() {
                 // Zero is how `:set scroll=0` asks for the default, so
                 // it is corrected without a message.
@@ -268,9 +268,4 @@ pub(crate) unsafe fn validate_option_value(
     } else {
         ptr::null()
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -130,7 +130,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         None
     };
 
-    if unsafe { *cur_buf().b_p_tfu } == 0 || !cur_buf().b_tfu_cb.is_set() {
+    if unsafe { *Buf::current().b_p_tfu } == 0 || !Buf::current().b_tfu_cb.is_set() {
         return FAIL;
     }
 
@@ -180,7 +180,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let save_pos = cur_win().w_cursor;
+    let save_pos = Win::current().w_cursor;
     let mut result = unsafe {
         callback_call(
             &raw mut (*Buf::current_raw()).b_tfu_cb,
@@ -191,7 +191,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     } as c_int;
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
-    cur_win().w_cursor = save_pos;
+    Win::current().w_cursor = save_pos;
     check_cursor(Win::current());
     unsafe { (*info).dv_refcount.release() };
 
@@ -375,14 +375,4 @@ unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
 unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

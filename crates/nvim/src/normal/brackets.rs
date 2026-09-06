@@ -111,11 +111,11 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
             break;
         };
         prev_pos = new_pos;
-        cur_win().w_cursor = found;
+        Win::current().w_cursor = found;
         new_pos = found;
         n -= 1;
     }
-    cur_win().w_cursor = unsafe { *old_pos };
+    Win::current().w_cursor = unsafe { *old_pos };
 
     if method {
         // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
@@ -124,7 +124,7 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
         n = ca.count1;
         if prev_pos.lnum != 0 {
             pos = Some(prev_pos);
-            cur_win().w_cursor = prev_pos;
+            Win::current().w_cursor = prev_pos;
             if norm {
                 n -= 1;
             }
@@ -151,11 +151,11 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
                     continue;
                 }
                 if (c == findc && norm) || (n == 1 && !norm) {
-                    new_pos = cur_win().w_cursor;
+                    new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                     n = 0;
                 } else if new_pos.lnum == 0 {
-                    new_pos = cur_win().w_cursor;
+                    new_pos = Win::current().w_cursor;
                     pos = Some(new_pos);
                 } else {
                     // A brace of the other kind: step over the block it
@@ -163,14 +163,14 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
                     pos = unsafe { findmatchlimit(ca.oap, findc, match_direction(cmd_arg), 0) };
                     match pos {
                         None => n = 0,
-                        Some(found) => cur_win().w_cursor = found,
+                        Some(found) => Win::current().w_cursor = found,
                     }
                 }
                 break;
             }
             n -= 1;
         }
-        cur_win().w_cursor = unsafe { *old_pos };
+        Win::current().w_cursor = unsafe { *old_pos };
         // A position was found on the way out but lost on the way back in.
         if pos.is_none() && new_pos.lnum != 0 {
             clear_op_beep(ca.op());
@@ -179,8 +179,8 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
 
     if let Some(pos) = pos {
         setpcmark();
-        cur_win().w_cursor = pos;
-        cur_win().w_set_curswant = true;
+        Win::current().w_cursor = pos;
+        Win::current().w_set_curswant = true;
         unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
     }
 }
@@ -224,7 +224,7 @@ unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
     };
     // `]` starts below the cursor line, `[` at the top of the file.
     let from = if ca.cmdchar == ']' as c_int {
-        cur_win().w_cursor.lnum + 1
+        Win::current().w_cursor.lnum + 1
     } else {
         1
     };
@@ -237,7 +237,7 @@ unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
         )
     };
     unsafe { xfree(name as *mut c_void) };
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 }
 
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
@@ -248,7 +248,7 @@ unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = FileMark::UNSET;
-    let mut fm = unsafe { pos_to_mark(Buf::current_raw(), &raw mut here, cur_win().w_cursor) };
+    let mut fm = unsafe { pos_to_mark(Buf::current_raw(), &raw mut here, Win::current().w_cursor) };
     debug_assert!(!fm.is_null());
     let linewise = ca.nchar == '\'' as c_int;
     let mut prev_fm = ptr::null_mut();
@@ -296,7 +296,7 @@ unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
             clear_op_beep(ca.op());
             break;
         }
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     }
     unsafe { may_fold_open(cmd_arg, kOptFdoFlagSearch as c_uint) };
 }
@@ -307,8 +307,8 @@ pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
-    let old_pos = cur_win().w_cursor;
-    cur_win().w_cursor.coladd = 0;
+    let old_pos = Win::current().w_cursor;
+    Win::current().w_cursor.coladd = 0;
 
     let nchar = ca.nchar;
     let opening = ca.cmdchar == '[' as c_int;
@@ -330,7 +330,7 @@ pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
         } else {
             '}' as c_int
         };
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
         let both_ways =
             ca.op().op_type != OpType::Nop && ca.arg == FORWARD as c_int && flag == '{' as c_int;
         let (incl, dir, n) = (&raw mut ca.op().inclusive, ca.arg, ca.count1);
@@ -364,9 +364,4 @@ pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
     } else {
         clear_op_beep(ca.op());
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -213,7 +213,7 @@ pub unsafe fn prepare_tagpreview(undo_sync: bool) -> bool {
     // SAFETY: every region below reads the live window list and the live
     // current window, or calls a window-layout function that does; both are
     // the editor's own and live from startup to exit.
-    if cur_win().w_onebuf_opt.wo_pvw != 0 {
+    if Win::current().w_onebuf_opt.wo_pvw != 0 {
         return false;
     }
     for wp in windows() {
@@ -235,11 +235,11 @@ pub unsafe fn prepare_tagpreview(undo_sync: bool) -> bool {
     {
         return false;
     }
-    cur_win().w_onebuf_opt.wo_pvw = 1;
-    cur_win().w_onebuf_opt.wo_wfh = 1;
-    cur_win().w_onebuf_opt.wo_scb = 0;
-    cur_win().w_onebuf_opt.wo_crb = 0;
-    cur_win().w_onebuf_opt.wo_diff = 0;
+    Win::current().w_onebuf_opt.wo_pvw = 1;
+    Win::current().w_onebuf_opt.wo_wfh = 1;
+    Win::current().w_onebuf_opt.wo_scb = 0;
+    Win::current().w_onebuf_opt.wo_crb = 0;
+    Win::current().w_onebuf_opt.wo_diff = 0;
     set_option_direct(
         kOptFoldcolumn,
         OptVal::String(String_0::from_raw_parts(
@@ -531,16 +531,3 @@ pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const DBL_MAX: ::core::ffi::c_double = __DBL_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;
-
-/// The window the editor is working in.
-///
-/// One copy for the whole family: every file here had its own, which is
-/// seventeen `unsafe` lines saying the same thing.
-pub(super) fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in.
-pub(super) fn cur_buf() -> Buf {
-    Buf::current()
-}

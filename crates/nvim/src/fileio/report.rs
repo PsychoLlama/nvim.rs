@@ -68,7 +68,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     if out.perm & __S_IFMT == 0o140000 {
         note(translate(c"[socket]").as_ptr());
     }
-    if cur_buf().b_p_ro != 0 {
+    if Buf::current().b_p_ro != 0 {
         note(
             if shortmess(ShmFlag::RO) {
                 translate(c"[RO]")
@@ -134,9 +134,4 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
         unsafe { set_keep_msg(shown, 0) };
     }
     msg_scrolled_ign.set(false);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

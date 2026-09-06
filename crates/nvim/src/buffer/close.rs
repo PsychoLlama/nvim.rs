@@ -664,10 +664,10 @@ pub fn buf_clear_file(mut buffer: Buf) {
 
 /// Clear the current buffer's contents.
 pub fn buf_clear() {
-    let buf = cur_buf();
+    let buf = Buf::current();
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks
-    while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         delete_line(1 as LineNr);
     }
     mark_lines_deleted(line_count); // prepare for display

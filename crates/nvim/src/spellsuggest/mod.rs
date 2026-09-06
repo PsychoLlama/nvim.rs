@@ -306,7 +306,7 @@ pub(crate) unsafe fn window_langs<'a>() -> &'a mut [LangP] {
     // SAFETY: the caller guarantees the window's spell state; an empty
     // garray has a null data pointer, which `from_raw_parts_mut` rejects
     // even at length zero.
-    let gap = unsafe { &raw const (*cur_win().w_s).b_langp };
+    let gap = unsafe { &raw const (*Win::current().w_s).b_langp };
     if unsafe { (*gap).ga_data.is_null() } || unsafe { (*gap).ga_len } <= 0 {
         &mut []
     } else {
@@ -717,9 +717,4 @@ unsafe fn suggest_try_change(su: Sug) {
             unsafe { suggest_trie_walk(su.raw(), lp, fwordp, false) };
         }
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

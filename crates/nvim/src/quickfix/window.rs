@@ -69,14 +69,6 @@ pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
     OptVal::String(static_cstring(text))
 }
 
-fn cur_win() -> Win {
-    Win::current()
-}
-
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
 /// `buf_valid()`: whether `buffer` is still on the buffer list.
 ///
 /// Takes a raw pointer deliberately — the question is asked about a buffer an
@@ -192,13 +184,13 @@ fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
     if resize {
         if vertsplit {
             if sz != win.w_width {
-                setwidth_win(sz, cur_win());
+                setwidth_win(sz, Win::current());
             }
         } else if sz != win.w_height
             && win.w_height + win.w_hsep_height + win.w_status_height + tabline_rows()
                 < cmdline_row.get()
         {
-            setheight_win(sz, cur_win());
+            setheight_win(sz, Win::current());
         }
     }
     true
@@ -214,7 +206,7 @@ fn set_cwindow_options() {
     set_option_value_give_err(kOptBuftype, string_optval(c"quickfix"), local);
     set_option_value_give_err(kOptBufhidden, string_optval(c"hide"), local);
     // RESET_BINDING: no 'scrollbind'/'cursorbind', and never a diff.
-    let mut win = cur_win();
+    let mut win = Win::current();
     win.w_onebuf_opt.wo_scb = false as c_int;
     win.w_onebuf_opt.wo_crb = false as c_int;
     win.w_onebuf_opt.wo_diff = false as c_int;
@@ -224,7 +216,7 @@ fn set_cwindow_options() {
 /// Open a new quickfix or location list window, load the quickfix buffer
 /// and set the window's options. Answers false when there was no room.
 fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
-    let oldwin = cur_win();
+    let oldwin = Win::current();
     let prevtab = TabPage::current_raw();
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
@@ -237,7 +229,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         return false; // not enough room for the window
     }
     // RESET_BINDING.
-    let mut new = cur_win();
+    let mut new = Win::current();
     new.w_onebuf_opt.wo_scb = false as c_int;
     new.w_onebuf_opt.wo_crb = false as c_int;
 
@@ -248,7 +240,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     }
 
     // Don't store info when the split above left us in another window.
-    let oldwin = (oldwin == cur_win()).then_some(oldwin);
+    let oldwin = (oldwin == Win::current()).then_some(oldwin);
     let hide = EcmdFlags::HIDE | EcmdFlags::NOWINENTER;
     match qf_buf {
         // Use the existing quickfix buffer.
@@ -263,22 +255,22 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
             if load_buffer(0, hide, oldwin).is_err() {
                 return false;
             }
-            qi.qf_bufnr = cur_buf().handle;
+            qi.qf_bufnr = Buf::current().handle;
         }
     }
 
     // Set the options for the quickfix buffer/window even if the buffer
     // was already present: an autocommand may have :bdeleted it since.
-    if !is_qf_buffer(cur_win()) {
+    if !is_qf_buffer(Win::current()) {
         set_cwindow_options();
     }
 
     // Only set the height when still in the same tab page and there is
     // no window to the side.
-    if TabPage::current_raw() == prevtab && cur_win().w_width == Columns.get() {
-        setheight_win(height, cur_win());
+    if TabPage::current_raw() == prevtab && Win::current().w_width == Columns.get() {
+        setheight_win(height, Win::current());
     }
-    cur_win().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'
+    Win::current().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'
     if valid_win(win).is_some() {
         prevwin.set(win);
     }
@@ -319,7 +311,7 @@ fn set_list_title(qfl: Qfl) {
 /// page.
 pub(crate) fn qf_update_win_titlevar(qi: Qi) {
     let qfl = qi.curlist();
-    let save_curwin = cur_win();
+    let save_curwin = Win::current();
     // `set_list_title` only writes a window variable, so the window list is
     // stable across the walk.
     for win in tab_windows() {
@@ -366,11 +358,11 @@ pub unsafe fn ex_copen(args: *mut ExArg) {
     // Save the current index here: updating the buffer may free the list.
     let lnum = qfl.qf_index;
 
-    fill_buffer(qfl, cur_buf(), cur_win());
+    fill_buffer(qfl, Buf::current(), Win::current());
 
     busy_end();
 
-    let mut win = cur_win();
+    let mut win = Win::current();
     win.w_cursor.lnum = lnum as LineNr;
     win.w_cursor.col = 0;
     clamp_cursor(win);

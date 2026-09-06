@@ -238,7 +238,7 @@ pub unsafe fn apply_autocmds_group(
         let win_local = event_row(event).win_local;
         let mut win_ignore = false;
         if buffer == Buf::current_raw() && win_local {
-            win_ignore = unsafe { event_ignored(event, cur_win().w_onebuf_opt.wo_eiw) };
+            win_ignore = unsafe { event_ignored(event, Win::current().w_onebuf_opt.wo_eiw) };
         } else if !buffer.is_null() && win_local && unsafe { (*buffer).b_nwindows } > 0 {
             win_ignore = true;
             for wp in tab_windows() {
@@ -276,7 +276,7 @@ pub unsafe fn apply_autocmds_group(
         let save_autocmd_match = autocmd_match.get();
         let save_autocmd_busy = autocmd_busy.get();
         let save_autocmd_nested = autocmd_nested.get();
-        let save_changed = cur_buf().b_changed != 0;
+        let save_changed = Buf::current().b_changed != 0;
         let old_curbuf = Buf::current_raw();
 
         // `<afile>`.  A copy, so renaming a buffer or changing
@@ -380,7 +380,7 @@ pub unsafe fn apply_autocmds_group(
                 unsafe { save_redobuff(&raw mut save_redo) };
                 did_save_redobuff = true;
             }
-            cur_buf().b_did_filetype = cur_buf().b_keep_filetype;
+            Buf::current().b_did_filetype = Buf::current().b_keep_filetype;
         }
 
         // Some commands need to know autocommands are running.
@@ -390,7 +390,7 @@ pub unsafe fn apply_autocmds_group(
 
         // Remembered for `did_filetype()`.
         if event == AutoEvent::FileType {
-            cur_buf().b_did_filetype = true;
+            Buf::current().b_did_filetype = true;
         }
 
         let tail = unsafe { path_tail(fname) };
@@ -514,16 +514,16 @@ pub unsafe fn apply_autocmds_group(
             if did_save_redobuff {
                 unsafe { restore_redobuff(&raw mut save_redo) };
             }
-            cur_buf().b_did_filetype = false;
+            Buf::current().b_did_filetype = false;
             free_deferred();
         }
 
         // Only if we are still in the same buffer.
         if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
-            if cur_buf().b_changed != save_changed as ::core::ffi::c_int {
+            if Buf::current().b_changed != save_changed as ::core::ffi::c_int {
                 need_maketitle.set(true);
             }
-            cur_buf().b_changed = save_changed as ::core::ffi::c_int;
+            Buf::current().b_changed = save_changed as ::core::ffi::c_int;
         }
 
         // The patterns and commands marked deleted can really go now.
@@ -537,7 +537,7 @@ pub unsafe fn apply_autocmds_group(
         unsafe { aubuflocal_remove(Buf::new(buffer)) };
     }
     if retval as ::core::ffi::c_int == OK && event == AutoEvent::FileType {
-        cur_buf().b_au_did_filetype = true;
+        Buf::current().b_au_did_filetype = true;
     }
 
     retval
@@ -568,14 +568,4 @@ pub unsafe extern "C" fn unblock_autocmds() {
 /// Whether [`block_autocmds`] is in effect.
 pub fn is_autocmd_blocked() -> bool {
     autocmd_blocked.get() != 0
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

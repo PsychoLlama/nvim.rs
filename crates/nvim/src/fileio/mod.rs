@@ -249,7 +249,7 @@ pub(crate) unsafe fn readfile_linenr(
     p: *const ::core::ffi::c_char,
     endp: *const ::core::ffi::c_char,
 ) -> LineNr {
-    let mut lnum: LineNr = cur_buf().b_ml.ml_line_count - linecnt + 1 as LineNr;
+    let mut lnum: LineNr = Buf::current().b_ml.ml_line_count - linecnt + 1 as LineNr;
     let mut s = p;
     while s < endp {
         if unsafe { *s } as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
@@ -265,7 +265,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     let buf = Buf::current_raw();
 
     // It's like the unnamed buffer is deleted...
-    if cur_buf().b_p_bl != 0 {
+    if Buf::current().b_p_bl != 0 {
         autocmd_for_curbuf(AutoEvent::BufDelete);
     }
     autocmd_for_curbuf(AutoEvent::BufWipeout);
@@ -279,13 +279,13 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
         return Err(Failed);
     }
 
-    if unsafe { setfname(cur_buf(), fname, sfname, false) }.is_ok() {
-        cur_buf().b_flags |= BufFlags::NOTEDITED;
+    if unsafe { setfname(Buf::current(), fname, sfname, false) }.is_ok() {
+        Buf::current().b_flags |= BufFlags::NOTEDITED;
     }
 
     // ...and a new named one is created.
     autocmd_for_curbuf(AutoEvent::BufNew);
-    if cur_buf().b_p_bl != 0 {
+    if Buf::current().b_p_bl != 0 {
         autocmd_for_curbuf(AutoEvent::BufAdd);
     }
     if aborting() {
@@ -293,7 +293,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     }
 
     // Do filetype detection now if 'filetype' is empty.
-    if unsafe { *cur_buf().b_p_ft } == 0 {
+    if unsafe { *Buf::current().b_p_ft } == 0 {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             let cmd = c"filetypedetect BufRead".as_ptr().cast_mut();
             // SAFETY: a static command line.
@@ -597,7 +597,7 @@ pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
     if set_options {
         if !args.is_null() && unsafe { (*args).force_ff } != 0 {
             set_fileformat(
-                unsafe { get_fileformat_force(cur_buf(), args) },
+                unsafe { get_fileformat_force(Buf::current(), args) },
                 OptionSetFlags::LOCAL,
             );
         } else if unsafe { *p_ffs.get() } != 0 {
@@ -607,9 +607,9 @@ pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
 
     // Set or reset 'binary'.
     if !args.is_null() && unsafe { (*args).force_bin } != 0 {
-        let oldval = cur_buf().b_p_bin;
-        cur_buf().b_p_bin = (unsafe { (*args).force_bin } == FORCE_BIN) as c_int;
-        let bin = cur_buf().b_p_bin != 0;
+        let oldval = Buf::current().b_p_bin;
+        Buf::current().b_p_bin = (unsafe { (*args).force_bin } == FORCE_BIN) as c_int;
+        let bin = Buf::current().b_p_bin != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
 }
@@ -629,9 +629,4 @@ pub unsafe fn set_forced_fenc(args: *mut ExArg) {
         0 as ScriptId,
     );
     unsafe { xfree(fenc.cast()) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

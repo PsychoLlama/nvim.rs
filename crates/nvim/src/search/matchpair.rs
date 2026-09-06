@@ -118,7 +118,7 @@ unsafe fn backslash_count(linep: *mut c_char, col: c_int) -> c_int {
 fn find_mps_values(target: &mut Target, switchit: bool) {
     let (initc, findc) = (&mut target.initc, &mut target.findc);
     let backwards = &mut target.backwards;
-    let mut ptr = cur_buf().b_p_mps;
+    let mut ptr = Buf::current().b_p_mps;
     while unsafe { *ptr } as c_int != NUL {
         // The opening half of this pair.
         if unsafe { utf_ptr2char(ptr) } == *initc {
@@ -349,7 +349,7 @@ unsafe fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option
     pos.col = 0;
     while !got_int.get() {
         if hash_dir > 0 {
-            if pos.lnum == cur_buf().b_ml.ml_line_count {
+            if pos.lnum == Buf::current().b_ml.ml_line_count {
                 break;
             }
         } else if pos.lnum == 1 {
@@ -493,7 +493,7 @@ impl Walk {
         }
         // End of file, or the line is exhausted and the comment with
         // it — then don't look for a match out in the code.
-        if self.pos.lnum == cur_buf().b_ml.ml_line_count || self.lispcomm {
+        if self.pos.lnum == Buf::current().b_ml.ml_line_count || self.lispcomm {
             return false;
         }
         self.pos.lnum += 1;
@@ -552,7 +552,7 @@ impl Walk {
                 let mut end = if self.count > 0 {
                     self.match_pos
                 } else {
-                    cur_win().w_cursor
+                    Win::current().w_cursor
                 };
                 if !unsafe { find_rawstring_end(linep, &raw mut self.pos, &raw mut end) } {
                     self.count += 1;
@@ -754,7 +754,7 @@ impl Walk {
 
         // For Lisp skip over backslashed (), {} and [] — actually
         // over "#\(" and friends.
-        if cur_buf().b_p_lisp != 0
+        if Buf::current().b_p_lisp != 0
             && !unsafe { vim_strchr(c"(){}[]".as_ptr(), c) }.is_null()
             && self.pos.col > 1
             && unsafe { check_prevcol(self.linep, self.pos.col, '\\' as c_int, None) }
@@ -800,10 +800,10 @@ unsafe fn find_match(
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
-    let mut pos = cur_win().w_cursor;
+    let mut pos = Win::current().w_cursor;
     pos.coladd = 0;
     let linep = ml_get(pos.lnum);
-    let lisp = cur_buf().b_p_lisp != 0; // engage Lisp-specific hacks ;)
+    let lisp = Buf::current().b_p_lisp != 0; // engage Lisp-specific hacks ;)
 
     // vi compatible matching, and "don't recognise backslashes".
     let cpo_match = cpo_has(CpoFlag::MATCH);
@@ -827,7 +827,7 @@ unsafe fn find_match(
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.
-    if cur_win().w_onebuf_opt.wo_rl != 0
+    if Win::current().w_onebuf_opt.wo_rl != 0
         && !unsafe { vim_strchr(c"()[]{}<>".as_ptr(), target.initc) }.is_null()
     {
         target.backwards = !target.backwards;
@@ -911,14 +911,4 @@ unsafe fn find_match(
         return Some(walk.match_pos);
     }
     None // never found it
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

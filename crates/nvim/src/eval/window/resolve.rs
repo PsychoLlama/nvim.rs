@@ -47,21 +47,6 @@ pub(crate) fn arg_win(args: Args<'_>, i: usize) -> Option<Win> {
     unsafe { find_win_by_nr_or_id(args.ptr(i)) }
 }
 
-/// The window the editor is working in.
-pub(crate) fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in.
-pub(crate) fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The tab page the editor is working in.
-pub(crate) fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
 /// The window with id `id`, in whichever tab page holds it.
 pub fn win_by_id(id: c_int) -> Option<Win> {
     win_and_tab_by_id(id).map(|(wp, _)| wp)
@@ -94,10 +79,10 @@ pub unsafe fn find_win_by_nr(vp: *mut TypVal, tabpage: Option<TabPage>) -> Optio
     }
     if nr == 0 {
         // SAFETY: `curwin` is set from startup to exit.
-        return Some(cur_win());
+        return Some(Win::current());
     }
     // SAFETY: `curtab` is set from startup to exit.
-    let tabpage = tabpage.unwrap_or_else(cur_tab);
+    let tabpage = tabpage.unwrap_or_else(TabPage::current);
     if nr >= LOWEST_WIN_ID {
         return windows_in_tab(tabpage).find(|wp| wp.handle == nr);
     }
@@ -134,10 +119,10 @@ pub unsafe fn find_win_by_nr_or_id(vp: *mut TypVal) -> Option<Win> {
 pub unsafe fn find_tabwin(wvp: *mut TypVal, tvp: *mut TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
     if unsafe { (*wvp).v_type } == VAR_UNKNOWN {
-        return Some(cur_win());
+        return Some(Win::current());
     }
     let tp = if unsafe { (*tvp).v_type } == VAR_UNKNOWN {
-        Some(cur_tab())
+        Some(TabPage::current())
     } else {
         let n = number_as_int(unsafe { tv_get_number(tvp) });
         // A negative tab page number is refused outright; zero reaches
@@ -243,7 +228,7 @@ pub unsafe fn f_win_getid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and `curwin`/`curtab` are set.
     if !args.has(0) {
-        result.vval.v_number = VarNumber::from(cur_win().handle);
+        result.vval.v_number = VarNumber::from(Win::current().handle);
         return;
     }
     let winnr = number_as_int(arg_number(args, 0));
@@ -255,7 +240,7 @@ pub unsafe fn f_win_getid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // This is not `find_tabpage()`, which answers the *current* tab page
     // for 0 where `win_getid()` has always rejected it.
     let tp = if !args.has(1) {
-        cur_tab()
+        TabPage::current()
     } else {
         match tabpage_by_nr(number_as_int(arg_number(args, 1))) {
             Some(tp) => tp,
@@ -299,7 +284,8 @@ pub unsafe fn f_win_id2tabwin(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 pub unsafe fn f_win_id2win(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals and `curtab` is set.
-    let (tp, id) = unsafe { (cur_tab(), number_as_int(tv_get_number(args.ptr(0)))) };
+    let tp = TabPage::current();
+    let id = number_as_int(unsafe { tv_get_number(args.ptr(0)) });
     let mut nr = 0;
     for wp in windows_in_tab(tp) {
         if wp.handle == id {
@@ -334,7 +320,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     // SAFETY: the arguments are live typvals and `curwin` is set.
     let id = unsafe { number_as_int(tv_get_number(args.ptr(0))) };
     // SAFETY: `curwin` is set from startup to exit.
-    if cur_win().handle == id {
+    if Win::current().handle == id {
         result.vval.v_number = 1;
         return;
     }
@@ -357,7 +343,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 pub unsafe fn f_winnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals and `curtab` is set.
-    let nr = unsafe { get_winnr(cur_tab(), args.ptr(0)) };
+    let nr = unsafe { get_winnr(TabPage::current(), args.ptr(0)) };
     result.vval.v_number = VarNumber::from(nr);
 }
 

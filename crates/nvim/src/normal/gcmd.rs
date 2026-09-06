@@ -62,7 +62,7 @@ const POUND_BYTE: u8 = 0xa3;
 pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let to_first_non_blank = ca.nchar == '^' as c_int;
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
@@ -118,7 +118,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     win.w_curswant = MAXCOL as ColNr;
@@ -144,7 +144,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let mut op = ca.op();
     let col_off = unsafe { win_col_off(win.raw()) };
     // `<End>` also skips back over trailing white space.
@@ -197,9 +197,9 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_gi_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
-    if cur_buf().b_last_insert.mark.lnum != 0 {
-        win.w_cursor = cur_buf().b_last_insert.mark;
+    let mut win = Win::current();
+    if Buf::current().b_last_insert.mark.lnum != 0 {
+        win.w_cursor = Buf::current().b_last_insert.mark;
         check_cursor_lnum(win);
         let len = get_cursor_line_len();
         if win.w_cursor.col > len {
@@ -230,7 +230,7 @@ unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut op = ca.op();
-    let moved = if cur_win().w_onebuf_opt.wo_wrap == 0 {
+    let moved = if Win::current().w_onebuf_opt.wo_wrap == 0 {
         op.motion_type = kMTLineWise;
         let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
@@ -349,13 +349,13 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
-            let width = unsafe { linetabsize(cur_win(), cur_win().w_cursor.lnum) };
+            let width = unsafe { linetabsize(Win::current(), Win::current().w_cursor.lnum) };
             if ca.count0 > 0 && ca.count0 <= 100 {
                 coladvance(Win::current(), width * ca.count0 / 100);
             } else {
                 coladvance(Win::current(), width / 2);
             }
-            cur_win().w_set_curswant = true;
+            Win::current().w_set_curswant = true;
         }
         Ok(b'_') => unsafe { nv_g_underscore_cmd(cmd_arg) },
         Ok(b'$') => unsafe { nv_g_dollar_cmd(cmd_arg) },
@@ -365,7 +365,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // `ge`/`gE`: back to the end of the previous word.
         Ok(b'e' | b'E') => {
             op.motion_type = kMTCharWise;
-            cur_win().w_set_curswant = true;
+            Win::current().w_set_curswant = true;
             op.inclusive = true;
             if unsafe { bckend_word(ca.count1, nchar == 'E' as c_int, false) }.is_err() {
                 clear_op_beep(op);
@@ -411,7 +411,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // `gq` and `gw` both format; `gw` returns the cursor to where it
         // was, which is what the remembered position is for.
         Ok(b'q' | b'w') => {
-            op.cursor_start = cur_win().w_cursor;
+            op.cursor_start = Win::current().w_cursor;
             unsafe { nv_operator(cmd_arg) };
         }
         // The rest of the two-character operators: `g~ gu gU g? g@`.
@@ -467,14 +467,4 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         }
         _ => clear_op_beep(op),
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

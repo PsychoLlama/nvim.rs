@@ -701,7 +701,7 @@ fn goto_existing_window(buffer: Buf) -> bool {
 /// Put the cursor where it was left in the current buffer.
 pub(crate) unsafe fn buflist_getfpos() {
     // SAFETY: the current buffer; the answer is a live mark.
-    let fm = unsafe { buflist_findfmark(cur_buf()) };
+    let fm = unsafe { buflist_findfmark(Buf::current()) };
     // SAFETY: a live mark.
     let (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
 

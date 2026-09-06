@@ -306,12 +306,12 @@ pub(crate) fn set_init_1(clean_arg: bool) {
 
     set_options_default(OptionSetFlags::NONE);
 
-    cur_buf().b_p_initialized = true;
+    Buf::current().b_p_initialized = true;
     // The four global-local options the first buffer starts unset.
-    cur_buf().b_p_ac = -1;
-    cur_buf().b_p_ar = -1;
-    cur_buf().b_p_fs = -1;
-    cur_buf().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+    Buf::current().b_p_ac = -1;
+    Buf::current().b_p_ar = -1;
+    Buf::current().b_p_fs = -1;
+    Buf::current().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
 
     unsafe { check_buf_options(Buf::current_raw()) };
     unsafe { check_win_options(Win::current_raw()) };
@@ -612,9 +612,4 @@ pub(crate) fn set_title_defaults() {
             cell.set(0);
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

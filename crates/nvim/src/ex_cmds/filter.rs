@@ -18,7 +18,6 @@
 use super::Owned;
 use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
-use super::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 use crate::winlayer::{Buf, Win};
 
@@ -204,7 +203,7 @@ pub unsafe fn do_bang(
             // SAFETY: `cmd` is a live string; the autocommand runs with the
             // current buffer.
             unsafe { do_filter(line1, line2, args, cmd, do_in, do_out) };
-            buf_autocmd(AutoEvent::ShellFilterPost, cur_buf());
+            buf_autocmd(AutoEvent::ShellFilterPost, Buf::current());
         }
     }
 }
@@ -281,8 +280,11 @@ unsafe fn do_filter(
 
     let old_curbuf = Buf::current_raw();
     // SAFETY: `curbuf` and `curwin` are the live current buffer and window.
-    let (orig_start, orig_end, cursor_save) =
-        (cur_buf().b_op_start, cur_buf().b_op_end, cur_win().w_cursor);
+    let (orig_start, orig_end, cursor_save) = (
+        Buf::current().b_op_start,
+        Buf::current().b_op_end,
+        Win::current().w_cursor,
+    );
     let stmp = p_stmp.get();
 
     // Temporarily disable lockmarks since that's needed to propagate changed
@@ -295,10 +297,10 @@ unsafe fn do_filter(
 
     let mut linecount = line2 - line1 + 1;
     // SAFETY: `curwin` is the live current window and `line1` a line of it.
-    cur_win().w_cursor.lnum = line1;
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.lnum = line1;
+    Win::current().w_cursor.col = 0;
     unsafe { changed_line_abv_curs() };
-    invalidate_botline_win(cur_win());
+    invalidate_botline_win(Win::current());
 
     // When using temp files:
     // 1. * Form temp file names
@@ -322,13 +324,13 @@ unsafe fn do_filter(
         if do_in {
             shell_flags |= ShellOpts::WRITE;
             // SAFETY: `curbuf` is live.
-            cur_buf().b_op_start.lnum = line1;
-            cur_buf().b_op_end.lnum = line2;
+            Buf::current().b_op_start.lnum = line1;
+            Buf::current().b_op_end.lnum = line2;
         }
         if do_out {
             shell_flags |= ShellOpts::READ;
             // SAFETY: `curwin` is live.
-            cur_win().w_cursor.lnum = line2;
+            Win::current().w_cursor.lnum = line2;
         }
     } else {
         if do_in {
@@ -406,7 +408,7 @@ unsafe fn do_filter(
                 redraw_curbuf_later(UPD_VALID);
             }
             // SAFETY: `curbuf` is live.
-            let mut read_linecount = cur_buf().b_ml.ml_line_count;
+            let mut read_linecount = Buf::current().b_ml.ml_line_count;
 
             // SAFETY: `cmd_buf` is a live command line and ours to free.
             // Pass on the DO_OUT flag when the output is redirected.
@@ -456,12 +458,12 @@ unsafe fn do_filter(
             }
 
             // SAFETY: `curbuf` is live.
-            read_linecount = cur_buf().b_ml.ml_line_count - read_linecount;
+            read_linecount = Buf::current().b_ml.ml_line_count - read_linecount;
 
             if shell_flags.has(ShellOpts::READ) {
                 // SAFETY: as above; the read appended after `line2`.
-                cur_buf().b_op_start.lnum = line2 + 1;
-                cur_buf().b_op_end.lnum = cur_win().w_cursor.lnum;
+                Buf::current().b_op_start.lnum = line2 + 1;
+                Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
                 unsafe { appended_lines_mark(line2, read_linecount as c_int) };
             }
 
@@ -505,22 +507,22 @@ unsafe fn do_filter(
                 // Adjust '[ and '] (set by buf_write()).
                 // SAFETY: the original range is still in the buffer, ahead of
                 // what the filter appended.
-                cur_win().w_cursor.lnum = line1;
+                Win::current().w_cursor.lnum = line1;
                 unsafe { del_lines(linecount, true) };
-                cur_buf().b_op_start.lnum -= linecount;
-                cur_buf().b_op_end.lnum -= linecount;
+                Buf::current().b_op_start.lnum -= linecount;
+                Buf::current().b_op_end.lnum -= linecount;
                 // adjust last line for next write
                 unsafe { write_lnum_adjust(-linecount) };
                 fold_update(
-                    cur_win(),
-                    cur_buf().b_op_start.lnum,
-                    cur_buf().b_op_end.lnum,
+                    Win::current(),
+                    Buf::current().b_op_start.lnum,
+                    Buf::current().b_op_end.lnum,
                 );
             } else {
                 // Put cursor on last new line for ":r !cmd".
                 // SAFETY: `curbuf`/`curwin` are live.
-                linecount = cur_buf().b_op_end.lnum - cur_buf().b_op_start.lnum + 1;
-                cur_win().w_cursor.lnum = cur_buf().b_op_end.lnum;
+                linecount = Buf::current().b_op_end.lnum - Buf::current().b_op_start.lnum + 1;
+                Win::current().w_cursor.lnum = Buf::current().b_op_end.lnum;
             }
 
             // SAFETY: cursor on first non-blank.
@@ -540,7 +542,7 @@ unsafe fn do_filter(
 
         // put cursor back in same position for ":w !cmd"
         // SAFETY: `curwin` is live and `cursor_save` came from it.
-        cur_win().w_cursor = cursor_save;
+        Win::current().w_cursor = cursor_save;
         drop(no_prompt.take());
         // SAFETY: message state.
         unsafe { wait_return(0) };
@@ -557,8 +559,8 @@ unsafe fn do_filter(
         ));
     } else if cmdmod_has(CmdModFlags::LOCKMARKS) {
         // SAFETY: `curbuf` is live and the marks came from it.
-        cur_buf().b_op_start = orig_start;
-        cur_buf().b_op_end = orig_end;
+        Buf::current().b_op_start = orig_start;
+        Buf::current().b_op_end = orig_end;
     }
 }
 
@@ -624,7 +626,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // Put the cursor back where it was: the shell wrote over the screen.
     msg_row.set(Rows.get() - 1);
     msg_col.set(0);
-    buf_autocmd(AutoEvent::ShellCmdPost, cur_buf());
+    buf_autocmd(AutoEvent::ShellCmdPost, Buf::current());
 }
 
 /// Which shell 'shell' names, as far as building a command line goes.
@@ -829,7 +831,7 @@ fn has_percent_s(opt: &[u8]) -> bool {
 /// `lnum` must be a line of the current buffer.
 pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
     // SAFETY: `curwin` is the live current window.
-    if cur_win().w_onebuf_opt.wo_nu != 0 || use_number {
+    if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
         let mut numbuf: [c_char; 30] = [0; 30];
         // SAFETY: a `%*d` for the width and the line number, into a buffer of
         // its own size.  Highlight line nrs.

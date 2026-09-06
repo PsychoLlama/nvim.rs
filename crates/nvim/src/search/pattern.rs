@@ -194,8 +194,8 @@ pub unsafe fn search_regcomp(
     }
 
     unsafe { xfree(compiled_pat.get() as *mut c_void) };
-    let rightleft_reverse = cur_win().w_onebuf_opt.wo_rl != 0
-        && unsafe { *cur_win().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
+    let rightleft_reverse = Win::current().w_onebuf_opt.wo_rl != 0
+        && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
     compiled_pat.set(if rightleft_reverse {
         unsafe { reverse_text(pat) }
     } else {
@@ -433,7 +433,7 @@ pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_in
     if ic != 0
         && !no_smartcase.get()
         && scs != 0
-        && !(ctrl_x_mode_not_default() && cur_buf().b_p_inf != 0)
+        && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf != 0)
     {
         ic = !unsafe { pat_has_uppercase(pat) } as c_int;
     }
@@ -644,7 +644,7 @@ pub(crate) unsafe fn is_zero_width(
     let (w, b) = (Win::current_raw(), Buf::current_raw());
     let (at, end) = (&raw mut pos, ptr::null_mut());
     let (opts, none) = (SEARCH_KEEP as c_int + flag, ptr::null_mut());
-    let (win, buf) = (Some(cur_win()), cur_buf());
+    let (win, buf) = (Some(Win::current()), Buf::current());
     // SAFETY: `pos` is this frame's and `pattern` a live pattern of
     // `patternlen` bytes.
     let found = unsafe {
@@ -735,14 +735,4 @@ pub fn set_last_used_pattern(is_substitute_pattern: bool) {
 /// one used last.
 pub fn search_was_last_used() -> bool {
     last_idx.get() == RE_SEARCH
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

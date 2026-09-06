@@ -178,7 +178,7 @@ pub unsafe fn aupat_get_buflocal_nr(
 
     // "<buffer>"
     if patlen == 8 {
-        return cur_buf().handle;
+        return Buf::current().handle;
     }
 
     if patlen > 9 && unsafe { *pat.add(7) } == b'=' as ::core::ffi::c_char {
@@ -206,7 +206,7 @@ pub unsafe fn aupat_normalize_buflocal_pat(
     debug_assert!(unsafe { aupat_is_buflocal(pat, patlen) });
 
     if buflocal_nr == 0 {
-        buflocal_nr = cur_buf().handle;
+        buflocal_nr = Buf::current().handle;
     }
     unsafe {
         snprintf(
@@ -216,9 +216,4 @@ pub unsafe fn aupat_normalize_buflocal_pat(
             buflocal_nr,
         )
     };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

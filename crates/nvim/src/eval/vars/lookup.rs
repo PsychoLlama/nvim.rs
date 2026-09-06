@@ -337,8 +337,8 @@ pub(crate) unsafe fn find_var_ht_dict(
         }
 
         match lead as u8 {
-            b'b' => *dict = cur_buf().b_vars,
-            b'w' => *dict = cur_win().w_vars,
+            b'b' => *dict = Buf::current().b_vars,
+            b'w' => *dict = Win::current().w_vars,
             b't' => *dict = TabPage::current().tp_vars,
             b'v' => *dict = get_vimvar_dict(),
             b'a' => *dict = unsafe { get_funccal_args_dict() },
@@ -435,14 +435,4 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
     }
     unsafe { xfree(tofree.cast()) };
     n
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

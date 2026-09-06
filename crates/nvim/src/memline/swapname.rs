@@ -384,7 +384,7 @@ unsafe fn resolve_swapfile_clash(
     // Only worth a word if the swap file belongs to *this* file, the
     // buffer was not already recovered, and 'shortmess' allows it.
     if unsafe { swapfile_is_for_other_file(buffer, fname) }
-        || cur_buf().b_flags.has(BufFlags::RECOVERED)
+        || Buf::current().b_flags.has(BufFlags::RECOVERED)
         || ShmFlag::ATTENTION.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
     {
         return false;
@@ -759,10 +759,10 @@ pub unsafe fn recover_names(
 
         // The current buffer's own swap file is not interesting — except
         // to swapfilelist(), which wants everything.
-        let mine = if cur_buf().b_ml.ml_mfp.is_null() {
+        let mine = if Buf::current().b_ml.ml_mfp.is_null() {
             core::ptr::null()
         } else {
-            unsafe { mf_fname(cur_buf().b_ml.ml_mfp) }
+            unsafe { mf_fname(Buf::current().b_ml.ml_mfp) }
         };
         // SAFETY: `expand_wildcards` filled `num_files` names, or left both
         // the count and the array at zero.
@@ -905,9 +905,4 @@ unsafe fn recov_file_names(
         }
     }
     num_names as c_int
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

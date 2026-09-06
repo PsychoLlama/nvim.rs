@@ -35,13 +35,13 @@ use crate::state::MODE_INSERT;
 /// The current window must be live.
 pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval: c_int = FAIL;
-    checkupdate(cur_win());
+    checkupdate(Win::current());
     for _ in 0..count {
-        let mut folds = window_folds(cur_win());
+        let mut folds = window_folds(Win::current());
         if folds.is_empty() {
             break;
         }
-        let cursor = cur_win().w_cursor.lnum;
+        let cursor = Win::current().w_cursor.lnum;
         let mut lnum_off: LineNr = 0;
         let mut use_level = false;
         let mut maybe_small = false;
@@ -78,7 +78,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
                 // SAFETY: the current window is live, and `fold` is one of
                 // its own folds, `lnum_off` lines down the tree.
                 let (ul, ms) = (&mut use_level, &mut maybe_small);
-                let closed = unsafe { check_closed(cur_win(), fold, ul, level, ms, lnum_off) };
+                let closed = unsafe { check_closed(Win::current(), fold, ul, level, ms, lnum_off) };
                 if closed {
                     last = true;
                 }
@@ -126,8 +126,8 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             setpcmark();
         }
         // SAFETY: the caller's promise.
-        cur_win().w_cursor.lnum = lnum_found;
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.lnum = lnum_found;
+        Win::current().w_cursor.col = 0;
         retval = OK;
     }
     retval
@@ -656,11 +656,6 @@ fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
     debug_assert!(i >= 0 && i < folds.len(), "i names an entry of folds");
     // SAFETY: the assertion above.
     unsafe { delete_fold_entry(folds, i, recursive) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// [`adjust_fold_list`] over a bare growarray: upstream's own entry point,

@@ -90,7 +90,7 @@ pub(crate) fn ins_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     if unsafe { oneleft() }.is_ok() {
         start_arrow_changing(&mut tpos, end_change);
         if !end_change {
@@ -98,18 +98,18 @@ pub(crate) fn ins_left() {
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
-        if revins_scol.get() != -1 && cur_win().w_cursor.col >= revins_scol.get() {
+        if revins_scol.get() != -1 && Win::current().w_cursor.col >= revins_scol.get() {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
     } else if !unsafe { vim_strchr(p_ww.get(), '[' as c_int) }.is_null()
-        && cur_win().w_cursor.lnum > 1
+        && Win::current().w_cursor.lnum > 1
     {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(&mut tpos);
-        cur_win().w_cursor.lnum -= 1;
+        Win::current().w_cursor.lnum -= 1;
         coladvance_to(MAXCOL as c_int);
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     } else {
         beep_cursor();
     }
@@ -121,13 +121,13 @@ pub(crate) fn ins_home(c: c_int) {
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     if c == Key::CHome.code() {
-        cur_win().w_cursor.lnum = 1;
+        Win::current().w_cursor.lnum = 1;
     }
-    cur_win().w_cursor.col = 0;
-    cur_win().w_cursor.coladd = 0;
-    cur_win().w_curswant = 0;
+    Win::current().w_cursor.col = 0;
+    Win::current().w_cursor.coladd = 0;
+    Win::current().w_curswant = 0;
     start_arrow_at(&mut tpos);
 }
 
@@ -136,12 +136,12 @@ pub(crate) fn ins_end(c: c_int) {
     may_open_fold_hor();
     hide_dollar();
 
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     if c == Key::CEnd.code() {
-        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL as c_int);
-    cur_win().w_curswant = MAXCOL as ColNr;
+    Win::current().w_curswant = MAXCOL as ColNr;
     start_arrow_at(&mut tpos);
 }
 
@@ -153,13 +153,13 @@ pub(crate) fn ins_s_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    if cur_win().w_cursor.lnum > 1 || cur_win().w_cursor.col > 0 {
-        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+    if Win::current().w_cursor.lnum > 1 || Win::current().w_cursor.col > 0 {
+        start_arrow_changing(&mut Win::current().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(Key::SLeft.code());
         }
         let _ = unsafe { bck_word(1, false, false) };
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     } else {
         beep_cursor();
     }
@@ -172,18 +172,18 @@ pub(crate) fn ins_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if gchar_cursor() != NUL || virtual_active(cur_win()) {
-        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+    if gchar_cursor() != NUL || virtual_active(Win::current()) {
+        start_arrow_changing(&mut Win::current().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(Key::Right.code());
         }
-        cur_win().w_set_curswant = true;
-        if virtual_active(cur_win()) {
+        Win::current().w_set_curswant = true;
+        if virtual_active(Win::current()) {
             let _ = unsafe { oneright() };
         } else {
             // SAFETY: the cursor is on a character of its line, so the
             // character there has a length.
-            cur_win().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            Win::current().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
         }
 
         revins_legal.set(revins_legal.get() + 1);
@@ -191,13 +191,13 @@ pub(crate) fn ins_right() {
             revins_chars.set(revins_chars.get() - 1);
         }
     } else if !unsafe { vim_strchr(p_ww.get(), ']' as c_int) }.is_null()
-        && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
+        && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
     {
         // 'whichwrap' allows the motion to leave the line.
-        start_arrow_at(&mut cur_win().w_cursor);
-        cur_win().w_set_curswant = true;
-        cur_win().w_cursor.lnum += 1;
-        cur_win().w_cursor.col = 0;
+        start_arrow_at(&mut Win::current().w_cursor);
+        Win::current().w_set_curswant = true;
+        Win::current().w_cursor.lnum += 1;
+        Win::current().w_cursor.col = 0;
     } else {
         beep_cursor();
     }
@@ -214,13 +214,13 @@ pub(crate) fn ins_s_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count || gchar_cursor() != NUL {
-        start_arrow_changing(&mut cur_win().w_cursor, end_change);
+    if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count || gchar_cursor() != NUL {
+        start_arrow_changing(&mut Win::current().w_cursor, end_change);
         if !end_change {
             append_to_redobuff_char(Key::SRight.code());
         }
         let _ = unsafe { fwd_word(1, false, false) };
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     } else {
         beep_cursor();
     }
@@ -234,11 +234,11 @@ pub(crate) fn ins_s_right() {
 /// `w_topline`/`w_topfill` check is because the motion may have scrolled the
 /// window even when the cursor stayed in view.
 pub(crate) fn ins_updown(up: bool, startcol: bool) {
-    let old_topline = cur_win().w_topline;
-    let old_topfill = cur_win().w_topfill;
+    let old_topline = Win::current().w_topline;
+    let old_topfill = Win::current().w_topfill;
     hide_dollar();
 
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     // SAFETY: `curwin` is live, which is all a cursor motion asks for.
     let moved = if up {
         unsafe { cursor_up(1, true) }
@@ -252,7 +252,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
             // SAFETY: `Insstart` is a live position in the current buffer.
             coladvance_to(unsafe { getvcol_nolist(&mut Insstart.get()) });
         }
-        if old_topline != cur_win().w_topline || old_topfill != cur_win().w_topfill {
+        if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
             unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
         }
         start_arrow_at(&mut tpos);
@@ -270,13 +270,13 @@ pub(crate) fn ins_page(back: bool) {
     if mod_mask.get().has(ModMask::CTRL) {
         // <C-PageUp>/<C-PageDown>: another tab page, if there is one.
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
-            start_arrow_at(&mut cur_win().w_cursor);
+            start_arrow_at(&mut Win::current().w_cursor);
             goto_tabpage(if back { -1 } else { 0 });
         }
         return;
     }
 
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     let dir = if back { BACKWARD } else { FORWARD };
     if unsafe { pagescroll(dir, 1, false) } == OK {
         start_arrow_at(&mut tpos);
@@ -320,14 +320,4 @@ fn start_arrow_changing(pos: &mut Pos, end_change: bool) {
 #[inline(always)]
 fn coladvance_to(vcol: c_int) {
     coladvance(Win::current(), vcol);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

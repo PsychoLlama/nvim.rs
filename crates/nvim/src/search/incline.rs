@@ -209,7 +209,7 @@ pub(crate) unsafe fn show_pat_in_path(
             unsafe { *lnum += 1 };
         } else {
             unsafe { *lnum += 1 };
-            if unsafe { *lnum } > cur_buf().b_ml.ml_line_count {
+            if unsafe { *lnum } > Buf::current().b_ml.ml_line_count {
                 break;
             }
             line = unsafe { ml_get(*lnum) };
@@ -217,9 +217,4 @@ pub(crate) unsafe fn show_pat_in_path(
         }
         unsafe { msg_putchar('\n' as c_int) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

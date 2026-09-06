@@ -335,8 +335,8 @@ unsafe fn echo_search_cmd(
             echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
         }
 
-        if cur_win().w_onebuf_opt.wo_rl != 0
-            && unsafe { *cur_win().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int
+        if Win::current().w_onebuf_opt.wo_rl != 0
+            && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int
         {
             unsafe { reverse_echo(&mut echo) };
         }
@@ -384,7 +384,7 @@ unsafe fn back_off_start(pos: &mut Pos, off: i64) {
         }
         if c != 0 {
             // At the end of the buffer.
-            pos.lnum = cur_buf().b_ml.ml_line_count + 1;
+            pos.lnum = Buf::current().b_ml.ml_line_count + 1;
             pos.col = 0;
         }
     }
@@ -401,7 +401,7 @@ unsafe fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
     if off.line {
         // Add the offset to the line number.
         let lnum = pos.lnum as i64 + off.off;
-        let last = cur_buf().b_ml.ml_line_count;
+        let last = Buf::current().b_ml.ml_line_count;
         pos.lnum = if lnum < 1 {
             1
         } else if lnum > last as i64 {
@@ -498,7 +498,7 @@ pub unsafe fn do_search(
     }
 
     // Position of the last match; start searching at the cursor.
-    let mut pos = cur_win().w_cursor;
+    let mut pos = Win::current().w_cursor;
 
     // If the cursor is in a closed fold, don't find another match in
     // the same fold.
@@ -645,11 +645,11 @@ pub unsafe fn do_search(
                 let inexact = count != 1
                     || has_offset
                     || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
-                        let (w, lnum) = (Win::current_raw(), cur_win().w_cursor.lnum);
+                        let (w, lnum) = (Win::current_raw(), Win::current().w_cursor.lnum);
                         // SAFETY: `curwin` is live and no bounds are asked for.
                         unsafe { has_folding(Win::new(w), lnum, None, None) }
                     });
-                let (at, cursor) = (&raw mut pos, cur_win().cursor().raw());
+                let (at, cursor) = (&raw mut pos, Win::current().cursor().raw());
                 let (msg, msglen) = (echo.buf.as_ptr(), echo.len);
                 let (top_bot, maxcount) = (show_top_bot_msg, p_msc.get() as c_int);
                 let tm = SEARCH_STAT_DEF_TIMEOUT;
@@ -685,8 +685,8 @@ pub unsafe fn do_search(
         if options & SEARCH_MARK != 0 {
             setpcmark();
         }
-        cur_win().w_cursor = pos;
-        cur_win().w_set_curswant = true;
+        Win::current().w_cursor = pos;
+        Win::current().w_set_curswant = true;
         true
     };
 
@@ -712,8 +712,8 @@ pub unsafe fn do_search(
 /// # Safety
 /// The current buffer must be valid.
 unsafe fn mps_shows_match(c: c_int) -> bool {
-    let rightleft = cur_win().w_onebuf_opt.wo_rl ^ p_ri.get() != 0;
-    let mut p = cur_buf().b_p_mps;
+    let rightleft = Win::current().w_onebuf_opt.wo_rl ^ p_ri.get() != 0;
+    let mut p = Buf::current().b_p_mps;
     while unsafe { *p } as c_int != NUL {
         if unsafe { utf_ptr2char(p) } == c && rightleft {
             return true;
@@ -746,16 +746,18 @@ pub unsafe fn showmatch(c: c_int) {
         unsafe { vim_beep(kOptBoFlagShowmatch) }; // no match, so beep
         return;
     };
-    if lpos.lnum < cur_win().w_topline || lpos.lnum >= cur_win().w_botline {
+    if lpos.lnum < Win::current().w_topline || lpos.lnum >= Win::current().w_botline {
         return;
     }
 
     let mut vcol: ColNr = 0;
-    if cur_win().w_onebuf_opt.wo_wrap == 0 {
+    if Win::current().w_onebuf_opt.wo_wrap == 0 {
         let (w, at, col) = (Win::current_raw(), &raw mut lpos, &raw mut vcol);
         // SAFETY: `lpos` is this frame's position in the live window.
         unsafe { getvcol(Win::new(w), at, ptr::null_mut(), col, ptr::null_mut()) };
-        if !(vcol >= cur_win().w_leftcol && vcol < cur_win().w_leftcol + cur_win().w_view_width) {
+        if !(vcol >= Win::current().w_leftcol
+            && vcol < Win::current().w_leftcol + Win::current().w_view_width)
+        {
             return;
         }
     }
@@ -767,22 +769,22 @@ pub unsafe fn showmatch(c: c_int) {
     let siso = ScrollOff::of(win, ScrollMargin::Columns);
 
     let mpos = lpos; // save the pos, update_screen() may change it
-    let save_cursor = cur_win().w_cursor;
+    let save_cursor = Win::current().w_cursor;
     let save_so = so.get();
     let save_siso = siso.get();
 
     // Handle "$" in 'cpo': if the ')' is typed on top of the "$", stop
     // displaying the "$".
-    if dollar_vcol.get() >= 0 && dollar_vcol.get() == cur_win().w_virtcol {
+    if dollar_vcol.get() >= 0 && dollar_vcol.get() == Win::current().w_virtcol {
         dollar_vcol.set(-1);
     }
-    cur_win().w_virtcol += 1; // do display ')' just before "$"
+    Win::current().w_virtcol += 1; // do display ')' just before "$"
 
     let save_dollar_vcol = dollar_vcol.get();
     let save_state = State.get();
     State.set(MODE_SHOWMATCH);
     unsafe { ui_cursor_shape() }; // may show a different cursor shape
-    cur_win().w_cursor = mpos; // move to the matching char
+    Win::current().w_cursor = mpos; // move to the matching char
     so.set(0); // don't use 'scrolloff' here
     siso.set(0); // don't use 'sidescrolloff' here
     unsafe { show_cursor_info_later(false) };
@@ -802,19 +804,9 @@ pub unsafe fn showmatch(c: c_int) {
         os_delay(p_mat.get() as u64 * 100 + 9, false);
     }
 
-    cur_win().w_cursor = save_cursor; // restore cursor position
+    Win::current().w_cursor = save_cursor; // restore cursor position
     so.set(save_so);
     siso.set(save_siso);
     State.set(save_state);
     unsafe { ui_cursor_shape() }; // may show a different cursor shape
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

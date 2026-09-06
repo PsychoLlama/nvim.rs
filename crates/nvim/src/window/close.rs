@@ -116,7 +116,7 @@ pub(crate) fn init_empty(window: Win) {
 
 /// Init the current window. Called when a new file is being edited.
 pub fn curwin_init() {
-    init_empty(cur_win());
+    init_empty(Win::current());
 }
 
 pub unsafe fn close_windows(buffer: *mut Buffer, keep_curwin: bool) {
@@ -302,13 +302,13 @@ pub(crate) fn close_last_tabpage_window(
     {
         close_othertab(win, free_buf, prev, false);
     }
-    enter_window(cur_win());
+    enter_window(Win::current());
 
     // `goto_tab` above did not trigger *Enter autocommands: do that now.
-    fire(AutoEvent::WinEnter, cur_buf());
-    fire(AutoEvent::TabEnter, cur_buf());
+    fire(AutoEvent::WinEnter, Buf::current());
+    fire(AutoEvent::TabEnter, Buf::current());
     if old_curbuf != Buf::current_raw() {
-        fire(AutoEvent::BufEnter, cur_buf());
+        fire(AutoEvent::BufEnter, Buf::current());
     }
     true
 }
@@ -330,7 +330,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
         buf.b_p_bl = 0;
     }
     // Close the link to the buffer.
-    let bufref = BufRef::of(cur_buf());
+    let bufref = BufRef::of(Buf::current());
     win.w_locked = true;
     let retval = close_buffer(Some(win), buf, action, abort_if_last, true);
     if valid_win_any_tab(win.raw()) {
@@ -379,7 +379,7 @@ pub unsafe fn close_others(message: c_int, forceit: c_int) {
 /// Try to close every window but the current one, hiding their buffers if
 /// 'hidden' is set or `forceit` and the buffer was changed. `:only`, `:bdel`.
 fn close_all_others(message: bool, forceit: bool) {
-    let old_curwin = cur_win();
+    let old_curwin = Win::current();
     let announce = message && !autocmd_busy.get();
     if old_curwin.w_floating {
         if announce {

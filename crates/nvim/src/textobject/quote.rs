@@ -127,7 +127,7 @@ unsafe fn quoted_span(
     vis_empty: bool,
     vis_bef_curs: bool,
 ) -> Option<(c_int, c_int)> {
-    let qe = cur_buf().b_p_qe;
+    let qe = Buf::current().b_p_qe;
     // SAFETY, for all five: the caller guarantees `line` is the current line
     // and so NUL-terminated, and 'quoteescape' is a NUL-terminated option
     // string -- between them that is everything the two searches ask of their
@@ -155,7 +155,7 @@ unsafe fn quoted_span(
             if end < 0 {
                 // It was a starting quote after all.
                 end = col_start;
-                col_start = cur_win().w_cursor.col as c_int;
+                col_start = Win::current().w_cursor.col as c_int;
             }
             col_end = end;
         } else {
@@ -167,7 +167,7 @@ unsafe fn quoted_span(
             if at(col_start) as u8 as c_int != quotechar {
                 // It was an ending quote after all.
                 col_start = end;
-                end = cur_win().w_cursor.col as c_int;
+                end = Win::current().w_cursor.col as c_int;
             }
             col_end = end;
         }
@@ -221,7 +221,7 @@ unsafe fn quoted_span(
 
 /// Swap the cursor and the Visual anchor, so the anchor is the earlier end.
 fn swap_cursor_and_anchor() {
-    let cursor = core::mem::replace(&mut *cur_win().cursor(), visual_anchor());
+    let cursor = core::mem::replace(&mut *Win::current().cursor(), visual_anchor());
     set_visual_anchor(cursor);
 }
 
@@ -239,7 +239,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     // non-NUL, so the reads stay inside it -- the `&&` chains that prove it
     // are left whole below.
     let at = |col: c_int| unsafe { *line.offset(col as isize) };
-    let mut col_start = cur_win().w_cursor.col as c_int;
+    let mut col_start = Win::current().w_cursor.col as c_int;
     let mut inclusive = false;
     let mut vis_empty = true; // the Visual selection is one character or less
     let mut vis_bef_curs = false; // the Visual area starts before the cursor
@@ -253,11 +253,11 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     // moved forward again after the area has been adjusted.
     if visual_active() {
         // This only works within one line.
-        if visual_anchor().lnum != cur_win().w_cursor.lnum {
+        if visual_anchor().lnum != Win::current().w_cursor.lnum {
             return false;
         }
-        vis_bef_curs = lt(visual_anchor(), cur_win().w_cursor);
-        vis_empty = equalpos(visual_anchor(), cur_win().w_cursor);
+        vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor);
+        vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
         // SAFETY: 'selection' is a NUL-terminated option string.
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             if vis_bef_curs {
@@ -269,7 +269,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
                 unsafe { with_visual_anchor(|anchor| dec(anchor)) };
                 did_exclusive_adj = true;
             }
-            vis_empty = equalpos(visual_anchor(), cur_win().w_cursor);
+            vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
             if !vis_bef_curs && !vis_empty {
                 // `VIsual` has to be the start of the selection.
                 swap_cursor_and_anchor();
@@ -287,16 +287,16 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         if vis_bef_curs {
             inside_quotes = visual_anchor().col > 0
                 && at(visual_anchor().col - 1) as u8 as c_int == quotechar
-                && at(cur_win().w_cursor.col) as c_int != NUL
-                && at(cur_win().w_cursor.col + 1) as u8 as c_int == quotechar;
+                && at(Win::current().w_cursor.col) as c_int != NUL
+                && at(Win::current().w_cursor.col + 1) as u8 as c_int == quotechar;
             i = visual_anchor().col as c_int;
-            sel_end = cur_win().w_cursor.col as c_int;
+            sel_end = Win::current().w_cursor.col as c_int;
         } else {
-            inside_quotes = cur_win().w_cursor.col > 0
-                && at(cur_win().w_cursor.col - 1) as u8 as c_int == quotechar
+            inside_quotes = Win::current().w_cursor.col > 0
+                && at(Win::current().w_cursor.col - 1) as u8 as c_int == quotechar
                 && at(visual_anchor().col) as c_int != NUL
                 && at(visual_anchor().col + 1) as u8 as c_int == quotechar;
-            i = cur_win().w_cursor.col as c_int;
+            i = Win::current().w_cursor.col as c_int;
             sel_end = visual_anchor().col as c_int;
         }
         // Is there a quote in the selection at all?
@@ -353,7 +353,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     if !include && count < 2 && (vis_empty || !inside_quotes) {
         col_start += 1;
     }
-    cur_win().w_cursor.col = col_start as ColNr;
+    Win::current().w_cursor.col = col_start as ColNr;
     if visual_active() {
         // Set the start of the Visual area when it was empty, when we
         // were just inside quotes, or when it neither started at a quote
@@ -366,19 +366,19 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
                     || (at(anchor_col) as u8 as c_int != quotechar
                         && (anchor_col == 0 || at(anchor_col - 1) as u8 as c_int != quotechar))))
         {
-            set_visual_anchor(cur_win().w_cursor);
+            set_visual_anchor(Win::current().w_cursor);
             // SAFETY: on the main thread with a current buffer.
             redraw_curbuf_later(UPD_INVERTED);
         }
     } else {
         // SAFETY: the caller guarantees `op` is a live operator argument.
         let op = unsafe { &mut *op };
-        op.start = cur_win().w_cursor;
+        op.start = Win::current().w_cursor;
         op.motion_type = kMTCharWise;
     }
 
     // The end position.
-    cur_win().w_cursor.col = col_end as ColNr;
+    Win::current().w_cursor.col = col_end as ColNr;
     // SAFETY: the cursor is on a line of the current buffer; the `&&` keeps
     // `inc_cursor`'s side effect behind the same test it had.
     if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
@@ -404,9 +404,9 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
             {
                 // SAFETY: the cursor is on a line of the current buffer.
                 dec_cursor();
-                set_visual_anchor(cur_win().w_cursor);
+                set_visual_anchor(Win::current().w_cursor);
             }
-            cur_win().w_cursor.col = col_start as ColNr;
+            Win::current().w_cursor.col = col_start as ColNr;
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);
@@ -417,14 +417,4 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         unsafe { (*op).inclusive = inclusive };
     }
     true
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

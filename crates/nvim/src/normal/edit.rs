@@ -135,7 +135,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         unsafe { nv_operator(cmd_arg) };
         return;
     }
-    if virtual_active(cur_win()) {
+    if virtual_active(Win::current()) {
         if u_save_cursor().is_err() {
             return;
         }
@@ -143,7 +143,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
             // Past the end of the line: make room for the whole count and
             // then step back to where the replacing starts.
             unsafe { coladvance_force(getviscol() + ca.count1) };
-            cur_win().w_cursor.col -= ca.count1;
+            Win::current().w_cursor.col -= ca.count1;
         } else if gchar_cursor() == TAB {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
@@ -160,7 +160,9 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
     }
     // A tab that 'expandtab' or 'smarttab' would turn into spaces is
     // easier to get right by replaying the whole thing as `R<Tab><Esc>`.
-    if literal != Ctrl_V && ca.nchar == '\t' as c_int && (cur_buf().b_p_et != 0 || p_sta.get() != 0)
+    if literal != Ctrl_V
+        && ca.nchar == '\t' as c_int
+        && (Buf::current().b_p_et != 0 || p_sta.get() != 0)
     {
         stuff_readbuf_number(ca.count1);
         stuff_readbuf_char('R' as c_int);
@@ -190,7 +192,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         literal,
         0,
     );
-    cur_buf().b_op_start = cur_win().w_cursor;
+    Buf::current().b_op_start = Win::current().w_cursor;
     let old_state = State.get();
     if ca.nchar_len > 0 {
         unsafe { append_to_redobuff(&raw mut ca.nchar_composing as *mut c_char) };
@@ -203,14 +205,14 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         State.set(MODE_REPLACE);
         if ca.nchar == Ctrl_E || ca.nchar == Ctrl_Y {
             // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
-            let from = cur_win().w_cursor.lnum + if ca.nchar == Ctrl_Y { -1 } else { 1 };
+            let from = Win::current().w_cursor.lnum + if ca.nchar == Ctrl_Y { -1 } else { 1 };
             let c = unsafe { ins_copychar(from) };
             if c != NUL {
                 unsafe { ins_char(c) };
             } else {
                 // Nothing there to copy: leave the character alone and
                 // step over it.
-                cur_win().w_cursor.col += 1;
+                Win::current().w_cursor.col += 1;
             }
         } else if ca.nchar_len != 0 {
             let bytes = &raw mut ca.nchar_composing as *mut c_char;
@@ -220,10 +222,10 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         }
         State.set(old_state);
     }
-    cur_win().w_cursor.col -= 1;
+    Win::current().w_cursor.col -= 1;
     unsafe { mb_adjust_cursor() };
-    cur_buf().b_op_end = cur_win().w_cursor;
-    cur_win().w_set_curswant = true;
+    Buf::current().b_op_end = Win::current().w_cursor;
+    Win::current().w_set_curswant = true;
     unsafe { set_last_insert(ca.nchar) };
     unsafe { fold_update_after_insert() };
 }
@@ -244,11 +246,11 @@ pub(crate) unsafe fn nv_replace_mode(cmd_arg: *mut CmdArg) {
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    if cur_buf().b_p_ma == 0 {
+    if Buf::current().b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return;
     }
-    if virtual_active(cur_win()) {
+    if virtual_active(Win::current()) {
         unsafe { coladvance(Win::current(), getviscol()) };
     }
     let kind = if ca.arg != 0 {
@@ -272,7 +274,7 @@ pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    if cur_buf().b_p_ma == 0 {
+    if Buf::current().b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return;
     }
@@ -286,7 +288,7 @@ pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
     }
     stuff_readbuf_char(ca.extra_char);
     stuff_readbuf_char(ESC);
-    if virtual_active(cur_win()) {
+    if virtual_active(Win::current()) {
         unsafe { coladvance(Win::current(), getviscol()) };
     }
     unsafe { invoke_edit(cmd_arg, 1, 'v' as c_int, 0) };
@@ -302,7 +304,7 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
     // An empty line has nothing to swap unless 'whichwrap' lets `~` move
     // to the next one.
     let wraps = !unsafe { vim_strchr(p_ww.get(), '~' as c_int) }.is_null();
-    if unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int == NUL && !wraps {
+    if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL && !wraps {
         clear_op_beep(ca.op());
         return;
     }
@@ -310,38 +312,38 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
     if u_save_cursor().is_err() {
         return;
     }
-    let startpos = cur_win().w_cursor;
+    let startpos = Win::current().w_cursor;
     let mut did_change = false;
     let mut n = ca.count1;
     while n > 0 {
         did_change |= unsafe { swapchar(ca.op().op_type, &raw mut (*Win::current_raw()).w_cursor) };
         inc_cursor();
         if gchar_cursor() == NUL {
-            if !(wraps && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count) {
+            if !(wraps && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count) {
                 break;
             }
-            cur_win().w_cursor.lnum += 1;
-            cur_win().w_cursor.col = 0;
+            Win::current().w_cursor.lnum += 1;
+            Win::current().w_cursor.col = 0;
             // Each further line needs its own undo entry.
             if n > 1 {
-                if u_savesub(cur_win().w_cursor.lnum).is_err() {
+                if u_savesub(Win::current().w_cursor.lnum).is_err() {
                     break;
                 }
-                u_clearline(cur_buf());
+                u_clearline(Buf::current());
             }
         }
         n -= 1;
     }
     check_cursor(Win::current());
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     if did_change {
         let (from, col) = (startpos.lnum, startpos.col);
-        let to = cur_win().w_cursor.lnum + 1;
-        changed_lines(cur_buf(), from, col, to, 0, true);
-        cur_buf().b_op_start = startpos;
-        cur_buf().b_op_end = cur_win().w_cursor;
-        if cur_buf().b_op_end.col > 0 {
-            cur_buf().b_op_end.col -= 1;
+        let to = Win::current().w_cursor.lnum + 1;
+        changed_lines(Buf::current(), from, col, to, 0, true);
+        Buf::current().b_op_start = startpos;
+        Buf::current().b_op_end = Win::current().w_cursor;
+        if Buf::current().b_op_end.col > 0 {
+            Buf::current().b_op_end.col -= 1;
         }
     }
 }
@@ -423,7 +425,7 @@ pub(crate) unsafe fn n_opencmd(cmd_arg: *mut CmdArg) {
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    let mut win = cur_win();
+    let mut win = Win::current();
     let opening_above = ca.cmdchar == 'O' as c_int;
     // Open outside a closed fold rather than inside it: `O` stretches to the
     // fold's first line, `o` to its last.
@@ -435,7 +437,7 @@ pub(crate) unsafe fn n_opencmd(cmd_arg: *mut CmdArg) {
         has_folding(win, lnum, None, Some(&mut edge));
     }
     win.w_cursor.lnum = edge;
-    cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
+    Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     let undo_first = win.w_cursor.lnum - LineNr::from(opening_above);
     let undo_last = win.w_cursor.lnum + LineNr::from(!opening_above);
     let dir = if opening_above {
@@ -478,8 +480,8 @@ pub(crate) unsafe fn nv_tilde(cmd_arg: *mut CmdArg) {
 /// past the last *cell* when 'virtualedit' is "all".
 pub(crate) unsafe fn set_cursor_for_append_to_line() {
     // SAFETY (throughout): reads and writes the current window's cursor.
-    cur_win().w_set_curswant = true;
-    if get_ve_flags(cur_win()) == kOptVeFlagAll as c_uint {
+    Win::current().w_set_curswant = true;
+    if get_ve_flags(Win::current()) == kOptVeFlagAll as c_uint {
         // Insert mode is what makes `coladvance` allow the position one
         // past the end.
         let save_state = State.get();
@@ -487,7 +489,8 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
         coladvance(Win::current(), MAXCOL as c_int);
         State.set(save_state);
     } else {
-        cur_win().w_cursor.col += unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as ColNr;
+        Win::current().w_cursor.col +=
+            unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as ColNr;
     }
 }
 
@@ -511,7 +514,7 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
         return;
     }
     // A terminal buffer is not 'modifiable' and is still editable.
-    if cur_buf().b_p_ma == 0 && cur_buf().terminal.is_null() {
+    if Buf::current().b_p_ma == 0 && Buf::current().terminal.is_null() {
         emsg(gettext(e_modifiable));
         clear_op(ca.op());
         return;
@@ -525,12 +528,12 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
         Ok(b'a') => {
             // `a` steps one right first. Under 'virtualedit' a position
             // inside a tab or past the end of the line moves by a cell.
-            if virtual_active(cur_win())
-                && (cur_win().w_cursor.coladd > 0
+            if virtual_active(Win::current())
+                && (Win::current().w_cursor.coladd > 0
                     || unsafe { *get_cursor_pos_ptr() } as c_int == NUL
                     || unsafe { *get_cursor_pos_ptr() } as c_int == TAB)
             {
-                cur_win().w_cursor.coladd += 1;
+                Win::current().w_cursor.coladd += 1;
             } else if unsafe { *get_cursor_pos_ptr() } as c_int != NUL {
                 inc_cursor();
             }
@@ -539,7 +542,7 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
     }
     // Insert mode has no virtual column of its own, so anything but `A`
     // has to land on a real one first.
-    if cur_win().w_cursor.coladd != 0 && ca.cmdchar != 'A' as c_int {
+    if Win::current().w_cursor.coladd != 0 && ca.cmdchar != 'A' as c_int {
         let save_state = State.get();
         State.set(MODE_INSERT);
         unsafe { coladvance(Win::current(), getviscol()) };
@@ -566,7 +569,7 @@ pub(crate) unsafe fn invoke_edit(cmd_arg: *mut CmdArg, repl: c_int, cmd: c_int, 
     restart_edit.set(0);
     // `o` and `O` already recorded the tick before opening the line.
     if ca.cmdchar != 'O' as c_int && ca.cmdchar != 'o' as c_int {
-        cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
+        Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     }
     if unsafe { edit(cmd, startln != 0, ca.count1) } {
         ca.retval |= CA_COMMAND_BUSY as c_int;
@@ -590,14 +593,14 @@ pub(crate) unsafe fn nv_join(cmd_arg: *mut CmdArg) {
     // Joining fewer than two lines means nothing; `J` and `1J` both join
     // this line with the next.
     ca.count0 = ca.count0.max(2);
-    if cur_win().w_cursor.lnum + ca.count0 as LineNr - 1 > cur_buf().b_ml.ml_line_count {
+    if Win::current().w_cursor.lnum + ca.count0 as LineNr - 1 > Buf::current().b_ml.ml_line_count {
         // A count that runs off the end joins what is left -- unless there
         // was no count, in which case there is nothing below to join to.
         if ca.count0 <= 2 {
             clear_op_beep(ca.op());
             return;
         }
-        ca.count0 = (cur_buf().b_ml.ml_line_count - cur_win().w_cursor.lnum + 1) as c_int;
+        ca.count0 = (Buf::current().b_ml.ml_line_count - Win::current().w_cursor.lnum + 1) as c_int;
     }
     prep_redo(
         ca.op().regname,
@@ -623,7 +626,7 @@ pub(crate) unsafe fn nv_put(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let save_fen = win.w_onebuf_opt.wo_fen;
     if ca.op().op_type != OpType::Nop {
         // `dp` is not "delete, then put": it is the diff command.
@@ -639,8 +642,8 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
     if buf_is_prompt(current_buf()) && !unsafe { prompt_curpos_editable() } {
         // On the prompt's own line, put in front of the prompt text
         // rather than refusing.
-        if win.w_cursor.lnum == cur_buf().b_prompt_start.mark.lnum {
-            win.w_cursor.col = cur_buf().b_prompt_start.mark.col;
+        if win.w_cursor.lnum == Buf::current().b_prompt_start.mark.lnum {
+            win.w_cursor.col = Buf::current().b_prompt_start.mark.col;
             ca.cmdchar = 'P' as c_int;
         } else {
             clear_op_beep(ca.op());
@@ -709,7 +712,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
             unsafe { do_pending_operator(cmd_arg, 0, false) };
             // The delete may have left the buffer with one empty line
             // that the put should not keep.
-            emptied = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
+            emptied = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
             drop(silenced);
             ca.op().regname = regname;
         }
@@ -724,8 +727,8 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
         // Put where the selection was, which is where the delete left the
         // cursor -- forwards only when it left it before the start.
         dir = BACKWARD as c_int;
-        if (!visual_mode().is_line() && win.w_cursor.col < cur_buf().b_op_start.col)
-            || (visual_mode().is_line() && win.w_cursor.lnum < cur_buf().b_op_start.lnum)
+        if (!visual_mode().is_line() && win.w_cursor.col < Buf::current().b_op_start.col)
+            || (visual_mode().is_line() && win.w_cursor.lnum < Buf::current().b_op_start.lnum)
         {
             dir = FORWARD as c_int;
         }
@@ -742,17 +745,18 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
             win.w_onebuf_opt.wo_fen = 1;
         }
         // Leave `gv` naming what was just put.
-        cur_buf().b_visual.vi_start = cur_buf().b_op_start;
-        cur_buf().b_visual.vi_end = cur_buf().b_op_end;
+        Buf::current().b_visual.vi_start = Buf::current().b_op_start;
+        Buf::current().b_visual.vi_end = Buf::current().b_op_end;
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }
-    if emptied && unsafe { *ml_get(cur_buf().b_ml.ml_line_count) } as c_int == NUL {
-        let _ = unsafe { ml_delete_flags(cur_buf().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
-        unsafe { deleted_lines(cur_buf().b_ml.ml_line_count + 1, 1) };
-        if win.w_cursor.lnum > cur_buf().b_ml.ml_line_count {
-            win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+    if emptied && unsafe { *ml_get(Buf::current().b_ml.ml_line_count) } as c_int == NUL {
+        let _ =
+            unsafe { ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
+        unsafe { deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1) };
+        if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
+            win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
             coladvance(win, MAXCOL as c_int);
         }
     }
@@ -772,20 +776,10 @@ pub(crate) unsafe fn nv_open(cmd_arg: *mut CmdArg) {
     } else if visual_active() {
         unsafe { v_swap_corners(ca.cmdchar) };
     } else if buf_is_prompt(current_buf())
-        && cur_win().w_cursor.lnum < cur_buf().b_prompt_start.mark.lnum
+        && Win::current().w_cursor.lnum < Buf::current().b_prompt_start.mark.lnum
     {
         clear_op_beep(ca.op());
     } else {
         unsafe { n_opencmd(cmd_arg) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

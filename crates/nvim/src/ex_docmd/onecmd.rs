@@ -422,8 +422,8 @@ pub(crate) unsafe fn do_one_cmd(
             && global_busy.get() == 0
             && ea.addr_type == CmdAddr::Lines
         {
-            has_folding(cur_win(), ea.line1, Some(&mut ea.line1), None);
-            has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
+            has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
+            has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
         }
 
         // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line
@@ -572,9 +572,9 @@ pub(crate) unsafe fn do_one_cmd(
     }
 
     // Can happen with a zero line number.
-    if cur_win().w_cursor.lnum == 0 {
-        cur_win().w_cursor.lnum = 1;
-        cur_win().w_cursor.col = 0;
+    if Win::current().w_cursor.lnum == 0 {
+        Win::current().w_cursor.lnum = 1;
+        Win::current().w_cursor.col = 0;
     }
 
     if let Some(msg) = errormsg
@@ -682,9 +682,9 @@ unsafe fn refuses_here(ea: &ExArg) -> Option<CString> {
         return Some(ex_msg(e_sandbox.as_ptr()));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
-    if cur_buf().b_p_ma == 0
+    if Buf::current().b_p_ma == 0
         && ea.argt.has(ExArgt::MODIFY)
-        && !(!cur_buf().terminal.is_null()
+        && !(!Buf::current().terminal.is_null()
             && (ea.cmdidx == CmdIdx::put || ea.cmdidx == CmdIdx::iput))
     {
         return Some(ex_msg(e_modifiable.as_ptr()));
@@ -721,12 +721,12 @@ pub(crate) unsafe fn ex_range_without_command(args: *mut ExArg) -> Option<CStrin
             unsafe { ex_print(ea.raw()) };
         }
     } else if ea.addr_count != 0 {
-        ea.line2 = ea.line2.min(cur_buf().b_ml.ml_line_count);
+        ea.line2 = ea.line2.min(Buf::current().b_ml.ml_line_count);
         if ea.line2 < 0 {
             errormsg = Some(ex_msg(e_invrange.as_ptr()));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
-            cur_win().w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
+            Win::current().w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     }
@@ -799,16 +799,6 @@ pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
         let mut len: size_t = 0;
         unsafe { xfree(script_get(args.raw(), &raw mut len) as *mut c_void) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `curbuf_locked()` as checked code.

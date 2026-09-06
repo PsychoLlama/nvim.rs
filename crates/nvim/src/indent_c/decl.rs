@@ -72,13 +72,13 @@ pub(crate) unsafe fn cin_islabel() -> bool {
         return false; // not a label in a comment or a raw string
     }
 
-    let cursor_save = cur_win().w_cursor;
-    while cur_win().w_cursor.lnum > 1 {
-        cur_win().w_cursor.lnum -= 1;
-        cur_win().w_cursor.col = 0;
+    let cursor_save = Win::current().w_cursor;
+    while Win::current().w_cursor.lnum > 1 {
+        Win::current().w_cursor.lnum -= 1;
+        Win::current().w_cursor.col = 0;
         // SAFETY: the cursor is on a line of the current buffer.
         if let Some(trypos) = unsafe { ind_find_start_comment_or_raw_string(None) } {
-            cur_win().w_cursor = trypos;
+            Win::current().w_cursor = trypos;
         }
 
         // SAFETY: the cursor is on a line of the current buffer, so
@@ -94,7 +94,7 @@ pub(crate) unsafe fn cin_islabel() -> bool {
             continue;
         };
 
-        cur_win().w_cursor = cursor_save;
+        Win::current().w_cursor = cursor_save;
         // SAFETY: `line` is a NUL-terminated line of the current buffer, and
         // the chain is left whole so `cin_nocode` only sees where
         // `cin_islabel_skip` left `line` when it found a label.
@@ -105,7 +105,7 @@ pub(crate) unsafe fn cin_islabel() -> bool {
                 || (cin_islabel_skip(&mut line) && cin_nocode(line))
         };
     }
-    cur_win().w_cursor = cursor_save;
+    Win::current().w_cursor = cursor_save;
     true // label at start of file???
 }
 
@@ -290,7 +290,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
     min_lnum: LineNr,
 ) -> bool {
     let mut lnum = first_lnum;
-    let save_lnum = cur_win().w_cursor.lnum;
+    let save_lnum = Win::current().w_cursor.lnum;
     let mut retval = false;
     let mut just_started = true;
 
@@ -304,25 +304,25 @@ pub(crate) unsafe fn cin_isfuncdecl(
 
     // Position on the rightmost unmatched paren so that matching it
     // takes us to the line the declaration starts on.
-    cur_win().w_cursor.lnum = lnum;
+    Win::current().w_cursor.lnum = lnum;
     // SAFETY: `s` is a NUL-terminated line; both searches run on the current
     // buffer from the cursor, and `find_match_paren` runs only when
     // `find_last_paren` found one, as upstream has it.
     let opening = unsafe {
         find_last_paren(s, b'(', b')')
-            .then(|| find_match_paren(cur_buf().b_ind_maxparen))
+            .then(|| find_match_paren(Buf::current().b_ind_maxparen))
             .flatten()
     };
     if let Some(trypos) = opening {
         lnum = trypos.lnum;
         if lnum < min_lnum {
-            cur_win().w_cursor.lnum = save_lnum;
+            Win::current().w_cursor.lnum = save_lnum;
             return false;
         }
         // SAFETY: `lnum` is the line the match was found on.
         s = ml_get(lnum);
     }
-    cur_win().w_cursor.lnum = save_lnum;
+    Win::current().w_cursor.lnum = save_lnum;
 
     // SAFETY: `s` is a NUL-terminated line.
     if unsafe { cin_ispreproc(s) } {
@@ -391,7 +391,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
                 // the end of the line, for this style:
                 //     func(arg1
                 //           , arg2)
-                while lnum < cur_buf().b_ml.ml_line_count {
+                while lnum < Buf::current().b_ml.ml_line_count {
                     lnum += 1;
                     // SAFETY: `lnum` is a line of the current buffer.
                     s = ml_get(lnum);
@@ -400,7 +400,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
                         break;
                     }
                 }
-                if lnum >= cur_buf().b_ml.ml_line_count {
+                if lnum >= Buf::current().b_ml.ml_line_count {
                     break;
                 }
                 // Require a comma at the end of this line, or a comma or
@@ -438,14 +438,4 @@ pub(crate) unsafe fn cin_isfuncdecl(
         *p = ml_get(first_lnum);
     }
     retval
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

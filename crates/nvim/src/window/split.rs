@@ -47,7 +47,7 @@ pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
 /// Split the current window, `flags` being the `WSP_*` set: which half the new
 /// window takes, whether it is vertical, and whether it is entered.
 pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
-    let cur = cur_win();
+    let cur = Win::current();
     // SAFETY: a live window.
     if unsafe { check_split_disallowed(cur.raw()) } == FAIL {
         return Err(Failed);
@@ -71,7 +71,7 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
         if flags & flag != 0 {
             take_snapshot(idx);
         } else {
-            drop_snapshot(cur_tab(), idx);
+            drop_snapshot(TabPage::current(), idx);
         }
     }
     if split_ins(size, flags, None, 0, None).is_some() {
@@ -132,11 +132,11 @@ fn split_ins(
 
     let mut oldwin = if flags & WSP_TOP as c_int != 0 {
         first_win()
-    } else if flags & WSP_BOT as c_int != 0 || cur_win().w_floating {
+    } else if flags & WSP_BOT as c_int != 0 || Win::current().w_floating {
         // Can't split a float: use the last non-floating window instead.
         last_nonfloating(None)
     } else {
-        cur_win()
+        Win::current()
     };
 
     let vertical = flags & WSP_VERT as c_int != 0;
@@ -630,7 +630,7 @@ fn size_vertical(
     let (mut wp, mut oldwin, mut frp) = (window, oldwin, frp);
     // 'scroll' is not inherited by a horizontal split, but is by a vertical
     // one.
-    wp.w_onebuf_opt.wo_scr = cur_win().w_onebuf_opt.wo_scr;
+    wp.w_onebuf_opt.wo_scr = Win::current().w_onebuf_opt.wo_scr;
     if need_status != 0 {
         new_win_height(oldwin, oldwin.w_height - 1);
         oldwin.w_status_height = need_status;

@@ -34,7 +34,7 @@ use super::*;
 pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *const c_char) {
     // SAFETY: a live current buffer and NUL-terminated names, by the above.
     let file_name: *mut c_char = if name.is_null() {
-        let picked = unsafe { u_get_undo_file_name(cur_buf().b_ffname, true) };
+        let picked = unsafe { u_get_undo_file_name(Buf::current().b_ffname, true) };
         if picked.is_null() {
             return;
         }
@@ -142,7 +142,7 @@ unsafe fn read_undo_file(
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
     if unsafe { core::slice::from_raw_parts(hash, read_hash.len()) } != read_hash
-        || line_count != cur_buf().b_ml.ml_line_count
+        || line_count != Buf::current().b_ml.ml_line_count
     {
         verbosely(automatic, || {
             let mesg = gettext(c"File contents changed, cannot use undo info");
@@ -374,9 +374,4 @@ unsafe fn graft(
     buf.b_u_save_nr_cur = header.last_save_nr;
     buf.b_u_synced = true;
     true
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

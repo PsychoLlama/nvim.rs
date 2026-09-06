@@ -165,8 +165,8 @@ pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
         return;
     }
     let lazyredraw_off = suspend_lazyredraw();
-    validate_cursor(cur_win());
-    update_topline(cur_win());
+    validate_cursor(Win::current());
+    update_topline(Win::current());
     if args.forceit != 0 {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
@@ -325,11 +325,6 @@ fn ui_flush() {
 fn update_screen() -> Result<(), Failed> {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::drawscreen::update_screen() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

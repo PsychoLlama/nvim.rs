@@ -38,7 +38,7 @@ pub unsafe fn findpar(
     what: c_int,
     both: bool,
 ) -> bool {
-    let mut curr = cur_win().w_cursor.lnum;
+    let mut curr = Win::current().w_cursor.lnum;
 
     loop {
         let this = count;
@@ -60,7 +60,7 @@ pub unsafe fn findpar(
             // Skip over a closed fold, which counts as one line.
             let mut fold_skipped = false;
             if first {
-                let (folded, fold_first, fold_last) = cur_win().fold_span(curr);
+                let (folded, fold_first, fold_last) = Win::current().fold_span(curr);
                 if folded {
                     curr = (if dir > 0 { fold_last } else { fold_first }) + dir as LineNr;
                     fold_skipped = true;
@@ -73,7 +73,7 @@ pub unsafe fn findpar(
                 curr -= dir as LineNr;
             }
             curr += dir as LineNr;
-            if curr < 1 || curr > cur_buf().b_ml.ml_line_count {
+            if curr < 1 || curr > Buf::current().b_ml.ml_line_count {
                 if count != 0 {
                     return false;
                 }
@@ -90,25 +90,26 @@ pub unsafe fn findpar(
     if both && unsafe { *ml_get(curr) } as c_int == '}' as c_int {
         curr += 1; // include the line holding the `}`
     }
-    cur_win().w_cursor.lnum = curr;
-    if curr == cur_buf().b_ml.ml_line_count && what != '}' as c_int && dir == FORWARD as c_int {
+    Win::current().w_cursor.lnum = curr;
+    if curr == Buf::current().b_ml.ml_line_count && what != '}' as c_int && dir == FORWARD as c_int
+    {
         // Put the cursor on the last character of the last line and make
         // the motion inclusive.
         // SAFETY: on the main thread with a current buffer; `ml_get` hands
         // back a NUL-terminated line and `ml_get_len` its length.
         let (line, len) = (ml_get(curr), ml_get_len(curr));
-        cur_win().w_cursor.col = len;
-        if cur_win().w_cursor.col != 0 {
-            cur_win().w_cursor.col -= 1;
+        Win::current().w_cursor.col = len;
+        if Win::current().w_cursor.col != 0 {
+            Win::current().w_cursor.col -= 1;
             // SAFETY: `col` is now below `len`, so it indexes `line`, and
             // `utf_head_off` only walks back from there towards `line`.
-            cur_win().w_cursor.col -=
-                unsafe { utf_head_off(line, line.offset(cur_win().w_cursor.col as isize)) };
+            Win::current().w_cursor.col -=
+                unsafe { utf_head_off(line, line.offset(Win::current().w_cursor.col as isize)) };
             // SAFETY: the caller guarantees `pincl` is writable.
             unsafe { *pincl = true };
         }
     } else {
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.col = 0;
     }
     true
 }
@@ -198,7 +199,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
         if dir == BACKWARD as c_int {
             1
         } else {
-            cur_buf().b_ml.ml_line_count
+            Buf::current().b_ml.ml_line_count
         }
     };
     let mut i = count;
@@ -238,8 +239,8 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
             prev_start_is_white = start_is_white;
         }
     }
-    cur_win().w_cursor.lnum = start_lnum;
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.lnum = start_lnum;
+    Win::current().w_cursor.col = 0;
     retval
 }
 
@@ -256,7 +257,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
     if type_0 == 'S' as c_int {
         return FAIL; // not implemented yet
     }
-    let mut start_lnum = cur_win().w_cursor.lnum;
+    let mut start_lnum = Win::current().w_cursor.lnum;
 
     // A Visual area of more than one line is extended, not replaced.
     if visual_active() && start_lnum != visual_anchor().lnum {
@@ -278,7 +279,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
 
     // Past the end of any white lines.
     let mut end_lnum = start_lnum;
-    while end_lnum <= cur_buf().b_ml.ml_line_count && line_is_white(end_lnum) {
+    while end_lnum <= Buf::current().b_ml.ml_line_count && line_is_white(end_lnum) {
         end_lnum += 1;
     }
     end_lnum -= 1;
@@ -296,7 +297,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
         if this == 0 {
             break;
         }
-        if end_lnum == cur_buf().b_ml.ml_line_count {
+        if end_lnum == Buf::current().b_ml.ml_line_count {
             return FAIL;
         }
         if !include {
@@ -305,7 +306,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
         if include || !do_white {
             end_lnum += 1;
             // On to the end of the paragraph.
-            while end_lnum < cur_buf().b_ml.ml_line_count
+            while end_lnum < Buf::current().b_ml.ml_line_count
                 && !line_is_white(end_lnum + 1)
                 && !line_starts_para(end_lnum + 1, 0, false)
             {
@@ -317,7 +318,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
         }
         // On to the end of the white lines after the paragraph.
         if include || do_white {
-            while end_lnum < cur_buf().b_ml.ml_line_count && line_is_white(end_lnum + 1) {
+            while end_lnum < Buf::current().b_ml.ml_line_count && line_is_white(end_lnum + 1) {
                 end_lnum += 1;
             }
         }
@@ -334,7 +335,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
     if visual_active() {
         // `Vipipip` on a single white line would otherwise get stuck
         // here, so hand it to the extending path instead.
-        if visual_mode().is_line() && start_lnum == cur_win().w_cursor.lnum {
+        if visual_mode().is_line() && start_lnum == Win::current().w_cursor.lnum {
             return extend_paragraphs(start_lnum, count, include);
         }
         if visual_anchor().lnum != start_lnum {
@@ -353,8 +354,8 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
         op.start.col = 0;
         op.motion_type = kMTLineWise;
     }
-    cur_win().w_cursor.lnum = end_lnum;
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.lnum = end_lnum;
+    Win::current().w_cursor.col = 0;
     OK
 }
 
@@ -370,14 +371,4 @@ fn line_is_white(lnum: LineNr) -> bool {
 fn line_starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     // SAFETY: as above -- the line number is `ml_get`'s to check.
     unsafe { starts_para(lnum, para, both) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

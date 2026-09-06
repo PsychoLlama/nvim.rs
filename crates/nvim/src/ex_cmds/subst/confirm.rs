@@ -17,7 +17,6 @@ use crate::cstr;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
-use crate::ex_cmds::cur_win;
 use crate::ex_cmds::say;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_docmd::state::ex_normal_busy;
@@ -91,25 +90,25 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     // byte of the match and back is what gives the match's screen columns.
     unsafe {
         getvcol(
-            cur_win(),
+            Win::current(),
             &raw mut (*Win::current_raw()).w_cursor,
             &raw mut sc,
             ptr::null_mut(),
             ptr::null_mut(),
         )
     };
-    cur_win().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
+    Win::current().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
     unsafe {
         getvcol(
-            cur_win(),
+            Win::current(),
             &raw mut (*Win::current_raw()).w_cursor,
             ptr::null_mut(),
             ptr::null_mut(),
             &raw mut ec,
         )
     };
-    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
-    if subflags.with(|flags| flags.do_number) || cur_win().w_onebuf_opt.wo_nu != 0 {
+    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
+    if subflags.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
         let numw = unsafe { number_width(Win::current_raw()) } + 1 as c_int;
         sc += numw;
         ec += numw;
@@ -168,9 +167,9 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz.get();
     // SAFETY: the current window is live.
-    let save_p_fen = cur_win().w_onebuf_opt.wo_fen;
+    let save_p_fen = Win::current().w_onebuf_opt.wo_fen;
     // SAFETY: as above.
-    cur_win().w_onebuf_opt.wo_fen = 0;
+    Win::current().w_onebuf_opt.wo_fen = 0;
 
     // Invert the matched string; the inversion is removed afterwards.
     let redraw = Allow::redraw();
@@ -190,7 +189,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
         // before it.
         len_change = unsafe { cstr::bytes_at(new_line) }.len() as c_int
             - unsafe { cstr::bytes_at(orig_line) }.len() as c_int;
-        cur_win().w_cursor.col += len_change;
+        Win::current().w_cursor.col += len_change;
         let _ = unsafe { ml_replace(st.lnum, new_line, false) };
     }
 
@@ -203,13 +202,13 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     highlight_match.set(true);
 
     // SAFETY: the current window is live.
-    update_topline(cur_win());
-    validate_cursor(cur_win());
+    update_topline(Win::current());
+    validate_cursor(Win::current());
     unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
     let _ = unsafe { update_screen() };
     unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
-    cur_win().w_onebuf_opt.wo_fen = save_p_fen;
+    Win::current().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];
     // SAFETY: `ask` is `IOSIZE` bytes and the format takes one string.
@@ -255,8 +254,8 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = 0 as c_int;
     let save_state = State.get();
     // SAFETY: the current window is live.
-    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
-    if cur_win().w_onebuf_opt.wo_crb != 0 {
+    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
+    if Win::current().w_onebuf_opt.wo_crb != 0 {
         unsafe { do_check_cursorbind() };
     }
     // Held for the whole prompt: `'cpoptions'` is read once, where the C

@@ -125,7 +125,7 @@ pub fn make_snapshot(idx: c_int) {
 
 /// Save the current layout in slot `idx` of the current tab page.
 pub(crate) fn take_snapshot(idx: c_int) {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     drop_snapshot(tp, idx);
     make_snapshot_rec(current_topframe(), snapshot_slot(tp, idx));
 }
@@ -195,7 +195,7 @@ fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
 /// The window the snapshot in slot `idx` of the current tab page remembers as
 /// the current one, if there is one.
 pub(crate) fn snapshot_curwin(idx: c_int) -> Option<Win> {
-    snapshot_of(cur_tab(), idx).and_then(snapshot_curwin_rec)
+    snapshot_of(TabPage::current(), idx).and_then(snapshot_curwin_rec)
 }
 
 pub fn restore_snapshot(idx: c_int, close_curwin: c_int) {
@@ -204,7 +204,7 @@ pub fn restore_snapshot(idx: c_int, close_curwin: c_int) {
 
 /// Put the layout saved in slot `idx` back, if it still fits the screen.
 pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let top = current_topframe();
     if let Some(sn) = snapshot_of(tp, idx)
         && sn.fr_width == top.fr_width

@@ -142,7 +142,7 @@ pub unsafe fn searchc(cmd_arg: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
     let len = get_cursor_line_len();
     let bytelen = lastc_bytelen.get();
     let bytes = lastc_bytes.get();
-    let mut col = cur_win().w_cursor.col as c_int;
+    let mut col = Win::current().w_cursor.col as c_int;
 
     while count > 0 {
         count -= 1;
@@ -182,11 +182,6 @@ pub unsafe fn searchc(cmd_arg: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             col -= unsafe { utf_head_off(line, line.offset(col as isize)) };
         }
     }
-    cur_win().w_cursor.col = col as ColNr;
+    Win::current().w_cursor.col = col as ColNr;
     Ok(())
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

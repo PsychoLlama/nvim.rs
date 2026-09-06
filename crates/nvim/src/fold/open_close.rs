@@ -75,11 +75,11 @@ pub unsafe fn op_fold_range(
         // range shorter and closing one makes it longer, and the walk has to
         // step past whichever range the command leaves behind.
         if opening != 0 && recurse == 0 {
-            has_folding(cur_win(), lnum, None, Some(&mut lnum_next));
+            has_folding(Win::current(), lnum, None, Some(&mut lnum_next));
         }
         set_manual_fold(at, opening != 0, recurse != 0, Some(&mut done));
         if opening == 0 && recurse == 0 {
-            has_folding(cur_win(), lnum, None, Some(&mut lnum_next));
+            has_folding(Win::current(), lnum, None, Some(&mut lnum_next));
         }
         lnum = lnum_next + 1;
     }
@@ -117,13 +117,13 @@ pub unsafe fn open_fold_recurse(pos: Pos) {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn fold_open_cursor() {
-    checkupdate(cur_win());
-    if has_any_folding(cur_win()) == 0 {
+    checkupdate(Win::current());
+    if has_any_folding(Win::current()) == 0 {
         return;
     }
     loop {
         let mut done: c_int = DONE_NOTHING;
-        set_manual_fold(cur_win().w_cursor, true, false, Some(&mut done));
+        set_manual_fold(Win::current().w_cursor, true, false, Some(&mut done));
         // The loop's only exit. Each pass opens the outermost fold still
         // closed over the cursor, so once a pass opens nothing there is
         // nothing left to open.
@@ -138,14 +138,14 @@ pub unsafe fn fold_open_cursor() {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn new_fold_level() {
-    new_fold_level_win(cur_win());
-    if !(foldmethod_is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0) {
+    new_fold_level_win(Win::current());
+    if !(foldmethod_is_diff(Win::current()) && Win::current().w_onebuf_opt.wo_scb != 0) {
         return;
     }
     // 'scrollbind' in a diff: the other diffed windows follow.
-    for mut win in windows_in_tab(cur_tab()) {
+    for mut win in windows_in_tab(TabPage::current()) {
         if !win.is_current() && foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
-            win.w_onebuf_opt.wo_fdl = cur_win().w_onebuf_opt.wo_fdl;
+            win.w_onebuf_opt.wo_fdl = Win::current().w_onebuf_opt.wo_fdl;
             new_fold_level_win(win);
         }
     }
@@ -173,14 +173,14 @@ pub unsafe fn fold_check_close() {
         return;
     }
     // SAFETY: the caller's promise.
-    checkupdate(cur_win());
+    checkupdate(Win::current());
     let changed = close_folds_off_cursor(
-        window_folds(cur_win()),
-        cur_win().w_cursor.lnum,
-        cur_win().w_onebuf_opt.wo_fdl as c_int,
+        window_folds(Win::current()),
+        Win::current().w_cursor.lnum,
+        Win::current().w_onebuf_opt.wo_fdl as c_int,
     );
     if changed {
-        changed_window_setting(cur_win());
+        changed_window_setting(Win::current());
     }
 }
 
@@ -211,7 +211,7 @@ pub(super) fn close_folds_off_cursor(folds: FoldList, lnum: LineNr, level: c_int
 /// The current window must be live.
 pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
     // SAFETY: the caller's promise.
-    if foldmethod_is_manual(cur_win()) || foldmethod_is_marker(cur_win()) {
+    if foldmethod_is_manual(Win::current()) || foldmethod_is_marker(Win::current()) {
         return 1;
     }
     let msg = if create {
@@ -463,19 +463,19 @@ pub(super) fn set_manual_fold(
     recurse: bool,
     donep: Option<&mut c_int>,
 ) -> LineNr {
-    if foldmethod_is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0 {
+    if foldmethod_is_diff(Win::current()) && Win::current().w_onebuf_opt.wo_scb != 0 {
         // 'scrollbind' in a diff: the matching fold in the other windows.
-        for win in windows_in_tab(cur_tab()) {
+        for win in windows_in_tab(TabPage::current()) {
             if win.is_current() || !foldmethod_is_diff(win) || win.w_onebuf_opt.wo_scb == 0 {
                 continue;
             }
-            let dlnum = diff_lnum_win(cur_win().w_cursor.lnum, win);
+            let dlnum = diff_lnum_win(Win::current().w_cursor.lnum, win);
             if dlnum != 0 {
                 set_manual_fold_win(win, dlnum, opening, recurse, None);
             }
         }
     }
-    set_manual_fold_win(cur_win(), pos.lnum, opening, recurse, donep)
+    set_manual_fold_win(Win::current(), pos.lnum, opening, recurse, donep)
 }
 
 /// Open or close the fold in window "wp" which contains "lnum".
@@ -628,18 +628,8 @@ pub(super) unsafe fn check_closed(
     closed
 }
 
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
 /// C's `emsg(_(e_nofold))`, which every command that found no fold gives.
 fn emsg_nofold() {
     // SAFETY: a static, translated message.
     unsafe { emsg(gettext_ptr(e_nofold.get())) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

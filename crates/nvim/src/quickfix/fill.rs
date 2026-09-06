@@ -63,8 +63,8 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
     // window the list belongs to, not the one showing it.
     let mut qf_winid = 0;
     if qi.qfl_type == QFLT_LOCATION {
-        let win = if cur_win().w_llist == qi.raw() {
-            cur_win()
+        let win = if Win::current().w_llist == qi.raw() {
+            Win::current()
         } else {
             // The file window, or failing that the location list window.
             let found = qf_find_win_with_loclist(qi.raw().cast_const());
@@ -318,7 +318,7 @@ unsafe fn clear_qf_buffer() -> bool {
     // No undo information is stored — the quickfix buffer is usually
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
-    while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if unsafe { ml_delete(1) }.is_err() {
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return false;
@@ -348,11 +348,11 @@ unsafe fn finish_qf_buffer() {
     // Set 'filetype' to "qf" each time after filling the buffer. This
     // resembles reading a file into a buffer, which is more logical
     // when using autocommands.
-    cur_buf().b_ro_locked += 1;
+    Buf::current().b_ro_locked += 1;
     set_option_value_give_err(kOptFiletype, string_optval(c"qf"), OptionSetFlags::LOCAL);
-    cur_buf().b_p_ma = false as c_int;
+    Buf::current().b_p_ma = false as c_int;
 
-    cur_buf().b_keep_filetype = true; // don't detect 'filetype'
+    Buf::current().b_keep_filetype = true; // don't detect 'filetype'
     let start_row = c"quickfix".as_ptr().cast_mut();
     let start_col = ptr::null_mut();
     let old_col = Buf::current_raw();
@@ -361,8 +361,8 @@ unsafe fn finish_qf_buffer() {
     let col = ptr::null_mut();
     let old_col2 = Buf::current_raw();
     unsafe { apply_autocmds(AutoEvent::BufWinEnter, lnum2, col, false, old_col2) };
-    cur_buf().b_keep_filetype = false;
-    cur_buf().b_ro_locked -= 1;
+    Buf::current().b_keep_filetype = false;
+    Buf::current().b_ro_locked -= 1;
 
     // Make sure it will be redrawn.
     redraw_curbuf_later(UPD_NOT_VALID);

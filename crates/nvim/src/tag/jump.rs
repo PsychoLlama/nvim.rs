@@ -436,7 +436,7 @@ impl Jump {
                         .and_then(|w| unsafe { Buf::from_raw(w.w_buffer) }),
                 )
             } else {
-                cur_buf().b_help
+                Buf::current().b_help
             });
         }
         let opened = if self.reused_window {
@@ -458,7 +458,7 @@ impl Jump {
             return Err(Failed);
         }
 
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
         postponed_split.set(0);
         let mut retval = if self.run_command(tagp) == OK {
             Ok(Jumped::Done)
@@ -473,8 +473,8 @@ impl Jump {
         if retval.is_ok() {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
-            if cur_buf().b_help {
-                set_topline(Win::current(), cur_win().w_cursor.lnum);
+            if Buf::current().b_help {
+                set_topline(Win::current(), Win::current().w_cursor.lnum);
             }
             if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
                 unsafe { fold_open_cursor() };
@@ -507,8 +507,8 @@ impl Jump {
         // SAFETY: the caller's promise.
         // Don't split again below.
         postponed_split.set(0);
-        self.saved_win = Some(cur_win().id());
-        if cur_win().w_onebuf_opt.wo_pvw == 0 {
+        self.saved_win = Some(Win::current().id());
+        if Win::current().w_onebuf_opt.wo_pvw == 0 {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
             self.full_fname = unsafe { full_name_save(self.fname(), false) };
@@ -550,8 +550,8 @@ impl Jump {
             return false;
         }
         // A fresh window does not inherit the scroll and cursor binding.
-        cur_win().w_onebuf_opt.wo_scb = 0;
-        cur_win().w_onebuf_opt.wo_crb = 0;
+        Win::current().w_onebuf_opt.wo_scb = 0;
+        Win::current().w_onebuf_opt.wo_crb = 0;
         true
     }
 
@@ -598,10 +598,10 @@ impl Jump {
         p_ic.set(0);
         p_scs.set(0);
 
-        let save_lnum = cur_win().w_cursor.lnum;
+        let save_lnum = Win::current().w_cursor.lnum;
         // Start before the line the "line:" field named, or before the
         // first line.
-        cur_win().w_cursor.lnum = (tagp.tagline - 1).max(0);
+        Win::current().w_cursor.lnum = (tagp.tagline - 1).max(0);
 
         let found = if self.pattern.search(search_options) {
             Found::Exactly
@@ -620,7 +620,7 @@ impl Jump {
             Found::Exactly => OK,
             Found::Nowhere => {
                 tag_emsg(c"E434: Can't find tag pattern");
-                cur_win().w_cursor.lnum = save_lnum;
+                Win::current().w_cursor.lnum = save_lnum;
                 FAIL
             }
             Found::IgnoringCase | Found::Guessing => {
@@ -793,7 +793,7 @@ impl Pattern {
         let _sandboxed = Lock::sandbox();
 
         // Start the command in line 1.
-        cur_win().w_cursor = Pos {
+        Win::current().w_cursor = Pos {
             lnum: 1,
             col: 0,
             coladd: 0,
@@ -807,14 +807,4 @@ impl Pattern {
         }
         secure.set(save_secure);
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

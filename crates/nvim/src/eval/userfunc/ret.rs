@@ -118,13 +118,13 @@ unsafe fn ex_call_inner(
     while lnum <= ea.line2 {
         if ea.addr_count > 0 {
             // Default is the line number, not the range.
-            if lnum > cur_buf().b_ml.ml_line_count {
+            if lnum > Buf::current().b_ml.ml_line_count {
                 emsg(gettext(e_invrange));
                 break;
             }
-            cur_win().w_cursor.lnum = lnum;
-            cur_win().w_cursor.col = 0;
-            cur_win().w_cursor.coladd = 0;
+            Win::current().w_cursor.lnum = lnum;
+            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.coladd = 0;
         }
         unsafe { *arg = startarg };
 
@@ -666,14 +666,4 @@ pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
 /// Whether the function running has already returned.
 pub unsafe fn current_func_returned() -> c_int {
     unsafe { (*current_funccal.get()).fc_returned }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -156,19 +156,19 @@ pub unsafe fn do_exmode() {
         need_wait_return.set(false);
         ex_pressedreturn.set(false);
         ex_no_reprint.set(false);
-        let changedtick = buf_get_changedtick(cur_buf());
+        let changedtick = buf_get_changedtick(Buf::current());
         let prev_msg_row = msg_row.get();
-        let prev_line = cur_win().w_cursor.lnum;
+        let prev_line = Win::current().w_cursor.lnum;
         cmdline_row.set(msg_row.get());
 
         let plain = DoCmdOpts::NONE;
         let _ = unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
         lines_left.set(Rows.get() - 1);
 
-        let moved =
-            prev_line != cur_win().w_cursor.lnum || changedtick != buf_get_changedtick(cur_buf());
+        let moved = prev_line != Win::current().w_cursor.lnum
+            || changedtick != buf_get_changedtick(Buf::current());
         if moved && !ex_no_reprint.get() {
-            if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+            if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 emsg(gettext(e_empty_buffer.as_ptr()));
             } else {
                 // A bare Return already scrolled; print over that line
@@ -181,12 +181,12 @@ pub unsafe fn do_exmode() {
                     }
                 }
                 msg_col.set(0);
-                unsafe { print_line_no_prefix(cur_win().w_cursor.lnum, false, false) };
+                unsafe { print_line_no_prefix(Win::current().w_cursor.lnum, false, false) };
                 unsafe { msg_clr_eos() };
             }
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
-            if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+            if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 emsg(gettext(e_empty_buffer.as_ptr()));
             } else {
                 emsg(gettext(c"E501: At end-of-file".as_ptr()));
@@ -435,16 +435,6 @@ pub(crate) unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CStr
 pub unsafe fn not_exiting(save_exiting: bool) {
     exiting.set(save_exiting);
     unsafe { set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `emsg()` as checked code.

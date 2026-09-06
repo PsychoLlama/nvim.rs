@@ -49,7 +49,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     // will be entered at.
     let lnum = if buffer.raw() == Buf::current_raw() {
         // SAFETY: `curwin` is set from startup to exit.
-        cur_win().w_cursor.lnum
+        Win::current().w_cursor.lnum
     } else {
         // SAFETY: the answer is a live mark.
         unsafe { buflist_findlnum(buffer) }

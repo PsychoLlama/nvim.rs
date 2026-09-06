@@ -42,7 +42,7 @@ pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
     };
     let topfr = current_topframe();
     equal_rec(
-        next_curwin.unwrap_or_else(cur_win),
+        next_curwin.unwrap_or_else(Win::current),
         current,
         topfr,
         dir,

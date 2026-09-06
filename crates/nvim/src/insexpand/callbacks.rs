@@ -269,7 +269,7 @@ unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
 pub(crate) unsafe fn get_cpt_sources_count() -> c_int {
     let mut dummy = [0 as c_char; LSIZE as usize];
     let mut count = 0;
-    let mut p = cur_buf().b_p_cpt;
+    let mut p = Buf::current().b_p_cpt;
     while unsafe { *p } as c_int != NUL {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } as c_int != NUL {
@@ -423,22 +423,22 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    let (buffer, count) = (Buf::current_raw(), cur_buf().b_p_cpt_count);
+    let (buffer, count) = (Buf::current_raw(), Buf::current().b_p_cpt_count);
     unsafe { clear_cpt_callbacks(&raw mut (*buffer).b_p_cpt_cb, count) };
-    cur_buf().b_p_cpt_count = 0;
+    Buf::current().b_p_cpt_count = 0;
 
     let count = unsafe { get_cpt_sources_count() };
     if count == 0 {
         return Ok(());
     }
     // Zeroed for the reason `copy_cpt_callbacks` zeroes.
-    cur_buf().b_p_cpt_cb =
+    Buf::current().b_p_cpt_cb =
         unsafe { xcalloc(count as size_t, size_of::<Callback>()) }.cast::<Callback>();
-    cur_buf().b_p_cpt_count = count;
+    Buf::current().b_p_cpt_count = count;
 
     let mut part = [0 as c_char; LSIZE as usize];
     let mut idx: isize = 0;
-    let mut p = cur_buf().b_p_cpt;
+    let mut p = Buf::current().b_p_cpt;
     while unsafe { *p } as c_int != NUL {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } as c_int != NUL {
@@ -451,7 +451,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
                 if !caret.is_null() {
                     unsafe { *caret = NUL as c_char };
                 }
-                let slot = unsafe { cur_buf().b_p_cpt_cb.offset(idx) };
+                let slot = unsafe { Buf::current().b_p_cpt_cb.offset(idx) };
                 if unsafe { option_set_callback_func(part.as_mut_ptr().offset(1), slot) }.is_err() {
                     unsafe { *slot = Callback::None };
                 }
@@ -462,7 +462,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
 
     if !local {
         // ':set' was used instead of ':setlocal': cache the callback array.
-        unsafe { cpt_cb().replace_from(cur_buf().b_p_cpt_cb, cur_buf().b_p_cpt_count) };
+        unsafe { cpt_cb().replace_from(Buf::current().b_p_cpt_cb, Buf::current().b_p_cpt_count) };
     }
     Ok(())
 }
@@ -526,13 +526,13 @@ pub unsafe fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 /// The user-defined completion function name for completion `type_0`.
 pub(crate) unsafe fn get_complete_funcname(type_0: c_int) -> *mut c_char {
     match type_0 {
-        CTRL_X_FUNCTION => cur_buf().b_p_cfu,
-        CTRL_X_OMNI => cur_buf().b_p_ofu,
+        CTRL_X_FUNCTION => Buf::current().b_p_cfu,
+        CTRL_X_OMNI => Buf::current().b_p_ofu,
         CTRL_X_THESAURUS => {
-            if unsafe { *cur_buf().b_p_tsrfu } as c_int == NUL {
+            if unsafe { *Buf::current().b_p_tsrfu } as c_int == NUL {
                 p_tsrfu.get()
             } else {
-                cur_buf().b_p_tsrfu
+                Buf::current().b_p_tsrfu
             }
         }
         _ => c"".as_ptr().cast_mut(),
@@ -548,7 +548,7 @@ pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
         return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
     }
     // CTRL_X_THESAURUS
-    if unsafe { *cur_buf().b_p_tsrfu } as c_int != NUL {
+    if unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL {
         unsafe { &raw mut (*Buf::current_raw()).b_tsrfu_cb }
     } else {
         tsrfu_cb().slot()
@@ -587,7 +587,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     let mut matchdict: *mut Dict = ptr::null_mut();
     let mut rettv = TYPVAL_T_INIT;
     let save_state = State.get();
-    let pos = cur_win().w_cursor;
+    let pos = Win::current().w_cursor;
 
     // Lock the text to avoid weird things from happening.  Also disallow
     // switching to another window: it should not be needed and may end up
@@ -604,10 +604,10 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     }
     drop(locked);
 
-    cur_win().w_cursor = pos; // restore the cursor position
+    Win::current().w_cursor = pos; // restore the cursor position
     check_cursor(Win::current()); // make sure the position is valid, just in case
     validate_cursor(Win::current());
-    if !equalpos(cur_win().w_cursor, pos) {
+    if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
     } else if !matchlist.is_null() {
         unsafe { ins_compl_add_list(matchlist) };
@@ -644,7 +644,7 @@ pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) ->
         p = unsafe { p.offset(1) };
         if unsafe { *p } as c_int != ',' as c_int && unsafe { *p } as c_int != NUL {
             // 'F{func}' case.
-            let slot = unsafe { cur_buf().b_p_cpt_cb.offset(idx as isize) };
+            let slot = unsafe { Buf::current().b_p_cpt_cb.offset(idx as isize) };
             return if unsafe { &*slot }.is_set() {
                 slot
             } else {
@@ -662,7 +662,7 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
     // The throwaway `copy_option_part` steps the entry into.
     let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = unsafe { xstrdup(cur_buf().b_p_cpt) };
+    let cpt = unsafe { xstrdup(Buf::current().b_p_cpt) };
     unsafe { strip_caret_numbers_in_place(cpt) };
 
     let mut idx = 0;
@@ -678,16 +678,15 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
             cpt_sources().update(idx, |source| source.cs_startcol = -3);
         } else {
             let mut startcol = 0;
-            if unsafe { get_userdefined_compl_info(cur_win().w_cursor.col, cb, &raw mut startcol) }
-                .is_err()
-            {
+            let col = Win::current().w_cursor.col;
+            if unsafe { get_userdefined_compl_info(col, cb, &raw mut startcol) }.is_err() {
                 if startcol == -3 {
                     cpt_sources().update(idx, |source| source.cs_refresh_always = false);
                 } else {
                     startcol = -2;
                 }
-            } else if startcol < 0 || startcol > cur_win().w_cursor.col {
-                startcol = cur_win().w_cursor.col;
+            } else if startcol < 0 || startcol > Win::current().w_cursor.col {
+                startcol = Win::current().w_cursor.col;
             }
             cpt_sources().update(idx, |source| source.cs_startcol = startcol);
         }
@@ -723,7 +722,7 @@ pub(crate) unsafe fn setup_cpt_sources() {
 
     let mut rows = Vec::with_capacity(count as usize);
     let mut part = [0 as c_char; LSIZE as usize];
-    let mut p = cur_buf().b_p_cpt;
+    let mut p = Buf::current().b_p_cpt;
     while unsafe { *p } != 0 {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } != 0 {
@@ -762,7 +761,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
         return;
     }
 
-    unsafe { set_compl_globals(startcol, cur_win().w_cursor.col, true) };
+    unsafe { set_compl_globals(startcol, Win::current().w_cursor.col, true) };
 
     // Insert the leader string (previously removed) before expansion.
     // This prevents flicker when `func` (e.g. an LSP client) is slow and
@@ -790,7 +789,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
     // Make the completion list linear (non-cyclic).
     ins_compl_make_linear();
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = unsafe { xstrdup(cur_buf().b_p_cpt) };
+    let cpt = unsafe { xstrdup(Buf::current().b_p_cpt) };
     unsafe { strip_caret_numbers_in_place(cpt) };
 
     cpt_sources().set_index(0);
@@ -808,7 +807,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                 unsafe { remove_old_matches() };
                 let mut startcol = 0;
                 let ret = unsafe {
-                    get_userdefined_compl_info(cur_win().w_cursor.col, cb, &raw mut startcol)
+                    get_userdefined_compl_info(Win::current().w_cursor.col, cb, &raw mut startcol)
                 };
                 if ret.is_err() {
                     if startcol == -3 {
@@ -816,8 +815,8 @@ pub(crate) unsafe fn cpt_compl_refresh() {
                     } else {
                         startcol = -2;
                     }
-                } else if startcol < 0 || startcol > cur_win().w_cursor.col {
-                    startcol = cur_win().w_cursor.col;
+                } else if startcol < 0 || startcol > Win::current().w_cursor.col {
+                    startcol = Win::current().w_cursor.col;
                 }
                 cpt_sources().update(idx, |source| source.cs_startcol = startcol);
                 if ret.is_ok() {
@@ -851,14 +850,4 @@ unsafe fn next_cpt_part(p: *mut *mut c_char, buf: *mut c_char, len: size_t) -> s
     let comma = c",".as_ptr().cast_mut();
     // SAFETY: the caller's promise.
     unsafe { copy_option_part(p, buf, len, comma) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

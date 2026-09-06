@@ -31,9 +31,9 @@ pub unsafe fn ex_args(args: *mut ExArg) {
         }
         // SAFETY: curwin always has an argument list, and dropping the
         // reference to it is what makes room for the new one.
-        unsafe { alist_unlink(win_alist(cur_win())) };
+        unsafe { alist_unlink(win_alist(Win::current())) };
         if cmdidx == CmdIdx::argglobal {
-            cur_win().w_alist = global_arglist();
+            Win::current().w_alist = global_arglist();
         } else {
             alist_new();
         }
@@ -82,7 +82,7 @@ fn list_args() {
 /// Safe: both lists always exist -- every window has one, and the global
 /// list lives from startup to exit.
 fn copy_global_arglist() {
-    let al = win_alist(cur_win());
+    let al = win_alist(Win::current());
     // SAFETY: both lists are live, and each name is copied into an
     // allocation the new entry owns. The copies are collected before any of
     // them joins the window's list, which is never the global one here.
@@ -200,7 +200,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // short-circuit, is what bounds it.
     let entry_fnum = unsafe { (*arg(argn)).ae_fnum };
     let refused = !is_split_cmd
-        && entry_fnum != cur_buf().handle
+        && entry_fnum != Buf::current().handle
         && !check_can_set_curbuf_forceit(args.forceit);
     if refused {
         return;
@@ -214,8 +214,8 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
         }
         // RESET_BINDING: the new window scrolls and cursors on its own.
         // SAFETY: curwin is the window just created.
-        cur_win().w_onebuf_opt.wo_scb = c_int::from(false);
-        cur_win().w_onebuf_opt.wo_crb = c_int::from(false);
+        Win::current().w_onebuf_opt.wo_scb = c_int::from(false);
+        Win::current().w_onebuf_opt.wo_crb = c_int::from(false);
     } else {
         // SAFETY: `argn` is in range.
         if !unsafe { can_leave_curbuf(argn, forceit) } {
@@ -223,7 +223,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
         }
     }
     set_cur_arg_idx(argn);
-    if argn == argcount() - 1 && win_alist(cur_win()) == global_arglist() {
+    if argn == argcount() - 1 && win_alist(Win::current()) == global_arglist() {
         arg_had_last.set(true);
     }
     // Edit the file, always at the last known line number.
@@ -340,8 +340,8 @@ pub unsafe fn ex_argedit(args: *mut ExArg) {
     // SAFETY: rebuilds the window title from the current buffer.
     unsafe { maketitle() };
     // SAFETY: curbuf is valid.
-    let empty_curbuf = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY)
-        && (cur_buf().b_ffname.is_null() || curbuf_is_reusable);
+    let empty_curbuf = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
+        && (Buf::current().b_ffname.is_null() || curbuf_is_reusable);
     if cur_arg_idx() == 0 && empty_curbuf {
         argn = 0;
     }
@@ -447,14 +447,4 @@ pub fn get_arglist_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
         return ptr::null_mut();
     }
     arg_name(idx)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

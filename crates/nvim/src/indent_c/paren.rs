@@ -55,7 +55,7 @@ pub(crate) unsafe fn cin_skip2pos(trypos: Pos) -> c_int {
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
 pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
-    let cursor_save = cur_win().w_cursor;
+    let cursor_save = Win::current().w_cursor;
     let mut trypos;
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
@@ -63,7 +63,7 @@ pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
         let Some(brace) = trypos else {
             break;
         };
-        cur_win().w_cursor = brace;
+        Win::current().w_cursor = brace;
 
         // SAFETY: `brace` is a position `findmatchlimit` found in the current
         // buffer, so `cin_skip2pos` may read its line; the comment search runs
@@ -80,10 +80,10 @@ pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
             break;
         }
         if let Some(pos) = pos {
-            cur_win().w_cursor = pos;
+            Win::current().w_cursor = pos;
         }
     }
-    cur_win().w_cursor = cursor_save;
+    Win::current().w_cursor = cursor_save;
     trypos
 }
 
@@ -106,7 +106,7 @@ pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
 pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
-    let cursor_save = cur_win().w_cursor;
+    let cursor_save = Win::current().w_cursor;
     let mut ind_maxp_wk = ind_maxparen;
 
     let found = loop {
@@ -125,11 +125,11 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> 
             if ind_maxp_wk <= 0 {
                 break None;
             }
-            cur_win().w_cursor = trypos.with_col(0);
+            Win::current().w_cursor = trypos.with_col(0);
             continue;
         }
 
-        cur_win().w_cursor = trypos;
+        Win::current().w_cursor = trypos;
 
         // SAFETY: on the main thread, with a current window and buffer.
         let enclosing = unsafe { ind_find_start_comment_or_raw_string(None) };
@@ -140,10 +140,10 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> 
         if ind_maxp_wk <= 0 {
             break None;
         }
-        cur_win().w_cursor = trypos_wk;
+        Win::current().w_cursor = trypos_wk;
     };
 
-    cur_win().w_cursor = cursor_save;
+    Win::current().w_cursor = cursor_save;
     found
 }
 
@@ -172,8 +172,8 @@ pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option
 /// paren the option was meant to exclude.  Only a `startpos` below the cursor
 /// and within half the budget shortens it.
 pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
-    let maxparen = cur_buf().b_ind_maxparen;
-    let n = startpos.lnum - cur_win().w_cursor.lnum;
+    let maxparen = Buf::current().b_ind_maxparen;
+    let n = startpos.lnum - Win::current().w_cursor.lnum;
     if n > 0 && n < maxparen / 2 {
         maxparen - n
     } else {
@@ -193,7 +193,7 @@ pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
 pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bool {
     let mut retval = false;
     let mut open_count = 0;
-    cur_win().w_cursor.col = 0; // default is start of line
+    Win::current().w_cursor.col = 0; // default is start of line
 
     let mut i: isize = 0;
     loop {
@@ -215,7 +215,7 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
             if open_count > 0 {
                 open_count -= 1;
             } else {
-                cur_win().w_cursor.col = i as ColNr;
+                Win::current().w_cursor.col = i as ColNr;
                 retval = true;
             }
         }
@@ -241,11 +241,11 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         (0, 1)
     };
 
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.col = 0;
 
-    while cur_win().w_cursor.lnum > ourscope + 1 {
-        cur_win().w_cursor.lnum -= 1;
-        cur_win().w_cursor.col = 0;
+    while Win::current().w_cursor.lnum > ourscope + 1 {
+        Win::current().w_cursor.lnum -= 1;
+        Win::current().w_cursor.col = 0;
 
         // SAFETY: the cursor is on a line of the current buffer, and
         // `get_cursor_line_ptr` hands back a NUL-terminated one -- which is
@@ -258,7 +258,7 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             cin_iselse(look)
                 || cin_isif(look)
                 || cin_isdo(look)
-                || cin_iswhileofdo(look, cur_win().w_cursor.lnum)
+                || cin_iswhileofdo(look, Win::current().w_cursor.lnum)
         };
         if !interesting {
             continue;
@@ -306,7 +306,7 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
 
         // SAFETY: `look` points inside a NUL-terminated line, and the cursor
         // is on a line of the current buffer.
-        if unsafe { cin_iswhileofdo(look, cur_win().w_cursor.lnum) } {
+        if unsafe { cin_iswhileofdo(look, Win::current().w_cursor.lnum) } {
             whilelevel += 1;
             continue;
         }
@@ -321,14 +321,4 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         }
     }
     false
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

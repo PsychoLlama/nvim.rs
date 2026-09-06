@@ -36,7 +36,7 @@ use crate::types::{VAR_STRING, Vv};
 pub(super) unsafe fn foldclosed_both(args: *mut TypVal, result: *mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
-    if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
+    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
         let mut first: LineNr = 0;
         let mut last: LineNr = 0;
         let win = Win::current();
@@ -74,7 +74,7 @@ pub unsafe fn f_foldclosedend(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 pub unsafe fn f_foldlevel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
-    if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
+    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
         // SAFETY: `lnum` is inside the current buffer.
         rv.vval.v_number = unsafe { fold_level(lnum) } as VarNumber;
     }
@@ -99,7 +99,7 @@ pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         )
     };
     let (foldstart, foldend) = (foldstart as LineNr, foldend as LineNr);
-    if !(foldstart > 0 && foldend <= cur_buf().b_ml.ml_line_count) {
+    if !(foldstart > 0 && foldend <= Buf::current().b_ml.ml_line_count) {
         return;
     }
     // The first line of the fold that has anything on it.
@@ -199,8 +199,3 @@ pub unsafe fn f_foldtextresult(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// [`Live`]'s shape for the `TypVal` the Vimscript face answers in.
 type Tv = Live<TypVal>;
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}

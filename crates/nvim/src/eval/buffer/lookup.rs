@@ -116,7 +116,7 @@ pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let buf = if args.has(0) {
         unsafe { Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) }
     } else {
-        Some(cur_buf())
+        Some(Buf::current())
     };
     if let Some(buf) = buf
         && !buf.b_fname.is_null()

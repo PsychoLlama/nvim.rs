@@ -744,7 +744,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
             line.set_lvl(0);
             line.set_lvl_next(0);
         }
-        if lnum == cur_buf().b_ml.ml_line_count {
+        if lnum == Buf::current().b_ml.ml_line_count {
             line.set_lvl_next(0);
         }
     }
@@ -771,11 +771,6 @@ pub(super) unsafe fn foldlevel_syntax(line: FLine) {
             line.set_lvl(n);
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 /// Ask the chosen 'foldmethod' getter for the level at `line`.

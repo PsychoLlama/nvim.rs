@@ -9,9 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::LineCopy;
 use super::say;
 use super::{CmdModFlags, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
-use super::{LineCopy, cur_buf, cur_win};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
@@ -53,7 +53,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // moves as if the lines had, to stay backwards compatible.
     if dest == line1 - 1 || dest == line2 {
         // SAFETY: `curwin` is the live current window.
-        cur_win().w_cursor.lnum = last_moved_line(line1, line2, dest);
+        Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
         return Ok(());
     }
 
@@ -104,12 +104,12 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
 
     // The last line in the file now that the copies are in.
     // SAFETY: `curbuf` is live.
-    let last_line = cur_buf().b_ml.ml_line_count;
+    let last_line = Buf::current().b_ml.ml_line_count;
     // SAFETY: as above; the range is the one just copied.
     unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
     folds_frozen(|| {
         changed_lines(
-            cur_buf(),
+            Buf::current(),
             last_line - num_lines + 1,
             0,
             last_line + 1,
@@ -146,7 +146,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     };
     folds_frozen(|| {
         changed_lines(
-            cur_buf(),
+            Buf::current(),
             last_line - num_lines + 1,
             0,
             last_line + 1,
@@ -192,15 +192,15 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
 
     // Leave the cursor on the last of the moved lines.
     // SAFETY: `curwin` is the live current window.
-    cur_win().w_cursor.lnum = last_moved_line(line1, line2, dest);
+    Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
 
     // SAFETY: `curbuf` is live; the redrawn span reaches from the first line
     // that moved to the last, whichever direction the move went.
     if line1 < dest {
-        let end = (dest + num_lines + 1).min(cur_buf().b_ml.ml_line_count + 1);
-        changed_lines(cur_buf(), line1, 0, end, 0, false);
+        let end = (dest + num_lines + 1).min(Buf::current().b_ml.ml_line_count + 1);
+        changed_lines(Buf::current(), line1, 0, end, 0, false);
     } else {
-        changed_lines(cur_buf(), dest + 1, 0, line1 + num_lines, 0, false);
+        changed_lines(Buf::current(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
     unsafe { buf_updates_send_changes(Buf::current_raw(), line1 + extra, 0, num_lines as int64_t) };
@@ -253,10 +253,10 @@ pub(super) unsafe fn set_op_range(start: LineNr, end: LineNr) {
     }
     // SAFETY: caller's contract.  `coladd` is deliberately left alone, as
     // upstream leaves it.
-    cur_buf().b_op_start.lnum = start;
-    cur_buf().b_op_start.col = 0;
-    cur_buf().b_op_end.lnum = end;
-    cur_buf().b_op_end.col = 0;
+    Buf::current().b_op_start.lnum = start;
+    Buf::current().b_op_start.col = 0;
+    Buf::current().b_op_end.lnum = end;
+    Buf::current().b_op_end.col = 0;
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.
@@ -283,17 +283,17 @@ pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
         return;
     }
 
-    cur_win().w_cursor.lnum = n;
+    Win::current().w_cursor.lnum = n;
     let mut copy = LineCopy::new();
     while line1 <= line2 {
         // Need to make a copy because the line will be unlocked within
         // `ml_append`.
         // SAFETY: `line1` is a line of the current buffer throughout.
         unsafe { copy.fill_line(line1) };
-        let at = cur_win().w_cursor.lnum;
+        let at = Win::current().w_cursor.lnum;
         // SAFETY: the text is this call's own NUL-terminated copy.
         let _ = unsafe { ml_append(at, copy.as_ptr(), 0, false) };
-        let cursor = &mut cur_win().w_cursor;
+        let cursor = &mut Win::current().w_cursor;
 
         // Situation 2: skip the lines already copied.
         if line1 == n {
@@ -312,7 +312,7 @@ pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     // SAFETY: `count` lines were appended after `n`.
     unsafe { appended_lines_mark(n, count) };
     if visual_active() {
-        with_visual_anchor(|anchor| check_pos(cur_buf(), anchor));
+        with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
     // SAFETY: message state, main thread.
     say::more(count);

@@ -28,7 +28,7 @@ fn find_top_diff_block(fromidx: usize, topline: LineNr) -> (Option<Df>, Option<D
     let mut thistopdiff = None;
     let mut runstart = None;
     let mut start_next_run = true;
-    let mut cur = Df::first(cur_tab());
+    let mut cur = Df::first(TabPage::current());
     while let Some(topdiff) = cur {
         if runstart.is_none() || start_next_run {
             runstart = Some(topdiff);
@@ -125,7 +125,7 @@ fn calculate_topfill_and_topline(
 ///
 /// Safe: two [`Win`]s carry the whole of the promise this needs.
 pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let frombuf = fromwin.buffer();
     let fromidx = diff_slot(frombuf, tp);
     if fromidx == DB_COUNT {
@@ -189,9 +189,9 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 /// `]c` / `[c`: move the cursor to the start of the `count`th next or
 /// previous change.
 pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
-    let tp = cur_tab();
-    let mut lnum = cur_win().w_cursor.lnum;
-    let idx = diff_slot(cur_buf(), tp);
+    let tp = TabPage::current();
+    let mut lnum = Win::current().w_cursor.lnum;
+    let idx = diff_slot(Buf::current(), tp);
     if idx == DB_COUNT || tp.tp_first_diff.is_null() {
         return Err(Failed);
     }
@@ -223,14 +223,14 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
         }
     }
 
-    lnum = lnum.min(cur_buf().b_ml.ml_line_count);
-    if lnum == cur_win().w_cursor.lnum {
+    lnum = lnum.min(Buf::current().b_ml.ml_line_count);
+    if lnum == Win::current().w_cursor.lnum {
         return Err(Failed);
     }
     // SAFETY: the editor exists.
     setpcmark();
-    cur_win().w_cursor.lnum = lnum;
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.lnum = lnum;
+    Win::current().w_cursor.col = 0;
     Ok(())
 }
 
@@ -239,9 +239,9 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
 /// `baseline` accumulates how far the two buffers have drifted apart over the
 /// blocks passed so far, which is the answer for any line outside a block.
 fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let idx1 = diff_slot(buf1, tp);
-    let idx2 = diff_slot(cur_buf(), tp);
+    let idx2 = diff_slot(Buf::current(), tp);
     if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_first_diff.is_null() {
         return lnum1;
     }
@@ -269,10 +269,10 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
         // were deleted: stay where the cursor is.
         if dp.df_lnum[idx1] == lnum1
             && dp.df_count[idx1] == 0
-            && dp.df_lnum[idx2] <= cur_win().w_cursor.lnum
-            && dp.end(idx2) > cur_win().w_cursor.lnum
+            && dp.df_lnum[idx2] <= Win::current().w_cursor.lnum
+            && dp.end(idx2) > Win::current().w_cursor.lnum
         {
-            return cur_win().w_cursor.lnum;
+            return Win::current().w_cursor.lnum;
         }
         baseline = dp.end(idx1) - dp.end(idx2);
     }
@@ -283,7 +283,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
-    diff_get_corresponding_line_int(buf1, lnum1).min(cur_buf().b_ml.ml_line_count)
+    diff_get_corresponding_line_int(buf1, lnum1).min(Buf::current().b_ml.ml_line_count)
 }
 
 /// The line of `window`'s buffer matching `lnum` of the current one.
@@ -294,8 +294,8 @@ pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
-    let tp = cur_tab();
-    let idx = diff_slot(cur_buf(), tp);
+    let tp = TabPage::current();
+    let idx = diff_slot(Buf::current(), tp);
     if idx == DB_COUNT {
         return 0;
     }
@@ -308,7 +308,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     // SAFETY: a live window's buffer is live.
     let buf = unsafe { Buf::new(window.w_buffer) };
     let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
-        return buf.b_ml.ml_line_count - (cur_buf().b_ml.ml_line_count - lnum);
+        return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
     };
     let i = diff_slot(buf, tp);
     if i == DB_COUNT {
@@ -316,19 +316,4 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     }
     let i = i as usize;
     (lnum + (dp.df_lnum[i] - dp.df_lnum[idx])).min(dp.end(i))
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

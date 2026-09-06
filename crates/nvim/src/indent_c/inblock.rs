@@ -102,14 +102,14 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     } else {
         // The opening brace may have been on a continuation line; find
         // the start of *that*, by matching the rightmost paren.
-        cur_win().w_cursor.lnum = ourscope;
+        Win::current().w_cursor.lnum = ourscope;
         let mut lnum = ourscope;
         // SAFETY: `start` is a NUL-terminated line and the cursor sits on
         // `ourscope`, a line of the current buffer.  The chain stays whole:
         // `find_match_paren` searches from where `find_last_paren` put the
         // cursor, so it may only run once that returned true.
         if unsafe { find_last_paren(start, b'(', b')') }
-            && let Some(trypos) = unsafe { find_match_paren(cur_buf().b_ind_maxparen) }
+            && let Some(trypos) = unsafe { find_match_paren(Buf::current().b_ind_maxparen) }
         {
             lnum = trypos.lnum;
         }
@@ -119,7 +119,8 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         //                      ldfd) {
         //                  }
         let mut l = ::core::ptr::null::<c_char>();
-        let js_or_keep_case = cur_buf().b_ind_js != 0 || cur_buf().b_ind_keep_case_label != 0;
+        let js_or_keep_case =
+            Buf::current().b_ind_js != 0 || Buf::current().b_ind_keep_case_label != 0;
         // SAFETY: the cursor is on a line of the current buffer, so
         // `get_cursor_line_ptr` hands back a NUL-terminated one for
         // `skipwhite` and `cin_iscase` to walk.  Kept behind the option
@@ -128,7 +129,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             if js_or_keep_case && unsafe { cin_iscase(skipwhite(get_cursor_line_ptr()), false) } {
                 // SAFETY: the cursor is still on a line of the current buffer.
                 get_indent()
-            } else if cur_buf().b_ind_js != 0 {
+            } else if Buf::current().b_ind_js != 0 {
                 // SAFETY: `lnum` is a line of the current buffer -- either
                 // `ourscope` or the line a paren match reported.
                 unsafe { get_indent_lnum(lnum) }
@@ -142,13 +143,13 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     // For Javascript, check whether the line starts with "key:".
     // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line,
     // alive for the whole call.  The `&&` keeps the call behind the option.
-    let js_cur_has_key = cur_buf().b_ind_js != 0 && unsafe { cin_has_js_key(line.theline) };
+    let js_cur_has_key = Buf::current().b_ind_js != 0 && unsafe { cin_has_js_key(line.theline) };
 
     // A closing brace is where we want to be already; some people want it
     // lined up with something other than the open brace.
     // SAFETY: `line.theline` is still valid.
     if unsafe { line.starts_with(b'}') } {
-        return amount + cur_buf().b_ind_close_extra;
+        return amount + Buf::current().b_ind_close_extra;
     }
 
     // An "else" wants its "if", a "while" its "do".
@@ -162,7 +163,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         LOOKFOR_INITIAL
     };
     if lookfor != LOOKFOR_INITIAL {
-        cur_win().w_cursor.lnum = line.cur_curpos.lnum;
+        Win::current().w_cursor.lnum = line.cur_curpos.lnum;
         // SAFETY: the cursor is on a line of the current buffer, and
         // `ourscope` is a line of it too -- where the search stops.
         if unsafe { find_match(lookfor, ourscope) } {
@@ -178,39 +179,39 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     if start_brace == BRACE_IN_COL0 {
         // A brace *really* at the left margin: use the imaginary
         // location of one, and look further back for a `namespace`.
-        amount = cur_buf().b_ind_open_left_imag;
+        amount = Buf::current().b_ind_open_left_imag;
         lookfor_cpp_namespace = true;
     } else if start_brace == BRACE_AT_END {
-        amount += cur_buf().b_ind_open_imag;
+        amount += Buf::current().b_ind_open_imag;
         // SAFETY: the cursor is on a line of the current buffer, which
         // `skipwhite` walks no further than its NUL.
         let l = unsafe { skipwhite(get_cursor_line_ptr()) };
         // SAFETY: `l` points into that same NUL-terminated line.
         if unsafe { cin_is_cpp_namespace(l) } {
-            amount += cur_buf().b_ind_cpp_namespace;
+            amount += Buf::current().b_ind_cpp_namespace;
         } else if unsafe { cin_is_cpp_extern_c(l) } {
-            amount += cur_buf().b_ind_cpp_extern_c;
+            amount += Buf::current().b_ind_cpp_extern_c;
         }
     } else {
         // Compensate for adding `b_ind_open_extra` later.
-        amount = (amount - cur_buf().b_ind_open_extra).max(0);
+        amount = (amount - Buf::current().b_ind_open_extra).max(0);
     }
 
     // What kind of line is being indented decides what to search for.
     let mut lookfor_break = false;
     // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line.
     let lookfor = if unsafe { cin_iscase(line.theline, false) } {
-        amount += cur_buf().b_ind_case;
+        amount += Buf::current().b_ind_case;
         LOOKFOR_CASE // a switch() label: find a previous one
     } else if unsafe { cin_isscopedecl(line.theline) } {
-        amount += cur_buf().b_ind_scopedecl;
+        amount += Buf::current().b_ind_scopedecl;
         LOOKFOR_SCOPEDECL // private:, ...: the class declaration
     } else {
         // SAFETY: the same; the `&&` keeps the call behind the option test.
-        if cur_buf().b_ind_case_break != 0 && unsafe { cin_isbreak(line.theline) } {
+        if Buf::current().b_ind_case_break != 0 && unsafe { cin_isbreak(line.theline) } {
             lookfor_break = true;
         }
-        amount += cur_buf().b_ind_level;
+        amount += Buf::current().b_ind_level;
         LOOKFOR_INITIAL
     };
 
@@ -224,7 +225,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         cur_amount: MAXCOL,
         cont_amount: 0,
         // A copy: the C++ base-class arm sets it to zero mid-scan.
-        ind_continuation: cur_buf().b_ind_continuation,
+        ind_continuation: Buf::current().b_ind_continuation,
         added_to_amount,
         lookfor,
         whilelevel: 0,
@@ -252,13 +253,13 @@ impl BlockScan<'_> {
     /// # Safety
     /// Moves the cursor; may unlock the current line.
     unsafe fn run(mut self) -> c_int {
-        cur_win().w_cursor = self.line.cur_curpos;
+        Win::current().w_cursor = self.line.cur_curpos;
         loop {
-            cur_win().w_cursor.lnum -= 1;
-            cur_win().w_cursor.col = 0;
+            Win::current().w_cursor.lnum -= 1;
+            Win::current().w_cursor.col = 0;
 
             // Back at the start of our scope: line up with it.
-            if cur_win().w_cursor.lnum <= self.ourscope {
+            if Win::current().w_cursor.lnum <= self.ourscope {
                 // SAFETY: this function's own contract -- the cursor is ours
                 // to move and the line it is on may be unlocked.
                 if unsafe { self.at_scope_start() } == Step::Done {
@@ -273,14 +274,4 @@ impl BlockScan<'_> {
         }
         self.amount
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

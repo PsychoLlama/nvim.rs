@@ -543,7 +543,7 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
     let mut result = unsafe { str_to_mapargs(arg, is_unmap, &mut args) };
     if result == 0 {
         // SAFETY: `curbuf` is live.
-        result = unsafe { buf_do_map(maptype, &args, mode, is_abbrev, cur_buf()) };
+        result = unsafe { buf_do_map(maptype, &args, mode, is_abbrev, Buf::current()) };
     }
     result
 }
@@ -564,7 +564,7 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
     // `curbuf` is live, so its tables are ours to clear.
     unsafe {
         let mode = get_map_mode(&raw mut cmdp, forceit);
-        map_clear_mode(cur_buf(), mode, local, abbr);
+        map_clear_mode(Buf::current(), mode, local, abbr);
     }
 }
 
@@ -585,7 +585,7 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
     args.buffer = buffer;
 
     // SAFETY: `curbuf` is live.
-    unsafe { buf_do_map(noremap, &args, mode, false, cur_buf()) };
+    unsafe { buf_do_map(noremap, &args, mode, false, Buf::current()) };
 }
 
 /// `:map`, `:abbrev` and every prefixed variant of either, from the command
@@ -616,7 +616,7 @@ unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
         return;
     }
     // SAFETY: `curbuf` is live.
-    let answer = unsafe { buf_do_map(maptype, &parsed, mode, isabbrev, cur_buf()) };
+    let answer = unsafe { buf_do_map(maptype, &parsed, mode, isabbrev, Buf::current()) };
     let lhs = parsed.lhs.as_ptr();
     match answer {
         1 => {
@@ -694,9 +694,4 @@ pub unsafe fn ex_mapclear(args: *mut ExArg) {
 pub unsafe fn ex_abclear(args: *mut ExArg) {
     // SAFETY: as [`ex_mapclear`].
     unsafe { do_mapclear((*args).cmd, (*args).arg, true, true) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

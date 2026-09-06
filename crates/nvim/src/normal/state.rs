@@ -344,8 +344,8 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
         && msg_silent.get() == 0
         && (restart_edit.get() != 0
             || visual_active()
-                && ns.old_pos.lnum == cur_win().w_cursor.lnum
-                && ns.old_pos.col == cur_win().w_cursor.col)
+                && ns.old_pos.lnum == Win::current().w_cursor.lnum
+                && ns.old_pos.col == Win::current().w_cursor.col)
         && (clear_cmdline.get() || redraw_cmdline.get())
         && (msg_didout.get() || msg_didany.get() && msg_scroll.get() != 0)
         && !msg_nowait.get()
@@ -452,11 +452,11 @@ fn normal_check_cursor_moved() {
     if !finish_op.get()
         && has_event(AutoEvent::CursorMoved)
         && (last_cursormoved_win.get() != Win::current_raw()
-            || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
+            || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
     {
         fire_on_curbuf(AutoEvent::CursorMoved);
         last_cursormoved_win.set(Win::current_raw());
-        last_cursormoved.set(cur_win().w_cursor);
+        last_cursormoved.set(Win::current().w_cursor);
     }
 }
 
@@ -464,10 +464,10 @@ fn normal_check_text_changed() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::TextChanged)
-        && cur_buf().b_last_changedtick != buf_get_changedtick(cur_buf())
+        && Buf::current().b_last_changedtick != buf_get_changedtick(Buf::current())
     {
         fire_on_curbuf(AutoEvent::TextChanged);
-        cur_buf().b_last_changedtick = buf_get_changedtick(cur_buf());
+        Buf::current().b_last_changedtick = buf_get_changedtick(Buf::current());
     }
 }
 
@@ -475,10 +475,10 @@ fn normal_check_buffer_modified() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::BufModifiedSet)
-        && cur_buf().b_changed_invalid as c_int == 1
+        && Buf::current().b_changed_invalid as c_int == 1
     {
         fire_on_curbuf(AutoEvent::BufModifiedSet);
-        cur_buf().b_changed_invalid = false;
+        Buf::current().b_changed_invalid = false;
     }
 }
 
@@ -513,7 +513,7 @@ fn normal_redraw() {
             unsafe { showmode() };
         }
     }
-    cur_buf().b_last_used = unsafe { time(ptr::null_mut()) };
+    Buf::current().b_last_used = unsafe { time(ptr::null_mut()) };
     if !keep_msg.get().is_null() {
         // `msg` may free the global, so it is handed a copy -- and the
         // message is not added to the history a second time.
@@ -634,16 +634,6 @@ pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
     unsafe { normal_prepare(&raw mut s) };
     unsafe { normal_execute(&raw mut s.state, safe_vgetc()) };
     unsafe { *op = s.oa };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

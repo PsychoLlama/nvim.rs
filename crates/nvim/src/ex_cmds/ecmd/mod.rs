@@ -30,7 +30,6 @@ use super::{
 };
 use crate::arglist::check_arg_idx;
 use crate::ex_cmds::say;
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -262,7 +261,7 @@ pub unsafe fn do_ecmd(
     };
     // SAFETY: `curwin` is the live current window, and the handle is used
     // only inside this call.
-    let so = ScrollOff::of(cur_win(), ScrollMargin::Lines);
+    let so = ScrollOff::of(Win::current(), ScrollMargin::Lines);
     // SAFETY: `eap` is live when non-NULL.
     let command = if args.is_null() {
         ptr::null_mut()
@@ -293,10 +292,10 @@ pub unsafe fn do_ecmd(
 
         // Re-editing a terminal buffer: skip most buffer re-initialization.
         // SAFETY: `curbuf`/`curwin` are live.
-        if !other_file && !cur_buf().terminal.is_null() {
+        if !other_file && !Buf::current().terminal.is_null() {
             // Needed when called from do_argfile(); the title may show the
             // arg index, e.g. "(2 of 5)".
-            check_arg_idx(cur_win());
+            check_arg_idx(Win::current());
             unsafe { maketitle() };
             retval = Ok(());
             break 'theend;
@@ -307,7 +306,7 @@ pub unsafe fn do_ecmd(
         // - or if we are the only window on this file and EcmdFlags::HIDE is false
         // SAFETY: `curbuf` is live.
         let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
-            || (cur_buf().b_nwindows == 1
+            || (Buf::current().b_nwindows == 1
                 && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
         // What "may we abandon this buffer" should take into account.  Plain
         // arithmetic, so it belongs outside the call's region.
@@ -359,8 +358,8 @@ pub unsafe fn do_ecmd(
                 Switch::Ready => {}
             }
             // SAFETY: `curwin` is live.
-            cur_win().w_pcmark.lnum = 1;
-            cur_win().w_pcmark.col = 0;
+            Win::current().w_pcmark.lnum = 1;
+            Win::current().w_pcmark.col = 0;
         } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF)
             // SAFETY: main thread, message state.
             || unsafe { check_fname() }.is_err()
@@ -378,7 +377,7 @@ pub unsafe fn do_ecmd(
         // SAFETY: `curbuf` is live.
         if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
             unsafe { prepare_help_buffer() };
-        } else if !cur_buf().b_help {
+        } else if !Buf::current().b_help {
             // Don't make a buffer listed if it's a help buffer.  Useful when
             // using CTRL-O to go back to a help file.
             unsafe { set_buflisted(1) };
@@ -394,7 +393,7 @@ pub unsafe fn do_ecmd(
         // unset.  Helps for when an autocommand changes files and expects
         // syntax highlighting to work in the other file.
         // SAFETY: `curbuf` is live.
-        cur_buf().b_did_filetype = false;
+        Buf::current().b_did_filetype = false;
 
         // other_file oldbuf
         //  false     false       re-edit same file, buffer is re-used
@@ -415,12 +414,12 @@ pub unsafe fn do_ecmd(
         // ":write" works.
         if !other_file {
             // SAFETY: `curbuf` is live.
-            cur_buf().b_flags.clear(BufFlags::NOTEDITED);
+            Buf::current().b_flags.clear(BufFlags::NOTEDITED);
         }
 
         // Check if we are editing the w_arg_idx file in the argument list.
         // SAFETY: `curwin` is live.
-        check_arg_idx(cur_win());
+        check_arg_idx(Win::current());
 
         if !state.auto_buf {
             // SAFETY: the editor's own state; `eap` is the caller's.
@@ -431,15 +430,15 @@ pub unsafe fn do_ecmd(
         // Also needed when re-editing the same buffer, because unloading will
         // have removed it as a diff buffer.
         // SAFETY: `curwin`/`curbuf` are live.
-        if cur_win().w_onebuf_opt.wo_diff != 0 {
-            diff_buf_add(cur_buf());
-            diff_invalidate(cur_buf());
+        if Win::current().w_onebuf_opt.wo_diff != 0 {
+            diff_buf_add(Buf::current());
+            diff_invalidate(Buf::current());
         }
         // If the window options were changed we may need to set the spell
         // language.  Can only be done once the buffer is properly set up.
         if state.did_get_winopts
-            && cur_win().w_onebuf_opt.wo_spell != 0
-            && unsafe { *(*cur_win().w_s).b_p_spl } as c_int != NUL
+            && Win::current().w_onebuf_opt.wo_spell != 0
+            && unsafe { *(*Win::current().w_s).b_p_spl } as c_int != NUL
         {
             unsafe { parse_spelllang(Win::current_raw()) };
         }
@@ -460,11 +459,11 @@ pub unsafe fn do_ecmd(
         }
 
         // SAFETY: `curbuf` is live and `command` the caller's.
-        cur_buf().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
+        Buf::current().b_last_used = unsafe { time(ptr::null_mut::<time_t>()) };
         if !command.is_null() {
             let _ = unsafe { do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE) };
         }
-        if cur_buf().b_kmap_state as c_int & KEYMAP_INIT != 0 {
+        if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
             keymap_init();
         }
 
@@ -486,9 +485,9 @@ pub unsafe fn do_ecmd(
         unsafe { terminal_check_size(old.terminal) };
     }
     if (!old_curbuf.valid() || Buf::current_raw() != old_curbuf.raw())
-        && !cur_buf().terminal.is_null()
+        && !Buf::current().terminal.is_null()
     {
-        unsafe { terminal_check_size(cur_buf().terminal) };
+        unsafe { terminal_check_size(Buf::current().terminal) };
     }
 
     drop(redraw_off.take());
@@ -516,7 +515,7 @@ unsafe fn resolve_target(
 ) -> Target {
     if fnum != 0 {
         // SAFETY: `curbuf` is live.
-        if fnum == cur_buf().handle {
+        if fnum == Buf::current().handle {
             // file is already being edited, nothing to do
             return Target::AlreadyHere;
         }
@@ -538,14 +537,14 @@ unsafe fn resolve_target(
         return Target::Editing(true);
     }
     // SAFETY: as above; `curbuf` is live.
-    if unsafe { **ffname } as c_int == NUL && cur_buf().b_ffname.is_null() {
+    if unsafe { **ffname } as c_int == NUL && Buf::current().b_ffname.is_null() {
         // there is no file name
         return Target::Editing(false);
     }
     if unsafe { **ffname } as c_int == NUL {
         // re-edit with same file name
-        *ffname = cur_buf().b_ffname;
-        *sfname = cur_buf().b_fname;
+        *ffname = Buf::current().b_ffname;
+        *sfname = Buf::current().b_fname;
     }
     // may expand to full path name
     *free_fname = unsafe { fix_fname(*ffname) };
@@ -567,8 +566,8 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // may set b_last_cursor
     unsafe { set_last_cursor(Win::current_raw()) };
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
-        state.newlnum = cur_win().w_cursor.lnum;
-        state.solcol = cur_win().w_cursor.col;
+        state.newlnum = Win::current().w_cursor.lnum;
+        state.solcol = Win::current().w_cursor.col;
     }
     let buf = Buf::current_raw();
     // SAFETY: the buffer's own file name is NUL-terminated; see
@@ -582,21 +581,29 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // If the buffer was used before, store the current contents so that
     // the reload can be undone.  Do not do this if the (empty) buffer is
     // being re-used for another file.
-    if !cur_buf().b_flags.has(BufFlags::NEVERLOADED)
-        && (p_ur.get() < 0 || cur_buf().b_ml.ml_line_count as OptInt <= p_ur.get())
+    if !Buf::current().b_flags.has(BufFlags::NEVERLOADED)
+        && (p_ur.get() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur.get())
     {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
-        if u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true).is_err() {
+        if u_savecommon(
+            Buf::current(),
+            0,
+            Buf::current().b_ml.ml_line_count + 1,
+            0,
+            true,
+        )
+        .is_err()
+        {
             return false;
         }
-        u_unchanged(cur_buf());
-        buf_freeall(cur_buf(), BFA_KEEP_UNDO as c_int);
+        u_unchanged(Buf::current());
+        buf_freeall(Buf::current(), BFA_KEEP_UNDO as c_int);
         // Tell readfile() not to clear or reload undo info.
         state.readfile_flags = READ_KEEP_UNDO as c_int;
     } else {
         // Free all things for buffer.
-        buf_freeall(cur_buf(), 0);
+        buf_freeall(Buf::current(), 0);
     }
 
     // If autocommands deleted the buffer we were going to re-edit, give up
@@ -614,10 +621,10 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     if buf != Buf::current_raw() || aborting() {
         return false;
     }
-    buf_clear_file(cur_buf());
+    buf_clear_file(Buf::current());
     // clear '[ and '] marks
-    cur_buf().b_op_start.lnum = 0;
-    cur_buf().b_op_end.lnum = 0;
+    Buf::current().b_op_start.lnum = 0;
+    Buf::current().b_op_end.lnum = 0;
     true
 }
 
@@ -653,14 +660,14 @@ unsafe fn enter_new_buffer(
     // Careful: open_buffer() and apply_autocmds() may change the current
     // buffer and window.
     // SAFETY: `curwin` is live.
-    let orig_pos = cur_win().w_cursor;
-    state.topline = cur_win().w_topline;
+    let orig_pos = Win::current().w_cursor;
+    state.topline = Win::current().w_topline;
     if !state.oldbuf {
         // need to read the file
         swap_exists_action.set(SEA_DIALOG);
         // set/reset 'ro' flag
         // SAFETY: `curbuf` is live and `eap` the caller's.
-        cur_buf().b_flags |= BufFlags::CHECK_RO;
+        Buf::current().b_flags |= BufFlags::CHECK_RO;
         // Open the buffer and read the file.
         if flags.has(EcmdFlags::NOWINENTER) {
             state.readfile_flags |= READ_NOWINENTER as c_int;
@@ -679,28 +686,28 @@ unsafe fn enter_new_buffer(
         // by the user.
         // SAFETY: `curbuf` is live.
         do_modelines(OptionSetFlags::WINONLY);
-        fire_retval(AutoEvent::BufEnter, cur_buf(), retval);
+        fire_retval(AutoEvent::BufEnter, Buf::current(), retval);
         if !flags.has(EcmdFlags::NOWINENTER) {
-            fire_retval(AutoEvent::BufWinEnter, cur_buf(), retval);
+            fire_retval(AutoEvent::BufWinEnter, Buf::current(), retval);
         }
     }
     // SAFETY: `curwin` is live.
-    check_arg_idx(cur_win());
+    check_arg_idx(Win::current());
 
     // If autocommands change the cursor position or topline, we should keep
     // it.  Also when it moves within a line.  But not when it moves to the
     // first non-blank.
     // SAFETY: `curwin` is live and the cursor is on a line of its buffer.
-    if !equalpos(cur_win().w_cursor, orig_pos) {
+    if !equalpos(Win::current().w_cursor, orig_pos) {
         let text = get_cursor_line_ptr();
-        if cur_win().w_cursor.lnum != orig_pos.lnum
-            || cur_win().w_cursor.col != unsafe { skipwhite(text).offset_from(text) } as c_int
+        if Win::current().w_cursor.lnum != orig_pos.lnum
+            || Win::current().w_cursor.col != unsafe { skipwhite(text).offset_from(text) } as c_int
         {
-            state.newlnum = cur_win().w_cursor.lnum;
-            state.newcol = cur_win().w_cursor.col;
+            state.newlnum = Win::current().w_cursor.lnum;
+            state.newcol = Win::current().w_cursor.col;
         }
     }
-    if cur_win().w_topline == state.topline {
+    if Win::current().w_topline == state.topline {
         state.topline = 0;
     }
 
@@ -718,26 +725,26 @@ unsafe fn place_cursor(state: &Ecmd) {
     // SAFETY: caller's contract.
     if state.newcol >= 0 {
         // position set by autocommands
-        cur_win().w_cursor.lnum = state.newlnum;
-        cur_win().w_cursor.col = state.newcol;
-        check_cursor(cur_win());
+        Win::current().w_cursor.lnum = state.newlnum;
+        Win::current().w_cursor.col = state.newcol;
+        check_cursor(Win::current());
     } else if state.newlnum > 0 {
         // line number from caller or old position
-        cur_win().w_cursor.lnum = state.newlnum;
-        check_cursor_lnum(cur_win());
+        Win::current().w_cursor.lnum = state.newlnum;
+        check_cursor_lnum(Win::current());
         if state.solcol >= 0 && p_sol.get() == 0 {
             // 'sol' is off: use the last known column.
-            cur_win().w_cursor.col = state.solcol;
-            check_cursor_col(cur_win());
-            cur_win().w_cursor.coladd = 0;
-            cur_win().w_set_curswant = true;
+            Win::current().w_cursor.col = state.solcol;
+            check_cursor_col(Win::current());
+            Win::current().w_cursor.coladd = 0;
+            Win::current().w_set_curswant = true;
         } else {
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
         // no line number, go to last line in Ex mode
         if exmode_active.get() {
-            cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+            Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         }
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
@@ -787,8 +794,9 @@ unsafe fn recenter(so: ScrollOff, topline: LineNr, command: *mut c_char) {
         so.set(999);
     }
     // SAFETY: caller's contract; `curwin` is live.
-    update_topline(cur_win());
-    cur_win().w_scbind_pos = unsafe { plines_m_win_fill(Win::current(), 1, cur_win().w_topline) };
+    update_topline(Win::current());
+    Win::current().w_scbind_pos =
+        unsafe { plines_m_win_fill(Win::current(), 1, Win::current().w_topline) };
     so.set(n);
     // redraw this buffer later
     // SAFETY: no argument beyond the redraw type.

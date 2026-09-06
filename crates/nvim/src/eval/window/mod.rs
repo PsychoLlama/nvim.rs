@@ -39,7 +39,7 @@ pub use resolve::{
 // The family's shared views of the editor's roots and of one argument. They
 // live in `resolve` because resolving an argument to a window is its job,
 // and are named here so that `use super::*` finds them.
-pub(crate) use resolve::{arg_number, arg_number_chk, arg_win, cur_buf, cur_tab, cur_win};
+pub(crate) use resolve::{arg_number, arg_number_chk, arg_win};
 pub use switch::{
     f_win_execute, restore_win, restore_win_noblock, switch_win, switch_win_noblock,
     win_execute_after, win_execute_before,

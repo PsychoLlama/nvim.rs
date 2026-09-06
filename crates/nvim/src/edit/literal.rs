@@ -321,18 +321,18 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count {
+    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
         unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };
         return NUL;
     }
 
     // Try to advance to the cursor column.
     validate_virtcol(Win::current());
-    let end_vcol = cur_win().w_virtcol;
+    let end_vcol = Win::current().w_virtcol;
     let line = ml_get(lnum);
 
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = 0;
     while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -378,7 +378,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
         return c;
     }
 
-    c = unsafe { ins_copychar(cur_win().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 }) };
+    c = unsafe { ins_copychar(Win::current().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 }) };
     if c == NUL {
         return c;
     }
@@ -388,22 +388,12 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
     if c < 256 && unsafe { *(*__ctype_b_loc()).offset(c as isize) } & _ISalnum == 0 {
         unsafe { append_to_redobuff(CTRL_V_STR.as_ptr()) };
     }
-    let tw_save = cur_buf().b_p_tw;
-    cur_buf().b_p_tw = -1;
+    let tw_save = Buf::current().b_p_tw;
+    Buf::current().b_p_tw = -1;
     insert_special(c, 1, 0);
-    cur_buf().b_p_tw = tw_save;
+    Buf::current().b_p_tw = tw_save;
     revins_chars.set(revins_chars.get() + 1);
     revins_legal.set(revins_legal.get() + 1);
     unsafe { auto_format(false, true) };
     Ctrl_V
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

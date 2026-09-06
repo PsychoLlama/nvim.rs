@@ -206,7 +206,7 @@ pub unsafe fn f_prompt_setprompt(args: *mut TypVal, _result: *mut TypVal, _fptr:
 unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_prompt_len: c_int) {
     // SAFETY: the caller's obligation.
     if buffer.b_prompt_start.mark.lnum < 1
-        || buffer.b_prompt_start.mark.lnum > cur_buf().line_count()
+        || buffer.b_prompt_start.mark.lnum > Buf::current().line_count()
     {
         // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
         // because an empty buffer makes the two bounds cross.
@@ -216,14 +216,14 @@ unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_pr
             .lnum
             .min(buffer.line_count())
             .max(1);
-        cur_buf().b_prompt_append_new_line = true;
+        Buf::current().b_prompt_append_new_line = true;
     }
     let prompt_lno = buffer.b_prompt_start.mark.lnum;
     let old_prompt = buf_prompt_text(buffer);
     let old_line = unsafe { buffer.line(prompt_lno) }.raw();
     let old_line_len = unsafe { buffer.line_len(prompt_lno) };
     let old_prompt_len = len_as_int(unsafe { cstr::bytes_at(old_prompt) }.len());
-    let mut cursor_col = cur_win().w_cursor.col;
+    let mut cursor_col = Win::current().w_cursor.col;
     let prompt_col = buffer.b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the
     // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
@@ -263,7 +263,7 @@ unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_pr
         splice(old_line_len);
         cursor_col = new_prompt_len;
     }
-    let mut win = cur_win();
+    let mut win = Win::current();
     if win.w_buffer == buffer.raw() && win.w_cursor.lnum == prompt_lno {
         win.w_cursor.col = cursor_col;
         check_cursor_col(win);

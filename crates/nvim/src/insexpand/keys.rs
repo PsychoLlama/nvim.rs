@@ -27,7 +27,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
     }
 
     let mut line = get_cursor_line_ptr();
-    let mut p = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+    let mut p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
     // C's MB_PTR_BACK: step back over one whole character.
     p = unsafe { p.offset(-((utf_head_off(line, p.offset(-1)) + 1) as isize)) };
     let p_off = unsafe { p.offset_from(line) };
@@ -46,7 +46,9 @@ pub unsafe fn ins_compl_bs() -> c_int {
 
     // Deleted more than what was used to find matches, or didn't finish
     // finding all matches: look for matches all over again.
-    if cur_win().w_cursor.col <= compl_col.get() + compl_length.get() || ins_compl_need_restart() {
+    if Win::current().w_cursor.col <= compl_col.get() + compl_length.get()
+        || ins_compl_need_restart()
+    {
         unsafe { ins_compl_restart() };
     }
 
@@ -171,7 +173,7 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
     compl_leader().set(unsafe {
         cbuf_to_string(
             get_cursor_line_ptr().offset(compl_col.get() as isize),
-            (cur_win().w_cursor.col - compl_col.get()) as size_t,
+            (Win::current().w_cursor.col - compl_col.get()) as size_t,
         )
     });
     unsafe { ins_compl_new_leader() };
@@ -218,7 +220,7 @@ pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) 
 /// Append the next character of the shown match to the leader.
 pub unsafe fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
-    let len = cur_win().w_cursor.col - compl_col.get();
+    let len = Win::current().w_cursor.col - compl_col.get();
     let mut p = shown.cp_str.data();
     if shown.cp_str.len() as c_int <= len {
         // The match is too short. When still at the original match use the
@@ -288,7 +290,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
             want_cindent = false; // don't do it again
         }
     } else if !compl_autocomplete.get() || compl_used_match.get() {
-        let prev_col = cur_win().w_cursor.col;
+        let prev_col = Win::current().w_cursor.col;
 
         // Put the cursor on the last char, for 'tw' formatting.
         if prev_col > 0 {
@@ -299,7 +301,8 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
             unsafe { insertchar(NUL, 0, -1) };
         }
         if prev_col > 0
-            && unsafe { *get_cursor_line_ptr().offset(cur_win().w_cursor.col as isize) } as c_int
+            && unsafe { *get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) }
+                as c_int
                 != NUL
         {
             inc_cursor();
@@ -317,7 +320,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
         retval = true;
         // May need to remove ComplMatchIns highlight.
-        unsafe { redraw_win_line(Win::current_raw(), cur_win().w_cursor.lnum) };
+        unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
     }
 
     // When a match was inserted but the pum was never displayed (e.g. only
@@ -622,9 +625,4 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
         compl_pending.set(0);
         unsafe { ins_compl_next(false, todo, true) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

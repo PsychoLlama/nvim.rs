@@ -96,7 +96,7 @@ unsafe fn search_around(
             clearpos(&mut pos);
         } else {
             // Searching backwards, so start at the last line and col.
-            let last = unsafe { (*cur_win().w_buffer).b_ml.ml_line_count };
+            let last = unsafe { (*Win::current().w_buffer).b_ml.ml_line_count };
             pos.lnum = last;
             pos.col = ml_get_len(last);
         }
@@ -120,7 +120,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     // Correct the cursor when 'selection' is exclusive.
     if visual_active()
         && unsafe { *p_sel.get() } as c_int == 'e' as c_int
-        && lt(visual_anchor(), cur_win().w_cursor)
+        && lt(visual_anchor(), Win::current().w_cursor)
     {
         dec_cursor();
     }
@@ -128,9 +128,10 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     // When searching forward and the cursor is at the start of the
     // Visual area, skip the first backward search, or it would not
     // move.
-    let skip_first_backward = forward && visual_active() && lt(cur_win().w_cursor, visual_anchor());
+    let skip_first_backward =
+        forward && visual_active() && lt(Win::current().w_cursor, visual_anchor());
 
-    let orig_pos = cur_win().w_cursor; // where the cursor started
+    let orig_pos = Win::current().w_cursor; // where the cursor started
     let mut pos = orig_pos; // position after the pattern
     if visual_active() {
         // Searching further will extend the match.
@@ -144,7 +145,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     // Is the pattern zero-width? This time, don't care about the
     // direction.
     let pat = last_used_pattern();
-    let cursor = cur_win().cursor().raw();
+    let cursor = Win::current().cursor().raw();
     // SAFETY: the last search pattern and the live window's cursor.
     let zero_width = unsafe { is_zero_width(pat.pat, pat.patlen, true, cursor, FORWARD) };
     if zero_width == -1 {
@@ -153,7 +154,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
 
     let found = unsafe { search_around(pos, count, forward, skip_first_backward, zero_width != 0) };
     let Some(found) = found else {
-        cur_win().w_cursor = orig_pos;
+        Win::current().w_cursor = orig_pos;
         if visual_active() {
             set_visual_anchor(save_visual);
         }
@@ -165,26 +166,26 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     }
 
     // Put the cursor after the match.
-    cur_win().w_cursor = found.end;
+    Win::current().w_cursor = found.end;
     if lt(visual_anchor(), found.end) && forward {
         if skip_first_backward {
             // Put the cursor on the start of the match.
-            cur_win().w_cursor = found.start;
+            Win::current().w_cursor = found.start;
         } else {
             // Put the cursor on the last character of the match.
             dec_cursor();
         }
-    } else if visual_active() && lt(cur_win().w_cursor, visual_anchor()) && forward {
-        cur_win().w_cursor = found.start;
+    } else if visual_active() && lt(Win::current().w_cursor, visual_anchor()) && forward {
+        Win::current().w_cursor = found.start;
     }
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
     if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
         // Correction for exclusive selection depends on the direction.
-        if forward && ltoreq(visual_anchor(), cur_win().w_cursor) {
+        if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();
-        } else if !forward && ltoreq(cur_win().w_cursor, visual_anchor()) {
+        } else if !forward && ltoreq(Win::current().w_cursor, visual_anchor()) {
             with_visual_anchor(|anchor| unsafe { inc(anchor) });
         }
     }
@@ -198,9 +199,4 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     redraw_curbuf_later(UPD_INVERTED);
     unsafe { showmode() };
     Ok(())
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

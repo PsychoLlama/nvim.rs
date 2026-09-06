@@ -70,12 +70,12 @@ pub unsafe fn current_block(
     };
     // `{` at the start of a line, so the object claims the line break.
     let mut sol = false;
-    let old_pos = cur_win().w_cursor;
-    let mut old_end = cur_win().w_cursor; // where we started
+    let old_pos = Win::current().w_cursor;
+    let mut old_end = Win::current().w_cursor; // where we started
     let mut old_start = old_end;
 
     // Starting on a bracket takes the whole block, brackets included.
-    if !visual_active() || equalpos(visual_anchor(), cur_win().w_cursor) {
+    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
         // SAFETY: on the main thread with a current window and buffer, which
         // is all `setpcmark` reads.
         setpcmark();
@@ -94,11 +94,11 @@ pub unsafe fn current_block(
         // the character `gchar_cursor` reads.
         if gchar_cursor() == what {
             // On the opening bracket: move just past it.
-            cur_win().w_cursor.col += 1;
+            Win::current().w_cursor.col += 1;
         }
-    } else if lt(visual_anchor(), cur_win().w_cursor) {
+    } else if lt(visual_anchor(), Win::current().w_cursor) {
         old_start = visual_anchor();
-        cur_win().w_cursor = visual_anchor(); // cursor at the low end
+        Win::current().w_cursor = visual_anchor(); // cursor at the low end
     } else {
         old_end = visual_anchor();
     }
@@ -136,22 +136,22 @@ pub unsafe fn current_block(
         let Some(found) = pos else {
             break;
         };
-        cur_win().w_cursor = found;
+        Win::current().w_cursor = found;
         start_pos = found;
     }
     p_cpo.set(save_cpo);
 
     // Then the matching closing bracket.
     if pos.is_none() {
-        cur_win().w_cursor = old_pos;
+        Win::current().w_cursor = old_pos;
         return Err(Failed);
     }
     // SAFETY: the cursor sits on the opening bracket the search above found.
     let Some(mut end_pos) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
-        cur_win().w_cursor = old_pos;
+        Win::current().w_cursor = old_pos;
         return Err(Failed);
     };
-    cur_win().w_cursor = end_pos;
+    Win::current().w_cursor = end_pos;
 
     // Without `include`, leave the brackets out. A closing bracket
     // preceded only by indent takes that indent with it -- but only if
@@ -165,48 +165,48 @@ pub unsafe fn current_block(
             // both report running off the first or last line themselves.
             // `PosRef` derefs to the cursor alone, not the whole window.
             unsafe { incl(&mut start_pos) };
-            sol = cur_win().w_cursor.col == 0;
-            unsafe { decl(&mut cur_win().cursor()) };
+            sol = Win::current().w_cursor.col == 0;
+            unsafe { decl(&mut Win::current().cursor()) };
             // SAFETY: there is a current line with the cursor on it.
             while unsafe { inindent(1) } {
                 sol = true;
-                if unsafe { decl(&mut cur_win().cursor()) } != 0 {
+                if unsafe { decl(&mut Win::current().cursor()) } != 0 {
                     break;
                 }
             }
 
             // In Visual mode, an empty result means there is no inner block.
             if equalpos(start_pos, end_pos) && visual_active() {
-                cur_win().w_cursor = old_pos;
+                Win::current().w_cursor = old_pos;
                 return Err(Failed);
             }
             // In Visual mode, a result no bigger than what we started with
             // extends to the next block out and excludes again. An empty area
             // is not expanded.
             if lt(start_pos, old_start)
-                || lt(old_end, cur_win().w_cursor)
-                || equalpos(start_pos, cur_win().w_cursor)
+                || lt(old_end, Win::current().w_cursor)
+                || equalpos(start_pos, Win::current().w_cursor)
                 || !visual_active()
             {
                 break;
             }
-            cur_win().w_cursor = old_start;
+            Win::current().w_cursor = old_start;
             // SAFETY: as above -- the cursor is a position in the current
             // buffer, and the searches take a null operator argument.
-            unsafe { decl(&mut cur_win().cursor()) };
+            unsafe { decl(&mut Win::current().cursor()) };
             pos = unsafe { findmatch(ptr::null_mut(), what) };
             let Some(found) = pos else {
-                cur_win().w_cursor = old_pos;
+                Win::current().w_cursor = old_pos;
                 return Err(Failed);
             };
             start_pos = found;
-            cur_win().w_cursor = found;
+            Win::current().w_cursor = found;
             let Some(found_end) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
-                cur_win().w_cursor = old_pos;
+                Win::current().w_cursor = old_pos;
                 return Err(Failed);
             };
             end_pos = found_end;
-            cur_win().w_cursor = end_pos;
+            Win::current().w_cursor = end_pos;
         }
     }
 
@@ -215,11 +215,11 @@ pub unsafe fn current_block(
         // before any mapping can run.
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             // SAFETY: the cursor is a position in the current buffer.
-            unsafe { inc(&mut cur_win().cursor()) };
+            unsafe { inc(&mut Win::current().cursor()) };
         }
         // SAFETY: there is a current line with the cursor on it.
         if sol && gchar_cursor() != NUL {
-            unsafe { inc(&mut cur_win().cursor()) }; // include the line break
+            unsafe { inc(&mut Win::current().cursor()) }; // include the line break
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
@@ -236,14 +236,14 @@ pub unsafe fn current_block(
         op.inclusive = false;
         if sol {
             // SAFETY: the cursor is a position in the current buffer.
-            unsafe { incl(&mut cur_win().cursor()) };
-        } else if ltoreq(start_pos, cur_win().w_cursor) {
+            unsafe { incl(&mut Win::current().cursor()) };
+        } else if ltoreq(start_pos, Win::current().w_cursor) {
             // Include the character under the cursor.
             op.inclusive = true;
         } else {
             // The end is before the start -- nothing between `<>`, `[]`
             // and so on -- so operate on no text at all.
-            cur_win().w_cursor = start_pos;
+            Win::current().w_cursor = start_pos;
         }
     }
     Ok(())
@@ -261,7 +261,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
     let mut lc = NUL;
 
     // Back to the `<` under or before the cursor, giving up at a `>`.
-    let mut p = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+    let mut p = unsafe { line.offset(Win::current().w_cursor.col as isize) };
     while p > line {
         // SAFETY: `p` is inside `line`, at or before its NUL.
         if unsafe { *p } as c_int == '<' as c_int {
@@ -281,7 +281,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
     }
 
     let mut pos = Pos {
-        lnum: cur_win().w_cursor.lnum,
+        lnum: Win::current().w_cursor.lnum,
         // SAFETY: `p` and `line` point into the same line.
         col: unsafe { p.offset_from(line) } as ColNr,
         coladd: 0,
@@ -354,8 +354,8 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     let mut is_inclusive = true;
     p_ws.set(0);
 
-    let old_pos = cur_win().w_cursor;
-    let mut old_end = cur_win().w_cursor; // where we started
+    let old_pos = Win::current().w_cursor;
+    let mut old_end = Win::current().w_cursor; // where we started
     let mut old_start = old_end;
     // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set before
     // any mapping can run.
@@ -366,7 +366,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     }
 
     // Starting on a `<aaa>` selects that block.
-    if !visual_active() || equalpos(visual_anchor(), cur_win().w_cursor) {
+    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
         // SAFETY: on the main thread with a current window and buffer.
         setpcmark();
         // Ignore the indent.
@@ -396,11 +396,11 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
                 }
             }
             dec_cursor();
-            old_end = cur_win().w_cursor;
+            old_end = Win::current().w_cursor;
         }
-    } else if lt(visual_anchor(), cur_win().w_cursor) {
+    } else if lt(visual_anchor(), Win::current().w_cursor) {
         old_start = visual_anchor();
-        cur_win().w_cursor = visual_anchor(); // cursor at the low end
+        Win::current().w_cursor = visual_anchor(); // cursor at the low end
     } else {
         old_end = visual_anchor();
     }
@@ -419,12 +419,12 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
             if unsafe { search_tag_pair(ANY_START_TAG.as_ptr(), ANY_END_TAG.as_ptr(), BACKWARD) }
                 <= 0
             {
-                cur_win().w_cursor = old_pos;
+                Win::current().w_cursor = old_pos;
                 p_ws.set(save_p_ws as c_int);
                 return retval;
             }
         }
-        start_pos = cur_win().w_cursor;
+        start_pos = Win::current().w_cursor;
 
         // Isolate the `aaa` so the matching `</aaa>` can be searched for.
         // SAFETY: there is a current line with the cursor on it, so
@@ -442,7 +442,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         }
         let len = unsafe { cp.offset_from(p) } as c_int;
         if len == 0 {
-            cur_win().w_cursor = old_pos;
+            Win::current().w_cursor = old_pos;
             p_ws.set(save_p_ws as c_int);
             return retval;
         }
@@ -463,12 +463,12 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         unsafe { xfree(spat as *mut c_void) };
         unsafe { xfree(epat as *mut c_void) };
 
-        if r < 1 || lt(cur_win().w_cursor, old_end) {
+        if r < 1 || lt(Win::current().w_cursor, old_end) {
             // No other end, or it is before the previous one: this could
             // be an HTML tag with no matching end. Search backwards for
             // another start tag.
             count = 1;
-            cur_win().w_cursor = start_pos;
+            Win::current().w_cursor = start_pos;
             continue 'again;
         }
 
@@ -491,7 +491,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
             // SAFETY: `c` points into the NUL-terminated cursor line.
             if unsafe { *c } as c_int == '<' as c_int
                 && !visual_active()
-                && cur_win().w_cursor.col == 0
+                && Win::current().w_cursor.col == 0
             {
                 is_inclusive = false;
             } else if unsafe { *c } as c_int == '<' as c_int {
@@ -499,12 +499,12 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
                 dec_cursor();
             }
         }
-        end_pos = cur_win().w_cursor;
+        end_pos = Win::current().w_cursor;
 
         if !do_include {
             // Exclude the start tag, stepping over any `>` inside quotes.
             let mut in_quotes = false;
-            cur_win().w_cursor = start_pos;
+            Win::current().w_cursor = start_pos;
             // SAFETY: `inc_cursor` reports running off the buffer itself, so
             // the cursor is on a character of a line of the current buffer
             // whenever the body runs, and `get_cursor_pos_ptr` points at it.
@@ -512,19 +512,19 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
                 let q = unsafe { *get_cursor_pos_ptr() } as c_int;
                 if q == '>' as c_int && !in_quotes {
                     inc_cursor();
-                    start_pos = cur_win().w_cursor;
+                    start_pos = Win::current().w_cursor;
                     break;
                 } else if q == '"' as c_int || q == '\'' as c_int {
                     in_quotes = !in_quotes;
                 }
             }
-            cur_win().w_cursor = end_pos;
+            Win::current().w_cursor = end_pos;
 
             // In Visual mode with exactly the text we already had, take
             // the tags in and try again.
             if visual_active() && equalpos(start_pos, old_start) && equalpos(end_pos, old_end) {
                 do_include = true;
-                cur_win().w_cursor = old_start;
+                Win::current().w_cursor = old_start;
                 count = count_arg;
                 continue 'again;
             }
@@ -536,7 +536,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // An end before the start means there is no text between the
         // tags: select the character under the cursor.
         if lt(end_pos, start_pos) {
-            cur_win().w_cursor = start_pos;
+            Win::current().w_cursor = start_pos;
         // SAFETY: `p_sel` holds the NUL-terminated 'selection' value.
         } else if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
             // SAFETY: the cursor is on a line of the current buffer.
@@ -556,7 +556,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         op.motion_type = kMTCharWise;
         if lt(end_pos, start_pos) {
             // No text between the tags: operate on an empty area.
-            cur_win().w_cursor = start_pos;
+            Win::current().w_cursor = start_pos;
             op.inclusive = false;
         } else {
             op.inclusive = is_inclusive;
@@ -566,9 +566,4 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
 
     p_ws.set(save_p_ws as c_int);
     retval
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

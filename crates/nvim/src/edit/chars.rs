@@ -183,7 +183,7 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
             && !(State.get() & REPLACE_FLAG != 0
                 && State.get() & VREPLACE_FLAG == 0
                 && unsafe { *get_cursor_pos_ptr() } as c_int != NUL)
-            && (cur_win().w_cursor.lnum != Insstart.get().lnum
+            && (Win::current().w_cursor.lnum != Insstart.get().lnum
                 || ((!fo_ins_long || Insstart_textlen.get() <= textwidth)
                     && (!fo_ins_blank || Insstart_blank_vcol.get() <= textwidth))));
     if !wanted {
@@ -196,11 +196,11 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
     let virtcol = unsafe { get_nolist_virtcol() }
         + unsafe { char2cells(if c != NUL { c } else { gchar_cursor() }) };
 
-    if unsafe { *cur_buf().b_p_fex } as c_int != NUL
+    if unsafe { *Buf::current().b_p_fex } as c_int != NUL
         && flags & INSCHAR_NO_FEX as c_int == 0
         && (force_format != 0 || virtcol > textwidth)
     {
-        do_internal = unsafe { fex_format(cur_win().w_cursor.lnum, 1, c) } != 0;
+        do_internal = unsafe { fex_format(Win::current().w_cursor.lnum, 1, c) } != 0;
         // Saving for undo may be needed again, e.g. when the expression
         // called setline().
         ins_need_undo.set(true);
@@ -257,7 +257,7 @@ fn end_pending_comment(c: c_int) {
 
     // Skip the white space before the cursor, then back over the middle
     // leader.
-    i = cur_win().w_cursor.col;
+    i = Win::current().w_cursor.col;
     while i > 0 && ascii_iswhite(unsafe { *line.offset(i as isize - 1) } as c_int) {
         i -= 1;
     }
@@ -288,12 +288,12 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
         return false;
     }
 
-    let start_col = if cur_win().w_cursor.lnum == Insstart.get().lnum {
+    let start_col = if Win::current().w_cursor.lnum == Insstart.get().lnum {
         Insstart.get().col
     } else {
         0
     };
-    let col = cur_win().w_cursor.col;
+    let col = Win::current().w_cursor.col;
     // SAFETY: `curwin`/`curbuf` are live, so the cursor's line is too.
     unsafe { check_abbr(c, get_cursor_line_ptr(), col, start_col) }
 }
@@ -331,14 +331,4 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     drop(locked);
     State.set(save_state);
     res
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

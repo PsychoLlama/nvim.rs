@@ -29,7 +29,7 @@ pub unsafe fn grep_internal(cmdidx: CmdIdx) -> bool {
         return false;
     }
     // SAFETY: the option strings of a live buffer are NUL-terminated.
-    let local = cur_buf().b_p_gp;
+    let local = Buf::current().b_p_gp;
     let grepprg = if unsafe { *local } as c_int == NUL {
         p_gp.get()
     } else {
@@ -108,7 +108,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
         return;
     }
 
-    let local_enc = cur_buf().b_p_menc;
+    let local_enc = Buf::current().b_p_menc;
     let enc = if unsafe { *local_enc } as c_int != NUL {
         local_enc
     } else {
@@ -124,7 +124,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     }
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(Win::current);
 
     unsafe { autowrite_all() };
     let fname = unsafe { get_mef_name() };
@@ -143,7 +143,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     let errorformat = if is_make {
         p_efm.get()
     } else {
-        let local = cur_buf().b_p_gefm;
+        let local = Buf::current().b_p_gefm;
         if unsafe { *local } as c_int != NUL {
             local
         } else {

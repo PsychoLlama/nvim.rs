@@ -34,7 +34,6 @@ use crate::eval::typval::{
 use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
 use crate::eval::vars::clear_local;
 use crate::eval::vars::{evalvars_init, get_vim_var_dict, get_vim_var_partial, set_vim_var_list};
-use crate::eval::window::cur_win;
 use crate::eval::{
     EVAL_EVALUATE, FUNCEXE_INIT, NL, Tv, check_luafunc_name, clear_evalarg, eval0,
     eval0_simple_funccal, eval1, may_call_simple_func, partial_name,
@@ -623,8 +622,8 @@ pub unsafe fn call_vim_function(
         // SAFETY: the caller's promise about `result`.
         unsafe { (*result).v_type = VAR_UNKNOWN };
         let mut funcexe: FuncExe = FUNCEXE_INIT;
-        funcexe.fe_firstline = cur_win().w_cursor.lnum;
-        funcexe.fe_lastline = cur_win().w_cursor.lnum;
+        funcexe.fe_firstline = Win::current().w_cursor.lnum;
+        funcexe.fe_lastline = Win::current().w_cursor.lnum;
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = pt;
         ret = unsafe { call_func(func, len, result, argc, argv, &raw mut funcexe) };

@@ -84,7 +84,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
                 ins_ctrl_o();
                 // Don't move the cursor left when 'virtualedit' has
                 // "onemore".
-                if get_ve_flags(cur_win()) & kOptVeFlagOnemore as ::core::ffi::c_uint != 0 {
+                if get_ve_flags(Win::current()) & kOptVeFlagOnemore as ::core::ffi::c_uint != 0 {
                     ins_at_eol.set(false);
                     s.nomove = true;
                 }
@@ -490,7 +490,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == CAR {
-        if cur_win().w_llist_ref.is_null() {
+        if Win::current().w_llist_ref.is_null() {
             let _ = unsafe { do_cmdline_cmd(c".cc".as_ptr()) };
         } else {
             let _ = unsafe { do_cmdline_cmd(c".ll".as_ptr()) };
@@ -528,7 +528,7 @@ fn key_complete(s: &mut InsertState) -> Next {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if unsafe { *cur_buf().b_p_cpt } as c_int == NUL
+    if unsafe { *Buf::current().b_p_cpt } as c_int == NUL
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()
     {
@@ -558,7 +558,10 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if !(unsafe { ins_compl_has_autocomplete() } && !char_avail() && cur_win().w_cursor.col > 0) {
+    if !(unsafe { ins_compl_has_autocomplete() }
+        && !char_avail()
+        && Win::current().w_cursor.col > 0)
+    {
         return;
     }
     s.c = unsafe { char_before_cursor() };
@@ -593,7 +596,7 @@ fn check_pum(s: &mut InsertState) {
         pum_ext_want_done();
     }
 
-    if cur_buf().b_u_synced {
+    if Buf::current().b_u_synced {
         ins_need_undo.set(true);
     }
 }
@@ -645,7 +648,7 @@ fn insert_normal_char(s: &mut InsertState) {
             can_cindent.set(false);
         }
         if Insstart_blank_vcol.get() == MAXCOL as ColNr
-            && cur_win().w_cursor.lnum == Insstart.get().lnum
+            && Win::current().w_cursor.lnum == Insstart.get().lnum
         {
             Insstart_blank_vcol.set(unsafe { get_nolist_virtcol() });
         }
@@ -718,14 +721,4 @@ fn compl_option_ok(cpt_only: bool) -> bool {
 fn printable(c: c_int) -> bool {
     // SAFETY: only reads the character tables.
     unsafe { vim_isprintc(c) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -58,7 +58,7 @@ pub unsafe fn inindent(extra: c_int) -> bool {
         ptr = unsafe { ptr.add(1) };
         col += 1;
     }
-    col >= cur_win().w_cursor.col as c_int + extra
+    col >= Win::current().w_cursor.col as c_int + extra
 }
 
 /// Writes `fmt` with `n` into a buffer of its own and shows it as
@@ -417,7 +417,7 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 unsafe fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = Insstart.get();
     // SAFETY: the caller's contract.
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
     if lnum == insstart.lnum && insstart.col != 0 {
         insstart.col = if (insstart.col as c_int) <= insstart_less {
             0
@@ -639,8 +639,8 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
             .cast::<u8>()
             .copy_from(get_cursor_line_ptr().cast(), line_len as size_t)
     };
-    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, line, false) };
-    cur_win().w_cursor.col = ind_len as ColNr;
+    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, line, false) };
+    Win::current().w_cursor.col = ind_len as ColNr;
     true
 }
 
@@ -843,8 +843,9 @@ impl Retab {
         };
         // Written inside `unsafe` blocks so that the walk stays checked code.
         let byte = |s: &LineScan| unsafe { *s.ptr.offset(s.col as isize) };
+        let win = Win::current();
         let width = |s: &LineScan| unsafe {
-            win_chartabsize(cur_win(), s.ptr.offset(s.col as isize), s.vcol as ColNr)
+            win_chartabsize(win, s.ptr.offset(s.col as isize), s.vcol as ColNr)
         };
         let charlen = |s: &LineScan| unsafe { utfc_ptr2len(s.ptr.offset(s.col as isize)) };
         loop {
@@ -975,9 +976,4 @@ pub unsafe fn ex_retab(args: *mut ExArg) {
     }
     coladvance(unsafe { Win::new(win) }, unsafe { (*win).w_curswant });
     u_clearline(b);
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

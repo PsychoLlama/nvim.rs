@@ -154,7 +154,7 @@ pub(crate) unsafe fn command_line_execute(
         return -1; // get another key
     }
 
-    let display_tick_saved: DispTick = cur_win().w_display_tick;
+    let display_tick_saved: DispTick = Win::current().w_display_tick;
     // SAFETY: as [`command_line_check`] -- the header of the live
     // `CommandLineState`.
     let mut s = unsafe { Cls::new(state.cast::<CommandLineState>()) };
@@ -191,11 +191,11 @@ pub(crate) unsafe fn command_line_execute(
             unsafe { map_execute_lua(false, false) };
         }
         // If the window changed, the incremental search state is invalid.
-        if s.is_state.winid != cur_win().handle {
+        if s.is_state.winid != Win::current().handle {
             unsafe { init_incsearch_state(s.is_state()) };
         }
         // Re-apply 'incsearch' highlighting in case it was cleared.
-        if cur_win().w_display_tick > display_tick_saved && s.is_state.did_incsearch {
+        if Win::current().w_display_tick > display_tick_saved && s.is_state.did_incsearch {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
         }
         // If f_setcmdline() changed the cmdline, treat it as such.
@@ -442,7 +442,7 @@ pub(crate) unsafe fn command_line_execute(
     // process it any further.
     if matches!(wild_type, Some(WildMode::Cancel | WildMode::Apply)) {
         // Apply search highlighting.
-        if s.is_state.winid != cur_win().handle {
+        if s.is_state.winid != Win::current().handle {
             unsafe { init_incsearch_state(s.is_state()) };
         }
         if KeyTyped.get() || vpeekc() == NUL {
@@ -555,9 +555,4 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
     }
 
     1
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -48,7 +48,7 @@ pub unsafe fn expand_tags(
     };
 
     let mincount = TAG_MANY as c_int;
-    let buf_ffname = cur_buf().b_ffname;
+    let buf_ffname = Buf::current().b_ffname;
     let ret = unsafe { find_tags(pat, num_file, file, flags, mincount, buf_ffname) };
     if ret.is_ok() && !tagnames {
         // One scratch buffer for the whole set, as upstream keeps.
@@ -361,9 +361,4 @@ unsafe fn add_tag_field(
     value.push(0);
     let name_len = unsafe { cstr::bytes_at(field_name) }.len();
     unsafe { tv_dict_add_str(dict, field_name, name_len, value.as_ptr()) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

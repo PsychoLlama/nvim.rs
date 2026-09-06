@@ -30,7 +30,6 @@ use crate::cstr;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::global_busy;
@@ -325,8 +324,8 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
 
     // Move the cursor to the start of the match, so that we can use
     // "\=col('.')".
-    cur_win().w_cursor.col = st.regmatch.startpos[0].col;
-    let line_count = cur_buf().b_ml.ml_line_count;
+    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
+    let line_count = Buf::current().b_ml.ml_line_count;
 
     // When the match included the "$" of the last line it may go beyond the
     // last line of the buffer.
@@ -426,7 +425,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         // The match might be after the last line, for "\n\zs" matching at the
         // end of the last line.
         // SAFETY: the current buffer is live.
-        if st.lnum > cur_buf().b_ml.ml_line_count {
+        if st.lnum > Buf::current().b_ml.ml_line_count {
             break;
         }
         if st.sub_firstline.is_null() {
@@ -437,7 +436,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         // Save the line number of the last change for the final cursor
         // position, just like Vi.
         // SAFETY: the current window is live.
-        cur_win().w_cursor.lnum = st.lnum;
+        Win::current().w_cursor.lnum = st.lnum;
         st.do_again = false;
 
         // SAFETY: the state describes a live match.
@@ -549,7 +548,7 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
         if args.cmdpreview_ns > 0 as c_int
             && st.preview_lines.lines_needed > p_cwh.get() as LineNr
             // SAFETY: the current window is live.
-            && st.lnum > cur_win().w_botline
+            && st.lnum > Win::current().w_botline
         {
             break;
         }
@@ -575,15 +574,15 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
 /// Main thread; `st` and `args` must describe the command just run.
 unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the current buffer is live.
-    cur_buf().deleted_bytes2 = 0 as size_t;
+    Buf::current().deleted_bytes2 = 0 as size_t;
 
     if st.first_line != 0 as LineNr {
         // Subtract the number of added lines from "last_line" to get the line
         // number before the change (the same as adding the number of deleted
         // lines).
-        let added = cur_buf().b_ml.ml_line_count - args.old_line_count;
+        let added = Buf::current().b_ml.ml_line_count - args.old_line_count;
         changed_lines(
-            cur_buf(),
+            Buf::current(),
             st.first_line,
             0 as ColNr,
             st.last_line - added,
@@ -603,17 +602,17 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // ":s/pat//n" doesn't move the cursor.
     if subflags.with(|flags| flags.do_count) {
         // SAFETY: the current window is live.
-        cur_win().w_cursor = args.old_cursor;
+        Win::current().w_cursor = args.old_cursor;
     }
 
     if sub_nsubs.get() > args.start_nsubs {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             // SAFETY: the current buffer is live.
-            cur_buf().b_op_start.lnum = args.range.0;
-            cur_buf().b_op_end.lnum = st.line2;
-            cur_buf().b_op_end.col = 0 as ColNr;
-            cur_buf().b_op_start.col = cur_buf().b_op_end.col;
+            Buf::current().b_op_start.lnum = args.range.0;
+            Buf::current().b_op_end.lnum = st.line2;
+            Buf::current().b_op_end.col = 0 as ColNr;
+            Buf::current().b_op_start.col = Buf::current().b_op_end.col;
         }
 
         if global_busy.get() == 0 {
@@ -621,7 +620,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             if !subflags.with(|flags| flags.do_ask) {
                 // SAFETY: the current window is live.
                 if args.endcolumn {
-                    coladvance(cur_win(), MAXCOL as c_int);
+                    coladvance(Win::current(), MAXCOL as c_int);
                 } else {
                     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
@@ -644,7 +643,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // SAFETY: the cursor is on a line of the buffer.
             unsafe {
                 print_line(
-                    cur_win().w_cursor.lnum,
+                    Win::current().w_cursor.lnum,
                     subflags.with(|flags| flags.do_number),
                     subflags.with(|flags| flags.do_list),
                     true,
@@ -668,10 +667,10 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     // SAFETY: the current window is live.
-    if subflags.with(|flags| flags.do_ask) && has_any_folding(cur_win()) != 0 {
+    if subflags.with(|flags| flags.do_ask) && has_any_folding(Win::current()) != 0 {
         // The cursor position may require updating.
         // SAFETY: as above.
-        changed_window_setting(cur_win());
+        changed_window_setting(Win::current());
     }
 
     // SAFETY: the compiled program and the replacement text are ours.
@@ -745,7 +744,7 @@ pub(crate) unsafe fn do_sub(
     let start_nsubs = sub_nsubs.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
     // SAFETY: the current window and buffer are live.
-    let (old_cursor, old_line_count) = (cur_win().w_cursor, cur_buf().b_ml.ml_line_count);
+    let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
 
     // SAFETY: caller's contract.
     let Some(setup) = (unsafe { parse_sub(args, cmdpreview_ns, keeppatterns) }) else {

@@ -36,7 +36,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
     let p = unsafe { ml_get_buf_mut(Buf::current_raw(), pos.lnum) };
-    let len = cur_buf().b_ml.cached_len();
+    let len = Buf::current().b_ml.cached_len();
 
     // Safety check: the caller's column may be past the line.
     if pos.col >= len {
@@ -78,7 +78,7 @@ unsafe fn replace_character(c: c_int) {
 pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     let op = unsafe { Op::new(op) };
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
+    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
 
@@ -103,14 +103,14 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
         replace_chars(op, c);
     }
 
-    cur_win().w_cursor = op.start;
+    Win::current().w_cursor = op.start;
     let (lnum, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
     check_cursor(Win::current());
-    changed_lines(cur_buf(), lnum, col, last, 0, true);
+    changed_lines(Buf::current(), lnum, col, last, 0, true);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = op.start;
-        cur_buf().b_op_end = op.end;
+        Buf::current().b_op_start = op.start;
+        Buf::current().b_op_end = op.end;
     }
     Ok(())
 }
@@ -120,17 +120,17 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
 /// `op` must be blockwise.
 fn replace_block(op: Op, c: c_int, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
-    bd.is_max = c_int::from(cur_win().w_curswant == MAXCOL);
-    while cur_win().w_cursor.lnum <= op.end.lnum {
+    bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
+    while Win::current().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.col = 0;
         // SAFETY: the cursor walks the region, so its line is the buffer's.
-        let lnum = cur_win().w_cursor.lnum;
+        let lnum = Win::current().w_cursor.lnum;
         unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
         if bd.textlen != 0 || (op_virtual() && bd.is_max == 0) {
             replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
-        cur_win().w_cursor.lnum += 1;
+        Win::current().w_cursor.lnum += 1;
     }
 }
 
@@ -153,7 +153,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it.
     if op_virtual() && bd.is_short != 0 && unsafe { *bd.textstart } as c_int == NUL {
         let mut vpos = Pos {
-            lnum: cur_win().w_cursor.lnum,
+            lnum: Win::current().w_cursor.lnum,
             col: 0,
             coladd: 0,
         };
@@ -230,14 +230,14 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
         newrows = 1;
     }
 
-    let baselnum = cur_win().w_cursor.lnum;
+    let baselnum = Win::current().w_cursor.lnum;
     let _ = unsafe { ml_replace(baselnum, newp, false) };
     let splice = Suppress::splice();
     if !after_p.is_null() {
         let len = after_p_len as ColNr;
-        let _ = unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
-        cur_win().w_cursor.lnum += 1;
-        unsafe { appended_lines_mark(cur_win().w_cursor.lnum, 1) };
+        let _ = unsafe { ml_append(Win::current().w_cursor.lnum, after_p, len, false) };
+        Win::current().w_cursor.lnum += 1;
+        unsafe { appended_lines_mark(Win::current().w_cursor.lnum, 1) };
         op.end.lnum += 1;
         unsafe { xfree(after_p as *mut c_void) };
     }
@@ -271,7 +271,7 @@ fn replace_chars(mut op: Op, c: c_int) {
     // current buffer at every step, which is what each of these asks for.
     if op.motion_type == kMTLineWise {
         op.start.col = 0;
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.col = 0;
         op.end.col = ml_get_len(op.end.lnum);
         if op.end.col != 0 {
             op.end.col -= 1;
@@ -280,7 +280,7 @@ fn replace_chars(mut op: Op, c: c_int) {
         unsafe { dec(&mut op.end) };
     }
 
-    while ltoreq(cur_win().w_cursor, op.end) {
+    while ltoreq(Win::current().w_cursor, op.end) {
         let mut done = false;
 
         let under_cursor = gchar_cursor();
@@ -291,7 +291,7 @@ fn replace_chars(mut op: Op, c: c_int) {
             if new_byte_len > 1 || old_byte_len > 1 {
                 // Slow, but it handles a single-byte character replacing a
                 // multi-byte one and the other way around.
-                if cur_win().w_cursor.lnum == op.end.lnum {
+                if Win::current().w_cursor.lnum == op.end.lnum {
                     op.end.col += new_byte_len - old_byte_len;
                 }
                 unsafe { replace_character(c) };
@@ -301,11 +301,11 @@ fn replace_chars(mut op: Op, c: c_int) {
                     // Breaking the TAB moves the end, so remember where it
                     // was in columns first.
                     let mut end_vcol = 0;
-                    if cur_win().w_cursor.lnum == op.end.lnum {
+                    if Win::current().w_cursor.lnum == op.end.lnum {
                         end_vcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
                     }
                     unsafe { coladvance_force(getviscol()) };
-                    if cur_win().w_cursor.lnum == op.end.lnum {
+                    if Win::current().w_cursor.lnum == op.end.lnum {
                         // SAFETY: a live current window, and the operator's
                         // end position in the cursor's own line.
                         unsafe { getvpos(Win::current(), op.end(), end_vcol) };
@@ -313,13 +313,13 @@ fn replace_chars(mut op: Op, c: c_int) {
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
                 if gchar_cursor() != NUL {
-                    unsafe { pbyte(cur_win().w_cursor, c) };
+                    unsafe { pbyte(Win::current().w_cursor, c) };
                     done = true;
                 }
             }
         }
 
-        if !done && op_virtual() && cur_win().w_cursor.lnum == op.end.lnum {
+        if !done && op_virtual() && Win::current().w_cursor.lnum == op.end.lnum {
             replace_virtual_tail(op, c);
         }
 
@@ -339,7 +339,7 @@ fn replace_chars(mut op: Op, c: c_int) {
 /// The cursor must be on `op.end.lnum`.
 fn replace_virtual_tail(op: Op, c: c_int) {
     let mut virtcols = op.end.coladd;
-    if cur_win().w_cursor.lnum == op.start.lnum
+    if Win::current().w_cursor.lnum == op.start.lnum
         && op.start.col == op.end.col
         && op.start.coladd != 0
     {
@@ -352,26 +352,16 @@ fn replace_virtual_tail(op: Op, c: c_int) {
     // and `coladvance_force` fills it out to the column being replaced.
     let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
     unsafe { coladvance_force(endcol + 1) };
-    cur_win().w_cursor.col -= virtcols + 1;
+    Win::current().w_cursor.col -= virtcols + 1;
     while virtcols >= 0 {
         if utf_char2len(c) > 1 {
             unsafe { replace_character(c) };
         } else {
-            unsafe { pbyte(cur_win().w_cursor, c) };
+            unsafe { pbyte(Win::current().w_cursor, c) };
         }
-        if unsafe { inc(&mut cur_win().w_cursor) } == -1 {
+        if unsafe { inc(&mut Win::current().w_cursor) } == -1 {
             break;
         }
         virtcols -= 1;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

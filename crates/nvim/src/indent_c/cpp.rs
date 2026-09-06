@@ -167,7 +167,7 @@ pub(crate) unsafe fn cin_is_cpp_extern_c(s: *const c_char) -> bool {
 /// # Safety
 /// Reads the cursor and the buffer; may unlock the current line.
 pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> bool {
-    let mut lnum = cur_win().w_cursor.lnum;
+    let mut lnum = Win::current().w_cursor.lnum;
     // SAFETY: the cursor is on a line of the current buffer.
     let mut line = get_cursor_line_ptr().cast_const();
 
@@ -244,7 +244,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> boo
     loop {
         // SAFETY: `s` points inside a NUL-terminated line.
         if unsafe { *s } == 0 {
-            if lnum == cur_win().w_cursor.lnum {
+            if lnum == Win::current().w_cursor.lnum {
                 break;
             }
             lnum += 1; // continue into the cursor's line
@@ -338,7 +338,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> boo
             }
 
             // When the line ends in a comma, do not align with it.
-            if lnum == cur_win().w_cursor.lnum
+            if lnum == Win::current().w_cursor.lnum
                 // SAFETY: `s.add(1)` is at worst the line's NUL, which is all
                 // `cin_nocode` asks for.
                 && unsafe { c == b',' && cin_nocode(s.add(1)) }
@@ -373,7 +373,7 @@ pub(crate) unsafe fn get_baseclass_amount(col: c_int) -> c_int {
         // upstream has it.
         let opening = unsafe {
             find_last_paren(get_cursor_line_ptr(), b'(', b')')
-                .then(|| find_match_paren(cur_buf().b_ind_maxparen))
+                .then(|| find_match_paren(Buf::current().b_ind_maxparen))
                 .flatten()
         };
         if let Some(trypos) = opening {
@@ -382,26 +382,16 @@ pub(crate) unsafe fn get_baseclass_amount(col: c_int) -> c_int {
         }
         // SAFETY: the cursor's line is NUL-terminated.
         if !unsafe { cin_ends_in(get_cursor_line_ptr(), b",") } {
-            amount += cur_buf().b_ind_cpp_baseclass;
+            amount += Buf::current().b_ind_cpp_baseclass;
         }
         amount
     } else {
-        let mut win = cur_win();
+        let mut win = Win::current();
         win.w_cursor.col = col;
         win.vcol(win.cursor())
     };
-    if amount < cur_buf().b_ind_cpp_baseclass {
-        amount = cur_buf().b_ind_cpp_baseclass;
+    if amount < Buf::current().b_ind_cpp_baseclass {
+        amount = Buf::current().b_ind_cpp_baseclass;
     }
     amount
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

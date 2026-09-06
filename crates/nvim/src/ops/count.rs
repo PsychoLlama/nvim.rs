@@ -129,7 +129,7 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
 
     // SAFETY: `report` is `IOSIZE` bytes and every write to it is bounded by
     // that; the message strings are the editor's own.
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if dict.is_null() {
             msg(gettext(no_lines_msg), 0);
             return;
@@ -177,10 +177,10 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
 ///
 /// `sel` must be the current window's selection.
 fn measure_selection(sel: VisualSelection) -> Selection {
-    let (mut min, mut max) = if lt(sel.anchor, cur_win().w_cursor) {
-        (sel.anchor, cur_win().w_cursor)
+    let (mut min, mut max) = if lt(sel.anchor, Win::current().w_cursor) {
+        (sel.anchor, Win::current().w_cursor)
     } else {
-        (cur_win().w_cursor, sel.anchor)
+        (Win::current().w_cursor, sel.anchor)
     };
     if sel_exclusive() && max.col > 0 {
         max.col -= 1;
@@ -190,21 +190,21 @@ fn measure_selection(sel: VisualSelection) -> Selection {
     if sel.mode.is_block() {
         // 'showbreak' would move the columns `getvcols` answers.
         let saved_sbr = p_sbr.get();
-        let saved_w_sbr = cur_win().w_onebuf_opt.wo_sbr;
+        let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
         p_sbr.set(empty_option());
-        cur_win().w_onebuf_opt.wo_sbr = empty_option();
+        Win::current().w_onebuf_opt.wo_sbr = empty_option();
 
         oparg.is_visual = true;
         oparg.motion_type = kMTBlockWise;
         oparg.op_type = OpType::Nop;
         // SAFETY: a live window and two live positions in its buffer.
         let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
-        unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, sv, ev) };
+        unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, sv, ev) };
 
         p_sbr.set(saved_sbr);
-        cur_win().w_onebuf_opt.wo_sbr = saved_w_sbr;
+        Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
 
-        if cur_win().w_curswant == MAXCOL {
+        if Win::current().w_curswant == MAXCOL {
             // `$`: the block has no right edge.
             oparg.end_vcol = MAXCOL;
         }
@@ -231,7 +231,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
 fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -> bool {
     // `lnum` walks the buffer's own line count, so every line the walk asks
     // for is one of it.
-    let eol_size = if get_fileformat(cur_buf()) == EOL_DOS {
+    let eol_size = if get_fileformat(Buf::current()) == EOL_DOS {
         2
     } else {
         1
@@ -239,7 +239,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     let mut bd = BlockDef::ZERO;
     let mut last_check: VarNumber = 100_000;
 
-    for lnum in 1..=cur_buf().line_count() {
+    for lnum in 1..=Buf::current().line_count() {
         if counts.bytes > last_check {
             os_breakcheck();
             if got_int.get() {
@@ -252,12 +252,12 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
             if lnum >= sel.min.lnum && lnum <= sel.max.lnum {
                 count_selected_line(counts, sel, &mut bd, lnum, eol_size);
             }
-        } else if lnum == cur_win().w_cursor.lnum {
+        } else if lnum == Win::current().w_cursor.lnum {
             // Outside Visual mode the `_cursor` totals are the running
             // ones up to this line, plus this line up to the cursor.
             counts.words_cursor += counts.words;
             counts.chars_cursor += counts.chars;
-            let upto = VarNumber::from(cur_win().w_cursor.col) + 1;
+            let upto = VarNumber::from(Win::current().w_cursor.col) + 1;
             let PosCounts {
                 words_cursor: wc,
                 chars_cursor: cc,
@@ -275,7 +275,9 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     }
 
     // The last line has no EOL, so it was counted one byte too long.
-    if cur_buf().b_p_eol == 0 && (cur_buf().b_p_bin != 0 || cur_buf().b_p_fixeol == 0) {
+    if Buf::current().b_p_eol == 0
+        && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
+    {
         counts.bytes -= VarNumber::from(eol_size);
     }
     true
@@ -296,7 +298,7 @@ fn count_selected_line(
     let mut s: *mut c_char = ::core::ptr::null_mut();
     let mut len = 0;
     if sel.mode.is_block() {
-        virtual_op.set(Some(virtual_active(cur_win())));
+        virtual_op.set(Some(virtual_active(Win::current())));
         unsafe { block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false) };
         virtual_op.set(None);
         s = bd.textstart;
@@ -326,9 +328,9 @@ fn count_selected_line(
     let taken = unsafe { line_count_info(s, wc, cc, VarNumber::from(len), eol_size) };
     counts.bytes_cursor += taken;
     // The last line has no EOL, and the selection reaches its end.
-    if lnum == cur_buf().line_count()
-        && cur_buf().b_p_eol == 0
-        && (cur_buf().b_p_bin != 0 || cur_buf().b_p_fixeol == 0)
+    if lnum == Buf::current().line_count()
+        && Buf::current().b_p_eol == 0
+        && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
         && (unsafe { cstr::bytes_at(s) }.len() as c_int) < len
     {
         counts.bytes_cursor -= VarNumber::from(eol_size);
@@ -360,7 +362,7 @@ fn report_counts(
     let (n1, b1) = (buf1.len(), buf1.as_mut_ptr());
     let n = IOSIZE as size_t;
     let out = out.as_mut_ptr();
-    let lines = cur_buf().line_count() as int64_t;
+    let lines = Buf::current().line_count() as int64_t;
 
     // SAFETY: `out` is `IOSIZE` bytes and `buf1`/`buf2` are sized beside the
     // calls that fill them; the formats are this file's own literals, whose
@@ -370,10 +372,13 @@ fn report_counts(
     let Some(sel) = selection else {
         let mut buf2: [c_char; 40] = [0; 40];
         let (n2, b2) = (buf2.len(), buf2.as_mut_ptr());
-        let lnum = cur_win().w_cursor.lnum as int64_t;
-        let (col, virtcol) = (cur_win().w_cursor.col + 1, cur_win().w_virtcol + 1);
+        let lnum = Win::current().w_cursor.lnum as int64_t;
+        let (col, virtcol) = (
+            Win::current().w_cursor.col + 1,
+            Win::current().w_virtcol + 1,
+        );
         let p = get_cursor_line_ptr();
-        validate_virtcol(cur_win());
+        validate_virtcol(Win::current());
         unsafe { col_print(b1, n1, col, virtcol) };
         unsafe { col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p)) };
         if same_as_bytes {
@@ -394,14 +399,14 @@ fn report_counts(
     };
 
     // A blockwise selection with a right edge also reports its width.
-    if sel.mode.is_block() && cur_win().w_curswant < MAXCOL {
+    if sel.mode.is_block() && Win::current().w_curswant < MAXCOL {
         let mut min = sel.min;
         let mut max = sel.max;
         // Both vcols are `c_int`, so the difference cannot overflow an
         // `int64_t` (upstream computes it under STRICT_SUB and aborts).
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
         let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
-        unsafe { getvcols(cur_win(), &raw mut min, &raw mut max, minc, maxc) };
+        unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, minc, maxc) };
         let cols_fmt = gettext(c"%ld Cols; ").as_ptr();
         unsafe { vim_snprintf(b1, n1, cols_fmt, cols) };
     } else {
@@ -497,14 +502,4 @@ pub fn get_region_bytecount(
         return bytes;
     }
     bytes + end_col as BCount
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

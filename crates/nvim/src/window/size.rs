@@ -80,7 +80,7 @@ pub(crate) fn comp_pos(topfrp: FrameRef, row: &mut c_int, col: &mut c_int) {
 }
 
 pub fn win_setheight(height: c_int) {
-    setheight_win(height, cur_win());
+    setheight_win(height, Win::current());
 }
 
 pub unsafe fn win_setheight_win(height: c_int, win: *mut Window) {
@@ -252,7 +252,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
 }
 
 pub fn win_setwidth(width: c_int) {
-    setwidth_win(width, cur_win());
+    setwidth_win(width, Win::current());
 }
 
 pub unsafe fn win_setwidth_win(width: c_int, window: *mut Window) {

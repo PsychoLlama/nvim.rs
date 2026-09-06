@@ -100,13 +100,13 @@ pub(crate) fn set_option_sctx(
     // the scope index the table gives is in range of the per-scope array.
     if option_has_scope(opt_idx, kOptScopeBuf) {
         let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
-        cur_buf().b_p_script_ctx[at] = script_ctx;
+        Buf::current().b_p_script_ctx[at] = script_ctx;
     } else if option_has_scope(opt_idx, kOptScopeWin) {
         let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
-        cur_win().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
+        Win::current().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
         if both {
             // A bare `:set` also writes the "all buffers" copy.
-            cur_win().w_allbuf_opt.wo_script_ctx[at] = script_ctx;
+            Win::current().w_allbuf_opt.wo_script_ctx[at] = script_ctx;
         }
     }
 }
@@ -492,18 +492,18 @@ pub(crate) unsafe fn did_set_option(
     match opt_idx {
         kOptMouse => setmouse(),
         // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-        kOptFormatlistpat if cur_win().w_briopt_list != 0 => {
+        kOptFormatlistpat if Win::current().w_briopt_list != 0 => {
             unsafe { redraw_all_later(UPD_NOT_VALID) };
         }
         kOptWinbar => set_winbar(true),
         _ => {}
     }
 
-    if cur_win().w_curswant != MAXCOL as c_int
+    if Win::current().w_curswant != MAXCOL as c_int
         && opt.flags & (kOptFlagCurswant | kOptFlagRedrAll) as uint32_t != 0
         && opt.flags & kOptFlagHLOnly as uint32_t == 0
     {
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     }
 
     check_redraw(opt.flags);
@@ -804,14 +804,4 @@ pub(crate) fn didset_options_sctx(opt_flags: OptionSetFlags, opts: &[OptIndex]) 
     for &opt_idx in opts {
         set_option_sctx(opt_idx, opt_flags, current_sctx.get());
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

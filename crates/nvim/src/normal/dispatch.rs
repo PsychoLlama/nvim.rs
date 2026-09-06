@@ -338,7 +338,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
         }
         // A language-mapped argument is read *with* mappings on, which is
         // the whole point of 'iminsert' being lmap.
-        let langmap_active = lang && cur_buf().b_p_iminsert == B_IMODE_LMAP as OptInt;
+        let langmap_active = lang && Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt;
         let mapped = langmap_active.then(Allow::mapping_with_codes);
         if langmap_active {
             State.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });
@@ -527,11 +527,11 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
     unsafe { mb_check_adjust_col(Win::current_raw().cast::<c_void>()) };
 
-    if cur_win().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
+    if Win::current().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
         validate_cursor(Win::current());
         unsafe { do_check_scrollbind(true) };
     }
-    if cur_win().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
+    if Win::current().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
         validate_cursor(Win::current());
         unsafe { do_check_cursorbind() };
     }
@@ -575,7 +575,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     let mut ns = unsafe { NormalStateRef::new(s) };
     ns.command_finished = false;
     ns.ctrl_w = false;
-    ns.old_col = cur_win().w_curswant as c_int;
+    ns.old_col = Win::current().w_curswant as c_int;
     ns.c = key;
     langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 
@@ -657,7 +657,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     {
         ns.command_finished = true;
     } else {
-        if cur_win().w_onebuf_opt.wo_rl != 0
+        if Win::current().w_onebuf_opt.wo_rl != 0
             && KeyTyped.get()
             && KeyStuffed.get() == 0
             && nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_RL != 0
@@ -683,7 +683,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                 msg_didout.set(false);
                 msg_col.set(0);
             }
-            ns.old_pos = cur_win().w_cursor;
+            ns.old_pos = Win::current().w_cursor;
 
             // 'keymodel' startsel: a shifted special key starts a
             // selection and then acts as its unshifted self.
@@ -886,14 +886,4 @@ pub(crate) fn may_clear_cmdline() {
     } else {
         clear_showcmd();
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

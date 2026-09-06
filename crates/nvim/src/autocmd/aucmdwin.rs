@@ -153,7 +153,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         unsafe { (*entry(auc_idx)).auc_win_used = true };
     }
 
-    unsafe { (*aco).save_curwin_handle = cur_win().handle };
+    unsafe { (*aco).save_curwin_handle = Win::current().handle };
     unsafe {
         (*aco).save_prevwin_handle = if prevwin.get().is_null() {
             0
@@ -162,7 +162,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         }
     };
     if buf_is_prompt(current_buf()) {
-        unsafe { (*aco).save_prompt_insert = cur_buf().b_prompt_insert };
+        unsafe { (*aco).save_prompt_insert = Buf::current().b_prompt_insert };
     }
 
     if let Some(win) = win {
@@ -216,7 +216,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
 
     // SAFETY: the caller's promise -- a live buffer.
     unsafe { Buf::new(buffer) }.make_current();
-    unsafe { (*aco).new_curwin_handle = cur_win().handle };
+    unsafe { (*aco).new_curwin_handle = Win::current().handle };
     unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 
     unsafe { (*aco).save_visual_active = visual_active() };
@@ -253,13 +253,13 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             }
         }
 
-        cur_buf().b_nwindows -= 1;
+        Buf::current().b_nwindows -= 1;
         unsafe { win_remove(Win::current_raw(), ::core::ptr::null_mut()) };
         // The autocommand window, held as an address across its own
         // deregistration: it is still current and still perfectly alive, but
         // `Win::current()` answers from the registry and would say there is
         // no current window between here and the `make_current` below.
-        let mut auc = cur_win();
+        let mut auc = Win::current();
         // The window is given back, not freed, so it goes out of the
         // registry rather than being forgotten by a free path.
         forget_window(auc.handle);
@@ -289,7 +289,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         }
         unsafe { entering_window(Win::current_raw()) };
         if buf_is_prompt(current_buf()) {
-            cur_buf().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
+            Buf::current().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
         }
 
         prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }));
@@ -311,9 +311,9 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         // The buffer's contents may have changed under the cursor.
         set_visual_active(unsafe { (*aco).save_visual_active });
         check_cursor(Win::current());
-        if cur_win().w_topline > cur_buf().b_ml.ml_line_count {
-            cur_win().w_topline = cur_buf().b_ml.ml_line_count;
-            cur_win().w_topfill = 0;
+        if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
+            Win::current().w_topline = Buf::current().b_ml.ml_line_count;
+            Win::current().w_topfill = 0;
         }
     } else {
         // Restore `curwin` by handle: a window may have been closed and
@@ -326,18 +326,18 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             // and we are still the same window with a valid buffer.
             // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
             let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
-            if cur_win().handle == unsafe { (*aco).new_curwin_handle }
+            if Win::current().handle == unsafe { (*aco).new_curwin_handle }
                 && Buf::current_raw() != new_curbuf.raw()
                 && let Some(mut new_curbuf) = new_curbuf.get()
                 && !new_curbuf.b_ml.ml_mfp.is_null()
             {
-                if cur_win().w_s == unsafe { &raw mut (*Buf::current_raw()).b_s } {
-                    cur_win().w_s = &raw mut new_curbuf.b_s;
+                if Win::current().w_s == unsafe { &raw mut (*Buf::current_raw()).b_s } {
+                    Win::current().w_s = &raw mut new_curbuf.b_s;
                 }
-                cur_buf().b_nwindows -= 1;
+                Buf::current().b_nwindows -= 1;
                 new_curbuf.make_current();
-                cur_win().w_buffer = new_curbuf.raw();
-                cur_buf().b_nwindows += 1;
+                Win::current().w_buffer = new_curbuf.raw();
+                Buf::current().b_nwindows += 1;
             }
 
             save_curwin.make_current();
@@ -357,14 +357,4 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     if visual_active() {
         with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

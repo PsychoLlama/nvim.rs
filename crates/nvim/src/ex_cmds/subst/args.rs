@@ -23,7 +23,6 @@ use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
 use crate::ex_cmds::Owned;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::check_nextcmd;
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
@@ -39,6 +38,8 @@ use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
 use crate::types::{AdditionalData, ExArg, LineNr, NUL, RegMMatch, SubReplacementString, size_t};
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -132,7 +133,7 @@ unsafe fn read_pattern(
             which_pat,
             has_second_delim: false,
             // SAFETY: the current window is live.
-            endcolumn: cur_win().w_curswant == MAXCOL as c_int,
+            endcolumn: Win::current().w_curswant == MAXCOL as c_int,
             cmd,
         });
     }
@@ -249,7 +250,7 @@ unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     }
     args.line1 = args.line2;
     args.line2 += i as LineNr - 1 as LineNr;
-    args.line2 = args.line2.min(cur_buf().b_ml.ml_line_count);
+    args.line2 = args.line2.min(Buf::current().b_ml.ml_line_count);
     true
 }
 
@@ -331,7 +332,7 @@ pub(super) unsafe fn parse_sub(
     let sub = sub?;
 
     // Substitution is not allowed in a non-'modifiable' buffer.
-    if !subflags.with(|flags| flags.do_count) && cur_buf().b_p_ma == 0 {
+    if !subflags.with(|flags| flags.do_count) && Buf::current().b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return None;
     }

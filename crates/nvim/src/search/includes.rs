@@ -214,7 +214,7 @@ unsafe fn compile_patterns(
     }
 
     if kind == FIND_DEFINE {
-        let buf_def = cur_buf().b_p_def;
+        let buf_def = Buf::current().b_p_def;
         let def = if unsafe { *buf_def } as c_int == NUL {
             p_def.get()
         } else {
@@ -235,7 +235,7 @@ unsafe fn compile_patterns(
 /// # Safety
 /// The current buffer must be valid.
 unsafe fn include_option() -> *mut c_char {
-    let buf_inc = cur_buf().b_p_inc;
+    let buf_inc = Buf::current().b_p_inc;
     if unsafe { *buf_inc } as c_int == NUL {
         p_inc.get()
     } else {
@@ -310,7 +310,7 @@ impl Walk {
             self.line = self.buf;
             self.files.close_innermost();
             self.curr_fname = if self.files.depth() == -1 {
-                cur_buf().b_fname
+                Buf::current().b_fname
             } else {
                 self.files.innermost().name.as_ptr()
             };
@@ -385,8 +385,8 @@ unsafe fn handle_include(
 ) {
     let mut progress = [0 as c_char; IOSIZE as usize];
     // A relative name is resolved against the file the line is in.
-    let p_fname = if walk.curr_fname == cur_buf().b_fname {
-        cur_buf().b_ffname
+    let p_fname = if walk.curr_fname == Buf::current().b_fname {
+        Buf::current().b_ffname
     } else {
         walk.curr_fname
     };
@@ -587,7 +587,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
     // `IObuff`, which the completion it feeds writes again.
     let mut joined = [0 as c_char; IOSIZE as usize];
     let mut cont_s_ipos = false;
-    if walk.files.depth() == -1 && walk.lnum == cur_win().w_cursor.lnum {
+    if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum {
         return After::Stop;
     }
     walk.found = true;
@@ -662,7 +662,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
         }
     }
 
-    let from_file = if walk.curr_fname == cur_buf().b_fname {
+    let from_file = if walk.curr_fname == Buf::current().b_fname {
         ptr::null_mut()
     } else {
         walk.curr_fname
@@ -727,7 +727,7 @@ unsafe fn goto_match(
 ) -> After {
     walk.found = true;
     let mut curwin_save: *mut Window = ptr::null_mut();
-    if walk.files.depth() == -1 && walk.lnum == cur_win().w_cursor.lnum && tagpreview == 0 {
+    if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum && tagpreview == 0 {
         emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {
         let did_show = walk.did_show;
@@ -747,8 +747,8 @@ unsafe fn goto_match(
             }
             // RESET_BINDING: a new window does not inherit
             // 'scrollbind'/'cursorbind'.
-            cur_win().w_onebuf_opt.wo_scb = 0;
-            cur_win().w_onebuf_opt.wo_crb = 0;
+            Win::current().w_onebuf_opt.wo_scb = 0;
+            Win::current().w_onebuf_opt.wo_crb = 0;
         }
         if walk.files.depth() == -1 {
             // The match is in the current file.
@@ -768,7 +768,7 @@ unsafe fn goto_match(
             } else {
                 setpcmark();
             }
-            cur_win().w_cursor.lnum = walk.lnum;
+            Win::current().w_cursor.lnum = walk.lnum;
             check_cursor(Win::current());
         } else {
             let file = walk.files.innermost();
@@ -778,12 +778,12 @@ unsafe fn goto_match(
             }
             // Autocommands may have changed the line number; that is
             // not wanted here.
-            cur_win().w_cursor.lnum = flnum;
+            Win::current().w_cursor.lnum = flnum;
         }
     }
     if action != ACTION_SHOW {
-        cur_win().w_cursor.col = unsafe { startp.offset_from(walk.line) } as ColNr;
-        cur_win().w_set_curswant = true;
+        Win::current().w_cursor.col = unsafe { startp.offset_from(walk.line) } as ColNr;
+        Win::current().w_set_curswant = true;
     }
 
     if tagpreview != 0 && Win::current_raw() != curwin_save && win_valid(curwin_save) {
@@ -834,7 +834,7 @@ pub unsafe fn find_pattern_in_path(
     let inc_opt = unsafe { include_option() };
 
     let mut file_line = vec![0 as c_char; LSIZE];
-    let end_lnum = end_lnum.min(cur_buf().b_ml.ml_line_count);
+    let end_lnum = end_lnum.min(Buf::current().b_ml.ml_line_count);
     // Do at least one line.
     let lnum = start_lnum.min(end_lnum);
     let mut walk = Walk {
@@ -844,7 +844,7 @@ pub unsafe fn find_pattern_in_path(
         end_lnum,
         already: false,
         files: FileStack::new(),
-        curr_fname: cur_buf().b_fname,
+        curr_fname: Buf::current().b_fname,
         prev_fname: ptr::null_mut(),
         depth_displayed: -1,
         did_show: false,
@@ -943,14 +943,4 @@ pub unsafe fn find_pattern_in_path(
     if action == ACTION_SHOW || action == ACTION_SHOW_ALL {
         unsafe { msg_end() };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

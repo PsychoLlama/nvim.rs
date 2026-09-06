@@ -156,11 +156,11 @@ fn wargcount(window: Win) -> c_int {
 
 /// `ARGLIST[n]` and `ARGCOUNT`: the current window's argument list.
 fn arg(n: c_int) -> *mut ArgEntry {
-    warg(cur_win(), n)
+    warg(Win::current(), n)
 }
 
 fn argcount() -> c_int {
-    wargcount(cur_win())
+    wargcount(Win::current())
 }
 
 /// The current window's argument list, for the handful of places that
@@ -171,7 +171,7 @@ fn argcount() -> c_int {
 /// The borrow must not outlive a call that can replace the window's list.
 unsafe fn cur_arglist<'a>() -> &'a mut Vec<ArgEntry> {
     // SAFETY: the current window always has an argument list.
-    unsafe { &mut (*win_alist(cur_win())).al_ga }
+    unsafe { &mut (*win_alist(Win::current())).al_ga }
 }
 
 /// `curwin->w_arg_idx`: which argument the current window is on. It is not
@@ -179,12 +179,12 @@ unsafe fn cur_arglist<'a>() -> &'a mut Vec<ArgEntry> {
 /// deletion, which is what [`check_arg_idx`] exists to notice.
 fn cur_arg_idx() -> c_int {
     // SAFETY: curwin is always valid.
-    cur_win().w_arg_idx
+    Win::current().w_arg_idx
 }
 
 fn set_cur_arg_idx(idx: c_int) {
     // SAFETY: curwin is always valid.
-    cur_win().w_arg_idx = idx;
+    Win::current().w_arg_idx = idx;
 }
 
 /// `alist_name(ARGLIST + n)`: the n-th argument's file name.
@@ -280,7 +280,7 @@ fn alist_new() {
     max_alist_id.set(max_alist_id.get() + 1);
     // The new list starts out owned by the current window alone; it is
     // released, and its box reclaimed, by `alist_unlink`.
-    cur_win().w_alist = Box::into_raw(Box::new(ArgList {
+    Win::current().w_alist = Box::into_raw(Box::new(ArgList {
         al_ga: Vec::new(),
         al_refcount: Refcount::ONE,
         id: max_alist_id.get(),
@@ -360,7 +360,7 @@ pub unsafe fn alist_add(al: *mut ArgList, fname: *mut c_char, set_fnum: c_int) {
     if arglist_is_locked() {
         return;
     }
-    let mut wp = cur_win();
+    let mut wp = Win::current();
     ARGLIST_LOCKED.set(true);
     wp.w_locked = true;
     // SAFETY: caller contract -- `fname` is NUL-terminated, and the list
@@ -484,7 +484,7 @@ pub unsafe fn get_arglist_exp(
 /// Safe: the tab page and window lists are the editor's own, and
 /// `check_arg_idx` only reads and writes `w_arg_idx`.
 fn alist_check_arg_idx() {
-    let alist = win_alist(cur_win());
+    let alist = win_alist(Win::current());
     for win in tab_windows().filter(|win| win.w_alist == alist) {
         check_arg_idx(win);
     }
@@ -502,7 +502,7 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
     if arglist_is_locked() {
         return;
     }
-    let mut wp = cur_win();
+    let mut wp = Win::current();
     let flags = BLN_LISTED as c_int | flag_if(will_edit, BLN_CURBUF);
     let after = after.clamp(0, argcount());
     ARGLIST_LOCKED.set(true);
@@ -645,10 +645,10 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
     // expansion below.
     // ":argadd" with no argument adds the current file.
     if op == ArgListOp::Add && unsafe { *str } as c_int == NUL {
-        if cur_buf().b_ffname.is_null() {
+        if Buf::current().b_ffname.is_null() {
             return false;
         }
-        str = cur_buf().b_fname;
+        str = Buf::current().b_fname;
         arg_escaped = false;
     }
     // Collect all the file name arguments.
@@ -678,7 +678,7 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
             unsafe { alist_add_list(exp_count, exp_files, after, will_edit) };
             unsafe { xfree(exp_files as *mut c_void) };
         } else {
-            let al2 = win_alist(cur_win());
+            let al2 = win_alist(Win::current());
             let fnum_list2 = ptr::null_mut();
             unsafe { alist_set(al2, exp_count, exp_files, will_edit, fnum_list2, 0) };
         }
@@ -771,14 +771,4 @@ pub unsafe fn alist_name(aep: *mut ArgEntry) -> *mut c_char {
         None => unsafe { (*aep).ae_fname },
         Some(bp) => bp.b_fname,
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -85,7 +85,7 @@ pub unsafe fn replace_makeprg(
         return arg;
     }
 
-    let buf = cur_buf();
+    let buf = Buf::current();
     let program: *const c_char = if is_grep {
         if byte(buf.b_p_gp) == NUL {
             p_gp.get()
@@ -444,11 +444,11 @@ pub unsafe fn eval_vars(
     } else {
         match spec_idx {
             SPEC_PERC => {
-                if cur_buf().b_fname.is_null() {
+                if Buf::current().b_fname.is_null() {
                     result = c"".as_ptr() as *mut c_char;
                     valid = 0;
                 } else {
-                    result = cur_buf().b_fname;
+                    result = Buf::current().b_fname;
                     tilde_file = equals(result, b"~");
                 }
             }
@@ -741,11 +741,6 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
         p = unsafe { newres.add(used as usize) };
     }
     result
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 /// `strncmp()`'s prefix test as checked code.

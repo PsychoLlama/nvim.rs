@@ -279,22 +279,22 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             equal(None, false, dir as c_int);
         }
         // increase, decrease or set the current window's height
-        Err(NotAKey(TALLER)) => setheight_win(cur_win().w_height + prenum1, cur_win()),
-        Err(NotAKey(SHORTER)) => setheight_win(cur_win().w_height - prenum1, cur_win()),
+        Err(NotAKey(TALLER)) => setheight_win(Win::current().w_height + prenum1, Win::current()),
+        Err(NotAKey(SHORTER)) => setheight_win(Win::current().w_height - prenum1, Win::current()),
         Err(NotAKey(SET_HEIGHT | Ctrl__)) => {
             let height = if prenum != 0 {
                 prenum
             } else {
                 Rows.get() - min_set_ch.get() as c_int
             };
-            setheight_win(height, cur_win());
+            setheight_win(height, Win::current());
         }
         // increase, decrease or set the current window's width
-        Err(NotAKey(WIDER)) => setwidth_win(cur_win().w_width + prenum1, cur_win()),
-        Err(NotAKey(NARROWER)) => setwidth_win(cur_win().w_width - prenum1, cur_win()),
+        Err(NotAKey(WIDER)) => setwidth_win(Win::current().w_width + prenum1, Win::current()),
+        Err(NotAKey(NARROWER)) => setwidth_win(Win::current().w_width - prenum1, Win::current()),
         Err(NotAKey(SET_WIDTH)) => {
             let width = if prenum != 0 { prenum } else { Columns.get() };
-            setwidth_win(width, cur_win());
+            setwidth_win(width, Win::current());
         }
         // jump to the tag under the cursor in a new window, '}' putting it in
         // the preview window
@@ -330,7 +330,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // quickfix window only: view the result under the cursor in a new split
         Ok(Key::Kenter) | Err(NotAKey(CAR)) => {
-            if buf_is_quickfix(Some(cur_buf())) {
+            if buf_is_quickfix(Some(Buf::current())) {
                 view_quickfix_result();
             }
         }
@@ -347,7 +347,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
 /// CTRL-W s / CTRL-W v. Splitting the quickfix window opens a new buffer in
 /// it rather than replicating the quickfix buffer.
 fn split_or_new(nchar: c_int, prenum: c_int, flags: c_int) {
-    if buf_is_quickfix(Some(cur_buf())) {
+    if buf_is_quickfix(Some(Buf::current())) {
         new_window(nchar, prenum);
     } else {
         let _ = split(prenum, flags);
@@ -358,7 +358,7 @@ fn split_or_new(nchar: c_int, prenum: c_int, flags: c_int) {
 /// `prenum` when there is a count.
 fn split_alternate(prenum: c_int) {
     let fnum = if prenum == 0 {
-        cur_win().w_alt_fnum
+        Win::current().w_alt_fnum
     } else {
         prenum
     };
@@ -452,7 +452,7 @@ fn nth_focusable(prenum: c_int) -> Win {
 
 /// The window before the current one, wrapping around to the last.
 fn prev_focusable() -> Win {
-    let mut cur = Some(cur_win().prev().unwrap_or_else(last_win));
+    let mut cur = Some(Win::current().prev().unwrap_or_else(last_win));
     while let Some(wp) = cur.filter(|wp| !focusable(*wp)) {
         cur = wp.prev();
     }
@@ -461,7 +461,7 @@ fn prev_focusable() -> Win {
 
 /// The window after the current one, wrapping around to the first.
 fn next_focusable() -> Win {
-    let mut cur = cur_win().next();
+    let mut cur = Win::current().next();
     while let Some(wp) = cur.filter(|wp| !focusable(*wp)) {
         cur = wp.next();
     }
@@ -471,7 +471,7 @@ fn next_focusable() -> Win {
 /// CTRL-W T -- give the current window a tab page of its own: make the new tab
 /// page first, then go back and close the window here.
 fn move_to_new_tabpage(prenum: c_int) {
-    if only_window(cur_win(), None) {
+    if only_window(Win::current(), None) {
         only_one_message();
         return;
     }
@@ -486,18 +486,18 @@ fn move_to_new_tabpage(prenum: c_int) {
     let newtab = TabPage::current_raw();
     goto_tab(oldtab, true, true);
     if Win::current_raw() == wp {
-        close(cur_win(), false, false);
+        close(Win::current(), false, false);
     }
     if let Some(newtab) = valid_tab(newtab) {
         goto_tab(newtab, true, true);
-        fire(AutoEvent::TabNewEntered, cur_buf());
+        fire(AutoEvent::TabNewEntered, Buf::current());
     }
 }
 
 /// CTRL-W H / J / K / L -- move the window to the very left, bottom, top or
 /// right.
 fn move_to_edge(nchar: c_int, prenum: c_int) {
-    if only_window(cur_win(), None) {
+    if only_window(Win::current(), None) {
         beep();
         return;
     }
@@ -509,7 +509,7 @@ fn move_to_edge(nchar: c_int, prenum: c_int) {
         } else {
             WSP_BOT as c_int
         };
-    let _ = splitmove(cur_win(), prenum, dir);
+    let _ = splitmove(Win::current(), prenum, dir);
 }
 
 /// The height `'previewheight'` gives the preview window, or the count.
@@ -557,21 +557,21 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
         wp = find_buffer_by_name(ptr).and_then(swbuf_goto_win);
     }
     if wp.is_none() && split(0, 0).is_ok() {
-        let mut cur = cur_win();
+        let mut cur = Win::current();
         cur.w_onebuf_opt.wo_scb = 0;
         cur.w_onebuf_opt.wo_crb = 0;
         if edit_file(ptr).is_err() {
             // Failed to open the file: close the window opened for it.
-            close(cur_win(), false, false);
+            close(Win::current(), false, false);
             // SAFETY: upstream assumes both survive the failed edit, which only
             // closed the window the split just above had made.
             unsafe { goto_tab_win(TabPage::new(oldtab), Win::new(oldwin)) };
         } else {
-            wp = Some(cur_win());
+            wp = Some(Win::current());
         }
     }
     if wp.is_some() && nchar == b'F' as c_int && lnum >= 0 as LineNr {
-        let mut cur = cur_win();
+        let mut cur = Win::current();
         cur.w_cursor.lnum = lnum;
         revalidate_cursor_lnum(cur);
         first_non_blank();
@@ -591,7 +591,7 @@ fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
     let pat = dup_bytes(found, len);
     search_path(pat, len, kind, prenum == 0, prenum1);
     free(pat);
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 }
 
 /// CTRL-W g -- read the second letter and dispatch on it.
@@ -612,7 +612,7 @@ fn window_g_command(prenum: c_int, prenum1: c_int, xchar: c_int) {
         TAG_SPLIT | Ctrl_RSB => g_jump_to_tag(prenum, xchar),
         // CTRL-W gf / gF: "gf" or "gF" in a new tab page
         FILE | FILE_LINE => {
-            cmdmod.with_mut(|m| m.cmod_tab = tab_index(cur_tab()) + 1);
+            cmdmod.with_mut(|m| m.cmod_tab = tab_index(TabPage::current()) + 1);
             goto_file(xchar, prenum1);
         }
         // CTRL-W gt / gT / g<Tab>: the next, previous or last used tab page
@@ -639,13 +639,13 @@ fn g_jump_to_tag(prenum: c_int, xchar: c_int) {
 
 /// CTRL-W ge -- hand the current window to the UI as an external window.
 fn detach_window() {
-    if cur_win().w_floating || !ui_has(kUIMultigrid) {
+    if Win::current().w_floating || !ui_has(kUIMultigrid) {
         beep();
         return;
     }
     let config = WinConfig {
-        width: cur_win().w_width,
-        height: cur_win().w_height,
+        width: Win::current().w_width,
+        height: Win::current().w_height,
         external: true,
         ..WIN_CONFIG_INIT
     };

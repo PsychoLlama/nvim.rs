@@ -394,7 +394,7 @@ pub unsafe fn autocmd_register(
             || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
         {
             last_cursormoved_win.set(Win::current_raw());
-            last_cursormoved.set(cur_win().w_cursor);
+            last_cursormoved.set(Win::current().w_cursor);
         }
         if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
             && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
@@ -621,9 +621,4 @@ unsafe fn arg_autocmd_flag_get(
         unsafe { *cmd_ptr = skipwhite((*cmd_ptr).offset(len as isize)) };
     }
     false
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -58,10 +58,10 @@ pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
     let mut op = unsafe { Op::new(op) };
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
-    bd.is_max = c_int::from(cur_win().w_curswant == MAXCOL);
+    bd.is_max = c_int::from(Win::current().w_curswant == MAXCOL);
 
     // The Visual block is still marked; get rid of it now.
-    cur_win().w_cursor.lnum = op.start.lnum;
+    Win::current().w_cursor.lnum = op.start.lnum;
     // SAFETY: both only touch the current buffer's windows.
     redraw_curbuf_later(UPD_INVERTED);
     let _ = unsafe { update_screen() };
@@ -83,19 +83,19 @@ pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
     }
 
     let t1 = op.start;
-    let start_insert = cur_win().w_cursor;
+    let start_insert = Win::current().w_cursor;
     // SAFETY: Insert mode on the current buffer.
     unsafe { edit(NUL, false, count1) };
 
     // When a TAB was inserted and the characters in front of it were
     // folded into it too, the cursor's column may have been *reduced*.
-    if t1.lnum == cur_buf().b_op_start_orig.lnum && lt(cur_buf().b_op_start_orig, t1) {
-        op.start = cur_buf().b_op_start_orig;
+    if t1.lnum == Buf::current().b_op_start_orig.lnum && lt(Buf::current().b_op_start_orig, t1) {
+        op.start = Buf::current().b_op_start_orig;
     }
 
     // The user moved off the line, or left Insert mode with CTRL-C: there
     // is nothing to replay.
-    if cur_win().w_cursor.lnum != op.start.lnum || got_int.get() {
+    if Win::current().w_cursor.lnum != op.start.lnum || got_int.get() {
         return;
     }
 
@@ -117,12 +117,12 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
     // *window-local* 'virtualedit', so that is what gets overridden.
     // SAFETY: the region's first line is a line of the current buffer, and
     // the cursor is on it.
-    if cur_win().w_cursor.coladd > 0 {
-        let old_ve_flags: c_uint = cur_win().w_onebuf_opt.wo_ve_flags;
+    if Win::current().w_cursor.coladd > 0 {
+        let old_ve_flags: c_uint = Win::current().w_onebuf_opt.wo_ve_flags;
         if u_save_cursor().is_err() {
             return None;
         }
-        cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
+        Win::current().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll as c_uint;
         let wcol = if op.op_type == OpType::Append {
             op.end_vcol + 1
         } else {
@@ -130,9 +130,9 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
         };
         unsafe { coladvance_force(wcol) };
         if op.op_type == OpType::Append {
-            cur_win().w_cursor.col -= 1;
+            Win::current().w_cursor.col -= 1;
         }
-        cur_win().w_onebuf_opt.wo_ve_flags = old_ve_flags;
+        Win::current().w_onebuf_opt.wo_ve_flags = old_ve_flags;
     }
 
     unsafe { block_prep(op.raw(), &raw mut *bd, op.start.lnum, true) };
@@ -153,13 +153,13 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
 fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
     // SAFETY: the cursor is on a line of the current buffer throughout, which
     // is what each of these asks for.
-    if op.motion_type == kMTBlockWise && cur_win().w_cursor.coladd == 0 {
+    if op.motion_type == kMTBlockWise && Win::current().w_cursor.coladd == 0 {
         // To the character right of the block.
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
         while unsafe { *get_cursor_pos_ptr() } as c_int != NUL
-            && cur_win().w_cursor.col < bd.textcol + bd.textlen
+            && Win::current().w_cursor.col < bd.textcol + bd.textlen
         {
-            cur_win().w_cursor.col += 1;
+            Win::current().w_cursor.col += 1;
         }
         if bd.is_short != 0 && bd.is_max == 0 {
             // The first line was too short: pad it out and say so in `bd`.
@@ -172,10 +172,10 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
             bd.textlen += bd.endspaces;
         }
     } else {
-        cur_win().w_cursor = op.end;
+        Win::current().w_cursor = op.end;
         check_cursor_col(Win::current());
         // Works just like `i` on the next character.
-        if unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
+        if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int != NUL
             && op.start_vcol != op.end_vcol
         {
             inc_cursor();
@@ -200,7 +200,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
     // If indenting kicked in the first line has moved -- but only count it
     // when the indent actually grew.
     let ind_post_col = unsafe { getwhitecols_curline() } as ColNr;
-    if cur_buf().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
+    if Buf::current().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
         ind_post_vcol = get_indent();
         bd.start_vcol += ind_post_vcol - pre.ind_pre_vcol;
@@ -209,18 +209,18 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
 
     // The user may have moved the cursor before typing; try to move the
     // block to match. Only when the difference is not the indent's doing.
-    if op.start.lnum == cur_buf().b_op_start_orig.lnum && bd.is_max == 0 && !did_indent {
-        let orig = cur_buf().b_op_start_orig;
+    if op.start.lnum == Buf::current().b_op_start_orig.lnum && bd.is_max == 0 && !did_indent {
+        let orig = Buf::current().b_op_start_orig;
         let t = unsafe { getviscol2(orig.col, orig.coladd) };
-        let orig_at = cur_buf().b_op_start_orig.col + cur_buf().b_op_start_orig.coladd;
+        let orig_at = Buf::current().b_op_start_orig.col + Buf::current().b_op_start_orig.coladd;
         let block_at = op.start.col + op.start.coladd;
 
         if op.op_type == OpType::Insert && block_at != orig_at {
-            op.start.col = cur_buf().b_op_start_orig.col;
+            op.start.col = Buf::current().b_op_start_orig.col;
             pre.pre_textlen -= t - op.start_vcol;
             op.start_vcol = t;
         } else if op.op_type == OpType::Append && block_at >= orig_at {
-            op.start.col = cur_buf().b_op_start_orig.col;
+            op.start.col = Buf::current().b_op_start_orig.col;
             // Back to what `pre_textlen` would have been for an insert.
             pre.pre_textlen += bd.textlen;
             pre.pre_textlen -= t - op.start_vcol;
@@ -297,7 +297,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
             let insert = op.op_type == OpType::Insert;
             unsafe { block_insert(op.raw(), ins_text, n, insert, &raw mut *bd) };
         }
-        cur_win().w_cursor.col = op.start.col;
+        Win::current().w_cursor.col = op.start.col;
         check_cursor(Win::current());
         unsafe { xfree(ins_text as *mut c_void) };
     }
@@ -323,7 +323,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
 
     // Delete the region first. In an empty buffer there is nothing to
     // delete, only undo to prepare.
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if u_save_cursor().is_err() {
             return 0;
         }
@@ -331,8 +331,8 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
         return 0;
     }
 
-    if l > cur_win().w_cursor.col
-        && unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
+    if l > Win::current().w_cursor.col
+        && unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int != NUL
         && !op_virtual()
     {
         inc_cursor();
@@ -343,13 +343,13 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
     let mut pre_indent = 0;
     if op.motion_type == kMTBlockWise {
         // Add the spaces before measuring the line's length.
-        if op_virtual() && (cur_win().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
+        if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
             unsafe { coladvance_force(getviscol()) };
         }
         let firstline = ml_get(op.start.lnum);
         pre_textlen = ml_get_len(op.start.lnum);
         pre_indent = unsafe { getwhitecols(firstline) } as c_int;
-        bd.textcol = cur_win().w_cursor.col;
+        bd.textcol = Win::current().w_cursor.col;
     }
 
     if op.motion_type == kMTLineWise {
@@ -451,7 +451,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
 
     let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
     check_cursor(Win::current());
-    changed_lines(cur_buf(), first, 0, last, 0, true);
+    changed_lines(Buf::current(), first, 0, last, 0, true);
     unsafe { xfree(ins_text as *mut c_void) };
 }
 
@@ -463,8 +463,8 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
 pub unsafe fn adjust_cursor_eol() {
     // SAFETY: the caller's promise -- the cursor is on a line of the current
     // buffer, which is all any of these reads.
-    let cur_ve_flags = get_ve_flags(cur_win());
-    let adj_cursor = cur_win().w_cursor.col > 0
+    let cur_ve_flags = get_ve_flags(Win::current());
+    let adj_cursor = Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL
         && cur_ve_flags & kOptVeFlagOnemore as c_uint == 0
         && cur_ve_flags & kOptVeFlagAll as c_uint == 0
@@ -478,17 +478,7 @@ pub unsafe fn adjust_cursor_eol() {
 
     if cur_ve_flags == kOptVeFlagAll as c_uint {
         // `coladd` becomes the width of that last character.
-        let (scol, ecol) = cur_win().vcol_span(cur_win().cursor());
-        cur_win().w_cursor.coladd = ecol - scol + 1;
+        let (scol, ecol) = Win::current().vcol_span(Win::current().cursor());
+        Win::current().w_cursor.coladd = ecol - scol + 1;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

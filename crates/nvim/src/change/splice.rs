@@ -133,7 +133,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         topline_offset: MAXLNUM as LineNr,
         skipcol: 0,
     };
-    let win = cur_win();
+    let win = Win::current();
     if win.w_buffer == buffer.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
         let at = win.w_cursor;
         // SAFETY: the current window is live.
@@ -215,8 +215,8 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.
     let len = buffer.b_changelistlen;
-    if cur_win().w_buffer == buffer.raw() {
-        cur_win().w_changelistidx = len;
+    if Win::current().w_buffer == buffer.raw() {
+        Win::current().w_changelistidx = len;
     }
 }
 
@@ -317,7 +317,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
             && win.w_onebuf_opt.wo_diff != 0
             && unsafe { diff_internal() } != 0;
         if diffed {
-            cur_tab().tp_diff_update = 1;
+            TabPage::current().tp_diff_update = 1;
             // SAFETY: a line of the current buffer.
             unsafe { diff_update_line(lnum) };
         }
@@ -327,7 +327,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
         record_change_mark(buffer, lnum, col);
     }
 
-    if cur_win().w_buffer == buffer.raw() && visual_active() {
+    if Win::current().w_buffer == buffer.raw() && visual_active() {
         // SAFETY: the editor exists.
         unsafe { check_visual_pos() };
     }
@@ -345,7 +345,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
     set_must_redraw(UPD_VALID);
 
     // A change on the cursor line always triggers CursorMoved.
-    let win = cur_win();
+    let win = Win::current();
     if last_cursormoved_win.get() == win.raw()
         && win.w_buffer == buffer.raw()
         && lnum <= win.w_cursor.lnum
@@ -361,15 +361,15 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
 /// `lnum` must be a valid line of the current buffer. May trigger
 /// autocommands that reload it.
 pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
-    changed_lines_redraw_buf(cur_buf(), lnum, lnum + 1, 0);
-    changed_common(cur_buf(), lnum, col, lnum + 1, 0);
+    changed_lines_redraw_buf(Buf::current(), lnum, lnum + 1, 0);
+    changed_common(Buf::current(), lnum, col, lnum + 1, 0);
 
     // Changing the end of a line can add or remove SpellCap on the start of
     // the next one, so schedule that line too -- but not when a `$` is
     // being displayed at the end of the changed text.
     // SAFETY: the current window is live; the short circuit is upstream's.
     let spell_next = unsafe { spell_check_window(Win::current_raw()) }
-        && lnum < cur_buf().b_ml.ml_line_count
+        && lnum < Buf::current().b_ml.ml_line_count
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {
         // SAFETY: the current window is live.
@@ -381,7 +381,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
     unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
 
     // Diff highlighting in the other diff windows may need updating too.
-    if cur_win().w_onebuf_opt.wo_diff != 0 {
+    if Win::current().w_onebuf_opt.wo_diff != 0 {
         for wp in windows() {
             if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
@@ -468,7 +468,7 @@ pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
-    let made_empty = count > 0 && cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let made_empty = count > 0 && Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cb = Buf::current_raw();
     let last = lnum + count - 1;
     let max = MAXLNUM as LineNr;
@@ -540,8 +540,8 @@ pub fn changed_lines(
 
     // SAFETY: the editor exists; the short circuit is upstream's.
     let diff_same_lines = xtra == 0
-        && cur_win().w_onebuf_opt.wo_diff != 0
-        && cur_win().w_buffer == buffer.raw()
+        && Win::current().w_onebuf_opt.wo_diff != 0
+        && Win::current().w_buffer == buffer.raw()
         && unsafe { diff_internal() } == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so
@@ -567,19 +567,4 @@ pub fn changed_lines(
         // made to it.
         unsafe { buf_updates_send_changes(buffer.raw(), lnum, num_added, num_removed) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

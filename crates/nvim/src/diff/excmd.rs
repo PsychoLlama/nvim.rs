@@ -139,8 +139,8 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
         if !info_ok || filesize == 0 {
             emsg_gettext(c"E816: Cannot read patch output".as_ptr());
         } else {
-            if !cur_buf().b_fname.is_null() {
-                let fname = cur_buf().b_fname;
+            if !Buf::current().b_fname.is_null() {
+                let fname = Buf::current().b_fname;
                 // SAFETY: the buffer's own file name, NUL-terminated; the
                 // four extra bytes are for the `.new` appended next.
                 newname = unsafe { xstrnsave(fname, cstr::bytes_at(fname).len() + 4) };
@@ -159,7 +159,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
                 // against the live window list.
                 if Win::current_raw() != old_curwin && win_valid(old_curwin) {
                     // SAFETY: both windows are live, as just checked.
-                    diff_win_options(cur_win(), true);
+                    diff_win_options(Win::current(), true);
                     diff_win_options(unsafe { Win::new(old_curwin) }, true);
                     if !newname.is_null() {
                         args.arg = newname;
@@ -186,7 +186,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
 /// Write the current buffer out to `tmp_orig`, the patch's input.
 fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
     let cb = Buf::current_raw();
-    let end = cur_buf().b_ml.ml_line_count;
+    let end = Buf::current().b_ml.ml_line_count;
     let req = WriteRequest::filter();
     // SAFETY: the current buffer is live and the name is our own temp file;
     // no shortname and no `ExArg` are wanted.
@@ -239,14 +239,14 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
         return;
     }
     args.cmdidx = CmdIdx::split;
-    cur_win().w_onebuf_opt.wo_diff = 1;
+    Win::current().w_onebuf_opt.wo_diff = 1;
     // SAFETY: the caller's command, and a window that was live when read.
     unsafe { do_exedit(args.raw(), old_curwin) };
     if Win::current_raw() == old_curwin {
         return;
     }
     // SAFETY: the current window is live.
-    diff_win_options(cur_win(), true);
+    diff_win_options(Win::current(), true);
     // SAFETY: `win_valid` compares against the live window list.
     if win_valid(old_curwin) {
         // SAFETY: the window is live, as just checked.
@@ -254,10 +254,10 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
         if let Some(old_buf) = old_curbuf.get() {
             // SAFETY: the old window is live and its buffer reference valid.
             let lnum = unsafe { diff_get_corresponding_line(old_buf, (*old_curwin).w_cursor.lnum) };
-            cur_win().w_cursor.lnum = lnum;
+            Win::current().w_cursor.lnum = lnum;
         }
     }
-    let height = cur_win().w_height;
+    let height = Win::current().w_height;
     // SAFETY: the current window is live.
     unsafe { scroll_to_fraction(Win::current_raw(), height) };
 }
@@ -268,7 +268,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
 /// The editor must be running.
 pub unsafe fn ex_diffthis(_args: *mut ExArg) {
     // SAFETY: the current window is live.
-    diff_win_options(cur_win(), true);
+    diff_win_options(Win::current(), true);
 }
 
 /// Set `'diff'` in `window` without letting the option's side effects run.
@@ -278,12 +278,12 @@ pub unsafe fn ex_diffthis(_args: *mut ExArg) {
 /// the buffer registry.
 fn set_diff_option(window: Win, value: bool) {
     let saved = switch_to(window);
-    cur_buf().b_ro_locked += 1;
+    Buf::current().b_ro_locked += 1;
     // `curwin`/`curbuf` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = boolean_optval(Some(value));
     set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
-    cur_buf().b_ro_locked -= 1;
+    Buf::current().b_ro_locked -= 1;
     saved.restore();
 }
 
@@ -447,7 +447,7 @@ pub unsafe fn ex_diffoff(args: *mut ExArg) {
     if args.forceit != 0 {
         diff_buf_clear();
     }
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     if !diffwin {
         diff_need_update.set(false);
         tp.tp_diff_invalid = 0;
@@ -473,19 +473,4 @@ fn saved_or(saved: *mut c_char, fallback: *const c_char) -> *const c_char {
     } else {
         fallback
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

@@ -20,7 +20,7 @@ pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
     }
     debug_assert!(len >= 0);
     unsafe { ins_bytes_len(p, len as size_t) };
-    compl_ins_end_col.set(cur_win().w_cursor.col);
+    compl_ins_end_col.set(Win::current().w_cursor.col);
 }
 
 /// Insert `prefix` as the completion, and redraw.
@@ -199,42 +199,42 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         };
     if unsafe { ins_compl_preinsert_effect() } {
         col += ins_compl_leader_len() as c_int;
-        cur_win().w_cursor.col = compl_ins_end_col.get();
+        Win::current().w_cursor.col = compl_ins_end_col.get();
     }
 
     // What follows the cursor on the last line, which the line deletion
     // below would take with it; re-inserted at the end.
     let mut remaining = String_0::NULL;
-    if cur_win().w_cursor.lnum > compl_lnum.get() {
-        if cur_win().w_cursor.col < get_cursor_line_len() {
+    if Win::current().w_cursor.lnum > compl_lnum.get() {
+        if Win::current().w_cursor.col < get_cursor_line_len() {
             remaining =
                 unsafe { cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
         }
-        while cur_win().w_cursor.lnum > compl_lnum.get() {
-            if unsafe { ml_delete(cur_win().w_cursor.lnum) }.is_err() {
+        while Win::current().w_cursor.lnum > compl_lnum.get() {
+            if unsafe { ml_delete(Win::current().w_cursor.lnum) }.is_err() {
                 unsafe { xfree(remaining.data().cast::<c_void>()) };
                 return;
             }
-            unsafe { deleted_lines_mark(cur_win().w_cursor.lnum, 1) };
-            cur_win().w_cursor.lnum -= 1;
+            unsafe { deleted_lines_mark(Win::current().w_cursor.lnum, 1) };
+            Win::current().w_cursor.lnum -= 1;
         }
         // Move cursor to end of line.
-        cur_win().w_cursor.col = get_cursor_line_len();
+        Win::current().w_cursor.col = get_cursor_line_len();
     }
 
-    if cur_win().w_cursor.col > col {
+    if Win::current().w_cursor.col > col {
         if unsafe { stop_arrow() }.is_err() {
             unsafe { xfree(remaining.data().cast::<c_void>()) };
             return;
         }
         unsafe { backspace_until_column(col) };
-        compl_ins_end_col.set(cur_win().w_cursor.col);
+        compl_ins_end_col.set(Win::current().w_cursor.col);
     }
 
     if !remaining.data().is_null() {
-        orig_col = cur_win().w_cursor.col;
+        orig_col = Win::current().w_cursor.col;
         unsafe { ins_str(remaining.data(), remaining.len()) };
-        cur_win().w_cursor.col = orig_col;
+        Win::current().w_cursor.col = orig_col;
         unsafe { xfree(remaining.data().cast::<c_void>()) };
     }
 
@@ -271,7 +271,7 @@ pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
     if curr > start {
         unsafe { ins_char_bytes(start, curr.offset_from(start) as size_t) };
     }
-    compl_ins_end_col.set(cur_win().w_cursor.col);
+    compl_ins_end_col.set(Win::current().w_cursor.col);
 }
 
 /// Insert the new text being completed.
@@ -339,7 +339,7 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
                 // match need not start with it), and upstream's `size_t`
                 // underflow narrows to a negative `ColNr`, i.e. the
                 // cursor moves the other way.
-                cur_win().w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as ColNr;
+                Win::current().w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as ColNr;
             }
         }
     }
@@ -489,7 +489,7 @@ pub(crate) unsafe fn ins_compl_next(
     // the buffer and the allocator can hand the same address back, so the
     // pointer comparison upstream does cannot tell "still here" from "gone
     // and replaced". See the re-entry rule in [`crate::winlayer`].
-    let orig_curbuf = cur_buf().id();
+    let orig_curbuf = Buf::current().id();
     let cur_cot_flags = completeopt_flags();
     // SAFETY: no precondition left; still an `unsafe fn` for its call sites
     // outside this family.
@@ -533,7 +533,7 @@ pub(crate) unsafe fn ins_compl_next(
         return -1;
     }
 
-    if cur_buf().id() != orig_curbuf {
+    if Buf::current().id() != orig_curbuf {
         // In case some completion function switched buffer, don't insert
         // the completion elsewhere.
         return -1;
@@ -606,14 +606,4 @@ pub(crate) unsafe fn ins_compl_next(
     }
 
     num_matches
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

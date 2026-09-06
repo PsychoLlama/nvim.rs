@@ -19,7 +19,6 @@ use super::{
     GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
     VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
 };
-use super::{cur_buf, cur_win};
 use crate::arglist::do_argfile;
 use crate::autocmd::{augroup_exists, do_doautocmd};
 use crate::buffer::{
@@ -97,7 +96,7 @@ unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
 /// `new_fname` must be a live file name.
 pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     let buf = Buf::current_raw();
-    buf_autocmd(AutoEvent::BufFilePre, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePre, Buf::current());
     // buffer changed, don't change name now
     if buf != Buf::current_raw() {
         return Err(Failed);
@@ -111,25 +110,29 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     // A new (unlisted) buffer entry needs to be made to hold the old file
     // name, which will become the alternate file name.  But don't set the
     // alternate file name if the buffer didn't have a name.
-    let (fname, sfname, xfname) = (cur_buf().b_ffname, cur_buf().b_sfname, cur_buf().b_fname);
-    cur_buf().b_ffname = ptr::null_mut();
-    cur_buf().b_sfname = ptr::null_mut();
+    let (fname, sfname, xfname) = (
+        Buf::current().b_ffname,
+        Buf::current().b_sfname,
+        Buf::current().b_fname,
+    );
+    Buf::current().b_ffname = ptr::null_mut();
+    Buf::current().b_sfname = ptr::null_mut();
     // SAFETY: caller's contract; the names are handed back on failure.
-    if unsafe { setfname(cur_buf(), new_fname, ptr::null_mut(), true) }.is_err() {
-        cur_buf().b_ffname = fname;
-        cur_buf().b_sfname = sfname;
+    if unsafe { setfname(Buf::current(), new_fname, ptr::null_mut(), true) }.is_err() {
+        Buf::current().b_ffname = fname;
+        Buf::current().b_sfname = sfname;
         return Err(Failed);
     }
-    cur_buf().b_flags |= BufFlags::NOTEDITED;
+    Buf::current().b_flags |= BufFlags::NOTEDITED;
     if !xfname.is_null() && unsafe { *xfname } as c_int != NUL {
-        let alt = unsafe { buflist_new(fname, xfname, cur_win().w_cursor.lnum, 0) };
+        let alt = unsafe { buflist_new(fname, xfname, Win::current().w_cursor.lnum, 0) };
         if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
-            cur_win().w_alt_fnum = unsafe { (*alt).handle } as c_int;
+            Win::current().w_alt_fnum = unsafe { (*alt).handle } as c_int;
         }
     }
     unsafe { xfree(fname.cast()) };
     unsafe { xfree(sfname.cast()) };
-    buf_autocmd(AutoEvent::BufFilePost, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     // Change directories when the 'acd' option is set.
     do_autochdir();
     Ok(())
@@ -177,8 +180,8 @@ pub unsafe fn ex_update(args: *mut ExArg) {
     // SAFETY: `curbuf` is live.
     if curbuf_is_changed()
         || (!buf_is_nofilename(current_buf())
-            && !cur_buf().b_ffname.is_null()
-            && !unsafe { os_path_exists(cur_buf().b_ffname) })
+            && !Buf::current().b_ffname.is_null()
+            && !unsafe { os_path_exists(Buf::current().b_ffname) })
     {
         let _ = unsafe { do_write(args) };
     }
@@ -194,7 +197,7 @@ pub unsafe fn ex_write(args: *mut ExArg) {
     if args.cmdidx == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
         args.line1 = 1;
-        args.line2 = cur_buf().b_ml.ml_line_count;
+        args.line2 = Buf::current().b_ml.ml_line_count;
     }
 
     if args.usefilter != 0 {
@@ -298,7 +301,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         if unsafe { cannot_write_curbuf(args) } {
             return Err(Failed);
         }
-        (ffname, fname) = (cur_buf().b_ffname, cur_buf().b_fname);
+        (ffname, fname) = (Buf::current().b_ffname, Buf::current().b_fname);
         // SAFETY: main thread, message state.
         if !unsafe { confirm_partial_write(args) } {
             return Err(Failed);
@@ -306,7 +309,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     }
 
     // SAFETY: the names are live.
-    unsafe { check_overwrite(args, cur_buf(), fname, ffname, other) }?;
+    unsafe { check_overwrite(args, Buf::current(), fname, ffname, other) }?;
 
     if args.cmdidx == CmdIdx::saveas
         && let Some(alt_buf) = alt_buf
@@ -320,7 +323,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // SAFETY: `fname` is live.
     unsafe { handle_mkdir_p_arg(args, fname) }?;
 
-    let name_was_missing = cur_buf().b_ffname.is_null();
+    let name_was_missing = Buf::current().b_ffname.is_null();
     let request = WriteRequest {
         append: args.append != 0,
         forceit: args.forceit != 0,
@@ -344,7 +347,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
 
     // After ":saveas fname" reset 'readonly'.
     if args.cmdidx == CmdIdx::saveas && retval.is_ok() {
-        cur_buf().b_p_ro = 0;
+        Buf::current().b_p_ro = 0;
         redraw_tabline.set(true);
     }
     // Change directories when the 'acd' option is set and the file name
@@ -370,8 +373,8 @@ unsafe fn cannot_write_curbuf(args: &mut ExArg) -> bool {
     unsafe {
         buf_dontwrite_msg(current_buf())
             || check_fname().is_err()
-            || check_writable(cur_buf().b_ffname).is_err()
-            || check_readonly(forceit, cur_buf())
+            || check_writable(Buf::current().b_ffname).is_err()
+            || check_readonly(forceit, Buf::current())
     }
 }
 
@@ -380,7 +383,7 @@ unsafe fn cannot_write_curbuf(args: &mut ExArg) -> bool {
 /// # Safety
 /// Main thread, message state; `args.forceit` may be set by the dialog.
 unsafe fn confirm_partial_write(args: &mut ExArg) -> bool {
-    if (args.line1 == 1 && args.line2 == cur_buf().b_ml.ml_line_count)
+    if (args.line1 == 1 && args.line2 == Buf::current().b_ml.ml_line_count)
         || args.forceit != 0
         || args.append != 0
         || p_wa.get() != 0
@@ -420,7 +423,7 @@ unsafe fn confirm_partial_write(args: &mut ExArg) -> bool {
 /// of soundness -- swapping a buffer's names with its own is a no-op.
 fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     let was_curbuf = Buf::current_raw();
-    buf_autocmd(AutoEvent::BufFilePre, cur_buf());
+    buf_autocmd(AutoEvent::BufFilePre, Buf::current());
     buf_autocmd(AutoEvent::BufFilePre, alt_buf);
     // buffer changed, don't change name now
     if Buf::current_raw() != was_curbuf || aborting() {
@@ -430,13 +433,13 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     // Exchange the file names for the current and the alternate buffer.
     // SAFETY: both buffers are live, so every field address below is.
     unsafe {
-        ptr::swap(&raw mut alt_buf.b_fname, &raw mut cur_buf().b_fname);
-        ptr::swap(&raw mut alt_buf.b_ffname, &raw mut cur_buf().b_ffname);
-        ptr::swap(&raw mut alt_buf.b_sfname, &raw mut cur_buf().b_sfname);
+        ptr::swap(&raw mut alt_buf.b_fname, &raw mut Buf::current().b_fname);
+        ptr::swap(&raw mut alt_buf.b_ffname, &raw mut Buf::current().b_ffname);
+        ptr::swap(&raw mut alt_buf.b_sfname, &raw mut Buf::current().b_sfname);
     };
     // SAFETY: `curbuf` is live.
-    unsafe { buf_name_changed(cur_buf()) };
-    buf_autocmd(AutoEvent::BufFilePost, cur_buf());
+    unsafe { buf_name_changed(Buf::current()) };
+    buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, alt_buf);
     if alt_buf.b_p_bl == 0 {
         alt_buf.b_p_bl = 1;
@@ -449,7 +452,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 
     // SAFETY: `curbuf` is live.
     // If 'filetype' was empty try detecting it now.
-    if unsafe { *cur_buf().b_p_ft } as c_int == NUL {
+    if unsafe { *Buf::current().b_p_ft } as c_int == NUL {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             let _ = unsafe {
                 do_doautocmd(
@@ -463,7 +466,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     }
     // Autocommands may have changed buffer names, esp. when 'autochdir'
     // is set.
-    Some(cur_buf().b_sfname)
+    Some(Buf::current().b_sfname)
 }
 
 /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
@@ -594,12 +597,12 @@ pub unsafe fn ex_wnext(args: *mut ExArg) {
     // SAFETY: the command name is at least two bytes long.
     let forwards = unsafe { *args.cmd.add(1) } as c_int == 'n' as c_int;
     let i = if forwards {
-        cur_win().w_arg_idx + step
+        Win::current().w_arg_idx + step
     } else {
-        cur_win().w_arg_idx - step
+        Win::current().w_arg_idx - step
     };
     args.line1 = 1;
-    args.line2 = cur_buf().b_ml.ml_line_count;
+    args.line2 = Buf::current().b_ml.ml_line_count;
     // SAFETY: main thread; the command block is the one borrowed here.
     if unsafe { do_write(args) }.is_ok() {
         unsafe { do_argfile(&raw mut *args, i) };
@@ -828,7 +831,7 @@ pub unsafe fn getfile(
         free_me = Owned(ffname);
     } else {
         // SAFETY: `curbuf` is live.
-        other = fnum != cur_buf().handle;
+        other = fnum != Buf::current().handle;
     }
 
     // Don't wait for the autowrite message. Released at two exits.
@@ -836,7 +839,7 @@ pub unsafe fn getfile(
     // SAFETY: `curbuf` is the live current buffer.
     if other
         && !forceit
-        && cur_buf().b_nwindows == 1
+        && Buf::current().b_nwindows == 1
         && !unsafe { buf_hide(Buf::current_raw()) }
         && curbuf_is_changed()
         && unsafe { autowrite(Buf::current_raw(), forceit) }.is_err()
@@ -862,9 +865,9 @@ pub unsafe fn getfile(
     if !other {
         // SAFETY: `curwin` is the live current window.
         if lnum != 0 {
-            cur_win().w_cursor.lnum = lnum;
+            Win::current().w_cursor.lnum = lnum;
         }
-        check_cursor_lnum(cur_win());
+        check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         // it's in the same file
         return GETFILE_SAME_FILE;

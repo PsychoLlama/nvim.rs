@@ -51,7 +51,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     if ready
         && has_event(AutoEvent::CursorMovedI)
         && (last_cursormoved_win.get() != Win::current_raw()
-            || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
+            || !equalpos(last_cursormoved.get(), Win::current().w_cursor))
         && !pum_visible()
     {
         // Update the screen first so syntax highlighting is right after a
@@ -65,7 +65,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         unsafe { update_curswant() };
         unsafe { ins_apply_autocmds(AutoEvent::CursorMovedI) };
         last_cursormoved_win.set(Win::current_raw());
-        last_cursormoved.set(cur_win().w_cursor);
+        last_cursormoved.set(Win::current().w_cursor);
     }
 
     // TextChangedI when changedtick_i differs, and TextChangedP when
@@ -77,7 +77,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // block has to be closed the way `ins_apply_autocmds` does it.
     let fire_text_changed = |event: AutoEvent, tick: *mut VarNumber| {
         let mut aco = AcoSave::default();
-        let before = buf_get_changedtick(cur_buf());
+        let before = buf_get_changedtick(Buf::current());
 
         // Save and restore curwin/curbuf, in case the autocommand changes
         // them.
@@ -86,24 +86,27 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) };
         unsafe { aucmd_restbuf(&raw mut aco) };
 
-        unsafe { *tick = buf_get_changedtick(cur_buf()) };
+        unsafe { *tick = buf_get_changedtick(Buf::current()) };
         if before != unsafe { *tick } {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
-            let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
+            let _ = u_save(
+                Win::current().w_cursor.lnum,
+                Win::current().w_cursor.lnum + 1,
+            );
         }
     };
 
-    let mut buf = cur_buf();
+    let mut buf = Buf::current();
     if ready && has_event(AutoEvent::TextChangedI) && !pum_visible() {
         let tick = &mut buf.b_last_changedtick_i;
-        if *tick != buf_get_changedtick(cur_buf()) {
+        if *tick != buf_get_changedtick(Buf::current()) {
             fire_text_changed(AutoEvent::TextChangedI, tick);
         }
     }
     if ready && has_event(AutoEvent::TextChangedP) && pum_visible() {
         let tick = &mut buf.b_last_changedtick_pum;
-        if *tick != buf_get_changedtick(cur_buf()) {
+        if *tick != buf_get_changedtick(Buf::current()) {
             fire_text_changed(AutoEvent::TextChangedP, tick);
         }
     }
@@ -115,13 +118,13 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // BufModified, if b_changed_invalid is set.
     if ready
         && has_event(AutoEvent::BufModifiedSet)
-        && cur_buf().b_changed_invalid
+        && Buf::current().b_changed_invalid
         && !pum_visible()
     {
         let none = ::core::ptr::null_mut();
         let buffer = Buf::current_raw();
         unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, buffer) };
-        cur_buf().b_changed_invalid = false;
+        Buf::current().b_changed_invalid = false;
     }
 
     // SafeState, if nothing is pending.
@@ -151,7 +154,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
-    let mut win = cur_win();
+    let mut win = Win::current();
     if !win.w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
         return;
     }
@@ -202,7 +205,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn edit_unputchar() {
-    let mut win = cur_win();
+    let mut win = Win::current();
     // SAFETY: `curwin` is live, and the line it is on is a line of its own
     // buffer.
     match pc_status.get() {
@@ -235,7 +238,7 @@ pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
         return;
     }
 
-    let mut win = cur_win();
+    let mut win = Win::current();
     let save_col = win.w_cursor.col;
     win.w_cursor.col = col;
 
@@ -264,7 +267,7 @@ pub(crate) unsafe fn undisplay_dollar() {
         return;
     }
     dollar_vcol.set(-1);
-    unsafe { redraw_win_line(Win::current_raw(), cur_win().w_cursor.lnum) };
+    unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
 }
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'
@@ -273,7 +276,7 @@ pub(crate) unsafe fn undisplay_dollar() {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn get_nolist_virtcol() -> ColNr {
-    let mut win = cur_win();
+    let mut win = Win::current();
     if win.w_buffer.is_null()
         || win.buffer().b_ml.ml_mfp.is_null()
         || win.w_cursor.lnum > win.buffer().b_ml.ml_line_count
@@ -287,14 +290,4 @@ pub(crate) unsafe fn get_nolist_virtcol() -> ColNr {
     // SAFETY: `curwin` is live for the whole session.
     validate_virtcol(win);
     win.w_virtcol
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

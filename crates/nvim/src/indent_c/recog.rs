@@ -38,7 +38,7 @@ pub unsafe fn cin_is_cinword(line: *const c_char) -> bool {
         .position(|&b| !ascii_iswhite(c_int::from(b)))
         .unwrap_or(all.len());
 
-    let mut cinw = cur_buf().b_p_cinw;
+    let mut cinw = Buf::current().b_p_cinw;
     // SAFETY: 'cinwords' is a NUL-terminated option string.
     let mut part = vec![0u8; unsafe { cstr::bytes_at(cinw) }.len() + 1];
     let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
@@ -194,7 +194,7 @@ pub(crate) unsafe fn cin_isscopedecl(p: *const c_char) -> bool {
     // SAFETY: `s` points into that NUL-terminated string.
     let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
 
-    let mut cinsd = cur_buf().b_p_cinsd;
+    let mut cinsd = Buf::current().b_p_cinsd;
     // SAFETY: 'cinscopedecls' is a NUL-terminated option string.
     let mut part = vec![0u8; unsafe { cstr::bytes_at(cinsd) }.len() + 1];
     let (part_len, comma) = (part.len(), c",".as_ptr().cast_mut());
@@ -306,16 +306,16 @@ pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: LineNr) -> bool {
         return false;
     }
 
-    let cursor_save = cur_win().w_cursor;
-    cur_win().w_cursor.lnum = lnum;
+    let cursor_save = Win::current().w_cursor;
+    Win::current().w_cursor.lnum = lnum;
     // SAFETY: on the main thread with a current buffer, and the cursor is on
     // a line of it; `get_cursor_line_ptr` hands back that line, NUL-terminated.
     let line = unsafe { CStr::from_ptr(get_cursor_line_ptr()) }.to_bytes();
     // Step over any '}' until the 'w' of the "while".
     let w = line.iter().position(|&b| b == b'w').unwrap_or(line.len());
-    cur_win().w_cursor.col = w as ColNr;
+    Win::current().w_cursor.col = w as ColNr;
 
-    let maxparen = int64_t::from(cur_buf().b_ind_maxparen);
+    let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
     // SAFETY: the cursor is on a line of the current buffer; `ml_get_pos`
     // hands back a NUL-terminated line at the position `findmatchlimit`
     // found in it, so `add(1)` is at worst that line's NUL.
@@ -323,7 +323,7 @@ pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: LineNr) -> bool {
         findmatchlimit(::core::ptr::null_mut::<OpArg>(), 0, 0, maxparen)
             .is_some_and(|pos| *cin_skipcomment(ml_get_pos(&raw const pos).add(1)) as u8 == b';')
     };
-    cur_win().w_cursor = cursor_save;
+    Win::current().w_cursor = cursor_save;
     retval
 }
 
@@ -421,17 +421,17 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
             // before the matching '('.
             // SAFETY: `p` points into `line`, so the distance is in range.
             let i = unsafe { p.offset_from(line) };
-            cur_win().w_cursor.col = i as ColNr;
+            Win::current().w_cursor.col = i as ColNr;
             // SAFETY: searches the current buffer from the cursor, and puts
             // the cursor back where it found it.
-            if let Some(trypos) = unsafe { find_match_paren(cur_buf().b_ind_maxparen) } {
+            if let Some(trypos) = unsafe { find_match_paren(Buf::current().b_ind_maxparen) } {
                 // SAFETY: `trypos` is a position in the current buffer, so
                 // `ml_get` hands back its line, NUL-terminated; the two
                 // skips answer pointers into that same line.
                 let opener = unsafe { cin_skip_close_brace(cin_skipcomment(ml_get(trypos.lnum))) };
                 // SAFETY: `opener` points into that line.
                 if unsafe { cin_starts_with(opener, b"while") } {
-                    cur_win().w_cursor.lnum = trypos.lnum;
+                    Win::current().w_cursor.lnum = trypos.lnum;
                     return true;
                 }
             }
@@ -549,14 +549,4 @@ pub(crate) unsafe fn cin_isterminated(s: *const c_char, incl_open: bool, incl_co
         }
     }
     found_start
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

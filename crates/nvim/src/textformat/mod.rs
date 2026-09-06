@@ -69,7 +69,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 pub fn has_format_option(x: FoFlag) -> bool {
     // The dereference stays behind the `&&`: with no current buffer the
     // left half is what keeps the right one from running.
-    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr(cur_buf().b_p_fo)) }
+    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr(Buf::current().b_p_fo)) }
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the
@@ -96,9 +96,9 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// There must be a current window and buffer.
 pub unsafe fn comp_textwidth(ff: bool) -> c_int {
     let win = Win::current_raw();
-    let mut textwidth = cur_buf().b_p_tw as c_int;
-    if textwidth == 0 && cur_buf().b_p_wm != 0 {
-        textwidth = unsafe { (*win).w_view_width } - cur_buf().b_p_wm as c_int;
+    let mut textwidth = Buf::current().b_p_tw as c_int;
+    if textwidth == 0 && Buf::current().b_p_wm != 0 {
+        textwidth = unsafe { (*win).w_view_width } - Buf::current().b_p_wm as c_int;
         if Buf::current_raw() == cmdwin_buf.get() {
             textwidth -= 1;
         }
@@ -113,9 +113,4 @@ pub unsafe fn comp_textwidth(ff: bool) -> c_int {
         textwidth = (unsafe { (*win).w_view_width } - 1).min(79);
     }
     textwidth
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

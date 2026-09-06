@@ -182,7 +182,7 @@ impl From<Failed> for UndoFailed {
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
     // SAFETY: a live current window, by the contract above.
-    let cur: LineNr = cur_win().w_cursor.lnum;
+    let cur: LineNr = Win::current().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
     u_save((cur - 1).max(0), cur + 1)
 }
@@ -192,7 +192,7 @@ pub fn u_save_cursor() -> Result<(), Failed> {
 /// Safe: the only promise is that the editor exists; `u_save_buf` validates
 /// the line range itself and answers `Err` when it is out of range.
 pub fn u_save(top: LineNr, bot: LineNr) -> Result<(), Failed> {
-    u_save_buf(cur_buf(), top, bot)
+    u_save_buf(Buf::current(), top, bot)
 }
 
 /// Saves the lines strictly between `top` and `bot` — the lines a change
@@ -215,23 +215,23 @@ pub fn u_save_buf(buffer: Buf, top: LineNr, bot: LineNr) -> Result<(), Failed> {
 ///
 /// Safe: as [`u_save`].
 pub fn u_savesub(lnum: LineNr) -> Result<(), Failed> {
-    u_savecommon(cur_buf(), lnum - 1, lnum + 1, lnum + 1, false)
+    u_savecommon(Buf::current(), lnum - 1, lnum + 1, lnum + 1, false)
 }
 
 /// Saves the position a `:substitute` is about to insert a line at.
 ///
 /// Safe: as [`u_savesub`].
 pub fn u_inssub(lnum: LineNr) -> Result<(), Failed> {
-    u_savecommon(cur_buf(), lnum - 1, lnum, lnum + 1, false)
+    u_savecommon(Buf::current(), lnum - 1, lnum, lnum + 1, false)
 }
 
 /// Saves the `nlines` lines from `lnum` that are about to be deleted.
 ///
 /// Safe: as [`u_save`].
 pub fn u_savedel(lnum: LineNr, nlines: LineNr) -> Result<(), Failed> {
-    let whole_buffer = nlines == cur_buf().b_ml.ml_line_count;
+    let whole_buffer = nlines == Buf::current().b_ml.ml_line_count;
     u_savecommon(
-        cur_buf(),
+        Buf::current(),
         lnum - 1,
         lnum + nlines,
         if whole_buffer { 2 } else { lnum },
@@ -433,8 +433,8 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     b.b_u_seq_cur = uhp.uh_seq;
     // SAFETY: the C clock, and a live current window.
     uhp.uh_time = unsafe { time(ptr::null_mut()) };
-    uhp.uh_cursor = cur_win().w_cursor;
-    uhp.uh_cursor_vcol = if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
+    uhp.uh_cursor = Win::current().w_cursor;
+    uhp.uh_cursor_vcol = if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
         unsafe { getviscol() }
     } else {
         -1
@@ -644,7 +644,7 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
 ///
 /// Safe: `curbuf` is set from startup to exit.
 pub fn u_sync(force: bool) {
-    let mut b = cur_buf();
+    let mut b = Buf::current();
     if b.b_u_synced || (!force && no_u_sync.get() > 0) {
         return;
     }
@@ -662,7 +662,7 @@ pub fn u_sync(force: bool) {
 ///
 /// The ex-command contract: `args` is a live command block.
 pub unsafe fn ex_undojoin(_args: *mut ExArg) {
-    let mut b = cur_buf();
+    let mut b = Buf::current();
     if b.b_u_newhead.is_none() {
         return;
     }
@@ -691,7 +691,7 @@ pub fn u_unchanged(mut buffer: Buf) {
 ///
 /// Safe: `curbuf` is set from startup to exit.
 pub fn u_find_first_changed() {
-    let b = cur_buf();
+    let b = Buf::current();
     let Some(mut uhp) = b.header(b.b_u_newhead).filter(|_| b.b_u_curhead.is_none()) else {
         return;
     };
@@ -755,15 +755,5 @@ pub fn any_buf_is_changed() -> bool {
 ///
 /// Safe: as [`buf_is_changed`], over the current buffer.
 pub fn curbuf_is_changed() -> bool {
-    buf_is_changed(cur_buf())
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
+    buf_is_changed(Buf::current())
 }

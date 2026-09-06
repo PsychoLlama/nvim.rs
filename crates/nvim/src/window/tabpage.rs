@@ -168,7 +168,7 @@ pub(crate) fn new_tabpage(
     filename: *mut c_char,
     enter: bool,
 ) -> Option<(TabPage, Win)> {
-    let old_curtab = cur_tab();
+    let old_curtab = TabPage::current();
     if enter && cmdwin_type.get() != 0 {
         err(e_cmdwin.as_ptr());
         return None;
@@ -181,12 +181,12 @@ pub(crate) fn new_tabpage(
     // Remember the current windows in this tab page, avoiding the side effects
     // of `stash_tabpage` when not entering.
     if enter {
-        if leave_tab(Some(cur_buf()), true).is_err() {
+        if leave_tab(Some(Buf::current()), true).is_err() {
             free(newtp.raw());
             return None;
         }
     } else {
-        let mut cur = cur_tab();
+        let mut cur = TabPage::current();
         stash_tabpage(cur);
         // Save this to tell whether room must be made for the tabline.
         cur.tp_old_rows_avail = rows_avail();
@@ -201,7 +201,7 @@ pub(crate) fn new_tabpage(
     // SAFETY: the old tab page's current window, which is live.
     let result = unsafe { win_alloc_firstwin(old_curtab.tp_curwin) };
     debug_assert!(result.is_ok(), "result.is_ok()");
-    let opened = cur_win();
+    let opened = Win::current();
 
     // Make the new tab page the new topframe.
     if after == 1 {
@@ -230,32 +230,32 @@ pub(crate) fn new_tabpage(
     let mut firstw = first_win();
     firstw.w_winrow = tabline_rows();
     firstw.w_prev_winrow = firstw.w_winrow;
-    comp_scroll(cur_win());
+    comp_scroll(Win::current());
     newtp.tp_topframe = topframe.get();
     update_last_status(false);
-    resize_terminal(cur_buf());
+    resize_terminal(Buf::current());
 
     if enter {
         redraw_all(UPD_NOT_VALID);
         check_tabpage_windows(old_curtab);
         lastused_tabpage.set(old_curtab.raw());
-        enter_window(cur_win());
-        fire(AutoEvent::WinNew, cur_buf());
-        fire(AutoEvent::WinEnter, cur_buf());
-        fire_named(AutoEvent::TabNew, filename, Some(cur_buf()));
-        fire(AutoEvent::TabEnter, cur_buf());
+        enter_window(Win::current());
+        fire(AutoEvent::WinNew, Buf::current());
+        fire(AutoEvent::WinEnter, Buf::current());
+        fire_named(AutoEvent::TabNew, filename, Some(Buf::current()));
+        fire(AutoEvent::TabEnter, Buf::current());
     } else {
-        stash_tabpage(cur_tab());
+        stash_tabpage(TabPage::current());
         adopt_tabpage(old_curtab);
         redraw_tabline.set(true); // the tabline may have been added, or changed
-        if cur_tab().tp_old_rows_avail != rows_avail() {
+        if TabPage::current().tp_old_rows_avail != rows_avail() {
             new_screen_rows();
         }
         // Trigger autocommands in the context of the new window, letting
         // `switch_win_noblock` handle things like resetting `VIsual_active`.
         in_window(newtp, || {
-            fire(AutoEvent::WinNew, cur_buf());
-            fire_named(AutoEvent::TabNew, filename, Some(cur_buf()));
+            fire(AutoEvent::WinNew, Buf::current());
+            fire_named(AutoEvent::TabNew, filename, Some(Buf::current()));
         });
     }
     Some((newtp, opened))
@@ -314,7 +314,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
         Err(Failed)
     };
     if status.is_ok() {
-        fire(AutoEvent::TabNewEntered, cur_buf());
+        fire(AutoEvent::TabNewEntered, Buf::current());
     }
     status
 }
@@ -389,7 +389,7 @@ pub fn find_tabpage(n: c_int) -> *mut Tabpage {
 /// there is no such tab page.
 fn nth_tab(n: c_int) -> Option<TabPage> {
     if n == 0 {
-        return Some(cur_tab());
+        return Some(TabPage::current());
     }
     if n < 0 {
         return None; // the walk runs off the end of the list
@@ -425,21 +425,21 @@ fn index_of_tab(ftp: *mut Tabpage) -> c_int {
 /// `Err` when autocommands changed `curtab`, in which case the tab page is
 /// not left. Careful: after `Ok` a new tab page must be entered very soon.
 fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Failed> {
-    let mut tp = cur_tab();
-    leave_window(cur_win());
+    let mut tp = TabPage::current();
+    leave_window(Win::current());
     reset_visual_and_resel(); // stop Visual mode
     if trigger_leave_autocmds {
         if raw_buf(new_curbuf) != Buf::current_raw() {
-            fire(AutoEvent::BufLeave, cur_buf());
+            fire(AutoEvent::BufLeave, Buf::current());
             if !tp.is_current() {
                 return Err(Failed);
             }
         }
-        fire(AutoEvent::WinLeave, cur_buf());
+        fire(AutoEvent::WinLeave, Buf::current());
         if !tp.is_current() {
             return Err(Failed);
         }
-        fire(AutoEvent::TabLeave, cur_buf());
+        fire(AutoEvent::TabLeave, Buf::current());
         if !tp.is_current() {
             return Err(Failed);
         }
@@ -472,17 +472,17 @@ fn enter_tab(
         .expect("a live tab page has a first window")
         .w_winrow;
     let next_prevwin = tabpage.tp_prevwin;
-    let old_curtab = cur_tab();
+    let old_curtab = TabPage::current();
     adopt_tabpage(tabpage);
 
     if old_curtab.raw() != TabPage::current_raw() {
         check_tabpage_windows(old_curtab);
-        if p_ch.get() != cur_tab().tp_ch_used {
+        if p_ch.get() != TabPage::current().tp_ch_used {
             // Use the stored value of 'cmdheight', which may differ per tab
             // page. Handle the other side effects, but avoid setting frame
             // sizes, which are still correct.
-            let new_ch = cur_tab().tp_ch_used;
-            cur_tab().tp_ch_used = p_ch.get();
+            let new_ch = TabPage::current().tp_ch_used;
+            TabPage::current().tp_ch_used = p_ch.get();
             command_frame_height.set(false);
             set_cmdheight(new_ch);
             command_frame_height.set(true);
@@ -517,15 +517,15 @@ fn enter_tab(
 
     // The tabline may have appeared or disappeared, so the frames may need
     // resizing; the same when the editor was resized.
-    if cur_tab().tp_old_rows_avail != rows_avail() || old_off != first_win().w_winrow {
+    if TabPage::current().tp_old_rows_avail != rows_avail() || old_off != first_win().w_winrow {
         new_screen_rows();
     }
-    if cur_tab().tp_old_columns != Columns.get() as int64_t {
+    if TabPage::current().tp_old_columns != Columns.get() as int64_t {
         if starting.get() == 0 {
             new_screen_cols(); // update window widths
-            cur_tab().tp_old_columns = Columns.get() as int64_t;
+            TabPage::current().tp_old_columns = Columns.get() as int64_t;
         } else {
-            cur_tab().tp_old_columns = -1 as int64_t; // update window widths later
+            TabPage::current().tp_old_columns = -1 as int64_t; // update window widths later
         }
     }
     lastused_tabpage.set(old_curtab.raw());
@@ -533,9 +533,9 @@ fn enter_tab(
     // Apply autocommands after updating the display, once 'lines' and 'columns'
     // have been set correctly.
     if trigger_enter_autocmds {
-        fire(AutoEvent::TabEnter, cur_buf());
+        fire(AutoEvent::TabEnter, Buf::current());
         if old_curbuf.raw() != Buf::current_raw() {
-            fire(AutoEvent::BufEnter, cur_buf());
+            fire(AutoEvent::BufEnter, Buf::current());
         }
     }
     redraw_all(UPD_NOT_VALID);
@@ -605,11 +605,11 @@ pub(crate) fn goto_tab_number(n: c_int) {
 
     let tp = if n == 0 {
         // No count: go to the next tab page, wrapping around the end.
-        cur_tab().next().unwrap_or_else(first_tab)
+        TabPage::current().next().unwrap_or_else(first_tab)
     } else if n < 0 {
         // "gT": go to the previous tab page, wrapping around the end. "N gT"
         // repeats this N times.
-        let mut ttp = cur_tab();
+        let mut ttp = TabPage::current();
         let mut tp = ttp;
         for _ in n..0 {
             let target = Some(ttp.id());
@@ -662,10 +662,10 @@ pub(crate) fn goto_tab(
     // SAFETY: the tab page's own current window, which is live.
     let new_curbuf = unsafe { Win::new(tabpage.tp_curwin) }.buffer_or_none();
     if !tabpage.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
-        let target = valid_tab(tabpage.raw()).unwrap_or_else(cur_tab);
+        let target = valid_tab(tabpage.raw()).unwrap_or_else(TabPage::current);
         enter_tab(
             target,
-            cur_buf(),
+            Buf::current(),
             trigger_enter_autocmds,
             trigger_leave_autocmds,
         );
@@ -714,7 +714,7 @@ pub fn tabpage_move(nr: c_int) {
         n += 1;
         tp = next;
     }
-    let mut cur = cur_tab();
+    let mut cur = TabPage::current();
     let id = cur.id();
     if tp.is_current() || (nr > 0 && tp.next().is_some() && tp.tp_next == Some(id)) {
         return;

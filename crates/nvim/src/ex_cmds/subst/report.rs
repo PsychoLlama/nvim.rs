@@ -16,7 +16,6 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
@@ -35,6 +34,7 @@ use crate::types::{
     int64_t, size_t,
 };
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
@@ -264,7 +264,7 @@ pub(crate) unsafe fn show_sub(
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
     let save_shm: CString = unsafe { CStr::from_ptr(p_shm.get()) }.into();
-    let orig_buf = cur_buf();
+    let orig_buf = Buf::current();
 
     // Disable the file info message.
     set_option_direct(
@@ -282,13 +282,13 @@ pub(crate) unsafe fn show_sub(
         .find(|r| r.start.lnum >= old_cusr.lnum)
     {
         // SAFETY: the current window is live.
-        cur_win().w_cursor.lnum = curres.start.lnum;
-        cur_win().w_cursor.col = curres.start.col;
+        Win::current().w_cursor.lnum = curres.start.lnum;
+        Win::current().w_cursor.col = curres.start.col;
     }
 
     // Update the topline so that the main window is on the correct line.
     // SAFETY: the current window is live.
-    update_topline(cur_win());
+    update_topline(Win::current());
 
     // Use the preview window only when inccommand=split and the range is more
     // than the current line.

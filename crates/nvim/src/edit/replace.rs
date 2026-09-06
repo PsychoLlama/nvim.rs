@@ -70,8 +70,8 @@ pub(crate) unsafe fn truncate_spaces(line: *mut c_char, len: size_t) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn backspace_until_column(col: c_int) {
-    while cur_win().w_cursor.col > col {
-        cur_win().w_cursor.col -= 1;
+    while Win::current().w_cursor.col > col {
+        Win::current().w_cursor.col -= 1;
         if State.get() & REPLACE_FLAG != 0 {
             replace_do_bs(col);
         } else if !del_char_after_col(col) {
@@ -94,22 +94,22 @@ fn del_char_after_col(limit_col: c_int) -> bool {
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
     if limit_col >= 0 {
-        let ecol = cur_win().w_cursor.col + 1;
+        let ecol = Win::current().w_cursor.col + 1;
 
         // Put the cursor at the start of a character, then step forward
         // again if a composing character took it too far back.
         unsafe { mb_adjust_cursor() };
-        while cur_win().w_cursor.col < limit_col {
+        while Win::current().w_cursor.col < limit_col {
             let l = unsafe { utf_ptr2len(get_cursor_pos_ptr()) };
             if l == 0 {
                 break; // end of line
             }
-            cur_win().w_cursor.col += l;
+            Win::current().w_cursor.col += l;
         }
-        if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || cur_win().w_cursor.col == ecol {
+        if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || Win::current().w_cursor.col == ecol {
             return false;
         }
-        let _ = unsafe { del_bytes(ecol - cur_win().w_cursor.col, false, true) };
+        let _ = unsafe { del_bytes(ecol - Win::current().w_cursor.col, false, true) };
     } else {
         let _ = unsafe { del_char(false) };
     }
@@ -253,14 +253,15 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // SAFETY: a live window and its own cursor.
             unsafe {
                 getvcol(
-                    cur_win(),
-                    &mut cur_win().w_cursor,
+                    Win::current(),
+                    &mut Win::current().w_cursor,
                     none,
                     &raw mut start_vcol,
                     none,
                 )
             };
-            orig_vcols = unsafe { win_chartabsize(cur_win(), get_cursor_pos_ptr(), start_vcol) };
+            orig_vcols =
+                unsafe { win_chartabsize(Win::current(), get_cursor_pos_ptr(), start_vcol) };
         }
         del_char_after_col(limit_col);
         let orig_len = if l_state & VREPLACE_FLAG != 0 {
@@ -277,7 +278,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             let mut vcol = start_vcol;
             let mut i = 0;
             while i < ins_len {
-                vcol += unsafe { win_chartabsize(cur_win(), p.offset(i as isize), vcol) };
+                vcol += unsafe { win_chartabsize(Win::current(), p.offset(i as isize), vcol) };
                 // O-B15-22: upstream steps by the length of the *first*
                 // character every time (`utfc_ptr2len(p)`, not
                 // `p + i`), so a restored run of differently-sized
@@ -288,22 +289,17 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
             // Virtual Replace keeps the following text aligned, so any
             // spaces it padded with have to come off again.
-            cur_win().w_cursor.col += ins_len;
+            Win::current().w_cursor.col += ins_len;
             while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
                 let _ = unsafe { del_char(false) };
                 orig_vcols += 1;
             }
-            cur_win().w_cursor.col -= ins_len;
+            Win::current().w_cursor.col -= ins_len;
         }
 
         // Mark the buffer changed and prepare for displaying.
-        unsafe { changed_bytes(cur_win().w_cursor.lnum, cur_win().w_cursor.col) };
+        unsafe { changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col) };
     } else if cc == 0 {
         del_char_after_col(limit_col);
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

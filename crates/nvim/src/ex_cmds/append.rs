@@ -15,7 +15,6 @@
 use super::lines::set_op_range;
 use super::say;
 use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
-use super::{cur_buf, cur_win};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cstr;
 use crate::cursor::check_cursor_lnum;
@@ -38,6 +37,8 @@ use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use crate::winlayer::graph::{firstwin, lastwin};
 use ::libc::atol;
 use core::ffi::{CStr, c_char, c_int};
@@ -74,7 +75,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
-    let mut empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let mut empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
     if forceit != 0 {
@@ -84,7 +85,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
 
     // First autoindent comes from the line we start on.
     // SAFETY: as above.
-    if cmdidx != CmdIdx::change && cur_buf().b_p_ai != 0 && lnum > 0 {
+    if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > 0 {
         // SAFETY: `lnum` is a line of the current buffer.
         append_indent.set(unsafe { get_indent_lnum(lnum) });
     }
@@ -100,7 +101,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     // Behave like in Insert mode.
     State.set(MODE_INSERT);
     // SAFETY: `curbuf` is live.
-    if cur_buf().b_p_iminsert == B_IMODE_LMAP as OptInt {
+    if Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt {
         State.set(State.get() | MODE_LANGMAP);
     }
 
@@ -108,7 +109,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
         msg_scroll.set(1);
         need_wait_return.set(false);
         // SAFETY: `curbuf` is live; `lnum` is a line of it, or zero.
-        if cur_buf().b_p_ai != 0 {
+        if Buf::current().b_p_ai != 0 {
             if append_indent.get() >= 0 {
                 indent = append_indent.replace(-1);
             } else if lnum > 0 {
@@ -185,7 +186,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     // "end" is set to lnum when something has been appended, otherwise
     // it is the same as "start"  -- Acevedo
     // SAFETY: `curbuf` is live.
-    let mut start = cur_buf().b_ml.ml_line_count;
+    let mut start = Buf::current().b_ml.ml_line_count;
     if line2 < start {
         start = line2 + 1;
     }
@@ -196,8 +197,8 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     unsafe { set_op_range(start, if line2 < lnum { lnum } else { start }) };
 
     // SAFETY: `curwin` is the live current window.
-    cur_win().w_cursor.lnum = lnum;
-    check_cursor_lnum(cur_win());
+    Win::current().w_cursor.lnum = lnum;
+    check_cursor_lnum(Win::current());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
     // Don't use wait_return() now.
@@ -211,7 +212,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
 /// The current buffer must be live.
 unsafe fn toggle_autoindent() {
     // SAFETY: caller's contract.
-    cur_buf().b_p_ai = c_int::from(cur_buf().b_p_ai == 0);
+    Buf::current().b_p_ai = c_int::from(Buf::current().b_p_ai == 0);
 }
 
 /// The next line for `:append` to insert, freshly allocated.
@@ -289,7 +290,7 @@ pub unsafe fn ex_change(args: *mut ExArg) {
 
     // The ! flag toggles autoindent.
     // SAFETY: `curbuf` is live.
-    let autoindent = cur_buf().b_p_ai;
+    let autoindent = Buf::current().b_p_ai;
     if if forceit != 0 {
         autoindent == 0
     } else {
@@ -302,7 +303,7 @@ pub unsafe fn ex_change(args: *mut ExArg) {
     let mut lnum = line2;
     while lnum >= line1 {
         // SAFETY: `curbuf` is live and `line1` is a line of it.
-        if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
             // Nothing left to delete.
             break;
         }
@@ -312,7 +313,7 @@ pub unsafe fn ex_change(args: *mut ExArg) {
 
     // Make sure the cursor is not beyond the end of the file now.
     // SAFETY: `curwin` is the live current window.
-    check_cursor_lnum(cur_win());
+    check_cursor_lnum(Win::current());
     unsafe { deleted_lines_mark(line1, line2 - lnum) };
     // ":append" on the line above the deleted lines.
     args.line2 = line1;
@@ -354,7 +355,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
         bigness = unsafe { atol(arg.add(at)) };
         // `bigness` could be < 0 if atol() overflowed.
         // SAFETY: `curbuf` is live.
-        let cap = int64_t::from(cur_buf().b_ml.ml_line_count) * 2;
+        let cap = int64_t::from(Buf::current().b_ml.ml_line_count) * 2;
         if bigness > cap || bigness < 0 {
             bigness = cap;
         }
@@ -402,7 +403,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
     };
 
     // SAFETY: `curbuf` is live.
-    let last = cur_buf().b_ml.ml_line_count;
+    let last = Buf::current().b_ml.ml_line_count;
     start = start.max(1);
     end = end.min(last);
     curs = curs.max(1).min(last);
@@ -428,9 +429,9 @@ pub unsafe fn ex_z(args: *mut ExArg) {
     }
 
     // SAFETY: `curwin` is the live current window.
-    if cur_win().w_cursor.lnum != curs {
-        cur_win().w_cursor.lnum = curs;
-        cur_win().w_cursor.col = 0;
+    if Win::current().w_cursor.lnum != curs {
+        Win::current().w_cursor.lnum = curs;
+        Win::current().w_cursor.col = 0;
     }
     ex_no_reprint.set(true);
 }
@@ -445,9 +446,9 @@ unsafe fn default_bigness(forceit: c_int) -> int64_t {
     if forceit != 0 {
         int64_t::from(Rows.get() - 1)
     } else if firstwin.get() == lastwin.get() {
-        cur_win().w_onebuf_opt.wo_scr * 2
+        Win::current().w_onebuf_opt.wo_scr * 2
     } else {
-        int64_t::from(cur_win().w_view_height - 3)
+        int64_t::from(Win::current().w_view_height - 3)
     }
 }
 

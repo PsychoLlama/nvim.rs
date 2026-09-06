@@ -134,7 +134,7 @@ pub unsafe fn get_spec_reg(
                 // SAFETY: main thread, with a current buffer; it only reports.
                 let _ = unsafe { check_fname() }; // will give an error message
             }
-            value = cur_buf().b_fname;
+            value = Buf::current().b_fname;
             true
         }
         // `"#` -- the alternate file name.
@@ -216,7 +216,7 @@ pub unsafe fn get_spec_reg(
         Ctrl_L if errmsg => {
             // SAFETY: main thread; the cursor is on a line of its own window's
             // buffer, and the line stays put until the buffer changes.
-            value = unsafe { ml_get_buf(cur_win().w_buffer, cur_win().w_cursor.lnum) };
+            value = unsafe { ml_get_buf(Win::current().w_buffer, Win::current().w_cursor.lnum) };
             true
         }
         // `"_` -- the black hole, which reads as empty.
@@ -232,14 +232,4 @@ pub unsafe fn get_spec_reg(
     // SAFETY: as above.
     unsafe { *allocated = owned };
     found
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

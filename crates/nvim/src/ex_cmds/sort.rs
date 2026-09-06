@@ -16,8 +16,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::LineCopy;
 use super::say;
-use super::{LineCopy, cur_buf, cur_win};
 use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -43,6 +43,7 @@ use crate::types::{
 };
 use crate::undo::u_save;
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use ::libc::{strcasecmp, strcoll, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
@@ -748,10 +749,10 @@ unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Plac
                 kExtmarkUndo,
             )
         };
-        changed_lines(cur_buf(), line1, 0, line2 + 1, -deleted, true);
+        changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
     }
 
-    cur_win().w_cursor.lnum = line1;
+    Win::current().w_cursor.lnum = line1;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }
 
@@ -945,9 +946,9 @@ unsafe fn uniq_range(args: &mut ExArg) {
         say::more(-deleted);
         if change_occurred {
             // SAFETY: as above.
-            changed_lines(cur_buf(), line1, 0, line2 + 1, -deleted, true);
+            changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
         }
-        cur_win().w_cursor.lnum = line1;
+        Win::current().w_cursor.lnum = line1;
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 

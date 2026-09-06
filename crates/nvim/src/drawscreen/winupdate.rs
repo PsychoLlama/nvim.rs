@@ -680,7 +680,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn plan_visual_area(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
-    let shown = visual_selection().filter(|_| buffer == cur_win().w_buffer);
+    let shown = visual_selection().filter(|_| buffer == Win::current().w_buffer);
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
         return;
     }
@@ -757,7 +757,7 @@ unsafe fn visual_line_range(
     redr_type: c_int,
 ) -> (LineNr, LineNr) {
     // SAFETY: the caller's window.
-    let cursor = cur_win().w_cursor.lnum;
+    let cursor = Win::current().w_cursor.lnum;
     let anchor = sel.anchor.lnum;
 
     let (mut from, mut to) =
@@ -818,9 +818,9 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 
     // With 'linebreak' the columns are computed as if 'virtualedit' were
     // "all", because that is how the selection is drawn.
-    let save_ve_flags = cur_win().w_onebuf_opt.wo_ve_flags;
-    if cur_win().w_onebuf_opt.wo_lbr != 0 {
-        cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll;
+    let save_ve_flags = Win::current().w_onebuf_opt.wo_ve_flags;
+    if Win::current().w_onebuf_opt.wo_lbr != 0 {
+        Win::current().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll;
     }
     unsafe {
         getvcols(
@@ -832,19 +832,19 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
         )
     };
     toc += 1;
-    cur_win().w_onebuf_opt.wo_ve_flags = save_ve_flags;
+    Win::current().w_onebuf_opt.wo_ve_flags = save_ve_flags;
 
-    if cur_win().w_curswant != MAXCOL as ColNr {
+    if Win::current().w_curswant != MAXCOL as ColNr {
         return (fromc, toc);
     }
 
     // `$` in blockwise mode: highlight to the end of every line, unless
     // 'virtualedit' has "block", in which case it stops at the longest one.
-    if get_ve_flags(cur_win()) & kOptVeFlagBlock == 0 {
+    if get_ve_flags(Win::current()) & kOptVeFlagBlock == 0 {
         return (fromc, MAXCOL as ColNr);
     }
 
-    let cursor_lnum = cur_win().w_cursor.lnum;
+    let cursor_lnum = Win::current().w_cursor.lnum;
     let anchor_lnum = sel.anchor.lnum;
     let cursor_above = cursor_lnum < anchor_lnum;
     let mut pos = Pos::default();
@@ -880,12 +880,12 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn remember_visual_area(mut window: Win, buffer: *mut Buffer) {
     // SAFETY: the caller's window and the global Visual state.
-    if let Some(sel) = visual_selection().filter(|_| buffer == cur_win().w_buffer) {
+    if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().w_buffer) {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
-        window.w_old_cursor_lnum = cur_win().w_cursor.lnum;
+        window.w_old_cursor_lnum = Win::current().w_cursor.lnum;
         window.w_old_visual_lnum = sel.anchor.lnum;
         window.w_old_visual_col = sel.anchor.col;
-        window.w_old_curswant = cur_win().w_curswant;
+        window.w_old_curswant = Win::current().w_curswant;
     } else {
         window.w_old_visual_mode = 0;
         window.w_old_cursor_lnum = 0;
@@ -943,7 +943,7 @@ unsafe fn finish_botline(
         if window.raw() == Win::current_raw() && window.w_botline != old_botline && !RECURSIVE.get()
         {
             RECURSIVE.set(true);
-            cur_win().w_valid.clear(WinValid::TOPLINE);
+            Win::current().w_valid.clear(WinValid::TOPLINE);
             update_topline(Win::current()); // may invalidate w_botline again
             // A new redraw, either from a moved topline or a reset skipcol.
             if must_redraw.get() != 0 {
@@ -962,9 +962,4 @@ unsafe fn finish_botline(
     if nrwidth_before != window.w_nrwidth && !unsafe { (*buffer).terminal }.is_null() {
         unsafe { terminal_check_size((*buffer).terminal) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

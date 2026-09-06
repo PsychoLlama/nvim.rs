@@ -130,7 +130,7 @@ impl CptScan {
 /// `'thesaurusfunc'` is set.
 pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
-        && (unsafe { *cur_buf().b_p_tsrfu } as c_int != NUL
+        && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
             || unsafe { *p_tsrfu.get() } as c_int != NUL)
 }
 
@@ -175,7 +175,7 @@ pub(crate) unsafe fn process_next_cpt_value(
 
     'done: {
         if unsafe { (*st).cpt.at() } as c_int == '.' as c_int
-            && !cur_buf().b_scanned
+            && !Buf::current().b_scanned
             && !skip_source
             && !compl_time_slice_expired.get()
         {
@@ -350,15 +350,15 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
     let files = if !dict.is_null() {
         dict
     } else if compl_type == CTRL_X_THESAURUS {
-        if unsafe { *cur_buf().b_p_tsr } as c_int == NUL {
+        if unsafe { *Buf::current().b_p_tsr } as c_int == NUL {
             p_tsr.get()
         } else {
-            cur_buf().b_p_tsr
+            Buf::current().b_p_tsr
         }
-    } else if unsafe { *cur_buf().b_p_dict } as c_int == NUL {
+    } else if unsafe { *Buf::current().b_p_dict } as c_int == NUL {
         p_dict.get()
     } else {
-        cur_buf().b_p_dict
+        Buf::current().b_p_dict
     };
     let flags = if dict.is_null() { 0 } else { dict_f };
     let thesaurus = compl_type == CTRL_X_THESAURUS;
@@ -382,7 +382,7 @@ pub(crate) unsafe fn get_next_tag_completion() {
     if ctrl_x_mode_not_default() {
         flags |= TAG_VERBOSE;
     }
-    let (pat, fname) = (compl_pattern().data(), cur_buf().b_ffname);
+    let (pat, fname) = (compl_pattern().data(), Buf::current().b_ffname);
     let (count, out) = (&raw mut num_matches, &raw mut matches);
     // SAFETY: `pat` is the running completion's NUL-terminated pattern, and
     // the two out-parameters are this frame's own locals.
@@ -671,7 +671,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
         let option = if compl_cont_status.get() & CONT_LOCAL != 0 {
             c".".as_ptr()
         } else {
-            cur_buf().b_p_cpt
+            Buf::current().b_p_cpt
         };
         // SAFETY: `st` is the scan state cell, and `option` is a
         // NUL-terminated option string.
@@ -907,9 +907,4 @@ pub(crate) unsafe fn scan_progress(msg: *mut c_char) {
     let state = c"running".as_ptr().cast_mut();
     // SAFETY: the caller's message, and two static kind/state names.
     unsafe { msg_progress(msg, kind, state, HLF_R, false, true) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

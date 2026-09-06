@@ -136,7 +136,7 @@ pub unsafe fn check_timestamps(focus: c_int) -> c_int {
         || global_busy.get() != 0
         || typeahead().maplen() != 0
         || autocmd_busy.get()
-        || cur_buf().b_ro_locked > 0
+        || Buf::current().b_ro_locked > 0
         || allbuf_lock.get() > 0
     {
         need_check_timestamps.set(true); // check later
@@ -210,7 +210,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     // Delete all the lines in "frombuf".
     if retval != FAIL {
         frombuf.make_current();
-        let mut lnum = cur_buf().b_ml.ml_line_count;
+        let mut lnum = Buf::current().b_ml.ml_line_count;
         while lnum > 0 {
             if unsafe { ml_delete(lnum) }.is_err() {
                 // Oops! We could try putting back the saved lines, but
@@ -550,14 +550,20 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         unsafe { prep_exarg(&raw mut ea, buffer) };
     }
 
-    let old_cursor = cur_win().w_cursor;
-    let old_topline = cur_win().w_topline;
+    let old_cursor = Win::current().w_cursor;
+    let old_topline = Win::current().w_topline;
 
-    if p_ur.get() < 0 || cur_buf().b_ml.ml_line_count as OptInt <= p_ur.get() {
+    if p_ur.get() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur.get() {
         // Save all the text, so that the reload can be undone. Sync first
         // so that this is a separate undo-able action.
         u_sync(false);
-        saved = u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true);
+        saved = u_savecommon(
+            Buf::current(),
+            0,
+            Buf::current().b_ml.ml_line_count + 1,
+            0,
+            true,
+        );
         flags |= READ_KEEP_UNDO as c_int;
     }
 
@@ -579,10 +585,10 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         {
             // Open the memline.
             scratch.make_current();
-            cur_win().w_buffer = savebuf;
+            Win::current().w_buffer = savebuf;
             saved = unsafe { ml_open(Buf::current_raw()) };
             buffer.make_current();
-            cur_win().w_buffer = buffer.raw();
+            Win::current().w_buffer = buffer.raw();
         }
         if savebuf.is_null()
             || saved.is_err()
@@ -599,8 +605,8 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     }
 
     if saved.is_ok() {
-        cur_buf().b_flags |= BufFlags::CHECK_RO; // check for RO again
-        cur_buf().b_keep_filetype = true; // don't detect 'filetype'
+        Buf::current().b_flags |= BufFlags::CHECK_RO; // check for RO again
+        Buf::current().b_keep_filetype = true; // don't detect 'filetype'
         let (ffname, fname) = (buffer.b_ffname, buffer.b_fname);
         let last = MAXLNUM as LineNr;
         let quiet = shortmess(ShmFlag::FILEINFO);
@@ -632,10 +638,10 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 u_clearallandblockfree(buffer);
             } else {
                 // Mark all undo states as changed.
-                u_unchanged(cur_buf());
+                u_unchanged(Buf::current());
             }
             unsafe { buf_updates_unload(Buf::current_raw(), true) };
-            cur_buf().b_mod_set = true;
+            Buf::current().b_mod_set = true;
         }
     }
     unsafe { xfree(ea.cmd.cast()) };
@@ -645,19 +651,19 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     }
 
     // Invalidate diff info if necessary.
-    diff_invalidate(cur_buf());
+    diff_invalidate(Buf::current());
 
     // Restore the topline and cursor position and check them; lines may
     // have been removed.
-    cur_win().w_topline = old_topline.min(cur_buf().b_ml.ml_line_count);
-    cur_win().w_cursor = old_cursor;
+    Win::current().w_topline = old_topline.min(Buf::current().b_ml.ml_line_count);
+    Win::current().w_cursor = old_cursor;
     check_cursor(Win::current());
     update_topline(Win::current());
-    cur_buf().b_keep_filetype = false;
+    Buf::current().b_keep_filetype = false;
 
     // Update folds unless they are defined manually.
     for wp in tab_windows() {
-        if wp.w_buffer == cur_win().w_buffer && !foldmethod_is_manual(wp) {
+        if wp.w_buffer == Win::current().w_buffer && !foldmethod_is_manual(wp) {
             fold_update_all(wp);
         }
     }
@@ -665,8 +671,8 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // If the mode didn't change and 'readonly' was set, keep the old
     // value; the user probably used the ":view" command. But don't reset
     // it, there might have been a read error.
-    if orig_mode == cur_buf().b_orig_mode {
-        cur_buf().b_p_ro |= old_ro;
+    if orig_mode == Buf::current().b_orig_mode {
+        Buf::current().b_p_ro |= old_ro;
     }
 
     // Modelines must override settings done by autocommands.
@@ -693,18 +699,8 @@ pub unsafe fn buf_store_file_info(mut buffer: Buf, file_info: *mut FileInfo) {
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
 pub unsafe fn write_lnum_adjust(offset: LineNr) {
-    if cur_buf().b_no_eol_lnum != 0 {
+    if Buf::current().b_no_eol_lnum != 0 {
         // Only if there is a missing end-of-line.
-        cur_buf().b_no_eol_lnum += offset;
+        Buf::current().b_no_eol_lnum += offset;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

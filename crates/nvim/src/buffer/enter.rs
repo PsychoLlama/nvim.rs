@@ -229,16 +229,16 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD as c_int
         || action == DOBUF_DEL as c_int
         || action == DOBUF_WIPE as c_int;
-    let old_tw: OptInt = cur_buf().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw;
     let winid_before = last_winid();
 
     if update_jumplist {
         set_pcmark();
     }
 
-    let mut win = cur_win();
+    let mut win = Win::current();
     if !cmdmod_has(CmdModFlags::KEEPALT) {
-        win.w_alt_fnum = cur_buf().handle as c_int; // remember alternate file
+        win.w_alt_fnum = Buf::current().handle as c_int; // remember alternate file
     }
     remember_altfpos(win); // remember curpos
 
@@ -246,7 +246,7 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     VIsual_reselect.set(0);
 
     // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
-    let prevbuf = cur_buf();
+    let prevbuf = Buf::current();
     let prevbufref = BufRef::of(prevbuf);
     let newbufref = BufRef::of(buffer);
     let prev_nwindows = prevbuf.b_nwindows;
@@ -256,7 +256,7 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
-    if !fire(AutoEvent::BufLeave, cur_buf())
+    if !fire(AutoEvent::BufLeave, Buf::current())
         || prevbufref.valid() && newbufref.valid() && !aborting_now()
     {
         leave_prevbuf(prevbufref, action, unload, prev_nwindows, winid_before);
@@ -271,7 +271,7 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
     let valid = buf_id.valid();
     if valid && buffer.raw() != Buf::current_raw() && !aborting_now()
-        || cur_win().w_buffer.is_null()
+        || Win::current().w_buffer.is_null()
     {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows
@@ -285,8 +285,8 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
         } else {
             last_buf().expect("lastbuf != NULL")
         });
-        if old_tw != cur_buf().b_p_tw {
-            recheck_colorcolumn(cur_win());
+        if old_tw != Buf::current().b_p_tw {
+            recheck_colorcolumn(Win::current());
         }
     }
 
@@ -305,8 +305,8 @@ fn leave_prevbuf(
     winid_before: c_int,
 ) {
     let prevraw = prevbufref.raw();
-    if prevraw == cur_win().w_buffer {
-        reset_syntax(cur_win());
+    if prevraw == Win::current().w_buffer {
+        reset_syntax(Win::current());
     }
     // autocommands may have opened a new window with prevbuf, grr
     // SAFETY: the caller's guard has just said `prevbuf` is still the buffer
@@ -329,11 +329,11 @@ fn leave_prevbuf(
     // Do not sync when in Insert mode and the buffer is open in another
     // window, might be a timer doing something in another window.
     if prevraw == Buf::current_raw()
-        && (State.get() & MODE_INSERT == 0 || cur_buf().b_nwindows <= 1)
+        && (State.get() & MODE_INSERT == 0 || Buf::current().b_nwindows <= 1)
     {
         sync_undo();
     }
-    let win = if prevraw == cur_win().w_buffer {
+    let win = if prevraw == Win::current().w_buffer {
         Win::current_raw()
     } else {
         ptr::null_mut::<Window>()
@@ -366,7 +366,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     }
 
     // Get the buffer in the current window.
-    let mut win = cur_win();
+    let mut win = Win::current();
     win.w_buffer = buffer.raw();
     buffer.make_current();
     buffer.b_nwindows += 1;
@@ -382,7 +382,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     invalidate_window_folds(win); // update folds (later).
 
     if win.w_onebuf_opt.wo_diff != 0 {
-        diff_add(cur_buf());
+        diff_add(Buf::current());
     }
 
     win.w_s = &raw mut buffer.b_s;
@@ -414,25 +414,25 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         if msg_silent.get() == 0 && !shortmess(ShmFlag::FILEINFO) {
             need_fileinfo.set(true); // display file info after redraw
         }
-        check_timestamp(cur_buf()); // check if file changed
+        check_timestamp(Buf::current()); // check if file changed
 
-        let mut win = cur_win();
+        let mut win = Win::current();
         win.w_topline = 1 as LineNr;
         win.w_topfill = 0;
-        fire(AutoEvent::BufEnter, cur_buf());
-        fire(AutoEvent::BufWinEnter, cur_buf());
+        fire(AutoEvent::BufEnter, Buf::current());
+        fire(AutoEvent::BufWinEnter, Buf::current());
     }
 
     // If autocommands did not change the cursor position, restore cursor lnum
     // and possibly cursor col.
-    if cur_win().cursor().lnum == 1 as LineNr && cursor_in_indent() {
+    if Win::current().cursor().lnum == 1 as LineNr && cursor_in_indent() {
         restore_position();
     }
 
-    recheck_arg_idx(cur_win()); // check for valid arg_idx
+    recheck_arg_idx(Win::current()); // check for valid arg_idx
     rebuild_title();
     // when autocmds didn't change it
-    let win = cur_win();
+    let win = Win::current();
     if win.w_topline == 1 as LineNr && !win.w_topline_was_set {
         scroll_halfway(win); // redisplay at correct position
     }
@@ -440,19 +440,19 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     // Change directories when the 'acd' option is set.
     do_autochdir_now();
 
-    if cur_buf().b_kmap_state as c_int & KEYMAP_INIT != 0 {
+    if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
         init_keymap();
     }
     // May need to set the spell language.  Can only do this after the buffer
     // has been properly setup.
-    let (buf, win) = (cur_buf(), cur_win());
+    let (buf, win) = (Buf::current(), Win::current());
     if !buf.b_help && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
         set_spelllang(win);
     }
-    cur_buf().b_last_used = now();
+    Buf::current().b_last_used = now();
 
-    if !cur_buf().terminal.is_null() {
-        resize_terminal(cur_buf().terminal);
+    if !Buf::current().terminal.is_null() {
+        resize_terminal(Buf::current().terminal);
     }
 
     win.redraw_later(UPD_NOT_VALID);
@@ -467,7 +467,7 @@ fn do_autochdir_now() {
     if p_acd.get() == 0 {
         return;
     }
-    let fname = cur_buf().b_ffname;
+    let fname = Buf::current().b_ffname;
     if starting.get() == 0 && !fname.is_null() && chdir_to_file(fname).is_ok() {
         last_chdir_reason.set(c"autochdir".as_ptr().cast_mut());
         reshorten_fnames();
@@ -487,7 +487,7 @@ pub fn no_write_message_buf(buffer: Buf) {
 }
 
 pub fn no_write_message() {
-    let buf = cur_buf();
+    let buf = Buf::current();
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {

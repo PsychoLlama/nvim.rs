@@ -190,7 +190,7 @@ fn free(p: *mut c_char) {
 /// global option.
 fn search_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer.
-    let local = cur_buf().b_p_path;
+    let local = Buf::current().b_p_path;
     // SAFETY: an option string is NUL-terminated, so its first byte is there.
     if unsafe { *local } == 0 {
         p_path.get()
@@ -205,7 +205,7 @@ fn suffixes(find_what: c_int) -> *mut c_char {
         return c"".as_ptr().cast_mut();
     }
     // SAFETY: `curbuf` names the live current buffer.
-    cur_buf().b_p_sua
+    Buf::current().b_p_sua
 }
 
 /// Set `v:val`, or clear it when `name` is NULL.
@@ -262,7 +262,7 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
         // about to be replaced.
         free(fresult);
         // SAFETY: `curbuf` names the live current buffer.
-        let rel = cur_buf().b_ffname;
+        let rel = Buf::current().b_ffname;
         // Only the first round is given the name; the ones after it continue
         // the walk the context remembers.
         let (p, n) = if first {
@@ -495,9 +495,4 @@ pub unsafe fn f_readdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
             list.push(name);
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

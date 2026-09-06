@@ -66,7 +66,7 @@ pub(crate) unsafe fn nv_screengo(
 ) -> bool {
     // SAFETY (throughout): `op` is the caller's live operator.
     let mut op = unsafe { Op::new(op) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let wp = win;
     // SAFETY: the cursor line is a line of the window's own buffer.
     let mut linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
@@ -203,7 +203,7 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
-    let mut win = cur_win();
+    let mut win = Win::current();
     let wp = win;
     op.motion_type = kMTLineWise;
     setpcmark();
@@ -238,7 +238,7 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
             validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
-            while (win.w_topline + n as LineNr) < cur_buf().b_ml.ml_line_count {
+            while (win.w_topline + n as LineNr) < Buf::current().b_ml.ml_line_count {
                 if n > 0
                     && used + unsafe { win_get_fill(wp, win.w_topline + n as LineNr) } / 2 >= half
                 {
@@ -278,7 +278,7 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
                 n = (lnum - win.w_topline) as c_int;
             }
         }
-        win.w_cursor.lnum = (win.w_topline + n as LineNr).min(cur_buf().b_ml.ml_line_count);
+        win.w_cursor.lnum = (win.w_topline + n as LineNr).min(Buf::current().b_ml.ml_line_count);
     }
     if op.op_type == OpType::Nop {
         // SAFETY: `wp` is the live window.
@@ -303,7 +303,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
-    let mut win = cur_win();
+    let mut win = Win::current();
     op.motion_type = kMTCharWise;
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
@@ -334,7 +334,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
         if at_end {
             if wrap_flag != NUL
                 && !unsafe { vim_strchr(p_ww.get(), wrap_flag) }.is_null()
-                && win.w_cursor.lnum < cur_buf().b_ml.ml_line_count
+                && win.w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {
                 // A pending exclusive operator eats the line break by
                 // becoming inclusive instead of moving.
@@ -388,7 +388,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     // A modifier turns this into a word move.
     if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
         if mod_mask.get().has(ModMask::CTRL) {
@@ -486,7 +486,9 @@ pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
             cmdwin_result.set(CAR);
             return;
         }
-        if buf_is_prompt(current_buf()) && cur_win().w_cursor.lnum == cur_buf().b_ml.ml_line_count {
+        if buf_is_prompt(current_buf())
+            && Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count
+        {
             unsafe { prompt_invoke_callback() };
             if restart_edit.get() == 0 {
                 restart_edit.set('a' as c_int);
@@ -526,8 +528,8 @@ pub(crate) unsafe fn nv_dollar(cmd_arg: *mut CmdArg) {
     ca.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
-    if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OpType::Nop {
-        cur_win().w_curswant = MAXCOL as ColNr;
+    if !virtual_active(Win::current()) || gchar_cursor() != NUL || ca.op().op_type == OpType::Nop {
+        Win::current().w_curswant = MAXCOL as ColNr;
     }
     if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
@@ -561,19 +563,19 @@ pub(crate) unsafe fn nv_csearch(cmd_arg: *mut CmdArg) {
         }
         return;
     }
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
     if gchar_cursor() == TAB
-        && virtual_active(cur_win())
+        && virtual_active(Win::current())
         && ca.arg == FORWARD as c_int
         && (t_cmd || ca.op().op_type != OpType::Nop)
     {
-        let win = cur_win();
+        let win = Win::current();
         let (scol, ecol) = win.vcol_span(win.cursor());
-        cur_win().w_cursor.coladd = ecol - scol;
+        Win::current().w_cursor.coladd = ecol - scol;
     } else {
-        cur_win().w_cursor.coladd = 0;
+        Win::current().w_cursor.coladd = 0;
     }
     unsafe { adjust_for_sel(cmd_arg) };
     unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
@@ -586,7 +588,7 @@ pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let count0 = ca.count0;
     let mut op = ca.op();
-    let mut win = cur_win();
+    let mut win = Win::current();
     let lnum = win.w_cursor.lnum;
     op.inclusive = true;
     if count0 != 0 {
@@ -596,7 +598,7 @@ pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
         } else {
             op.motion_type = kMTLineWise;
             setpcmark();
-            let count = cur_buf().b_ml.ml_line_count;
+            let count = Buf::current().b_ml.ml_line_count;
             // Divide first for a file long enough that `count * 100`
             // would not fit.
             win.w_cursor.lnum = if count >= 21474836 {
@@ -638,13 +640,13 @@ pub(crate) unsafe fn nv_brace(cmd_arg: *mut CmdArg) {
     ca.op().motion_type = kMTCharWise;
     ca.op().use_reg_one = true;
     ca.op().inclusive = false;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     if unsafe { findsent(ca.arg as Direction, ca.count1) }.is_err() {
         clear_op_beep(ca.op());
         return;
     }
     unsafe { adjust_cursor(ca.oap) };
-    cur_win().w_cursor.coladd = 0;
+    Win::current().w_cursor.coladd = 0;
     unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
 }
 
@@ -655,12 +657,12 @@ pub(crate) unsafe fn nv_findpar(cmd_arg: *mut CmdArg) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     ca.op().use_reg_one = true;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     if !unsafe { findpar(&raw mut ca.op().inclusive, ca.arg, ca.count1, NUL, false) } {
         clear_op_beep(ca.op());
         return;
     }
-    cur_win().w_cursor.coladd = 0;
+    Win::current().w_cursor.coladd = 0;
     unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
 }
 
@@ -687,12 +689,12 @@ pub(crate) unsafe fn nv_pipe(cmd_arg: *mut CmdArg) {
     beginline(BeginlineOpts::NONE);
     if ca.count0 > 0 {
         coladvance(Win::current(), ca.count0 - 1);
-        cur_win().w_curswant = ca.count0 - 1;
+        Win::current().w_curswant = ca.count0 - 1;
     } else {
-        cur_win().w_curswant = 0;
+        Win::current().w_curswant = 0;
     }
     // The column was named outright, so it is not a remembered want.
-    cur_win().w_set_curswant = false;
+    Win::current().w_set_curswant = false;
 }
 
 /// `b` and `B`: back a word.
@@ -701,7 +703,7 @@ pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     if unsafe { bck_word(ca.count1, ca.arg != 0, false) }.is_err() {
         clear_op_beep(ca.op());
     } else {
@@ -713,7 +715,7 @@ pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let startpos = cur_win().w_cursor;
+    let startpos = Win::current().w_cursor;
     let mut word_end = ca.cmdchar == 'e' as c_int || ca.cmdchar == 'E' as c_int;
     ca.op().inclusive = word_end;
 
@@ -732,13 +734,13 @@ pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
     }
 
     ca.op().motion_type = kMTCharWise;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     let moved = if word_end {
         unsafe { end_word(ca.count1, ca.arg != 0, cw_on_word, false) }
     } else {
         unsafe { fwd_word(ca.count1, ca.arg != 0, ca.op().op_type != OpType::Nop) }
     };
-    if lt(startpos, cur_win().w_cursor) {
+    if lt(startpos, Win::current().w_cursor) {
         unsafe { adjust_cursor(ca.oap) };
     }
     if moved.is_err() && ca.op().op_type == OpType::Nop {
@@ -754,13 +756,13 @@ pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
     // SAFETY (throughout): `op` is the caller's live operator.
     let mut op = unsafe { Op::new(op) };
-    if cur_win().w_cursor.col > 0
+    if Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL
         && (!visual_active() || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
-        && !virtual_active(cur_win())
-        && get_ve_flags(cur_win()) & kOptVeFlagOnemore as c_uint == 0
+        && !virtual_active(Win::current())
+        && get_ve_flags(Win::current()) & kOptVeFlagOnemore as c_uint == 0
     {
-        cur_win().w_cursor.col -= 1;
+        Win::current().w_cursor.col -= 1;
         unsafe { mb_adjust_cursor() };
         op.inclusive = true;
     }
@@ -782,26 +784,16 @@ pub(crate) unsafe fn nv_beginline(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_goto(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let last = cur_buf().b_ml.ml_line_count;
+    let last = Buf::current().b_ml.ml_line_count;
     let mut lnum = if ca.arg != 0 { last } else { 1 };
     ca.op().motion_type = kMTLineWise;
     setpcmark();
     if ca.count0 != 0 {
         lnum = ca.count0 as LineNr;
     }
-    cur_win().w_cursor.lnum = lnum.max(1).min(last);
+    Win::current().w_cursor.lnum = lnum.max(1).min(last);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     unsafe { may_fold_open(cmd_arg, kOptFdoFlagJump as c_uint) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// Whether `lnum` is inside a closed fold of `window`.

@@ -34,7 +34,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
     if unsafe { *dict } as c_int == NUL {
         // When 'dictionary' is empty and spell checking is enabled use
         // "spell".
-        if !thesaurus && cur_win().w_onebuf_opt.wo_spell != 0 {
+        if !thesaurus && Win::current().w_onebuf_opt.wo_spell != 0 {
             dict = c"spell".as_ptr().cast_mut();
         } else {
             return;
@@ -53,7 +53,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs.get();
-    if cur_buf().b_p_inf != 0 {
+    if Buf::current().b_p_inf != 0 {
         p_scs.set(0);
     }
 
@@ -651,7 +651,7 @@ pub(crate) unsafe fn get_next_default_completion(
         }
 
         if is_nearest_active() && in_curbuf {
-            score = (match_pos.lnum - cur_win().w_cursor.lnum) as c_int;
+            score = (match_pos.lnum - Win::current().w_cursor.lnum) as c_int;
             score = score.abs();
         }
 
@@ -798,16 +798,6 @@ unsafe fn add_scanned_word(
         let len = end.offset_from(start) as c_int;
         ins_compl_add_infercase(start, len, p_ic.get() != 0, fname, dir, false, score)
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 // ---------------------------------------------------------------------------

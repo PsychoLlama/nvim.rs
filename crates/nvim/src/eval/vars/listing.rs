@@ -71,7 +71,7 @@ pub(crate) unsafe fn list_glob_vars(first: *mut c_int) {
 pub(crate) unsafe fn list_buf_vars(first: *mut c_int) {
     // SAFETY: the current buffer's own `b:` dictionary; `first` is the
     // caller's obligation.
-    let ht = unsafe { &raw mut (*cur_buf().b_vars).dv_hashtab };
+    let ht = unsafe { &raw mut (*Buf::current().b_vars).dv_hashtab };
     unsafe { list_hashtable_vars(ht, c"b:".as_ptr(), true, first) }
 }
 
@@ -81,7 +81,7 @@ pub(crate) unsafe fn list_buf_vars(first: *mut c_int) {
 /// As [`list_glob_vars`].
 pub(crate) unsafe fn list_win_vars(first: *mut c_int) {
     // SAFETY: the current window's own `w:` dictionary.
-    let ht = unsafe { &raw mut (*cur_win().w_vars).dv_hashtab };
+    let ht = unsafe { &raw mut (*Win::current().w_vars).dv_hashtab };
     unsafe { list_hashtable_vars(ht, c"w:".as_ptr(), true, first) }
 }
 
@@ -316,14 +316,4 @@ unsafe fn list_one_var_a(
         unsafe { msg_clr_eos() };
         unsafe { *first = 0 };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

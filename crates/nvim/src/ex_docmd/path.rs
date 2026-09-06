@@ -62,7 +62,7 @@ fn global_findfunc() -> *mut Callback {
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
 pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
-    if byte(cur_buf().b_p_ffu) != NUL {
+    if byte(Buf::current().b_p_ffu) != NUL {
         // SAFETY: `curbuf` is set from startup to exit, and the address
         // of a field is not a read of the buffer.
         unsafe { &raw mut (*Buf::current_raw()).b_ffu_cb }
@@ -219,7 +219,7 @@ pub unsafe fn set_ref_in_findfunc(copy_id: c_int) -> bool {
 pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
     match scope as c_int {
         s if s == kCdScopeTabpage as c_int => TabPage::current().tp_prevdir,
-        s if s == kCdScopeWindow as c_int => cur_win().w_prevdir,
+        s if s == kCdScopeWindow as c_int => Win::current().w_prevdir,
         _ => prev_dir.get(),
     }
 }
@@ -232,8 +232,8 @@ pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
 /// remembers what the global directory was, so that leaving a local
 /// directory can go back to it.
 pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
-    xfree(cur_win().w_localdir as *mut c_void);
-    cur_win().w_localdir = ptr::null_mut();
+    xfree(Win::current().w_localdir as *mut c_void);
+    Win::current().w_localdir = ptr::null_mut();
     if scope as c_int >= kCdScopeTabpage as c_int {
         xfree(TabPage::current().tp_localdir as *mut c_void);
         TabPage::current().tp_localdir = ptr::null_mut();
@@ -260,7 +260,7 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
             TabPage::current().tp_localdir = xstrdup(&raw mut cwd as *mut c_char);
         }
         s if s == kCdScopeWindow as c_int => {
-            cur_win().w_localdir = xstrdup(&raw mut cwd as *mut c_char);
+            Win::current().w_localdir = xstrdup(&raw mut cwd as *mut c_char);
         }
         // `kCdScopeInvalid`. Upstream aborts here; so does this.
         _ => unreachable!("post_chdir with an invalid scope"),
@@ -372,7 +372,7 @@ pub(crate) unsafe fn ex_pwd(_args: *mut ExArg) {
     if p_verbose.get() > 0 as OptInt {
         let context = if !last_chdir_reason.get().is_null() {
             last_chdir_reason.get()
-        } else if !cur_win().w_localdir.is_null() {
+        } else if !Win::current().w_localdir.is_null() {
             c"window".as_ptr() as *mut c_char
         } else if !TabPage::current().tp_localdir.is_null() {
             c"tabpage".as_ptr() as *mut c_char
@@ -385,16 +385,6 @@ pub(crate) unsafe fn ex_pwd(_args: *mut ExArg) {
     } else {
         unsafe { msg_ptr(dir.as_mut_ptr(), 0) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `do_autocmd_dirchanged()` as checked code.

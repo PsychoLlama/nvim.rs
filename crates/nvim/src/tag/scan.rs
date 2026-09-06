@@ -406,7 +406,7 @@ impl FindTags {
 
         // For CTRL-] in a help file prefer a match in the same
         // language: a help file for language xx is named "*.xxx".
-        let fname = cur_buf().b_fname;
+        let fname = Buf::current().b_fname;
         let flen = if fname.is_null() {
             0
         } else {
@@ -456,7 +456,7 @@ impl FindTags {
         // the growarray holds the allocated matches the callback made.
         if self.flags & TAG_NO_TAGFUNC as c_int != 0
             || tfu_in_use.get()
-            || unsafe { *cur_buf().b_p_tfu } == 0
+            || unsafe { *Buf::current().b_p_tfu } == 0
         {
             return NOTDONE;
         }
@@ -483,7 +483,7 @@ impl FindTags {
         // SAFETY: `tag_fname` is NUL-terminated, and the file this opens
         // is closed before the block ends.
         // A help tags file for another language is skipped entirely.
-        if cur_buf().b_help && !self.in_help_init() {
+        if Buf::current().b_help && !self.in_help_init() {
             return;
         }
 
@@ -714,7 +714,7 @@ pub unsafe fn find_tags(
 
     let save_p_ic = p_ic.get();
     // 'tagcase' decides how case is treated for this search.
-    let tagcase = match cur_buf().b_tc_flags {
+    let tagcase = match Buf::current().b_tc_flags {
         0 => tc_flags.get(),
         local => local,
     };
@@ -727,16 +727,16 @@ pub unsafe fn find_tags(
         _ => unsafe { abort() },
     }
 
-    let help_save = cur_buf().b_help;
+    let help_save = Buf::current().b_help;
 
     let mut st = FindTags::new(pat, flags, mincount);
     if st.help_only {
-        cur_buf().b_help = true;
+        Buf::current().b_help = true;
     }
 
     // In a help buffer a trailing "@xx" names the language wanted.
     let bytes = unsafe { CStr::from_ptr(pat) }.to_bytes();
-    let saved_pat: Option<Name> = if cur_buf().b_help
+    let saved_pat: Option<Name> = if Buf::current().b_help
         && let [.., b'@', a, b] = bytes
         && a.is_ascii_alphabetic()
         && b.is_ascii_alphabetic()
@@ -768,7 +768,7 @@ pub unsafe fn find_tags(
         retval = if tagfunc == OK { Ok(()) } else { Err(Failed) };
         if tagfunc == NOTDONE {
             // A ".txt" help file keeps "en" as its language.
-            let fname = cur_buf().b_fname;
+            let fname = Buf::current().b_fname;
             if flags & TAG_KEEP_LANG as c_int != 0
                 && st.help_lang_find.is_null()
                 && !fname.is_null()
@@ -821,13 +821,8 @@ pub unsafe fn find_tags(
     }
     unsafe { *num_matches = st.into_matches(matchesp) };
 
-    cur_buf().b_help = help_save;
+    Buf::current().b_help = help_save;
     p_ic.set(save_p_ic);
     drop(saved_pat);
     retval
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

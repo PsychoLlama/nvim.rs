@@ -30,7 +30,7 @@ use crate::winlayer::graph::lastwin;
 use crate::winlayer::{FrameRef, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
-    let cur = cur_win();
+    let cur = Win::current();
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
     let maxcount = if vertical {
@@ -55,7 +55,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     unsafe { block_autocmds() };
     let mut todo = count - 1;
     while todo > 0 {
-        let cur = cur_win();
+        let cur = Win::current();
         let (size, flags) = if vertical {
             let width = cur.w_width;
             (
@@ -84,7 +84,7 @@ pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
 /// Exchange the current window with the `prenum`th window of its row or
 /// column, or with the next one when `prenum` is zero.
 pub(crate) fn exchange(prenum: c_int) {
-    let mut cur = cur_win();
+    let mut cur = Win::current();
     if cur.w_floating {
         emsg(e_floatexchange);
         return;
@@ -164,23 +164,26 @@ pub(crate) fn exchange(prenum: c_int) {
     }
     // SAFETY: a live window; nothing derived from it is read afterwards.
     unsafe { win_enter(wp.raw(), true) };
-    cur_win().redraw_later(UPD_NOT_VALID);
+    Win::current().redraw_later(UPD_NOT_VALID);
     wp.redraw_later(UPD_NOT_VALID);
 }
 
 /// Rotate the windows in the current row or column `count` places, upwards or
 /// downwards.
 pub(crate) fn rotate(upwards: bool, count: c_int) {
-    if cur_win().w_floating {
+    if Win::current().w_floating {
         emsg(e_floatexchange);
         return;
     }
-    if count <= 0 || is_only_window(cur_win(), None) {
+    if count <= 0 || is_only_window(Win::current(), None) {
         // SAFETY: beeps.
         beep_flush();
         return;
     }
-    let parent = cur_win().frame().parent().expect("not the only window");
+    let parent = Win::current()
+        .frame()
+        .parent()
+        .expect("not the only window");
     // Check that all frames in this row or column are leaves.
     if parent.children().any(|frp| frp.win().is_none()) {
         err(c"E443: Cannot rotate when another window is split".as_ptr());
@@ -205,7 +208,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             wp2 = last.win();
         } else {
             // Last window becomes first window.
-            let frp = frames(Some(cur_win().frame()))
+            let frp = frames(Some(Win::current().frame()))
                 .last()
                 .expect("at least one");
             let w1 = frp.win().expect("a leaf frame holds a window");
@@ -291,7 +294,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     {
         setheight_win(height, window);
         if p_ea.get() != 0 {
-            let cur = cur_win();
+            let cur = Win::current();
             equal(Some(cur), cur == window, 'v' as c_int);
         }
     }
@@ -343,7 +346,7 @@ fn move_after(win1: Win, win2: Win) {
         append(Some(win2), win1, None);
         frame_append(win2.frame(), win1.frame());
         comp_positions(); // recompute window positions
-        cur_win().redraw_later(UPD_NOT_VALID);
+        Win::current().redraw_later(UPD_NOT_VALID);
     }
     win1.w_pos_changed = true;
     win2.w_pos_changed = true;

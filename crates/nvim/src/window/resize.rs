@@ -195,7 +195,7 @@ pub(crate) fn fix_scroll(resize: bool) {
 /// Move the cursor into the visible part of the window when a resize left it
 /// outside `'scrolloff'`.
 pub(crate) fn fix_cursor(normal: bool) {
-    let mut wp = cur_win();
+    let mut wp = Win::current();
     if skip_win_fix_cursor.get()
         || !wp.w_do_win_fix_cursor
         || wp.buffer().line_count() < wp.w_view_height as LineNr
@@ -229,7 +229,7 @@ pub(crate) fn fix_cursor(normal: bool) {
         } else {
             wp.w_fraction = if nlnum == bot { FRACTION_MULT } else { 0 };
             to_fraction(wp, wp.w_prev_height);
-            validate_botline(cur_win());
+            validate_botline(Win::current());
         }
     }
 }
@@ -369,7 +369,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     if height != prev_height {
         if height > 0 && valid_cursor {
             if window.is_current() && (keeps_cursor || window.w_floating) {
-                cur_win().validate_cursor();
+                Win::current().validate_cursor();
             }
             if window.w_view_height != prev_height {
                 // Recursive call: the cursor validation resized this window.
@@ -479,7 +479,7 @@ pub(crate) fn comp_scroll(window: Win) {
 // The rows that are not text
 
 pub unsafe fn command_height() {
-    let mut old_p_ch = cur_tab().tp_ch_used as c_int;
+    let mut old_p_ch = TabPage::current().tp_ch_used as c_int;
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
     let mut frp = Some(last_nonfloating(None).frame());
@@ -531,7 +531,7 @@ pub unsafe fn command_height() {
         unsafe { grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0) };
         msg_row.set(cmdline_row.get());
     }
-    cur_tab().tp_ch_used = p_ch.get();
+    TabPage::current().tp_ch_used = p_ch.get();
     min_set_ch.set(p_ch.get());
 }
 

@@ -49,7 +49,7 @@ pub(crate) unsafe fn prompt_text() -> *mut c_char {
 /// still means "at the end of the line" once the cursor has been moved onto
 /// the prompt line.
 pub(crate) fn init_prompt(cmdchar_todo: c_int) {
-    let mut win = cur_win();
+    let mut win = Win::current();
     // SAFETY: every `unsafe` call in this function is an editor-wide routine
     // whose only precondition is the live `curwin`/`curbuf` this mode runs
     // with; `prompt` and `text` are NUL-terminated strings of that buffer.
@@ -59,9 +59,9 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust
     // marks, this one included.
-    if start().lnum < 1 || start().lnum > cur_buf().b_ml.ml_line_count {
-        set_start_lnum(start().lnum.min(cur_buf().b_ml.ml_line_count).max(1));
-        cur_buf().b_prompt_append_new_line = true;
+    if start().lnum < 1 || start().lnum > Buf::current().b_ml.ml_line_count {
+        set_start_lnum(start().lnum.min(Buf::current().b_ml.ml_line_count).max(1));
+        Buf::current().b_prompt_append_new_line = true;
     }
 
     win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
@@ -91,17 +91,17 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
-            let lnum = cur_buf().b_ml.ml_line_count;
+            let lnum = Buf::current().b_ml.ml_line_count;
             let _ = unsafe { ml_append(lnum, prompt, 0, false) };
             unsafe { appended_lines_mark(lnum, 1) };
-            set_start_lnum(cur_buf().b_ml.ml_line_count);
-            cur_buf().b_prompt_append_new_line = true;
+            set_start_lnum(Buf::current().b_ml.ml_line_count);
+            Buf::current().b_prompt_append_new_line = true;
             // Like submitting: the undo history belonged to the old
             // prompt.
-            u_clearallandblockfree(cur_buf());
+            u_clearallandblockfree(Buf::current());
         }
         set_start_col(prompt_len);
-        win.w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+        win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         coladvance_win(win, MAXCOL as c_int);
     }
 
@@ -131,19 +131,19 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
 /// Where the prompt's editable part begins.
 #[inline(always)]
 fn start() -> Pos {
-    cur_buf().b_prompt_start.mark
+    Buf::current().b_prompt_start.mark
 }
 
 /// Move that mark to line `lnum`.
 #[inline(always)]
 fn set_start_lnum(lnum: LineNr) {
-    cur_buf().b_prompt_start.mark.lnum = lnum;
+    Buf::current().b_prompt_start.mark.lnum = lnum;
 }
 
 /// Move that mark to column `col`.
 #[inline(always)]
 fn set_start_col(col: ColNr) {
-    cur_buf().b_prompt_start.mark.col = col;
+    Buf::current().b_prompt_start.mark.col = col;
 }
 
 /// Move `win`'s cursor to virtual column `vcol` of its line.
@@ -159,16 +159,6 @@ fn coladvance_win(win: Win, vcol: c_int) {
 /// Must run with a live `curbuf`/`curwin`.
 pub(crate) unsafe fn prompt_curpos_editable() -> bool {
     let start = start();
-    let cursor = cur_win().w_cursor;
+    let cursor = Win::current().w_cursor;
     cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

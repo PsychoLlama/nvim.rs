@@ -384,7 +384,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
         // `copy_string` for a fresh allocation.
         let copy = unsafe { copy_string(match_0.cp_str, ptr::null_mut::<Arena>()) };
         compl_leader().set(copy);
-        let had_match = cur_win().w_cursor.col > compl_col.get();
+        let had_match = Win::current().w_cursor.col > compl_col.get();
         // SAFETY: the leader is a NUL-terminated string, and a completion is
         // running -- the caller's promise.
         unsafe { ins_compl_longest_insert(compl_leader().data()) };
@@ -432,7 +432,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
         // SAFETY: `p` and the leader's bytes are the same allocation.
         let len = unsafe { p.offset_from(leader.data()) } as size_t;
         compl_leader().set(String_0::from_raw_parts(leader.data(), len));
-        let had_match = cur_win().w_cursor.col > compl_col.get();
+        let had_match = Win::current().w_cursor.col > compl_col.get();
         // SAFETY: as in the branch above.
         unsafe { ins_compl_longest_insert(compl_leader().data()) };
         if !had_match {
@@ -956,9 +956,4 @@ pub(crate) unsafe fn remove_old_matches() {
         compl_curr_match.set(if forward { cur.raw() } else { cur.cp_next });
         current = cur.next();
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

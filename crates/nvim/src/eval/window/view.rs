@@ -131,7 +131,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     // autocommand may close one under it.
     let wp = arg_win(args, 0);
     let targetwin = arg_win(args, 1);
-    let oldwin = cur_win();
+    let oldwin = Win::current();
     let (Some(wp), Some(targetwin)) = (wp, targetwin) else {
         crate::semsg!("E957: Invalid window number");
         return;
@@ -176,7 +176,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// `wincol()` — the cursor's screen column within the window, one-based.
 pub unsafe fn f_wincol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
-    let win = cur_win();
+    let win = Win::current();
     validate_cursor(win);
     unsafe { (*result).vval.v_number = VarNumber::from(win.w_wcol + 1) };
 }
@@ -184,7 +184,7 @@ pub unsafe fn f_wincol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// `winline()` — the cursor's screen row within the window, one-based.
 pub unsafe fn f_winline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
-    let win = cur_win();
+    let win = Win::current();
     validate_cursor(win);
     unsafe { (*result).vval.v_number = VarNumber::from(win.w_wrow + 1) };
 }
@@ -213,7 +213,7 @@ pub unsafe fn f_winwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 pub unsafe fn f_winrestcmd(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curtab` is set, and `result` takes the text over at the end.
     let mut cmds = Vec::<u8>::new();
-    let tp = cur_tab();
+    let tp = TabPage::current();
     // Scoped so the buffer it borrows is free again for the tail below.
     {
         let mut emit = |prefix: &str, winnr: c_int, size: c_int| {
@@ -241,7 +241,7 @@ pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: Eval
         return;
     }
     let dict = unsafe { (*args).dict_or_null() };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
         // entry of it or NULL.
@@ -284,7 +284,7 @@ pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: Eval
     unsafe { win_new_width(win.raw(), win.w_width) };
     changed_window_setting(win);
     // SAFETY: `curbuf` is set from startup to exit.
-    let line_count = cur_buf().line_count();
+    let line_count = Buf::current().line_count();
     win.w_topline = restored_topline(win.w_topline, line_count);
     // SAFETY: a live window.
     check_topfill(win, true);
@@ -313,7 +313,7 @@ pub unsafe fn f_winsaveview(_args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // dictionary stays alive for the appends because `result` owns it.
     unsafe { tv_dict_alloc_ret(result) };
     let dict = unsafe { (*result).dict_or_null() };
-    let win = cur_win();
+    let win = Win::current();
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };

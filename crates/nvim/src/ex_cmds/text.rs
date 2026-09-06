@@ -13,7 +13,6 @@
 
 use super::say;
 use super::{CAR, EOL_MAC, NL, TAB};
-use super::{cur_buf, cur_win};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -34,6 +33,7 @@ use crate::types::CmdIdx;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -74,7 +74,7 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
             c = NUL;
         }
         // NL is stored as CR.
-        let mac = c == CAR && get_fileformat(cur_buf()) == EOL_MAC;
+        let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
         // SAFETY: `c` came out of the buffer.
         unsafe { describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line) };
         // needed for overlong ascii?
@@ -248,7 +248,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
     let args = unsafe { &mut *args };
     let (mut cmdidx, arg, line1, line2) = (args.cmdidx, args.arg, args.line1, args.line2);
 
-    if cur_win().w_onebuf_opt.wo_rl != 0 {
+    if Win::current().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
         // itself, and that outlives the call.
         cmdidx = match cmdidx {
@@ -272,10 +272,10 @@ pub unsafe fn ex_align(args: *mut ExArg) {
         width = if arg_width > 0 {
             arg_width
         } else {
-            cur_buf().b_p_tw as c_int
+            Buf::current().b_p_tw as c_int
         };
-        if width == 0 && cur_buf().b_p_wm > 0 {
-            width = cur_win().w_view_width - cur_buf().b_p_wm as c_int;
+        if width == 0 && Buf::current().b_p_wm > 0 {
+            width = Win::current().w_view_width - Buf::current().b_p_wm as c_int;
         }
         if width <= 0 {
             width = 80;
@@ -283,7 +283,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
     }
 
     // SAFETY: `curwin` is live; `u_save` takes the range's guard lines.
-    let save_curpos = cur_win().w_cursor;
+    let save_curpos = Win::current().w_cursor;
     // SAFETY: as above.
     if u_save(line1 - 1, line2 + 1).is_err() {
         return;
@@ -293,7 +293,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
     while lnum <= line2 {
         // SAFETY: `lnum` is inside the range `u_save` just guarded, and
         // nothing in the body adds or removes a line.
-        cur_win().w_cursor.lnum = lnum;
+        Win::current().w_cursor.lnum = lnum;
         if let Some(new_indent) = unsafe { aligned_indent(cmdidx, indent, width) } {
             // SAFETY: the cursor is on `lnum`.
             unsafe { set_indent(new_indent.max(0), 0) };
@@ -302,8 +302,8 @@ pub unsafe fn ex_align(args: *mut ExArg) {
     }
 
     // SAFETY: the range is still the one that was just rewritten.
-    changed_lines(cur_buf(), line1, 0, line2 + 1, 0, true);
-    cur_win().w_cursor = save_curpos;
+    changed_lines(Buf::current(), line1, 0, line2 + 1, 0, true);
+    Win::current().w_cursor = save_curpos;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }
 

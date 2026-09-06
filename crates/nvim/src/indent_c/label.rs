@@ -88,8 +88,8 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
 /// # Safety
 /// Moves the cursor and restores it; may unlock the current line.
 pub(crate) unsafe fn skip_label(lnum: LineNr, cursor: &mut *const c_char) -> c_int {
-    let cursor_save = cur_win().w_cursor;
-    cur_win().w_cursor.lnum = lnum;
+    let cursor_save = Win::current().w_cursor;
+    Win::current().w_cursor.lnum = lnum;
     // SAFETY: the cursor now sits on line `lnum` of the current buffer, so
     // `get_cursor_line_ptr` answers with that NUL-terminated line.
     let (amount, mut text) = unsafe {
@@ -106,7 +106,7 @@ pub(crate) unsafe fn skip_label(lnum: LineNr, cursor: &mut *const c_char) -> c_i
     }
     *cursor = text;
 
-    cur_win().w_cursor = cursor_save;
+    Win::current().w_cursor = cursor_save;
     amount
 }
 
@@ -172,7 +172,7 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
     }
 
     let p = unsafe { skipwhite(p.add(len)) }.cast_const();
-    unsafe { line_vcol(cur_win().w_cursor.lnum, p.offset_from(line) as ColNr) }
+    unsafe { line_vcol(Win::current().w_cursor.lnum, p.offset_from(line) as ColNr) }
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -222,9 +222,4 @@ pub(crate) unsafe fn cin_get_equal_amount(lnum: LineNr) -> c_int {
         s = unsafe { s.add(1) }; // nice alignment for continued strings
     }
     unsafe { line_vcol(lnum, s.offset_from(line) as ColNr) }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

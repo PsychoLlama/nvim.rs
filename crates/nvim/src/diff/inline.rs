@@ -25,8 +25,8 @@ pub unsafe fn diff_update_line(lnum: LineNr) {
     if diff_flags.get() & ALL_INLINE_DIFF == 0 {
         return;
     }
-    let tp = cur_tab();
-    let idx = diff_slot(cur_buf(), tp);
+    let tp = TabPage::current();
+    let idx = diff_slot(Buf::current(), tp);
     if idx == DB_COUNT {
         return;
     }
@@ -183,7 +183,7 @@ fn diff_find_change_simple(
         unsafe { CStr::from_ptr(ml_get_buf(window.w_buffer, lnum)) }.to_owned()
     });
     let off = lnum - dp.df_lnum[idx as usize];
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let mut added = true;
     for i in 0..DB_COUNT as usize {
         let buf = tp.tp_diffbuf[i];
@@ -222,7 +222,7 @@ fn diff_find_change_simple(
 /// # Safety
 /// `diffline` must be a writable `DiffLine`.
 pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLine) -> bool {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let idx = diff_slot(window.buffer(), tp);
     if idx == DB_COUNT {
         return false;
@@ -343,21 +343,21 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let stale = !cache_results
         || lnum != prev_lnum.get()
         // SAFETY: the current buffer is live.
-        || changedtick.get() != buf_get_changedtick(cur_buf())
-        || fnum.get() != cur_buf().handle
+        || changedtick.get() != buf_get_changedtick(Buf::current())
+        || fnum.get() != Buf::current().handle
         || diff_flags.get() != prev_diff_flags.get();
     if stale {
         let mut linestatus = 0;
         let status = &raw mut linestatus;
         // SAFETY: the current window is live; `linestatus` is a local.
-        unsafe { diff_check_with_linestatus(cur_win(), lnum, status) };
+        unsafe { diff_check_with_linestatus(Win::current(), lnum, status) };
         hlID.set(match linestatus {
             LINE_CHANGED => {
                 change_start.set(MAXCOL as c_int);
                 change_end.set(-1);
                 let out = &raw mut diffline;
                 // SAFETY: the current window is live; `diffline` is a local.
-                let added = unsafe { diff_find_change(cur_win(), lnum, out) };
+                let added = unsafe { diff_find_change(Win::current(), lnum, out) };
                 if added {
                     HLF_ADD
                 } else {
@@ -379,8 +379,8 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         if cache_results {
             prev_lnum.set(lnum);
             // SAFETY: the current buffer is live.
-            changedtick.set(buf_get_changedtick(cur_buf()));
-            fnum.set(cur_buf().handle);
+            changedtick.set(buf_get_changedtick(Buf::current()));
+            fnum.set(Buf::current().handle);
             prev_diff_flags.set(diff_flags.get());
         }
     }
@@ -421,19 +421,4 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let id = hlID.get() as VarNumber;
     // SAFETY: the caller's result cell.
     unsafe { (*result).vval.v_number = id };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_char, c_int};
 pub unsafe fn cindent_on() -> bool {
     // SAFETY: 'indentexpr' is a NUL-terminated option string.  The cheaper
     // tests are kept in front of it, as upstream has them.
-    p_paste.get() == 0 && (cur_buf().b_p_cin != 0 || unsafe { *cur_buf().b_p_inde } != 0)
+    p_paste.get() == 0 && (Buf::current().b_p_cin != 0 || unsafe { *Buf::current().b_p_inde } != 0)
 }
 
 /// Which prefix of a 'cinkeys' item this call is asking about.
@@ -58,10 +58,10 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
 
     // 'indentexpr' set means 'indentkeys' rather than 'cinkeys'.
     // SAFETY: 'indentexpr' is a NUL-terminated option string.
-    let mut look = if unsafe { *cur_buf().b_p_inde } != 0 {
-        cur_buf().b_p_indk
+    let mut look = if unsafe { *Buf::current().b_p_inde } != 0 {
+        Buf::current().b_p_indk
     } else {
-        cur_buf().b_p_cink
+        Buf::current().b_p_cink
     };
 
     loop {
@@ -126,14 +126,15 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
         } else if c == b'e' {
             // Check for "else" at the start of the line and just before
             // the cursor.
-            if try_match && keytyped == c_int::from(b'e') && cur_win().w_cursor.col >= 4 {
+            if try_match && keytyped == c_int::from(b'e') && Win::current().w_cursor.col >= 4 {
                 // SAFETY: the cursor is on a line of the current buffer and
                 // `get_cursor_line_ptr` hands back a NUL-terminated one; the
                 // `col >= 4` test the `&&` chain keeps in front is what says
                 // `col - 4` is a byte of it.
+                let back = (Win::current().w_cursor.col - 4) as isize;
                 let is_else = unsafe {
                     let p = get_cursor_line_ptr();
-                    let at = p.offset((cur_win().w_cursor.col - 4) as isize).cast_const();
+                    let at = p.offset(back).cast_const();
                     skipwhite(p).cast_const() == at
                         && CStr::from_ptr(at).to_bytes().starts_with(b"else")
                 };
@@ -202,7 +203,7 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             // SAFETY: `end` and `look` point into the same option string.
             let len = unsafe { end.offset_from(look) } as usize;
             if (try_match || try_match_word)
-                && cur_win().w_cursor.col >= len as ColNr
+                && Win::current().w_cursor.col >= len as ColNr
                 // SAFETY: `look` has `len` bytes in front of it, and the
                 // column test the `&&` chain keeps in front is what says the
                 // cursor's line has `len` bytes behind it.
@@ -253,7 +254,7 @@ unsafe fn colon_reindents() -> bool {
     // `cin_islabel` may have unlocked the line.
     // SAFETY: as above.
     let mut p = get_cursor_line_ptr();
-    let col = cur_win().w_cursor.col as isize;
+    let col = Win::current().w_cursor.col as isize;
     // SAFETY: `col > 2` -- which the `||` chain keeps in front -- says that
     // `col - 1` and `col - 2` are bytes of the cursor's line.
     if col <= 2 || unsafe { *p.offset(col - 1) as u8 != b':' || *p.offset(col - 2) as u8 != b':' } {
@@ -310,7 +311,7 @@ unsafe fn word_matches(
         // `same` is asked only once `s.add(len)` is known to be within it --
         // the `&&` chain is left whole so that it keeps being so.
         let line = get_cursor_line_ptr();
-        let mut s = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+        let mut s = unsafe { line.offset(Win::current().w_cursor.col as isize) };
         while s > line {
             let n = unsafe { mb_prevptr(line, s) };
             if !unsafe { vim_iswordp(n) } {
@@ -318,7 +319,7 @@ unsafe fn word_matches(
             }
             s = n;
         }
-        unsafe { s.add(len) <= line.offset(cur_win().w_cursor.col as isize) && same(s, look) }
+        unsafe { s.add(len) <= line.offset(Win::current().w_cursor.col as isize) && same(s, look) }
     } else {
         // TODO(@brammool): multi-byte.
         // `look[len - 1]` is upstream's `p[-1]`, read off the *end* of
@@ -342,7 +343,7 @@ unsafe fn word_matches(
         // are on that line -- except when `col == len`, which the `||` chain
         // keeps in front of the read and which is left whole for that reason.
         let line = get_cursor_pos_ptr();
-        (cur_win().w_cursor.col == len as ColNr
+        (Win::current().w_cursor.col == len as ColNr
             || !unsafe { vim_iswordc(c_int::from(*line.sub(len + 1) as u8)) })
             && same(unsafe { line.sub(len) }, look)
     };
@@ -351,7 +352,7 @@ unsafe fn word_matches(
     if matched && try_match_word && !try_match {
         // SAFETY: reads the cursor's line of the current buffer.
         let white = unsafe { getwhitecols_curline() };
-        return white == (cur_win().w_cursor.col as isize) - len as isize;
+        return white == (Win::current().w_cursor.col as isize) - len as isize;
     }
     matched
 }
@@ -362,7 +363,7 @@ unsafe fn word_matches(
 /// Reads the current buffer and rewrites the current line.
 pub unsafe fn do_c_expr_indent() {
     // SAFETY: 'indentexpr' is a NUL-terminated option string.
-    if unsafe { *cur_buf().b_p_inde } != 0 {
+    if unsafe { *Buf::current().b_p_inde } != 0 {
         // SAFETY: rewrites the current line of the current buffer.
         unsafe { fixthisline(Some(get_expr_indent)) };
     } else {
@@ -377,29 +378,19 @@ pub unsafe fn do_c_expr_indent() {
 /// # Safety
 /// Moves the cursor and restores it; `result` must be a valid number typval.
 pub unsafe fn f_cindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let pos = cur_win().w_cursor;
+    let pos = Win::current().w_cursor;
     // SAFETY: the caller's promise -- `args` is the call's argument list.
     let lnum = unsafe { tv_get_lnum(args) } as LineNr;
-    let amount = if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
-        cur_win().w_cursor.lnum = lnum;
+    let amount = if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
+        Win::current().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it
         // is put back on the next line.
         let amount = VarNumber::from(unsafe { get_c_indent() });
-        cur_win().w_cursor = pos;
+        Win::current().w_cursor = pos;
         amount
     } else {
         -1
     };
     // SAFETY: the caller's promise -- `result` is a number typval to fill in.
     unsafe { (*result).vval.v_number = amount };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

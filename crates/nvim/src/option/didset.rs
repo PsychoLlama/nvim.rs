@@ -313,8 +313,8 @@ pub(crate) unsafe fn did_set_foldnestmax(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_helpheight(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: `curbuf`/`curwin` are live.
     if firstwin.get() != lastwin.get()
-        && cur_buf().b_help
-        && (cur_win().w_height as OptInt) < p_hh.get()
+        && Buf::current().b_help
+        && (Win::current().w_height as OptInt) < p_hh.get()
     {
         win_setheight(p_hh.get() as c_int);
     }
@@ -704,7 +704,7 @@ pub(crate) unsafe fn did_set_window(_args: &mut OptSet) -> Option<&CStr> {
 /// 'winheight': grow the current window if it is now too short.
 pub(crate) unsafe fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: `curwin` is live.
-    if firstwin.get() != lastwin.get() && (cur_win().w_height as OptInt) < p_wh.get() {
+    if firstwin.get() != lastwin.get() && (Win::current().w_height as OptInt) < p_wh.get() {
         win_setheight(p_wh.get() as c_int);
     }
     None
@@ -713,7 +713,7 @@ pub(crate) unsafe fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
 /// 'winwidth': widen the current window if it is now too narrow.
 pub(crate) unsafe fn did_set_winwidth(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: `curwin` is live.
-    if firstwin.get() != lastwin.get() && (cur_win().w_width as OptInt) < p_wiw.get() {
+    if firstwin.get() != lastwin.get() && (Win::current().w_width as OptInt) < p_wiw.get() {
         win_setwidth(p_wiw.get() as c_int);
     }
     None
@@ -809,14 +809,4 @@ pub(crate) unsafe fn do_spelllang_source(win: *mut Window) {
         };
         let _ = unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

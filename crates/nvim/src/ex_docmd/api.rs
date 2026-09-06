@@ -76,7 +76,7 @@ pub unsafe fn parse_cmdline(
     errormsg: &mut Option<CString>,
 ) -> bool {
     let save_ex_pressedreturn = ex_pressedreturn.get();
-    let save_cursor: Pos = cur_win().w_cursor;
+    let save_cursor: Pos = Win::current().w_cursor;
     save_last_search_pattern();
 
     let into = cmdinfo.cast::<u8>();
@@ -222,7 +222,7 @@ pub unsafe fn parse_cmdline(
         unsafe { undo_cmdmod(&mut (*cmdinfo).cmdmod) };
     }
     ex_pressedreturn.set(save_ex_pressedreturn);
-    cur_win().w_cursor = save_cursor;
+    Win::current().w_cursor = save_cursor;
     restore_last_search_pattern();
     retval
 }
@@ -351,9 +351,9 @@ pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview:
     'end: {
         // `:put` is allowed in a terminal buffer, which is not
         // 'modifiable'.
-        if cur_buf().b_p_ma == 0
+        if Buf::current().b_p_ma == 0
             && ea.argt.has(ExArgt::MODIFY)
-            && !(!cur_buf().terminal.is_null()
+            && !(!Buf::current().terminal.is_null()
                 && (ea.cmdidx == CmdIdx::put || ea.cmdidx == CmdIdx::iput))
         {
             errormsg = Some(ex_msg(e_modifiable.as_ptr()));
@@ -394,8 +394,8 @@ pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview:
             && global_busy.get() == 0
             && ea.addr_type == CmdAddr::Lines
         {
-            has_folding(cur_win(), ea.line1, Some(&mut ea.line1), None);
-            has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
+            has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
+            has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
         }
 
         if unsafe { parse_count(args, &mut errormsg, true) }.is_err() {
@@ -419,16 +419,6 @@ pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview:
     drop(mods);
     do_cmdline_end();
     retv
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `buflist_findpat()` as checked code.

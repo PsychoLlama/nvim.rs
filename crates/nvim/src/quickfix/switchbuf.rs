@@ -79,7 +79,8 @@ pub(crate) unsafe fn jump_to_help_window(
     // Put the split at the very top when no position was asked for and
     // the current window is one of a narrow vertical split.
     let mut flags = WSP_HELP as c_int;
-    if cmdmod_split() == 0 && cur_win().w_width != Columns.get() && cur_win().w_width < 80 {
+    if cmdmod_split() == 0 && Win::current().w_width != Columns.get() && Win::current().w_width < 80
+    {
         flags |= WSP_TOP as c_int;
     }
     // A new window asked for by the user gets its own copy of the
@@ -90,11 +91,11 @@ pub(crate) unsafe fn jump_to_help_window(
     }
     win_split(0, flags)?;
     unsafe { *opened_window = true };
-    if (cur_win().w_height as OptInt) < p_hh.get() {
+    if (Win::current().w_height as OptInt) < p_hh.get() {
         win_setheight(p_hh.get() as c_int);
     }
     if share_loclist {
-        win_set_loclist(cur_win(), qi);
+        win_set_loclist(Win::current(), qi);
     }
     // Do not want insert mode in a help file.
     restart_edit.set(0);
@@ -135,12 +136,12 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut QfInfo) -> Result<(), Failed> {
     // Do not split again for the next entry.
     p_swb.set(empty_option());
     swb_flags.set(0);
-    cur_win().w_onebuf_opt.wo_scb = false as c_int;
-    cur_win().w_onebuf_opt.wo_crb = false as c_int;
+    Win::current().w_onebuf_opt.wo_scb = false as c_int;
+    Win::current().w_onebuf_opt.wo_crb = false as c_int;
     if !ll_ref.is_null() {
         // The new window shows the location list window's list.
         // SAFETY: the caller's promise -- a live stack, tested for null.
-        win_set_loclist(cur_win(), unsafe { Qi::new(ll_ref) });
+        win_set_loclist(Win::current(), unsafe { Qi::new(ll_ref) });
     }
     Ok(())
 }
@@ -160,10 +161,10 @@ unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref:
         .unwrap_or_else(|| {
             // Walk backwards from here, wrapping at the top, for a window
             // holding an ordinary buffer.
-            let mut win = cur_win();
+            let mut win = Win::current();
             while !is_normal_buffer(win) {
                 win = prev_window(win);
-                if win == cur_win() {
+                if win == Win::current() {
                     break;
                 }
             }
@@ -197,7 +198,7 @@ fn prev_window(window: Win) -> Win {
 /// quickfix window.
 ///
 fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
-    let mut win = cur_win();
+    let mut win = Win::current();
     let mut altwin: Option<Win> = None;
     while win.buffer().handle != qf_fnum {
         win = prev_window(win);
@@ -215,9 +216,9 @@ fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
                 // The quickfix window is not the only one here -- the
                 // caller splits one off when it is -- so it has a
                 // neighbour on one side or the other.
-                cur_win()
+                Win::current()
                     .prev()
-                    .or_else(|| cur_win().next())
+                    .or_else(|| Win::current().next())
                     .expect("the quickfix window has a neighbour")
             };
             break;
@@ -252,7 +253,7 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
     let ll_ref = if newwin {
         ptr::null_mut()
     } else {
-        cur_win().w_llist_ref
+        Win::current().w_llist_ref
     };
     let usable_wp = (!ll_ref.is_null())
         .then(|| qf_find_win_with_loclist(ll_ref))
@@ -271,7 +272,7 @@ pub(crate) unsafe fn qf_jump_to_usable_window(
         unsafe { qf_open_new_file_win(ll_ref) }?;
         // Close it again if the jump fails.
         unsafe { *opened_window = true };
-    } else if !cur_win().w_llist_ref.is_null() {
+    } else if !Win::current().w_llist_ref.is_null() {
         unsafe { qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref) };
     } else {
         qf_goto_win_with_qfl_file(qf_fnum);

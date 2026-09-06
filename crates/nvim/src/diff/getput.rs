@@ -89,8 +89,8 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
         unsafe { vim_snprintf(at, 30, c"%zu".as_ptr(), count) };
         ea.arg = at;
     }
-    ea.line1 = cur_win().w_cursor.lnum;
-    ea.line2 = cur_win().w_cursor.lnum;
+    ea.line1 = Win::current().w_cursor.lnum;
+    ea.line2 = Win::current().w_cursor.lnum;
     // SAFETY: `ea` is a local of this frame.
     unsafe { ex_diffgetput(&raw mut ea) };
 }
@@ -107,8 +107,8 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
 pub unsafe fn ex_diffgetput(args: *mut ExArg) {
     // SAFETY: the caller's command.
     let mut args = unsafe { Live::<ExArg>::new(args) };
-    let tp = cur_tab();
-    let idx_cur = diff_slot(cur_buf(), tp);
+    let tp = TabPage::current();
+    let idx_cur = diff_slot(Buf::current(), tp);
     if idx_cur == DB_COUNT {
         emsg_gettext(c"E99: Current buffer is not in diff mode".as_ptr());
         return;
@@ -201,11 +201,11 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         let line1 = args.line1;
         // SAFETY: the current window is live and `linestatus` is a local, in
         // both calls; the short circuit is upstream's.
-        let below_end = line1 == cur_buf().b_ml.ml_line_count
-            && unsafe { diff_check_with_linestatus(cur_win(), line1, status) } == 0
+        let below_end = line1 == Buf::current().b_ml.ml_line_count
+            && unsafe { diff_check_with_linestatus(Win::current(), line1, status) } == 0
             && linestatus == 0
             && (line1 == 1 as LineNr
-                || unsafe { diff_check_with_linestatus(cur_win(), line1 - 1, status) } >= 0
+                || unsafe { diff_check_with_linestatus(Win::current(), line1 - 1, status) } >= 0
                     && linestatus == 0);
         if below_end {
             args.line2 += 1;
@@ -229,11 +229,11 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         (idx_other, idx_cur)
     };
     '_theend: {
-        if cur_buf().b_changed == 0 {
+        if Buf::current().b_changed == 0 {
             // SAFETY: the current buffer is live.
-            unsafe { change_warning(cur_buf(), 0) };
+            unsafe { change_warning(Buf::current(), 0) };
             // The warning can run autocommands, which can move us.
-            if diff_slot(cur_buf(), tp) != idx_to {
+            if diff_slot(Buf::current(), tp) != idx_to {
                 emsg_gettext(c"E787: Buffer changed unexpectedly".as_ptr());
                 break '_theend;
             }
@@ -255,7 +255,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };
     }
     // SAFETY: the current window is live, in both calls.
-    check_cursor(cur_win());
+    check_cursor(Win::current());
     unsafe { changed_line_abv_curs() };
     if tp.tp_first_diff.is_null() {
         // The last block went away: the diff folds have nothing left to
@@ -296,7 +296,7 @@ fn diffgetput(
     line2: LineNr,
 ) {
     let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let mut off = 0 as LineNr;
     let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
     let mut cursor = Df::first(tp);
@@ -360,7 +360,7 @@ fn diffgetput(
             let mut buf_empty = unsafe { buf_is_empty(Buf::current_raw()) };
             let mut added: c_int = 0;
             for _ in 0..count {
-                buf_empty = cur_buf().b_ml.ml_line_count == 1 as LineNr;
+                buf_empty = Buf::current().b_ml.ml_line_count == 1 as LineNr;
                 // SAFETY: the editor exists and `lnum` is a line of it.
                 if unsafe { ml_delete(lnum) }.is_ok() {
                     added -= 1;
@@ -380,7 +380,7 @@ fn diffgetput(
                 let _ = unsafe { ml_append(lnum + i - 1 as LineNr, p, 0 as ColNr, false) };
                 unsafe { xfree(p.cast()) };
                 added += 1;
-                if buf_empty && cur_buf().b_ml.ml_line_count == 2 as LineNr {
+                if buf_empty && Buf::current().b_ml.ml_line_count == 2 as LineNr {
                     buf_empty = false;
                     // SAFETY: the buffer holds the two lines just counted.
                     let _ = unsafe { ml_delete(2 as LineNr) };
@@ -415,12 +415,12 @@ fn diffgetput(
             if added != 0 {
                 // SAFETY: the editor exists.
                 unsafe { mark_adjust(lnum, last, max, amount, kExtmarkNOOP) };
-                if cur_win().w_cursor.lnum >= lnum {
-                    if cur_win().w_cursor.lnum >= lnum + count {
-                        let moved = cur_win().w_cursor.lnum + amount;
-                        cur_win().w_cursor.lnum = moved.min(cur_buf().b_ml.ml_line_count);
+                if Win::current().w_cursor.lnum >= lnum {
+                    if Win::current().w_cursor.lnum >= lnum + count {
+                        let moved = Win::current().w_cursor.lnum + amount;
+                        Win::current().w_cursor.lnum = moved.min(Buf::current().b_ml.ml_line_count);
                     } else if added < 0 {
-                        cur_win().w_cursor.lnum = lnum;
+                        Win::current().w_cursor.lnum = lnum;
                     }
                 }
             }
@@ -455,19 +455,4 @@ fn diffgetput(
             cursor = dp.next();
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

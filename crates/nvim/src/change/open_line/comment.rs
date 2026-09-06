@@ -234,7 +234,7 @@ unsafe fn plan_start_or_middle(
         let after_leader = old.byte_at(plan.lead_len as isize);
         let last_of_leader = old.byte_at((plan.lead_len - 1) as isize);
         if !ascii_iswhite(last_of_leader)
-            && (!p_extra.is_null() && cur_win().w_cursor.col == plan.lead_len
+            && (!p_extra.is_null() && Win::current().w_cursor.col == plan.lead_len
                 || p_extra.is_null() && after_leader == NUL
                 || require_blank)
         {
@@ -259,7 +259,7 @@ unsafe fn plan_end(plan: &mut LeaderPlan, mut p: Com, dir: c_int, saved_line: *m
 
     // `O` on the end of a comment inserts the middle leader, which is the
     // item before this one -- so search backwards for it.
-    let com = cur_buf().b_p_com;
+    let com = Buf::current().b_p_com;
     while p.raw() > com && p.byte() != ',' as c_int {
         p.back();
     }
@@ -600,9 +600,9 @@ pub(crate) unsafe fn build_leader(
         };
 
         // The indent may have changed with the leader.
-        if cur_buf().b_p_ai != 0 || do_si {
-            newindent =
-                unsafe { indent_size_ts(leader, cur_buf().b_p_ts, cur_buf().b_p_vts_array) };
+        if Buf::current().b_p_ai != 0 || do_si {
+            let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
+            newindent = unsafe { indent_size_ts(leader, ts, vts) };
         }
 
         // Add the 'comments' numeric offset.
@@ -681,29 +681,19 @@ pub(crate) unsafe fn indent_after_comment_end(
 ) -> c_int {
     if c_int::from(unsafe { *comment_end }) != '*' as c_int
         || c_int::from(unsafe { *comment_end.add(1) }) != '/' as c_int
-        || (cur_buf().b_p_ai == 0 && !do_si)
+        || (Buf::current().b_p_ai == 0 && !do_si)
     {
         return newindent;
     }
-    let old_cursor = cur_win().w_cursor;
-    cur_win().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as ColNr;
+    let old_cursor = Win::current().w_cursor;
+    Win::current().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as ColNr;
     let newindent = match unsafe { findmatch(::core::ptr::null_mut(), NUL) } {
         None => newindent,
         Some(pos) => {
-            cur_win().w_cursor.lnum = pos.lnum;
+            Win::current().w_cursor.lnum = pos.lnum;
             get_indent()
         }
     };
-    cur_win().w_cursor = old_cursor;
+    Win::current().w_cursor = old_cursor;
     newindent
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

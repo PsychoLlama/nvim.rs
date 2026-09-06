@@ -55,7 +55,7 @@ pub fn diff_buf_adjust(win: Win) {
     if windows().any(|wp| wp.w_buffer == win.w_buffer && wp.w_onebuf_opt.wo_diff != 0) {
         return;
     }
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     let i = diff_buf_idx(win.buffer(), tp);
     if i != DB_COUNT {
         tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
@@ -67,7 +67,7 @@ pub fn diff_buf_adjust(win: Win) {
 
 /// Put `buffer` in the current tabpage's diff, if there is a slot free.
 pub fn diff_buf_add(buffer: Buf) {
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     if diff_buf_idx(buffer, tp) != DB_COUNT {
         return;
     }
@@ -85,7 +85,7 @@ pub fn diff_buf_add(buffer: Buf) {
 
 /// Empty the current tabpage's diff.
 pub(crate) fn diff_buf_clear() {
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     for i in 0..DB_COUNT as usize {
         if !tp.tp_diffbuf[i].is_null() {
             tp.tp_diffbuf[i] = ::core::ptr::null_mut();
@@ -512,7 +512,7 @@ pub fn diff_clear(mut tabpage: TabPage) {
 /// every window: the shorter buffers are padded with filler.
 pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
     (0..DB_COUNT as usize)
-        .filter(|&k| !cur_tab().tp_diffbuf[k].is_null())
+        .filter(|&k| !TabPage::current().tp_diffbuf[k].is_null())
         .map(|k| unsafe { (*dp).df_count[k] })
         .max()
         .unwrap_or(0)
@@ -523,7 +523,7 @@ pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
 /// `:diffget`/`:diffput` run autocommands between reading a block and using
 /// it, and those can rebuild the list underneath.
 pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
-    let mut dp = cur_tab().tp_first_diff;
+    let mut dp = TabPage::current().tp_first_diff;
     while !dp.is_null() {
         if dp == diff {
             return true;
@@ -536,9 +536,4 @@ pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
 /// Whether `buffer` is in any tabpage's diff.
 pub fn diff_mode_buf(buffer: Buf) -> bool {
     tabs().any(|tp| diff_buf_idx(buffer, tp) != DB_COUNT)
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

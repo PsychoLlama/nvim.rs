@@ -88,8 +88,8 @@ pub(crate) unsafe fn eval_func(
     let owned = unsafe { xmemdupz(resolved.cast(), len as size_t) } as *mut c_char;
 
     let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_firstline = cur_win().w_cursor.lnum;
-    funcexe.fe_lastline = cur_win().w_cursor.lnum;
+    funcexe.fe_firstline = Win::current().w_cursor.lnum;
+    funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
     funcexe.fe_partial = partial;
     funcexe.fe_basetv = basetv;
@@ -176,8 +176,8 @@ pub(crate) unsafe fn call_func_rettv(
     }
 
     let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_firstline = cur_win().w_cursor.lnum;
-    funcexe.fe_lastline = cur_win().w_cursor.lnum;
+    funcexe.fe_firstline = Win::current().w_cursor.lnum;
+    funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
     funcexe.fe_partial = pt;
     funcexe.fe_selfdict = selfdict;
@@ -470,9 +470,4 @@ pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
     if unsafe { (*pt).pt_refcount.release() } <= 0 {
         unsafe { partial_free(pt) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

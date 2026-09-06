@@ -207,10 +207,10 @@ pub fn get_highest_fnum() -> c_int {
 fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loaded, Failed> {
     let silent = shortmess(ShmFlag::FILEINFO);
 
-    let line_count = cur_buf().line_count();
+    let line_count = Buf::current().line_count();
     let (ffname, fname) = match read_stdin {
         true => (ptr::null_mut(), ptr::null_mut()),
-        false => (cur_buf().b_ffname, cur_buf().b_fname),
+        false => (Buf::current().b_ffname, Buf::current().b_fname),
     };
     let last = MAXLNUM as LineNr;
     let mut retval = read_file(
@@ -230,25 +230,25 @@ fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loade
         }
     } else {
         // Delete the converted lines.
-        while cur_buf().line_count() > line_count {
+        while Buf::current().line_count() > line_count {
             delete_line(line_count);
         }
     }
     // Put the cursor on the first line.
-    let mut cursor = cur_win().cursor();
+    let mut cursor = Win::current().cursor();
     cursor.lnum = 1 as LineNr;
     cursor.col = 0 as ColNr;
 
     if read_stdin {
         // Set or reset 'modified' before executing autocommands, so that it
         // can be changed there.
-        let buf = cur_buf();
+        let buf = Buf::current();
         if !readonlymode.get() && !empty_buffer(buf) {
             set_changed(buf);
         } else if retval.is_ok() {
             unchanged_now(buf, false, true);
         }
-        fire_retval(AutoEvent::StdinReadPost, cur_buf(), &mut retval);
+        fire_retval(AutoEvent::StdinReadPost, Buf::current(), &mut retval);
     }
     retval
 }
@@ -289,14 +289,14 @@ fn open_buffer_inner(
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
     let mut retval = Ok(Loaded::Read);
-    let old_tw: OptInt = cur_buf().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw;
     let mut read_fifo = false;
     let silent = shortmess(ShmFlag::FILEINFO);
 
     // The 'readonly' flag is only set when BufFlags::NEVERLOADED is being reset.
     // When re-entering the same buffer, it should not change, because the
     // user may have reset the flag by hand.
-    let mut buf = cur_buf();
+    let mut buf = Buf::current();
     if readonlymode.get() && !buf.b_ffname.is_null() && buf.b_flags.has(BufFlags::NEVERLOADED) {
         buf.b_p_ro = 1;
     }
@@ -314,7 +314,7 @@ fn open_buffer_inner(
     buf.b_modified_was_set = false;
 
     // mark cursor position as being invalid
-    cur_win().w_valid = WinValid::NONE;
+    Win::current().w_valid = WinValid::NONE;
 
     // A buffer without an actual file should not use the buffer name to read
     // a file.
@@ -339,7 +339,7 @@ fn open_buffer_inner(
         let read = flags | READ_NEW as c_int | fifo;
         retval = read_file(ffname, fname, 0, 0, last, args, read, silent);
         if read_fifo {
-            cur_buf().b_p_bin = save_bin;
+            Buf::current().b_p_bin = save_bin;
             if retval == Ok(Loaded::Read) {
                 // don't add READ_FIFO here, otherwise we won't be able to
                 // detect the encoding
@@ -347,7 +347,7 @@ fn open_buffer_inner(
             }
         }
         // Help buffer: populate *local-additions* in help.txt
-        if buf_is_help(Some(cur_buf())) {
+        if buf_is_help(Some(Buf::current())) {
             collect_local_additions();
         }
     } else if read_stdin {
@@ -360,14 +360,14 @@ fn open_buffer_inner(
         let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM as LineNr);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
         retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
-        cur_buf().b_p_bin = save_bin;
+        Buf::current().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
             retval = read_buffer(true, args, flags);
         }
     }
 
     // Can now sync this buffer in ml_sync_all().
-    let buf = cur_buf();
+    let buf = Buf::current();
     if dirty(buf) == Some(MfDirty::YesNoSync) {
         set_dirty(buf, MfDirty::Yes);
     }
@@ -396,11 +396,11 @@ fn open_buffer_inner(
     // `changed()` notifies the `b:changedtick` watchers, which can re-enter
     // Lua and leave another buffer current -- so from here on `curbuf` and
     // `curwin` are re-read at each step, exactly as upstream reads the globals.
-    save_fileformat(cur_buf()); // keep this fileformat
+    save_fileformat(Buf::current()); // keep this fileformat
 
     // Set last_changedtick to avoid triggering a TextChanged autocommand right
     // after it was added.
-    let mut buf = cur_buf();
+    let mut buf = Buf::current();
     let tick = changedtick(buf);
     buf.b_last_changedtick = tick;
     buf.b_last_changedtick_i = tick;
@@ -408,20 +408,20 @@ fn open_buffer_inner(
 
     // require "!" to overwrite the file, because it wasn't read completely
     if aborting_now() {
-        cur_buf().b_flags |= BufFlags::READERR;
+        Buf::current().b_flags |= BufFlags::READERR;
     }
 
     // Need to update automatic folding.  Do this before the autocommands, they
     // may use the fold info.
-    invalidate_window_folds(cur_win());
+    invalidate_window_folds(Win::current());
 
     // need to set w_topline, unless some autocommand already did that.
-    let mut win = cur_win();
+    let mut win = Win::current();
     if !win.w_valid.has(WinValid::TOPLINE) {
         win.w_topline = 1 as LineNr;
         win.w_topfill = 0;
     }
-    fire_retval(AutoEvent::BufEnter, cur_buf(), &mut retval);
+    fire_retval(AutoEvent::BufEnter, Buf::current(), &mut retval);
     retval?;
 
     // The autocommands may have changed the current buffer.  Apply the
@@ -432,12 +432,12 @@ fn open_buffer_inner(
     // Go to the buffer that was opened, make sure it is in a window.
     in_buffer(old, || {
         do_modelines(OptionSetFlags::NONE);
-        cur_buf()
+        Buf::current()
             .b_flags
             .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
         if flags & READ_NOWINENTER as c_int == 0 {
-            fire_retval(AutoEvent::BufWinEnter, cur_buf(), &mut retval);
+            fire_retval(AutoEvent::BufWinEnter, Buf::current(), &mut retval);
         }
     });
     retval
@@ -446,7 +446,7 @@ fn open_buffer_inner(
 /// There MUST be a memfile, otherwise we can't do anything.  If we can't
 /// create one for the current buffer, take another buffer.
 fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
-    close_buffer(None, cur_buf(), 0, false, false);
+    close_buffer(None, Buf::current(), 0, false, false);
 
     leave_curbuf();
     if let Some(buf) = buffers().find(|b| !b.b_ml.ml_mfp.is_null()) {
@@ -464,9 +464,9 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     }
 
     err(c"E83: Cannot allocate buffer, using other one...");
-    enter_buffer(cur_buf());
-    if old_tw != cur_buf().b_p_tw {
-        recheck_colorcolumn(cur_win());
+    enter_buffer(Buf::current());
+    if old_tw != Buf::current().b_p_tw {
+        recheck_colorcolumn(Win::current());
     }
     Err(Failed)
 }
@@ -510,15 +510,15 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
         let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM as LineNr);
-        if open_memline(cur_buf()).is_ok()
+        if open_memline(Buf::current()).is_ok()
             && read_file(ffname, fname, 0, 0, last, &raw mut ea, read, false) == Ok(Loaded::Read)
-            && buffer.line_count() == cur_buf().line_count()
+            && buffer.line_count() == Buf::current().line_count()
         {
-            differ = (1..=cur_buf().line_count()).any(|lnum| lines_differ(buffer, lnum));
+            differ = (1..=Buf::current().line_count()).any(|lnum| lines_differ(buffer, lnum));
         }
         free(ea.cmd);
     });
-    if cur_buf() != newbuf {
+    if Buf::current() != newbuf {
         // SAFETY: `buflist_new` answered it and nothing has freed it: the
         // dummy is not in any window, so `close_buffer` cannot have run.
         wipe_buffer(newbuf, false);
@@ -539,17 +539,25 @@ pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<()
     let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
-    edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win())?;
+    edit_file(
+        bufnr,
+        none,
+        none,
+        ptr::null_mut(),
+        one,
+        hide,
+        Win::current(),
+    )?;
     if !bufname.is_null() {
-        fire(AutoEvent::BufFilePre, cur_buf());
+        fire(AutoEvent::BufFilePre, Buf::current());
         // SAFETY: the current buffer, and the caller's NUL-terminated name.
-        let _ = unsafe { setfname(cur_buf(), bufname, ptr::null_mut(), true) };
-        fire(AutoEvent::BufFilePost, cur_buf());
+        let _ = unsafe { setfname(Buf::current(), bufname, ptr::null_mut(), true) };
+        fire(AutoEvent::BufFilePost, Buf::current());
     }
     set_option_string(kOptBufhidden, c"hide");
     set_option_string(kOptBuftype, c"nofile");
     set_option_false(kOptSwapfile);
-    let mut win = cur_win();
+    let mut win = Win::current();
     win.w_onebuf_opt.wo_scb = 0; // reset 'scrollbind'
     win.w_onebuf_opt.wo_crb = 0; // reset 'cursorbind'
     Ok(())

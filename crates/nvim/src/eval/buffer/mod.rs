@@ -122,16 +122,6 @@ pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut Buffer {
     unsafe { tv_get_buf_from_arg(args.ptr(i)) }
 }
 
-/// The window the editor is working in.
-pub(super) fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in.
-pub(super) fn cur_buf() -> Buf {
-    Buf::current()
-}
-
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
 struct SavedBufferState {
@@ -166,7 +156,7 @@ impl SavedBufferState {
         buffer.make_current();
         // SAFETY: `curbuf` was just set to the caller's live buffer.
         unsafe { find_win_for_curbuf() };
-        let current = cur_win();
+        let current = Win::current();
         if current.w_buffer != buffer.raw() {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
@@ -205,7 +195,7 @@ unsafe fn find_win_for_curbuf() {
     // a window that has moved on, hence the second test.
     // SAFETY: `curbuf` is live and its window-info vector holds `size` live
     // entries.
-    let buf = cur_buf();
+    let buf = Buf::current();
     let wininfo = &buf.b_wininfo;
     for i in 0..wininfo.size {
         let wip: *mut WinInfo = unsafe { *wininfo.items.add(i) };

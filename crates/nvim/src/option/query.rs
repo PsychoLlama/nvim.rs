@@ -49,20 +49,20 @@ use crate::winlayer::Win;
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
-    if unsafe { *cur_buf().b_p_ep } == 0 {
+    if unsafe { *Buf::current().b_p_ep } == 0 {
         p_ep.get()
     } else {
-        cur_buf().b_p_ep
+        Buf::current().b_p_ep
     }
 }
 
 /// 'findfunc', local where set.
 pub(crate) fn get_findfunc() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
-    if unsafe { *cur_buf().b_p_ffu } == 0 {
+    if unsafe { *Buf::current().b_p_ffu } == 0 {
         p_ffu.get()
     } else {
-        cur_buf().b_p_ffu
+        Buf::current().b_p_ffu
     }
 }
 
@@ -538,9 +538,4 @@ impl ScrollOff {
             Self::Global(ScrollMargin::Columns) => p_siso.set(value),
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

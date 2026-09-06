@@ -287,7 +287,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
 
     if yank_type == kMTBlockWise {
         // A `$`-extended block has no fixed width.
-        let narrow = cur_win().w_curswant == MAXCOL;
+        let narrow = Win::current().w_curswant == MAXCOL;
         // SAFETY: `reg` is live.
         unsafe { (*reg).y_width = region.end_vcol - region.start_vcol };
         if narrow && unsafe { (*reg).y_width } > 0 {
@@ -364,11 +364,11 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = region.start;
-        cur_buf().b_op_end = region.end;
+        Buf::current().b_op_start = region.start;
+        Buf::current().b_op_end = region.end;
         if yank_type == kMTLineWise {
-            cur_buf().b_op_start.col = 0;
-            cur_buf().b_op_end.col = MAXCOL;
+            Buf::current().b_op_start.col = 0;
+            Buf::current().b_op_end.col = MAXCOL;
         }
         if yank_type != kMTLineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
@@ -529,14 +529,4 @@ pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
     // SAFETY: `op` and `reg` describe the yank that just happened.
     unsafe { do_autocmd_textyankpost(op, reg) };
     true
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

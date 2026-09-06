@@ -607,12 +607,12 @@ pub unsafe fn insert_reg(
                 // SAFETY: a non-null `y_array` starts with a NUL-terminated
                 // line, whose character count is what is deleted.
                 let _ = unsafe { del_chars(mb_charlen((*(*reg).y_array).data()), 1) };
-                let curpos = cur_win().w_cursor;
+                let curpos = Win::current().w_cursor;
                 // SAFETY: main thread with a current window and buffer.
                 if unsafe { oneright() }.is_err() {
                     dir = FORWARD;
                 }
-                cur_win().w_cursor = curpos;
+                Win::current().w_cursor = curpos;
             }
             append_to_redobuff_char(Ctrl_R);
             append_to_redobuff_char(regname);
@@ -671,9 +671,4 @@ pub unsafe fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool
         }
     }
     true
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

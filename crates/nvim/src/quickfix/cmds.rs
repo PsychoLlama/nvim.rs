@@ -61,7 +61,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
         );
     }
 
-    let local_enc = cur_buf().b_p_menc;
+    let local_enc = Buf::current().b_p_menc;
     let enc = if unsafe { *local_enc } as c_int != NUL {
         local_enc
     } else {
@@ -69,7 +69,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
     };
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(Win::current);
 
     incr_quickfix_busy();
 

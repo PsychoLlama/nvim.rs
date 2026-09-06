@@ -62,7 +62,7 @@ fn insert_enter(s: &mut InsertState) {
     if where_paste_started.get().lnum != 0 {
         Insstart.set(where_paste_started.get());
     } else {
-        Insstart.set(cur_win().w_cursor);
+        Insstart.set(Win::current().w_cursor);
         if s.startln != 0 {
             Insstart.set(Insstart.get().with_col(0));
         }
@@ -100,7 +100,7 @@ fn insert_enter(s: &mut InsertState) {
     } else if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
         State.set(MODE_VREPLACE);
         s.replace_state = MODE_VREPLACE;
-        orig_line_count.set(cur_buf().b_ml.ml_line_count);
+        orig_line_count.set(Buf::current().b_ml.ml_line_count);
         vr_lines_changed.set(1);
     } else {
         State.set(MODE_INSERT);
@@ -111,11 +111,11 @@ fn insert_enter(s: &mut InsertState) {
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
     if gchar_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
-        cur_win()
+        Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
-    if cur_buf().b_p_iminsert == B_IMODE_LMAP as OptInt {
+    if Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt {
         State.set(State.get() | MODE_LANGMAP);
     }
 
@@ -190,7 +190,7 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     if ins_at_eol.get() {
-        o_lnum.set(cur_win().w_cursor.lnum);
+        o_lnum.set(Win::current().w_cursor.lnum);
     }
     unsafe { pum_check_clear() };
     unsafe { fold_update_after_insert() };
@@ -202,8 +202,10 @@ fn insert_enter(s: &mut InsertState) {
     // `ins_redraw` triggers TextChangedI only when the typeahead buffer
     // is empty, so `b_last_changedtick` is reset here when the event was
     // not blocked by `char_avail()` (`:norm!`, say) and did fire.
-    if !key_available() && cur_buf().b_last_changedtick_i == buf_get_changedtick(cur_buf()) {
-        cur_buf().b_last_changedtick = buf_get_changedtick(cur_buf());
+    if !key_available()
+        && Buf::current().b_last_changedtick_i == buf_get_changedtick(Buf::current())
+    {
+        Buf::current().b_last_changedtick = buf_get_changedtick(Buf::current());
     }
 }
 
@@ -212,7 +214,7 @@ fn insert_enter(s: &mut InsertState) {
 /// It is allowed to move the cursor deliberately by setting `v:char`; the
 /// restore only happens when `v:char` is still empty.
 fn trigger_insert_enter(cmdchar: c_int) {
-    let save_cursor = cur_win().w_cursor;
+    let save_cursor = Win::current().w_cursor;
 
     let mode: *const c_char = if cmdchar == 'R' as c_int {
         c"r".as_ptr()
@@ -235,12 +237,12 @@ fn trigger_insert_enter(cmdchar: c_int) {
     // Make sure the cursor did not move.  `check_cursor_col` is still
     // called in case the text was modified; Insert mode has not started
     // yet, so `State` is faked for it.
-    if !equalpos(cur_win().w_cursor, save_cursor)
+    if !equalpos(Win::current().w_cursor, save_cursor)
         && unsafe { *get_vim_var_str(Vv::Char) } as c_int == NUL
-        && save_cursor.lnum <= cur_buf().b_ml.ml_line_count
+        && save_cursor.lnum <= Buf::current().b_ml.ml_line_count
     {
         let save_state = State.get();
-        cur_win().w_cursor = save_cursor;
+        Win::current().w_cursor = save_cursor;
         State.set(MODE_INSERT);
         check_cursor_col(Win::current());
         State.set(save_state);
@@ -253,22 +255,22 @@ fn trigger_insert_enter(cmdchar: c_int) {
 /// Only when the insert *was* at the end of the line (`ins_at_eol` on the
 /// same line) or the wanted column is past the last character.
 fn restore_ctrl_o_column() {
-    let at_eol = ins_at_eol.get() && cur_win().w_cursor.lnum == o_lnum.get();
-    if !at_eol && cur_win().w_curswant <= cur_win().w_virtcol {
+    let at_eol = ins_at_eol.get() && Win::current().w_cursor.lnum == o_lnum.get();
+    if !at_eol && Win::current().w_curswant <= Win::current().w_virtcol {
         return;
     }
     // SAFETY: the cursor's column is a byte of the cursor's line, so `ptr`
     // addresses that byte and every read below stops at the line's NUL.
-    let ptr = unsafe { get_cursor_line_ptr().offset(cur_win().w_cursor.col as isize) };
+    let ptr = unsafe { get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) };
     if unsafe { *ptr } as c_int == NUL {
         return;
     }
     if unsafe { *ptr.offset(1) } as c_int == NUL {
-        cur_win().w_cursor.col += 1;
+        Win::current().w_cursor.col += 1;
     } else {
         let len = unsafe { utfc_ptr2len(ptr) };
         if unsafe { *ptr.offset(len as isize) } as c_int == NUL {
-            cur_win().w_cursor.col += len;
+            Win::current().w_cursor.col += len;
         }
     }
 }
@@ -298,7 +300,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         Insstart_orig.set(Insstart.get());
     }
 
-    if !cur_buf().terminal.is_null() && !stop_insert_mode.get() {
+    if !Buf::current().terminal.is_null() && !stop_insert_mode.get() {
         // Exiting a terminal buffer's Insert mode: a K_NOP is stuffed so
         // the loop wakes up and sees `stop_insert_mode`.
         stop_insert_mode.set(true);
@@ -312,7 +314,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     }
 
     if !arrow_used.get() {
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     }
     if stuff_empty() {
         did_check_timestamps.set(false);
@@ -348,17 +350,17 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
 
     unsafe { ins_redraw(true) };
 
-    if cur_win().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().w_onebuf_opt.wo_scb != 0 {
         unsafe { do_check_scrollbind(true) };
     }
-    if cur_win().w_onebuf_opt.wo_crb != 0 {
+    if Win::current().w_onebuf_opt.wo_crb != 0 {
         unsafe { do_check_cursorbind() };
     }
     if s.count <= 1 {
         unsafe { update_curswant() };
     }
-    s.old_topline = cur_win().w_topline;
-    s.old_topfill = cur_win().w_topfill;
+    s.old_topline = Win::current().w_topline;
+    s.old_topfill = Win::current().w_topfill;
 
     // `lastc` is the previous *real* key: a K_EVENT is not one.
     if s.c != Key::Event.code() {
@@ -376,7 +378,9 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         s.ins_just_started = false;
         // Autocomplete: with a word character already before the cursor,
         // start completing without waiting for another key.
-        if unsafe { ins_compl_has_autocomplete() } && !key_available() && cur_win().w_cursor.col > 0
+        if unsafe { ins_compl_has_autocomplete() }
+            && !key_available()
+            && Win::current().w_cursor.col > 0
         {
             s.c = unsafe { char_before_cursor() };
             if unsafe { vim_isprintc(s.c) } {
@@ -398,38 +402,40 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
 /// means the line wrapped, and the cursor is on the last row 'scrolloff'
 /// allows.  Not with 'smoothscroll', and not while repeating an insert.
 fn may_scroll_for_wrap(s: &mut InsertState) {
-    if !(cur_buf().b_mod_set
-        && cur_win().w_onebuf_opt.wo_wrap != 0
-        && cur_win().w_onebuf_opt.wo_sms == 0
+    if !(Buf::current().b_mod_set
+        && Win::current().w_onebuf_opt.wo_wrap != 0
+        && Win::current().w_onebuf_opt.wo_sms == 0
         && !s.did_backspace
-        && cur_win().w_topline == s.old_topline
-        && cur_win().w_topfill == s.old_topfill
+        && Win::current().w_topline == s.old_topline
+        && Win::current().w_topfill == s.old_topfill
         && s.count <= 1)
     {
         return;
     }
 
-    s.mincol = cur_win().w_wcol;
+    s.mincol = Win::current().w_wcol;
     validate_cursor_col(Win::current());
 
     let vcol = unsafe { get_nolist_virtcol() };
-    let tabstop = unsafe { tabstop_at(vcol, cur_buf().b_p_ts, cur_buf().b_p_vts_array, false) };
-    if cur_win().w_wcol < s.mincol - tabstop
-        && cur_win().w_wrow as int64_t
-            == (cur_win().w_view_height - 1) as int64_t - get_scrolloff_value(cur_win())
-        && (cur_win().w_cursor.lnum != cur_win().w_topline || cur_win().w_topfill > 0)
+    let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
+    let tabstop = unsafe { tabstop_at(vcol, ts, vts, false) };
+    if Win::current().w_wcol < s.mincol - tabstop
+        && Win::current().w_wrow as int64_t
+            == (Win::current().w_view_height - 1) as int64_t - get_scrolloff_value(Win::current())
+        && (Win::current().w_cursor.lnum != Win::current().w_topline
+            || Win::current().w_topfill > 0)
     {
-        if cur_win().w_topfill > 0 {
-            cur_win().w_topfill -= 1;
+        if Win::current().w_topfill > 0 {
+            Win::current().w_topfill -= 1;
         } else if has_folding(
-            cur_win(),
-            cur_win().w_topline,
+            Win::current(),
+            Win::current().w_topline,
             None,
             Some(&mut s.old_topline),
         ) {
             set_topline(Win::current(), s.old_topline + 1);
         } else {
-            set_topline(Win::current(), cur_win().w_topline + 1);
+            set_topline(Win::current(), Win::current().w_topline + 1);
         }
     }
 }
@@ -530,7 +536,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         }
     }
 
-    if cur_win().w_onebuf_opt.wo_rl != 0 {
+    if Win::current().w_onebuf_opt.wo_rl != 0 {
         s.c = mirror_arrow_key(s.c);
     }
 
@@ -573,7 +579,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // SAFETY: `curwin`/`curbuf` are live, which is all the completion
     // machine's routines below ask for.
     if !(ins_compl_active()
-        && cur_win().w_cursor.col >= ins_compl_col()
+        && Win::current().w_cursor.col >= ins_compl_col()
         && unsafe { ins_compl_has_shown_match() }
         && unsafe { pum_wanted() })
     {
@@ -581,7 +587,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // Backspace inside the leader: shrink it rather than deleting text.
-    if (s.c == Key::Bs.code() || s.c == Ctrl_H) && cur_win().w_cursor.col > ins_compl_col() {
+    if (s.c == Key::Bs.code() || s.c == Ctrl_H) && Win::current().w_cursor.col > ins_compl_col() {
         s.c = unsafe { ins_compl_bs() };
         if s.c == NUL {
             return true;
@@ -660,7 +666,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
         did_cursorhold.set(false);
     }
     // The completion popup belongs to the window it was started in.
-    if ins_compl_active() && !ins_compl_win_active(cur_win()) {
+    if ins_compl_active() && !ins_compl_win_active(Win::current()) {
         unsafe { ins_compl_cancel() };
     }
     if arrow_used.get() {
@@ -691,7 +697,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
 pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
-    if !cur_buf().terminal.is_null() {
+    if !Buf::current().terminal.is_null() {
         if ex_normal_busy.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.
@@ -776,14 +782,4 @@ fn cinkeys(c: c_int, when: c_int, line_is_white: bool) -> bool {
 fn c_expr_indent() {
     // SAFETY: `curwin`/`curbuf` are set from startup to exit.
     unsafe { do_c_expr_indent() }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

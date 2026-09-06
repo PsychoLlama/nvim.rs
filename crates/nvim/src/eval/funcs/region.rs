@@ -125,7 +125,7 @@ impl Drop for BufferSwap {
     fn drop(&mut self) {
         self.buf.make_current();
         // `curwin` is live for the whole of a builtin call.
-        cur_win().w_buffer = self.buf.raw();
+        Win::current().w_buffer = self.buf.raw();
         virtual_op.set(self.virtual_op);
     }
 }
@@ -189,8 +189,8 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     unsafe { check_corner(findbuf.raw(), &mut p2) }?;
 
     findbuf.make_current();
-    cur_win().w_buffer = findbuf.raw();
-    virtual_op.set(Some(virtual_active(cur_win())));
+    Win::current().w_buffer = findbuf.raw();
+    virtual_op.set(Some(virtual_active(Win::current())));
 
     // Columns are one-based on the way in and zero-based from here.
     p1.col -= 1;
@@ -299,8 +299,8 @@ fn block_oparg(p1: Pos, p2: Pos, is_select_exclusive: bool, block_width: c_int) 
     let (at1, at2) = (&raw const p1 as *mut Pos, &raw const p2 as *mut Pos);
     let nul = ptr::null_mut();
     // SAFETY: the two positions and the four out-parameters are locals.
-    unsafe { getvvcol(cur_win(), at1, &raw mut sc1, nul, &raw mut ec1) };
-    unsafe { getvvcol(cur_win(), at2, &raw mut sc2, nul, &raw mut ec2) };
+    unsafe { getvvcol(Win::current(), at1, &raw mut sc1, nul, &raw mut ec1) };
+    unsafe { getvvcol(Win::current(), at2, &raw mut sc2, nul, &raw mut ec2) };
     restore_lbr(lbr_saved);
     let start_vcol = sc1.min(sc2);
     OpArg {
@@ -500,9 +500,4 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
         unsafe { tv_list_append_number(l, p.col as VarNumber) };
         unsafe { tv_list_append_number(l, p.coladd as VarNumber) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

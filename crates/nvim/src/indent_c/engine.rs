@@ -58,7 +58,7 @@ impl Line {
 /// Reads and restores the cursor; unlocks the current line freely.
 pub unsafe fn get_c_indent() -> c_int {
     // Remember where the cursor was when we started.
-    let cur_curpos = cur_win().w_cursor;
+    let cur_curpos = Win::current().w_cursor;
 
     // At line 1, zero indent is fine, right?
     if cur_curpos.lnum == 1 {
@@ -74,7 +74,7 @@ pub unsafe fn get_c_indent() -> c_int {
     // In Insert mode with the cursor on a ')', truncate the line there:
     // new text should not line up with the matching '('.  The cursor can
     // be past the end of the line, for unknown reasons, so check.
-    let col = cur_win().w_cursor.col;
+    let col = Win::current().w_cursor.col;
     // SAFETY: `linecopy` is a NUL-terminated copy of the line, and the
     // `strlen` test -- which the `&&` chain keeps in front -- is what says
     // `col` indexes inside it.
@@ -91,7 +91,7 @@ pub unsafe fn get_c_indent() -> c_int {
     // Move the cursor to the start of the line, and judge the line before
     // anything else moves: 'cinoptions' `L` reads the answer again at the
     // very end.
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.col = 0;
     let line = Line {
         theline,
         linecopy: linecopy.cast_const(),
@@ -108,7 +108,7 @@ pub unsafe fn get_c_indent() -> c_int {
     };
 
     // Put the cursor back where it belongs.
-    cur_win().w_cursor = cur_curpos;
+    Win::current().w_cursor = cur_curpos;
     // SAFETY: `linecopy` came from `xstrdup` and nothing else owns it.
     unsafe { xfree(linecopy.cast::<::core::ffi::c_void>()) };
     amount
@@ -126,7 +126,7 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // SAFETY: on the main thread, with a current window and buffer.
     let mut comment_pos = unsafe { ind_find_start_comment() };
     // SAFETY: the same.
-    let raw_string = unsafe { find_start_rawstring(cur_buf().b_ind_maxcomment) };
+    let raw_string = unsafe { find_start_rawstring(Buf::current().b_ind_maxcomment) };
     if let Some(raw) = raw_string
         && comment_pos.is_none_or(|comment| lt(raw, comment))
     {
@@ -145,17 +145,20 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
                 || in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true))
             && {
                 let directive = skipwhite(line.theline.add(1));
-                cur_buf().b_ind_pragma == 0
+                Buf::current().b_ind_pragma == 0
                     || !CStr::from_ptr(directive).to_bytes().starts_with(b"pragma")
             }
     };
     if hash_at_left {
-        return Some(cur_buf().b_ind_hash_comment);
+        return Some(Buf::current().b_ind_hash_comment);
     }
 
     // A non-case label goes at the left margin too, unless the JS flag is
     // set or 'cinoptions' `L` is positive.
-    if line.original_line_islabel && cur_buf().b_ind_js == 0 && cur_buf().b_ind_jump_label < 0 {
+    if line.original_line_islabel
+        && Buf::current().b_ind_js == 0
+        && Buf::current().b_ind_jump_label < 0
+    {
         return Some(0);
     }
 
@@ -187,7 +190,7 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // it; the match search runs on the current buffer, and only for a `]`.
     let bracket = unsafe {
         (*skipwhite(line.theline) as u8 == b']')
-            .then(|| find_match_char(b'[', cur_buf().b_ind_maxparen))
+            .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen))
             .flatten()
     };
     if let Some(trypos) = bracket {
@@ -199,8 +202,8 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // `(paren && !java) || (brace = find_start_brace()) || paren`, so the
     // brace search runs in every case but "a paren, and not Java".
     // SAFETY: both search the current buffer from the cursor.
-    let mut paren = unsafe { find_match_paren(cur_buf().b_ind_maxparen) };
-    let mut brace = if paren.is_some() && cur_buf().b_ind_java == 0 {
+    let mut paren = unsafe { find_match_paren(Buf::current().b_ind_maxparen) };
+    let mut brace = if paren.is_some() && Buf::current().b_ind_java == 0 {
         None
     } else {
         // SAFETY: the same.
@@ -233,21 +236,11 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // Extra indent for a comment.
     // SAFETY: `line.theline` is NUL-terminated.
     if unsafe { cin_iscomment(line.theline) } {
-        amount += cur_buf().b_ind_comment;
+        amount += Buf::current().b_ind_comment;
     }
     // Take back the extra left shift jump labels get.
-    if cur_buf().b_ind_jump_label > 0 && line.original_line_islabel {
-        amount -= cur_buf().b_ind_jump_label;
+    if Buf::current().b_ind_jump_label > 0 && line.original_line_islabel {
+        amount -= Buf::current().b_ind_jump_label;
     }
     Some(amount)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

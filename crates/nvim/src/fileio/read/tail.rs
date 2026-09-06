@@ -45,15 +45,15 @@ pub(crate) unsafe fn report_and_place(
     // With errors, writing the file requires ":w!".
     let bad_bytes = out.illegal_byte > 0 && bad_char != BAD_KEEP;
     if how.newfile && (out.error || out.conv_error != 0 || bad_bytes) {
-        cur_buf().b_p_ro = c_int::from(true);
+        Buf::current().b_p_ro = c_int::from(true);
     }
 
     // SAFETY: the current buffer and window are live.
-    u_clearline(cur_buf()); // "U" cannot be used after adding lines
+    u_clearline(Buf::current()); // "U" cannot be used after adding lines
 
     // In Ex mode the cursor goes on the last new line, otherwise on the
     // first one.
-    cur_win().w_cursor.lnum = if exmode_active.get() {
+    Win::current().w_cursor.lnum = if exmode_active.get() {
         from + out.linecnt
     } else {
         from + 1
@@ -63,10 +63,10 @@ pub(crate) unsafe fn report_and_place(
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks to the newly read lines.
-        cur_buf().b_op_start.lnum = from + 1;
-        cur_buf().b_op_start.col = 0;
-        cur_buf().b_op_end.lnum = from + out.linecnt;
-        cur_buf().b_op_end.col = 0;
+        Buf::current().b_op_start.lnum = from + 1;
+        Buf::current().b_op_start.col = 0;
+        Buf::current().b_op_end.lnum = from + out.linecnt;
+        Buf::current().b_op_end.col = 0;
     }
 }
 
@@ -114,8 +114,8 @@ pub(crate) unsafe fn run_read_autocmds(
     // SAFETY: the current buffer is live and `args` is the caller's command.
     unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, args) };
     // SAFETY: `b_p_ft` is the buffer's own `'filetype'` string.
-    if buf_read && !cur_buf().b_au_did_filetype && unsafe { *cur_buf().b_p_ft } != 0 {
-        let (ft, fname) = (cur_buf().b_p_ft, cur_buf().b_fname);
+    if buf_read && !Buf::current().b_au_did_filetype && unsafe { *Buf::current().b_p_ft } != 0 {
+        let (ft, fname) = (Buf::current().b_p_ft, Buf::current().b_fname);
         // SAFETY: the buffer's own option and file name; `curbuf` is re-read
         // because `BufReadPost` may have moved us.
         unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, Buf::current_raw()) };
@@ -124,14 +124,4 @@ pub(crate) unsafe fn run_read_autocmds(
         msg_scroll.set(m);
     }
     !aborting()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -23,7 +23,6 @@ use crate::ex_cmds::sub_nsubs;
 use crate::ex_cmds::{
     CAR, LineData, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
 };
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
@@ -37,6 +36,7 @@ use crate::regexp::vim_regsub_multi;
 use crate::types::{BCount, ColNr, LPos, LineNr, NUL, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -115,7 +115,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 st.line2 += 1;
                 // Move the cursor to the new line, like Vi.
                 // SAFETY: the current window is live.
-                cur_win().w_cursor.lnum += 1;
+                Win::current().w_cursor.lnum += 1;
                 // Copy the rest.
                 // SAFETY: both point into the replacement buffer.
                 let n_len = unsafe { cstr::bytes_at(p1.add(1)) }.len();
@@ -147,12 +147,12 @@ pub(super) unsafe fn build_replacement(
 ) {
     st.lnum_start = st.lnum; // save the start lnum
     // SAFETY: the current buffer is live.
-    let save_ma = cur_buf().b_p_ma;
+    let save_ma = Buf::current().b_p_ma;
     let counting = subflags.with(|flags| flags.do_count);
     if counting {
         // Prevent a function from accidentally changing the buffer.
         // SAFETY: as above.
-        cur_buf().b_p_ma = 0;
+        Buf::current().b_p_ma = 0;
     }
     // Held to the end of the function: the only path that reaches here with
     // `counting` set is the early return below.
@@ -186,7 +186,7 @@ pub(super) unsafe fn build_replacement(
     // SAFETY: main thread.
     if st.sublen == 0 as c_int || aborting() || subflags.with(|flags| flags.do_count) {
         // SAFETY: the current buffer is live.
-        cur_buf().b_p_ma = save_ma;
+        Buf::current().b_p_ma = save_ma;
         return;
     }
 
@@ -251,7 +251,7 @@ pub(super) unsafe fn build_replacement(
     // Move the cursor to the start of the line, to avoid it being beyond the
     // end of the line after the substitution.
     // SAFETY: the current window is live.
-    cur_win().w_cursor.col = 0 as ColNr;
+    Win::current().w_cursor.col = 0 as ColNr;
 
     // Remember the next character to be copied.
     st.copycol = st.regmatch.endpos[0].col;

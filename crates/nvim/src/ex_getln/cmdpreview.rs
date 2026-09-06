@@ -61,10 +61,10 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     // Temporarily switch to the preview buffer to set it up.
     unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
     buf_clear();
-    cur_buf().b_p_ma = 1;
-    cur_buf().b_p_ul = -1;
+    Buf::current().b_p_ma = 1;
+    Buf::current().b_p_ul = -1;
     // Reset 'textwidth', which a ftplugin may have set.
-    cur_buf().b_p_tw = 0;
+    Buf::current().b_p_tw = 0;
     unsafe { aucmd_restbuf(&raw mut aco) };
     cmdpreview_bufnr.set(unsafe { (*cmdpreview_buf).handle });
 
@@ -105,10 +105,10 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Wi
         return ::core::ptr::null_mut::<Window>();
     }
 
-    cur_win().w_onebuf_opt.wo_cul = 0;
-    cur_win().w_onebuf_opt.wo_cuc = 0;
-    cur_win().w_onebuf_opt.wo_spell = 0;
-    cur_win().w_onebuf_opt.wo_fen = 0;
+    Win::current().w_onebuf_opt.wo_cul = 0;
+    Win::current().w_onebuf_opt.wo_cuc = 0;
+    Win::current().w_onebuf_opt.wo_spell = 0;
+    Win::current().w_onebuf_opt.wo_fen = 0;
 
     unsafe { win_enter(save_curwin, false) };
     preview_win
@@ -196,7 +196,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
     cpinfo.win_info = CP_INFO_INIT.win_info;
 
     // C's FOR_ALL_WINDOWS_IN_TAB(win, curtab).
-    for mut win in windows_in_tab(cur_tab()) {
+    for mut win in windows_in_tab(TabPage::current()) {
         let mut buf = win.buffer();
 
         // Don't save the state of the command preview buffer or window.
@@ -298,7 +298,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             // SAFETY: `aco` is this frame's, and every `prepbuf` below is
             // paired with the `restbuf` that follows it.
             unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
-            if cur_buf().b_u_synced as ::core::ffi::c_int == 0 {
+            if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
                 // SAFETY: syncing undo needs only a live editor.
                 u_sync(true);
             }
@@ -498,18 +498,3 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 /// [`Live`]'s shape for the save/restore state of one `'inccommand'` run,
 /// which lives in [`cmdpreview_may_show`]'s frame.
 pub(crate) type Cp = Live<CpInfo>;
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}

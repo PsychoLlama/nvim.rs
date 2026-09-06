@@ -177,9 +177,9 @@ const IGNORED: [c_int; 22] = [
 fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr) {
     // SAFETY (throughout): `curwin` is the current window.
     let (mut top, mut bot) = if cursor_bot {
-        (sel.anchor.lnum, cur_win().w_cursor.lnum)
+        (sel.anchor.lnum, Win::current().w_cursor.lnum)
     } else {
-        (cur_win().w_cursor.lnum, sel.anchor.lnum)
+        (Win::current().w_cursor.lnum, sel.anchor.lnum)
     };
     has_folding(Win::current(), top, Some(&mut top), None);
     has_folding(Win::current(), bot, None, Some(&mut bot));
@@ -195,15 +195,15 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
     let saved_sbr = p_sbr.get();
-    let saved_w_sbr = cur_win().w_onebuf_opt.wo_sbr;
+    let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
     p_sbr.set(empty_option());
-    cur_win().w_onebuf_opt.wo_sbr = empty_option();
-    let win = cur_win();
+    Win::current().w_onebuf_opt.wo_sbr = empty_option();
+    let win = Win::current();
     let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
     let (l, r) = (&raw mut leftcol, &raw mut rightcol);
     unsafe { getvcols(win, cursor, other, l, r) };
     p_sbr.set(saved_sbr);
-    cur_win().w_onebuf_opt.wo_sbr = saved_w_sbr;
+    Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
 }
 
@@ -246,12 +246,12 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
 /// Describe the Visual selection into the 'showcmd' buffer.
 fn show_visual_size(sel: VisualSelection) {
     // SAFETY: `curwin` is the current window.
-    let cursor_bot = lt(sel.anchor, cur_win().w_cursor);
+    let cursor_bot = lt(sel.anchor, Win::current().w_cursor);
     let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
     // SAFETY: `curwin` is the current window.
-    let same_line = sel.anchor.lnum == cur_win().w_cursor.lnum;
+    let same_line = sel.anchor.lnum == Win::current().w_cursor.lnum;
     let text = if sel.mode.is_block() {
         format!("{lines}x{}", blockwise_width(sel))
     } else if sel.mode.is_line() || !same_line {
@@ -389,7 +389,7 @@ pub(crate) fn display_showcmd() {
     if loc == 's' as c_int {
         // SAFETY: `curwin` is the current window.
         if clear {
-            cur_win().w_redr_status = true;
+            Win::current().w_redr_status = true;
         } else {
             unsafe { win_redr_status(Win::current_raw()) };
             unsafe { setcursor() };
@@ -472,9 +472,4 @@ fn draw_on_last_line(clear: bool) {
     let tail = unsafe { pad.offset(len as isize) };
     unsafe { grid_line_puts(sc_col.get() + len, tail, -1, attr) };
     unsafe { grid_line_flush() };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

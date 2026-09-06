@@ -169,14 +169,14 @@ pub(crate) unsafe fn read_stdin() {
     no_wait_return.set(1);
     let save_msg_didany = msg_didany.get();
 
-    if !cur_buf().b_ffname.is_null() {
+    if !Buf::current().b_ffname.is_null() {
         let stdin_buf =
             unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
         if stdin_buf.is_null() {
             semsg!("Failed to create buffer for stdin");
             return;
         }
-        let initial_buf_handle: Handle = cur_buf().handle;
+        let initial_buf_handle: Handle = Buf::current().handle;
         unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
         let last = MAXLNUM as c_int as LineNr;
         let null_ea = ptr::null_mut::<ExArg>();
@@ -259,7 +259,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     if recoverymode.get() {
         msg_scroll.set(1);
         unsafe { ml_recover(true) };
-        if cur_buf().b_ml.ml_mfp.is_null() {
+        if Buf::current().b_ml.ml_mfp.is_null() {
             // Recovery failed; there is nothing to edit.
             unsafe { getout(1) };
         }
@@ -294,11 +294,11 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             next.make_current();
         }
         dorewind = false;
-        cur_win().buffer().make_current();
+        Win::current().buffer().make_current();
 
-        if cur_buf().b_ml.ml_mfp.is_null() {
+        if Buf::current().b_ml.ml_mfp.is_null() {
             if p_fdls.get() >= 0 as OptInt {
-                cur_win().w_onebuf_opt.wo_fdl = p_fdls.get();
+                Win::current().w_onebuf_opt.wo_fdl = p_fdls.get();
             }
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
@@ -314,7 +314,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
                 // index so it is deleted later.
                 let _ =
                     unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
-                cur_win().w_arg_idx = -1;
+                Win::current().w_arg_idx = -1;
                 swap_exists_action.set(SEA_NONE);
             } else {
                 handle_swap_exists(None);
@@ -336,7 +336,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     } else {
         first_win().make_current();
     }
-    cur_win().buffer().make_current();
+    Win::current().buffer().make_current();
     drop(quiet);
 }
 
@@ -351,7 +351,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
-    if cur_win().w_arg_idx == -1 {
+    if Win::current().w_arg_idx == -1 {
         unsafe { win_close(Win::current_raw(), true, false) };
         advance = false;
     }
@@ -362,7 +362,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
     let mut arg_idx: c_int = 1;
     for i in 1..parm.window_count {
-        if cur_win().w_arg_idx == -1 {
+        if Win::current().w_arg_idx == -1 {
             arg_idx += 1;
             unsafe { win_close(Win::current_raw(), true, false) };
             advance = false;
@@ -393,8 +393,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if Buf::current_raw() == first_win().w_buffer || cur_buf().b_ffname.is_null() {
-            cur_win().w_arg_idx = arg_idx;
+        if Buf::current_raw() == first_win().w_buffer || Buf::current().b_ffname.is_null() {
+            Win::current().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();
             let name = if arg_idx < unsafe { (*alist).al_ga.len() as c_int } {
@@ -480,14 +480,4 @@ pub(crate) unsafe fn check_swap_exists_action() {
 /// startup makes it until exit.
 fn first_win() -> Win {
     first_window().expect("the editor always has a window")
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

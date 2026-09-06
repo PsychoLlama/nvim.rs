@@ -31,7 +31,7 @@ mod tags;
 
 use crate::api::private::helpers::{api_free_object, cstr_as_string};
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
-use crate::buffer::{buf_is_help, cur_win, find_buf, set_buflisted, wipe_buffer};
+use crate::buffer::{buf_is_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
@@ -228,8 +228,11 @@ pub(crate) unsafe fn ex_help(args: *mut ExArg) {
             wipe_buffer(buf, true);
         }
         // Keep the previous alternate file.
-        if opened.alt_fnum != 0 && cur_win().w_alt_fnum == opened.empty_fnum && keepalt_is_off() {
-            cur_win().w_alt_fnum = opened.alt_fnum;
+        if opened.alt_fnum != 0
+            && Win::current().w_alt_fnum == opened.empty_fnum
+            && keepalt_is_off()
+        {
+            Win::current().w_alt_fnum = opened.alt_fnum;
         }
     }
     unsafe { xfree(tag.cast::<c_void>()) };
@@ -329,7 +332,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // Re-use an existing help window; always open a new one for
     // `:tab help`.
     let same_tab = cmdmod.with(|m| m.cmod_tab) == 0;
-    if buf_is_help(cur_win().buffer_or_none()) && same_tab {
+    if buf_is_help(Win::current().buffer_or_none()) && same_tab {
         return Some(opened);
     }
     let existing = same_tab
@@ -360,8 +363,8 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // was given and the current window is vertically split and narrow.
     let mut split = WSP_HELP as c_int;
     if cmdmod.with(|m| m.cmod_split) == 0
-        && cur_win().w_width != Columns.get()
-        && cur_win().w_width < 80
+        && Win::current().w_width != Columns.get()
+        && Win::current().w_width < 80
     {
         split |= if p_sb.get() != 0 {
             WSP_BOT as c_int
@@ -372,7 +375,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     if win_split(0, split).is_err() {
         return None;
     }
-    if (cur_win().w_height as OptInt) < p_hh.get() {
+    if (Win::current().w_height as OptInt) < p_hh.get() {
         win_setheight(p_hh.get() as c_int);
     }
 
@@ -385,7 +388,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // SAFETY: the editor's own current window and buffer.
     let _ = unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
     if keepalt_is_off() {
-        cur_win().w_alt_fnum = opened.alt_fnum;
+        Win::current().w_alt_fnum = opened.alt_fnum;
     }
     opened.empty_fnum = Buf::current().handle;
     Some(opened)

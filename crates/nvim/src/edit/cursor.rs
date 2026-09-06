@@ -39,7 +39,7 @@ crate::flag_set! {
 /// Safe: the only promise is that the editor exists, which `cur_win()`
 /// carries.
 pub(crate) fn beginline(flags: BeginlineOpts) {
-    let mut win = cur_win();
+    let mut win = Win::current();
     if flags.has(BeginlineOpts::SOL) && p_sol.get() == 0 {
         // SAFETY: `curwin` is live for the whole session.
         let want = win.w_curswant;
@@ -73,7 +73,7 @@ pub(crate) unsafe fn oneright() -> Result<(), Failed> {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    let mut win = cur_win();
+    let mut win = Win::current();
 
     if virtual_edit(win) {
         // In 'virtualedit' the step is a *screen* column, so a wide
@@ -126,7 +126,7 @@ pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    let mut win = cur_win();
+    let mut win = Win::current();
 
     if virtual_edit(win) {
         let v = viscol();
@@ -223,7 +223,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn cursor_up(n: LineNr, upd_topline: bool) -> Result<(), Failed> {
-    let win = cur_win();
+    let win = Win::current();
     if n > 0 && win.w_cursor.lnum <= 1 {
         return Err(Failed);
     }
@@ -280,7 +280,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
 /// # Safety
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
-    let win = cur_win();
+    let win = Win::current();
     let mut lnum = win.w_cursor.lnum;
     fold_end(win, lnum, &mut lnum);
     if n > 0 && lnum >= win.buffer().b_ml.ml_line_count {
@@ -358,9 +358,4 @@ fn fold_start(win: Win, lnum: LineNr, first: &mut LineNr) -> bool {
 #[inline(always)]
 fn fold_end(win: Win, lnum: LineNr, last: &mut LineNr) -> bool {
     has_folding_win(win, lnum, None, Some(last), true, None)
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

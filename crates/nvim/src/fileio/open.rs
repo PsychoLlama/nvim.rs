@@ -106,14 +106,14 @@ pub(crate) unsafe fn open_source(
     // curbuf->b_fname, to detect nasty autocommands altering them.
     // Also check whether "fname" and "sfname" point at one of them.
     let old_curbuf = Buf::current_raw();
-    let old_b_ffname = cur_buf().b_ffname;
-    let old_b_fname = cur_buf().b_fname;
+    let old_b_ffname = Buf::current().b_ffname;
+    let old_b_fname = Buf::current().b_fname;
     let using_b_ffname = fname == old_b_ffname || sfname == old_b_ffname;
     let using_b_fname = fname == old_b_fname || sfname == old_b_fname;
     let buffer_changed = || {
         Buf::current_raw() != old_curbuf
-            || (using_b_ffname && old_b_ffname != cur_buf().b_ffname)
-            || (using_b_fname && old_b_fname != cur_buf().b_fname)
+            || (using_b_ffname && old_b_ffname != Buf::current().b_ffname)
+            || (using_b_fname && old_b_fname != Buf::current().b_fname)
     };
 
     // After reading a file the cursor line changes, but we don't want
@@ -132,12 +132,12 @@ pub(crate) unsafe fn open_source(
     // The BufReadCmd and FileReadCmd events intercept the reading
     // process by running the associated commands instead.
     if !how.filtering && !how.stdin && !how.buffer {
-        orig_start = cur_buf().b_op_start;
+        orig_start = Buf::current().b_op_start;
 
         // Set the '[ mark to the line above where the lines go, line
         // 1 if zero.
-        cur_buf().b_op_start.lnum = if from == 0 { 1 } else { from };
-        cur_buf().b_op_start.col = 0;
+        Buf::current().b_op_start.lnum = if from == 0 { 1 } else { from };
+        Buf::current().b_op_start.col = 0;
 
         if how.newfile {
             if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, args, false) } {
@@ -151,7 +151,7 @@ pub(crate) unsafe fn open_source(
                 // but this should work like ":edit", so reset
                 // BufFlags::NOTEDITED and let ":write" overwrite the file.
                 if retval.is_ok() {
-                    cur_buf().b_flags.clear(BufFlags::NOTEDITED);
+                    Buf::current().b_flags.clear(BufFlags::NOTEDITED);
                 }
                 return Err(retval);
             }
@@ -164,7 +164,7 @@ pub(crate) unsafe fn open_source(
             return Err(retval);
         }
 
-        cur_buf().b_op_start = orig_start;
+        Buf::current().b_op_start = orig_start;
 
         if how.nofile {
             // NOTDONE rather than FAIL, so that BufEnter can still be
@@ -175,7 +175,7 @@ pub(crate) unsafe fn open_source(
     }
 
     msg_scroll.set(
-        (!((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || cur_buf().b_help)
+        (!((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || Buf::current().b_help)
             || p_verbose.get() != 0) as c_int,
     );
 
@@ -232,17 +232,17 @@ pub(crate) unsafe fn open_source(
     // When opening a new file take the readonly flag from the file.
     // The default is r/w and can be set to r/o below; don't reset it
     // in readonly mode, and only touch b_p_ro when BufFlags::CHECK_RO is set.
-    let check_readonly = how.newfile && cur_buf().b_flags.has(BufFlags::CHECK_RO);
+    let check_readonly = how.newfile && Buf::current().b_flags.has(BufFlags::CHECK_RO);
     if check_readonly && !readonlymode.get() {
-        cur_buf().b_p_ro = false as c_int;
+        Buf::current().b_p_ro = false as c_int;
     }
 
     if how.newfile && !how.stdin && !how.buffer && !how.fifo {
         // Remember the time of the file.
         if unsafe { os_fileinfo(fname, &raw mut file_info) } {
             unsafe { buf_store_file_info(Buf::current(), &raw mut file_info) };
-            cur_buf().b_mtime_read = cur_buf().b_mtime;
-            cur_buf().b_mtime_read_ns = cur_buf().b_mtime_ns;
+            Buf::current().b_mtime_read = Buf::current().b_mtime;
+            Buf::current().b_mtime_read_ns = Buf::current().b_mtime_ns;
             // Use the protection bits of the original file for the
             // swap file, so that others can read the name of the
             // edited file from it, but only if they can read the file
@@ -253,16 +253,18 @@ pub(crate) unsafe fn open_source(
             // file is created.
             swap_mode = (file_info.stat.st_mode as c_int & 0o644) | 0o600;
         } else {
-            cur_buf().b_mtime = 0;
-            cur_buf().b_mtime_ns = 0;
-            cur_buf().b_mtime_read = 0;
-            cur_buf().b_mtime_read_ns = 0;
-            cur_buf().b_orig_size = 0;
-            cur_buf().b_orig_mode = 0;
+            Buf::current().b_mtime = 0;
+            Buf::current().b_mtime_ns = 0;
+            Buf::current().b_mtime_read = 0;
+            Buf::current().b_mtime_read_ns = 0;
+            Buf::current().b_orig_size = 0;
+            Buf::current().b_orig_mode = 0;
         }
         // Reset the "new file" flag; it is set again below when the
         // file doesn't exist.
-        cur_buf().b_flags.clear(BufFlags::NEW | BufFlags::NEW_W);
+        Buf::current()
+            .b_flags
+            .clear(BufFlags::NEW | BufFlags::NEW_W);
     }
 
     // Check readonly.
@@ -287,7 +289,7 @@ pub(crate) unsafe fn open_source(
         if perm == UV_ENOENT {
             // The file does not exist. Set the 'new-file' flag, so
             // that a ":w" complains if someone else created it since.
-            cur_buf().b_flags |= BufFlags::NEW;
+            Buf::current().b_flags |= BufFlags::NEW;
 
             // Create a swap file now, so that other Nvims are warned
             // that we are editing this file. Not for a "nofile" or
@@ -336,27 +338,27 @@ pub(crate) unsafe fn open_source(
             c"[Permission Denied]"
         };
         unsafe { filemess(Buf::current(), sfname, translate(note).as_ptr().cast_mut()) };
-        cur_buf().b_p_ro = true as c_int; // must use "w!" now
+        Buf::current().b_p_ro = true as c_int; // must use "w!" now
         return Err(retval);
     }
 
     // Only set the 'ro' flag for readonly files the first time they
     // are loaded. Help files always get readonly mode.
-    if (check_readonly && file_readonly) || cur_buf().b_help {
-        cur_buf().b_p_ro = true as c_int;
+    if (check_readonly && file_readonly) || Buf::current().b_help {
+        Buf::current().b_p_ro = true as c_int;
     }
 
     if set_options {
         // Don't change 'eol' when reading from a buffer: it was
         // already set correctly when stdin was read.
         if !how.buffer {
-            cur_buf().b_p_eof = false as c_int;
-            cur_buf().b_start_eof = false as c_int;
-            cur_buf().b_p_eol = true as c_int;
-            cur_buf().b_start_eol = true as c_int;
+            Buf::current().b_p_eof = false as c_int;
+            Buf::current().b_start_eof = false as c_int;
+            Buf::current().b_p_eol = true as c_int;
+            Buf::current().b_start_eol = true as c_int;
         }
-        cur_buf().b_p_bomb = false as c_int;
-        cur_buf().b_start_bomb = false as c_int;
+        Buf::current().b_p_bomb = false as c_int;
+        Buf::current().b_start_bomb = false as c_int;
     }
 
     // Create a swap file now, so that other Nvims are warned that we
@@ -371,7 +373,7 @@ pub(crate) unsafe fn open_source(
             return Err(retval);
         }
         // Set the swap file's protection bits now that it exists.
-        let mfp = cur_buf().b_ml.ml_mfp;
+        let mfp = Buf::current().b_ml.ml_mfp;
         if swap_mode > 0 && !mfp.is_null() && !unsafe { mf_fname(mfp) }.is_null() {
             let swap_fname = unsafe { mf_fname(mfp) };
             // If the group-read bit is set but not the world-read bit,
@@ -409,9 +411,9 @@ pub(crate) unsafe fn open_source(
 
     // Set the '[ mark to the line above where the lines go, line 1 if
     // zero.
-    orig_start = cur_buf().b_op_start;
-    cur_buf().b_op_start.lnum = if from == 0 { 1 } else { from };
-    cur_buf().b_op_start.col = 0;
+    orig_start = Buf::current().b_op_start;
+    Buf::current().b_op_start.lnum = if from == 0 { 1 } else { from };
+    Buf::current().b_op_start.col = 0;
 
     let mut guess = unsafe { FormatGuess::from_ffs() };
 
@@ -441,7 +443,7 @@ pub(crate) unsafe fn open_source(
 
         // The autocommands may have changed 'fileformats'.
         guess = unsafe { FormatGuess::from_ffs() };
-        cur_buf().b_op_start = orig_start;
+        Buf::current().b_op_start = orig_start;
 
         if msg_scrolled.get() == n {
             msg_scroll.set(m);
@@ -451,7 +453,7 @@ pub(crate) unsafe fn open_source(
             // Autocommands may abort script processing.
             no_wait_return.set(no_wait_return.get() - 1);
             msg_scroll.set(msg_save);
-            cur_buf().b_p_ro = true as c_int; // must use "w!" now
+            Buf::current().b_p_ro = true as c_int; // must use "w!" now
             return Err(retval);
         }
 
@@ -473,7 +475,7 @@ pub(crate) unsafe fn open_source(
                 c"E201: *ReadPre autocommands must not change current buffer"
             };
             emsg(gettext(msg));
-            cur_buf().b_p_ro = true as c_int; // must use "w!" now
+            Buf::current().b_p_ro = true as c_int; // must use "w!" now
             return Err(retval);
         }
     }
@@ -485,9 +487,4 @@ pub(crate) unsafe fn open_source(
         perm,
         guess,
     })
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

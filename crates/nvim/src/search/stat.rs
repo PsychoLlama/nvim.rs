@@ -90,14 +90,14 @@ impl Counted {
     /// Reads the current buffer and the remembered pattern.
     unsafe fn still_holds(&self, cursor_pos: Pos) -> bool {
         let live = last_used_pattern();
-        self.chgtick as VarNumber == buf_get_changedtick(cur_buf())
+        self.chgtick as VarNumber == buf_get_changedtick(Buf::current())
             // The null test suppresses clang's "NULL passed as
             // nonnull parameter" on `strncmp`.
             && !self.pat.is_null()
             && unsafe { cstr::prefix_eq(self.pat, live.pat, self.patlen) }
             && self.patlen == live.patlen
             && equalpos(self.at, cursor_pos)
-            && self.buf == Some(cur_buf().id())
+            && self.buf == Some(Buf::current().id())
     }
 
     /// Throw the numbers away and start counting the current buffer again.
@@ -107,7 +107,7 @@ impl Counted {
         self.exact_match = false;
         self.incomplete = 0;
         clearpos(&mut self.at);
-        self.buf = Some(cur_buf().id());
+        self.buf = Some(Buf::current().id());
     }
 
     /// Record what the numbers were counted from.
@@ -119,8 +119,8 @@ impl Counted {
         unsafe { xfree(self.pat as *mut c_void) };
         self.pat = unsafe { xstrnsave(live.pat, live.patlen) };
         self.patlen = live.patlen;
-        self.chgtick = buf_get_changedtick(cur_buf()) as c_int;
-        self.buf = Some(cur_buf().id());
+        self.chgtick = buf_get_changedtick(Buf::current()) as c_int;
+        self.buf = Some(Buf::current().id());
         self.at = at;
     }
 }
@@ -155,8 +155,8 @@ pub(crate) unsafe fn cmdline_search_stat(
 
     // A right-to-left window has the pair the other way round, so that
     // it still reads "current of total" on screen.
-    let reversed = cur_win().w_onebuf_opt.wo_rl != 0
-        && unsafe { *cur_win().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
+    let reversed = Win::current().w_onebuf_opt.wo_rl != 0
+        && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
     let mut t = [0 as c_char; STAT_BUF_LEN];
     let at = t.as_mut_ptr();
     let room = STAT_BUF_LEN as size_t;
@@ -361,7 +361,7 @@ unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c
 /// `result` the return value.
 pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut pos = cur_win().w_cursor;
+    let mut pos = Win::current().w_cursor;
     let mut pattern = ptr::null_mut::<c_char>();
     let mut maxcount = p_msc.get() as c_int;
     let mut timeout = SEARCH_STAT_DEF_TIMEOUT as c_int;
@@ -466,14 +466,4 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     }
     restore_last_search_pattern();
     restore_incsearch_state();
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

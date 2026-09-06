@@ -91,7 +91,7 @@ pub(crate) fn new_screen_rows() {
     win_reconfig_floats();
     // SAFETY: recomputes the row the command line starts on.
     unsafe { compute_cmdrow() };
-    cur_tab().tp_ch_used = p_ch.get();
+    TabPage::current().tp_ch_used = p_ch.get();
     if !skip_win_fix_scroll.get() {
         fix_scroll(true);
     }

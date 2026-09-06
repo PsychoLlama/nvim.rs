@@ -436,7 +436,7 @@ pub unsafe fn qf_init(
             qi,
             (*qi).qf_curlist,
             efile,
-            Some(cur_buf()),
+            Some(Buf::current()),
             ptr::null_mut(),
             errorformat,
             newlist != 0,

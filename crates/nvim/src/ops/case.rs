@@ -51,7 +51,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         }
         if did_change {
             let (first, last) = (op.start.lnum, op.end.lnum + 1);
-            changed_lines(cur_buf(), first, 0, last, 0, true);
+            changed_lines(Buf::current(), first, 0, last, 0, true);
         }
     } else {
         if op.motion_type == kMTLineWise {
@@ -85,7 +85,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         }
         if did_change {
             let (first, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
-            changed_lines(cur_buf(), first, col, last, 0, true);
+            changed_lines(Buf::current(), first, col, last, 0, true);
         }
     }
 
@@ -95,8 +95,8 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = op.start;
-        cur_buf().b_op_end = op.end;
+        Buf::current().b_op_start = op.start;
+        Buf::current().b_op_end = op.end;
     }
 
     if op.line_count as OptInt > p_report.get() {
@@ -176,11 +176,11 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
         // The byte length can differ, so rebuild the character through the
         // change layer. Not `del_char()`: that would take the composing
         // characters with it.
-        let saved: Pos = cur_win().w_cursor;
-        cur_win().w_cursor = unsafe { *pos };
+        let saved: Pos = Win::current().w_cursor;
+        Win::current().w_cursor = unsafe { *pos };
         let _ = unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
         unsafe { ins_char(nc) };
-        cur_win().w_cursor = saved;
+        Win::current().w_cursor = saved;
     } else {
         unsafe { pbyte(*pos, nc) };
     }
@@ -191,14 +191,4 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
 /// at `a`.
 fn rot13(c: c_int, a: c_int) -> c_int {
     (c - a + 13) % 26 + a
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

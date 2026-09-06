@@ -138,7 +138,8 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
                     == NUL;
             let ve_allows =
                 ve_flags == kOptVeFlagAll as c_uint || ve_flags == kOptVeFlagOnemore as c_uint;
-            let eof = cur_buf().b_ml.ml_line_count == cur_win().w_cursor.lnum && one_past_line;
+            let eof =
+                Buf::current().b_ml.ml_line_count == Win::current().w_cursor.lnum && one_past_line;
             if ve_allows || !(eol || eof) {
                 stuff_readbuf_char('l' as c_int);
             }
@@ -151,7 +152,7 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
     // Save the cursor position now (though no text), so that `u` after
     // `".p` restores it.
     if command_start_char == 'a' as c_int {
-        let lnum = cur_win().w_cursor.lnum;
+        let lnum = Win::current().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
         let _ = u_save(lnum, lnum + 1);
     }
@@ -259,7 +260,7 @@ impl Put {
         // SAFETY: `p` points at those `taillen` bytes.
         let tail = unsafe { xmemdupz(p as *const c_void, taillen) } as *mut c_char;
         // SAFETY: `tail` is NUL-terminated and `ml_append` copies it.
-        let _ = unsafe { ml_append(cur_win().w_cursor.lnum, tail, 0, false) };
+        let _ = unsafe { ml_append(Win::current().w_cursor.lnum, tail, 0, false) };
         // SAFETY: the copy is ours.
         unsafe { xfree(tail as *mut c_void) };
 
@@ -269,11 +270,11 @@ impl Put {
         // `split_pos` is a column of it, and `ml_replace` takes the copy over.
         let head = get_cursor_line_ptr() as *const c_void;
         let head = unsafe { xmemdupz(head, self.split_pos as size_t) } as *mut c_char;
-        let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, head, false) };
+        let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, head, false) };
         self.nr_lines += 1;
         self.dir = FORWARD;
 
-        let lnum = cur_win().w_cursor.lnum;
+        let lnum = Win::current().w_cursor.lnum;
         // SAFETY: a live buffer, in which one line just became two.
         unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
         true
@@ -287,11 +288,11 @@ impl Put {
     /// The cursor must be on a valid line.
     unsafe fn save_for_undo(&self) -> bool {
         if self.y_type == kMTBlockWise {
-            let mut lnum = cur_win().w_cursor.lnum + self.y_size as LineNr + 1;
-            lnum = lnum.min(cur_buf().b_ml.ml_line_count + 1);
+            let mut lnum = Win::current().w_cursor.lnum + self.y_size as LineNr + 1;
+            lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
             // SAFETY: the cursor is on a valid line and `lnum` is capped at
             // one past the last, so the range is the buffer's.
-            return u_save(cur_win().w_cursor.lnum - 1, lnum).is_ok();
+            return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
         }
 
         if self.y_type != kMTLineWise {
@@ -301,11 +302,13 @@ impl Put {
 
         // Correct for a closed fold. The cursor must not move yet:
         // u_save() reads it.
-        let cursor_lnum = cur_win().w_cursor.lnum;
+        let cursor_lnum = Win::current().w_cursor.lnum;
         let mut lnum = if self.dir == BACKWARD {
-            cur_win().fold_first(cursor_lnum).unwrap_or(cursor_lnum)
+            Win::current()
+                .fold_first(cursor_lnum)
+                .unwrap_or(cursor_lnum)
         } else {
-            cur_win().fold_last(cursor_lnum)
+            Win::current().fold_last(cursor_lnum)
         };
         if self.dir == FORWARD {
             lnum += 1;
@@ -322,8 +325,8 @@ impl Put {
         if saved.is_err() {
             return false;
         }
-        cur_win().w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
-        cur_buf().b_op_start = cur_win().w_cursor; // for mark_adjust()
+        Win::current().w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
+        Buf::current().b_op_start = Win::current().w_cursor; // for mark_adjust()
         true
     }
 
@@ -341,21 +344,21 @@ impl Put {
         // line every one of these reads, measures or moves within.
         if gchar_cursor() == TAB {
             let viscol = unsafe { getviscol() };
-            let ts = cur_buf().b_p_ts;
+            let ts = Buf::current().b_p_ts;
             // No spaces needed for `p` on the last position of a tab, or
             // `P` on the first.
             let splits_tab = if self.dir == FORWARD {
-                let pad = unsafe { tabstop_padding(viscol, ts, cur_buf().b_p_vts_array) };
+                let pad = unsafe { tabstop_padding(viscol, ts, Buf::current().b_p_vts_array) };
                 pad != 1
             } else {
-                cur_win().w_cursor.coladd > 0
+                Win::current().w_cursor.coladd > 0
             };
             if splits_tab {
                 unsafe { coladvance_force(viscol) };
             } else {
-                cur_win().w_cursor.coladd = 0;
+                Win::current().w_cursor.coladd = 0;
             }
-        } else if cur_win().w_cursor.coladd > 0 || gchar_cursor() == NUL {
+        } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL {
             let to = unsafe { getviscol() } + c_int::from(self.dir == FORWARD);
             unsafe { coladvance_force(to) };
         }
@@ -377,10 +380,10 @@ impl Put {
 /// The cursor must be on a valid line. May run the clipboard provider and, by
 /// way of `"=`, arbitrary Vimscript.
 pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int, flags: c_int) {
-    let orig_start = cur_buf().b_op_start;
-    let orig_end = cur_buf().b_op_end;
+    let orig_start = Buf::current().b_op_start;
+    let orig_end = Buf::current().b_op_end;
     // SAFETY: a live window.
-    let ve_flags = get_ve_flags(cur_win());
+    let ve_flags = get_ve_flags(Win::current());
 
     // Remove any preinserted completion text (vim/vim#19329).
     // SAFETY: main thread; the completion state is its own.
@@ -390,8 +393,8 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
     }
 
     // Defaults for the `'[` and `']` marks.
-    cur_buf().b_op_start = cur_win().w_cursor;
-    cur_buf().b_op_end = cur_win().w_cursor;
+    Buf::current().b_op_start = Win::current().w_cursor;
+    Buf::current().b_op_end = Win::current().w_cursor;
 
     if regname == '.' as c_int && reg.is_null() {
         // SAFETY: the cursor is on a valid line.
@@ -412,10 +415,10 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         return;
     }
 
-    if cur_buf().terminal.is_null() {
+    if Buf::current().terminal.is_null() {
         // Saving for undo can run autocommands, which would invalidate
         // `y_array`, so it happens before the register is read.
-        let lnum = cur_win().w_cursor.lnum;
+        let lnum = Win::current().w_cursor.lnum;
         // SAFETY: the cursor is on a valid line.
         if u_save(lnum, lnum + 1).is_err() {
             return;
@@ -467,7 +470,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
     }
 
     'end: {
-        if !cur_buf().terminal.is_null() {
+        if !Buf::current().terminal.is_null() {
             // SAFETY: `y_array` holds `y_size` NUL-terminated strings.
             unsafe { terminal_paste(count, put.y_array, put.y_size) };
             break 'end;
@@ -482,11 +485,11 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
             }
             if put.flags & PUT_LINE_FORWARD as c_int != 0 {
                 // `p` over a Visual block puts the lines below the block.
-                cur_win().w_cursor = cur_buf().b_visual.vi_end;
+                Win::current().w_cursor = Buf::current().b_visual.vi_end;
                 put.dir = FORWARD;
             }
-            cur_buf().b_op_start = cur_win().w_cursor;
-            cur_buf().b_op_end = cur_win().w_cursor;
+            Buf::current().b_op_start = Win::current().w_cursor;
+            Buf::current().b_op_end = Win::current().w_cursor;
         }
 
         if put.flags & PUT_LINE as c_int != 0 {
@@ -514,8 +517,8 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         // SAFETY: as above.
         unsafe { put.make_room_for_virtualedit() };
 
-        let mut lnum = cur_win().w_cursor.lnum;
-        let mut col = cur_win().w_cursor.col;
+        let mut lnum = Win::current().w_cursor.lnum;
+        let mut col = Win::current().w_cursor.col;
 
         if put.y_type == kMTBlockWise {
             // SAFETY: the cursor is on a valid line and `y_array` holds
@@ -534,16 +537,16 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
                     col += bytelen;
                     // SAFETY: a charwise register holds at least one line.
                     if !unsafe { (*put.y_array).is_empty() } {
-                        cur_win().w_cursor.col += bytelen;
-                        cur_buf().b_op_end.col += bytelen;
+                        Win::current().w_cursor.col += bytelen;
+                        Buf::current().b_op_end.col += bytelen;
                     }
                 }
-                cur_buf().b_op_start = cur_win().w_cursor;
+                Buf::current().b_op_start = Win::current().w_cursor;
             } else if put.dir == BACKWARD {
                 // Linewise: BACKWARD is FORWARD on the previous line.
                 lnum -= 1;
             }
-            let new_cursor = cur_win().w_cursor;
+            let new_cursor = Win::current().w_cursor;
 
             // SAFETY (both): `lnum`/`col` is a position of the buffer and
             // undo has just been saved.
@@ -556,22 +559,22 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
 
         // SAFETY: main thread, reporting how many lines went in.
         unsafe { msgmore(put.nr_lines) };
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
 
         // Don't leave the cursor after the NUL.
         // SAFETY: the cursor is on a line of the current buffer.
         let len = get_cursor_line_len();
-        if cur_win().w_cursor.col > len {
+        if Win::current().w_cursor.col > len {
             if ve_flags == kOptVeFlagAll as c_uint {
-                cur_win().w_cursor.coladd = cur_win().w_cursor.col - len;
+                Win::current().w_cursor.coladd = Win::current().w_cursor.col - len;
             }
-            cur_win().w_cursor.col = len;
+            Win::current().w_cursor.col = len;
         }
     }
 
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = orig_start;
-        cur_buf().b_op_end = orig_end;
+        Buf::current().b_op_start = orig_start;
+        Buf::current().b_op_end = orig_end;
     }
     if allocated {
         // SAFETY: `allocated` is `get_spec_reg` saying the string is ours.
@@ -582,20 +585,10 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         unsafe { xfree(put.y_array as *mut c_void) };
     }
 
-    if cur_buf().terminal.is_null() {
+    if Buf::current().terminal.is_null() {
         set_visual_active(false);
     }
 
     // SAFETY: the cursor is on a line of the current buffer.
     unsafe { adjust_cursor_eol() };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

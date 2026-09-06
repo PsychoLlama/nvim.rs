@@ -47,7 +47,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
 
     let mut block_col: ColNr = 0;
     if op.motion_type == kMTBlockWise {
-        block_col = cur_win().w_cursor.col;
+        block_col = Win::current().w_cursor.col;
     }
 
     for _ in 0..op.line_count {
@@ -55,7 +55,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
         if first_char == NUL {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
-            cur_win().w_cursor.col = 0;
+            Win::current().w_cursor.col = 0;
         } else if op.motion_type == kMTBlockWise {
             shift_block(op, amount);
         } else if first_char != '#' as c_int || !unsafe { preprocs_left() } {
@@ -64,18 +64,18 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
             let left = op.op_type == OpType::Lshift;
             unsafe { shift_line(left, p_sr.get() != 0, amount, false) };
         }
-        cur_win().w_cursor.lnum += 1;
+        Win::current().w_cursor.lnum += 1;
     }
 
     if op.motion_type == kMTBlockWise {
-        cur_win().w_cursor.lnum = op.start.lnum;
-        cur_win().w_cursor.col = block_col;
+        Win::current().w_cursor.lnum = op.start.lnum;
+        Win::current().w_cursor.col = block_col;
     } else if curs_top {
-        cur_win().w_cursor.lnum = op.start.lnum;
+        Win::current().w_cursor.lnum = op.start.lnum;
         // `shift_line` may have moved the column.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else {
-        cur_win().w_cursor.lnum -= 1;
+        Win::current().w_cursor.lnum -= 1;
     }
     // The cursor line must not be in a closed fold.
     unsafe { fold_open_cursor() };
@@ -116,16 +116,16 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = op.start;
-        cur_buf().b_op_end.lnum = op.end.lnum;
-        cur_buf().b_op_end.col = ml_get_len(op.end.lnum);
-        if cur_buf().b_op_end.col > 0 {
-            cur_buf().b_op_end.col -= 1;
+        Buf::current().b_op_start = op.start;
+        Buf::current().b_op_end.lnum = op.end.lnum;
+        Buf::current().b_op_end.col = ml_get_len(op.end.lnum);
+        if Buf::current().b_op_end.col > 0 {
+            Buf::current().b_op_end.col -= 1;
         }
     }
 
     let (first, last) = (op.start.lnum, op.end.lnum + 1);
-    changed_lines(cur_buf(), first, 0, last, 0, true);
+    changed_lines(Buf::current(), first, 0, last, 0, true);
 }
 
 /// Width of the `index`-th 'vartabstop' stop, the last one repeating forever.
@@ -257,9 +257,9 @@ fn get_new_vts_indent(
 /// # Safety
 /// Operates on the cursor line of the current buffer.
 pub unsafe fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bool) {
-    let sw_val = cur_buf().b_p_sw;
-    let ts_val = cur_buf().b_p_ts;
-    let vts_array = cur_buf().b_p_vts_array as *const c_int;
+    let sw_val = Buf::current().b_p_sw;
+    let ts_val = Buf::current().b_p_ts;
+    let vts_array = Buf::current().b_p_vts_array as *const c_int;
     // `vts_array[0]` is the count, so the whole array is one longer.
     // SAFETY: 'vartabstop' is stored as its own length followed by that many
     // stops, and the cursor is on a line of the current buffer.
@@ -318,7 +318,7 @@ fn shift_block(op: Op, amount: c_int) {
     // describes it once `block_prep` has run.
     let left = op.op_type == OpType::Lshift;
     let old_state = State.get();
-    let old_col = cur_win().w_cursor.col;
+    let old_col = Win::current().w_cursor.col;
     let sw_val = unsafe { get_sw_value_indent(Buf::current_raw(), left) };
     let old_p_ri = p_ri.get();
 
@@ -327,7 +327,7 @@ fn shift_block(op: Op, amount: c_int) {
     State.set(MODE_INSERT);
 
     let mut bd = BlockDef::ZERO;
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
     unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
     if bd.is_short != 0 {
         return;
@@ -353,7 +353,7 @@ fn shift_block(op: Op, amount: c_int) {
     unsafe { extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo) };
 
     State.set(old_state);
-    cur_win().w_cursor.col = old_col;
+    Win::current().w_cursor.col = old_col;
     p_ri.set(old_p_ri);
 }
 
@@ -372,7 +372,7 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     // and every walk below stops at a non-white character or its NUL.
     let old_p = get_cursor_line_ptr();
     let old_line_len = get_cursor_line_len();
-    let ts_val = cur_buf().b_p_ts as c_int;
+    let ts_val = Buf::current().b_p_ts as c_int;
 
     // All the virtual white space up to and including a split TAB.
     total += bd.pre_whitesp;
@@ -391,8 +391,8 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
 
     // Add the width of the white space that follows the block's edge.
     let mut csarg = CharsizeArg::default();
-    let lnum = cur_win().w_cursor.lnum;
-    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, bd.textstart) };
+    let lnum = Win::current().w_cursor.lnum;
+    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     let mut vcol = bd.start_vcol as c_int;
     while ascii_iswhite(ci.chr.value) {
@@ -408,8 +408,8 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     // at the first non-white character in the block.
     let mut tabs = 0;
     let mut spaces = 0;
-    if cur_buf().b_p_et == 0 {
-        let (vts, tp, sp) = (cur_buf().b_p_vts_array, &raw mut tabs, &raw mut spaces);
+    if Buf::current().b_p_et == 0 {
+        let (vts, tp, sp) = (Buf::current().b_p_vts_array, &raw mut tabs, &raw mut spaces);
         unsafe { tabstop_fromto(ws_vcol, ws_vcol + total, ts_val, vts, tp, sp) };
     } else {
         spaces = total;
@@ -477,8 +477,8 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     }
     let mut non_white_col = bd.start_vcol;
     let mut csarg = CharsizeArg::default();
-    let lnum = cur_win().w_cursor.lnum;
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, bd.textstart) };
+    let lnum = Win::current().w_cursor.lnum;
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, bd.textstart) };
     while ascii_iswhite(unsafe { *non_white } as c_int) {
         let c = unsafe { *non_white } as u8 as int32_t;
         let at = non_white;
@@ -497,7 +497,7 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     if bd.startspaces != 0 {
         verbatim_copy_width -= bd.start_char_vcols;
     }
-    cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, bd.textstart) };
+    cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;
@@ -542,14 +542,4 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     };
     debug_assert!(shifted.new_len - shifted.old_len == new_line_len - old_line_len);
     shifted
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

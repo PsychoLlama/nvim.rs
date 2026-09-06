@@ -243,7 +243,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
     special(
         '%' as c_int,
         c"\n  c  \"%   ".as_ptr(),
-        cur_buf().b_fname,
+        Buf::current().b_fname,
         false,
     );
 
@@ -278,9 +278,4 @@ pub unsafe fn ex_display(args: *mut ExArg) {
     );
 
     msg_ext_skip_flush.set(false);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

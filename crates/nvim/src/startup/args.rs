@@ -344,8 +344,8 @@ impl Scan {
             b'b' => {
                 // Before the file names are expanded: on Windows this is
                 // what decides whether a shortcut is edited or followed.
-                set_options_bin(cur_buf().b_p_bin != 0, true, OptionSetFlags::NONE);
-                cur_buf().b_p_bin = 1;
+                set_options_bin(Buf::current().b_p_bin != 0, true, OptionSetFlags::NONE);
+                Buf::current().b_p_bin = 1;
             }
             b'D' => self.parm.use_debug_break_level = DEBUG_BREAK_ALL,
             b'd' => self.parm.diff_mode = 1,
@@ -399,7 +399,7 @@ impl Scan {
             }
             b'R' => {
                 readonlymode.set(true);
-                cur_buf().b_p_ro = 1;
+                Buf::current().b_p_ro = 1;
                 p_uc.set(READONLY_UPDATECOUNT);
             }
             // `-L` is the historical spelling of `-r`.
@@ -791,9 +791,4 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
     drop(sctx);
     unsafe { xfree(initstr as *mut c_void) };
     Ok(())
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

@@ -26,7 +26,6 @@ use crate::eval::userfunc::{
 };
 use crate::eval::vars::eval_variable;
 use crate::eval::vars::{clear_local, emsg_static};
-use crate::eval::window::{cur_buf, cur_win};
 use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
 use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
@@ -48,7 +47,7 @@ use crate::types::{
     uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::{Buf, Live, Win};
 
 pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
     script_ctx: ScriptCtx::NONE,
@@ -274,8 +273,8 @@ pub unsafe fn eval_call_provider(
     unsafe { tv_list_ref(arguments) };
 
     let mut funcexe: FuncExe = FUNCEXE_INIT;
-    funcexe.fe_firstline = cur_win().w_cursor.lnum;
-    funcexe.fe_lastline = cur_win().w_cursor.lnum;
+    funcexe.fe_firstline = Win::current().w_cursor.lnum;
+    funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = true;
     let (name, args) = (func.as_mut_ptr(), argvars.as_mut_ptr());
     // SAFETY: `name` is the NUL-terminated name rendered above, `args` the
@@ -464,7 +463,7 @@ pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
 /// Called from the prompt-buffer key handling, with a prompt buffer
 /// current.
 pub unsafe fn prompt_invoke_callback() {
-    let lnum = cur_buf().line_count();
+    let lnum = Buf::current().line_count();
     // SAFETY: the current buffer is live.
     let user_input = unsafe { prompt_get_input(Buf::current_raw()) };
     if user_input.is_null() {
@@ -476,11 +475,11 @@ pub unsafe fn prompt_invoke_callback() {
     let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as ColNr, false) };
     // SAFETY: the line was just appended.
     unsafe { appended_lines_mark(lnum, 1) };
-    cur_win().w_cursor.lnum = lnum + 1;
-    cur_win().w_cursor.col = 0;
-    cur_buf().b_prompt_start.mark.lnum = lnum + 1;
+    Win::current().w_cursor.lnum = lnum + 1;
+    Win::current().w_cursor.col = 0;
+    Buf::current().b_prompt_start.mark.lnum = lnum + 1;
 
-    if !cur_buf().b_prompt_callback.is_set() {
+    if !Buf::current().b_prompt_callback.is_set() {
         // SAFETY: nothing took the input over.
         unsafe { xfree(user_input as *mut c_void) };
     } else {
@@ -501,8 +500,8 @@ pub unsafe fn prompt_invoke_callback() {
     }
 
     u_clearallandblockfree(Buf::current());
-    cur_buf().b_prompt_start.mark.lnum = cur_buf().line_count();
-    cur_buf().b_prompt_append_new_line = true;
+    Buf::current().b_prompt_start.mark.lnum = Buf::current().line_count();
+    Buf::current().b_prompt_append_new_line = true;
 }
 
 /// CTRL-C in a prompt buffer. Answers whether the buffer had an interrupt
@@ -511,7 +510,7 @@ pub unsafe fn prompt_invoke_callback() {
 /// # Safety
 /// As `prompt_invoke_callback`.
 pub unsafe fn invoke_prompt_interrupt() -> bool {
-    if !cur_buf().b_prompt_interrupt.is_set() {
+    if !Buf::current().b_prompt_interrupt.is_set() {
         return false;
     }
     let mut rettv = UNSET_TV;

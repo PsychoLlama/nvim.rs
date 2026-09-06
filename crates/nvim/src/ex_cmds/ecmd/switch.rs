@@ -15,7 +15,6 @@
 use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::message_fmt::msg_cstr;
 use crate::types::AutoEvent;
 use core::ffi::CStr;
@@ -78,12 +77,12 @@ pub(super) unsafe fn switch_to_other_buffer(
         ..
     } = *args;
     // SAFETY: `curwin` is live.
-    let prev_alt_fnum = cur_win().w_alt_fnum;
+    let prev_alt_fnum = Win::current().w_alt_fnum;
 
     if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // SAFETY: `curwin`/`curbuf` are live, and `oldwin` was validated.
         if !cmdmod_has(CmdModFlags::KEEPALT) {
-            cur_win().w_alt_fnum = cur_buf().handle;
+            Win::current().w_alt_fnum = Buf::current().handle;
         }
         if !oldwin.is_null() {
             unsafe { buflist_altfpos(Win::new(*oldwin)) };
@@ -113,7 +112,7 @@ pub(super) unsafe fn switch_to_other_buffer(
             )
         };
         if !newbuf.is_null() && flags.has(EcmdFlags::ALTBUF) {
-            cur_win().w_alt_fnum = unsafe { (*newbuf).handle };
+            Win::current().w_alt_fnum = unsafe { (*newbuf).handle };
         }
         return Switch::Abandon;
     } else {
@@ -149,19 +148,19 @@ pub(super) unsafe fn switch_to_other_buffer(
         // The window was split, but is not editing the new buffer; reset
         // b_nwindows again.
         if oldwin.is_null()
-            && !cur_win().w_buffer.is_null()
-            && unsafe { (*cur_win().w_buffer).b_nwindows } > 1
+            && !Win::current().w_buffer.is_null()
+            && unsafe { (*Win::current().w_buffer).b_nwindows } > 1
         {
-            unsafe { (*cur_win().w_buffer).b_nwindows -= 1 };
+            unsafe { (*Win::current().w_buffer).b_nwindows -= 1 };
         }
         emsg(gettext(e_cannot_switch_to_a_closing_buffer));
         return Switch::Abandon;
     }
 
     // SAFETY: `buf` and `curwin` are live.
-    if cur_win().w_alt_fnum == unsafe { (*buf).handle } && prev_alt_fnum != 0 {
+    if Win::current().w_alt_fnum == unsafe { (*buf).handle } && prev_alt_fnum != 0 {
         // reusing the buffer, keep the old alternate file
-        cur_win().w_alt_fnum = prev_alt_fnum;
+        Win::current().w_alt_fnum = prev_alt_fnum;
     }
 
     // SAFETY: `buf` is live.
@@ -252,7 +251,7 @@ unsafe fn leave_for_buffer(
     let new_name: Option<CString> = new_name;
     let save_au_new_curbuf = au_new_curbuf.get();
     au_new_curbuf.set(BufRef::of(buffer).record());
-    buf_autocmd(AutoEvent::BufLeave, cur_buf());
+    buf_autocmd(AutoEvent::BufLeave, Buf::current());
 
     cmdwin_type.set(save_cmdwin_type);
     cmdwin_win.set(save_cmdwin_win);
@@ -294,7 +293,8 @@ unsafe fn leave_for_buffer(
     // A terminal buffer that is still running is hidden, never unloaded.
     // SAFETY: the current buffer is live, and its terminal is its own.
     let unload = !(flags.has(EcmdFlags::HIDE)
-        || !cur_buf().terminal.is_null() && unsafe { terminal_running(cur_buf().terminal) });
+        || !Buf::current().terminal.is_null()
+            && unsafe { terminal_running(Buf::current().terminal) });
 
     // Close the link to the current buffer.  This will set
     // oldwin->w_buffer to NULL.
@@ -303,7 +303,7 @@ unsafe fn leave_for_buffer(
     // SAFETY: `Win::from_raw` is the promise -- the window is the editor's
     // own and live, or NULL.
     let win = unsafe { Win::from_raw(oldwin) };
-    let did_decrement = close_buffer(win, cur_buf(), mode, false, false);
+    let did_decrement = close_buffer(win, Buf::current(), mode, false, false);
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
     // Autocommands may have closed the window.
@@ -314,7 +314,7 @@ unsafe fn leave_for_buffer(
 
     // autocmds may abort script processing
     // SAFETY: `curwin` is live.
-    if aborting() && !cur_win().w_buffer.is_null() {
+    if aborting() && !Win::current().w_buffer.is_null() {
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
@@ -343,15 +343,15 @@ unsafe fn leave_for_buffer(
     } else {
         // <VN> We could instead free the synblock and re-attach to the
         // buffer, perhaps.
-        if cur_win().w_buffer.is_null()
-            || cur_win().w_s == unsafe { &raw mut (*cur_win().w_buffer).b_s }
+        if Win::current().w_buffer.is_null()
+            || Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s }
         {
-            cur_win().w_s = &raw mut buffer.b_s;
+            Win::current().w_s = &raw mut buffer.b_s;
         }
 
-        cur_win().w_buffer = buffer.raw();
+        Win::current().w_buffer = buffer.raw();
         buffer.make_current();
-        cur_buf().b_nwindows += 1;
+        Buf::current().b_nwindows += 1;
 
         // Set 'fileformat', 'binary' and 'fenc' when forced.
         if !state.oldbuf && !eap.is_null() {

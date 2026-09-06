@@ -56,7 +56,7 @@ pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let op = ca.op();
-    let save_cursor = cur_win().w_cursor;
+    let save_cursor = Win::current().w_cursor;
     // `g?` is rot13; `?` after it is the operator, not a search.
     if ca.cmdchar == '?' as c_int && op.op_type == OpType::Rot13 {
         ca.cmdchar = 'g' as c_int;
@@ -71,7 +71,7 @@ pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
     }
     // Reading the pattern may itself have moved the cursor ('incsearch'),
     // in which case the previous position is already on the jump list.
-    let moved_while_typing = ca.arg != 0 || !equalpos(save_cursor, cur_win().w_cursor);
+    let moved_while_typing = ca.arg != 0 || !equalpos(save_cursor, Win::current().w_cursor);
     let mark = if moved_while_typing {
         0
     } else {
@@ -87,14 +87,14 @@ pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let old = cur_win().w_cursor;
+    let old = Win::current().w_cursor;
     let mut wrapped: c_int = 0;
     let (none, opt) = (ptr::null_mut(), SEARCH_MARK as c_int | ca.arg);
     let i = unsafe { normal_search(cmd_arg, 0, none, 0, opt, &raw mut wrapped) };
     // A match that lands where the cursor already is, without having
     // wrapped, is the one we are standing on: search once more so `n`
     // always moves.
-    if i == 1 && wrapped == 0 && equalpos(old, cur_win().w_cursor) {
+    if i == 1 && wrapped == 0 && equalpos(old, Win::current().w_cursor) {
         ca.count1 += 1;
         let again = SEARCH_MARK as c_int | ca.arg;
         unsafe { normal_search(cmd_arg, 0, none, 0, again, ptr::null_mut()) };
@@ -122,14 +122,14 @@ pub(crate) unsafe fn normal_search(
     // SAFETY: `cmd_arg` is the caller's live command argument, `pat` is null or a
     // pattern `patlen` bytes long, and `wrapped` is null or an out-parameter.
     let mut sia: SearchItArg = unsafe { core::mem::zeroed() };
-    let prev_cursor = cur_win().w_cursor;
+    let prev_cursor = Win::current().w_cursor;
     let mut op = ca.op();
     op.motion_type = kMTCharWise;
     op.inclusive = false;
     // A search is one of the motions that fills the "1 last change"
     // register rather than the small-delete one.
     op.use_reg_one = true;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 
     let flags = opt | SEARCH_OPT as c_int | SEARCH_ECHO as c_int | SEARCH_MSG as c_int;
     let (raw, n, arg) = (op.raw(), ca.count1, &raw mut sia);
@@ -145,7 +145,7 @@ pub(crate) unsafe fn normal_search(
         if i == 2 {
             op.motion_type = kMTLineWise;
         }
-        cur_win().w_cursor.coladd = 0;
+        Win::current().w_cursor.coladd = 0;
         if op.op_type == OpType::Nop
             && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
             && KeyTyped.get()
@@ -153,7 +153,7 @@ pub(crate) unsafe fn normal_search(
             unsafe { fold_open_cursor() };
         }
     }
-    if !equalpos(cur_win().w_cursor, prev_cursor) && current_match_is_distinct() {
+    if !equalpos(Win::current().w_cursor, prev_cursor) && current_match_is_distinct() {
         unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     }
     check_cursor(Win::current());
@@ -197,7 +197,7 @@ pub(crate) unsafe fn nv_mark_move_to(
         ca.op().use_reg_one = true;
     }
     ca.op().inclusive = false;
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     res
 }
 
@@ -260,8 +260,8 @@ pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
     let (buffer, win) = (Buf::current_raw(), Win::current_raw());
     let fm = unsafe { mark_get(buffer, win, &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
-    if !virtual_active(cur_win()) {
-        cur_win().w_cursor.coladd = 0;
+    if !virtual_active(Win::current()) {
+        Win::current().w_cursor.coladd = 0;
     }
     let moved = move_res & kMarkMoveSuccess as MarkMoveRes != 0
         && (move_res & kMarkSwitchedBuf as MarkMoveRes != 0
@@ -299,7 +299,7 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
         move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     } else if ca.cmdchar == 'g' as c_int {
         // Three different reasons the change list had nothing.
-        if cur_buf().b_changelistlen == 0 {
+        if Buf::current().b_changelistlen == 0 {
             emsg(gettext(e_changelist_is_empty));
         } else if ca.count1 < 0 {
             emsg(gettext(c"E662: At start of changelist"));
@@ -313,14 +313,4 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     let moved = move_res & kMarkSwitchedBuf as MarkMoveRes != 0
         || move_res & kMarkChangedLine as MarkMoveRes != 0;
     unsafe { may_open_fold(cmd_arg, moved, old_key_typed) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

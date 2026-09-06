@@ -58,7 +58,7 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
     static old_leftcol: GlobalCell<ColNr> = GlobalCell::new(0);
 
     // SAFETY: reads the current window and the remembered previous one.
-    let mut win = cur_win();
+    let mut win = Win::current();
     let vtopline = get_vtopline(win);
     if check && win.w_onebuf_opt.wo_scb != 0 {
         if did_syncbind.get() {
@@ -123,11 +123,9 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
                     win.w_scbind_pos += vtopline_diff as c_int;
                     // SAFETY: a live window of the walk above.
                     let curr_vtopline = get_vtopline(win);
-                    let max_vtopline = curr_vtopline
-                        + win.w_topfill
-                        + unsafe {
-                            plines_m_win_fill(win, win.w_topline + 1, cur_buf().b_ml.ml_line_count)
-                        };
+                    let last = Buf::current().b_ml.ml_line_count;
+                    let filled = unsafe { plines_m_win_fill(win, win.w_topline + 1, last) };
+                    let max_vtopline = curr_vtopline + win.w_topfill + filled;
                     let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;
                     if y > 0 {
@@ -217,14 +215,4 @@ pub(crate) unsafe fn nv_exit_command(cmd_arg: *mut CmdArg) {
         }
     };
     let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

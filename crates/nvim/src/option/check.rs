@@ -136,7 +136,7 @@ pub(crate) fn didset_options() {
     unsafe { didset_string_options() };
     let _ = spell_check_msm();
     let _ = unsafe { spell_check_sps() };
-    unsafe { compile_cap_prog(cur_win().w_s) };
+    unsafe { compile_cap_prog(Win::current().w_s) };
     unsafe { did_set_spell_option() };
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.
@@ -445,9 +445,4 @@ pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, fla
 pub(crate) fn check_redraw(flags: uint32_t) {
     // SAFETY: `curbuf`/`curwin` are live.
     unsafe { check_redraw_for(Buf::current_raw(), Win::current_raw(), flags) }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

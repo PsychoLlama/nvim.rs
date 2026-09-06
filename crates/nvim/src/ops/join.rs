@@ -170,8 +170,8 @@ pub unsafe fn do_join(
     // The two arrays are `count` entries each, which is what the walks index.
     let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
-    let above = cur_win().w_cursor.lnum - 1;
-    let past = cur_win().w_cursor.lnum + count as LineNr;
+    let above = Win::current().w_cursor.lnum - 1;
+    let past = Win::current().w_cursor.lnum + count as LineNr;
     if save_undo {
         u_save(above, past)?;
     }
@@ -229,12 +229,12 @@ fn measure_join(
     // `ml_get` answers a live NUL-terminated line, and `plan.curr` stays
     // inside the line `plan.curr_start` begins.
     for t in 0..count as LineNr {
-        plan.curr_start = ml_get(cur_win().w_cursor.lnum + t);
+        plan.curr_start = ml_get(Win::current().w_cursor.lnum + t);
         plan.curr = plan.curr_start;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            let mut buf = cur_win().buffer();
-            buf.b_op_start.lnum = cur_win().w_cursor.lnum;
+            let mut buf = Win::current().buffer();
+            buf.b_op_start.lnum = Win::current().w_cursor.lnum;
             buf.b_op_start.col = unsafe { cstr::bytes_at(plan.curr) }.len() as ColNr;
         }
 
@@ -291,7 +291,7 @@ fn measure_join(
         let added = plan.spaces_at(t);
         if t > 0 && curbuf_splice_pending.get() == 0 {
             let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as ColNr;
-            let row = cur_win().w_cursor.lnum as c_int - 1;
+            let row = Win::current().w_cursor.lnum as c_int - 1;
             let (old, new) = ((removed + 1) as BCount, added as BCount);
             let op = kExtmarkUndo;
             unsafe {
@@ -389,14 +389,14 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         // compatible -- Vi deletes them -- but better. If more spaces are
         // deleted than added, a mark inside them moves no further than
         // what was added.
-        let lnum = cur_win().w_cursor.lnum + t;
+        let lnum = Win::current().w_cursor.lnum + t;
         unsafe { mark_col_adjust(lnum, 0, -t, at, spaces_removed) };
 
         if t == 0 {
             break;
         }
 
-        plan.curr_start = ml_get(cur_win().w_cursor.lnum + t - 1);
+        plan.curr_start = ml_get(Win::current().w_cursor.lnum + t - 1);
         plan.curr = plan.curr_start;
         if !plan.comments.is_null() {
             let skipped = plan.comment_at(t - 1);
@@ -409,47 +409,40 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         t -= 1;
     }
 
-    let _ = unsafe { ml_replace_len(cur_win().w_cursor.lnum, newp, newp_len, false) };
+    let _ = unsafe { ml_replace_len(Win::current().w_cursor.lnum, newp, newp_len, false) };
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        let mut buf = cur_win().buffer();
-        buf.b_op_end.lnum = cur_win().w_cursor.lnum;
+        let mut buf = Win::current().buffer();
+        buf.b_op_end.lnum = Win::current().w_cursor.lnum;
         buf.b_op_end.col = plan.sumsize;
     }
 
     // Only the first line's change is reported here; `del_lines` reports
     // the lines it deletes.
-    let (lnum, next) = (cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
-    changed_lines(cur_buf(), lnum, plan.currsize, next, 0, true);
+    let (lnum, next) = (
+        Win::current().w_cursor.lnum,
+        Win::current().w_cursor.lnum + 1,
+    );
+    changed_lines(Buf::current(), lnum, plan.currsize, next, 0, true);
 
     // Delete the following lines with the cursor moved there briefly.
     // `del_lines` may move it up again if the last line went, so the line
     // number is kept.
-    let joined_lnum = cur_win().w_cursor.lnum;
-    cur_win().w_cursor.lnum += 1;
+    let joined_lnum = Win::current().w_cursor.lnum;
+    Win::current().w_cursor.lnum += 1;
     unsafe { del_lines(count as LineNr - 1, false) };
-    cur_win().w_cursor.lnum = joined_lnum;
+    Win::current().w_cursor.lnum = joined_lnum;
     drop(splice);
-    cur_buf().deleted_bytes2 = 0;
+    Buf::current().deleted_bytes2 = 0;
 
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
     // join, Vim at the column of the last.
-    cur_win().w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
+    Win::current().w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
         plan.currsize
     } else {
         col
     };
     check_cursor_col(Win::current());
-    cur_win().w_cursor.coladd = 0;
-    cur_win().w_set_curswant = true;
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
+    Win::current().w_cursor.coladd = 0;
+    Win::current().w_set_curswant = true;
 }

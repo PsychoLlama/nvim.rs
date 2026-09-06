@@ -132,7 +132,7 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
         return Err(Failed);
     }
     if word.is_null() {
-        let pos = cur_win().w_cursor;
+        let pos = Win::current().w_cursor;
         // The search is only being used to find where the bad word
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
@@ -141,10 +141,10 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.
-        if len != 0 && cur_win().w_cursor.col <= pos.col {
+        if len != 0 && Win::current().w_cursor.col <= pos.col {
             word = unsafe { ml_get_pos(&raw mut (*Win::current_raw()).w_cursor) };
         }
-        cur_win().w_cursor = pos;
+        Win::current().w_cursor = pos;
     }
     if word.is_null() {
         len =
@@ -176,7 +176,7 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
 unsafe fn scroll_sideways(cmd_arg: *mut CmdArg, right: bool) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let win = cur_win();
+    let win = Win::current();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
     }
@@ -194,7 +194,7 @@ unsafe fn scroll_sideways(cmd_arg: *mut CmdArg, right: bool) {
 /// edge, keeping 'sidescrolloff' columns of context.
 unsafe fn scroll_cursor_to_edge(to_left: bool) {
     // SAFETY (throughout): reads and scrolls the current window.
-    let mut win = cur_win();
+    let mut win = Win::current();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
     }
@@ -231,7 +231,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
 unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
     let in_fold = || folded(win.w_cursor.lnum);
@@ -269,7 +269,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
                 clear_folding(win);
                 changed_window_setting(win);
             } else if foldmethod_is_marker(win) {
-                unsafe { delete_fold(win.raw(), 1, cur_buf().b_ml.ml_line_count, 1, false) };
+                unsafe { delete_fold(win.raw(), 1, Buf::current().b_ml.ml_line_count, 1, false) };
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
                 emsg(gettext(msg));
@@ -389,7 +389,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
 pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut win = cur_win();
+    let mut win = Win::current();
     let mut nchar = ca.nchar;
     let mut old_fdl = win.w_onebuf_opt.wo_fdl as c_int;
     let old_fen = win.w_onebuf_opt.wo_fen;
@@ -417,7 +417,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
     {
         setpcmark();
         let count0 = ca.count0 as LineNr;
-        win.w_cursor.lnum = count0.min(cur_buf().b_ml.ml_line_count);
+        win.w_cursor.lnum = count0.min(Buf::current().b_ml.ml_line_count);
         check_cursor_col(win);
     }
 
@@ -441,7 +441,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
                 // window rather than from the cursor.
                 if ca.count0 == 0 {
                     validate_botline_win(win);
-                    win.w_cursor.lnum = win.w_botline.min(cur_buf().b_ml.ml_line_count);
+                    win.w_cursor.lnum = win.w_botline.min(Buf::current().b_ml.ml_line_count);
                 }
                 Some((Place::Top, true))
             }
@@ -557,18 +557,8 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
     }
 }
 
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
 /// Whether `lnum` is inside a closed fold of the current window.
 fn folded(lnum: LineNr) -> bool {
     // SAFETY: `cur_win()` is the live window.
-    has_folding(cur_win(), lnum, None, None)
+    has_folding(Win::current(), lnum, None, None)
 }

@@ -73,9 +73,9 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Every line and column touched below is one of that region's.
     let mut op = unsafe { Op::new(op) };
-    let old_lcount = cur_buf().line_count();
+    let old_lcount = Buf::current().line_count();
 
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         return Ok(());
     }
     // Nothing to delete -- but still prepare undo, for `op_change`.
@@ -83,7 +83,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
         u_save_cursor()?;
         return Ok(());
     }
-    if cur_buf().b_p_ma == 0 {
+    if Buf::current().b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return Err(NotDeleted::NotModifiable);
     }
@@ -136,7 +136,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
             delete_chars(op)?;
         }
 
-        let n = cur_buf().line_count() as c_int - old_lcount as c_int;
+        let n = Buf::current().line_count() as c_int - old_lcount as c_int;
         unsafe { msgmore(n) };
     } else if !op_virtual() {
         // Operating on an empty region is an error when 'cpoptions'
@@ -151,12 +151,12 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         if op.motion_type == kMTBlockWise {
-            cur_buf().b_op_end.lnum = op.end.lnum;
-            cur_buf().b_op_end.col = op.start.col;
+            Buf::current().b_op_end.lnum = op.end.lnum;
+            Buf::current().b_op_end.col = op.start.col;
         } else {
-            cur_buf().b_op_end = op.start;
+            Buf::current().b_op_end = op.start;
         }
-        cur_buf().b_op_start = op.start;
+        Buf::current().b_op_start = op.start;
     }
 
     Ok(())
@@ -234,14 +234,14 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
     u_save(above, below)?;
 
     let mut bd = BlockDef::ZERO;
-    let mut lnum = cur_win().w_cursor.lnum;
+    let mut lnum = Win::current().w_cursor.lnum;
     while lnum <= op.end.lnum {
         unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
         if bd.textlen != 0 {
             // Adjust the cursor for a TAB replaced by spaces, and 'lbr'.
-            if lnum == cur_win().w_cursor.lnum {
-                cur_win().w_cursor.col = bd.textcol + bd.startspaces;
-                cur_win().w_cursor.coladd = 0;
+            if lnum == Win::current().w_cursor.lnum {
+                Win::current().w_cursor.col = bd.textcol + bd.startspaces;
+                Win::current().w_cursor.coladd = 0;
             }
 
             // The line shrinks by the block's text minus the padding that
@@ -270,9 +270,9 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
         lnum += 1;
     }
 
-    let (lnum, col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
+    let (lnum, col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
     check_cursor_col(Win::current());
-    changed_lines(cur_buf(), lnum, col, op.end.lnum + 1, 0, true);
+    changed_lines(Buf::current(), lnum, col, op.end.lnum + 1, 0, true);
     // No whole lines were deleted, so `msgmore` must not report any.
     op.line_count = 0;
     Ok(())
@@ -292,25 +292,25 @@ fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
         unsafe { del_lines(op.line_count, true) };
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         // `U` is not possible after `dd`.
-        u_clearline(cur_buf());
+        u_clearline(Buf::current());
         return Ok(());
     }
 
     // Delete every line but the first, with the cursor moved off it: the
     // line number is remembered because deleting the last line moves it.
     if op.line_count > 1 {
-        let lnum = cur_win().w_cursor.lnum;
-        cur_win().w_cursor.lnum += 1;
+        let lnum = Win::current().w_cursor.lnum;
+        Win::current().w_cursor.lnum += 1;
         unsafe { del_lines(op.line_count - 1, true) };
-        cur_win().w_cursor.lnum = lnum;
+        Win::current().w_cursor.lnum = lnum;
     }
     u_save_cursor()?;
-    if cur_buf().b_p_ai != 0 {
+    if Buf::current().b_p_ai != 0 {
         // Keep the indent, on the first non-white character; `did_ai` is
         // what deletes it again if the insert is left with ESC.
         beginline(BeginlineOpts::WHITE);
         did_ai.set(true);
-        ai_col.set(cur_win().w_cursor.col);
+        ai_col.set(Win::current().w_cursor.col);
     } else {
         beginline(BeginlineOpts::NONE);
     }
@@ -318,7 +318,7 @@ fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
     unsafe { truncate_line(0) };
     if op.line_count > 1 {
         // `U` is not possible after `2cc`.
-        u_clearline(cur_buf());
+        u_clearline(Buf::current());
     }
     Ok(())
 }
@@ -364,12 +364,12 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
         }
         let startcol = unsafe { getviscol2(op.start.col, op.start.coladd) };
         unsafe { coladvance_force(startcol) };
-        op.start = cur_win().w_cursor;
+        op.start = Win::current().w_cursor;
         if op.line_count == 1 {
-            cur_win().coladvance(endcol);
-            op.end.col = cur_win().w_cursor.col;
-            op.end.coladd = cur_win().w_cursor.coladd;
-            cur_win().w_cursor = op.start;
+            Win::current().coladvance(endcol);
+            op.end.col = Win::current().w_cursor.col;
+            op.end.coladd = Win::current().w_cursor.coladd;
+            Win::current().w_cursor = op.start;
         }
     }
 
@@ -377,11 +377,11 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
     if unsafe { gchar_pos(op.end().raw()) } == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
-        cur_win().w_cursor = op.end;
+        Win::current().w_cursor = op.end;
         let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
         unsafe { coladvance_force(endcol) };
-        op.end = cur_win().w_cursor;
-        cur_win().w_cursor = op.start;
+        op.end = Win::current().w_cursor;
+        Win::current().w_cursor = op.start;
     }
 
     unsafe { mb_adjust_opend(op.raw()) };
@@ -401,7 +401,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
     // removing the text now.
     if cpo_has(CpoFlag::DOLLAR)
         && op.op_type == OpType::Change
-        && op.end.lnum == cur_win().w_cursor.lnum
+        && op.end.lnum == Win::current().w_cursor.lnum
         && !op.is_visual
     {
         unsafe { display_dollar(op.end.col - c_int::from(!op.inclusive)) };
@@ -423,7 +423,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
         }
         // Having deleted a character in the line, `coladd` is stale.
         if gchar_cursor() != NUL {
-            cur_win().w_cursor.coladd = 0;
+            Win::current().w_cursor.coladd = 0;
         }
     }
 
@@ -443,32 +443,32 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
 fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
     // SAFETY: the region is the current buffer's and spans at least two of
     // its lines; the cursor stays inside it through all four edits.
-    let above = cur_win().w_cursor.lnum - 1;
-    let past = cur_win().w_cursor.lnum + op.line_count;
+    let above = Win::current().w_cursor.lnum - 1;
+    let past = Win::current().w_cursor.lnum + op.line_count;
     // Save the deleted and changed lines for undo.
     u_save(above, past)?;
 
     let splice = Suppress::splice();
-    let startpos = cur_win().w_cursor;
+    let startpos = Win::current().w_cursor;
     let (lnum, col) = (startpos.lnum, startpos.col);
-    let buf = cur_buf();
+    let buf = Buf::current();
     let spanned = get_region_bytecount(buf, lnum, op.end.lnum, col, op.end.col);
     let deleted_bytes = spanned + BCount::from(op.inclusive);
 
     // From the cursor to the end of the line.
     unsafe { truncate_line(1) };
 
-    let curpos = cur_win().w_cursor;
-    cur_win().w_cursor.lnum += 1;
+    let curpos = Win::current().w_cursor;
+    Win::current().w_cursor.lnum += 1;
     unsafe { del_lines(op.line_count - 2, false) };
 
     // From the start of the last line up to the region's end.
     let n = op.end.col + 1 - c_int::from(!op.inclusive);
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.col = 0;
     let fixpos = op.op_type == OpType::Delete && !op.is_visual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
 
-    cur_win().w_cursor = curpos;
+    Win::current().w_cursor = curpos;
     let _ = unsafe { do_join(2, false, false, false, false) };
     drop(splice);
 
@@ -499,14 +499,4 @@ pub(crate) unsafe fn mb_adjust_opend(op: *mut OpArg) {
         ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) - 1) as isize) };
         op.end.col = unsafe { ptr.offset_from(line) } as ColNr;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

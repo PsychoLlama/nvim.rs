@@ -574,10 +574,10 @@ unsafe fn show_one(
         unsafe { last_set_msg(option_last_set(opt_idx)) };
     } else if option_has_scope(opt_idx, kOptScopeWin) {
         let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
-        unsafe { last_set_msg(cur_win().w_onebuf_opt.wo_script_ctx[at]) };
+        unsafe { last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]) };
     } else if option_has_scope(opt_idx, kOptScopeBuf) {
         let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
-        unsafe { last_set_msg(cur_buf().b_p_script_ctx[at]) };
+        unsafe { last_set_msg(Buf::current().b_p_script_ctx[at]) };
     }
 }
 
@@ -739,14 +739,4 @@ pub(crate) unsafe fn string_to_key(arg: *mut c_char) -> c_int {
         return if key == 0 { Key::Zero.code() } else { key };
     }
     unsafe { *arg as uint8_t as c_int }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

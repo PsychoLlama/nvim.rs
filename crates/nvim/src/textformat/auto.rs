@@ -50,7 +50,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         return;
     }
 
-    let pos = cur_win().w_cursor;
+    let pos = Win::current().w_cursor;
     let old = get_cursor_line_ptr();
 
     // May remove an added space.
@@ -66,17 +66,17 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         dec_cursor();
         let mut cc = gchar_cursor();
         if !unsafe { whitechar(cc) }
-            && cur_win().w_cursor.col > 0
+            && Win::current().w_cursor.col > 0
             && has_format_option(FoFlag::ONE_LETTER)
         {
             dec_cursor();
         }
         cc = gchar_cursor();
         if unsafe { whitechar(cc) } {
-            cur_win().w_cursor = pos;
+            Win::current().w_cursor = pos;
             return;
         }
-        cur_win().w_cursor = pos;
+        Win::current().w_cursor = pos;
     }
 
     // Skip it as well when white space was just typed in the middle of a
@@ -95,7 +95,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         // is given but the composing check at the *cursor*, which is one
         // byte further along than the byte named here.
         if unsafe { whitechar(*line.offset(pos.col as isize - 1) as c_int) } {
-            cur_win().w_cursor = pos;
+            Win::current().w_cursor = pos;
             return;
         }
     }
@@ -109,8 +109,8 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     }
 
     // May start one line earlier, but not at the start of a paragraph.
-    if prev_line && !unsafe { paragraph_start(cur_win().w_cursor.lnum) } {
-        cur_win().w_cursor.lnum -= 1;
+    if prev_line && !unsafe { paragraph_start(Win::current().w_cursor.lnum) } {
+        Win::current().w_cursor.lnum -= 1;
         if u_save_cursor().is_err() {
             return;
         }
@@ -120,12 +120,12 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // formatting as the text moves under it.
     saved_cursor.set(pos);
     unsafe { format_lines(-1, false) };
-    cur_win().w_cursor = saved_cursor.get();
+    Win::current().w_cursor = saved_cursor.get();
     saved_cursor.set(saved_cursor.get().with_lnum(0));
 
-    if cur_win().w_cursor.lnum > cur_buf().b_ml.ml_line_count {
+    if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
         // "cannot happen"
-        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
         coladvance(Win::current(), MAXCOL);
     } else {
         check_cursor_col(Win::current());
@@ -138,11 +138,11 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     if !wasatend && has_format_option(FoFlag::WHITE_PAR) {
         let linep = get_cursor_line_ptr();
         let len = get_cursor_line_len();
-        if cur_win().w_cursor.col == len {
+        if Win::current().w_cursor.col == len {
             let plinep = unsafe { xstrnsave(linep, len as size_t + 2) };
             unsafe { *plinep.offset(len as isize) = ' ' as c_char };
             unsafe { *plinep.offset(len as isize + 1) = NUL as c_char };
-            let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, plinep, false) };
+            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, plinep, false) };
             // Remove the space later.
             did_add_space.set(true);
         } else {
@@ -183,14 +183,4 @@ pub unsafe fn check_auto_format(end_insert: bool) {
         let _ = unsafe { del_char(false) };
         did_add_space.set(false);
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

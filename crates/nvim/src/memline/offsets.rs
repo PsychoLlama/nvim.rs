@@ -393,27 +393,17 @@ pub unsafe fn goto_byte(cnt: c_int) {
     let lnum = unsafe { ml_find_line_or_offset(Buf::current_raw(), 0, &raw mut boff, false) };
     if lnum < 1 {
         // Past the end.
-        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-        cur_win().w_curswant = MAXCOL as c_int;
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_curswant = MAXCOL as c_int;
         coladvance(Win::current(), MAXCOL as c_int);
     } else {
-        cur_win().w_cursor.lnum = lnum;
-        cur_win().w_cursor.col = boff;
-        cur_win().w_cursor.coladd = 0;
-        cur_win().w_set_curswant = true;
+        Win::current().w_cursor.lnum = lnum;
+        Win::current().w_cursor.col = boff;
+        Win::current().w_cursor.coladd = 0;
+        Win::current().w_set_curswant = true;
     }
     check_cursor(Win::current());
 
     // Make sure the cursor is on the first byte of a multi-byte char.
     unsafe { mb_adjust_cursor() };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

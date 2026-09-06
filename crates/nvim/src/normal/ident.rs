@@ -123,13 +123,13 @@ pub(crate) unsafe fn find_ident_under_cursor(
         &raw mut textcol
     };
     let win = Win::current_raw();
-    let pos = cur_win().w_cursor;
+    let pos = Win::current().w_cursor;
     // SAFETY: `win` is live; `text`/`textcolp` have room for one value each.
     let len =
         unsafe { find_ident_at_pos(Win::new(win), pos.lnum, pos.col, text, textcolp, find_type) };
     if !offset.is_null() {
         // SAFETY: `offset` is the caller's own out-parameter.
-        unsafe { *offset = cur_win().w_cursor.col - textcol };
+        unsafe { *offset = Win::current().w_cursor.col - textcol };
     }
     len
 }
@@ -370,7 +370,7 @@ pub(crate) unsafe fn find_decl(
     };
     let patlen = unsafe { snprintf(pat, patsize, fmt, len as c_int, word) } as size_t;
 
-    let old_pos = cur_win().w_cursor;
+    let old_pos = Win::current().w_cursor;
     let save_p_ws = p_ws.get();
     let save_p_scs = p_scs.get();
     // The search must not wrap round the file or guess at case.
@@ -386,20 +386,20 @@ pub(crate) unsafe fn find_decl(
         locally && unsafe { findpar(&raw mut incll, BACKWARD as c_int, 1, '{' as c_int, false) };
     if !in_block {
         setpcmark();
-        cur_win().w_cursor.lnum = 1;
-        par_pos = cur_win().w_cursor;
+        Win::current().w_cursor.lnum = 1;
+        par_pos = Win::current().w_cursor;
     } else {
-        par_pos = cur_win().w_cursor;
+        par_pos = Win::current().w_cursor;
         // Back up over the function's own header lines.
-        while cur_win().w_cursor.lnum > 1 {
+        while Win::current().w_cursor.lnum > 1 {
             // SAFETY: the cursor line is a NUL-terminated buffer line.
             if unsafe { *skipwhite(get_cursor_line_ptr()) } as c_int == NUL {
                 break;
             }
-            cur_win().w_cursor.lnum -= 1;
+            Win::current().w_cursor.lnum -= 1;
         }
     }
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.col = 0;
 
     // The last match that was inside a comment or a string, kept as the
     // answer of last resort.
@@ -422,7 +422,7 @@ pub(crate) unsafe fn find_decl(
         // SAFETY: window and buffer are live; `pat` is `patlen` bytes.
         let hit = unsafe { searchit(win, buf, pos, end, FORWARD, pat, patlen, 1, opts, re, arg) };
         found = hit != 0;
-        if cur_win().w_cursor.lnum >= old_pos.lnum {
+        if Win::current().w_cursor.lnum >= old_pos.lnum {
             // Found it below the cursor, which is not a declaration of
             // what is under the cursor.
             found = false;
@@ -430,7 +430,7 @@ pub(crate) unsafe fn find_decl(
         if thisblock && found {
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
-            let travel = (old_pos.lnum - cur_win().w_cursor.lnum + 1) as int64_t;
+            let travel = (old_pos.lnum - Win::current().w_cursor.lnum + 1) as int64_t;
             let null_op = ptr::null_mut();
             let brace = '}' as c_int;
             // SAFETY: the current window and buffer are live.
@@ -438,13 +438,13 @@ pub(crate) unsafe fn find_decl(
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {
-                cur_win().w_cursor = close;
+                Win::current().w_cursor = close;
                 continue;
             }
         }
         if !found {
             if found_pos.lnum != 0 {
-                cur_win().w_cursor = found_pos;
+                Win::current().w_cursor = found_pos;
                 found = true;
             }
             break;
@@ -453,30 +453,30 @@ pub(crate) unsafe fn find_decl(
         let leader = unsafe { get_leader_len(get_cursor_line_ptr(), ptr::null_mut(), false, true) };
         if leader > 0 {
             // The whole line is a comment; skip past it.
-            cur_win().w_cursor.lnum += 1;
-            cur_win().w_cursor.col = 0;
+            Win::current().w_cursor.lnum += 1;
+            Win::current().w_cursor.col = 0;
             continue;
         }
         // SAFETY: as above.
-        let valid = unsafe { is_ident(get_cursor_line_ptr(), cur_win().w_cursor.col) };
+        let valid = unsafe { is_ident(get_cursor_line_ptr(), Win::current().w_cursor.col) };
         if !valid && found_pos.lnum != 0 {
             // Nothing better than what was already found.
-            cur_win().w_cursor = found_pos;
+            Win::current().w_cursor = found_pos;
             break;
         }
         if valid && !locally {
             break;
         }
-        if valid && cur_win().w_cursor.lnum >= par_pos.lnum {
+        if valid && Win::current().w_cursor.lnum >= par_pos.lnum {
             // Past the start of the block: a local search is done, and
             // the earlier match wins if there was one.
             if found_pos.lnum != 0 {
-                cur_win().w_cursor = found_pos;
+                Win::current().w_cursor = found_pos;
             }
             break;
         }
         if valid {
-            found_pos = cur_win().w_cursor;
+            found_pos = Win::current().w_cursor;
         } else {
             clearpos(&mut found_pos);
         }
@@ -485,9 +485,9 @@ pub(crate) unsafe fn find_decl(
     }
 
     if !found {
-        cur_win().w_cursor = old_pos;
+        Win::current().w_cursor = old_pos;
     } else {
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
         reset_search_dir();
     }
     // SAFETY: `pat` came from `xmalloc` above and is not used again.
@@ -687,7 +687,7 @@ fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
     }
     // A help tag may contain any of these, so nothing is escaped.
     // SAFETY: 'filetype' is a NUL-terminated option string.
-    if unsafe { cstr::eq_bytes(cur_buf().b_p_ft, b"help") } {
+    if unsafe { cstr::eq_bytes(Buf::current().b_p_ft, b"help") } {
         c""
     } else {
         c"\\|\"\n["
@@ -794,10 +794,10 @@ pub(crate) unsafe fn nv_ident(cmd_arg: *mut CmdArg) {
 
     // 'keywordprg', which decides what `K` does.
     // SAFETY: 'keywordprg' is a NUL-terminated option string.
-    let kp = if unsafe { *cur_buf().b_p_kp } as c_int == NUL {
+    let kp = if unsafe { *Buf::current().b_p_kp } as c_int == NUL {
         p_kp.get()
     } else {
-        cur_buf().b_p_kp
+        Buf::current().b_p_kp
     };
     // SAFETY: `kp` is NUL-terminated, as are the literals.
     let kp_helpbang = unsafe { strequal(kp, c":help!".as_ptr()) };
@@ -830,7 +830,7 @@ pub(crate) unsafe fn nv_ident(cmd_arg: *mut CmdArg) {
             // SAFETY: `word` points into the cursor's own line.
             setpcmark();
             let col = unsafe { word.offset_from(get_cursor_line_ptr()) } as ColNr;
-            cur_win().w_cursor.col = col;
+            Win::current().w_cursor.col = col;
             if !g_cmd && unsafe { vim_iswordp(word) } {
                 // The plain forms anchor at a word boundary.
                 out.set(c"\\<");
@@ -854,7 +854,7 @@ pub(crate) unsafe fn nv_ident(cmd_arg: *mut CmdArg) {
         _ => {
             tag_cmd = true;
             let count0 = unsafe { (*cmd_arg).count0 };
-            let cmd: &CStr = if cur_buf().b_help {
+            let cmd: &CStr = if Buf::current().b_help {
                 c"help! "
             } else if g_cmd {
                 c"tjump "
@@ -965,7 +965,7 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
     let must_write = curbuf_is_changed()
-        && cur_buf().b_nwindows <= 1
+        && Buf::current().b_nwindows <= 1
         && !unsafe { buf_hide(Buf::current_raw()) };
     if must_write {
         let _ = unsafe { autowrite(Buf::current_raw(), false) };
@@ -978,20 +978,10 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
     if opened.is_ok() && unsafe { (*cmd_arg).nchar } == 'F' as c_int && lnum >= 0 {
-        cur_win().w_cursor.lnum = lnum;
+        Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // SAFETY: `name` came from `grab_file_name`.
     unsafe { xfree(name as *mut c_void) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

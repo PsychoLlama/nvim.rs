@@ -51,7 +51,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let append_lnum: LineNr = if append {
         lnum - 1
     } else {
-        cur_buf().line_count()
+        Buf::current().line_count()
     };
     let mut l: *mut List = ptr::null_mut();
     let mut li: *mut ListItem = ptr::null_mut();
@@ -81,20 +81,20 @@ pub(crate) unsafe fn set_buffer_lines(
                 li = item.li_next;
             }
             ret.vval.v_number = 1;
-            if line.is_null() || lnum > cur_buf().line_count() + 1 {
+            if line.is_null() || lnum > Buf::current().line_count() + 1 {
                 break;
             }
             if u_sync_once.get() == 2 {
                 u_sync_once.set(1);
                 u_sync(true);
             }
-            if !append && lnum <= cur_buf().line_count() {
+            if !append && lnum <= Buf::current().line_count() {
                 let old_len = len_as_int(unsafe { cstr::bytes_at(ml_get(lnum)) }.len());
                 if u_savesub(lnum).is_ok() && unsafe { ml_replace(lnum, line, true) }.is_ok() {
                     let new_len = len_as_int(unsafe { cstr::bytes_at(line) }.len());
                     unsafe { inserted_bytes(lnum, 0, old_len, new_len) };
-                    if is_curbuf && lnum == cur_win().w_cursor.lnum {
-                        check_cursor_col(cur_win());
+                    if is_curbuf && lnum == Win::current().w_cursor.lnum {
+                        check_cursor_col(Win::current());
                     }
                     ret.vval.v_number = 0;
                 }
@@ -122,8 +122,8 @@ pub(crate) unsafe fn set_buffer_lines(
                     wp.w_cursor.lnum += added;
                 }
             }
-            check_cursor_col(cur_win());
-            update_topline(cur_win());
+            check_cursor_col(Win::current());
+            update_topline(Win::current());
         }
     }
     if !is_curbuf {
@@ -305,7 +305,7 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if !is_curbuf {
         unsafe { cob.prepare(Buf::new(buf)) };
     }
-    last = last.min(cur_buf().line_count());
+    last = last.min(Buf::current().line_count());
     let count = last - first + 1;
     if u_sync_once.get() == 2 {
         u_sync_once.set(1);
@@ -330,7 +330,7 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
                 wp.w_cursor.lnum = line_count;
             }
         }
-        check_cursor_col(cur_win());
+        check_cursor_col(Win::current());
         unsafe { deleted_lines_mark(first, count) };
         result.vval.v_number = 0;
     }

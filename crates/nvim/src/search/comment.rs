@@ -87,7 +87,7 @@ pub(crate) unsafe fn find_rawstring_end(
 /// `line` must be NUL-terminated.
 pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
     let mut p = line; // scan from the start
-    if cur_buf().b_p_lisp != 0 {
+    if Buf::current().b_p_lisp != 0 {
         // Skip Lispish one-line comments.
         if unsafe { vim_strchr(p, ';' as c_int) }.is_null() {
             return MAXCOL; // there are no comments
@@ -155,9 +155,4 @@ pub unsafe fn linewhite(lnum: LineNr) -> bool {
     let mut lines = unsafe { Lines::current() };
     let line = lines.line(lnum);
     skip::white(line) == line.len()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

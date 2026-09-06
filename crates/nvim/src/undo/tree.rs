@@ -241,8 +241,8 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
     }
     u_clearline(buffer);
     buffer.b_u_line_lnum = lnum;
-    if cur_win().w_buffer == buffer.raw() && cur_win().w_cursor.lnum == lnum {
-        buffer.b_u_line_colnr = cur_win().w_cursor.col;
+    if Win::current().w_buffer == buffer.raw() && Win::current().w_cursor.lnum == lnum {
+        buffer.b_u_line_colnr = Win::current().w_cursor.col;
     } else {
         buffer.b_u_line_colnr = 0;
     }
@@ -270,39 +270,42 @@ pub fn u_clearline(mut buffer: Buf) {
 /// Called from the editor's main loop, with a current buffer and window.
 pub unsafe fn u_undoline() {
     // SAFETY: a live current buffer and window.
-    if cur_buf().b_u_line_ptr.is_null() || cur_buf().b_u_line_lnum > cur_buf().b_ml.ml_line_count {
+    if Buf::current().b_u_line_ptr.is_null()
+        || Buf::current().b_u_line_lnum > Buf::current().b_ml.ml_line_count
+    {
         beep_flush();
         return;
     }
     // Bound first: rustfmt puts a call wider than 60 columns on one line per
     // argument, and every one of those lines is inside the region.
-    let lnum = cur_buf().b_u_line_lnum;
-    if u_savecommon(cur_buf(), lnum - 1, lnum + 1, 0, false).is_err() {
+    let lnum = Buf::current().b_u_line_lnum;
+    if u_savecommon(Buf::current(), lnum - 1, lnum + 1, 0, false).is_err() {
         return;
     }
-    let oldp: *mut c_char = unsafe { u_save_line(cur_buf().b_u_line_lnum) };
-    let _ = unsafe { ml_replace(cur_buf().b_u_line_lnum, cur_buf().b_u_line_ptr, true) };
+    let oldp: *mut c_char = unsafe { u_save_line(Buf::current().b_u_line_lnum) };
+    let (lnum, line) = (Buf::current().b_u_line_lnum, Buf::current().b_u_line_ptr);
+    let _ = unsafe { ml_replace(lnum, line, true) };
     let oldp_len = unsafe { cstr::bytes_at(oldp) }.len();
-    let ptr_len = unsafe { cstr::bytes_at(cur_buf().b_u_line_ptr) }.len();
+    let ptr_len = unsafe { cstr::bytes_at(Buf::current().b_u_line_ptr) }.len();
     unsafe {
         extmark_splice_cols(
             Buf::current_raw(),
-            cur_buf().b_u_line_lnum as c_int - 1,
+            Buf::current().b_u_line_lnum as c_int - 1,
             0,
             oldp_len as ColNr,
             ptr_len as ColNr,
             kExtmarkUndo,
         )
     };
-    unsafe { changed_bytes(cur_buf().b_u_line_lnum, 0) };
-    unsafe { xfree(cur_buf().b_u_line_ptr as *mut c_void) };
-    cur_buf().b_u_line_ptr = oldp;
-    let t: ColNr = cur_buf().b_u_line_colnr;
-    if cur_win().w_cursor.lnum == cur_buf().b_u_line_lnum {
-        cur_buf().b_u_line_colnr = cur_win().w_cursor.col;
+    unsafe { changed_bytes(Buf::current().b_u_line_lnum, 0) };
+    unsafe { xfree(Buf::current().b_u_line_ptr as *mut c_void) };
+    Buf::current().b_u_line_ptr = oldp;
+    let t: ColNr = Buf::current().b_u_line_colnr;
+    if Win::current().w_cursor.lnum == Buf::current().b_u_line_lnum {
+        Buf::current().b_u_line_colnr = Win::current().w_cursor.col;
     }
-    cur_win().w_cursor.col = t;
-    cur_win().w_cursor.lnum = cur_buf().b_u_line_lnum;
+    Win::current().w_cursor.col = t;
+    Win::current().w_cursor.lnum = Buf::current().b_u_line_lnum;
     check_cursor_col(Win::current());
 }
 
@@ -313,7 +316,7 @@ pub unsafe fn u_undoline() {
 /// A live current buffer holding line `lnum`.
 pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
     // SAFETY: a live current buffer holding that line, by the contract above.
-    unsafe { u_save_line_buf(cur_buf(), lnum) }
+    unsafe { u_save_line_buf(Buf::current(), lnum) }
 }
 
 /// A fresh copy of line `lnum` of `buffer`.
@@ -324,14 +327,4 @@ pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
 pub(crate) unsafe fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
     // SAFETY: the buffer holds that line, by the contract above.
     unsafe { xstrdup(ml_get_buf(buffer.raw(), lnum)) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

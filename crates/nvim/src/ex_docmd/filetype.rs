@@ -197,7 +197,7 @@ pub unsafe fn filetype_maybe_enable() {
 /// `:setfiletype` still applies.
 pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    if cur_buf().b_did_filetype {
+    if Buf::current().b_did_filetype {
         return;
     }
     let mut arg = args.arg;
@@ -210,7 +210,7 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
         OptionSetFlags::LOCAL,
     );
     if arg != args.arg {
-        cur_buf().b_did_filetype = false;
+        Buf::current().b_did_filetype = false;
     }
 }
 
@@ -290,11 +290,6 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
 /// A `'static` Lua source string as the API's counted string.
 fn lua_chunk(src: &'static CStr) -> String_0 {
     String_0::from_raw_parts(src.as_ptr() as *mut c_char, src.to_bytes().len() as size_t)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 /// `strncmp()`'s prefix test as checked code.

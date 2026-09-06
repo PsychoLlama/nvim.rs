@@ -141,17 +141,17 @@ unsafe fn indent_of_comment_start(text: *mut c_char) -> Option<c_int> {
         if p.byte() == '/' as c_int && p.byte_at(-1) == '*' as c_int {
             // End of a C comment: line the indent up with the line
             // holding the start of it.
-            cur_win().w_cursor.col = p.col_in(start);
+            Win::current().w_cursor.col = p.col_in(start);
             if let Some(pos) = find_match(NUL) {
-                cur_win().w_cursor.lnum = pos.lnum;
+                Win::current().w_cursor.lnum = pos.lnum;
                 return Some(indent_here());
             }
             // findmatch may have made `text` stale; fetch it again.
-            let at = line_at(cur_win().w_cursor.lnum);
+            let at = line_at(Win::current().w_cursor.lnum);
             // SAFETY: a line of the current buffer, and the cursor column is
             // inside it.
             start = unsafe { Ln::new(at) };
-            p = unsafe { Ln::new(at.wrapping_offset(cur_win().w_cursor.col as isize)) };
+            p = unsafe { Ln::new(at.wrapping_offset(Win::current().w_cursor.col as isize)) };
         }
         p.step();
     }
@@ -177,9 +177,9 @@ unsafe fn smart_indent_forward(
     let mut start = unsafe { Ln::new(text) };
     // Skip preprocessor directives, unless they are comments.
     if lead_len == 0 && start.byte() == '#' as c_int {
-        while start.byte() == '#' as c_int && cur_win().w_cursor.lnum > 1 {
-            cur_win().w_cursor.lnum -= 1;
-            text = line_at(cur_win().w_cursor.lnum);
+        while start.byte() == '#' as c_int && Win::current().w_cursor.lnum > 1 {
+            Win::current().w_cursor.lnum -= 1;
+            text = line_at(Win::current().w_cursor.lnum);
             // SAFETY: a line of the current buffer.
             start = unsafe { Ln::new(text) };
         }
@@ -235,9 +235,9 @@ unsafe fn smart_indent_forward(
     //         Should line up here!
     //     }
     if p.byte() == ')' as c_int {
-        cur_win().w_cursor.col = p.col_in(start);
+        Win::current().w_cursor.col = p.col_in(start);
         if let Some(pos) = find_match('(' as c_int) {
-            cur_win().w_cursor.lnum = pos.lnum;
+            Win::current().w_cursor.lnum = pos.lnum;
             newindent = indent_here();
             // SAFETY: the cursor is on a valid line of the current buffer.
             text = get_cursor_line_ptr();
@@ -278,14 +278,14 @@ unsafe fn smart_indent_backward(
     if lead_len == 0 && start.byte() == '#' as c_int {
         let mut was_backslashed = false;
         while (start.byte() == '#' as c_int || was_backslashed)
-            && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
+            && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
             // SAFETY: `text` is NUL-terminated and not empty, as just tested.
             was_backslashed = start.byte() != 0
                 && unsafe { c_int::from(*text.add(cstr::bytes_at(text).len().wrapping_sub(1))) }
                     == '\\' as c_int;
-            cur_win().w_cursor.lnum += 1;
-            text = line_at(cur_win().w_cursor.lnum);
+            Win::current().w_cursor.lnum += 1;
+            text = line_at(Win::current().w_cursor.lnum);
             // SAFETY: a line of the current buffer.
             start = unsafe { Ln::new(text) };
         }
@@ -318,7 +318,7 @@ pub(crate) unsafe fn smart_indent(
     saved_line: *mut c_char,
     newindent: c_int,
 ) -> (c_int, bool) {
-    let old_cursor = cur_win().w_cursor;
+    let old_cursor = Win::current().w_cursor;
     let ptr = saved_line;
     let lead_len = if flags & OPENLINE_DO_COM != 0 {
         leader_len_of(ptr)
@@ -333,16 +333,6 @@ pub(crate) unsafe fn smart_indent(
             (smart_indent_backward(ptr, lead_len, newindent), false)
         }
     };
-    cur_win().w_cursor = old_cursor;
+    Win::current().w_cursor = old_cursor;
     answer
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

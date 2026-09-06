@@ -437,7 +437,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };
 
     if exmode_active.get() {
-        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     }
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::BufEnter;
@@ -484,7 +484,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     unsafe { set_reg_var(get_default_register_name()) };
 
-    if cur_win().w_onebuf_opt.wo_diff != 0 && cur_win().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
         update_topline(Win::current());
         unsafe { check_scrollbind(0 as LineNr, 0) };
         time_msg_at(c"diff scrollbinding");
@@ -549,14 +549,4 @@ pub fn main() {
 /// startup makes it until exit.
 fn first_win() -> Win {
     first_window().expect("the editor always has a window")
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

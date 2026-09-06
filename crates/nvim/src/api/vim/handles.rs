@@ -18,21 +18,6 @@ use core::ptr;
 use crate::buffer::BufRef;
 use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, tabs};
 
-/// The current buffer, which exists from startup to exit.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The current window, which exists from startup to exit.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The current tab page, which exists from startup to exit.
-fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
 /// One `String` option's value, borrowing the literal's bytes.
 fn string_optval(value: &'static CStr) -> OptVal {
     OptVal::String(String_0::from_cstr(value))
@@ -58,7 +43,7 @@ pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
 /// The editor must be running: there is a current buffer from startup to
 /// exit.
 pub unsafe fn nvim_get_current_buf() -> BufferHandle {
-    cur_buf().handle
+    Buf::current().handle
 }
 
 /// Make `buf` the current buffer, as `:buffer` does.
@@ -103,7 +88,7 @@ pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
 /// The editor must be running: there is a current window from startup to
 /// exit.
 pub unsafe fn nvim_get_current_win() -> WindowHandle {
-    cur_win().handle
+    Win::current().handle
 }
 
 /// Make `win` the current window, entering its tab page if need be.
@@ -231,7 +216,7 @@ pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
 /// The editor must be running: there is a current tab page from startup to
 /// exit.
 pub unsafe fn nvim_get_current_tabpage() -> TabpageHandle {
-    cur_tab().handle
+    TabPage::current().handle
 }
 
 /// Make `tabpage` the current one, as `:tabnext` does.

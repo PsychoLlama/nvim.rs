@@ -214,7 +214,7 @@ impl DoTag {
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
-            cur_fnum: cur_buf().handle,
+            cur_fnum: Buf::current().handle,
             error_cur_match: 0,
             new_tag: false,
             no_regexp: help,
@@ -229,7 +229,7 @@ impl DoTag {
                 view: NO_VIEW,
                 additional_data: ptr::null_mut(),
             },
-            buf_ffname: cur_buf().b_ffname,
+            buf_ffname: Buf::current().b_ffname,
             owned_name: None,
             prev_num_matches: num_matches.get(),
         };
@@ -345,7 +345,7 @@ impl DoTag {
 
         // SAFETY: `tag` is the NUL-terminated name the command was given.
         self.current().tagname = unsafe { xstrdup(self.tag) };
-        cur_win().w_tagstacklen = self.len;
+        Win::current().w_tagstacklen = self.len;
         // Worth remembering where the cursor was.
         self.save_pos = true;
     }
@@ -408,7 +408,7 @@ impl DoTag {
         // used.
         self.saved_fmark = self.current().fmark.clone();
         let mark = self.saved_fmark.clone();
-        if mark.fnum != cur_buf().handle {
+        if mark.fnum != Buf::current().handle {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
             if unsafe {
@@ -426,13 +426,13 @@ impl DoTag {
             }
             // A BufReadPost autocommand may jump to the '" mark, which
             // is not wanted here.
-            cur_win().w_cursor.lnum = mark.mark.lnum;
+            Win::current().w_cursor.lnum = mark.mark.lnum;
         } else {
             setpcmark();
-            cur_win().w_cursor.lnum = mark.mark.lnum;
+            Win::current().w_cursor.lnum = mark.mark.lnum;
         }
-        cur_win().w_cursor.col = mark.mark.col;
-        cur_win().w_set_curswant = true;
+        Win::current().w_cursor.col = mark.mark.col;
+        Win::current().w_set_curswant = true;
         if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
             unsafe { mark_view_restore(&raw mut self.saved_fmark) };
         }
@@ -503,7 +503,7 @@ impl DoTag {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
             self.cur_match = 0;
-            self.cur_fnum = cur_buf().handle;
+            self.cur_fnum = Buf::current().handle;
         }
     }
 
@@ -512,16 +512,16 @@ impl DoTag {
         // SAFETY: the caller's promise.
         self.saved_fmark = self.current().fmark.clone();
         if self.save_pos {
-            let cursor = cur_win().w_cursor;
+            let cursor = Win::current().w_cursor;
             self.current().fmark.mark = cursor;
-            self.current().fmark.fnum = cur_buf().handle;
+            self.current().fmark.fnum = Buf::current().handle;
             // SAFETY: `curwin` is live and `cursor` is a position in it.
             self.current().fmark.view = unsafe { mark_view_make(Win::current_raw(), cursor) };
         }
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an
         // autocommand jumps to another window, so store the index now.
-        cur_win().w_tagstackidx = self.idx;
+        Win::current().w_tagstackidx = self.idx;
         if !self.selecting() {
             let entry = unsafe {
                 (&raw mut (*Win::current_raw()).w_tagstack)
@@ -539,7 +539,7 @@ impl DoTag {
     /// matches came out in is the same as it was then.
     fn set_priority_buffer(&mut self) {
         // SAFETY: the caller's promise.
-        if self.cur_fnum == cur_buf().handle {
+        if self.cur_fnum == Buf::current().handle {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {
@@ -798,8 +798,8 @@ impl DoTag {
         if result != Ok(Jumped::NoSuchFile) {
             // We may have jumped to another window; check the index is
             // still one this window has.
-            if self.use_tagstack && self.idx > cur_win().w_tagstacklen {
-                self.idx = cur_win().w_tagstackidx;
+            if self.use_tagstack && self.idx > Win::current().w_tagstacklen {
+                self.idx = Win::current().w_tagstackidx;
             }
             return false;
         }
@@ -874,8 +874,8 @@ impl DoTag {
         // SAFETY: the caller's promise.
         // Only when using the tag stack, and only when the index is
         // one this window still has.
-        if self.use_tagstack && self.idx <= cur_win().w_tagstacklen {
-            cur_win().w_tagstackidx = self.idx;
+        if self.use_tagstack && self.idx <= Win::current().w_tagstacklen {
+            Win::current().w_tagstackidx = self.idx;
         }
         // Don't split, or preview, next time.
         postponed_split.set(0);
@@ -922,14 +922,4 @@ pub(crate) unsafe fn forget_matches() {
     // SAFETY: the caller's promise; the list is ours.
     unsafe { free_wild(num_matches.get(), matches.get()) };
     num_matches.set(0);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

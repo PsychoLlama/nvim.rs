@@ -208,7 +208,7 @@ impl ComplOrigExtmarks {
         // look.
         let mut saved = COMPL_ORIG_EXTMARKS.get();
         // SAFETY: the caller's promise; `saved` is a live vector.
-        let lnum = cur_win().w_cursor.lnum as c_int - 1;
+        let lnum = Win::current().w_cursor.lnum as c_int - 1;
         let buf = Buf::current_raw();
         let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
         let list = &raw mut saved;
@@ -259,12 +259,12 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     compl_get_longest.set(compl_longest);
 
     compl_direction.set(FORWARD);
-    if startcol > cur_win().w_cursor.col {
-        startcol = cur_win().w_cursor.col;
+    if startcol > Win::current().w_cursor.col {
+        startcol = Win::current().w_cursor.col;
     }
     compl_col.set(startcol);
-    compl_lnum.set(cur_win().w_cursor.lnum);
-    compl_length.set(cur_win().w_cursor.col - startcol);
+    compl_lnum.set(Win::current().w_cursor.lnum);
+    compl_length.set(Win::current().w_cursor.col - startcol);
     // compl_pattern doesn't need to be set.
     // SAFETY: `compl_col`/`compl_length` were just set to a range of the
     // cursor line.
@@ -288,8 +288,8 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     compl_started.set(true);
     compl_used_match.set(true);
     compl_cont_status.set(0);
-    let save_w_wrow = cur_win().w_wrow;
-    let save_w_leftcol = cur_win().w_leftcol;
+    let save_w_wrow = Win::current().w_wrow;
+    let save_w_leftcol = Win::current().w_leftcol;
 
     compl_curr_match.set(compl_first_match.get());
     let no_select = compl_no_select || compl_longest;
@@ -428,10 +428,10 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
 
     if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
         let line = get_cursor_line_ptr();
-        let len = compl_ins_end_col.get() - cur_win().w_cursor.col;
+        let len = compl_ins_end_col.get() - Win::current().w_cursor.col;
         let text = if len > 0 {
             // SAFETY: the cursor column is inside the cursor line.
-            unsafe { line.offset(cur_win().w_cursor.col as isize) }
+            unsafe { line.offset(Win::current().w_cursor.col as isize) }
         } else {
             c"".as_ptr()
         };
@@ -518,9 +518,4 @@ pub unsafe fn f_complete_info(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         what_list = unsafe { (*args).vval.v_list };
     }
     unsafe { get_complete_info(what_list, (*result).vval.v_dict) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

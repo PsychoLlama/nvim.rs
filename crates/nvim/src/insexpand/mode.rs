@@ -156,14 +156,15 @@ pub unsafe fn check_compl_option(dict_opt: bool) -> bool {
     let empty = if dict_opt {
         // SAFETY: an option string is a NUL-terminated allocation, never
         // null.
-        let unset = unsafe { *cur_buf().b_p_dict as c_int == NUL && *p_dict.get() as c_int == NUL };
-        unset && cur_win().w_onebuf_opt.wo_spell == 0
+        let unset =
+            unsafe { *Buf::current().b_p_dict as c_int == NUL && *p_dict.get() as c_int == NUL };
+        unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
         // SAFETY: as above.
         unsafe {
-            *cur_buf().b_p_tsr as c_int == NUL
+            *Buf::current().b_p_tsr as c_int == NUL
                 && *p_tsr.get() as c_int == NUL
-                && *cur_buf().b_p_tsrfu as c_int == NUL
+                && *Buf::current().b_p_tsrfu as c_int == NUL
                 && *p_tsrfu.get() as c_int == NUL
         }
     };
@@ -348,7 +349,7 @@ pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
 pub unsafe fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
     // SAFETY: the caller's promise, passed straight on.
     let multiple = unsafe { ins_compl_has_multiple() };
-    multiple && lnum >= compl_lnum.get() && lnum <= cur_win().w_cursor.lnum
+    multiple && lnum >= compl_lnum.get() && lnum <= Win::current().w_cursor.lnum
 }
 
 pub unsafe fn ins_compl_has_shown_match() -> bool {
@@ -363,7 +364,7 @@ pub unsafe fn ins_compl_long_shown_match() -> bool {
     let Some(shown) = shown_match() else {
         return false;
     };
-    let typed = cur_win().w_cursor.col - compl_col.get();
+    let typed = Win::current().w_cursor.col - compl_col.get();
     !shown.cp_str.data().is_null() && shown.cp_str.len() as ColNr > typed
 }
 
@@ -371,7 +372,7 @@ pub unsafe fn ins_compl_long_shown_match() -> bool {
 ///
 /// Safe: both halves are ordinary reads of live editor state.
 pub(crate) fn completeopt_flags() -> c_uint {
-    let local = cur_buf().b_cot_flags;
+    let local = Buf::current().b_cot_flags;
     if local != 0 { local } else { cot_flags.get() }
 }
 
@@ -444,7 +445,7 @@ pub unsafe fn ins_compl_preinsert_effect() -> bool {
     // SAFETY: neither has a precondition left; both are still `unsafe fn`s
     // for their call sites outside this family.
     let previewing = unsafe { ins_compl_has_preinsert() || ins_compl_preinsert_longest() };
-    previewing && cur_win().w_cursor.col < compl_ins_end_col.get()
+    previewing && Win::current().w_cursor.col < compl_ins_end_col.get()
 }
 
 /// The completion function asked for its matches to be recomputed on every
@@ -459,14 +460,14 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
 pub unsafe fn ins_compl_has_autocomplete() -> bool {
-    let local = cur_buf().b_p_ac;
+    let local = Buf::current().b_p_ac;
     (if local >= 0 { local } else { p_ac.get() }) != 0
 }
 
 /// How much of the leader has been typed: the cursor's distance from
 /// `compl_col`, never negative.
 pub(crate) fn get_compl_len() -> c_int {
-    let off = cur_win().w_cursor.col - compl_col.get();
+    let off = Win::current().w_cursor.col - compl_col.get();
     off.max(0)
 }
 
@@ -705,14 +706,4 @@ pub unsafe fn f_preinserted(_args: *mut TypVal, result: *mut TypVal, _fptr: Eval
             (*result).vval.v_number = 1;
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

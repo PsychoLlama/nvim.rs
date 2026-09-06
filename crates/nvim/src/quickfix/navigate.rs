@@ -394,7 +394,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     } else {
         BUF_HAS_LL_ENTRY
     };
-    if cur_buf().b_has_qf_entry & buf_has_flag == 0 {
+    if Buf::current().b_has_qf_entry & buf_has_flag == 0 {
         qf_emsg(e_no_errors.as_ptr());
         return;
     }
@@ -421,10 +421,10 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cabove | CmdIdx::labove
     );
 
-    let mut pos = cur_win().w_cursor;
+    let mut pos = Win::current().w_cursor;
     // An entry's column is 1 based where the cursor's is 0 based.
     pos.col += 1;
-    let bnr2 = cur_buf().handle;
+    let bnr2 = Buf::current().handle;
     let pos2 = &raw const pos;
     let n2 = if args.addr_count > 0 { args.line2 } else { 0 };
     let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };

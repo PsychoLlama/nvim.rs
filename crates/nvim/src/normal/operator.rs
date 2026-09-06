@@ -101,7 +101,7 @@ pub(crate) unsafe fn nv_kundo(cmd_arg: *mut CmdArg) {
         return;
     }
     unsafe { u_undo(ca.count1) };
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
@@ -116,7 +116,7 @@ pub(crate) unsafe fn nv_undo_line(cmd_arg: *mut CmdArg) {
         return;
     }
     unsafe { u_undoline() };
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 }
 
 /// `"`: name the register the next command works on.
@@ -182,7 +182,7 @@ pub(crate) unsafe fn nv_redo_or_register(cmd_arg: *mut CmdArg) {
         return;
     }
     unsafe { u_redo(ca.count1) };
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
 }
 
 /// Start an operator, or apply the pending one to whole lines when it is the
@@ -200,7 +200,7 @@ pub(crate) unsafe fn nv_operator(cmd_arg: *mut CmdArg) {
     if op_type == ca.op().op_type {
         unsafe { nv_lineop(cmd_arg) };
     } else if !check_clear_op(ca.op()) {
-        ca.op().start = cur_win().w_cursor;
+        ca.op().start = Win::current().w_cursor;
         ca.op().op_type = op_type;
         set_op_var(op_type);
     }
@@ -271,9 +271,4 @@ pub(crate) unsafe fn nv_record(cmd_arg: *mut CmdArg) {
     } else if reg_executing.get() == 0 && unsafe { do_record(ca.nchar) }.is_err() {
         clear_op_beep(ca.op());
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

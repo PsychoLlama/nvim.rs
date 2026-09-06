@@ -153,7 +153,7 @@ pub(crate) unsafe fn parse_command_modifiers(
         if byte(ea.cmd) == NUL
             && exmode_active.get()
             && unsafe { getline_equal(ea.ea_getline, ea.cookie, Some(getexline)) }
-            && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
+            && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
             ea.cmd = exmode_plus.as_ptr().cast_mut();
             use_plus_cmd = true;
@@ -747,7 +747,7 @@ pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
 /// lock is about the *user's* text.
 pub fn expr_map_locked() -> bool {
     // SAFETY: `curbuf` is a live buffer whenever a mapping can be running.
-    expr_map_lock.get() > 0 && !cur_buf().b_flags.has(BufFlags::DUMMY)
+    expr_map_lock.get() > 0 && !Buf::current().b_flags.has(BufFlags::DUMMY)
 }
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells
@@ -771,16 +771,6 @@ pub unsafe fn is_map_cmd(cmdidx: CmdIdx) -> bool {
         || ex_func_is(func, ex_mapclear)
         || ex_func_is(func, ex_abbreviate)
         || ex_func_is(func, ex_abclear)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `checkforcmd()` as checked code.

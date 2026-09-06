@@ -150,14 +150,6 @@ fn len(p: *const c_char) -> size_t {
     unsafe { cstr::bytes_at(p) }.len()
 }
 
-fn cur_win() -> Win {
-    Win::current()
-}
-
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
 fn edit(ea: Ex, old_curwin: *mut Window) {
     // SAFETY: a live command, and a live window or null.
@@ -230,7 +222,7 @@ fn splitview(mut ea: Ex) {
 
     // Splitting a quickfix window gives a plain window, not a second
     // quickfix one — unless `:tab` asked for a tab page.
-    if buf_is_quickfix(Some(cur_buf())) && cmdmod.with(|m| m.cmod_tab) == 0 {
+    if buf_is_quickfix(Some(Buf::current())) && cmdmod.with(|m| m.cmod_tab) == 0 {
         if ea.is(CmdIdx::split) {
             ea.cmdidx = CmdIdx::new;
         }
@@ -256,7 +248,7 @@ fn splitview(mut ea: Ex) {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
         if byte(ea.arg) != NUL {
-            reset_binding(cur_win());
+            reset_binding(Win::current());
         } else {
             // SAFETY: reads the window list and the current window.
             unsafe { do_check_scrollbind(false) };
@@ -292,7 +284,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
     let (ff, sc) = (&raw mut file_to_find, &raw mut search_ctx);
-    let (mess, from) = (FileNameOpts::MESS, cur_buf().b_ffname);
+    let (mess, from) = (FileNameOpts::MESS, Buf::current().b_ffname);
     // SAFETY: a NUL-terminated argument, and the search's own two slots.
     let found = unsafe { find_file_in_path(arg, n, mess, true, from, ff, sc) };
     free(file_to_find);
@@ -328,7 +320,7 @@ fn open_tabpage(ea: Ex, old_curwin: *mut Window) {
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = cur_buf().handle as c_int;
+        old.w_alt_fnum = Buf::current().handle as c_int;
     }
 }
 
@@ -548,7 +540,7 @@ pub(crate) unsafe fn ex_resize(args: *mut ExArg) {
 }
 
 fn resize(ea: Ex) {
-    let mut wp = cur_win();
+    let mut wp = Win::current();
     if ea.addr_count > 0 {
         // The count is a window number, clamped to the last window.
         let mut n = ea.line2 as c_int;
@@ -719,8 +711,8 @@ fn back_to_current_window(curwin_save: *mut Window) {
         && let Some(saved) = valid_win(curwin_save)
     {
         // The preview window is left drawn but not current.
-        cur_win().validate_cursor();
-        cur_win().redraw_later(UPD_VALID);
+        Win::current().validate_cursor();
+        Win::current().redraw_later(UPD_VALID);
         enter(saved, true);
     }
     g_do_tagpreview.set(0);

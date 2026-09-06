@@ -106,7 +106,7 @@ unsafe fn qf_jump_edit_buffer(
                 ptr::null_mut(),
                 1,
                 EcmdFlags::HIDE | EcmdFlags::SET_HELP,
-                if prev_winid == cur_win().handle {
+                if prev_winid == Win::current().handle {
                     Win::current_raw()
                 } else {
                     ptr::null_mut()
@@ -133,7 +133,9 @@ unsafe fn qf_jump_edit_buffer(
     };
 
     // For a location list, the window it belongs to may be gone.
-    if qfl_type == QFLT_LOCATION && win_by_id(prev_winid).is_none() && cur_win().w_llist != qi.raw()
+    if qfl_type == QFLT_LOCATION
+        && win_by_id(prev_winid).is_none()
+        && Win::current().w_llist != qi.raw()
     {
         emsg(gettext(c"E924: Current window was closed"));
         *opened_window = false;
@@ -174,7 +176,7 @@ unsafe fn escape_winfixbuf(
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
-    if forceit != 0 || cur_win().w_onebuf_opt.wo_wfb == 0 || cur_buf().handle == fnum {
+    if forceit != 0 || Win::current().w_onebuf_opt.wo_wfb == 0 || Buf::current().handle == fnum {
         return Some(true);
     }
     if qi.qfl_type == QFLT_LOCATION {
@@ -189,14 +191,14 @@ unsafe fn escape_winfixbuf(
     {
         unsafe { win_goto(prevwin.get()) };
     }
-    if cur_win().w_onebuf_opt.wo_wfb == 0 {
+    if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return Some(true);
     }
     // Split off a window, which is 'nowinfixbuf'.
     if win_split(0, 0).is_ok() {
         *opened_window = true;
     }
-    if cur_win().w_onebuf_opt.wo_wfb == 0 {
+    if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return Some(true);
     }
     // The split failed, or autocommands set 'winfixbuf' again or sent
@@ -221,8 +223,8 @@ unsafe fn qf_jump_goto_line(
     if !qf_pattern.is_null() {
         // Search from before the first line, and stay put if the
         // pattern is not there any more.
-        let save_cursor = cur_win().w_cursor;
-        cur_win().w_cursor.lnum = 0;
+        let save_cursor = Win::current().w_cursor;
+        Win::current().w_cursor.lnum = 0;
         let op = ptr::null_mut();
         let dirc = '/' as c_int;
         let search_delim = '/' as c_int;
@@ -243,26 +245,26 @@ unsafe fn qf_jump_goto_line(
             )
         };
         if found == 0 {
-            cur_win().w_cursor = save_cursor;
+            Win::current().w_cursor = save_cursor;
         }
         return;
     }
 
     // A line number of 0 means the entry names no line.
     if qf_lnum > 0 {
-        cur_win().w_cursor.lnum = qf_lnum.min(cur_buf().b_ml.ml_line_count);
+        Win::current().w_cursor.lnum = qf_lnum.min(Buf::current().b_ml.ml_line_count);
     }
     if qf_col <= 0 {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         return;
     }
-    cur_win().w_cursor.coladd = 0;
+    Win::current().w_cursor.coladd = 0;
     if qf_viscol as c_int == 1 {
         coladvance(Win::current(), qf_col as ColNr - 1);
     } else {
-        cur_win().w_cursor.col = (qf_col - 1) as ColNr;
+        Win::current().w_cursor.col = (qf_col - 1) as ColNr;
     }
-    cur_win().w_set_curswant = true;
+    Win::current().w_set_curswant = true;
     check_cursor(Win::current());
 }
 
@@ -323,7 +325,7 @@ unsafe fn qf_jump_print_msg(
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
     let old_msg_scroll = msg_scroll.get();
-    if Buf::current_raw() == old_curbuf && cur_win().w_cursor.lnum == old_lnum {
+    if Buf::current_raw() == old_curbuf && Win::current().w_cursor.lnum == old_lnum {
         msg_scroll.set(true as c_int);
     } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
         && shortmess(ShmFlag::OVERALL)
@@ -359,7 +361,7 @@ unsafe fn qf_jump_open_window(
 
     // A `:helpgrep` entry wants a help window.
     if qf_ptr.qf_type == 1
-        && (!buf_is_help(cur_win().buffer_or_none()) || cmdmod_tab() != 0)
+        && (!buf_is_help(Win::current().buffer_or_none()) || cmdmod_tab() != 0)
         && unsafe { jump_to_help_window(qi.raw(), newwin, opened_window) }.is_err()
     {
         return Jumped::Restore;
@@ -402,7 +404,7 @@ unsafe fn qf_jump_to_buffer(
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
     // SAFETY: forwarded from the caller.
     let old_curbuf = Buf::current_raw();
-    let old_lnum = cur_win().w_cursor.lnum;
+    let old_lnum = Win::current().w_cursor.lnum;
 
     if qf_ptr.qf_fnum != 0 {
         let edited =
@@ -486,7 +488,7 @@ pub(crate) unsafe fn qf_jump_newwin(
 
         // No need to print the message when the quickfix window shows it.
         let print_message = !qf_win_pos_update(qi, old_qf_index);
-        let prev_winid = cur_win().handle as c_int;
+        let prev_winid = Win::current().handle as c_int;
         let mut opened_window = false;
 
         match unsafe { qf_jump_open_window(qi.raw(), qf_ptr, newwin, &mut opened_window) } {

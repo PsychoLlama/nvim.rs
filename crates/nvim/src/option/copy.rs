@@ -695,7 +695,7 @@ fn vts_array(buffer: Buf) -> *mut ColNr {
 
 /// `-M`: make every buffer unmodifiable, default included.
 pub(crate) fn reset_modifiable() {
-    cur_buf().b_p_ma = 0;
+    Buf::current().b_p_ma = 0;
     p_ma.set(0);
     change_option_default(kOptModifiable, boolean_optval(Some(false)));
 }
@@ -719,9 +719,4 @@ pub(crate) unsafe fn set_iminsert_global(buffer: *mut Buffer) {
 pub(crate) unsafe fn set_imsearch_global(buffer: *mut Buffer) {
     // SAFETY: the caller's buffer.
     p_imsearch.set(unsafe { (*buffer).b_p_imsearch });
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

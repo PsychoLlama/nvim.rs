@@ -124,8 +124,8 @@ pub unsafe fn func_call(
         }
 
         let mut funcexe = FUNCEXE_INIT;
-        funcexe.fe_firstline = cur_win().w_cursor.lnum;
-        funcexe.fe_lastline = cur_win().w_cursor.lnum;
+        funcexe.fe_firstline = Win::current().w_cursor.lnum;
+        funcexe.fe_lastline = Win::current().w_cursor.lnum;
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = partial;
         funcexe.fe_selfdict = selfdict;
@@ -359,9 +359,4 @@ pub unsafe fn call_func(
     unsafe { xfree(tofree as *mut c_void) };
     unsafe { xfree(name as *mut c_void) };
     ret
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

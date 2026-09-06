@@ -87,21 +87,21 @@ const ESC: c_int = 0x1b;
 pub(crate) unsafe fn spell_suggest(count: c_int) {
     // SAFETY: the caller guarantees the window; `curwin` is re-read after
     // the body because autocommands may have moved it.
-    let prev_cursor = cur_win().w_cursor;
+    let prev_cursor = Win::current().w_cursor;
     let msg_scroll_save = msg_scroll.get();
 
     // `z=` works with 'spell' off, but 'spelllang' has to be parsed
     // for it, which is what turning the option on does.
-    let wo_spell_save = cur_win().w_onebuf_opt.wo_spell;
-    if cur_win().w_onebuf_opt.wo_spell == 0 {
+    let wo_spell_save = Win::current().w_onebuf_opt.wo_spell;
+    if Win::current().w_onebuf_opt.wo_spell == 0 {
         unsafe { parse_spelllang(Win::current_raw()) };
-        cur_win().w_onebuf_opt.wo_spell = 1;
+        Win::current().w_onebuf_opt.wo_spell = 1;
     }
 
     unsafe { suggest_and_replace(count, prev_cursor, msg_scroll_save) };
 
     // Every way out of the body comes through here.
-    cur_win().w_onebuf_opt.wo_spell = wo_spell_save;
+    Win::current().w_onebuf_opt.wo_spell = wo_spell_save;
 }
 
 /// The body of `z=`, with `'spell'` already on.
@@ -112,7 +112,7 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
 unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
-    if unsafe { *(*cur_win().w_s).b_p_spl } as c_int == NUL {
+    if unsafe { *(*Win::current().w_s).b_p_spl } as c_int == NUL {
         emsg(gettext(e_no_spell));
         return;
     }
@@ -125,8 +125,8 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     //
     // SAFETY: `curwin` is the window whose cursor position is passed with
     // it, and the caller guarantees its spell state.
-    let lnum = cur_win().w_cursor.lnum;
-    let col = cur_win().w_cursor.col;
+    let lnum = Win::current().w_cursor.lnum;
+    let col = Win::current().w_cursor.col;
     let need_cap = unsafe { check_need_cap(Win::current_raw(), lnum, col) };
 
     // Autocommands may free the line, so work from a copy.
@@ -141,7 +141,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     let su = unsafe { Sug::new(&raw mut sug) };
     // SAFETY: `line` is the copy of the cursor line taken above, so the
     // cursor's column is inside it, and `su` is the live `sug`.
-    let badword = unsafe { line.offset(cur_win().w_cursor.col as isize) };
+    let badword = unsafe { line.offset(Win::current().w_cursor.col as isize) };
     unsafe { spell_find_suggest(badword, badlen, su, limit, true, need_cap, true) };
 
     let mut selected = count;
@@ -161,7 +161,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
         let stp = &sug.su_ga[selected as usize - 1];
         unsafe { apply_suggestion(&sug, stp, line) };
     } else {
-        cur_win().w_cursor = prev_cursor;
+        Win::current().w_cursor = prev_cursor;
     }
 
     unsafe { spell_find_cleanup(su) };
@@ -183,35 +183,35 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     if visual_active() {
         // The Visual selection is the bad word, but only within a
         // single line.
-        if cur_win().w_cursor.lnum != visual_anchor().lnum {
+        if Win::current().w_cursor.lnum != visual_anchor().lnum {
             unsafe { vim_beep(kOptBoFlagSpell as core::ffi::c_uint) };
             return None;
         }
-        let mut badlen = cur_win().w_cursor.col - visual_anchor().col;
+        let mut badlen = Win::current().w_cursor.col - visual_anchor().col;
         if badlen < 0 {
             badlen = -badlen;
         } else {
-            cur_win().w_cursor.col = visual_anchor().col;
+            Win::current().w_cursor.col = visual_anchor().col;
         }
         badlen += 1;
         end_visual_mode();
         // Leave out the NUL at the end of the line.
-        return Some(badlen.min(get_cursor_line_len() - cur_win().w_cursor.col));
+        return Some(badlen.min(get_cursor_line_len() - Win::current().w_cursor.col));
     }
 
     // SAFETY: `curwin` is set from startup to exit and the caller
     // guarantees its spell state; a null `attrp` asks for no attribute.
     let win = Win::current_raw();
     let moved = unsafe { spell_move_to(win, FORWARD as c_int, SMT_ALL, true, ptr::null_mut()) };
-    if moved != 0 && cur_win().w_cursor.col <= prev_cursor.col {
+    if moved != 0 && Win::current().w_cursor.col <= prev_cursor.col {
         return Some(0);
     }
 
     // No bad word, or the one found starts after the cursor: take the
     // word under the cursor instead.
-    cur_win().w_cursor = prev_cursor;
+    Win::current().w_cursor = prev_cursor;
     let curline = get_cursor_line_ptr();
-    let mut p = unsafe { curline.offset(cur_win().w_cursor.col as isize) };
+    let mut p = unsafe { curline.offset(Win::current().w_cursor.col as isize) };
     // Back up to before the start of the word...
     while p > curline && unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
         p = unsafe { p.sub(utf_head_off(curline, p.sub(1)) as usize + 1) };
@@ -224,7 +224,7 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         beep_flush(); // no word at all
         return None;
     }
-    cur_win().w_cursor.col = unsafe { p.offset_from(curline) } as ColNr;
+    Win::current().w_cursor.col = unsafe { p.offset_from(curline) } as ColNr;
     Some(0)
 }
 
@@ -244,7 +244,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     // SAFETY: the caller guarantees `sug`; every message is formatted into
     // `IObuff` with its own size.
     // With 'rightleft' the list is drawn right to left.
-    cmdmsg_rl.set(cur_win().w_onebuf_opt.wo_rl != 0);
+    cmdmsg_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
 
     unsafe { msg_start() };
     msg_row.set(Rows.get() - 1); // for when 'cmdheight' > 1
@@ -433,14 +433,9 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
     append_to_redobuff_char(ESC);
 
     // `newline` may be freed here.
-    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newline, false) };
-    cur_win().w_cursor.col = col as ColNr;
+    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newline, false) };
+    Win::current().w_cursor.col = col as ColNr;
     // SAFETY: the cursor is on the line just replaced.
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
     unsafe { inserted_bytes(lnum, col as ColNr, stp.st_orglen, stp.st_wordlen) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

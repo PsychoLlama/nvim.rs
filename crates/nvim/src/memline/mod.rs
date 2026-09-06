@@ -547,7 +547,7 @@ pub unsafe fn check_need_swap(newfile: bool) {
     // The swap dialog may prompt, and the user has to see it; E325 may
     // reset this again.
     let _loud = Allow::messages();
-    if cur_buf().b_may_swap && (cur_buf().b_p_ro == 0 || !newfile) {
+    if Buf::current().b_may_swap && (Buf::current().b_p_ro == 0 || !newfile) {
         unsafe { ml_open_file(Buf::current_raw()) };
     }
 }
@@ -609,8 +609,3 @@ pub unsafe fn ml_close_notmod() {
 }
 
 pub const EOL_DOS: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}

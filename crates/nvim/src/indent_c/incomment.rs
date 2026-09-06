@@ -50,14 +50,14 @@ pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
     // SAFETY: on the main thread with a current buffer and the cursor on a
     // line of it, which is all `find_line_comment` searches back from.
     let mut trypos = unsafe { find_line_comment() };
-    if trypos.is_none() && cur_win().w_cursor.lnum > 1 {
+    if trypos.is_none() && Win::current().w_cursor.lnum > 1 {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
         // SAFETY: the test in front says `lnum - 1` is at least 1, so it is a
         // line of the buffer, and `ml_get` hands back a NUL-terminated one.
-        let col = unsafe { check_linecomment(ml_get(cur_win().w_cursor.lnum - 1)) };
+        let col = unsafe { check_linecomment(ml_get(Win::current().w_cursor.lnum - 1)) };
         if col != MAXCOL {
-            let lnum = cur_win().w_cursor.lnum - 1;
+            let lnum = Win::current().w_cursor.lnum - 1;
             trypos = Some(Pos {
                 lnum,
                 col,
@@ -110,7 +110,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // nothing after the opener -- add `c`; otherwise line up with the
     // text that follows the opener.
     let mut nothing_after_opener = true;
-    if cur_buf().b_ind_in_comment2 == 0 {
+    if Buf::current().b_ind_in_comment2 == 0 {
         // SAFETY: a contiguous walk over one NUL-terminated line, every step
         // of which is unsafe.  `comment` is the position of a `/*` in this
         // buffer, so `col + 2` lands on the byte after the `*` -- at worst
@@ -126,8 +126,8 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // SAFETY: `comment` is still a position in the current buffer -- the
     // block above only ever moved its column forward within its own line.
     amount = unsafe { line_vcol(comment.lnum, comment.col) };
-    if cur_buf().b_ind_in_comment2 != 0 || nothing_after_opener {
-        amount += cur_buf().b_ind_in_comment;
+    if Buf::current().b_ind_in_comment2 != 0 || nothing_after_opener {
+        amount += Buf::current().b_ind_in_comment;
     }
     amount
 }
@@ -163,7 +163,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
     let mut start_align = 0;
     let mut done = false;
 
-    let mut p = cur_buf().b_p_com;
+    let mut p = Buf::current().b_p_com;
     // SAFETY: 'comments' is a NUL-terminated option string, and nothing below
     // steps `p` past that NUL: each `add(1)` follows a byte just read and
     // found non-NUL, `getdigits_int` stops at the first non-digit, and
@@ -222,8 +222,8 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
             && !ncmp_eq(theline, &lead_end, lead_end_len)
         {
             done = true;
-            if cur_win().w_cursor.lnum > 1 {
-                let prev = cur_win().w_cursor.lnum - 1;
+            if Win::current().w_cursor.lnum > 1 {
+                let prev = Win::current().w_cursor.lnum - 1;
                 // The line above starting with the start leader: its
                 // indent plus the offset.  With the middle leader: its
                 // indent and nothing more.
@@ -270,7 +270,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
         {
             // SAFETY: on the main thread with a current buffer; a bad line
             // number is `ml_get`'s own to report, as upstream leaves it.
-            *amount = unsafe { get_indent_lnum(cur_win().w_cursor.lnum - 1) };
+            *amount = unsafe { get_indent_lnum(Win::current().w_cursor.lnum - 1) };
             if off != 0 {
                 *amount += off;
             } else if align == COM_RIGHT {
@@ -281,16 +281,6 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
         }
     }
     done
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 #[cfg(test)]

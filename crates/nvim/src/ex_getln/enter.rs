@@ -256,8 +256,8 @@ pub(crate) unsafe fn command_line_enter(
         unsafe { clear_cmdline_orig() };
 
         cmdmsg_rl.set(
-            cur_win().w_onebuf_opt.wo_rl != 0
-                && unsafe { *cur_win().w_onebuf_opt.wo_rlc } as ::core::ffi::c_int
+            Win::current().w_onebuf_opt.wo_rl != 0
+                && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as ::core::ffi::c_int
                     == 's' as ::core::ffi::c_int
                 && (s.firstc == '/' as ::core::ffi::c_int || s.firstc == '?' as ::core::ffi::c_int),
         );
@@ -291,7 +291,7 @@ pub(crate) unsafe fn command_line_enter(
             || s.firstc == '@' as ::core::ffi::c_int
         {
             // Use ":lmap" mappings for the search pattern and input().
-            s.b_im_ptr = if cur_buf().b_p_imsearch == B_IMODE_USE_INSERT as OptInt {
+            s.b_im_ptr = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT as OptInt {
                 cur_buf_iminsert()
             } else {
                 cur_buf_imsearch()
@@ -699,14 +699,4 @@ pub(crate) fn cur_buf_iminsert() -> *mut OptInt {
 pub(crate) fn cur_buf_imsearch() -> *mut OptInt {
     // SAFETY: a field's address is the object's plus a constant.
     unsafe { &raw mut (*Buf::current_raw()).b_p_imsearch }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

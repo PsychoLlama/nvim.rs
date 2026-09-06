@@ -34,8 +34,8 @@ const HELP_FILES: &[u8] = br"doc/*.\(txt\|??x\)";
 /// There must be a current window.
 unsafe fn hgr_get_ll(new_ll: &mut bool) -> Qi {
     // SAFETY: the caller's promise -- a current window.
-    let wp = if is_help_buffer(cur_win()) {
-        Some(cur_win())
+    let wp = if is_help_buffer(Win::current()) {
+        Some(Win::current())
     } else {
         qf_find_help_win()
     };
@@ -291,17 +291,17 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
     qf_busy_end();
 
     if args.cmdidx == CmdIdx::lhelpgrep && new_qi {
-        if !buf_is_help(cur_win().buffer_or_none()) || cur_win().w_llist == qi.raw() {
+        if !buf_is_help(Win::current().buffer_or_none()) || Win::current().w_llist == qi.raw() {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.
             let mut stack = qi.raw();
             // SAFETY: the stack this command allocated a moment ago, which
             // nothing else has been given a reference to.
             unsafe { ll_free_all(&raw mut stack) };
-        } else if cur_win().w_llist.is_null() {
+        } else if Win::current().w_llist.is_null() {
             // The current window had no location list before, so it
             // takes the new one.
-            cur_win().w_llist = qi.raw();
+            Win::current().w_llist = qi.raw();
         }
     }
 }

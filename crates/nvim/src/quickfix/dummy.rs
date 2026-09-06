@@ -41,7 +41,7 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     // Return to the original directory, ignoring any error.
     let mut ea = ExArg {
         arg: dirname_start.cast_mut(),
-        cmdidx: if cur_win().w_localdir.is_null() {
+        cmdidx: if Win::current().w_localdir.is_null() {
             CmdIdx::cd
         } else {
             CmdIdx::lcd
@@ -88,14 +88,14 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.
-        let _ = unsafe { setfname(cur_buf(), fname, ptr::null_mut(), false) };
+        let _ = unsafe { setfname(Buf::current(), fname, ptr::null_mut(), false) };
 
         // Create swap file now to avoid the ATTENTION message.
         unsafe { check_need_swap(true) };
 
         // Remove the "dummy" flag, otherwise autocommands may not
         // work.
-        cur_buf().b_flags.clear(BufFlags::DUMMY);
+        Buf::current().b_flags.clear(BufFlags::DUMMY);
 
         let mut newbuf_to_wipe = BufRef::NONE;
         let sfname = ptr::null_mut();
@@ -105,7 +105,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         let readfile_result =
             unsafe { readfile(fname, sfname, 0, 0, lines_to_read, eap, flags, false) };
         unsafe { (*newbuf).b_locked -= 1 };
-        if readfile_result.is_ok() && !got_int.get() && !cur_buf().b_flags.has(BufFlags::NEW) {
+        if readfile_result.is_ok() && !got_int.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
             failed = false;
             if !ptr::eq(Buf::current_raw(), newbuf) {
                 // Bloody autocommands changed the buffer! Restore

@@ -338,7 +338,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
     let orig_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_orig));
     let new_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_new));
     let diff_out: *mut DiffOut = dio.field_ptr(offset_of!(DiffIo, dio_diff));
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     let idx_orig = idx_orig as usize;
     let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
@@ -518,7 +518,7 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
         diff_need_update.set(true);
         return;
     }
-    let mut tp = cur_tab();
+    let mut tp = TabPage::current();
     let had_diffs = !tp.tp_first_diff.is_null();
     // SAFETY: the current tab page is live.
     diff_clear(tp);
@@ -543,7 +543,7 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
         };
         // SAFETY: `diffio` is a local, and `args` is the caller's command.
         unsafe { diff_try_update(&raw mut diffio, idx_orig, args) };
-        cur_win().w_valid_cursor.lnum = 0;
+        Win::current().w_valid_cursor.lnum = 0;
     }
 
     if had_diffs || !tp.tp_first_diff.is_null() {
@@ -553,14 +553,4 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
         let buffer = Buf::current_raw();
         unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, buffer) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

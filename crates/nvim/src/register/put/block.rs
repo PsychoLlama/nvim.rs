@@ -41,7 +41,8 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window whose cursor is on `oldp`'s line, and `oldp` is
     // that line's NUL-terminated text.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), cur_win().w_cursor.lnum, oldp) };
+    let (win, lnum) = (Win::current(), Win::current().w_cursor.lnum);
+    let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, oldp) };
 
     // Walk to the block's screen column, or to the end of the line.
     //
@@ -99,7 +100,7 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
 unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window, and `line` is NUL-terminated.
-    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, line) };
     // SAFETY (all four): `ci` starts at `line` and `utfc_next` steps over one
     // whole character at a time, so it stays inside it; the `!= NUL` test in
     // front of the walk is what stops it at the end.
@@ -128,40 +129,40 @@ impl Put {
 
         if self.dir == FORWARD && c != NUL {
             if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint {
-                (col, endcol2) = cur_win().vcol_span(cur_win().cursor());
+                (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
             } else {
-                col = cur_win().vcol_span(cur_win().cursor()).1;
+                col = Win::current().vcol_span(Win::current().cursor()).1;
             }
             // Move to the start of the next character.
             //
             // SAFETY: the cursor is on a valid line and `c` is not the NUL
             // that ends it, so there is a character there to step over.
-            cur_win().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
+            Win::current().w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
             col += 1;
         } else {
-            (col, endcol2) = cur_win().vcol_span(cur_win().cursor());
+            (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
         }
 
-        col += cur_win().w_cursor.coladd;
+        col += Win::current().w_cursor.coladd;
         if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint
-            && (cur_win().w_cursor.coladd > 0 || endcol2 == cur_win().w_cursor.col)
+            && (Win::current().w_cursor.coladd > 0 || endcol2 == Win::current().w_cursor.col)
         {
             if self.dir == FORWARD && c == NUL {
                 col += 1;
             }
-            if self.dir != FORWARD && c != NUL && cur_win().w_cursor.coladd > 0 {
-                cur_win().w_cursor.col += 1;
+            if self.dir != FORWARD && c != NUL && Win::current().w_cursor.coladd > 0 {
+                Win::current().w_cursor.col += 1;
             }
             if c == TAB {
-                if self.dir == BACKWARD && cur_win().w_cursor.col != 0 {
-                    cur_win().w_cursor.col -= 1;
+                if self.dir == BACKWARD && Win::current().w_cursor.col != 0 {
+                    Win::current().w_cursor.col -= 1;
                 }
                 if self.dir == FORWARD && col - 1 == endcol2 {
-                    cur_win().w_cursor.col += 1;
+                    Win::current().w_cursor.col += 1;
                 }
             }
         }
-        cur_win().w_cursor.coladd = 0;
+        Win::current().w_cursor.coladd = 0;
         col
     }
 
@@ -187,8 +188,8 @@ impl Put {
     ) -> bool {
         // Pasting past the end of the buffer appends empty lines.
         let mut lines_appended = 0;
-        if cur_win().w_cursor.lnum > cur_buf().b_ml.ml_line_count {
-            let last = cur_buf().b_ml.ml_line_count;
+        if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
+            let last = Buf::current().b_ml.ml_line_count;
             let empty = c"".as_ptr().cast_mut();
             // SAFETY: `last` is the buffer's own last line, and the text is a
             // NUL-terminated literal that `ml_append` copies.
@@ -273,10 +274,10 @@ impl Put {
             ptr.cast::<u8>().copy_from(rest.cast(), columns as size_t);
         }
         // SAFETY: `newp` is a NUL-terminated line the buffer takes over.
-        let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newp, false) };
+        let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newp, false) };
 
         let buf = Buf::current_raw();
-        let at = cur_win().w_cursor.lnum - 1;
+        let at = Win::current().w_cursor.lnum - 1;
         let inserted = *totlen as c_int + lines_appended;
         // SAFETY: a live buffer; `delcount` bytes came out at `textcol` and
         // `inserted` went in there.
@@ -284,9 +285,9 @@ impl Put {
             extmark_splice_cols(buf, at, land.textcol, land.delcount, inserted, kExtmarkUndo)
         };
 
-        cur_win().w_cursor.lnum += 1;
+        Win::current().w_cursor.lnum += 1;
         if i == 0 {
-            cur_win().w_cursor.col += land.startspaces;
+            Win::current().w_cursor.col += land.startspaces;
         }
         true
     }
@@ -312,37 +313,27 @@ impl Put {
             }
         }
 
-        let to = cur_buf().b_op_start.lnum + self.y_size as LineNr - self.nr_lines;
+        let to = Buf::current().b_op_start.lnum + self.y_size as LineNr - self.nr_lines;
         // SAFETY: a live buffer; the range is the lines the put rewrote.
-        changed_lines(cur_buf(), lnum, 0, to, self.nr_lines, true);
+        changed_lines(Buf::current(), lnum, 0, to, self.nr_lines, true);
 
-        cur_buf().b_op_start = cur_win().w_cursor;
-        cur_buf().b_op_start.lnum = lnum;
+        Buf::current().b_op_start = Win::current().w_cursor;
+        Buf::current().b_op_start.lnum = lnum;
 
-        cur_buf().b_op_end.lnum = cur_win().w_cursor.lnum - 1;
-        cur_buf().b_op_end.col = (textcol + totlen as ColNr - 1).max(0);
-        cur_buf().b_op_end.coladd = 0;
+        Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum - 1;
+        Buf::current().b_op_end.col = (textcol + totlen as ColNr - 1).max(0);
+        Buf::current().b_op_end.coladd = 0;
 
         if self.flags & PUT_CURSEND as c_int != 0 {
-            cur_win().w_cursor = cur_buf().b_op_end;
-            cur_win().w_cursor.col += 1;
+            Win::current().w_cursor = Buf::current().b_op_end;
+            Win::current().w_cursor.col += 1;
             // In Insert mode the cursor may be past the NUL.
             //
             // SAFETY: the cursor is on a line of the buffer.
             let len = get_cursor_line_len();
-            cur_win().w_cursor.col = cur_win().w_cursor.col.min(len);
+            Win::current().w_cursor.col = Win::current().w_cursor.col.min(len);
         } else {
-            cur_win().w_cursor.lnum = lnum;
+            Win::current().w_cursor.lnum = lnum;
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

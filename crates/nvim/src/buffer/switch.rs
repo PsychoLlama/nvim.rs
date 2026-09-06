@@ -222,7 +222,7 @@ pub unsafe fn goto_buffer(args: *mut ExArg, start: c_int, dir: c_int, count: c_i
             | CmdIdx::sbprevious
     );
 
-    let old_curbuf = BufRef::of(cur_buf());
+    let old_curbuf = BufRef::of(Buf::current());
 
     if swap_exists_action.get() == SEA_NONE {
         swap_exists_action.set(SEA_DIALOG);
@@ -247,7 +247,7 @@ pub unsafe fn goto_buffer(args: *mut ExArg, start: c_int, dir: c_int, count: c_i
         let mut cs = NO_CLEANUP;
         enter_cleanup_now(&mut cs);
         // Quitting means closing the split window, nothing else.
-        close_win(cur_win(), true, false);
+        close_win(Win::current(), true, false);
         swap_exists_action.set(save_sea);
         swap_exists_did_quit.set(true);
         leave_cleanup_now(&mut cs);
@@ -260,7 +260,7 @@ pub unsafe fn goto_buffer(args: *mut ExArg, start: c_int, dir: c_int, count: c_i
 /// the buffer to go back to, `None` where the C passed a NULL `BufferRef *`;
 /// it is only ever re-validated, never trusted.
 pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
-    let old_tw: OptInt = cur_buf().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw;
 
     if swap_exists_action.get() == SEA_QUIT {
         // Reset the error state, so aborting() is false while the buffer
@@ -293,8 +293,8 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         };
         if let Some(buf) = buf {
             enter_buffer(buf);
-            if old_tw != cur_buf().b_p_tw {
-                recheck_colorcolumn(cur_win());
+            if old_tw != Buf::current().b_p_tw {
+                recheck_colorcolumn(Win::current());
             }
         }
         // If "old_curbuf" is NULL we are in big trouble here...
@@ -359,7 +359,7 @@ pub unsafe fn do_bufdel(
         // delete the current buffer last, otherwise when the current buffer is
         // deleted, the next buffer becomes the current one and will be loaded,
         // which may then also be deleted, etc.
-        if bnr == cur_buf().handle {
+        if bnr == Buf::current().handle {
             do_current = bnr;
         } else if delete_one(command, bnr, forceit) {
             deleted += 1;
@@ -432,7 +432,7 @@ fn delete_one(command: c_int, bnr: c_int, forceit: c_int) -> bool {
 /// Make the current buffer empty, for when it is wiped out and it is the last
 /// one.
 fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(), Failed> {
-    let buf = cur_buf();
+    let buf = Buf::current();
 
     if action == DOBUF_UNLOAD as c_int {
         err(c"E90: Cannot unload last buffer");
@@ -447,7 +447,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
         // (probably unlisted) buffer, in which case it is fine.  When it is
         // not, `close_windows` would refuse to close the last non-floating
         // window, so it is allowed to close the current one instead.
-        let can_close_all_others = !cur_win().w_floating
+        let can_close_all_others = !Win::current().w_floating
             || windows()
                 .take_while(|wp| !wp.w_floating)
                 .any(|wp| wp.w_buffer != Buf::current_raw());
@@ -458,7 +458,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let flags = EcmdFlags::FORCEIT.when(forceit != 0);
-    let retval = edit_file(0, none, none, ptr::null_mut(), one, flags, cur_win());
+    let retval = edit_file(0, none, none, ptr::null_mut(), one, flags, Win::current());
 
     // do_ecmd() may create a new buffer, then we have to delete the old one.
     // But do_ecmd() may have done that already, check if the buffer still
@@ -552,16 +552,16 @@ fn do_buffer_ext(
     }
 
     // Check if the current buffer may be abandoned.
-    if action == DOBUF_GOTO as c_int && !may_abandon(cur_buf(), forceit) {
+    if action == DOBUF_GOTO as c_int && !may_abandon(Buf::current(), forceit) {
         if confirming() && p_write.get() != 0 {
             let bufref = BufRef::of(buf);
-            ask_about_changes(cur_buf());
+            ask_about_changes(Buf::current());
             if !bufref.valid() {
                 // Autocommand deleted buffer, oops!
                 return Err(Failed);
             }
         }
-        if is_changed(cur_buf()) {
+        if is_changed(Buf::current()) {
             no_write_message();
             return Err(Failed);
         }
@@ -574,7 +574,7 @@ fn do_buffer_ext(
     unsafe { set_curbuf(buf, action, update_jumplist) };
 
     if action == DOBUF_SPLIT as c_int {
-        let mut win = cur_win(); // reset 'scrollbind' and 'cursorbind'
+        let mut win = Win::current(); // reset 'scrollbind' and 'cursorbind'
         win.w_onebuf_opt.wo_scb = 0;
         win.w_onebuf_opt.wo_crb = 0;
     }
@@ -635,7 +635,7 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
                     return Ok(None);
                 };
                 buf = next;
-                if buf == cur_buf() || is_changed(buf) {
+                if buf == Buf::current() || is_changed(buf) {
                     break;
                 }
             }
@@ -760,11 +760,11 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     // (unless it's the only non-floating window), for as long as we end up in
     // a window with this buffer.
     while buffer.raw() == Buf::current_raw()
-        && !(window_locked(cur_win()) || cur_win().buffer().b_locked > 0)
+        && !(window_locked(Win::current()) || Win::current().buffer().b_locked > 0)
         && (last_listed_window().is_some_and(|wp| is_autocmd_window(wp.raw()))
-            || !is_last_window(cur_win()))
+            || !is_last_window(Win::current()))
     {
-        if close_win(cur_win(), false, false) == FAIL {
+        if close_win(Win::current(), false, false) == FAIL {
             break;
         }
     }
@@ -773,7 +773,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     if buffer.raw() != Buf::current_raw() {
         if jop_clean() {
             // Remove the buffer to be deleted from the jump list.
-            forget_jumps(cur_win(), buf_fnum);
+            forget_jumps(Win::current(), buf_fnum);
         }
 
         close_all_windows(buffer, false);
@@ -839,14 +839,14 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     let mut buf = BufRef::of_record(au_new_curbuf.get())
         .get()
         .filter(|b| b.b_locked_split == 0);
-    if buf.is_none() && cur_win().w_jumplistlen > 0 {
+    if buf.is_none() && Win::current().w_jumplistlen > 0 {
         if jop_clean() {
             // Remove the buffer from the jump list.
-            forget_jumps(cur_win(), buf_fnum);
+            forget_jumps(Win::current(), buf_fnum);
         }
         // It's possible that we removed all jump list entries, in that case we
         // need to try another approach.
-        if cur_win().w_jumplistlen > 0 {
+        if Win::current().w_jumplistlen > 0 {
             buf = walk_jumplist(&mut unloaded, update_jumplist);
         }
     }
@@ -872,7 +872,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
         // Still no buffer, just take one.  Upstream tests the answer without
         // checking it for null first; with both neighbours gone there is
         // nothing to test, which is what `filter` says here.
-        let cur = cur_buf();
+        let cur = Buf::current();
         buf = cur.next().or_else(|| cur.prev()).filter(|b| {
             !is_quickfix(*b) && !(b.raw() != Buf::current_raw() && b.b_locked_split != 0)
         });
@@ -883,7 +883,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
 /// The jump list, newest first, for the most recently visited buffer that is
 /// listed, loaded and not closing.
 fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Option<Buf> {
-    let mut win = cur_win();
+    let mut win = Win::current();
     let mut jumpidx = win.w_jumplistidx;
 
     if jop_clean() {
@@ -947,7 +947,7 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
 /// listed buffer of the same help-ness.
 fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
     let mut forward = true;
-    let cur = cur_buf();
+    let cur = Buf::current();
     let mut buf = cur.next();
     loop {
         let Some(b) = buf else {

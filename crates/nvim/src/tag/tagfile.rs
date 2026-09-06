@@ -77,8 +77,8 @@ impl TagFiles {
     pub(crate) fn new() -> Self {
         // SAFETY: `curbuf` is live, and the buffer-local and global
         // `'tags'` are NUL-terminated option strings.
-        let help = cur_buf().b_help;
-        let local = cur_buf().b_p_tags;
+        let help = Buf::current().b_help;
+        let local = Buf::current().b_p_tags;
         TagFiles {
             help: help.then(HelpTags::collect),
             tags: (!help)
@@ -153,7 +153,7 @@ impl TagFiles {
                 FINDFILE_FILE as c_int,
                 self.search.ctx,
                 true,
-                cur_buf().b_ffname,
+                Buf::current().b_ffname,
             )
         };
         self.search.open = !self.search.ctx.is_null();
@@ -314,7 +314,7 @@ pub(crate) unsafe fn expand_tag_fname(
     let dir = unsafe { CStr::from_ptr(tag_fname) }.to_bytes();
     let dir = &dir[..tail_index(dir)];
 
-    let retval = if (p_tr.get() != 0 || cur_buf().b_help)
+    let retval = if (p_tr.get() != 0 || Buf::current().b_help)
         && !unsafe { vim_is_abs_name(fname) }
         && !dir.is_empty()
     {
@@ -335,9 +335,4 @@ pub(crate) unsafe fn expand_tag_fname(
 
     unsafe { xfree(expanded.cast()) };
     retval
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

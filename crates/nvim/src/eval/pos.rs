@@ -4,7 +4,6 @@
 
 use crate::cstr;
 use crate::eval::Tv;
-use crate::eval::window::{cur_buf, cur_win};
 use crate::winlayer::{Buf, Live};
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
@@ -313,7 +312,7 @@ pub unsafe fn list2fpos(
             return Err(Failed);
         }
         if n == 0 {
-            n = cur_buf().handle as c_int; // buffer 0 is "current"
+            n = Buf::current().handle as c_int; // buffer 0 is "current"
         }
         // SAFETY: the caller's promise -- a non-null `fnump` is valid.
         unsafe { *fnump = n };
@@ -337,7 +336,7 @@ pub unsafe fn list2fpos(
         // SAFETY: the caller's promise -- a non-null `fnump` is valid, and
         // it was written above.
         let handle = if fnump.is_null() {
-            cur_buf().handle as c_int
+            Buf::current().handle as c_int
         } else {
             unsafe { *fnump }
         };
@@ -345,7 +344,7 @@ pub unsafe fn list2fpos(
             return Err(Failed);
         };
         let lnum = if posp.lnum == 0 {
-            cur_win().w_cursor.lnum
+            Win::current().w_cursor.lnum
         } else {
             posp.lnum
         };

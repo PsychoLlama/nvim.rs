@@ -63,11 +63,11 @@ fn replace_normal(state: c_int) -> bool {
 /// The cursor must be on a valid line of the current buffer.
 unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     if !buf_is_prompt(current_buf())
-        || cur_win().w_cursor.lnum != cur_buf().b_prompt_start.mark.lnum
+        || Win::current().w_cursor.lnum != Buf::current().b_prompt_start.mark.lnum
     {
         return ::core::ptr::null_mut();
     }
-    let prompt_line = ml_get(cur_win().w_cursor.lnum);
+    let prompt_line = ml_get(Win::current().w_cursor.lnum);
     let prompt = unsafe { prompt_text() };
     let prompt_len = unsafe { cstr::bytes_at(prompt) }.len();
     if !unsafe { cstr::prefix_eq(prompt_line, prompt, prompt_len) } {
@@ -81,7 +81,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     let into = prompt_line.cast::<u8>();
     unsafe { into.copy_from(rest.cast(), rest_len + 1) };
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
-    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, prompt_line, true) };
+    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, prompt_line, true) };
     unsafe { concat_str(prompt, p_extra) }
 }
 
@@ -95,12 +95,12 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
 /// The cursor must be on a valid line and `p_extra` NUL-terminated.
 unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool> {
     if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
-        if unsafe { ml_append(cur_win().w_cursor.lnum, p_extra, 0, false) }.is_err() {
+        if unsafe { ml_append(Win::current().w_cursor.lnum, p_extra, 0, false) }.is_err() {
             return None;
         }
         // changed_lines() is postponed: calling it here would upset
         // marker folding.
-        let below = cur_win().w_cursor.lnum + 1;
+        let below = Win::current().w_cursor.lnum + 1;
         let max = MAXLNUM as LineNr;
         // SAFETY: the editor exists.
         unsafe { mark_adjust(below, max, 1, 0, kExtmarkNOOP) };
@@ -108,16 +108,16 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
     }
 
     // Virtual Replace: start replacing the next line.
-    cur_win().w_cursor.lnum += 1;
-    if cur_win().w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
+    Win::current().w_cursor.lnum += 1;
+    if Win::current().w_cursor.lnum >= Insstart.get().lnum + vr_lines_changed.get() {
         // NL to a new line, BS back, NL again: don't save the new line
         // for undo twice. Errors are ignored.
         let _ = u_save_cursor();
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
-    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, p_extra, true) };
-    unsafe { changed_bytes(cur_win().w_cursor.lnum, 0) };
-    cur_win().w_cursor.lnum -= 1;
+    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p_extra, true) };
+    unsafe { changed_bytes(Win::current().w_cursor.lnum, 0) };
+    Win::current().w_cursor.lnum -= 1;
     Some(false)
 }
 
@@ -135,7 +135,7 @@ unsafe fn apply_new_indent(
     newcol: &mut ColNr,
     no_si: bool,
 ) {
-    cur_win().w_cursor.lnum += 1;
+    Win::current().w_cursor.lnum += 1;
     if did_si.get() {
         let sw = unsafe { get_sw_value(Buf::current_raw()) };
         if p_sr.get() != 0 {
@@ -144,25 +144,25 @@ unsafe fn apply_new_indent(
         newindent += sw;
     }
 
-    if cur_buf().b_p_ci != 0 {
+    if Buf::current().b_p_ci != 0 {
         unsafe { copy_indent(newindent, saved_line) };
         // Keep 'preserveindent' on so that later fiddling with the line
         // does not undo the copy; restored at the end of `open_line`.
-        cur_buf().b_p_pi = true as c_int;
+        Buf::current().b_p_pi = true as c_int;
     } else {
         unsafe { set_indent(newindent, SIN_INSERT | SIN_NOMARK) };
     }
-    *less_cols -= cur_win().w_cursor.col;
-    ai_col.set(cur_win().w_cursor.col);
+    *less_cols -= Win::current().w_cursor.col;
+    ai_col.set(Win::current().w_cursor.col);
 
     // In Replace mode every character of the new indent needs a NUL on
     // the replace stack, for when BS deletes it.
     if replace_normal(State.get()) {
-        for _ in 0..cur_win().w_cursor.col {
+        for _ in 0..Win::current().w_cursor.col {
             unsafe { replace_push_nul() };
         }
     }
-    *newcol += cur_win().w_cursor.col;
+    *newcol += Win::current().w_cursor.col;
     if no_si {
         did_si.set(false);
     }
@@ -188,22 +188,22 @@ unsafe fn truncate_old_line(
     less_cols_off: ColNr,
     did_append: bool,
 ) {
-    unsafe { *saved_line.offset(cur_win().w_cursor.col as isize) = NUL as c_char };
+    unsafe { *saved_line.offset(Win::current().w_cursor.col as isize) = NUL as c_char };
     // Remove trailing white space, unless the caller asked to keep it --
     // and only when the line being left was auto-indented, so that white
     // space the user typed on purpose survives.
     if trunc_line && flags & OPENLINE_KEEPTRAIL == 0 {
-        unsafe { truncate_spaces(saved_line, cur_win().w_cursor.col as size_t) };
+        unsafe { truncate_spaces(saved_line, Win::current().w_cursor.col as size_t) };
     }
-    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, saved_line, false) };
+    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, saved_line, false) };
 
     let new_len = unsafe { cstr::bytes_at(saved_line) }.len() as c_int;
     let mut cols_spliced = 0;
-    if new_len < cur_win().w_cursor.col {
+    if new_len < Win::current().w_cursor.col {
         // Trailing white space went as well as the split.
         let cb = Buf::current_raw();
-        let row = cur_win().w_cursor.lnum - 1;
-        let gone = cur_win().w_cursor.col - new_len;
+        let row = Win::current().w_cursor.lnum - 1;
+        let gone = Win::current().w_cursor.col - new_len;
         // SAFETY: the current buffer is live, and the row is the line just
         // replaced.
         unsafe { extmark_splice_cols(cb, row, new_len, gone, 0, kExtmarkUndo) };
@@ -221,7 +221,7 @@ unsafe fn truncate_old_line(
         let old_b = off as BCount;
         let new_b = (1 + added) as BCount;
         let undo = kExtmarkUndo;
-        let (cur_lnum, cur_col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
+        let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
         // SAFETY: the current buffer is live, and the row names the line that
         // was just split.
         unsafe {
@@ -234,7 +234,7 @@ unsafe fn truncate_old_line(
             unsafe { mark_col_adjust(cur_lnum, cur_col + off, 1, -less_cols, 0) };
         }
     } else {
-        unsafe { changed_bytes(cur_win().w_cursor.lnum, cur_win().w_cursor.col) };
+        unsafe { changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col) };
     }
 }
 
@@ -258,12 +258,13 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
     if p_paste.get() == 0 {
         if leader.is_null()
             && !unsafe { use_indentexpr_for_lisp() }
-            && cur_buf().b_p_lisp != 0
-            && cur_buf().b_p_ai != 0
+            && Buf::current().b_p_lisp != 0
+            && Buf::current().b_p_ai != 0
         {
             unsafe { fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int)) };
             ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
-        } else if do_cindent || (cur_buf().b_p_ai != 0 && unsafe { use_indentexpr_for_lisp() }) {
+        } else if do_cindent || (Buf::current().b_p_ai != 0 && unsafe { use_indentexpr_for_lisp() })
+        {
             unsafe { do_c_expr_indent() };
             ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
         }
@@ -297,9 +298,9 @@ pub unsafe fn open_line(
     did_do_comment: *mut bool,
 ) -> bool {
     let do_si = unsafe { may_do_si() };
-    let saved_pi = cur_buf().b_p_pi;
-    let lnum = cur_win().w_cursor.lnum;
-    let mincol = cur_win().w_cursor.col + 1;
+    let saved_pi = Buf::current().b_p_pi;
+    let lnum = Win::current().w_cursor.lnum;
+    let mincol = Win::current().w_cursor.col + 1;
 
     // A copy of the current line, so that it can be cut in two.
     let mut saved_line = copy_cursor_line();
@@ -311,8 +312,8 @@ pub unsafe fn open_line(
         // leader machinery below can do as it likes; what it produces is
         // taken off again at the bottom and inserted character by
         // character over the original.  -- webb.
-        next_line = if cur_win().w_cursor.lnum < orig_line_count.get() {
-            let next = cur_win().w_cursor.lnum + 1;
+        next_line = if Win::current().w_cursor.lnum < orig_line_count.get() {
+            let next = Win::current().w_cursor.lnum + 1;
             // SAFETY: `next` is a line of the current buffer, as just tested.
             unsafe { xstrnsave(ml_get(next), ml_get_len(next) as size_t) }
         } else {
@@ -325,7 +326,7 @@ pub unsafe fn open_line(
         // expects it.
         unsafe { replace_push_nul() };
         unsafe { replace_push_nul() };
-        let p = unsafe { saved_line.offset(cur_win().w_cursor.col as isize) };
+        let p = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
         unsafe { replace_push(p, cstr::bytes_at(p).len()) };
         unsafe { *p = NUL as c_char };
     }
@@ -337,7 +338,7 @@ pub unsafe fn open_line(
     let mut saved_char = NUL as c_char;
     let mut first_char = NUL;
     if State.get() & MODE_INSERT != 0 && State.get() & VREPLACE_FLAG == 0 {
-        p_extra = unsafe { saved_line.offset(cur_win().w_cursor.col as isize) };
+        p_extra = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
         if do_si {
             // 'smartindent' wants the first character after the break.
             first_char = c_int::from(unsafe { *skipwhite(p_extra) } as u8);
@@ -347,7 +348,7 @@ pub unsafe fn open_line(
         unsafe { *p_extra = NUL as c_char };
     }
 
-    u_clearline(cur_buf()); // "U" cannot undo added lines
+    u_clearline(Buf::current()); // "U" cannot undo added lines
     did_si.set(false);
     ai_col.set(0);
 
@@ -360,9 +361,9 @@ pub unsafe fn open_line(
     let mut no_si = false;
     if flags & OPENLINE_FORCE_INDENT != 0 {
         newindent = second_line_indent;
-    } else if cur_buf().b_p_ai != 0 || do_si {
-        let ts = cur_buf().b_p_ts;
-        let vts = cur_buf().b_p_vts_array;
+    } else if Buf::current().b_p_ai != 0 || do_si {
+        let ts = Buf::current().b_p_ts;
+        let vts = Buf::current().b_p_vts_array;
         // SAFETY: `saved_line` is this frame's NUL-terminated copy of the
         // line, and the tabstops are the buffer's own.
         newindent = unsafe { indent_size_ts(saved_line, ts, vts) };
@@ -394,8 +395,8 @@ pub unsafe fn open_line(
     // `in_cinkeys` reads `'cinkeys'` and the cursor line; the short circuits
     // are upstream's.
     let do_cindent = p_paste.get() == 0
-        && (cur_buf().b_p_cin != 0 || c_int::from(unsafe { *cur_buf().b_p_inde }) != NUL)
-        && unsafe { in_cinkeys(key, ' ' as c_int, linewhite(cur_win().w_cursor.lnum)) }
+        && (Buf::current().b_p_cin != 0 || c_int::from(unsafe { *Buf::current().b_p_inde }) != NUL)
+        && unsafe { in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum)) }
         && flags & OPENLINE_FORCE_INDENT == 0;
 
     // Does the current line start with a comment leader that should be
@@ -408,7 +409,7 @@ pub unsafe fn open_line(
         lead_len =
             unsafe { get_leader_len(saved_line, &raw mut lead_flags, dir == BACKWARD, true) };
         if lead_len == 0
-            && cur_buf().b_p_cin != 0
+            && Buf::current().b_p_cin != 0
             && do_cindent
             && dir == FORWARD
             && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
@@ -470,7 +471,7 @@ pub unsafe fn open_line(
         if replace_normal(State.get()) {
             unsafe { replace_push_nul() }; // end of the extra blanks
         }
-        if cur_buf().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
+        if Buf::current().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
             while (c_int::from(unsafe { *p_extra }) == ' ' as c_int
                 || c_int::from(unsafe { *p_extra }) == '\t' as c_int)
                 && !utf_iscomposing_first(unsafe { utf_ptr2char(p_extra.add(1)) })
@@ -511,7 +512,7 @@ pub unsafe fn open_line(
     }
 
     let splice = Suppress::splice();
-    let old_cursor = cur_win().w_cursor;
+    let old_cursor = Win::current().w_cursor;
     let old_cmod_flags = cmdmod_flags();
     let mut prompt_moved: *mut c_char = ::core::ptr::null_mut();
     if dir == BACKWARD {
@@ -519,7 +520,7 @@ pub unsafe fn open_line(
         if !prompt_moved.is_null() {
             p_extra = prompt_moved;
         }
-        cur_win().w_cursor.lnum -= 1;
+        Win::current().w_cursor.lnum -= 1;
     }
 
     let mut retval = false;
@@ -544,7 +545,7 @@ pub unsafe fn open_line(
             }
         }
 
-        cur_win().w_cursor = old_cursor;
+        Win::current().w_cursor = old_cursor;
         if dir == FORWARD {
             if trunc_line || State.get() & MODE_INSERT != 0 {
                 unsafe {
@@ -565,11 +566,11 @@ pub unsafe fn open_line(
             }
             // Put the cursor on the new line. `old_cursor`, not
             // `w_cursor`: a scroll above may have moved the latter.
-            cur_win().w_cursor.lnum = old_cursor.lnum + 1;
+            Win::current().w_cursor.lnum = old_cursor.lnum + 1;
         }
         if did_append {
             let cb = Buf::current_raw();
-            let at = cur_win().w_cursor.lnum;
+            let at = Win::current().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
             let extra = ml_get_len(at) as BCount;
             // SAFETY: as above.
@@ -580,8 +581,8 @@ pub unsafe fn open_line(
         }
         drop(splice);
 
-        cur_win().w_cursor.col = newcol;
-        cur_win().w_cursor.coladd = 0;
+        Win::current().w_cursor.col = newcol;
+        Win::current().w_cursor.coladd = 0;
 
         unsafe { reindent_new_line(leader, do_cindent) };
 
@@ -591,12 +592,12 @@ pub unsafe fn open_line(
             // character so that each replaced byte reaches the replace
             // stack.
             let new_text = copy_cursor_line();
-            let at = cur_win().w_cursor.lnum;
+            let at = Win::current().w_cursor.lnum;
             // SAFETY: `next_line` is this frame's allocation, which the buffer
             // takes over.
             let _ = unsafe { ml_replace(at, next_line, false) };
-            cur_win().w_cursor.col = 0;
-            cur_win().w_cursor.coladd = 0;
+            Win::current().w_cursor.col = 0;
+            Win::current().w_cursor.coladd = 0;
             // SAFETY: `new_text` is this frame's NUL-terminated allocation.
             unsafe {
                 ins_bytes(new_text); // calls changed_bytes()
@@ -607,7 +608,7 @@ pub unsafe fn open_line(
         retval = true;
     }
 
-    cur_buf().b_p_pi = saved_pi;
+    Buf::current().b_p_pi = saved_pi;
     free_str(saved_line);
     free_str(next_line);
     free_str(allocated);
@@ -627,14 +628,4 @@ fn copy_cursor_line() -> *mut c_char {
 fn free_str(p: *mut c_char) {
     // SAFETY: this frame's own allocation, or null.
     unsafe { xfree(p.cast::<c_void>()) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

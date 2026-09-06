@@ -73,7 +73,7 @@ use crate::winlayer::{Buf, Ea, Win};
 /// that no longer exists.
 pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
     if fnum != 0 {
-        return fnum != cur_buf().handle;
+        return fnum != Buf::current().handle;
     }
     if ffname.is_null() {
         return true;
@@ -82,9 +82,11 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
     if byte(ffname) == NUL {
         return false;
     }
-    if !cur_buf().file_id_valid && !cur_buf().b_sfname.is_null() && byte(cur_buf().b_sfname) != NUL
+    if !Buf::current().file_id_valid
+        && !Buf::current().b_sfname.is_null()
+        && byte(Buf::current().b_sfname) != NUL
     {
-        return unsafe { path_fnamecmp(ffname, cur_buf().b_sfname) } != 0;
+        return unsafe { path_fnamecmp(ffname, Buf::current().b_sfname) } != 0;
     }
     unsafe { otherfile(ffname) }
 }
@@ -245,7 +247,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
             pat_len,
             FileNameOpts::MESS,
             true,
-            cur_buf().b_ffname,
+            Buf::current().b_ffname,
             &raw mut file_to_find,
             &raw mut search_ctx,
         )
@@ -262,7 +264,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
                 0 as size_t,
                 FileNameOpts::MESS,
                 false,
-                cur_buf().b_ffname,
+                Buf::current().b_ffname,
                 &raw mut file_to_find,
                 &raw mut search_ctx,
             );
@@ -398,7 +400,7 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             // cleanup pair keeps an exception from the failed edit from
             // being lost while the window is closed.
             if !old_curwin.is_null() {
-                let need_hide = curbuf_is_changed() && cur_buf().b_nwindows <= 1;
+                let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
                 if !need_hide || buf_hide(Buf::current_raw()) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
@@ -407,16 +409,16 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
                     unsafe { leave_cleanup(&raw mut cs) };
                 }
             }
-        } else if readonlymode.get() && cur_buf().b_nwindows == 1 {
-            cur_buf().b_p_ro = 1;
+        } else if readonlymode.get() && Buf::current().b_nwindows == 1 {
+            Buf::current().b_p_ro = 1;
         }
         readonlymode.set(saved_readonly);
     } else {
         // A `:split` with no file name: the window is already there.
         run_ecmd_cmd(ea);
-        let was_invalid = cur_win().w_arg_idx_invalid;
-        check_arg_idx(cur_win());
-        if was_invalid != cur_win().w_arg_idx_invalid {
+        let was_invalid = Win::current().w_arg_idx_invalid;
+        check_arg_idx(Win::current());
+        if was_invalid != Win::current().w_arg_idx_invalid {
             unsafe { maketitle() };
         }
     }
@@ -428,14 +430,14 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
         && unsafe { (*old_curwin).w_buffer } != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        unsafe { (*old_curwin).w_alt_fnum = cur_buf().handle as c_int };
+        unsafe { (*old_curwin).w_alt_fnum = Buf::current().handle as c_int };
     }
     ex_no_reprint.set(true);
 }
 
 /// `:swapname`.
 pub(crate) unsafe fn ex_swapname(_args: *mut ExArg) {
-    let mfp = cur_buf().b_ml.ml_mfp;
+    let mfp = Buf::current().b_ml.ml_mfp;
     if mfp.is_null() || mf_fname(mfp).is_null() {
         msg(gettext(c"No swap file".as_ptr()), 0);
     } else {
@@ -446,7 +448,7 @@ pub(crate) unsafe fn ex_swapname(_args: *mut ExArg) {
 /// `:read` — insert a file, or the output of a command.
 pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
-    let was_empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let was_empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     if args.usefilter != 0 {
         do_bang(1, &mut args, false, false, true);
         return;
@@ -460,8 +462,8 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
             return;
         }
         readfile(
-            cur_buf().b_ffname,
-            cur_buf().b_fname,
+            Buf::current().b_ffname,
+            Buf::current().b_fname,
             args.line2,
             0,
             MAXLNUM as LineNr,
@@ -498,14 +500,14 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     // buffer started with; drop it.
     if was_empty && exmode_active.get() {
         let lnum = if args.line2 == 0 {
-            cur_buf().b_ml.ml_line_count
+            Buf::current().b_ml.ml_line_count
         } else {
             1
         };
         if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1).is_ok() {
             let _ = unsafe { ml_delete(lnum) };
-            if cur_win().w_cursor.lnum > 1 && cur_win().w_cursor.lnum >= lnum {
-                cur_win().w_cursor.lnum -= 1;
+            if Win::current().w_cursor.lnum > 1 && Win::current().w_cursor.lnum >= lnum {
+                Win::current().w_cursor.lnum -= 1;
             }
             unsafe { deleted_lines_mark(lnum, 1) };
         }
@@ -585,16 +587,6 @@ pub(crate) unsafe fn ex_shada(args: *mut ExArg) {
 pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     unsafe { win_float_remove(args.forceit != 0, args.line1 as c_int) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `buf_hide()` as checked code.

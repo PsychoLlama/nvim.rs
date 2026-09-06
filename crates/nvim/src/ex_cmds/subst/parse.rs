@@ -22,7 +22,6 @@ use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, SubFlags, kSubHonorOptions,
     kSubIgnoreCase, kSubMatchCase,
 };
-use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
@@ -36,6 +35,8 @@ use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{ExArg, Failed, LineNr, NUL, SubReplacementString, Timestamp, size_t};
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -134,7 +135,7 @@ pub(crate) unsafe fn sub_joining_lines(
         return true;
     }
 
-    cur_win().w_cursor.lnum = args.line1;
+    Win::current().w_cursor.lnum = args.line1;
     // SAFETY: caller's contract -- `cmd` is a live string.
     args.flags = match unsafe { *cmd } as u8 {
         b'l' => EXFLAG_LIST,
@@ -146,7 +147,7 @@ pub(crate) unsafe fn sub_joining_lines(
     // one more if this is not the end of the file.
     let joined_lines_count = args.line2 - args.line1
         + 1 as LineNr
-        + LineNr::from(args.line2 < cur_buf().b_ml.ml_line_count);
+        + LineNr::from(args.line2 < Buf::current().b_ml.ml_line_count);
     if joined_lines_count > 1 as LineNr {
         // SAFETY: the range is inside the buffer; message state is ready.
         let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };

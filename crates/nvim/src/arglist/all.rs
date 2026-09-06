@@ -318,7 +318,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
 /// `aall` must be the live state.
 unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool {
     // SAFETY: curwin is valid.
-    if cur_win().w_arg_idx == i {
+    if Win::current().w_arg_idx == i {
         return false;
     }
     let Some(wp) = windows().find(|wp| wp.w_arg_idx == i) else {
@@ -331,7 +331,7 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
     }
     // SAFETY: `wp` is a live window with a frame, as is `curwin`.
     let moved =
-        wp.w_floating || unsafe { (*wp.w_frame).fr_parent == (*cur_win().w_frame).fr_parent };
+        wp.w_floating || unsafe { (*wp.w_frame).fr_parent == (*Win::current().w_frame).fr_parent };
     if !moved {
         crate::semsg!("E249: Window layout changed unexpectedly");
         return true;
@@ -380,13 +380,13 @@ unsafe fn open_window_for_arg(
     }
     // SAFETY: curwin is the window just split (or the first one), and the
     // argument name outlives `do_ecmd`'s use of it.
-    cur_win().w_arg_idx = i;
+    Win::current().w_arg_idx = i;
     if i == 0 {
         aall.new_curwin = Win::current_raw();
         aall.new_curtab = TabPage::current_raw();
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
-    let buf = cur_win().buffer();
+    let buf = Win::current().buffer();
     let hide = unsafe { buf_hide(buf.raw()) } || buf_is_changed(buf);
     let flags = EcmdFlags::HIDE.when(hide) | EcmdFlags::OLDBUF;
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
@@ -410,9 +410,9 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     let tab_drop_empty_window = unsafe {
         aall.keep_tabs
             && buf_is_empty(Buf::current_raw())
-            && cur_buf().b_nwindows == 1
-            && cur_buf().b_ffname.is_null()
-            && cur_buf().b_changed == 0
+            && Buf::current().b_nwindows == 1
+            && Buf::current().b_ffname.is_null()
+            && Buf::current().b_changed == 0
     };
     if tab_drop_empty_window {
         aall.use_firstwin = true;
@@ -470,7 +470,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // SAFETY: curwin always has an argument list, and the reference taken
     // here keeps it alive across every autocommand below.
     setpcmark();
-    let alist = win_alist(cur_win());
+    let alist = win_alist(Win::current());
     unsafe { (*alist).al_refcount.retain() };
     let opened = unsafe { xcalloc(argcount() as size_t, 1) }.cast::<uint8_t>();
     let mut aall = ArgAllState {
@@ -586,14 +586,4 @@ pub unsafe fn arg_all() -> *mut c_char {
     out.push(0);
     // SAFETY: `out` is NUL-terminated; the copy is the caller's to free.
     unsafe { xstrdup(out.as_ptr() as *const c_char) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

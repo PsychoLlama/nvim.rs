@@ -210,7 +210,7 @@ pub unsafe fn f_winlayout(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // `result` for the whole walk.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
     let tp = if !args.has(0) {
-        cur_tab()
+        TabPage::current()
     } else {
         let n = number_as_int(arg_number(args, 0));
         match unsafe { TabPage::from_raw(find_tabpage(n)) } {
@@ -228,7 +228,7 @@ pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     result.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals and `curwin` is set.
     let wp = if !args.has(0) {
-        cur_win()
+        Win::current()
     } else {
         match arg_win(args, 0) {
             Some(wp) => wp,

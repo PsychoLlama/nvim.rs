@@ -200,7 +200,7 @@ pub unsafe fn get_leader_len(
     // Repeat to match several nested comment strings.
     while line.at(i) != NUL {
         let mut found_one = false;
-        let mut list = cur_buf().b_p_com;
+        let mut list = Buf::current().b_p_com;
         while more_items(list) {
             if !got_com {
                 set_flags(list); // where this item's flags started
@@ -311,7 +311,7 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
         let mut found_one = false;
         let mut com_leader = None;
         let mut com_flags: *mut c_char = ::core::ptr::null_mut();
-        let mut list = cur_buf().b_p_com;
+        let mut list = Buf::current().b_p_com;
         while more_items(list) {
             let flags_save = list;
             // SAFETY: `list` is a position inside 'comments'.
@@ -374,7 +374,7 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
         let len1 = com_leader.len();
 
         let mut other = ComItem::new();
-        let mut list = cur_buf().b_p_com;
+        let mut list = Buf::current().b_p_com;
         while more_items(list) {
             let flags_save = list;
             // `take` writes the NUL that isolates the flags, so the leader
@@ -413,9 +413,4 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
         }
     }
     result
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

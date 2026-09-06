@@ -485,19 +485,13 @@ pub(crate) unsafe fn word_at(
     (word, end)
 }
 
-/// The window the editor is working in.
-#[inline]
-fn cur_win() -> Win {
-    Win::current()
-}
-
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`
 /// command is not necessarily [`syn_block`], the one being *parsed*.
 #[inline]
 pub(crate) fn cur_syn_block() -> SynBlockRef {
     // SAFETY: `w_s` names either the window's own block or its buffer's, and
     // both outlive the window that points at them.
-    unsafe { SynBlockRef::new(cur_win().w_s) }
+    unsafe { SynBlockRef::new(Win::current().w_s) }
 }
 
 impl SynBlockRef {

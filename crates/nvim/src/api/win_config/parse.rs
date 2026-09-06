@@ -373,11 +373,6 @@ unsafe fn smatch(s: String_0, names: &[&CStr]) -> Option<usize> {
 // ---------------------------------------------------------------------------
 // The whole keyset
 
-/// The current window, which exists from startup to exit.
-fn cur_win() -> Win {
-    Win::current()
-}
-
 /// Fill `fconfig` in from `config`, reporting the first thing wrong with it
 /// through `err`.
 ///
@@ -561,7 +556,7 @@ pub(crate) unsafe fn parse_win_config(
                 fconfig.window = config.win;
             }
             if fconfig.window == 0 {
-                fconfig.window = cur_win().handle;
+                fconfig.window = Win::current().handle;
             }
         }
         if set(KEYSET_OPTIDX_win_config__focusable) {

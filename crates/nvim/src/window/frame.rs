@@ -38,7 +38,7 @@ pub(crate) struct AltWin {
 /// Free `win`'s frame and the window itself, and say which neighbour took its
 /// room and along which axis.
 pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_int) {
-    let mut win_tp = tabpage.unwrap_or_else(cur_tab);
+    let mut win_tp = tabpage.unwrap_or_else(TabPage::current);
     let (wp, dir) = if win.w_floating {
         // SAFETY: `win` is only compared, never read.
         (
@@ -381,7 +381,7 @@ pub(crate) fn alt_tab_page() -> TabPage {
         // SAFETY: just proved live.
         return unsafe { TabPage::new(lastused_tabpage.get()) };
     }
-    let cur = cur_tab();
+    let cur = TabPage::current();
     let forward = cur.next().is_some()
         && (tcl_flags.get() & kOptTclFlagLeft == 0 || first_tabpage.get() == Some(cur.id()));
     match cur.next() {

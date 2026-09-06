@@ -147,7 +147,7 @@ pub unsafe fn ins_compl_add_infercase(
         n
     };
 
-    if p_ic.get() != 0 && cur_buf().b_p_inf != 0 && len > 0 {
+    if p_ic.get() != 0 && Buf::current().b_p_inf != 0 && len > 0 {
         let char_len = char_count(str);
         let compl_char_len = char_count(compl_orig_text().data());
         // "char_len" may be smaller than "compl_char_len" when using
@@ -375,7 +375,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
     debug_assert!(!first.is_null());
     // Avoid inserting text that duplicates the text already after the cursor.
     if len == unsafe { cstr::bytes_at(first) }.len() as c_int {
-        let p = unsafe { get_cursor_line_ptr().offset(cur_win().w_cursor.col as isize) };
+        let p = unsafe { get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) };
         if !p.is_null() && !ascii_iswhite_or_nul(unsafe { *p } as c_int) {
             // SAFETY: `find_word_end` answers a pointer into the same line.
             let text_len = unsafe { find_word_end(p).offset_from(p) } as c_int;
@@ -453,14 +453,4 @@ pub(crate) unsafe fn quote_meta(
         unsafe { *dest = NUL as c_char };
     }
     m
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

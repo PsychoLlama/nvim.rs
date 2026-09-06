@@ -42,7 +42,7 @@ fn read_original(
     lines: LineNr,
     flags: c_int,
 ) -> Result<Loaded, Failed> {
-    let (name, short) = (cur_buf().b_ffname, core::ptr::null_mut());
+    let (name, short) = (Buf::current().b_ffname, core::ptr::null_mut());
     let no_cmd = core::ptr::null_mut();
     // SAFETY: the name is the buffer's own, and a null `eap` is "no command".
     unsafe { readfile(name, short, from, skip, lines, no_cmd, flags, false) }
@@ -53,7 +53,7 @@ pub unsafe fn ml_recover(checkext: bool) {
     // so it is this frame's rather than the shared `NameBuff`.
     let mut path = [0 as c_char; MAXPATHL as usize];
     recoverymode.set(true);
-    let called_from_main = cur_buf().b_ml.ml_mfp.is_null();
+    let called_from_main = Buf::current().b_ml.ml_mfp.is_null();
 
     let buf: *mut Buffer;
     // Who owns what `buf` points at. The recovery buffer is not in the
@@ -68,10 +68,10 @@ pub unsafe fn ml_recover(checkext: bool) {
     let mut serious_error = true;
 
     'theend: {
-        let fname = if cur_buf().b_fname.is_null() {
+        let fname = if Buf::current().b_fname.is_null() {
             c"".as_ptr().cast_mut()
         } else {
-            cur_buf().b_fname
+            Buf::current().b_fname
         };
         // A name ending in ".s[a-w][a-z]" is taken to be the swap file
         // itself; otherwise its swap files are searched for.
@@ -204,9 +204,8 @@ pub unsafe fn ml_recover(checkext: bool) {
         // from what the swap file says it belongs to.
         if directly {
             unsafe { expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL) };
-            if unsafe { setfname(cur_buf(), path.as_mut_ptr(), core::ptr::null_mut(), true) }
-                .is_err()
-            {
+            let (buf, none) = (Buf::current(), core::ptr::null_mut());
+            if unsafe { setfname(buf, path.as_mut_ptr(), none, true) }.is_err() {
                 break 'theend;
             }
         }
@@ -230,7 +229,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         } else {
             let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
             let none = core::ptr::null();
-            unsafe { home_replace(none, cur_buf().b_ffname, out, room, true) };
+            unsafe { home_replace(none, Buf::current().b_ffname, out, room, true) };
         }
         unsafe { msg_putchar('\n' as c_int) };
         // SAFETY: the copy above NUL-terminated `path`.
@@ -243,8 +242,8 @@ pub unsafe fn ml_recover(checkext: bool) {
         let mtime = unsafe { b0_read_number(&(*b0p).b0_mtime) } as c_int;
         let mut org_file_info: FileInfo = unsafe { core::mem::zeroed() };
         let mut swp_file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if !cur_buf().b_ffname.is_null()
-            && unsafe { os_fileinfo(cur_buf().b_ffname, &raw mut org_file_info) }
+        if !Buf::current().b_ffname.is_null()
+            && unsafe { os_fileinfo(Buf::current().b_ffname, &raw mut org_file_info) }
             && ((unsafe { os_fileinfo(mf_fname(mfp), &raw mut swp_file_info) }
                 && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
                 || org_file_info.stat.st_mtim.tv_sec != mtime as _)
@@ -276,7 +275,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         hp = core::ptr::null_mut();
 
         // Recovery is going ahead, so the buffer's current contents go.
-        while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
             let _ = unsafe { ml_delete(1) };
         }
 
@@ -284,7 +283,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // and friends. Errors are ignored, and the text itself is not
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
-        if !cur_buf().b_ffname.is_null() {
+        if !Buf::current().b_ffname.is_null() {
             orig_file_status = read_original(0, 0, MAXLNUM as LineNr, READ_NEW as c_int);
         }
 
@@ -300,7 +299,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             );
             unsafe { xfree(b0_fenc.cast()) };
         }
-        unchanged(cur_buf(), true, true);
+        unchanged(Buf::current(), true, true);
 
         serious_error = false;
         let Ok((lnum, error)) = (unsafe { recover_lines(buf, mfp, &mut hp) }) else {
@@ -311,11 +310,12 @@ pub unsafe fn ml_recover(checkext: bool) {
         // Lines 1 to lnum are what was recovered, lines lnum + 1 to
         // ml_line_count are the file's, and line ml_line_count + 1 is the
         // empty buffer's dummy line.
-        if orig_file_status != Ok(Loaded::Read) || cur_buf().b_ml.ml_line_count != lnum * 2 + 1 {
+        if orig_file_status != Ok(Loaded::Read) || Buf::current().b_ml.ml_line_count != lnum * 2 + 1
+        {
             // Recovering an empty file gives two lines of which the first
             // is empty; that is not a modification.
-            if !(cur_buf().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
-                changed_internal(cur_buf());
+            if !(Buf::current().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
+                changed_internal(Buf::current());
                 unsafe { buf_inc_changedtick(Buf::current_raw()) };
             }
         } else {
@@ -326,7 +326,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 let same = unsafe { cstr::eq(p, ml_get(idx + lnum)) };
                 unsafe { xfree(p.cast()) };
                 if !same {
-                    changed_internal(cur_buf());
+                    changed_internal(Buf::current());
                     unsafe { buf_inc_changedtick(Buf::current_raw()) };
                     break;
                 }
@@ -335,10 +335,12 @@ pub unsafe fn ml_recover(checkext: bool) {
 
         // Drop the original file's lines and the empty buffer's dummy
         // line; they are now past the end of what was recovered.
-        while cur_buf().b_ml.ml_line_count > lnum && !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-            let _ = unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
+        while Buf::current().b_ml.ml_line_count > lnum
+            && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
+        {
+            let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
         }
-        cur_buf().b_flags |= BufFlags::RECOVERED;
+        Buf::current().b_flags |= BufFlags::RECOVERED;
         check_cursor(Win::current());
 
         msg_ext_skip_flush.set(!got_int.get());
@@ -362,7 +364,7 @@ pub unsafe fn ml_recover(checkext: bool) {
     if serious_error && called_from_main {
         unsafe { ml_close(Buf::current_raw(), 1) };
     } else {
-        let (name, buf) = (cur_buf().b_fname, Buf::current_raw());
+        let (name, buf) = (Buf::current().b_fname, Buf::current_raw());
         let none = core::ptr::null_mut();
         unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, buf) };
         unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, buf) };
@@ -447,7 +449,7 @@ unsafe fn recover_lines(
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
-    let mut cannot_open = cur_buf().b_ffname.is_null();
+    let mut cannot_open = Buf::current().b_ffname.is_null();
 
     let append = |lnum: &mut LineNr, text: *const c_char| {
         let _ = unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
@@ -681,7 +683,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
     }
 
     unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
-    if cur_buf().b_changed != 0 {
+    if Buf::current().b_changed != 0 {
         tell(
             c"Recovery completed. You should check if everything is OK.",
             0,
@@ -829,9 +831,4 @@ pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
             complain(c"E314: Preserve failed");
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

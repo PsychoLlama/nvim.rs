@@ -41,7 +41,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         unsafe { stuff_readbuf(c"'<,'>".as_ptr()) };
     } else {
         // Make the range look nice, so it can be repeated.
-        if op.start.lnum == cur_win().w_cursor.lnum {
+        if op.start.lnum == Win::current().w_cursor.lnum {
             stuff_readbuf_char('.' as c_int);
         } else {
             stuff_readbuf_number(op.start.lnum as c_int);
@@ -49,18 +49,18 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
 
         // When using !! on a closed fold the range ".!" works best to
         // operate on: it is made the whole closed fold later.
-        let end_of_start_fold = cur_win().fold_last(op.start.lnum);
+        let end_of_start_fold = Win::current().fold_last(op.start.lnum);
         if op.end.lnum != op.start.lnum && op.end.lnum != end_of_start_fold {
             // Make it a range with the end line.
             stuff_readbuf_char(',' as c_int);
-            if op.end.lnum == cur_win().w_cursor.lnum {
+            if op.end.lnum == Win::current().w_cursor.lnum {
                 stuff_readbuf_char('.' as c_int);
-            } else if op.end.lnum == cur_buf().line_count() {
+            } else if op.end.lnum == Buf::current().line_count() {
                 stuff_readbuf_char('$' as c_int);
-            } else if op.start.lnum == cur_win().w_cursor.lnum
+            } else if op.start.lnum == Win::current().w_cursor.lnum
                 // Not ".+number" for a closed fold: that would count the
                 // folded lines twice.
-                && !cur_win().fold_span(op.end.lnum).0
+                && !Win::current().fold_span(op.end.lnum).0
             {
                 unsafe { stuff_readbuf(c".+".as_ptr()) };
                 stuff_readbuf_number(op.line_count as c_int - 1);
@@ -76,8 +76,8 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         unsafe { stuff_readbuf(get_equalprg()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
     } else if op.op_type == OpType::Format {
-        if unsafe { *cur_buf().b_p_fp } as c_int != NUL {
-            unsafe { stuff_readbuf(cur_buf().b_p_fp) };
+        if unsafe { *Buf::current().b_p_fp } as c_int != NUL {
+            unsafe { stuff_readbuf(Buf::current().b_p_fp) };
         } else if unsafe { *p_fp.get() } as c_int != NUL {
             unsafe { stuff_readbuf(p_fp.get()) };
         } else {
@@ -138,8 +138,8 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     // NUL-terminated option string, and `b_op_end` is a live position of the
     // current buffer.
     let op = unsafe { Op::new(op.cast_mut()) };
-    let orig_start: Pos = cur_buf().b_op_start;
-    let orig_end: Pos = cur_buf().b_op_end;
+    let orig_start: Pos = Buf::current().b_op_start;
+    let orig_end: Pos = Buf::current().b_op_end;
 
     if unsafe { *p_opfunc.get() } as c_int == NUL {
         emsg(gettext(c"E774: 'operatorfunc' is empty"));
@@ -147,11 +147,11 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     }
 
     // Set '[ and '] to the text to be operated on.
-    cur_buf().b_op_start = op.start;
-    cur_buf().b_op_end = op.end;
+    Buf::current().b_op_start = op.start;
+    Buf::current().b_op_end = op.end;
     if op.motion_type != kMTLineWise && !op.inclusive {
         // Exclude the end position.
-        unsafe { decl(&mut cur_buf().b_op_end) };
+        unsafe { decl(&mut Buf::current().b_op_end) };
     }
 
     let kind = match op.motion_type {
@@ -187,17 +187,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     virtual_op.set(save_virtual_op);
     finish_op.set(save_finish_op);
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = orig_start;
-        cur_buf().b_op_end = orig_end;
+        Buf::current().b_op_start = orig_start;
+        Buf::current().b_op_end = orig_end;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

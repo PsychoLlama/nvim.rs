@@ -493,11 +493,11 @@ fn numbered(name: &[u8], nr: c_int) -> CString {
 ///
 /// Must be called from a quickfix or location list window.
 pub unsafe fn qf_view_result(split: bool) {
-    let in_ll_window = is_ll_window(cur_win());
+    let in_ll_window = is_ll_window(Win::current());
     // SAFETY: a location list window always references a live stack, which
     // is what `is_ll_window` just established.
     let qi = if in_ll_window {
-        unsafe { Qi::new(cur_win().w_llist_ref) }
+        unsafe { Qi::new(Win::current().w_llist_ref) }
     } else {
         qf_global()
     };
@@ -506,7 +506,7 @@ pub unsafe fn qf_view_result(split: bool) {
         return;
     }
     if split {
-        unsafe { qf_jump_newwin(qi.raw(), 0, cur_win().w_cursor.lnum as c_int, 0, true) };
+        unsafe { qf_jump_newwin(qi.raw(), 0, Win::current().w_cursor.lnum as c_int, 0, true) };
         let _ = unsafe { do_cmdline_cmd(c"clearjumps".as_ptr()) };
         return;
     }

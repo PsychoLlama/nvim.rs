@@ -269,7 +269,7 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
             )
         };
         unsafe { msg_outtrans(row.as_ptr(), 0, false) };
-        let hl = if item.fmark.fnum == cur_buf().handle {
+        let hl = if item.fmark.fnum == Buf::current().handle {
             HLF_D
         } else {
             0
@@ -422,9 +422,4 @@ unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
 unsafe fn number(d: *const Dict, key: &CStr) -> c_int {
     // SAFETY: the dict is live and the key is NUL-terminated.
     unsafe { tv_dict_get_number(d, key.as_ptr()) as c_int }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

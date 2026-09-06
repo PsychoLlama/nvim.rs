@@ -133,7 +133,7 @@ pub unsafe fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
             -1
         };
     }
-    let cursor_lnum = cur_win().w_cursor.lnum;
+    let cursor_lnum = Win::current().w_cursor.lnum;
     let inside = (lnum == compl_lnum.get() && col >= start_col && col < MAXCOL)
         || (lnum > compl_lnum.get() && lnum < cursor_lnum)
         || (lnum == cursor_lnum && col <= compl_ins_end_col.get());
@@ -266,7 +266,7 @@ pub(crate) unsafe fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startc
     // SAFETY: the cursor line exists, `startcol .. compl_col` is inside it,
     // and `buf` has room for the two pieces and the NUL.
     unsafe {
-        let line = ml_get(cur_win().w_cursor.lnum);
+        let line = ml_get(Win::current().w_cursor.lnum);
         let head = line.offset(startcol as isize);
         buf.cast::<u8>()
             .copy_from(head.cast(), prepend_len as size_t);
@@ -579,15 +579,15 @@ pub unsafe fn ins_compl_show_pum() {
 
     // Move the cursor to the start of the match for the popup menu's sake,
     // then put it back.
-    let col = cur_win().w_cursor.col;
-    cur_win().w_cursor.col = compl_col.get();
+    let col = Win::current().w_cursor.col;
+    Win::current().w_cursor.col = compl_col.get();
     compl_selected_item.set(cur);
     let items = compl_match_array().as_mut_ptr();
     let len = compl_match_array().len();
     // SAFETY: the array is `len` items long and stays put until
     // `pum_undisplay` gives the borrow back.
     unsafe { pum_display(items, len, cur, array_changed, 0) };
-    cur_win().w_cursor.col = col;
+    Win::current().w_cursor.col = col;
 
     if compl_started.get() && compl_curr_match.get() != compl_shown_match.get() {
         compl_curr_match.set(compl_shown_match.get());
@@ -785,7 +785,7 @@ pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // SAFETY: the editor exists, a completion is running -- the caller's
     // promise -- and this runs on its own thread.
     unsafe { setcursor() };
-    if prev_w_wrow != cur_win().w_wrow || prev_w_leftcol != cur_win().w_leftcol {
+    if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol {
         // SAFETY: as above.
         unsafe { ins_compl_del_pum() };
     }
@@ -794,9 +794,4 @@ pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
         ins_compl_show_pum();
         setcursor();
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

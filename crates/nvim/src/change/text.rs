@@ -36,7 +36,7 @@ fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
 
 /// The line the cursor is on, and its length.
 fn cursor_line() -> (*mut c_char, ColNr) {
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
     // SAFETY: the cursor is on a valid line of the current buffer.
     (ml_get(lnum), ml_get_len(lnum))
 }
@@ -99,16 +99,16 @@ unsafe fn vreplace_extent(
 ) -> (size_t, size_t) {
     // Disable 'list' while measuring, unless 'cpo' has the `L` flag: it
     // changes how wide a TAB looks.
-    let old_list = cur_win().w_onebuf_opt.wo_list;
+    let old_list = Win::current().w_onebuf_opt.wo_list;
     if old_list != 0 && !cpo_has(CpoFlag::LISTWM) {
-        cur_win().w_onebuf_opt.wo_list = false as c_int;
+        Win::current().w_onebuf_opt.wo_list = false as c_int;
     }
 
     let mut oldlen: size_t = 0;
     let mut newlen: size_t = charlen;
     let mut vcol: ColNr = 0;
     let win = Win::current_raw();
-    let cursor = cur_win().cursor().raw();
+    let cursor = Win::current().cursor().raw();
     let novcol = ::core::ptr::null_mut::<ColNr>();
     // SAFETY: the current window and its own cursor; only the middle column
     // is asked for, and it is a local.
@@ -133,7 +133,7 @@ unsafe fn vreplace_extent(
         }
     }
 
-    cur_win().w_onebuf_opt.wo_list = old_list;
+    Win::current().w_onebuf_opt.wo_list = old_list;
     (oldlen, newlen)
 }
 
@@ -148,12 +148,12 @@ unsafe fn vreplace_extent(
 /// prepared for undo.
 pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
     // Break tabs if needed.
-    if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
+    if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
         unsafe { coladvance_force(getviscol()) };
     }
 
-    let col = cur_win().w_cursor.col as size_t;
-    let lnum = cur_win().w_cursor.lnum;
+    let col = Win::current().w_cursor.col as size_t;
+    let lnum = Win::current().w_cursor.lnum;
     let (oldp, line_bytes) = cursor_line();
     let linelen = (line_bytes as size_t).wrapping_add(1); // includes the NUL
 
@@ -212,7 +212,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 
     if p_ri.get() == 0 || State.get() & REPLACE_FLAG != 0 {
         // Normal insert: move the cursor right.
-        cur_win().w_cursor.col += charlen as ColNr;
+        Win::current().w_cursor.col += charlen as ColNr;
     }
 }
 
@@ -224,13 +224,13 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 /// `s` must point to at least `slen` readable bytes. The caller must have
 /// prepared for undo.
 pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
 
-    if virtual_active(cur_win()) && cur_win().w_cursor.coladd > 0 {
+    if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
         unsafe { coladvance_force(getviscol()) };
     }
 
-    let col = cur_win().w_cursor.col;
+    let col = Win::current().w_cursor.col;
     let (oldp, oldlen) = cursor_line();
 
     // SAFETY: `xmalloc` aborts rather than answer null.
@@ -251,7 +251,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
     // over, and `lnum` is the cursor line.
     let _ = unsafe { ml_replace(lnum, newp, false) };
     unsafe { inserted_bytes(lnum, col, 0, slen as c_int) };
-    cur_win().w_cursor.col += slen as ColNr;
+    Win::current().w_cursor.col += slen as ColNr;
 }
 
 /// Delete the character under the cursor.
@@ -302,8 +302,8 @@ pub unsafe fn del_bytes(
     fixpos_arg: bool,
     use_delcombine: bool,
 ) -> Result<(), Failed> {
-    let lnum = cur_win().w_cursor.lnum;
-    let mut col = cur_win().w_cursor.col;
+    let lnum = Win::current().w_cursor.lnum;
+    let mut col = Win::current().w_cursor.col;
     let mut fixpos = fixpos_arg;
     let (oldp, oldlen) = cursor_line();
 
@@ -362,12 +362,12 @@ pub unsafe fn del_bytes(
         if col > 0
             && fixpos
             && restart_edit.get() == 0
-            && get_ve_flags(cur_win()) & kOptVeFlagOnemore as ::core::ffi::c_uint == 0
+            && get_ve_flags(Win::current()) & kOptVeFlagOnemore as ::core::ffi::c_uint == 0
         {
-            cur_win().w_cursor.col -= 1;
-            cur_win().w_cursor.coladd = 0;
-            cur_win().w_cursor.col -=
-                unsafe { utf_head_off(oldp, oldp.offset(cur_win().w_cursor.col as isize)) };
+            Win::current().w_cursor.col -= 1;
+            Win::current().w_cursor.coladd = 0;
+            Win::current().w_cursor.col -=
+                unsafe { utf_head_off(oldp, oldp.offset(Win::current().w_cursor.col as isize)) };
         }
         count = oldlen - col;
         movelen = 1;
@@ -383,7 +383,7 @@ pub unsafe fn del_bytes(
         move_bytes(newp, oldp, col as size_t);
         newp
     } else {
-        unsafe { ml_add_deleted_len(cur_buf().b_ml.cached_text(), oldlen as ssize_t) };
+        unsafe { ml_add_deleted_len(Buf::current().b_ml.cached_text(), oldlen as ssize_t) };
         oldp
     };
     let from = oldp
@@ -393,7 +393,7 @@ pub unsafe fn del_bytes(
     if alloc_newp {
         let _ = unsafe { ml_replace(lnum, newp, false) };
     } else {
-        cur_buf().b_ml.set_cached_len(newlen + 1);
+        Buf::current().b_ml.set_cached_len(newlen + 1);
     }
 
     unsafe { inserted_bytes(lnum, col, count, 0) };
@@ -405,8 +405,8 @@ pub unsafe fn del_bytes(
 /// # Safety
 /// The caller must have prepared for undo.
 pub unsafe fn truncate_line(fixpos: c_int) {
-    let lnum = cur_win().w_cursor.lnum;
-    let col = cur_win().w_cursor.col;
+    let lnum = Win::current().w_cursor.lnum;
+    let col = Win::current().w_cursor.col;
     let (old_line, old_len) = cursor_line();
     // SAFETY: a static empty string, or the cursor line's first `col` bytes.
     let newp = unsafe {
@@ -424,8 +424,8 @@ pub unsafe fn truncate_line(fixpos: c_int) {
     unsafe { inserted_bytes(lnum, col, deleted, 0) };
 
     // Don't leave the cursor past the end of the line.
-    if fixpos != 0 && cur_win().w_cursor.col > 0 {
-        cur_win().w_cursor.col -= 1;
+    if fixpos != 0 && Win::current().w_cursor.col > 0 {
+        Win::current().w_cursor.col -= 1;
     }
 }
 
@@ -438,7 +438,7 @@ pub unsafe fn truncate_line(fixpos: c_int) {
 /// The cursor must be on a valid line. With `undo` false the caller must have
 /// prepared for undo itself.
 pub unsafe fn del_lines(nlines: LineNr, undo: bool) {
-    let first = cur_win().w_cursor.lnum;
+    let first = Win::current().w_cursor.lnum;
     if nlines <= 0 {
         return;
     }
@@ -448,28 +448,18 @@ pub unsafe fn del_lines(nlines: LineNr, undo: bool) {
 
     let mut n = 0;
     while n < nlines {
-        if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
             break; // nothing to delete
         }
         let _ = unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
         n += 1;
         // Delete the *same* line over and over, until the buffer runs out.
-        if first > cur_buf().b_ml.ml_line_count {
+        if first > Buf::current().b_ml.ml_line_count {
             break;
         }
     }
 
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.col = 0;
     check_cursor_lnum(Win::current());
     unsafe { deleted_lines_mark(first, n) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

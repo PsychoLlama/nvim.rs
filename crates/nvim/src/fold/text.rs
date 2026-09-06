@@ -186,7 +186,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
     let gap = |b: *const c_char, a: *const c_char| b.addr().wrapping_sub(a.addr()) as size_t;
 
     // 'commentstring' split around its `%s`, with the padding trimmed.
-    let cms_start = skip_ws(cur_buf().b_p_cms);
+    let cms_start = skip_ws(Buf::current().b_p_cms);
     // SAFETY: 'commentstring' is a NUL-terminated option string.
     let mut cms_slen = unsafe { cstr::bytes_at(cms_start) }.len();
     while cms_slen > 0 && ascii_iswhite(at(cms_start.wrapping_add(cms_slen - 1))) {
@@ -213,7 +213,11 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
     let mut s = str;
     while at(s) != NUL {
         let mut len: size_t = 0;
-        if ncmp(s, cur_win().w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()) {
+        if ncmp(
+            s,
+            Win::current().w_onebuf_opt.wo_fmr,
+            foldstartmarkerlen.get(),
+        ) {
             len = foldstartmarkerlen.get();
         } else if ncmp(s, foldendmarker.get(), foldendmarkerlen.get()) {
             len = foldendmarkerlen.get();
@@ -257,14 +261,4 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
             s = s.wrapping_offset(unsafe { utfc_ptr2len(s) } as isize);
         }
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

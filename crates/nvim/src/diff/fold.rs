@@ -67,12 +67,12 @@ pub unsafe fn diff_redraw(dofold: bool) {
 
     // Whichever window took the larger filler count drives the other.
     if let Some(other) = wp_other
-        && cur_win().w_onebuf_opt.wo_scb != 0
+        && Win::current().w_onebuf_opt.wo_scb != 0
     {
         let pair = if used_max_fill_curwin {
-            Some((other, cur_win()))
+            Some((other, Win::current()))
         } else if used_max_fill_other {
-            Some((cur_win(), other))
+            Some((Win::current(), other))
         } else {
             None
         };
@@ -105,7 +105,7 @@ pub unsafe fn diff_check_with_linestatus(
     };
     set_status(0);
 
-    let tp = cur_tab();
+    let tp = TabPage::current();
     // SAFETY: a live window's buffer is live; a diffed window always has one.
     let buf = unsafe { Buf::new(window.w_buffer) };
     if tp.tp_diff_invalid != 0 {
@@ -232,7 +232,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     if window.w_onebuf_opt.wo_diff == 0 {
         return false;
     }
-    let tp = cur_tab();
+    let tp = TabPage::current();
     let mut idx = None;
     let mut other = false;
     for i in 0..DB_COUNT as usize {
@@ -278,7 +278,7 @@ pub(crate) fn diff_fold_update(
     count: &[LineNr; DB_COUNT as usize],
     skip_idx: c_int,
 ) {
-    let tp = cur_tab();
+    let tp = TabPage::current();
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
             if tp.tp_diffbuf[i] == wp.w_buffer && i as c_int != skip_idx {
@@ -298,16 +298,6 @@ pub unsafe fn f_diff_filler(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // already clamps at zero.
     //
     // SAFETY: the caller's cells, and the current window is live.
-    let fill = diff_check_fill(cur_win(), unsafe { tv_get_lnum(args) });
+    let fill = diff_check_fill(Win::current(), unsafe { tv_get_lnum(args) });
     unsafe { (*result).vval.v_number = fill as VarNumber };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
 }

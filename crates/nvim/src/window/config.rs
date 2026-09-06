@@ -111,7 +111,7 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
         let handle = win_id.handle();
         *err = api_error!(kErrorTypeException, "Failed to switch to window {handle}");
     }
-    cur_win().validate_cursor();
+    Win::current().validate_cursor();
     // SAFETY: the state `switch_win_noblock` saved.
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
 }

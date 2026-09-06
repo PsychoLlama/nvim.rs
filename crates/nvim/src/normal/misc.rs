@@ -119,7 +119,7 @@ pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
     if !cmd_result {
         clear_op(op);
     } else if op.op_type != OpType::Nop
-        && (op.start.lnum > cur_buf().b_ml.ml_line_count
+        && (op.start.lnum > Buf::current().b_ml.ml_line_count
             || op.start.col > ml_get_len(op.start.lnum)
             || did_emsg.get() != 0)
     {
@@ -288,7 +288,7 @@ pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
     if visual_active() {
         end_visual_mode();
         check_cursor_col(Win::current());
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
         redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {
         unsafe { vim_beep(kOptBoFlagEsc as c_uint) };
@@ -321,14 +321,4 @@ pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
         // command.
         ca.retval |= CA_COMMAND_BUSY as c_int;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

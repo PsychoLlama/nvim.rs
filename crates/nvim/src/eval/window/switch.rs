@@ -45,10 +45,10 @@ pub unsafe fn win_execute_before(
     // there could change it: a different window or tab page with a
     // `:lcd`/`:tcd` of its own, or 'autochdir'.
     if !win.is_current()
-        && (!cur_win().w_localdir.is_null()
+        && (!Win::current().w_localdir.is_null()
             || !win.w_localdir.is_null()
             || !tab.is_current()
-                && (!cur_tab().tp_localdir.is_null() || !tab.tp_localdir.is_null())
+                && (!TabPage::current().tp_localdir.is_null() || !tab.tp_localdir.is_null())
             || p_acd.get() != 0)
     {
         args.cwd_status = unsafe { os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd)) };
@@ -57,7 +57,7 @@ pub unsafe fn win_execute_before(
         // 'autochdir' will move the working directory itself when the
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.
-        let buf = cur_buf();
+        let buf = Buf::current();
         if !buf.b_sfname.is_null() && buf.b_fname == buf.b_sfname {
             args.save_sfname = unsafe { xstrdup(buf.b_sfname) };
         }
@@ -68,7 +68,7 @@ pub unsafe fn win_execute_before(
         }
     }
     if unsafe { switch_win_noblock(&raw mut args.switchwin, window, tabpage, true) }.is_ok() {
-        check_cursor(cur_win());
+        check_cursor(Win::current());
         return true;
     }
     false
@@ -90,7 +90,7 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
     } else if args.cwd_status.is_ok() {
         unsafe { os_chdir(args.cwd.as_mut_ptr()) };
         if !args.save_sfname.is_null() {
-            let mut buf = cur_buf();
+            let mut buf = Buf::current();
             unsafe { xfree(buf.b_sfname.cast()) };
             buf.b_sfname = args.save_sfname;
             buf.b_fname = buf.b_sfname;
@@ -102,9 +102,9 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
             win.w_redr_status = true;
         }
     }
-    check_cursor(cur_win());
+    check_cursor(Win::current());
     if visual_active() {
-        with_visual_anchor(|anchor| check_pos(cur_buf(), anchor));
+        with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
 }
 
@@ -219,7 +219,7 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
             // `unuse_tabpage` writes the current window back into the tab
             // page it is leaving; that is the wrong window here, because
             // the caller only half entered this one.
-            let mut leaving = cur_tab();
+            let mut leaving = TabPage::current();
             let old_tp_curwin = leaving.tp_curwin;
             unsafe { unuse_tabpage(leaving.raw()) };
             leaving.tp_curwin = old_tp_curwin;

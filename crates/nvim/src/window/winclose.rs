@@ -88,11 +88,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // Otherwise clear the snapshot, which is now invalid.
     let help_window = buf_is_help(win.buffer_or_none());
     if !help_window {
-        drop_snapshot(cur_tab(), SNAP_HELP_IDX);
+        drop_snapshot(TabPage::current(), SNAP_HELP_IDX);
     }
     let quickfix_window = buf_is_quickfix(win.buffer_or_none());
     if !quickfix_window {
-        drop_snapshot(cur_tab(), SNAP_QUICKFIX_IDX);
+        drop_snapshot(TabPage::current(), SNAP_QUICKFIX_IDX);
     }
 
     let mut other_buffer = false;
@@ -121,8 +121,8 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     {
         // Autocommands have closed all windows, quit now. Restore
         // `curwin->w_buffer`, or writing the ShaDa file may fail.
-        if cur_win().buffer_or_none().is_none() {
-            cur_win().w_buffer = Buf::current_raw();
+        if Win::current().buffer_or_none().is_none() {
+            Win::current().w_buffer = Buf::current_raw();
         }
         quit_now();
     }
@@ -204,10 +204,10 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         if wp.w_onebuf_opt.wo_pvw != 0 || buf_is_quickfix(wp.buffer_or_none()) {
             wp = away_from_preview(wp);
         }
-        cur_win().buffer().make_current();
+        Win::current().buffer().make_current();
         // The cursor position may be invalid if the buffer changed after the
         // window was last used.
-        revalidate_cursor(cur_win());
+        revalidate_cursor(Win::current());
     }
 
     if !was_floating {
@@ -216,11 +216,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         update_last_status(false);
         // SAFETY: `'eadirection'` is a NUL-terminated option string.
         let ead = unsafe { *p_ead.get() } as c_int;
-        if !cur_win().w_floating && p_ea.get() != 0 && (ead == 'b' as c_int || ead == dir) {
+        if !Win::current().w_floating && p_ea.get() != 0 && (ead == 'b' as c_int || ead == dir) {
             // If the frame of the closed window contains the new current
             // window, resize only that frame; otherwise resize all windows.
-            let same = cur_win().frame().fr_parent == win_frame;
-            equal(Some(cur_win()), same, dir);
+            let same = Win::current().frame().fr_parent == win_frame;
+            equal(Some(Win::current()), same, dir);
         } else {
             comp_positions();
             fix_scroll(false);
@@ -239,19 +239,19 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         enter_ext(wp, flags);
         if other_buffer {
             // careful: after this `wp` and `win` may be invalid!
-            fire(AutoEvent::BufEnter, cur_buf());
+            fire(AutoEvent::BufEnter, Buf::current());
         }
     }
 
     if firstwin.get() == lastwin.get()
-        && cur_win().w_locked
-        && cur_buf().b_locked_split != 0
+        && Win::current().w_locked
+        && Buf::current().b_locked_split != 0
         && first_tab().next().is_some()
     {
         // The new `curwin` is the last window of the current tab page and is
         // already being closed. Trigger TabLeave now: once its buffer is gone
         // it is no longer safe to do so.
-        fire(AutoEvent::TabLeave, cur_buf());
+        fire(AutoEvent::TabLeave, Buf::current());
     }
     drop(no_split);
 
@@ -270,7 +270,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         }
     }
 
-    cur_win().w_pos_changed = true;
+    Win::current().w_pos_changed = true;
     if !was_floating {
         redraw_all(UPD_NOT_VALID);
     }
@@ -330,7 +330,7 @@ enum Leave {
 /// `BufLeave` and `WinLeave`, guarding the window across both.
 fn leave_closing_window(win: Win) -> Leave {
     let mut win = win;
-    leave_window(cur_win());
+    leave_window(Win::current());
 
     // Guess which window is going to be the new current one. This may change
     // because of the autocommands (sigh).
@@ -353,7 +353,7 @@ fn leave_closing_window(win: Win) -> Leave {
             return Leave::Failed;
         }
         win.w_locked = true;
-        fire(AutoEvent::BufLeave, cur_buf());
+        fire(AutoEvent::BufLeave, Buf::current());
         if valid_win(win.raw()).is_none() {
             return Leave::Failed;
         }
@@ -363,7 +363,7 @@ fn leave_closing_window(win: Win) -> Leave {
         }
     }
     win.w_locked = true;
-    fire(AutoEvent::WinLeave, cur_buf());
+    fire(AutoEvent::WinLeave, Buf::current());
     if valid_win(win.raw()).is_none() {
         return Leave::Failed;
     }
@@ -585,7 +585,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             if event_wanted(AutoEvent::TabClosed) {
                 let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
                 number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
-                let buf = bufref.get().unwrap_or_else(cur_buf);
+                let buf = bufref.get().unwrap_or_else(Buf::current);
                 fire_named(AutoEvent::TabClosed, prev_idx.as_mut_ptr(), Some(buf));
             }
         }

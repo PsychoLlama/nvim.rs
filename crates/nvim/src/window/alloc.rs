@@ -513,13 +513,13 @@ fn set_last(tabpage: Option<TabPage>, window: Option<WinId>) {
 /// `win_remove`'s extra write, which `win_append` does not make.
 fn sync_tab_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        cur_tab().tp_firstwin = window;
+        TabPage::current().tp_firstwin = window;
     }
 }
 
 fn sync_tab_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        cur_tab().tp_lastwin = window;
+        TabPage::current().tp_lastwin = window;
     }
 }
 

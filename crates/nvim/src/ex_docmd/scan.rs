@@ -107,8 +107,8 @@ pub unsafe fn set_cmd_count(args: *mut ExArg, count: LineNr, validate: bool) {
         ea.line2 += count - 1;
     }
     ea.addr_count += 1;
-    if validate && ea.line2 > cur_buf().b_ml.ml_line_count {
-        ea.line2 = cur_buf().b_ml.ml_line_count;
+    if validate && ea.line2 > Buf::current().b_ml.ml_line_count {
+        ea.line2 = Buf::current().b_ml.ml_line_count;
     }
 }
 
@@ -329,11 +329,6 @@ pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
         return unsafe { s.add(1) };
     }
     ptr::null_mut()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 /// `skipwhite()` as checked code.

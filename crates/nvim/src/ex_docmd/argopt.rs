@@ -388,10 +388,11 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
 /// Answers `OK` when quitting is allowed. `quitmore` is what makes the
 /// second `:q` work: the refusal sets it, and `do_one_cmd` counts it down.
 pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
-    let n = unsafe { (*cur_win().w_alist).al_ga.len() as c_int } - cur_win().w_arg_idx - 1;
+    let n =
+        unsafe { (*Win::current().w_alist).al_ga.len() as c_int } - Win::current().w_arg_idx - 1;
     if forceit
         || !unsafe { only_one_window() }
-        || unsafe { (*cur_win().w_alist).al_ga.len() as c_int } <= 1
+        || unsafe { (*Win::current().w_alist).al_ga.len() as c_int } <= 1
         || arg_had_last.get()
         || n <= 0
         || quitmore.get() != 0
@@ -401,7 +402,9 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
     if !message {
         return FAIL;
     }
-    if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && !cur_buf().b_fname.is_null() {
+    if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM))
+        && !Buf::current().b_fname.is_null()
+    {
         let mut buff: [c_char; 1000] = [0; 1000];
         let fmt = ngettext(
             c"%d more file to edit.  Quit anyway?",
@@ -483,16 +486,6 @@ pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_c
         fname
     };
     unsafe { vim_snprintf(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --

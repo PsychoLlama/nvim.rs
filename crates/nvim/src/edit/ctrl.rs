@@ -104,13 +104,13 @@ pub(crate) fn ins_reg() {
     // error message for it; only explicitly.
     let no_sync = Suppress::undo_sync();
     if regname == '=' as c_int {
-        let curpos = cur_win().w_cursor;
+        let curpos = Win::current().w_cursor;
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
         u_sync_once.set(2);
         regname = unsafe { get_expr_register() };
         // The cursor may have been moved back a column.
-        cur_win().w_cursor = curpos;
+        Win::current().w_cursor = curpos;
         check_cursor(Win::current());
     }
 
@@ -195,7 +195,7 @@ pub(crate) fn ins_ctrl_g() {
             // Insstart has to be reset too, because a BS that joins this
             // line to the previous one must save for undo.
             update_Insstart_orig.set(false);
-            Insstart.set(cur_win().w_cursor);
+            Insstart.set(Win::current().w_cursor);
         }
         // CTRL-G U: allow one left/right cursor movement with the next
         // key without breaking undo.
@@ -213,10 +213,10 @@ pub(crate) fn ins_ctrl_hat() {
     if unsafe { map_to_exists_mode(c"".as_ptr(), MODE_LANGMAP, false) } {
         // `:lmap` mappings exist, so the key toggles their use.
         if State.get() & MODE_LANGMAP != 0 {
-            cur_buf().b_p_iminsert = B_IMODE_NONE as OptInt;
+            Buf::current().b_p_iminsert = B_IMODE_NONE as OptInt;
             State.set(State.get() & !MODE_LANGMAP);
         } else {
-            cur_buf().b_p_iminsert = B_IMODE_LMAP as OptInt;
+            Buf::current().b_p_iminsert = B_IMODE_LMAP as OptInt;
             State.set(State.get() | MODE_LANGMAP);
         }
     }
@@ -242,7 +242,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // with.
     check_spell_redraw();
 
-    let temp = cur_win().w_cursor.col;
+    let temp = Win::current().w_cursor.col;
     if disabled_redraw.get() {
         RedrawingDisabled.set(RedrawingDisabled.get() - 1);
         disabled_redraw.set(false);
@@ -279,7 +279,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             disabled_redraw.set(true);
             return false;
         }
-        unsafe { stop_insert(&mut cur_win().w_cursor, 1, nomove as c_int) };
+        unsafe { stop_insert(&mut Win::current().w_cursor, 1, nomove as c_int) };
         unsafe { undisplay_dollar() };
     }
 
@@ -288,18 +288,18 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
-    if restart_edit.get() == NUL && temp == cur_win().w_cursor.col {
-        cur_win().w_set_curswant = true;
+    if restart_edit.get() == NUL && temp == Win::current().w_cursor.col {
+        Win::current().w_set_curswant = true;
     }
 
     // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-        let view = unsafe { mark_view_make(Win::current_raw(), cur_win().w_cursor) };
-        let mut buf = cur_buf();
+        let view = unsafe { mark_view_make(Win::current_raw(), Win::current().w_cursor) };
+        let mut buf = Buf::current();
         let fm = &mut buf.b_last_insert;
         unsafe { free_fmark(fm.clone()) };
-        fm.mark = cur_win().w_cursor;
-        fm.fnum = cur_buf().handle;
+        fm.mark = Win::current().w_cursor;
+        fm.fnum = Buf::current().handle;
         fm.timestamp = os_time();
         fm.view = view;
         fm.additional_data = ::core::ptr::null_mut();
@@ -308,20 +308,22 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // The cursor should end up on the last inserted character.  Not for
     // CTRL-O, unless it is past the end of the line.
     if !nomove
-        && (cur_win().w_cursor.col != 0 || cur_win().w_cursor.coladd > 0)
+        && (Win::current().w_cursor.col != 0 || Win::current().w_cursor.coladd > 0)
         && (restart_edit.get() == NUL || (char_at_cursor() == NUL && !visual_active()))
         && !revins_on.get()
     {
-        if cur_win().w_cursor.coladd > 0
-            || get_ve_flags(cur_win()) == kOptVeFlagAll as ::core::ffi::c_uint
+        if Win::current().w_cursor.coladd > 0
+            || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
             let _ = unsafe { oneleft() };
             if restart_edit.get() != NUL {
-                cur_win().w_cursor.coladd += 1;
+                Win::current().w_cursor.coladd += 1;
             }
         } else {
-            cur_win().w_cursor.col -= 1;
-            cur_win().w_valid.clear(WinValid::WCOL | WinValid::VIRTCOL);
+            Win::current().w_cursor.col -= 1;
+            Win::current()
+                .w_valid
+                .clear(WinValid::WCOL | WinValid::VIRTCOL);
             // Correct the cursor for a multi-byte character.
             unsafe { mb_adjust_cursor() };
         }
@@ -332,7 +334,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
     if char_at_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
-        cur_win()
+        Win::current()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
@@ -371,14 +373,14 @@ pub(crate) fn ins_ctrl_() {
             if n == 0 {
                 break;
             }
-            cur_win().w_cursor.col += 1;
+            Win::current().w_cursor.col += 1;
         }
     }
 
     p_ri.set((p_ri.get() == 0) as c_int);
     revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
     if revins_on.get() {
-        revins_scol.set(cur_win().w_cursor.col);
+        revins_scol.set(Win::current().w_cursor.col);
         revins_legal.set(revins_legal.get() + 1);
         revins_chars.set(0);
         unsafe { undisplay_dollar() };
@@ -431,7 +433,7 @@ pub(crate) fn ins_ctrl_o() {
     } else {
         'I' as c_int
     });
-    ins_at_eol.set(if virtual_active(cur_win()) {
+    ins_at_eol.set(if virtual_active(Win::current()) {
         false
     } else {
         char_at_cursor() == NUL
@@ -474,14 +476,4 @@ fn get_key() -> c_int {
 fn beep(flag: ::core::ffi::c_uint) {
     // SAFETY: the bell only reads options.
     unsafe { vim_beep(flag) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

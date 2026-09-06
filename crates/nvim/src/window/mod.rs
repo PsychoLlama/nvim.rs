@@ -254,7 +254,7 @@ pub fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
 /// Whether the current window's `'winfixbuf'` lets another buffer in, saying
 /// so if it does not.
 fn winfixbuf_allows() -> bool {
-    if cur_win().w_onebuf_opt.wo_wfb != 0 {
+    if Win::current().w_onebuf_opt.wo_wfb != 0 {
         err(e_winfixbuf_cannot_go_to_buffer.as_ptr());
         return false;
     }
@@ -438,21 +438,6 @@ fn raw_win(win: Option<Win>) -> *mut Window {
 fn current_topframe() -> FrameRef {
     // SAFETY: `topframe` is set from startup to exit.
     unsafe { FrameRef::new(topframe.get()) }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The tab page the editor is working in.
-fn cur_tab() -> TabPage {
-    TabPage::current()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 /// The first window of the current tab page.

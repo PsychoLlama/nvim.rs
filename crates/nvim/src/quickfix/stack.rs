@@ -133,7 +133,7 @@ pub(crate) fn qf_emsg(msg: *const c_char) {
 pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> bool {
     let pat = name.as_ptr().cast_mut();
     let fname = if on_fname {
-        cur_buf().b_fname
+        Buf::current().b_fname
     } else {
         ptr::null_mut()
     };
@@ -172,7 +172,7 @@ pub(crate) fn qf_cmd_stack_or_alloc(args: Ea) -> (Qi, Option<Win>) {
     if !unsafe { is_loclist_cmd(args.cmdidx) } {
         return (QfStack::Global.qi(), None);
     }
-    let wp = cur_win();
+    let wp = Win::current();
     // SAFETY: `ll_get_or_alloc_list` answers a live stack for a live window.
     (unsafe { Qi::new(ll_get_or_alloc_list(wp)) }, Some(wp))
 }
@@ -397,14 +397,14 @@ unsafe fn wipe_qf_buffer(qi: *mut QfInfo) {
     // `close_buffer` insists that `curwin->w_buffer == curbuf`, and it
     // may not: this is reachable from `win_free_mem` after `win_close`
     // already released the current window's buffer.
-    let buf_was_null = cur_win().w_buffer.is_null();
+    let buf_was_null = Win::current().w_buffer.is_null();
     if buf_was_null {
-        cur_win().w_buffer = Buf::current_raw();
+        Win::current().w_buffer = Buf::current_raw();
     }
     close_buffer(None, qfbuf, DOBUF_WIPE as c_int, false, false);
     qi.qf_bufnr = INVALID_QFBUFNR;
     if buf_was_null {
-        cur_win().w_buffer = ptr::null_mut();
+        Win::current().w_buffer = ptr::null_mut();
     }
 }
 
@@ -631,7 +631,7 @@ pub(crate) unsafe fn qf_cmd_get_stack(args: *mut ExArg, print_emsg: bool) -> *mu
     if !unsafe { is_loclist_cmd(args.cmdidx) } {
         return QfStack::Global.raw();
     }
-    let qi = win_loclist(cur_win());
+    let qi = win_loclist(Win::current());
     if qi.is_null() && print_emsg {
         qf_emsg(e_loclist.as_ptr());
     }
@@ -749,20 +749,6 @@ pub(crate) fn qf_free_stack(mut window: Option<Win>, mut qi: Qi) {
             win_set_loclist(wp, new_ll);
         }
     }
-}
-
-/// The window the editor is working in.
-///
-/// The whole family shares this one rather than each file keeping its own:
-/// the promise `Win::current` wants is the same everywhere, and paying it
-/// once is the point of the exercise.
-pub(crate) fn cur_win() -> Win {
-    Win::current()
-}
-
-/// The buffer the editor is working in — see [`cur_win`].
-pub(crate) fn cur_buf() -> Buf {
-    Buf::current()
 }
 
 #[cfg(test)]

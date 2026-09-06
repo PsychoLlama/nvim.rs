@@ -60,14 +60,14 @@ use crate::undo::{u_save, u_save_cursor};
 pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     // SAFETY: the caller's promise -- a live operator argument.
     let op = unsafe { Op::new(op) };
-    let mut old_line_count = cur_buf().b_ml.ml_line_count;
+    let mut old_line_count = Buf::current().b_ml.ml_line_count;
 
     // Put the cursor where the command was given, so `u` can put it back.
-    cur_win().w_cursor = op.cursor_start;
+    Win::current().w_cursor = op.cursor_start;
     if u_save(op.start.lnum - 1, op.end.lnum + 1).is_err() {
         return;
     }
-    cur_win().w_cursor = op.start;
+    Win::current().w_cursor = op.start;
 
     if op.is_visual {
         // When nothing changes, the Visual selection still has to go.
@@ -75,7 +75,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `'[` mark goes at the start of the formatted area.
-        cur_buf().b_op_start = op.start;
+        Buf::current().b_op_start = op.start;
     }
     if keep_cursor {
         saved_cursor.set(op.cursor_start);
@@ -86,19 +86,19 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
     // carries on with the next lines.
-    if op.end_adjusted && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count {
-        cur_win().w_cursor.lnum += 1;
+    if op.end_adjusted && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count {
+        Win::current().w_cursor.lnum += 1;
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    old_line_count = cur_buf().b_ml.ml_line_count - old_line_count;
+    old_line_count = Buf::current().b_ml.ml_line_count - old_line_count;
     unsafe { msgmore(old_line_count as c_int) };
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `']` mark goes at the end of it.
-        cur_buf().b_op_end = cur_win().w_cursor;
+        Buf::current().b_op_end = Win::current().w_cursor;
     }
     if keep_cursor {
-        cur_win().w_cursor = saved_cursor.get();
+        Win::current().w_cursor = saved_cursor.get();
         saved_cursor.set(saved_cursor.get().with_lnum(0));
         // Formatting may have made the position invalid.
         check_cursor(Win::current());
@@ -152,9 +152,9 @@ pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int 
     unsafe { set_vim_var_char(c) };
 
     // Copy it: the option can be changed while it is running.
-    let fex = unsafe { xstrdup(cur_buf().b_p_fex) };
+    let fex = unsafe { xstrdup(Buf::current().b_p_fex) };
     // Errors go against the script that set `'formatexpr'`.
-    let script_ctx = Script::context(cur_buf().b_p_script_ctx[kBufOptFormatexpr as usize]);
+    let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         unsafe { eval_to_number(fex, true) as c_int }
@@ -174,12 +174,12 @@ pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int 
 /// # Safety
 /// There must be a current line.
 unsafe fn paragraph_indent(first_line: LineNr) -> c_int {
-    if cur_win().w_cursor.lnum == first_line {
+    if Win::current().w_cursor.lnum == first_line {
         get_indent()
-    } else if cur_buf().b_p_lisp != 0 {
+    } else if Buf::current().b_p_lisp != 0 {
         unsafe { get_lisp_indent() }
     } else if unsafe { cindent_on() } {
-        if unsafe { *cur_buf().b_p_inde } as c_int != NUL {
+        if unsafe { *Buf::current().b_p_inde } as c_int != NUL {
             unsafe { get_expr_indent() }
         } else {
             unsafe { get_c_indent() }
@@ -198,8 +198,8 @@ unsafe fn paragraph_indent(first_line: LineNr) -> c_int {
 /// # Safety
 /// There must be a current line, and it must be modifiable.
 unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
-    cur_win().w_cursor.lnum += 1;
-    cur_win().w_cursor.col = 0;
+    Win::current().w_cursor.lnum += 1;
+    Win::current().w_cursor.col = 0;
     if line_count < 0 && u_save_cursor().is_err() {
         return false;
     }
@@ -213,9 +213,9 @@ unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_coun
     };
     if strip > 0 {
         let _ = unsafe { del_bytes(strip as ColNr, false, false) };
-        unsafe { mark_col_adjust(cur_win().w_cursor.lnum, 0, 0, -(strip as ColNr), 0) };
+        unsafe { mark_col_adjust(Win::current().w_cursor.lnum, 0, 0, -(strip as ColNr), 0) };
     }
-    cur_win().w_cursor.lnum -= 1;
+    Win::current().w_cursor.lnum -= 1;
     if unsafe { do_join(2 as size_t, true, false, false, false) }.is_err() {
         beep_flush();
         return false;
@@ -251,7 +251,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let mut second_indent: c_int = -1;
     let mut first_par_line = true;
     let mut need_set_indent = true;
-    let first_line = cur_win().w_cursor.lnum;
+    let first_line = Win::current().w_cursor.lnum;
     let mut force_format = false;
     let old_state = State.get();
 
@@ -267,44 +267,44 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let do_trail_white = has_format_option(FoFlag::WHITE_PAR);
 
     // The previous and current lines.
-    let mut is_not_par = if cur_win().w_cursor.lnum > 1 {
-        unsafe { fmt_check_par(cur_win().w_cursor.lnum - 1, &mut leader, do_comments) }
+    let mut is_not_par = if Win::current().w_cursor.lnum > 1 {
+        unsafe { fmt_check_par(Win::current().w_cursor.lnum - 1, &mut leader, do_comments) }
     } else {
         true
     };
     let mut next_is_not_par =
-        unsafe { fmt_check_par(cur_win().w_cursor.lnum, &mut next_leader, do_comments) };
+        unsafe { fmt_check_par(Win::current().w_cursor.lnum, &mut next_leader, do_comments) };
     let mut is_end_par = is_not_par || next_is_not_par;
     if !is_end_par && do_trail_white {
-        is_end_par = !unsafe { ends_in_white(cur_win().w_cursor.lnum - 1) };
+        is_end_par = !unsafe { ends_in_white(Win::current().w_cursor.lnum - 1) };
     }
 
-    cur_win().w_cursor.lnum -= 1;
+    Win::current().w_cursor.lnum -= 1;
     let mut count = line_count as c_long;
     while count != 0 && !got_int.get() {
         if advance {
-            cur_win().w_cursor.lnum += 1;
+            Win::current().w_cursor.lnum += 1;
             prev_is_end_par = is_end_par;
             is_not_par = next_is_not_par;
             leader = next_leader;
         }
 
         // The last line to be formatted.
-        if count == 1 || cur_win().w_cursor.lnum == cur_buf().b_ml.ml_line_count {
+        if count == 1 || Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count {
             next_is_not_par = true;
             next_leader = Leader::NONE;
         } else {
-            next_is_not_par = unsafe {
-                fmt_check_par(cur_win().w_cursor.lnum + 1, &mut next_leader, do_comments)
-            };
+            let next = Win::current().w_cursor.lnum + 1;
+            next_is_not_par = unsafe { fmt_check_par(next, &mut next_leader, do_comments) };
             if do_number_indent {
-                next_is_start_par = unsafe { get_number_indent(cur_win().w_cursor.lnum + 1) } > 0;
+                next_is_start_par =
+                    unsafe { get_number_indent(Win::current().w_cursor.lnum + 1) } > 0;
             }
         }
         advance = true;
         is_end_par = is_not_par || next_is_not_par || next_is_start_par;
         if !is_end_par && do_trail_white {
-            is_end_par = !unsafe { ends_in_white(cur_win().w_cursor.lnum) };
+            is_end_par = !unsafe { ends_in_white(Win::current().w_cursor.lnum) };
         }
 
         if is_not_par {
@@ -318,14 +318,15 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
             if first_par_line
                 && (do_second_indent || do_number_indent)
                 && prev_is_end_par
-                && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count
+                && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {
                 let no_comment = leader.len == 0 && next_leader.len == 0;
                 if do_second_indent
-                    && unsafe { *ml_get(cur_win().w_cursor.lnum + 1) } as c_int != NUL
+                    && unsafe { *ml_get(Win::current().w_cursor.lnum + 1) } as c_int != NUL
                 {
                     if no_comment {
-                        second_indent = unsafe { get_indent_lnum(cur_win().w_cursor.lnum + 1) };
+                        second_indent =
+                            unsafe { get_indent_lnum(Win::current().w_cursor.lnum + 1) };
                     } else {
                         second_indent = next_leader.len;
                         do_comments_list = true;
@@ -336,7 +337,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     // the list flag differs. It is never cleared again --
                     // one comment-bearing paragraph turns it on for the
                     // rest of the run.
-                    second_indent = unsafe { get_number_indent(cur_win().w_cursor.lnum) };
+                    second_indent = unsafe { get_number_indent(Win::current().w_cursor.lnum) };
                     if !no_comment {
                         do_comments_list = true;
                     }
@@ -344,8 +345,8 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
             }
 
             // A change of comment leader ends the paragraph.
-            if cur_win().w_cursor.lnum >= cur_buf().b_ml.ml_line_count
-                || !unsafe { same_leader(cur_win().w_cursor.lnum, leader, next_leader) }
+            if Win::current().w_cursor.lnum >= Buf::current().b_ml.ml_line_count
+                || !unsafe { same_leader(Win::current().w_cursor.lnum, leader, next_leader) }
             {
                 // Except when the next line opens a line comment and this
                 // one has a line comment after some text: then the
@@ -370,7 +371,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 // Put the cursor on the last non-space.
                 State.set(MODE_NORMAL); // don't go past end-of-line
                 coladvance(Win::current(), MAXCOL);
-                while cur_win().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
+                while Win::current().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
                     dec_cursor();
                 }
 
@@ -435,14 +436,4 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
         line_breakcheck();
         count -= 1;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

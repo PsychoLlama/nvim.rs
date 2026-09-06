@@ -55,7 +55,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
 
     // Line 0 says "no line yet", so that a `--cmd` that moves the cursor
     // is not immediately overridden by the first file's position.
-    cur_win().w_cursor.lnum = 0;
+    Win::current().w_cursor.lnum = 0;
     estack_push(
         ETYPE_ARGS,
         gettext(c"pre-vimrc command line").as_ptr().cast_mut(),
@@ -77,9 +77,9 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block.
     let parm = unsafe { Mp::new(parmp) };
     msg_scroll.set(1);
-    if parm.tagname.is_null() && cur_win().w_cursor.lnum <= 1 {
+    if parm.tagname.is_null() && Win::current().w_cursor.lnum <= 1 {
         // As in `exe_pre_commands`: let the commands decide the line.
-        cur_win().w_cursor.lnum = 0;
+        Win::current().w_cursor.lnum = 0;
     }
 
     // NB: not translated, unlike the pre-vimrc one above.
@@ -100,8 +100,8 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
 
-    if cur_win().w_cursor.lnum == 0 {
-        cur_win().w_cursor.lnum = 1;
+    if Win::current().w_cursor.lnum == 0 {
+        Win::current().w_cursor.lnum = 1;
     }
     if !exmode_active.get() {
         msg_scroll.set(0);
@@ -335,9 +335,4 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
     }
 
     time_msg_at(c"sourcing vimrc file(s)");
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

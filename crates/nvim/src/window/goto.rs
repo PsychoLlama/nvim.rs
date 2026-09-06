@@ -53,7 +53,7 @@ pub unsafe fn win_goto(window: *mut Window) {
 /// Make `window` the current window and redraw what the move uncovers.
 pub(crate) fn goto_win(window: Win) {
     let mut window = window;
-    let owp = cur_win();
+    let owp = Win::current();
     // SAFETY: reads the editor's lock state.
     if unsafe { text_or_buf_locked() } {
         beep();
@@ -64,7 +64,7 @@ pub(crate) fn goto_win(window: Win) {
         // careful: triggers ModeChanged autocommand
         reset_visual_and_resel();
     } else if visual_active() {
-        window.w_cursor = cur_win().w_cursor;
+        window.w_cursor = Win::current().w_cursor;
     }
 
     // autocommand may have made `window` invalid
@@ -80,8 +80,8 @@ pub(crate) fn goto_win(window: Win) {
     {
         redraw_winline(owp);
     }
-    if cur_win().w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled.get() == 0 {
-        redraw_winline(cur_win());
+    if Win::current().w_onebuf_opt.wo_cole > 0 as OptInt && msg_scrolled.get() == 0 {
+        redraw_winline(Win::current());
     }
 }
 
@@ -169,7 +169,13 @@ pub unsafe fn win_vert_neighbor(
 
 /// Move to the window above or below, `count` times.
 pub(crate) fn goto_ver(up: bool, count: c_int) {
-    if let Some(win) = neighbor(cur_tab(), cur_win(), Axis::Vertical, up, count) {
+    if let Some(win) = neighbor(
+        TabPage::current(),
+        Win::current(),
+        Axis::Vertical,
+        up,
+        count,
+    ) {
         goto_win(win);
     }
 }
@@ -187,7 +193,13 @@ pub unsafe fn win_horz_neighbor(
 
 /// Move to the window left or right, `count` times.
 pub(crate) fn goto_hor(left: bool, count: c_int) {
-    if let Some(win) = neighbor(cur_tab(), cur_win(), Axis::Horizontal, left, count) {
+    if let Some(win) = neighbor(
+        TabPage::current(),
+        Win::current(),
+        Axis::Horizontal,
+        left,
+        count,
+    ) {
         goto_win(win);
     }
 }
@@ -279,18 +291,18 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     let mut other_buffer = false;
     if !curwin_invalid {
-        leave_window(cur_win());
+        leave_window(Win::current());
     }
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
         // Be careful: if autocommands delete the window, return now.
         if window.w_buffer != Buf::current_raw() {
-            fire(AutoEvent::BufLeave, cur_buf());
+            fire(AutoEvent::BufLeave, Buf::current());
             other_buffer = true;
             if valid_win(window.raw()).is_none() {
                 return;
             }
         }
-        fire(AutoEvent::WinLeave, cur_buf());
+        fire(AutoEvent::WinLeave, Buf::current());
         if valid_win(window.raw()).is_none() {
             return;
         }
@@ -318,15 +330,15 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     if !curwin_invalid {
         prevwin.set(Win::current_raw()); // remember for CTRL-W p
-        cur_win().w_redr_status = true;
+        Win::current().w_redr_status = true;
     }
     window.make_current();
     window.buffer().make_current();
 
-    revalidate_cursor(cur_win());
+    revalidate_cursor(Win::current());
     // SAFETY: a live window.
-    if !virtual_active(cur_win()) {
-        cur_win().w_cursor.coladd = 0;
+    if !virtual_active(Win::current()) {
+        Win::current().w_cursor.coladd = 0;
     }
     if split_keep_cursor() {
         // SAFETY: reads the current window, which was just set.
@@ -338,30 +350,30 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         fix_cursor(state & (MODE_NORMAL | MODE_CMDLINE | MODE_TERMINAL) != 0);
     }
     fix_current_dir();
-    enter_window(cur_win());
+    enter_window(Win::current());
 
     // Careful: autocommands may close the window and make `window` invalid.
     if flags & WEE_TRIGGER_NEW_AUTOCMDS as c_int != 0 {
-        fire(AutoEvent::WinNew, cur_buf());
+        fire(AutoEvent::WinNew, Buf::current());
     }
     if flags & WEE_TRIGGER_ENTER_AUTOCMDS as c_int != 0 {
-        fire(AutoEvent::WinEnter, cur_buf());
+        fire(AutoEvent::WinEnter, Buf::current());
         if other_buffer {
-            fire(AutoEvent::BufEnter, cur_buf());
+            fire(AutoEvent::BufEnter, Buf::current());
         }
     }
 
     // SAFETY: reads the current buffer's name.
     unsafe { maketitle() };
-    cur_win().w_redr_status = true;
+    Win::current().w_redr_status = true;
     redraw_tabline.set(true);
     if restart_edit.get() != 0 {
-        cur_win().redraw_later(UPD_VALID); // causes status line redraw
+        Win::current().redraw_later(UPD_VALID); // causes status line redraw
     }
     // Change background colour according to NormalNC, but only if actually
     // defined (otherwise no extra redraw).
-    if cur_win().w_hl_attr_normal != cur_win().w_hl_attr_normalnc {
-        cur_win().redraw_later(UPD_NOT_VALID);
+    if Win::current().w_hl_attr_normal != Win::current().w_hl_attr_normalnc {
+        Win::current().redraw_later(UPD_NOT_VALID);
     }
     if let Some(prev) = current_prevwin()
         && prev.w_hl_attr_normal != prev.w_hl_attr_normalnc
@@ -370,14 +382,14 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     // set window height to desired minimal value
-    let cur = cur_win();
+    let cur = Win::current();
     if (cur.w_height as OptInt) < p_wh.get() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
         setheight_win(p_wh.get() as c_int, cur);
     } else if cur.w_height == 0 {
         setheight_win(1, cur);
     }
     // set window width to desired minimal value
-    let cur = cur_win();
+    let cur = Win::current();
     if (cur.w_width as OptInt) < p_wiw.get() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
         setwidth_win(p_wiw.get() as c_int, cur);
     }
@@ -410,10 +422,10 @@ pub fn win_fix_current_dir() {
 /// neither -- the global one saved when the first local directory was entered.
 fn fix_current_dir() {
     // The new directory is the window's own, the tab page's, or none.
-    let new_dir = if cur_win().w_localdir.is_null() {
-        cur_tab().tp_localdir
+    let new_dir = if Win::current().w_localdir.is_null() {
+        TabPage::current().tp_localdir
     } else {
-        cur_win().w_localdir
+        Win::current().w_localdir
     };
     let mut cwd = [0 as c_char; MAXPATHL as usize];
     // SAFETY: a buffer of exactly `MAXPATHL` bytes to fill in.
@@ -428,7 +440,7 @@ fn fix_current_dir() {
             // SAFETY: `cwd` is NUL-terminated and `xstrdup` copies it.
             globaldir.set(unsafe { xstrdup(cwd.as_ptr()) });
         }
-        let scope = if cur_win().w_localdir.is_null() {
+        let scope = if Win::current().w_localdir.is_null() {
             kCdScopeTabpage
         } else {
             kCdScopeWindow
@@ -478,9 +490,9 @@ pub unsafe fn buf_jump_open_win(buffer: *mut Buffer) -> *mut Window {
 /// Enter the first window of the current tab page showing `buffer`, if there is
 /// one.
 pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
-    if cur_win().w_buffer == buffer.raw() {
-        enter(cur_win(), false);
-        return Some(cur_win());
+    if Win::current().w_buffer == buffer.raw() {
+        enter(Win::current(), false);
+        return Some(Win::current());
     }
     let wp = windows().find(|wp| wp.w_buffer == buffer.raw())?;
     enter(wp, false);

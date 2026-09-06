@@ -130,15 +130,15 @@ pub(crate) unsafe fn readfile(
     let wasempty;
 
     // Reset before triggering any autocommands.
-    cur_buf().b_au_did_filetype = false;
+    Buf::current().b_au_did_filetype = false;
     // In case it was set by the previous read.
-    cur_buf().b_no_eol_lnum = 0;
+    Buf::current().b_no_eol_lnum = 0;
 
     'theend: {
         // If there is no file name yet, use the one for the read file, and
         // set BufFlags::NOTEDITED to reflect that. Not for a read from a filter,
         // and only when 'cpoptions' contains the 'f' flag.
-        if cur_buf().b_ffname.is_null()
+        if Buf::current().b_ffname.is_null()
             && !how.filtering
             && !fname.is_null()
             && cpo_has(CpoFlag::FNAMER)
@@ -164,7 +164,7 @@ pub(crate) unsafe fn readfile(
 
         // Autocommands may have added lines, so check whether the buffer
         // is empty now.
-        wasempty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
+        wasempty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
 
         if !recoverymode.get()
             && !how.filtering
@@ -180,16 +180,16 @@ pub(crate) unsafe fn readfile(
 
         // Set linecnt now, before the "retry" caused by a wrong guess at
         // the fileformat, and after the autocommands, which may change it.
-        linecnt = cur_buf().b_ml.ml_line_count;
+        linecnt = Buf::current().b_ml.ml_line_count;
 
         // The "++bad=" argument.
         if !args.is_null() && unsafe { (*args).bad_char } != 0 {
             conv.bad_char = unsafe { (*args).bad_char };
             if set_options {
-                cur_buf().b_bad_char = unsafe { (*args).bad_char };
+                Buf::current().b_bad_char = unsafe { (*args).bad_char };
             }
         } else {
-            cur_buf().b_bad_char = 0;
+            Buf::current().b_bad_char = 0;
         }
 
         // Decide which 'fileencoding' to use, or to start with.
@@ -197,10 +197,10 @@ pub(crate) unsafe fn readfile(
             fenc = unsafe { enc_canonize((*args).cmd.offset((*args).force_enc as isize)) };
             fenc_alloced = true;
             keep_dest_enc = true;
-        } else if cur_buf().b_p_bin != 0 {
+        } else if Buf::current().b_p_bin != 0 {
             fenc = c"".as_ptr().cast_mut(); // binary: don't convert
             fenc_alloced = false;
-        } else if cur_buf().b_help {
+        } else if Buf::current().b_help {
             // Help files are either utf-8 or latin1. Try utf-8 first; if
             // that fails it must be latin1. This is needed when the first
             // line has non-ASCII characters, which happens only in *.??x
@@ -209,7 +209,7 @@ pub(crate) unsafe fn readfile(
             fenc = c"utf-8".as_ptr().cast_mut();
             fenc_alloced = false;
         } else if unsafe { *p_fencs.get() } == 0 {
-            fenc = cur_buf().b_p_fenc; // use the buffer's encoding
+            fenc = Buf::current().b_p_fenc; // use the buffer's encoding
             fenc_alloced = false;
         } else {
             fenc_next = p_fencs.get(); // try the items in 'fileencodings'
@@ -244,8 +244,8 @@ pub(crate) unsafe fn readfile(
                 }
                 file_rewind = false;
                 if set_options {
-                    cur_buf().b_p_bomb = false as c_int;
-                    cur_buf().b_start_bomb = false as c_int;
+                    Buf::current().b_p_bomb = false as c_int;
+                    Buf::current().b_start_bomb = false as c_int;
                 }
                 conv.conv_error = 0;
             }
@@ -256,14 +256,14 @@ pub(crate) unsafe fn readfile(
                 keep_fileformat = false;
             } else {
                 if !args.is_null() && unsafe { (*args).force_ff } != 0 {
-                    fileformat = unsafe { get_fileformat_force(cur_buf(), args) };
+                    fileformat = unsafe { get_fileformat_force(Buf::current(), args) };
                     guess.try_unix = 0;
                     guess.try_dos = false;
                     guess.try_mac = 0;
-                } else if cur_buf().b_p_bin != 0 {
+                } else if Buf::current().b_p_bin != 0 {
                     fileformat = EOL_UNIX; // binary: use Unix format
                 } else if unsafe { *p_ffs.get() } == 0 {
-                    fileformat = get_fileformat(cur_buf()); // from the buffer
+                    fileformat = get_fileformat(Buf::current()); // from the buffer
                 } else {
                     fileformat = EOL_UNKNOWN; // detect from the file
                 }
@@ -373,8 +373,8 @@ pub(crate) unsafe fn readfile(
                 conv.restlen = 0;
                 read_undo_file = how.newfile
                     && !how.keep_undo
-                    && !cur_buf().b_ffname.is_null()
-                    && cur_buf().b_p_udf != 0
+                    && !Buf::current().b_ffname.is_null()
+                    && Buf::current().b_p_udf != 0
                     && !how.filtering
                     && !how.fifo
                     && !how.stdin
@@ -498,7 +498,7 @@ pub(crate) unsafe fn readfile(
                                 if read_buf_lnum > from {
                                     // When the last line had no
                                     // end-of-line, don't add one now.
-                                    if cur_buf().b_p_eol == 0 {
+                                    if Buf::current().b_p_eol == 0 {
                                         tlen -= 1;
                                     }
                                     w.size = tlen;
@@ -529,12 +529,13 @@ pub(crate) unsafe fn readfile(
                                     continue 'retry;
                                 }
                                 if conv.conv_error == 0 {
-                                    conv.conv_error = cur_buf().b_ml.ml_line_count - linecnt + 1;
+                                    conv.conv_error =
+                                        Buf::current().b_ml.ml_line_count - linecnt + 1;
                                 }
                             } else if illegal_byte == 0 {
                                 // Remember the first line with an illegal
                                 // byte.
-                                illegal_byte = cur_buf().b_ml.ml_line_count - linecnt + 1;
+                                illegal_byte = Buf::current().b_ml.ml_line_count - linecnt + 1;
                             }
                             if conv.bad_char == BAD_DROP {
                                 unsafe { *w.ptr.offset(-(conv.restlen as isize)) = 0 };
@@ -566,12 +567,12 @@ pub(crate) unsafe fn readfile(
                 // 'charconvert' and not when a BOM was already found.
                 if filesize == 0
                     && (conv.flags == FIO_UCSBOM
-                        || (cur_buf().b_p_bomb == 0
+                        || (Buf::current().b_p_bomb == 0
                             && tmpname.is_null()
                             && (unsafe { *fenc } == b'u' as c_char || unsafe { *fenc } == 0)))
                 {
                     // No BOM detection in a short file or in binary mode.
-                    let found = if w.size < 2 || cur_buf().b_p_bin != 0 {
+                    let found = if w.size < 2 || Buf::current().b_p_bin != 0 {
                         None
                     } else {
                         check_for_bom(
@@ -592,8 +593,8 @@ pub(crate) unsafe fn readfile(
                         w.size -= blen as ptrdiff_t;
                         unsafe { ptr::copy(w.ptr.add(blen), w.ptr, w.size as usize) };
                         if set_options {
-                            cur_buf().b_p_bomb = true as c_int;
-                            cur_buf().b_start_bomb = true as c_int;
+                            Buf::current().b_p_bomb = true as c_int;
+                            Buf::current().b_start_bomb = true as c_int;
                         }
                     }
 
@@ -647,7 +648,7 @@ pub(crate) unsafe fn readfile(
                         );
                         continue 'retry;
                     }
-                } else if cur_buf().b_p_bin == 0
+                } else if Buf::current().b_p_bin == 0
                     && !unsafe { conv.check_utf8(&mut w, filesize, &mut illegal_byte) }
                 {
                     let had_iconv = conv.has_iconv();
@@ -723,14 +724,14 @@ pub(crate) unsafe fn readfile(
         // CTRL-Z should be dropped; 'endoffile' lets the user decide what
         // to write later. In Unix format the CTRL-Z is just a character.
         if w.linerest != 0
-            && cur_buf().b_p_bin == 0
+            && Buf::current().b_p_bin == 0
             && fileformat == EOL_DOS
             && unsafe { *w.ptr.offset(-1) } == Ctrl_Z as c_char
         {
             w.ptr = unsafe { w.ptr.offset(-1) };
             w.linerest -= 1;
             if set_options {
-                cur_buf().b_p_eof = true as c_int;
+                Buf::current().b_p_eof = true as c_int;
             }
         }
 
@@ -739,7 +740,7 @@ pub(crate) unsafe fn readfile(
         if !error && !got_int.get() && w.linerest != 0 {
             // Remember it for when writing.
             if set_options {
-                cur_buf().b_p_eol = false as c_int;
+                Buf::current().b_p_eol = false as c_int;
             }
             unsafe { *w.ptr = 0 };
             let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as ColNr;
@@ -796,15 +797,15 @@ pub(crate) unsafe fn readfile(
         // In recovery mode everything but autocommands is skipped.
         if !recoverymode.get() {
             // The last line, which came from the empty buffer, has to go.
-            if how.newfile && wasempty && !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                let _ = unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
+            if how.newfile && wasempty && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+                let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
                 linecnt -= 1;
             }
-            cur_buf().deleted_bytes = 0;
-            cur_buf().deleted_bytes2 = 0;
-            cur_buf().deleted_codepoints = 0;
-            cur_buf().deleted_codeunits = 0;
-            linecnt = cur_buf().b_ml.ml_line_count - linecnt;
+            Buf::current().deleted_bytes = 0;
+            Buf::current().deleted_bytes2 = 0;
+            Buf::current().deleted_codepoints = 0;
+            Buf::current().deleted_codeunits = 0;
+            linecnt = Buf::current().b_ml.ml_line_count - linecnt;
             if filesize == 0 {
                 linecnt = 0;
             }
@@ -825,7 +826,7 @@ pub(crate) unsafe fn readfile(
                     let interr = gettext(e_interr).as_ptr().cast_mut();
                     unsafe { filemess(Buf::current(), sfname, interr) };
                     if how.newfile {
-                        cur_buf().b_p_ro = true as c_int; // must use "w!" now
+                        Buf::current().b_p_ro = true as c_int; // must use "w!" now
                     }
                 }
                 msg_scroll.set(msg_save);
@@ -860,7 +861,7 @@ pub(crate) unsafe fn readfile(
         // when 'binary' is off, to support turning 'fixeol' off or writing
         // the same text again with 'binary' on. The latter is needed for
         // ":autocmd FileReadPost *.gz set bin|'[,']!gunzip" to work.
-        cur_buf().b_no_eol_lnum = read_no_eol_lnum;
+        Buf::current().b_no_eol_lnum = read_no_eol_lnum;
 
         // When reloading a buffer put the cursor on the first line that
         // differs.
@@ -890,15 +891,10 @@ pub(crate) unsafe fn readfile(
         }
     }
 
-    let mfp = cur_buf().b_ml.ml_mfp;
+    let mfp = Buf::current().b_ml.ml_mfp;
     if !mfp.is_null() && unsafe { (*mfp).mf_dirty } == MfDirty::YesNoSync {
         // It is OK to sync the swap file now.
         unsafe { (*mfp).mf_dirty = MfDirty::Yes };
     }
     retval
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

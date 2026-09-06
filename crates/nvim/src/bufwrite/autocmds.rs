@@ -188,7 +188,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
         if nofile_err {
-            let buftype = cur_buf().b_p_bt;
+            let buftype = Buf::current().b_p_bt;
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let buftype = unsafe { c_str(buftype) };
             semsg!("E676: No matching autocommands for buftype={buftype} buffer");
@@ -279,7 +279,7 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     mode: WriteMode,
 ) {
     // In case it was set by the previous read.
-    cur_buf().b_no_eol_lnum = 0;
+    Buf::current().b_no_eol_lnum = 0;
 
     let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
@@ -303,9 +303,4 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
 
     // Restore curwin/curbuf and a few other things.
     unsafe { aucmd_restbuf(&raw mut aco) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

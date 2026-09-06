@@ -96,7 +96,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     if arrow_used.get() {
-        Insstart.set(cur_win().w_cursor); // new insertion starts here
+        Insstart.set(Win::current().w_cursor); // new insertion starts here
         if Insstart.get().col > Insstart_orig.get().col && !ins_need_undo.get() {
             // Don't update the original insert position when moved to the
             // right, except when nothing was inserted yet.
@@ -110,7 +110,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
         }
         ai_col.set(0);
         if State.get() & VREPLACE_FLAG != 0 {
-            orig_line_count.set(cur_buf().b_ml.ml_line_count);
+            orig_line_count.set(Buf::current().b_ml.ml_line_count);
             vr_lines_changed.set(1);
         }
         unsafe { reset_redobuff() };
@@ -168,17 +168,17 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
         // Only when something was actually inserted, or undo breaks.
         let mut cc;
         if !ins_need_undo.get() && has_format_option(FoFlag::AUTO) {
-            let tpos = cur_win().w_cursor;
+            let tpos = Win::current().w_cursor;
 
             // At the end of a line after a space, formatting would move
             // the cursor to the following word; move it onto the space
             // first so it does not.
             cc = 'x' as c_int;
-            if cur_win().w_cursor.col > 0 && char_at_cursor() == NUL {
+            if Win::current().w_cursor.col > 0 && char_at_cursor() == NUL {
                 dec_cursor();
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) {
-                    cur_win().w_cursor = tpos;
+                    Win::current().w_cursor = tpos;
                 }
             }
 
@@ -190,10 +190,10 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
                 }
                 // Still on the same character: keep its `coladd` too.
                 if char_at_cursor() == NUL
-                    && cur_win().w_cursor.lnum == tpos.lnum
-                    && cur_win().w_cursor.col == tpos.col
+                    && Win::current().w_cursor.lnum == tpos.lnum
+                    && Win::current().w_cursor.col == tpos.col
                 {
-                    cur_win().w_cursor.coladd = tpos.coladd;
+                    Win::current().w_cursor.coladd = tpos.coladd;
                 }
             }
         }
@@ -210,17 +210,17 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
             && did_ai.get()
             && (esc != 0
                 || (!cpo_has(CpoFlag::INDENT)
-                    && cur_win().w_cursor.lnum != unsafe { (*end_insert_pos).lnum }))
-            && unsafe { (*end_insert_pos).lnum } <= cur_buf().b_ml.ml_line_count
+                    && Win::current().w_cursor.lnum != unsafe { (*end_insert_pos).lnum }))
+            && unsafe { (*end_insert_pos).lnum } <= Buf::current().b_ml.ml_line_count
         {
-            let mut tpos = cur_win().w_cursor;
+            let mut tpos = Win::current().w_cursor;
             let prev_col = unsafe { (*end_insert_pos).col };
 
-            cur_win().w_cursor = unsafe { *end_insert_pos };
+            Win::current().w_cursor = unsafe { *end_insert_pos };
             check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
-                if char_at_cursor() == NUL && cur_win().w_cursor.col > 0 {
-                    cur_win().w_cursor.col -= 1;
+                if char_at_cursor() == NUL && Win::current().w_cursor.col > 0 {
+                    Win::current().w_cursor.col -= 1;
                 }
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) || unsafe { del_char(true) }.is_err() {
@@ -228,14 +228,14 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
                 }
             }
 
-            if cur_win().w_cursor.lnum != tpos.lnum {
-                cur_win().w_cursor = tpos;
-            } else if cur_win().w_cursor.col < prev_col {
+            if Win::current().w_cursor.lnum != tpos.lnum {
+                Win::current().w_cursor = tpos;
+            } else if Win::current().w_cursor.col < prev_col {
                 // Reset `tpos`: the loop above may have invalidated it.
-                tpos = cur_win().w_cursor;
+                tpos = Win::current().w_cursor;
                 tpos.col += 1;
                 if cc != NUL && unsafe { gchar_pos(&raw mut tpos) } == NUL {
-                    cur_win().w_cursor.col += 1; // put the cursor back on the NUL
+                    Win::current().w_cursor.col += 1; // put the cursor back on the NUL
                 }
             }
 
@@ -255,9 +255,9 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
     // Set `'[` and `']` to the inserted text.  A null `end_insert_pos`
     // means a different buffer is current now.
     if !end_insert_pos.is_null() {
-        cur_buf().b_op_start = Insstart.get();
-        cur_buf().b_op_start_orig = Insstart_orig.get();
-        cur_buf().b_op_end = unsafe { *end_insert_pos };
+        Buf::current().b_op_start = Insstart.get();
+        Buf::current().b_op_start_orig = Insstart_orig.get();
+        Buf::current().b_op_end = unsafe { *end_insert_pos };
     }
 }
 
@@ -271,12 +271,15 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
-    let tick = buf_get_changedtick(cur_buf());
+    let tick = buf_get_changedtick(Buf::current());
     let none = ::core::ptr::null_mut();
     let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) } as c_int;
 
-    if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(cur_buf()) {
-        let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
+    if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(Buf::current()) {
+        let _ = u_save(
+            Win::current().w_cursor.lnum,
+            Win::current().w_cursor.lnum + 1,
+        );
     }
     r
 }
@@ -293,14 +296,4 @@ fn char_at_cursor() -> c_int {
 fn save_cursor_line() -> Result<(), Failed> {
     // SAFETY: `curwin`/`curbuf` are live for the whole session.
     u_save_cursor()
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

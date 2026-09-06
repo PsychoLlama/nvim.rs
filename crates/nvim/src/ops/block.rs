@@ -183,11 +183,11 @@ pub(crate) unsafe fn block_insert(
         if lnum == op.end.lnum {
             // `']` goes to the end of the block, not the end of the insert
             // in the first line.
-            cur_buf().b_op_end.lnum = op.end.lnum;
-            cur_buf().b_op_end.col = offset;
-            if cur_buf().b_visual.vi_end.coladd != 0 {
-                cur_buf().b_visual.vi_end.col += cur_buf().b_visual.vi_end.coladd;
-                cur_buf().b_visual.vi_end.coladd = 0;
+            Buf::current().b_op_end.lnum = op.end.lnum;
+            Buf::current().b_op_end.col = offset;
+            if Buf::current().b_visual.vi_end.coladd != 0 {
+                Buf::current().b_visual.vi_end.col += Buf::current().b_visual.vi_end.coladd;
+                Buf::current().b_visual.vi_end.coladd = 0;
             }
         }
         lnum += 1;
@@ -200,7 +200,7 @@ pub(crate) unsafe fn block_insert(
     if op.start.lnum < op.end.lnum {
         let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
         // SAFETY: both name lines of the current buffer.
-        changed_lines(cur_buf(), first, 0, last, 0, true);
+        changed_lines(Buf::current(), first, 0, last, 0, true);
     }
 }
 
@@ -213,12 +213,12 @@ pub(crate) unsafe fn block_insert(
 /// Safe: the only thing it touches is the current window, which is what
 /// [`cur_win`] already promises.
 pub fn reset_lbr() -> bool {
-    if cur_win().w_onebuf_opt.wo_lbr == 0 {
+    if Win::current().w_onebuf_opt.wo_lbr == 0 {
         return false;
     }
-    cur_win().w_onebuf_opt.wo_lbr = 0;
+    Win::current().w_onebuf_opt.wo_lbr = 0;
     // Changing 'linebreak' may require w_virtcol to be recomputed.
-    cur_win()
+    Win::current()
         .w_valid
         .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     true
@@ -228,11 +228,11 @@ pub fn reset_lbr() -> bool {
 ///
 /// Safe for the same reason [`reset_lbr`] is.
 pub fn restore_lbr(lbr_saved: bool) {
-    if cur_win().w_onebuf_opt.wo_lbr != 0 || !lbr_saved {
+    if Win::current().w_onebuf_opt.wo_lbr != 0 || !lbr_saved {
         return;
     }
-    cur_win().w_onebuf_opt.wo_lbr = 1;
-    cur_win()
+    Win::current().w_onebuf_opt.wo_lbr = 1;
+    Win::current()
         .w_valid
         .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
 }
@@ -277,7 +277,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
     let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
     while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -331,7 +331,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
             }
         } else {
             // Walk on to the block's right edge.
-            cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
+            cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;
@@ -416,7 +416,7 @@ pub unsafe fn charwise_block_prep(
         startcol = start.col;
         if op_virtual() {
             let at = unsafe { PosRef::new(&raw mut start) };
-            let (cs, ce) = cur_win().vcol_span(at);
+            let (cs, ce) = Win::current().vcol_span(at);
             if ce != cs && start.coladd > 0 {
                 // Part of a TAB is selected -- but do not double-count it.
                 bdp.start_char_vcols = ce - cs + 1;
@@ -430,7 +430,7 @@ pub unsafe fn charwise_block_prep(
         endcol = end.col;
         if op_virtual() {
             let at = unsafe { PosRef::new(&raw mut end) };
-            let (cs, ce) = cur_win().vcol_span(at);
+            let (cs, ce) = Win::current().vcol_span(at);
             // No padding for a double-width character: `endcol` is then on
             // the last byte of the character, not past it.
             let mid_char = || unsafe { utf_head_off(p, p.offset(endcol as isize)) } == 0;
@@ -476,17 +476,17 @@ pub unsafe fn charwise_block_prep(
 /// to be skipped. `redo_visual_vcol` is the recorded width a `.` replay uses
 /// instead of measuring the selection again.
 pub(crate) fn get_op_vcol(mut op: Op, redo_visual_vcol: ColNr, initial: bool) {
-    if !visual_mode().is_block() || (!initial && op.end.col < cur_win().w_view_width) {
+    if !visual_mode().is_block() || (!initial && op.end.col < Win::current().w_view_width) {
         return;
     }
 
     op.motion_type = kMTBlockWise;
     // Do not let the end land on a trail byte.
-    cur_win().buffer().snap_to_char(op.end());
+    Win::current().buffer().snap_to_char(op.end());
 
-    (op.start_vcol, op.end_vcol) = cur_win().virtual_vcol_span(op.start());
+    (op.start_vcol, op.end_vcol) = Win::current().virtual_vcol_span(op.start());
     if !redo_VIsual_busy.get() {
-        let (start, end) = cur_win().virtual_vcol_span(op.end());
+        let (start, end) = Win::current().virtual_vcol_span(op.end());
         op.start_vcol = op.start_vcol.min(start);
         if end > op.end_vcol {
             if initial && sel_exclusive() && start >= 1 && start > op.end_vcol {
@@ -497,37 +497,27 @@ pub(crate) fn get_op_vcol(mut op: Op, redo_visual_vcol: ColNr, initial: bool) {
         }
     }
 
-    if cur_win().w_curswant == MAXCOL {
+    if Win::current().w_curswant == MAXCOL {
         // `$` was used: the block's right edge is the longest line's.
-        cur_win().w_cursor.col = MAXCOL;
+        Win::current().w_cursor.col = MAXCOL;
         op.end_vcol = 0;
-        cur_win().w_cursor.lnum = op.start.lnum;
-        let cursor = cur_win().cursor();
-        while cur_win().w_cursor.lnum <= op.end.lnum {
-            let (_, end) = cur_win().virtual_vcol_span(cursor);
+        Win::current().w_cursor.lnum = op.start.lnum;
+        let cursor = Win::current().cursor();
+        while Win::current().w_cursor.lnum <= op.end.lnum {
+            let (_, end) = Win::current().virtual_vcol_span(cursor);
             op.end_vcol = op.end_vcol.max(end);
-            cur_win().w_cursor.lnum += 1;
+            Win::current().w_cursor.lnum += 1;
         }
     } else if redo_VIsual_busy.get() {
         op.end_vcol = op.start_vcol + redo_visual_vcol - 1;
     }
 
     // Turn the column pair back into the block's two corner *positions*.
-    cur_win().w_cursor.lnum = op.end.lnum;
-    cur_win().coladvance(op.end_vcol);
-    op.end = cur_win().w_cursor;
+    Win::current().w_cursor.lnum = op.end.lnum;
+    Win::current().coladvance(op.end_vcol);
+    op.end = Win::current().w_cursor;
 
-    cur_win().w_cursor = op.start;
-    cur_win().coladvance(op.start_vcol);
-    op.start = cur_win().w_cursor;
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
+    Win::current().w_cursor = op.start;
+    Win::current().coladvance(op.start_vcol);
+    op.start = Win::current().w_cursor;
 }

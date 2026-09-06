@@ -578,7 +578,7 @@ pub unsafe fn write_reg_contents_ex(
             }
         };
         if let Some(buf) = buf {
-            cur_win().w_alt_fnum = buf.handle;
+            Win::current().w_alt_fnum = buf.handle;
         }
         return;
     }
@@ -716,9 +716,4 @@ pub unsafe fn finish_yankreg_from_object(reg: *mut YankReg, clipboard_adjust: bo
     }
     // SAFETY: `reg` is the register whose lines were just settled.
     unsafe { update_yankreg_width(reg) };
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

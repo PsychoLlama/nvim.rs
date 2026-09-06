@@ -68,7 +68,7 @@ impl NrFormats {
     unsafe fn current() -> Self {
         // SAFETY: the caller's promise -- 'nrformats' is a NUL-terminated
         // option string.
-        let has = |c: u8| !unsafe { vim_strchr(cur_buf().b_p_nf, c_int::from(c)) }.is_null();
+        let has = |c: u8| !unsafe { vim_strchr(Buf::current().b_p_nf, c_int::from(c)) }.is_null();
         NrFormats {
             hex: has(b'x'),
             oct: has(b'o'),
@@ -109,14 +109,14 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     let folds_frozen = Suppress::fold_update();
 
     if !visual_active() {
-        let mut pos = cur_win().w_cursor;
+        let mut pos = Win::current().w_cursor;
         if u_save_cursor().is_err() {
             return;
         }
         let changed = unsafe { do_addsub(op.op_type, &raw mut pos, 0, prenum1) };
         drop(folds_frozen);
         if changed {
-            changed_lines(cur_buf(), pos.lnum, 0, pos.lnum + 1, 0, true);
+            changed_lines(Buf::current(), pos.lnum, 0, pos.lnum + 1, 0, true);
         }
         return;
     }
@@ -141,7 +141,7 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
         let one_change = unsafe { do_addsub(op.op_type, &raw mut pos, length, amount) };
         if one_change {
             if change_cnt == 0 {
-                startpos = cur_buf().b_op_start;
+                startpos = Buf::current().b_op_start;
             }
             change_cnt += 1;
             if g_cmd {
@@ -154,13 +154,13 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     drop(folds_frozen);
     if change_cnt != 0 {
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
-        changed_lines(cur_buf(), first, 0, last, 0, true);
+        changed_lines(Buf::current(), first, 0, last, 0, true);
     } else if op.is_visual {
         // Nothing changed, so the selection has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
     }
     if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = startpos;
+        Buf::current().b_op_start = startpos;
     }
     if change_cnt > p_report.get() as ssize_t {
         let fmt = ngettext(
@@ -185,7 +185,7 @@ fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
         return bd.textlen;
     }
     if op.motion_type == kMTLineWise {
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.col = 0;
         pos.col = 0;
         return ml_get_len(pos.lnum);
     }
@@ -226,15 +226,15 @@ pub unsafe fn do_addsub(
     let mut pos = unsafe { PosRef::new(pos) };
     let fmt = unsafe { NrFormats::current() };
     let visual = visual_active();
-    let save_cursor = cur_win().w_cursor;
+    let save_cursor = Win::current().w_cursor;
 
     let mut save_coladd: ColNr = 0;
-    if virtual_active(cur_win()) {
+    if virtual_active(Win::current()) {
         save_coladd = pos.coladd;
         pos.coladd = 0;
     }
 
-    cur_win().w_cursor = *pos;
+    Win::current().w_cursor = *pos;
     let ptr = ml_get(pos.lnum);
     let linelen = ml_get_len(pos.lnum);
     let mut col = pos.col;
@@ -289,10 +289,10 @@ pub unsafe fn do_addsub(
             did_change = true;
 
             if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-                cur_buf().b_op_start = startpos;
-                cur_buf().b_op_end = endpos;
-                if cur_buf().b_op_end.col > 0 {
-                    cur_buf().b_op_end.col -= 1;
+                Buf::current().b_op_start = startpos;
+                Buf::current().b_op_end = endpos;
+                if Buf::current().b_op_end.col > 0 {
+                    Buf::current().b_op_end.col -= 1;
                 }
             }
         }
@@ -304,12 +304,12 @@ pub unsafe fn do_addsub(
 /// Put the cursor back where the caller expects it, and answer `did_change`.
 fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: ColNr) -> bool {
     if visual {
-        cur_win().w_cursor = save_cursor;
+        Win::current().w_cursor = save_cursor;
     } else if did_change {
-        cur_win().w_set_curswant = true;
+        Win::current().w_set_curswant = true;
     // SAFETY: a live window.
-    } else if virtual_active(cur_win()) {
-        cur_win().w_cursor.coladd = save_coladd;
+    } else if virtual_active(Win::current()) {
+        Win::current().w_cursor.coladd = save_coladd;
     }
     did_change
 }
@@ -357,7 +357,7 @@ unsafe fn find_number_start(text: *mut c_char, start_col: ColNr, fmt: &NrFormats
     }
     if fmt.bin && fmt.hex && !prefixed_at(col, b'X', b'x', ascii_isxdigit) {
         // Binary and hexadecimal overlap: rescan over decimal digits.
-        col = cur_win().w_cursor.col;
+        col = Win::current().w_cursor.col;
         while col > 0 && ascii_isdigit(byte(col)) {
             col = back(col);
         }
@@ -469,13 +469,13 @@ unsafe fn bump_alpha_char(
         firstdigit += prenum1 as c_int;
     }
 
-    cur_win().w_cursor.col = col;
-    let startpos = cur_win().w_cursor;
+    Win::current().w_cursor.col = col;
+    let startpos = Win::current().w_cursor;
     // SAFETY: the caller's promise -- the cursor is on the line holding `col`.
     let _ = unsafe { del_char(false) };
     unsafe { ins_char(firstdigit) };
-    let endpos = cur_win().w_cursor;
-    cur_win().w_cursor.col = col;
+    let endpos = Win::current().w_cursor;
+    Win::current().w_cursor.col = col;
     (startpos, endpos)
 }
 
@@ -542,7 +542,7 @@ unsafe fn replace_number(
     // a linewise selection or one opened with `$`.
     let mut maxlen = 0;
     if visual && !visual_mode().is_line() {
-        maxlen = if cur_buf().b_visual.vi_curswant == MAXCOL {
+        maxlen = if Buf::current().b_visual.vi_curswant == MAXCOL {
             linelen - col
         } else {
             *length
@@ -585,8 +585,8 @@ unsafe fn replace_number(
     }
 
     // Delete the old number.
-    cur_win().w_cursor.col = col;
-    let startpos = cur_win().w_cursor;
+    Win::current().w_cursor.col = col;
+    let startpos = Win::current().w_cursor;
     let mut todel = *length;
     let mut c = gchar_cursor();
     // The `-` is not part of the length: only the part after it keeps its
@@ -613,9 +613,9 @@ unsafe fn replace_number(
     let len = *length;
     unsafe { render_number(n, pre, len, firstdigit, negative, visual, was_positive, fmt) };
 
-    let endpos = cur_win().w_cursor;
-    if cur_win().w_cursor.col != 0 {
-        cur_win().w_cursor.col -= 1;
+    let endpos = Win::current().w_cursor;
+    if Win::current().w_cursor.col != 0 {
+        Win::current().w_cursor.col -= 1;
     }
     (startpos, endpos)
 }
@@ -766,14 +766,4 @@ fn format_binary(n: UVarNumber, out: &mut [c_char; NUMBUFLEN as usize]) -> c_int
     }
     out[len] = NUL as c_char;
     len as c_int
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -19,7 +19,7 @@ use crate::winlayer::Win;
 unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
     if unsafe { (*arg).v_type } == VAR_UNKNOWN {
-        return Some(win_alist(cur_win()));
+        return Some(win_alist(Win::current()));
     }
     if unsafe { (*arg).v_type } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber {
         return Some(global_arglist());
@@ -46,7 +46,7 @@ pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 /// Standard eval-function contract.
 pub unsafe fn f_argidx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*result).vval.v_number = cur_win().w_arg_idx as VarNumber };
+    unsafe { (*result).vval.v_number = Win::current().w_arg_idx as VarNumber };
 }
 
 /// "arglistid()" function
@@ -104,7 +104,7 @@ pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // only read once their type says they are present.
     if unsafe { (*args.offset(0)).v_type } == VAR_UNKNOWN {
         // No index: the whole current argument list.
-        let (entries, count) = alist_entries(win_alist(cur_win()));
+        let (entries, count) = alist_entries(win_alist(Win::current()));
         unsafe { arglist_as_rettv(entries, count, result) };
         return;
     }
@@ -120,9 +120,4 @@ pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     } else if idx == -1 {
         unsafe { arglist_as_rettv(entries, count, result) };
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

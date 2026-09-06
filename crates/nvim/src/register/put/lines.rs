@@ -40,7 +40,7 @@ impl Put {
         let mut totlen: size_t = 0;
 
         if visual_active() {
-            let visual = cur_buf().b_visual;
+            let visual = Buf::current().b_visual;
             end_lnum = visual.vi_end.lnum.max(visual.vi_start.lnum);
             if end_lnum > start_lnum {
                 // `col` is only right for the first line; the others have
@@ -52,7 +52,7 @@ impl Put {
                     coladd: 0,
                 };
                 let none = ::core::ptr::null_mut();
-                let win = cur_win();
+                let win = Win::current();
                 // SAFETY: a writable local position; only the cursor column
                 // of the three is asked for.
                 unsafe { getvcol(win, &raw mut pos, none, &raw mut vcol, none) };
@@ -124,12 +124,12 @@ impl Put {
                 // last byte, and `newp` is the line it belongs to.
                 first_byte_off = unsafe { utf_head_off(newp, ptr.offset(-1)) };
 
-                if lnum == cur_win().w_cursor.lnum {
+                if lnum == Win::current().w_cursor.lnum {
                     // Land the cursor on the last character put, keeping
                     // w_virtcol right.
                     changed_cline_bef_curs(Win::current());
                     invalidate_botline_win(Win::current());
-                    cur_win().w_cursor.col += (totlen - 1) as ColNr;
+                    Win::current().w_cursor.col += (totlen - 1) as ColNr;
                 }
                 // SAFETY: `lnum`/`col` is where the line changed.
                 unsafe { changed_bytes(lnum, col) };
@@ -148,15 +148,15 @@ impl Put {
         }
 
         // `']` goes on the *first byte* of the last character put.
-        cur_buf().b_op_end = cur_win().w_cursor;
-        cur_buf().b_op_end.col -= first_byte_off;
+        Buf::current().b_op_end = Win::current().w_cursor;
+        Buf::current().b_op_end.col -= first_byte_off;
 
         // `CTRL-O p` in Insert mode leaves the cursor after the last
         // character rather than on it.
         if totlen != 0 && (restart_edit.get() != 0 || self.flags & PUT_CURSEND as c_int != 0) {
-            cur_win().w_cursor.col += 1;
+            Win::current().w_cursor.col += 1;
         } else {
-            cur_win().w_cursor.col -= first_byte_off;
+            Win::current().w_cursor.col -= first_byte_off;
         }
     }
 
@@ -214,8 +214,8 @@ impl Put {
     /// # Safety
     /// `lnum` must be a valid line.
     unsafe fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
-        let old_pos = cur_win().w_cursor;
-        cur_win().w_cursor.lnum = lnum;
+        let old_pos = Win::current().w_cursor;
+        Win::current().w_cursor.lnum = lnum;
         // SAFETY: the caller promises `lnum` is a line of the buffer, so
         // `ml_get` hands back its NUL-terminated text.
         let first = unsafe { c_int::from(*ml_get(lnum)) };
@@ -234,7 +234,7 @@ impl Put {
             (get_indent() + state.diff).max(0)
         };
         unsafe { set_indent(indent, SIN_NOMARK) };
-        cur_win().w_cursor = old_pos;
+        Win::current().w_cursor = old_pos;
     }
 
     /// The `'[` and `']` marks, and where the cursor ends up.
@@ -251,9 +251,9 @@ impl Put {
         lendiff: c_int,
     ) {
         if self.y_type == kMTLineWise {
-            cur_buf().b_op_start.col = 0;
+            Buf::current().b_op_start.col = 0;
             if self.dir == FORWARD {
-                cur_buf().b_op_start.lnum += 1;
+                Buf::current().b_op_start.lnum += 1;
             }
         }
 
@@ -264,7 +264,7 @@ impl Put {
         } else {
             kExtmarkNOOP
         };
-        let from = cur_buf().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
+        let from = Buf::current().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
         // SAFETY: main thread, with a current buffer; the range runs from the
         // put's first line to the end of the buffer.
         unsafe { mark_adjust(from, MAXLNUM as LineNr, self.nr_lines, 0, kind) };
@@ -272,65 +272,65 @@ impl Put {
         // SAFETY (both): a live buffer, and the range is the lines the put
         // just rewrote.
         if self.y_type == kMTCharWise {
-            let at = cur_win().w_cursor.lnum;
-            changed_lines(cur_buf(), at, col, at + 1, self.nr_lines, true);
+            let at = Win::current().w_cursor.lnum;
+            changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
-            let at = cur_buf().b_op_start.lnum;
-            changed_lines(cur_buf(), at, 0, at, self.nr_lines, true);
+            let at = Buf::current().b_op_start.lnum;
+            changed_lines(Buf::current(), at, 0, at, self.nr_lines, true);
         }
 
         // `']` goes on the first byte of the last character put, its
         // column corrected for whatever the reindent above removed.
-        cur_buf().b_op_end.lnum = new_lnum;
+        Buf::current().b_op_end.lnum = new_lnum;
         // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
         // one, so the last is there.
         let last = unsafe { *self.y_array.add(self.y_size.wrapping_sub(1)) };
         let col = (last.len() as ColNr - lendiff).max(0);
         if col > 1 {
-            cur_buf().b_op_end.col = col - 1;
+            Buf::current().b_op_end.col = col - 1;
             if !last.is_empty() {
                 // SAFETY: `last` is NUL-terminated and `len()` bytes long, so
                 // its final byte is one of them.
                 let head = unsafe { utf_head_off(last.data(), last.data().add(last.len() - 1)) };
-                cur_buf().b_op_end.col -= head;
+                Buf::current().b_op_end.col -= head;
             }
         } else {
-            cur_buf().b_op_end.col = 0;
+            Buf::current().b_op_end.col = 0;
         }
 
         if self.flags & PUT_CURSLINE as c_int != 0 {
             // `:put`: the cursor goes on the last inserted line.
-            cur_win().w_cursor.lnum = lnum;
+            Win::current().w_cursor.lnum = lnum;
             // SAFETY: the cursor is on a line of the current buffer.
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND as c_int != 0 {
             // The cursor goes after the inserted text.
             if self.y_type == kMTLineWise {
-                cur_win().w_cursor.lnum = if lnum >= cur_buf().b_ml.ml_line_count {
-                    cur_buf().b_ml.ml_line_count
+                Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
+                    Buf::current().b_ml.ml_line_count
                 } else {
                     lnum + 1
                 };
-                cur_win().w_cursor.col = 0;
+                Win::current().w_cursor.col = 0;
             } else {
-                cur_win().w_cursor.lnum = new_lnum;
-                cur_win().w_cursor.col = col;
-                cur_buf().b_op_end = cur_win().w_cursor;
+                Win::current().w_cursor.lnum = new_lnum;
+                Win::current().w_cursor.col = col;
+                Buf::current().b_op_end = Win::current().w_cursor;
                 if col > 1 {
-                    cur_buf().b_op_end.col = col - 1;
+                    Buf::current().b_op_end.col = col - 1;
                 }
             }
         } else if self.y_type == kMTLineWise {
             // The cursor goes on the first non-blank of the first line.
-            cur_win().w_cursor.col = 0;
+            Win::current().w_cursor.col = 0;
             if self.dir == FORWARD {
-                cur_win().w_cursor.lnum += 1;
+                Win::current().w_cursor.lnum += 1;
             }
             // SAFETY: the cursor is on a line of the current buffer.
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else {
             // The cursor goes on the first character put.
-            cur_win().w_cursor = new_cursor;
+            Win::current().w_cursor = new_cursor;
         }
     }
 
@@ -362,7 +362,7 @@ impl Put {
                     // SAFETY: `lnum`/`col` is the caller's valid position.
                     unsafe { self.split_line_for_charwise(lnum, col) };
                     new_lnum += 1;
-                    cur_win().w_cursor.lnum = lnum;
+                    Win::current().w_cursor.lnum = lnum;
                     i = 1;
                 }
 
@@ -451,14 +451,4 @@ struct FixIndent {
     diff: c_int,
     /// Whether `diff` still has to be measured.
     first: bool,
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

@@ -87,7 +87,7 @@ use crate::winlayer::{Buf, Ea, Win, windows};
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         emsg(gettext(e_empty_buffer.as_ptr()));
     } else {
         let idx = args.cmdidx;
@@ -100,7 +100,7 @@ pub(crate) unsafe fn ex_print(args: *mut ExArg) {
             os_breakcheck();
         }
         setpcmark();
-        cur_win().w_cursor.lnum = args.line2;
+        Win::current().w_cursor.lnum = args.line2;
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // Ex mode has just printed the line itself; it must not print it
@@ -117,19 +117,19 @@ pub(crate) unsafe fn ex_goto(args: *mut ExArg) {
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
 /// position.
 pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
-    let old_linenr = cur_win().w_cursor.lnum;
+    let old_linenr = Win::current().w_cursor.lnum;
     setpcmark();
 
     // The topline to use is the smallest that every bound window can
     // reach: one of them may be shorter than the rest.
     let mut vtopline: LineNr = 1;
-    if cur_win().w_onebuf_opt.wo_scb != 0 {
-        vtopline = get_vtopline(cur_win()) as LineNr;
+    if Win::current().w_onebuf_opt.wo_scb != 0 {
+        vtopline = get_vtopline(Win::current()) as LineNr;
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
                 let limit = unsafe { plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count) }
                     as LineNr
-                    - get_scrolloff_value(cur_win()) as LineNr;
+                    - get_scrolloff_value(Win::current()) as LineNr;
                 vtopline = vtopline.min(limit);
             }
         }
@@ -151,11 +151,11 @@ pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
         }
     }
 
-    if cur_win().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().w_onebuf_opt.wo_scb != 0 {
         did_syncbind.set(true);
         unsafe { checkpcmark() };
         // The cursor moved with the scroll; CTRL-O puts it back.
-        if old_linenr != cur_win().w_cursor.lnum {
+        if old_linenr != Win::current().w_cursor.lnum {
             let ctrl_o: [c_char; 2] = [Ctrl_O as c_char, 0];
             let _ = ins_typebuf(
                 ctrl_o.as_ptr() as *mut c_char,
@@ -183,7 +183,7 @@ pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
 pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    if cursor_valid(cur_win()) != 0 {
+    if cursor_valid(Win::current()) != 0 {
         unsafe { setcursor_mayforce(Win::current_raw(), true) };
     }
     let mut len = args.line2 as int64_t;
@@ -239,7 +239,7 @@ pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
     // context mark either.
     if args.cmdidx != CmdIdx::yank {
         setpcmark();
-        cur_win().w_cursor.lnum = args.line1;
+        Win::current().w_cursor.lnum = args.line1;
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     if visual_active() {
@@ -258,12 +258,14 @@ pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
         }
         _ => {
             // In a 'rightleft' window the two shift commands swap.
-            oa.op_type =
-                if (args.cmdidx == CmdIdx::rshift) as c_int ^ cur_win().w_onebuf_opt.wo_rl != 0 {
-                    OpType::Rshift
-                } else {
-                    OpType::Lshift
-                };
+            oa.op_type = if (args.cmdidx == CmdIdx::rshift) as c_int
+                ^ Win::current().w_onebuf_opt.wo_rl
+                != 0
+            {
+                OpType::Rshift
+            } else {
+                OpType::Lshift
+            };
             unsafe { op_shift(&raw mut oa, false, args.amount) };
         }
     }
@@ -292,8 +294,8 @@ fn put_lines(mut args: Ea, flags: c_int) {
         args.line2 = 1;
         args.forceit = 1;
     }
-    cur_win().w_cursor.lnum = args.line2;
-    check_cursor_col(cur_win());
+    Win::current().w_cursor.lnum = args.line2;
+    check_cursor_col(Win::current());
     unsafe {
         do_put(
             args.regname,
@@ -336,7 +338,7 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
     get_flags(args);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
-    if n == MAXLNUM as LineNr || n < 0 || n > cur_buf().b_ml.ml_line_count {
+    if n == MAXLNUM as LineNr || n < 0 || n > Buf::current().b_ml.ml_line_count {
         emsg(gettext(e_invrange.as_ptr()));
         return;
     }
@@ -348,7 +350,7 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
     } else {
         unsafe { ex_copy(args.line1, args.line2, n) };
     }
-    u_clearline(cur_buf());
+    u_clearline(Buf::current());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     unsafe { ex_may_print(args.raw()) };
 }
@@ -358,7 +360,7 @@ pub unsafe fn ex_may_print(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.flags != 0 {
         print_line(
-            cur_win().w_cursor.lnum,
+            Win::current().w_cursor.lnum,
             args.flags & EXFLAG_NR != 0,
             args.flags & EXFLAG_LIST != 0,
             true,
@@ -401,14 +403,14 @@ fn force_magic(args: Ea) -> OptMagic {
 /// `:join`.
 pub(crate) unsafe fn ex_join(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
-    cur_win().w_cursor.lnum = args.line1;
+    Win::current().w_cursor.lnum = args.line1;
     if args.line1 == args.line2 {
         // One line: join it with the next, unless a two-address range
         // said exactly one line, or there is no next line.
         if args.addr_count >= 2 {
             return;
         }
-        if args.line2 == cur_buf().b_ml.ml_line_count {
+        if args.line2 == Buf::current().b_ml.ml_line_count {
             beep_flush();
             return;
         }
@@ -435,8 +437,8 @@ pub(crate) unsafe fn ex_join(args: *mut ExArg) {
 pub(crate) unsafe fn ex_at(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let prev_len = typeahead().len();
-    cur_win().w_cursor.lnum = args.line2;
-    check_cursor_col(cur_win());
+    Win::current().w_cursor.lnum = args.line2;
+    check_cursor_col(Win::current());
 
     let mut c = ubyte(args.arg) as c_int;
     if c == NUL {
@@ -484,15 +486,15 @@ pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
         return;
     }
 
-    if step >= cur_buf().b_u_seq_cur as LineNr {
+    if step >= Buf::current().b_u_seq_cur as LineNr {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
         return;
     }
     // Count how many states back `step` is along this branch.
-    let start = if cur_buf().b_u_curhead.is_none() {
-        cur_buf().b_u_newhead
+    let start = if Buf::current().b_u_curhead.is_none() {
+        Buf::current().b_u_newhead
     } else {
-        cur_buf().b_u_curhead
+        Buf::current().b_u_curhead
     };
     let mut count = 0;
     let mut uhp = ::core::ptr::null_mut();
@@ -594,24 +596,24 @@ pub(crate) unsafe fn ex_mark(args: *mut ExArg) {
     }
     // The mark is set at the first non-blank of the addressed line, so
     // the cursor goes there and comes back.
-    let pos = cur_win().w_cursor;
-    cur_win().w_cursor.lnum = args.line2;
+    let pos = Win::current().w_cursor;
+    Win::current().w_cursor.lnum = args.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     if unsafe { setmark(*args.arg as c_int) }.is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
         ));
     }
-    cur_win().w_cursor = pos;
+    Win::current().w_cursor = pos;
 }
 
 /// Put the cursor and the window back in agreement after a command that
 /// moved either.
 pub unsafe fn update_topline_cursor() {
-    check_cursor(cur_win());
-    update_topline(cur_win());
-    if cur_win().w_onebuf_opt.wo_wrap == 0 {
-        validate_cursor(cur_win());
+    check_cursor(Win::current());
+    update_topline(Win::current());
+    if Win::current().w_onebuf_opt.wo_wrap == 0 {
+        validate_cursor(Win::current());
     }
     unsafe { update_curswant() };
 }
@@ -664,7 +666,7 @@ pub unsafe fn restore_current_state(sst: *mut SaveState) {
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
-    if !cur_buf().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
+    if !Buf::current().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
     }
@@ -685,10 +687,10 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
             // With a range, the keys are run once per line, from the
             // first column.
             if args.addr_count != 0 {
-                cur_win().w_cursor.lnum = args.line1;
+                Win::current().w_cursor.lnum = args.line1;
                 args.line1 += 1;
-                cur_win().w_cursor.col = 0 as ColNr;
-                check_cursor_moved(cur_win());
+                Win::current().w_cursor.col = 0 as ColNr;
+                check_cursor_moved(Win::current());
             }
             unsafe {
                 exec_normal_cmd(
@@ -769,8 +771,8 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.forceit != 0 {
-        if cur_win().w_cursor.lnum == 0 {
-            cur_win().w_cursor.lnum = 1;
+        if Win::current().w_cursor.lnum == 0 {
+            Win::current().w_cursor.lnum = 1;
         }
         unsafe { set_cursor_for_append_to_line() };
     }
@@ -791,7 +793,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
-        cur_win().w_curswant = 0 as ColNr;
+        Win::current().w_curswant = 0 as ColNr;
     }
     if visual_active() {
         unsafe { showmode() };
@@ -879,23 +881,13 @@ pub(crate) unsafe fn ex_folddo(args: *mut ExArg) {
     let want_closed = (args.cmdidx == CmdIdx::folddoclosed) as c_int;
     let mut lnum = args.line1;
     while lnum <= args.line2 {
-        if has_folding(cur_win(), lnum, None, None) as c_int == want_closed {
+        if has_folding(Win::current(), lnum, None, None) as c_int == want_closed {
             unsafe { ml_setmarked(lnum) };
         }
         lnum += 1;
     }
     unsafe { global_exe(args.arg) };
     unsafe { ml_clearmarked() };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }
 
 /// `clear_oparg()` as checked code.

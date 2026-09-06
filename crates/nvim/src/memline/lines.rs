@@ -81,7 +81,7 @@ impl Lines {
     /// a second line, and nothing that redraws (a redraw reads lines). Keep
     /// the handle's life to the walk that needs it.
     pub unsafe fn current() -> Self {
-        Lines(cur_buf())
+        Lines(Buf::current())
     }
 
     /// Borrow `buffer`'s line cache.
@@ -192,7 +192,7 @@ pub unsafe fn gchar_pos(pos: *mut Pos) -> ::core::ffi::c_int {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_line_alloced() -> bool {
-    cur_buf().b_ml.line_is_dirty()
+    Buf::current().b_ml.line_is_dirty()
 }
 
 /// Flush any pending change, then insert.
@@ -251,7 +251,7 @@ pub unsafe fn ml_append_flags(
     flags: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     // During startup the memfile may still have to be created.
-    if cur_buf().b_ml.ml_mfp.is_null()
+    if Buf::current().b_ml.ml_mfp.is_null()
         && unsafe { open_buffer(false, ::core::ptr::null_mut(), 0) }.is_err()
     {
         return Err(Failed);
@@ -461,7 +461,7 @@ pub unsafe fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_delete_flags(lnum: LineNr, flags: ::core::ffi::c_int) -> Result<(), Failed> {
     unsafe { ml_flush_line(Buf::current_raw(), false) };
-    if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count {
+    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
         return Err(Failed);
     }
     unsafe { ml_delete_int(Buf::current_raw(), lnum, flags) }
@@ -472,7 +472,8 @@ pub unsafe fn ml_delete_flags(lnum: LineNr, flags: ::core::ffi::c_int) -> Result
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_setmarked(lnum: LineNr) {
-    if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count || cur_buf().b_ml.ml_mfp.is_null() {
+    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count || Buf::current().b_ml.ml_mfp.is_null()
+    {
         return; // invalid line number
     }
     if lowest_marked.get() == 0 || lowest_marked.get() > lnum {
@@ -483,10 +484,9 @@ pub unsafe fn ml_setmarked(lnum: LineNr) {
         return;
     }
     let dp = unsafe { Db::new((*hp).bh_data.cast()) };
-    unsafe {
-        *db_index(dp).wrapping_offset((lnum - cur_buf().b_ml.locked_low()) as isize) |= DB_MARKED
-    };
-    cur_buf().b_ml.locked_is_dirty();
+    let idx = (lnum - Buf::current().b_ml.locked_low()) as isize;
+    unsafe { *db_index(dp).wrapping_offset(idx) |= DB_MARKED };
+    Buf::current().b_ml.locked_is_dirty();
 }
 
 /// The first line with its [`DB_MARKED`] bit set, clearing the bit. Zero when
@@ -495,24 +495,24 @@ pub unsafe fn ml_setmarked(lnum: LineNr) {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_firstmarked() -> LineNr {
-    if cur_buf().b_ml.ml_mfp.is_null() {
+    if Buf::current().b_ml.ml_mfp.is_null() {
         return 0;
     }
     // Start at lowest_marked: the last line a mark was found at, kept up
     // to date as lines are inserted and deleted.
     let mut lnum = lowest_marked.get();
-    while lnum <= cur_buf().b_ml.ml_line_count {
+    while lnum <= Buf::current().b_ml.ml_line_count {
         let hp = unsafe { ml_find_line(Buf::current_raw(), lnum, ML_FIND) };
         if hp.is_null() {
             return 0;
         }
         let dp = unsafe { Db::new((*hp).bh_data.cast()) };
-        let mut i = lnum - cur_buf().b_ml.locked_low();
-        while lnum <= cur_buf().b_ml.locked_high() {
+        let mut i = lnum - Buf::current().b_ml.locked_low();
+        while lnum <= Buf::current().b_ml.locked_high() {
             let slot = db_index(dp).wrapping_offset(i as isize);
             if unsafe { *slot } & DB_MARKED != 0 {
                 unsafe { *slot &= DB_INDEX_MASK };
-                cur_buf().b_ml.locked_is_dirty();
+                Buf::current().b_ml.locked_is_dirty();
                 lowest_marked.set(lnum + 1);
                 return lnum;
             }
@@ -528,22 +528,22 @@ pub unsafe fn ml_firstmarked() -> LineNr {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_clearmarked() {
-    if cur_buf().b_ml.ml_mfp.is_null() {
+    if Buf::current().b_ml.ml_mfp.is_null() {
         return; // nothing to do
     }
     let mut lnum = lowest_marked.get();
-    while lnum <= cur_buf().b_ml.ml_line_count {
+    while lnum <= Buf::current().b_ml.ml_line_count {
         let hp = unsafe { ml_find_line(Buf::current_raw(), lnum, ML_FIND) };
         if hp.is_null() {
             return;
         }
         let dp = unsafe { Db::new((*hp).bh_data.cast()) };
-        let mut i = lnum - cur_buf().b_ml.locked_low();
-        while lnum <= cur_buf().b_ml.locked_high() {
+        let mut i = lnum - Buf::current().b_ml.locked_low();
+        while lnum <= Buf::current().b_ml.locked_high() {
             let slot = db_index(dp).wrapping_offset(i as isize);
             if unsafe { *slot } & DB_MARKED != 0 {
                 unsafe { *slot &= DB_INDEX_MASK };
-                cur_buf().b_ml.locked_is_dirty();
+                Buf::current().b_ml.locked_is_dirty();
             }
             i += 1;
             lnum += 1;
@@ -598,7 +598,7 @@ pub unsafe fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
             };
         }
     }
-    if pos.lnum != cur_buf().b_ml.ml_line_count {
+    if pos.lnum != Buf::current().b_ml.ml_line_count {
         // There is a next line.
         pos.col = 0;
         pos.lnum += 1;
@@ -665,9 +665,4 @@ pub unsafe fn decl(pos: &mut Pos) -> ::core::ffi::c_int {
         r = unsafe { dec(pos) };
     }
     r
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
 }

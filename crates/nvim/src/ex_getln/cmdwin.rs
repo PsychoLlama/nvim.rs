@@ -55,7 +55,7 @@ pub unsafe fn text_or_buf_locked() -> bool {
 /// Check `curbuf->b_ro_locked` and `allbuf_lock`; report and answer true if
 /// either is set.
 pub unsafe fn curbuf_locked() -> bool {
-    if cur_buf().b_ro_locked > 0 {
+    if Buf::current().b_ro_locked > 0 {
         emsg(gettext(e_cannot_edit_other_buf));
         return true;
     }
@@ -201,13 +201,13 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // The command-line buffer has bufhidden=wipe, unlike a true
     // "scratch" buffer.
     set_option_value_give_err(kOptBufhidden, static_optval(c"wipe"), OptionSetFlags::LOCAL);
-    cur_buf().b_p_ma = 1;
-    cur_win().w_onebuf_opt.wo_fen = 0;
-    cur_win().w_onebuf_opt.wo_rl = cmdmsg_rl.get() as ::core::ffi::c_int;
+    Buf::current().b_p_ma = 1;
+    Win::current().w_onebuf_opt.wo_fen = 0;
+    Win::current().w_onebuf_opt.wo_rl = cmdmsg_rl.get() as ::core::ffi::c_int;
     cmdmsg_rl.set(false);
 
     // Don't allow switching to another buffer.
-    cur_buf().b_ro_locked += 1;
+    Buf::current().b_ro_locked += 1;
 
     // Showing the prompt may have set need_wait_return; reset it.
     need_wait_return.set(false);
@@ -226,11 +226,11 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         }
         set_option_value_give_err(kOptFiletype, static_optval(c"vim"), OptionSetFlags::LOCAL);
     }
-    cur_buf().b_ro_locked -= 1;
+    Buf::current().b_ro_locked -= 1;
 
     // Reset 'textwidth' after setting 'filetype' (the Vim filetype plugin
     // sets 'textwidth' to 78).
-    cur_buf().b_p_tw = 0;
+    Buf::current().b_p_tw = 0;
 
     // Fill the buffer with the history.
     init_history();
@@ -259,9 +259,10 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Replace the empty last line with the current command line and put
     // the cursor there.
-    let _ = unsafe { ml_replace(cur_buf().b_ml.ml_line_count, Cc::current().text(), true) };
-    cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-    cur_win().w_cursor.col = Cc::current().cmdpos as ColNr;
+    let (last, text) = (Buf::current().b_ml.ml_line_count, Cc::current().text());
+    let _ = unsafe { ml_replace(last, text, true) };
+    Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+    Win::current().w_cursor.col = Cc::current().cmdpos as ColNr;
     unsafe { changed_line_abv_curs() };
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
@@ -356,7 +357,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             cc.cmdpos = 0;
             cmdwin_result.set(Ctrl_C);
         } else {
-            cc.cmdpos = cur_win().w_cursor.col as ::core::ffi::c_int;
+            cc.cmdpos = Win::current().w_cursor.col as ::core::ffi::c_int;
             // If the cursor is on the last character, it probably should
             // be after it.
             if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
@@ -370,7 +371,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         // Avoid the command-line window's first character being
         // concealed.
-        cur_win().w_onebuf_opt.wo_cole = 0;
+        Win::current().w_onebuf_opt.wo_cole = 0;
         // First go back to the original window.
         let wp = Win::current_raw();
         bufref = BufRef::of_opt(current_buf());
@@ -416,14 +417,4 @@ fn wipe_buffer(buffer: *mut Buffer) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
     // SAFETY: the callers have just asked `BufRef::valid` about `buffer`.
     unsafe { close_buffer(None, Buf::new(buffer), wipe, false, false) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

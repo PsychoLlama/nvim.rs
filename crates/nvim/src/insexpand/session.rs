@@ -21,7 +21,7 @@ use crate::winlayer::{Buf, Win};
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
 /// — the completion's anchor moved to `col` on the cursor's line.
 fn set_compl_startpos_here(col: ColNr) {
-    let lnum = cur_win().w_cursor.lnum;
+    let lnum = Win::current().w_cursor.lnum;
     compl_startpos.set(compl_startpos.get().with_lnum(lnum).with_col(col));
 }
 
@@ -243,7 +243,7 @@ pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_
             startcol = curs_col;
         }
         // Re-obtain the line in case it has changed.
-        let line = ml_get(cur_win().w_cursor.lnum);
+        let line = ml_get(Win::current().w_cursor.lnum);
         let len = curs_col - startcol;
         compl_pattern()
             .set(unsafe { cbuf_to_string(line.offset(startcol as isize), len as size_t) });
@@ -290,16 +290,16 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     args[0].vval.v_number = 1;
     args[1].vval.v_string = c"".as_ptr().cast_mut();
 
-    let pos = cur_win().w_cursor;
+    let pos = Win::current().w_cursor;
     let locked = Lock::text();
     let col = unsafe { callback_call_retnr(cb, 2, args.as_mut_ptr()) } as ColNr;
     drop(locked);
 
     State.set(save_state);
-    cur_win().w_cursor = pos; // restore the cursor position
+    Win::current().w_cursor = pos; // restore the cursor position
     check_cursor(Win::current()); // make sure the position is valid, just in case
     validate_cursor(Win::current());
-    if !equalpos(cur_win().w_cursor, pos) {
+    if !equalpos(Win::current().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
         return Err(Failed);
     }
@@ -352,7 +352,7 @@ pub(crate) unsafe fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> R
         compl_length.set(curs_col - compl_col.get());
     }
     // Need to obtain "line" again, it may have become invalid.
-    let line = ml_get(cur_win().w_cursor.lnum);
+    let line = ml_get(Win::current().w_cursor.lnum);
     // SAFETY: `compl_col`/`compl_length` describe a range of `line`.
     compl_pattern().set(unsafe { compl_text_from_line(line) });
     Ok(())
@@ -412,7 +412,7 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
     // It is a continued search.
     compl_cont_status.set(compl_cont_status.get() & !CONT_INTRPT); // remove INTRPT
     if ctrl_x_mode_normal() || ctrl_x_mode_path_patterns() || ctrl_x_mode_path_defines() {
-        if compl_startpos.get().lnum != cur_win().w_cursor.lnum {
+        if compl_startpos.get().lnum != Win::current().w_cursor.lnum {
             // The line (probably) wrapped: set compl_startpos to the first
             // non-blank in the line. If that is not a word character we
             // include it to get a better pattern, but then we don't want
@@ -434,13 +434,13 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
             }
             compl_col.set(compl_startpos.get().col);
         }
-        compl_length.set(cur_win().w_cursor.col - compl_col.get());
+        compl_length.set(Win::current().w_cursor.col - compl_col.get());
         // An `IOSIZE` buffer is used to add a "word from the next
         // line"; would we have enough space?  Just being paranoid.
         if compl_length.get() > IOSIZE - MIN_SPACE {
             compl_cont_status.set(compl_cont_status.get() & !CONT_SOL);
             compl_length.set(IOSIZE - MIN_SPACE);
-            compl_col.set(cur_win().w_cursor.col - compl_length.get());
+            compl_col.set(Win::current().w_cursor.col - compl_length.get());
         }
         compl_cont_status.set(compl_cont_status.get() | CONT_ADDING | CONT_N_ADDS);
         if compl_length.get() < 1 {
@@ -466,10 +466,10 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    let mut line = ml_get(cur_win().w_cursor.lnum);
-    let curs_col = cur_win().w_cursor.col;
+    let mut line = ml_get(Win::current().w_cursor.lnum);
+    let curs_col = Win::current().w_cursor.col;
     compl_pending.set(0);
-    compl_lnum.set(cur_win().w_cursor.lnum);
+    compl_lnum.set(Win::current().w_cursor.lnum);
 
     if compl_cont_status.get() & CONT_INTRPT == CONT_INTRPT
         && compl_cont_mode.get() == ctrl_x_mode.get()
@@ -490,7 +490,7 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
             compl_cont_status.set(0);
         }
         compl_cont_status.set(compl_cont_status.get() | CONT_N_ADDS);
-        compl_startpos.set(cur_win().w_cursor);
+        compl_startpos.set(Win::current().w_cursor);
         startcol = curs_col;
         compl_col.set(0);
     }
@@ -509,7 +509,7 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
     }
     // If "line" was changed while getting the completion info, get it again.
     if line_invalid {
-        line = ml_get(cur_win().w_cursor.lnum);
+        line = ml_get(Win::current().w_cursor.lnum);
     }
 
     if compl_status_adding() {
@@ -518,14 +518,14 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
         }
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
-            let old = cur_buf().b_p_com;
-            cur_buf().b_p_com = c"".as_ptr().cast_mut();
+            let old = Buf::current().b_p_com;
+            Buf::current().b_p_com = c"".as_ptr().cast_mut();
             set_compl_startpos_here(compl_col.get());
             ins_eol('\r' as c_int);
-            cur_buf().b_p_com = old;
+            Buf::current().b_p_com = old;
             compl_length.set(0);
-            compl_col.set(cur_win().w_cursor.col);
-            compl_lnum.set(cur_win().w_cursor.lnum);
+            compl_col.set(Win::current().w_cursor.col);
+            compl_lnum.set(Win::current().w_cursor.lnum);
         }
     } else {
         edit_submode_pre.set(ptr::null_mut());
@@ -605,15 +605,15 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     // The identities, taken while both are provably live: the completion
     // below runs user functions and Lua, and only the *identity* survives
     // that (see `compl_curr_win`).
-    compl_curr_win.set(Some(cur_win().id()));
-    compl_curr_buf.set(cur_win().buffer_or_none().map(Buf::id));
+    compl_curr_win.set(Some(Win::current().id()));
+    compl_curr_buf.set(Win::current().buffer_or_none().map(Buf::id));
     compl_shown_match.set(compl_curr_match.get());
     compl_shows_dir.set(compl_direction.get());
     compl_num_bests.set(0);
 
     // Find the next match (and the following matches).
-    let save_w_wrow = cur_win().w_wrow;
-    let save_w_leftcol = cur_win().w_leftcol;
+    let save_w_wrow = Win::current().w_wrow;
+    let save_w_leftcol = Win::current().w_leftcol;
     let n = unsafe { ins_compl_next(true, ins_compl_key2count(c), insert_match) };
 
     // Reset the autocompletion timer expiry flag.
@@ -701,10 +701,10 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 /// Move the cursor back to the start of the bad word, recording its length in
 /// `spell_bad_len`.
 pub(crate) unsafe fn spell_back_to_badword() {
-    let mut tpos = cur_win().w_cursor;
+    let mut tpos = Win::current().w_cursor;
     let win = Win::current_raw();
     spell_bad_len.set(unsafe { spell_move_to(win, BACKWARD, SMT_ALL, true, ptr::null_mut()) });
-    if cur_win().w_cursor.col != tpos.col {
+    if Win::current().w_cursor.col != tpos.col {
         unsafe { start_arrow(&raw mut tpos) };
     }
 }
@@ -737,14 +737,4 @@ pub(crate) unsafe fn compl_text_from_line(line: *mut c_char) -> String_0 {
     let (at, len) = (compl_col.get(), compl_length.get());
     // SAFETY: the caller's promise.
     unsafe { cbuf_to_string(line.offset(at as isize), len as size_t) }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

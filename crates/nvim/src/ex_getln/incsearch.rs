@@ -62,16 +62,16 @@ pub(crate) fn restore_viewstate(mut window: Win, vs: ViewState) {
 
 /// Start an incremental search from where the cursor and view are now.
 pub(crate) unsafe fn init_incsearch_state(mut s: Is) {
-    s.winid = cur_win().handle;
-    s.match_start = cur_win().w_cursor;
+    s.winid = Win::current().handle;
+    s.match_start = Win::current().w_cursor;
     s.did_incsearch = false;
     s.incsearch_postponed = false;
     s.magic_overruled_save = magic_overruled.get();
     clearpos(&mut s.match_end);
-    s.save_cursor = cur_win().w_cursor;
-    s.search_start = cur_win().w_cursor;
-    s.init_viewstate = save_viewstate(cur_win());
-    s.old_viewstate = save_viewstate(cur_win());
+    s.save_cursor = Win::current().w_cursor;
+    s.search_start = Win::current().w_cursor;
+    s.init_viewstate = save_viewstate(Win::current());
+    s.old_viewstate = save_viewstate(Win::current());
 }
 
 /// Move `t` to the end of the match the last search found, clamped to the
@@ -79,8 +79,8 @@ pub(crate) unsafe fn init_incsearch_state(mut s: Is) {
 pub(crate) fn set_search_match(t: &mut Pos) {
     t.lnum += search_match_lines.get();
     t.col = search_match_endcol.get();
-    if t.lnum > cur_buf().b_ml.ml_line_count {
-        t.lnum = cur_buf().b_ml.ml_line_count;
+    if t.lnum > Buf::current().b_ml.ml_line_count {
+        t.lnum = Buf::current().b_ml.ml_line_count;
         coladvance(Win::current(), MAXCOL);
     }
 }
@@ -250,8 +250,8 @@ pub unsafe fn parse_pattern_and_range(
     *patlen = end.addr().wrapping_sub(p.addr()) as ::core::ffi::c_int;
 
     // Parse the address range.
-    let save_cursor = cur_win().w_cursor;
-    cur_win().w_cursor = incsearch_start;
+    let save_cursor = Win::current().w_cursor;
+    Win::current().w_cursor = incsearch_start;
 
     unsafe { parse_cmd_address(&raw mut ea, &mut dummy, true) };
 
@@ -263,11 +263,11 @@ pub unsafe fn parse_pattern_and_range(
         && at(cmd.wrapping_offset(1)) != 'o' as ::core::ffi::c_int
     {
         // :s defaults to the current line.
-        search_last_line.set(cur_win().w_cursor.lnum);
+        search_last_line.set(Win::current().w_cursor.lnum);
         search_first_line.set(search_last_line.get());
     }
 
-    cur_win().w_cursor = save_cursor;
+    Win::current().w_cursor = save_cursor;
     true
 }
 
@@ -347,15 +347,15 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 
     if search_first_line.get() == 0 {
         // Start at the original cursor position.
-        cur_win().w_cursor = s.search_start;
-    } else if search_first_line.get() > cur_buf().b_ml.ml_line_count {
+        Win::current().w_cursor = s.search_start;
+    } else if search_first_line.get() > Buf::current().b_ml.ml_line_count {
         // Start after the last line.
-        cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-        cur_win().w_cursor.col = MAXCOL;
+        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.col = MAXCOL;
     } else {
         // Start at the first line in the range.
-        cur_win().w_cursor.lnum = search_first_line.get();
-        cur_win().w_cursor.col = 0;
+        Win::current().w_cursor.lnum = search_first_line.get();
+        Win::current().w_cursor.col = 0;
     }
 
     // The do_search() result.
@@ -394,12 +394,12 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         drop(no_emsg);
         set_cmd_byte(cc, skiplen + patlen, next_char);
 
-        if cur_win().w_cursor.lnum < search_first_line.get()
-            || cur_win().w_cursor.lnum > search_last_line.get()
+        if Win::current().w_cursor.lnum < search_first_line.get()
+            || Win::current().w_cursor.lnum > search_last_line.get()
         {
             // The match is outside the address range.
             found = 0;
-            cur_win().w_cursor = s.search_start;
+            Win::current().w_cursor = s.search_start;
         }
 
         // Interrupted while searching: behave as if it failed.
@@ -425,18 +425,18 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 
     // First restore the old curwin values, so the screen is positioned the
     // same way the real search command would leave it.
-    restore_viewstate(cur_win(), s.old_viewstate);
+    restore_viewstate(Win::current(), s.old_viewstate);
     curwin_cursor_moved();
 
-    let mut end_pos = cur_win().w_cursor;
+    let mut end_pos = Win::current().w_cursor;
     if found != 0 {
-        s.match_start = cur_win().w_cursor;
+        s.match_start = Win::current().w_cursor;
         // SAFETY: `curwin`'s cursor lives as long as the window, and
         // `coladvance` inside writes through the same place.
-        set_search_match(unsafe { &mut *cur_win().cursor().raw() });
+        set_search_match(unsafe { &mut *Win::current().cursor().raw() });
         validate_curwin_cursor();
-        s.match_end = cur_win().w_cursor;
-        cur_win().w_cursor = end_pos;
+        s.match_end = Win::current().w_cursor;
+        Win::current().w_cursor = end_pos;
         end_pos = s.match_end;
     }
 
@@ -457,8 +457,8 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     validate_curwin_cursor();
 
     // May redraw the status line to show the cursor position.
-    if p_ru.get() != 0 && (cur_win().w_status_height > 0 || global_stl_height() > 0) {
-        cur_win().w_redr_status = true;
+    if p_ru.get() != 0 && (Win::current().w_status_height > 0 || global_stl_height() > 0) {
+        Win::current().w_redr_status = true;
     }
 
     unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
@@ -469,11 +469,11 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     // Leave the cursor at the end so CTRL-R CTRL-W works — but not when
     // it is beyond the end of the pattern, as for ":s/pat/".
     if cmd_byte(cc, skiplen + patlen) as ::core::ffi::c_int != NUL {
-        cur_win().w_cursor = s.search_start;
+        Win::current().w_cursor = s.search_start;
     } else if found != 0 {
-        cur_win().w_cursor = end_pos;
+        Win::current().w_cursor = end_pos;
         // Mark as valid for the cmdline_show redraw.
-        cur_win().w_valid_cursor = end_pos;
+        Win::current().w_valid_cursor = end_pos;
     }
 
     unsafe { msg_starthere() };
@@ -505,7 +505,7 @@ pub(crate) unsafe fn may_add_char_to_search(
     restore_last_search_pattern();
 
     if s.did_incsearch {
-        cur_win().w_cursor = s.match_end;
+        Win::current().w_cursor = s.match_end;
         // SAFETY: the cursor was just put on a match of the current buffer.
         *c = gchar_cursor();
         if *c != NUL {
@@ -537,7 +537,7 @@ pub(crate) unsafe fn may_add_char_to_search(
             if utf_char2len(*c) != cursor_len() {
                 let save_c = *c;
                 while utf_char2len(*c) != cursor_len() {
-                    cur_win().w_cursor.col += utf_char2len(*c);
+                    Win::current().w_cursor.col += utf_char2len(*c);
                     // SAFETY: as the `gchar_cursor` above.
                     *c = gchar_cursor();
                     stuff_readbuf_char(*c);
@@ -563,16 +563,16 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 
     s.did_incsearch = false;
     if gotesc {
-        cur_win().w_cursor = s.save_cursor;
+        Win::current().w_cursor = s.save_cursor;
     } else {
         if !equalpos(s.save_cursor, s.search_start) {
             // Put the previous-context mark at the original position.
-            cur_win().w_cursor = s.save_cursor;
+            Win::current().w_cursor = s.save_cursor;
             setpcmark();
         }
-        cur_win().w_cursor = s.search_start;
+        Win::current().w_cursor = s.search_start;
     }
-    restore_viewstate(cur_win(), s.old_viewstate);
+    restore_viewstate(Win::current(), s.old_viewstate);
     highlight_match.set(false);
 
     // By default search all lines.
@@ -711,16 +711,16 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         }
 
         set_search_match(&mut s.match_end);
-        cur_win().w_cursor = s.match_start;
+        Win::current().w_cursor = s.match_start;
         curwin_cursor_moved();
         validate_curwin_cursor();
         highlight_match.set(true);
-        s.old_viewstate = save_viewstate(cur_win());
+        s.old_viewstate = save_viewstate(Win::current());
         unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
         let _ = unsafe { update_screen() };
         highlight_match.set(false);
         unsafe { redrawcmdline() };
-        cur_win().w_cursor = s.match_end;
+        Win::current().w_cursor = s.match_end;
     } else {
         unsafe { vim_beep(kOptBoFlagError as ::core::ffi::c_uint) };
     }
@@ -818,14 +818,4 @@ fn curwin_cursor_moved() {
 /// C's `validate_cursor(curwin)`.
 fn validate_curwin_cursor() {
     validate_cursor(Win::current());
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    Buf::current()
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    Win::current()
 }

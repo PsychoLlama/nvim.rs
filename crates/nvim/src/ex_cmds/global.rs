@@ -13,7 +13,6 @@
 
 use super::say;
 use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
-use super::{cur_buf, cur_win};
 use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
@@ -51,8 +50,8 @@ use core::ptr;
 /// C string.  This re-enters `do_cmdline`, so every global may change.
 unsafe fn global_exe_one(cmd: *mut c_char, lnum: LineNr) {
     // SAFETY: caller's contract -- the current window is live.
-    cur_win().w_cursor.lnum = lnum;
-    cur_win().w_cursor.col = 0 as ColNr;
+    Win::current().w_cursor.lnum = lnum;
+    Win::current().w_cursor.col = 0 as ColNr;
     // SAFETY: caller's contract -- `cmd` is NUL-terminated.
     let first = unsafe { *cmd } as c_int;
     let cmd = if first == NUL || first == '\n' as c_int {
@@ -227,7 +226,9 @@ pub unsafe fn ex_global(args: *mut ExArg) {
     let args = unsafe { &mut *args };
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
-    if global_busy.get() != 0 && (args.line1 != 1 || args.line2 != cur_buf().b_ml.ml_line_count) {
+    if global_busy.get() != 0
+        && (args.line1 != 1 || args.line2 != Buf::current().b_ml.ml_line_count)
+    {
         // Will increment global_busy to break out of the loop.
         emsg(gettext(c"E147: Cannot do :global recursive with a range"));
         return;
@@ -267,7 +268,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
     if global_busy.get() != 0 {
         // SAFETY: the program is compiled and the cursor line is in the
         // buffer.
-        let lnum = cur_win().w_cursor.lnum;
+        let lnum = Win::current().w_cursor.lnum;
         if selects(kind, unsafe { matches_line(&raw mut regmatch, lnum) }) {
             unsafe { global_exe_one(parsed.cmd, lnum) };
         }
@@ -320,7 +321,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     global_need_beginline.set(false);
     global_busy.set(1 as c_int);
     // SAFETY: `curbuf` is the live buffer.
-    let old_lcount = cur_buf().b_ml.ml_line_count;
+    let old_lcount = Buf::current().b_ml.ml_line_count;
 
     while !got_int.get() {
         // SAFETY: main thread, live buffer.
@@ -339,7 +340,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
         // SAFETY: as above -- the cursor may be beyond the end of the line.
-        check_cursor(cur_win());
+        check_cursor(Win::current());
     }
 
     // The cursor may not have moved in the text but a change in a previous
@@ -359,6 +360,6 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // the one we started in.
     // SAFETY: message state; `curbuf` is live.
     if !unsafe { do_sub_msg(false) } && Buf::current_raw() == old_buf {
-        say::more(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int);
+        say::more(Buf::current().b_ml.ml_line_count as c_int - old_lcount as c_int);
     }
 }
