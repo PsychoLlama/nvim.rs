@@ -684,8 +684,15 @@ pub(crate) unsafe fn win_float_remove(bang: bool, mut count: c_int) {
         // that reads exactly that.
         unsafe { qsort(items, len, size, Some(float_zindex_cmp)) };
     }
-    for &wp in &float_win_arr {
-        if let Some(win) = valid_window(unsafe { Win::new(wp) }.id())
+    // The identities are taken here, before the first close: every float in
+    // the array is still live, and `Win::id` reads the window it names.
+    // SAFETY: the floats collected above, none closed yet.
+    let ids: Vec<WinId> = float_win_arr
+        .iter()
+        .map(|&wp| unsafe { Win::new(wp) }.id())
+        .collect();
+    for id in ids {
+        if let Some(win) = valid_window(id)
             && close_window(win) == FAIL
         {
             break;
