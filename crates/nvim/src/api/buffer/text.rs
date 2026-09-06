@@ -301,10 +301,7 @@ pub unsafe fn nvim_buf_set_text(
                     kExtmarkNOOP,
                 )
             };
-            if visual_active()
-                && b == unsafe { Buf::new(Buf::current_raw()) }
-                && !visual_mode().is_block()
-            {
+            if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
                 let mut anchor = visual_anchor();
                 unsafe {
                     fix_pos_col(

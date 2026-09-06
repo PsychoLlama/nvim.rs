@@ -62,7 +62,10 @@ pub(crate) unsafe fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, u
 
     // Find the chunk the line belongs to; `curline` ends up at the start
     // of it.
-    if buffer != unsafe { Buf::new(ml_upd_lastbuf.get()) }
+    // The **address**, not a handle: `ml_upd_lastbuf` is only ever compared,
+    // and the buffer it names may have been freed since -- building a `Buf`
+    // from it would read a dead buffer's number. The C compares the pointer.
+    if buffer.raw() != ml_upd_lastbuf.get()
         || line != ml_upd_lastline.get() + 1
         || updtype != ML_CHNK_ADDLINE
     {
