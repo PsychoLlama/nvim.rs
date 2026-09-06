@@ -339,8 +339,6 @@ pub(crate) unsafe fn find_var_ht_dict(
         match lead as u8 {
             b'b' => *dict = cur_buf().b_vars,
             b'w' => *dict = cur_win().w_vars,
-            // SAFETY: `curtab` is set from startup to exit, and the two
-            // function-scope getters read the call stack the editor owns.
             b't' => *dict = TabPage::current().tp_vars,
             b'v' => *dict = get_vimvar_dict(),
             b'a' => *dict = unsafe { get_funccal_args_dict() },

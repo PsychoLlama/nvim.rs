@@ -290,10 +290,6 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
     // Moving tab pages around in an autocommand may cause an endless loop.
     let _no_move = Lock::tabpage_move();
     loop {
-        // SAFETY: caller contract; curtab is valid, and `tpnext` is
-        // re-validated below because closing windows runs autocommands.
-        // The next page is read *before* the close, which may leave the
-        // current one.
         let tpnext = TabPage::current().next();
         // SAFETY: as above.
         unsafe { close_unused_windows_in_tab(aall, old_curwin, old_curtab) };

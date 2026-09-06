@@ -428,8 +428,6 @@ pub(crate) unsafe fn ex_loadview(args: *mut ExArg) {
 /// # Safety
 /// Main thread; `curbuf` is live.
 unsafe fn get_view_file(c: c_char) -> *mut c_char {
-    // SAFETY: `curbuf` is live, 'viewdir' is a NUL-terminated option string,
-    // and `retval` is sized below for every byte written into it.
     if Buf::current().b_ffname.is_null() {
         emsg(gettext(e_noname));
         return ptr::null_mut();

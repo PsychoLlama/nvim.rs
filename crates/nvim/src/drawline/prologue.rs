@@ -291,7 +291,6 @@ impl LineSetup {
         let lnum = wlv.lnum;
         // Both ends by value: nothing here writes through either, and copying
         // the cursor keeps the ordering out of the unsafe region.
-        // SAFETY: the caller's window.
         let cursor = Win::current().w_cursor;
         let (mut top, bot) = if ltoreq(cursor, sel.anchor) {
             (cursor, sel.anchor)
@@ -389,7 +388,6 @@ impl LineSetup {
     /// `window` must be the current window.
     unsafe fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
-        // SAFETY: the caller's window.
         if lnum == Win::current().w_cursor.lnum {
             unsafe {
                 getvcol(

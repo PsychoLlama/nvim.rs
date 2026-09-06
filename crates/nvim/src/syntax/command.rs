@@ -197,7 +197,6 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
 /// The current buffer's character table, as the 32 bytes a syntax block
 /// stores it in. The buffer declares it as four `uint64_t`s.
 fn buf_chartab() -> [uint8_t; 32] {
-    // SAFETY: the editor's current buffer.
     let words = Buf::current().b_chartab;
     ::core::array::from_fn(|i| words[i / 8].to_ne_bytes()[i % 8])
 }

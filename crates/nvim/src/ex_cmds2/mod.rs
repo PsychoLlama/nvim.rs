@@ -656,7 +656,6 @@ unsafe fn report_unwritten(buffer: *mut Buffer) {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
-    // SAFETY: module contract.
     if Buf::current().b_ffname.is_null() {
         emsg(gettext(c"E32: No file name"));
         return Err(Failed);

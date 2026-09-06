@@ -567,7 +567,6 @@ pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> 
 /// # Safety
 /// See [`syn_id2attr`].
 pub(crate) unsafe fn syn_get_final_id(hl_id: c_int) -> c_int {
-    // SAFETY: the editor's own state.
     let mut ns_id = Win::current().w_ns_hl_active;
     let mut hl_id = hl_id;
     unsafe { syn_ns_get_final_id(&mut ns_id, &mut hl_id) };

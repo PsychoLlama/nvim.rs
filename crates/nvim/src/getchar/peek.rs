@@ -296,9 +296,6 @@ unsafe fn read_from_typeahead(
             line_breakcheck();
         } else {
             // os_breakcheck() can call input_enqueue().
-            // SAFETY (this body): `curbuf` is set from startup to exit, and
-            // every typeahead access goes through the accessors, which
-            // bound-check against the buffer's own length.
             if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
                 ctrl_c_interrupts.set(false);
             }

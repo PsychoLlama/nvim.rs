@@ -532,8 +532,6 @@ pub unsafe fn f_tabpagebuflist(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 /// non-zero.
 pub unsafe fn f_visualmode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY throughout: the frame is live, `curbuf` is live for the call, and `result`
-    // owns the duplicate.
     let mode = [Buf::current().b_visual_mode_eval as c_char, NUL as c_char];
     result.v_type = VAR_STRING;
     result.vval.v_string = unsafe { xstrdup(mode.as_ptr()) };

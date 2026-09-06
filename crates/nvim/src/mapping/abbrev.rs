@@ -240,7 +240,6 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     let locked = Lock::expr_map();
     // SAFETY: sets `v:char`, which is a plain vim variable.
     unsafe { set_vim_var_char(c) }; // set v:char to the typed character
-    // SAFETY: the caller's promise — `curwin` is a live window.
     let save_cursor = Win::current().w_cursor;
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();

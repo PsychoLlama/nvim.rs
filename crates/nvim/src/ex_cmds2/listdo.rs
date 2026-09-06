@@ -147,7 +147,6 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
 /// Module contract.
 unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
-    // SAFETY: module contract.
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return true;
     }

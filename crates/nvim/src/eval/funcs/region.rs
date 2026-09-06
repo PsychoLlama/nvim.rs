@@ -115,7 +115,6 @@ impl BufferSwap {
     /// `curbuf` and `curwin` are live.
     unsafe fn save() -> Self {
         BufferSwap {
-            // SAFETY: the caller's promise -- `curbuf` is live.
             buf: Buf::current(),
             virtual_op: virtual_op.get(),
         }

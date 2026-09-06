@@ -16,8 +16,6 @@ use crate::winlayer::{Buf, Win};
 /// The current buffer's handle and the cursor's line, as the deprecated
 /// `buffer_*_line` trio take them -- a zero-based index.
 fn cursor_line() -> (BufferHandle, Integer) {
-    // SAFETY: `curbuf` and `curwin` name live objects for the editor's whole
-    // run.
     let (buf, lnum) = (Buf::current().handle, Win::current().w_cursor.lnum);
     (buf, Integer::from(lnum - 1))
 }

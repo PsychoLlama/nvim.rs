@@ -413,7 +413,6 @@ pub unsafe fn get_mode() -> ModeName {
         visual_select: visual_select(),
         visual_mode: visual_mode().raw(),
         restart_visual_select: restart_VIsual_select.get() != 0,
-        // SAFETY: the editor is initialized, so `curbuf` is live.
         terminal_buffer: !Buf::current().terminal.is_null(),
         finish_op: finish_op.get(),
         motion_force: motion_force.get(),

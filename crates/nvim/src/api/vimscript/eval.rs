@@ -116,7 +116,6 @@ unsafe fn call_function_with(
         let _nesting = enter_recursive(&recursive);
         let mut rettv: TypVal = TV_INITIAL_VALUE;
         let mut funcexe: FuncExe = FUNCEXE_INIT;
-        // SAFETY: there is always a current window.
         let lnum = Win::current().w_cursor.lnum;
         funcexe.fe_firstline = lnum;
         funcexe.fe_lastline = lnum;
