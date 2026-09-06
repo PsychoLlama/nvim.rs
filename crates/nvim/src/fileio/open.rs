@@ -57,7 +57,7 @@ unsafe fn read_autocmd(
         (ptr::null_mut(), Buf::current_raw())
     };
     // SAFETY: the current buffer is live and `args` is the caller's command.
-    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, Buf::new(buf), args) }
+    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, Buf::from_raw(buf), args) }
 }
 
 /// The file, open and ready to read.
@@ -318,7 +318,9 @@ pub(crate) unsafe fn open_source(
                 unsafe { set_forced_fenc(args) };
             }
             let event = AutoEvent::BufNewFile;
-            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, Buf::current(), args) };
+            unsafe {
+                apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args)
+            };
             // Remember the current fileformat.
             save_file_ff(Buf::current());
 

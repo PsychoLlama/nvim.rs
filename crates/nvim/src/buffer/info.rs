@@ -391,12 +391,9 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         } else {
             buf.b_ffname
         };
-        let help = if shorthelp != 0 {
-            buf.raw()
-        } else {
-            ptr::null_mut()
-        };
-        out.put_home_replaced(unsafe { Buf::new(help) }, name);
+        // Only a help buffer's name is shortened against the buffer's own
+        // directory; every other name is shortened against `$HOME` alone.
+        out.put_home_replaced((shorthelp != 0).then_some(buf), name);
     }
 
     let dontwrite = buf_is_dontwrite(Some(buf));
@@ -577,11 +574,10 @@ impl Msg {
 
     /// `home_replace` into the tail, followed by the length it wrote --
     /// which upstream measures with `strlen` rather than taking the answer.
-    fn put_home_replaced(&mut self, buffer: Buf, name: *const c_char) {
+    fn put_home_replaced(&mut self, buffer: Option<Buf>, name: *const c_char) {
         let (dst, room) = self.tail();
-        // SAFETY: a live buffer or null, a NUL-terminated name, and the
-        // buffer's own tail.
-        unsafe { home_replace(Some(buffer), name, dst, room, true) };
+        // SAFETY: a NUL-terminated name, and the buffer's own tail.
+        unsafe { home_replace(buffer, name, dst, room, true) };
         // SAFETY: what `home_replace` just NUL-terminated.
         self.len += unsafe { cstr::bytes_at(dst) }.len();
     }

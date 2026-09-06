@@ -330,14 +330,10 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
 
     let need_switch_win = !(tp == TabPage::current_or_none() && win == Win::current_raw());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
-    // SAFETY: a live window and its tab page.
-    let (w, t) = unsafe {
-        (
-            Win::new(win),
-            TabPage::new(tp.map_or(ptr::null_mut(), TabPage::raw)),
-        )
-    };
-    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, Some(t), true) }.is_ok() {
+    // SAFETY: a live window; `tp` is `None` for "wherever it is", which is
+    // what `switch_win` reads an absent tab page as.
+    let w = unsafe { Win::new(win) };
+    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, tp, true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };
         } else {

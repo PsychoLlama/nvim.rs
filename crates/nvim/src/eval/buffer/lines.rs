@@ -145,7 +145,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool)
     };
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
-    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
+    let lnum = unsafe { arg_lnum_buf(args, 1, Some(buf)) };
     if did_emsg.get() == did_emsg_before {
         unsafe { set_buffer_lines(Some(buf), lnum, append, args.ptr(2), result) };
     }
@@ -197,9 +197,7 @@ unsafe fn get_buffer_lines(
 unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
-    let Some(buf) = arg_buf_chk(args, 0) else {
-        return;
-    };
+    let buf = arg_buf_chk(args, 0);
     let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() > did_emsg_before {
         return;
@@ -209,7 +207,7 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     } else {
         lnum
     };
-    unsafe { get_buffer_lines(Some(buf), lnum, end, retlist, result) };
+    unsafe { get_buffer_lines(buf, lnum, end, retlist, result) };
 }
 
 /// `append({lnum}, {string/list})`.
@@ -286,12 +284,12 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     let Some(buf) = arg_buf(args, 0, 0) else {
         return;
     };
-    let first = unsafe { arg_lnum_buf(args, 1, buf) };
+    let first = unsafe { arg_lnum_buf(args, 1, Some(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let mut last = if args.has(2) {
-        unsafe { arg_lnum_buf(args, 2, buf) }
+        unsafe { arg_lnum_buf(args, 2, Some(buf)) }
     } else {
         first
     };

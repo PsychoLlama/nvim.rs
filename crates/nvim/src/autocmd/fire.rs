@@ -129,7 +129,7 @@ pub unsafe fn apply_autocmds_exarg(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buffer: Buf,
+    buffer: Option<Buf>,
     args: *mut ExArg,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
@@ -142,7 +142,7 @@ pub unsafe fn apply_autocmds_exarg(
             fname_io,
             force,
             AUGROUP_ALL,
-            Some(buffer),
+            buffer,
             args,
             ::core::ptr::null_mut(),
         )

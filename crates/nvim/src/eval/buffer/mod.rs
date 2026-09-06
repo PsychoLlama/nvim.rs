@@ -104,9 +104,9 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
 ///
 /// # Safety
 /// `buffer` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: Buf) -> LineNr {
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: Option<Buf>) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(args.ptr(i), Some(buffer)) }
+    unsafe { tv_get_lnum_buf(args.ptr(i), buffer) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
