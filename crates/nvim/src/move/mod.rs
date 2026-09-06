@@ -65,7 +65,7 @@ use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, Window, int64_t};
+use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, int64_t};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -116,7 +116,12 @@ impl Win {
     /// Screen columns to the left of the text: the 'number'/'statuscolumn'
     /// column, the command-line window's marker, the fold column and the sign
     /// column. None of them move when the window scrolls horizontally.
-    pub(super) fn col_off(self) -> c_int {
+    ///
+    /// This is upstream's `win_col_off(wp)`, and it is the editor's own entry
+    /// point. The unmangled `win_col_off` symbol the ABI ledger carries is a
+    /// separate C-ABI shim over this, in `winlayer::graph` beside the `curwin`
+    /// static `test/functional/lua/ffi_spec.lua` pairs it with.
+    pub(crate) fn col_off(self) -> c_int {
         self.number_col()
             + (cmdwin_win.get() == Some(self.id())) as c_int
             + self.fdccol_count()
@@ -687,21 +692,6 @@ pub fn validate_cursor_col(mut win: Win) {
         win.w_leftcol,
     );
     win.w_valid |= WinValid::WCOL;
-}
-
-/// Columns of a window that are not text: the 'number'/'statuscolumn'
-/// column, the fold column and the sign column. They do not move when the
-/// window scrolls horizontally.
-///
-/// # Safety
-/// `window` must be a valid window.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
-    // SAFETY: the caller's promise. The parameter stays a raw pointer: the
-    // symbol is in the ABI ledger and `test/functional/lua/ffi_spec.lua`
-    // calls it through an `ffi.cdef` that spells `win_T *`. Rust callers
-    // want `Win::col_off` instead.
-    unsafe { Win::new(window) }.col_off()
 }
 
 /// The extra column offset a wrapped line's later screen lines get.

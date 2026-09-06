@@ -59,7 +59,7 @@ pub(crate) fn reg_breakcheck(rex: Rex) {
 /// being matched is not always the current one.
 pub(crate) fn reg_iswordc(rex: Rex, c: c_int) -> bool {
     // SAFETY: `reg_buf` is the buffer the match was set up against.
-    unsafe { vim_iswordc_buf(c, Buf::new(rex.reg_buf())) }
+    unsafe { vim_iswordc_buf(c, rex.reg_buf()) }
 }
 
 /// Which line numbering to resolve against: the running match, or the
@@ -118,7 +118,7 @@ pub(crate) fn reg_line(rex: Rex, lnum: LineNr, origin: LineOrigin) -> *mut c_cha
         Located::Past => c"".as_ptr().cast_mut(),
         // SAFETY: `reg_buf` is the buffer being matched and `locate` has
         // established the line is in it.
-        Located::At(lnum) => unsafe { ml_get_buf(Buf::new(rex.reg_buf()), lnum) },
+        Located::At(lnum) => unsafe { ml_get_buf(rex.reg_buf(), lnum) },
     }
 }
 
@@ -127,7 +127,7 @@ pub(crate) fn reg_line_len(rex: Rex, lnum: LineNr, origin: LineOrigin) -> ColNr 
     match locate(lnum, origin.first(rex), origin.maxline(rex)) {
         Located::Before | Located::Past => 0,
         // SAFETY: as `reg_line`.
-        Located::At(lnum) => unsafe { ml_get_buf_len(Buf::new(rex.reg_buf()), lnum) },
+        Located::At(lnum) => unsafe { ml_get_buf_len(rex.reg_buf(), lnum) },
     }
 }
 
@@ -190,22 +190,18 @@ pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
     // than `line`; `reg_buf` is the buffer whose 'iskeyword' applies.
     let line = rex.line().cast::<c_char>();
     let prev = unsafe { rex.input_str().sub(1) };
-    let chartab = (unsafe { &raw mut (*rex.reg_buf()).b_chartab }).cast::<u64>();
+    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<u64>();
     unsafe { mb_get_class_tab(prev.sub(utf_head_off(line, prev) as usize), chartab) }
 }
 
 /// Is the position being matched inside the Visual area? Backs `\%V`.
 pub(crate) fn reg_match_visual(rex: Rex) -> bool {
-    let raw = match rex.reg_win() {
-        w if w.is_null() => Win::current_raw(),
-        w => w,
-    };
-    // SAFETY: `reg_win` is the window the match is running for, or `curwin`
-    // when it has none; both stay live for the length of the match.
-    let wp = unsafe { Win::new(raw) };
+    // `reg_win` is the window the match is running for, or `curwin` when it
+    // has none; both stay live for the length of the match.
+    let wp = rex.reg_win().unwrap_or_else(Win::current);
     // `\%V` is a buffer-position test, so it only applies to a multi-line
     // match in the current buffer.
-    if rex.reg_buf() != Buf::current_raw() || !visual_ever_started() || !rex.multi() {
+    if Some(rex.reg_buf()) != Buf::current_or_none() || !visual_ever_started() || !rex.multi() {
         return false;
     }
 

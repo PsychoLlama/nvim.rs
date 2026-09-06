@@ -81,8 +81,8 @@ unsafe fn matches_line(regmatch: *mut RegMMatch, lnum: LineNr) -> bool {
     unsafe {
         vim_regexec_multi(
             regmatch,
-            Win::current_raw(),
-            Buf::current().raw(),
+            Some(Win::current()),
+            Buf::current(),
             lnum,
             0 as ColNr,
             ptr::null_mut(),

@@ -87,8 +87,8 @@ impl Searcher {
         unsafe {
             vim_regexec_multi(
                 &raw mut self.regmatch,
-                self.win.map_or(ptr::null_mut(), Win::raw),
-                self.buf.raw(),
+                self.win,
+                self.buf,
                 lnum,
                 col,
                 self.tm,

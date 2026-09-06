@@ -466,8 +466,10 @@ pub(crate) unsafe fn syn_regexec(
     }
     unsafe { (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as ColNr };
     let mut timed_out: c_int = 0;
-    let (win, buf, tm) = (syn_win.get(), syn_buf.get(), syn_tm.get());
-    // SAFETY: the window and buffer the parser was started for.
+    // SAFETY: the window and buffer the parser was started for -- the
+    // window may be absent, the buffer never is once the parse has begun.
+    let (win, buf) = unsafe { (Win::from_raw(syn_win.get()), Buf::new(syn_buf.get())) };
+    let tm = syn_tm.get();
     let r = unsafe { vim_regexec_multi(rmp, win, buf, lnum, col, tm, &raw mut timed_out) };
 
     if timing {

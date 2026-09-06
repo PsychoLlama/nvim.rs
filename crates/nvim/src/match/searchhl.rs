@@ -293,10 +293,10 @@ unsafe fn next_search_hl(
             // SAFETY: the caller's match state, whose own `rm` and `tm` these
             // are; two addresses off the pointer rather than off a borrow.
             let (rm, tm) = unsafe { (&raw mut (*shl.raw()).rm, &raw mut (*shl.raw()).tm) };
-            let buf = shl.buf;
+            let buf = unsafe { Buf::new(shl.buf) };
             // SAFETY: the caller's window and buffer.
             let out = &raw mut timed_out;
-            nmatched = unsafe { vim_regexec_multi(rm, win.raw(), buf, lnum, matchcol, tm, out) };
+            nmatched = unsafe { vim_regexec_multi(rm, Some(win), buf, lnum, matchcol, tm, out) };
             if regprog_is_copy {
                 unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
             }

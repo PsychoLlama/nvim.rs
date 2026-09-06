@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::winlayer::{Buf, Win};
 
 /// The head every compiled pattern starts with, whichever engine built it.
 #[repr(C)]
@@ -31,8 +32,8 @@ pub type RegExecNl =
 pub type RegExecMulti = Option<
     unsafe fn(
         *mut RegMMatch,
-        *mut Window,
-        *mut Buffer,
+        Option<Win>,
+        Buf,
         LineNr,
         ColNr,
         *mut ProfTime,

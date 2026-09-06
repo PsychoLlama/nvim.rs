@@ -233,11 +233,9 @@ pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
 pub(super) unsafe fn regexec_at(regmatch: *mut RegMMatch, lnum: LineNr, col: ColNr) -> c_int {
-    let (win, buffer) = (Win::current_raw(), Buf::current_raw());
+    let (win, buffer) = (Win::current(), Buf::current());
     let (timeout, timed_out) = (ptr::null_mut(), ptr::null_mut());
-    // SAFETY: a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
-    unsafe { vim_regexec_multi(regmatch, win, buffer.raw(), lnum, col, timeout, timed_out) }
+    unsafe { vim_regexec_multi(regmatch, Some(win), buffer, lnum, col, timeout, timed_out) }
 }
 
 /// Record a match for the `'inccommand'` preview, and how many lines it adds

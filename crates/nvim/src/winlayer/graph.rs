@@ -72,6 +72,25 @@ pub(crate) static cmdwin_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static cmdwin_old_curwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static cmdline_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
+/// Columns of window `window` that are not text -- the 'number' /
+/// 'statuscolumn' column, the command-line window's marker, the fold column
+/// and the sign column.
+///
+/// Here rather than in `move`, where its body is, for the same reason
+/// [`curwin`] is here: `test/functional/lua/ffi_spec.lua` reads `curwin` as a
+/// data symbol and hands it straight to this one through an `ffi.cdef` that
+/// spells `win_T *`, so the pair is frozen together and the raw parameter is
+/// the ABI, not a gap in the migration. Rust callers want
+/// `crate::r#move::win_col_off`, which takes a [`Win`].
+///
+/// # Safety
+/// `window` must be a live window.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
+    // SAFETY: the caller's promise.
+    unsafe { Win::new(window) }.col_off()
+}
+
 // ---------------------------------------------------------------------------
 // Which one is current
 //

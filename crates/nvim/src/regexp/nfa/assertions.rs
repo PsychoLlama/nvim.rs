@@ -8,7 +8,6 @@
 
 use super::list::op;
 use crate::regexp::NfaOp;
-use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use super::run::nfa_re_num_cmp;
@@ -16,7 +15,7 @@ use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
-use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, Window, uint8_t};
+use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, uint8_t};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
@@ -31,11 +30,8 @@ fn lnum(rex: Rex) -> LineNr {
 }
 
 /// The window the match runs in, for the assertions that need one.
-fn window(rex: Rex) -> *mut Window {
-    match rex.reg_win() {
-        w if w.is_null() => Win::current_raw(),
-        w => w,
-    }
+fn window(rex: Rex) -> Win {
+    rex.reg_win().unwrap_or_else(Win::current)
 }
 
 /// `\%23l`: the line number, counted in the buffer rather than in the match.
@@ -90,16 +86,16 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut NfaState) -> bool {
     // Likewise for `\%>`, but the bound is the tab width: no character
     // expands to more columns than one tab does.
     if op == 1 && col - 1 > want && col > 100 {
-        let ts = (unsafe { (*(*wp).w_buffer).b_p_ts }).max(4);
+        let ts = wp.buffer().b_p_ts.max(4);
         if col as i64 > want as i64 * ts {
             return true;
         }
     }
     let mut lnum = if rex.multi() { lnum(rex) } else { 1 };
-    if rex.multi() && (lnum <= 0 || lnum > unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }) {
+    if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = 1;
     }
-    let vcol = unsafe { win_linetabsize(Win::new(wp), lnum, rex.line() as *mut c_char, col) };
+    let vcol = unsafe { win_linetabsize(wp, lnum, rex.line() as *mut c_char, col) };
     assert!(want >= 0, "virtual column assertion out of range");
     nfa_re_num_cmp(want as u64, op, vcol as u64 + 1)
 }
@@ -113,7 +109,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     let col = if rex.multi() { col(rex) } else { 0 };
     let fm: *mut FileMark = unsafe {
         mark_get(
-            Buf::new(rex.reg_buf()),
+            rex.reg_buf(),
             Win::current(),
             &raw mut slot,
             kMarkBufLocal,
@@ -155,10 +151,8 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
 
 /// `\%#`: the cursor's own position.
 pub(crate) fn at_cursor(rex: Rex) -> bool {
-    // SAFETY: reads the match context and its window.
-    !rex.reg_win().is_null()
-        && lnum(rex) == unsafe { (*rex.reg_win()).w_cursor.lnum }
-        && col(rex) == unsafe { (*rex.reg_win()).w_cursor.col }
+    rex.reg_win()
+        .is_some_and(|w| lnum(rex) == w.w_cursor.lnum && col(rex) == w.w_cursor.col)
 }
 
 /// `\%V`: inside the Visual area.

@@ -369,12 +369,9 @@ unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
     if curc == NUL {
         return false;
     }
-    let this_class = unsafe {
-        mb_get_class_tab(
-            rex.input_str(),
-            &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
-        )
-    };
+    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<u64>();
+    // SAFETY: the match context is live, per the caller.
+    let this_class = unsafe { mb_get_class_tab(rex.input_str(), chartab) };
     this_class > 1 && reg_prev_class(rex) != this_class
 }
 
@@ -387,12 +384,9 @@ unsafe fn at_word_end(rex: Rex) -> bool {
     if rex.at_bol() {
         return false;
     }
-    let this_class = unsafe {
-        mb_get_class_tab(
-            rex.input_str(),
-            &raw mut (*rex.reg_buf()).b_chartab as *mut u64,
-        )
-    };
+    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<u64>();
+    // SAFETY: the match context is live, per the caller.
+    let this_class = unsafe { mb_get_class_tab(rex.input_str(), chartab) };
     let prev_class = reg_prev_class(rex);
     this_class != prev_class && prev_class != 0 && prev_class != 1
 }

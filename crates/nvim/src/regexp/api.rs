@@ -12,8 +12,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use crate::types::Buffer;
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::{
@@ -27,9 +27,7 @@ use crate::option::vars::{p_re, p_verbose};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::regexp::state::reg_do_extmatch;
-use crate::types::{
-    ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, Window, uint8_t,
-};
+use crate::types::{ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, uint8_t};
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
 /// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
@@ -261,8 +259,8 @@ pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
 pub unsafe fn vim_regexec_multi(
     rmp: *mut RegMMatch,
-    win: *mut Window,
-    buffer: *mut Buffer,
+    win: Option<Win>,
+    buffer: Buf,
     lnum: LineNr,
     col: ColNr,
     tm: *mut ProfTime,

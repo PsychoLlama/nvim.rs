@@ -283,8 +283,8 @@ unsafe fn match_buflines(
             while unsafe {
                 vim_regexec_multi(
                     &raw mut search.regmatch,
-                    Win::current_raw(),
-                    buffer.raw(),
+                    Some(Win::current()),
+                    buffer,
                     lnum,
                     col,
                     ptr::null_mut(),

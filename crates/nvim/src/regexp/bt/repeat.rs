@@ -9,7 +9,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::op::BtOp;
@@ -145,7 +144,7 @@ pub(crate) fn regrepeat(rex: Rex, p: *mut uint8_t, maxcount: int64_t) -> c_int {
         // `\k`/`\K`: 'iskeyword' characters, which are buffer-local.
         BtOp::Kword | BtOp::Skword => count_class!(false, |scan: *mut uint8_t| {
             unsafe {
-                vim_iswordp_buf(scan.cast(), Buf::new(rex.reg_buf()))
+                vim_iswordp_buf(scan.cast(), rex.reg_buf())
                     && (positive || !ascii_isdigit(*scan as c_int))
             }
         }),

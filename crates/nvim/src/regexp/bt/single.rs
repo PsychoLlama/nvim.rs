@@ -5,7 +5,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
-use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
@@ -187,9 +186,7 @@ pub(crate) fn match_one(
 /// The cursor of the window the match runs in, if it runs in one. `\%#`
 /// needs a window and a string match has none.
 fn cursor_of(rex: Rex) -> Option<Pos> {
-    let win = rex.reg_win();
-    // SAFETY: a non-null `reg_win` is the live window the match runs in.
-    (!win.is_null()).then(|| unsafe { (*win).w_cursor })
+    rex.reg_win().map(|win| win.w_cursor)
 }
 
 /// `vim_is_ident_char`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
@@ -215,27 +212,22 @@ fn nomatch_unless(ok: bool) -> c_int {
 fn char_class(rex: Rex) -> c_int {
     // SAFETY: `rex.input` points into the current line and `reg_buf` is the
     // buffer being matched, so it has a 'iskeyword' table.
-    let chartab = (unsafe { &raw mut (*rex.reg_buf()).b_chartab }).cast::<uint64_t>();
+    let chartab = (&raw mut rex.reg_buf().b_chartab).cast::<uint64_t>();
     unsafe { mb_get_class_tab(rex.input_str(), chartab) }
 }
 
 /// `\%23v` compares against this: the screen column the cursor sits in.
 fn virtual_column(rex: Rex) -> uint32_t {
-    let wp = if rex.reg_win().is_null() {
-        Win::current_raw()
-    } else {
-        rex.reg_win()
-    };
+    let wp = rex.reg_win().unwrap_or_else(Win::current);
     let mut lnum: LineNr = if rex.multi() { rex.buf_lnum() } else { 1 };
     // A string match has no line numbers, and a multi-line match may be
     // running over a line that has since been deleted.
-    // SAFETY: `wp` is a live window, so it has a buffer.
-    if rex.multi() && (lnum <= 0 || lnum > unsafe { (*(*wp).w_buffer).b_ml.ml_line_count }) {
+    if rex.multi() && (lnum <= 0 || lnum > wp.buffer().b_ml.ml_line_count) {
         lnum = 1;
     }
     // SAFETY: `rex.line` is the line being matched, NUL-terminated, and the
     // cursor is a byte offset into it.
-    unsafe { win_linetabsize(Win::new(wp), lnum, rex.line().cast(), rex.col()) as uint32_t }
+    unsafe { win_linetabsize(wp, lnum, rex.line().cast(), rex.col()) as uint32_t }
 }
 
 /// `\%'m`, `\%<'m`, `\%>'m`: is the cursor at, before or after mark `m`?
@@ -251,7 +243,7 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // window; `slot` is this frame's and outlives every use of `fm`.
     let buf = rex.reg_buf();
     let win = Win::current();
-    let fm = unsafe { mark_get(Buf::new(buf), win, &raw mut slot, kMarkBufLocal, mark) };
+    let fm = unsafe { mark_get(buf, win, &raw mut slot, kMarkBufLocal, mark) };
     // `mark_get` can move the buffer's line pointers, so re-anchor.
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).cast(), col);
