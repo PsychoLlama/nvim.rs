@@ -382,7 +382,7 @@ pub unsafe fn did_set_fileformat(args: &mut OptSet) -> Option<&CStr> {
     // Only "mac" is drawn differently, so a redraw is needed when
     // entering or leaving it.
     if get_fileformat(b) == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {
-        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+        unsafe { redraw_buf_later(Buf::new(buf), UPD_NOT_VALID) };
     }
     None
 }
@@ -498,7 +498,7 @@ pub unsafe fn did_set_iskeyword(args: &mut OptSet) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_isopt(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's buffer.
-    if !unsafe { buf_init_chartab(args.os_buf.cast::<Buffer>(), true) } {
+    if !unsafe { buf_init_chartab(Buf::new(args.os_buf.cast::<Buffer>()), true) } {
         args.os_restore_chartab = true;
         return invalid();
     }
@@ -546,10 +546,10 @@ pub unsafe fn did_set_keymap(args: &mut OptSet) -> Option<&CStr> {
         }
     }
     if !opt_flags.has(OptionSetFlags::LOCAL) {
-        unsafe { set_iminsert_global(buf) };
-        unsafe { set_imsearch_global(buf) };
+        unsafe { set_iminsert_global(Buf::new(buf)) };
+        unsafe { set_imsearch_global(Buf::new(buf)) };
     }
-    unsafe { status_redraw_buf(buf) };
+    unsafe { status_redraw_buf(Buf::new(buf)) };
     None
 }
 

@@ -227,7 +227,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
     if !b.b_ml.ml_mfp.is_null() {
         // The swap file's name follows the buffer's.
         // SAFETY: a live buffer with a memline.
-        unsafe { ml_setname(b.raw()) };
+        unsafe { ml_setname(b) };
     }
     let cur = current_win();
     if cur.w_buffer == b.raw() {
@@ -243,7 +243,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
     // name.
     unsafe { fmarks_check_names(b) };
     // SAFETY: as above.
-    unsafe { ml_timestamp(b.raw()) };
+    unsafe { ml_timestamp(b) };
 }
 
 // ---------------------------------------------------------------------------

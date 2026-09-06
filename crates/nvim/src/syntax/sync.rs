@@ -18,7 +18,6 @@ use core::ffi::{CStr, c_char, c_int};
 use super::*;
 use crate::regexp::RE_MAGIC;
 use crate::types::NUL;
-use crate::winlayer::Buf;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 
 /// Find a synchronisation point for line `start_lnum`, setting `current_lnum`
@@ -85,7 +84,7 @@ unsafe fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
     // is `syn_buf`, which need not be the one `window` shows.
     let saved_win = switch_window(window);
     // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
-    let saved_buf = switch_buffer(unsafe { Buf::new(syn_buf.get()) });
+    let saved_buf = switch_buffer(syn_buffer());
 
     // Skip lines that end in a backslash.
     while start_lnum > 1 {

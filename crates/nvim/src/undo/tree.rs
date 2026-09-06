@@ -326,5 +326,5 @@ pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
 /// `buffer` holds line `lnum`.
 pub(crate) unsafe fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
     // SAFETY: the buffer holds that line, by the contract above.
-    unsafe { xstrdup(ml_get_buf(buffer.raw(), lnum)) }
+    unsafe { xstrdup(ml_get_buf(buffer, lnum)) }
 }

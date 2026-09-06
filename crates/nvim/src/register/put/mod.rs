@@ -317,7 +317,7 @@ impl Put {
         // has to be part of what is saved.
         //
         // SAFETY (these three): a live buffer, and `lnum` is a line of it.
-        let saved = if unsafe { buf_is_empty(Buf::current_raw()) } {
+        let saved = if unsafe { buf_is_empty(Buf::current()) } {
             u_save(0, 2)
         } else {
             u_save(lnum - 1, lnum)

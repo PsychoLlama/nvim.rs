@@ -192,6 +192,8 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     while lnum <= frombuf.b_ml.ml_line_count {
         let p = {
             let from = frombuf.raw();
+            // SAFETY: a live buffer.
+            let from = unsafe { Buf::new(from) };
             // SAFETY: a live buffer and a line number inside it.
             let (at, len) = unsafe { (ml_get_buf(from, lnum), ml_get_buf_len(from, lnum)) };
             // SAFETY: `len` bytes of the line just named.
@@ -539,7 +541,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
     // Set curwin/curbuf for "buf" and save some things.
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, buffer.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
 
     // Unless reload_options is set we only want to read the text from the
     // file, not reset the syntax highlighting, clear marks, diff status
@@ -574,7 +576,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // move the buffer contents to a hidden buffer.
     let mut savebuf = ptr::null_mut::<Buffer>();
     let mut bufref = BufRef::NONE;
-    if !(unsafe { buf_is_empty(Buf::current_raw()) } || saved.is_err()) {
+    if !(unsafe { buf_is_empty(Buf::current()) } || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
         // SAFETY: `buflist_new` answers a live buffer or null.
@@ -586,7 +588,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             // Open the memline.
             scratch.make_current();
             Win::current().w_buffer = savebuf;
-            saved = unsafe { ml_open(Buf::current_raw()) };
+            saved = unsafe { ml_open(Buf::current()) };
             buffer.make_current();
             Win::current().w_buffer = buffer.raw();
         }
@@ -622,7 +624,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             if !savebuf.is_null() && bufref.valid() && buffer.raw() == Buf::current_raw() {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
-                while !unsafe { buf_is_empty(Buf::current_raw()) } {
+                while !unsafe { buf_is_empty(Buf::current()) } {
                     if unsafe { ml_delete(buffer.b_ml.ml_line_count) }.is_err() {
                         break;
                     }

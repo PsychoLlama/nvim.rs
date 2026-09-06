@@ -139,7 +139,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: a new buffer with neither a file name nor a short name.
     let buf = unsafe { buflist_new(no_name, no_name, 0 as LineNr, flags) };
     // SAFETY: `buf` is the buffer just made, or null.
-    let opened = !buf.is_null() && unsafe { ml_open(buf) }.is_ok();
+    let opened = !buf.is_null() && unsafe { ml_open(Buf::new(buf)) }.is_ok();
     if !opened {
         // SAFETY: paired with the `block_autocmds` above.
         unsafe { unblock_autocmds() };
@@ -154,7 +154,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: as above.
     unsafe {
         buf_copy_options(
-            buf,
+            Buf::new(buf),
             BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
         );
     }

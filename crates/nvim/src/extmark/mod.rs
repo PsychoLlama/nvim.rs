@@ -261,17 +261,17 @@ fn decor_remove(
     free: bool,
 ) {
     // SAFETY: a live buffer and a decoration read out of one of its marks.
-    unsafe { buf_decor_remove(buffer.raw(), row1, row2, col1, decor, free) }
+    unsafe { buf_decor_remove(buffer, row1, row2, col1, decor, free) }
 }
 
 fn put_decor(buffer: Buf, decor: DecorInline, row: c_int, row2: c_int) {
     // SAFETY: as [`decor_remove`].
-    unsafe { buf_put_decor(buffer.raw(), decor, row, row2) }
+    unsafe { buf_put_decor(buffer, decor, row, row2) }
 }
 
 fn redraw_decor(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
     // SAFETY: as [`decor_remove`].
-    unsafe { decor_redraw(buffer.raw(), row1, row2, col1, decor) }
+    unsafe { decor_redraw(buffer, row1, row2, col1, decor) }
 }
 
 fn free_decor(decor: DecorInline) {
@@ -287,7 +287,7 @@ fn type_flags(decor: DecorInline) -> uint16_t {
 
 fn invalidate_decor_state(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { decor_state_invalidate(buffer.raw()) }
+    unsafe { decor_state_invalidate(buffer) }
 }
 
 fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
@@ -329,7 +329,7 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
     // SAFETY: a live buffer; the `offp` out-parameter is NULL, which the
     // callee tests for.
-    unsafe { ml_find_line_or_offset(buffer.raw(), lnum, ptr::null_mut(), true) }
+    unsafe { ml_find_line_or_offset(buffer, lnum, ptr::null_mut(), true) }
 }
 
 /// `u_force_get_undo_header(buf)`, and then the extmark list on it. NULL when

@@ -62,10 +62,10 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 /// # Safety
 /// `win` must be live and `info` NUL-terminated. `info` is written through
 /// and restored, so it must be writable — the callers own it.
-unsafe fn pum_preview_set_text(win: *mut Window, info: *mut c_char) -> (LineNr, c_int) {
+unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_int) {
     // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
     // `replacement` before it is freed.
-    let buf = unsafe { (*win).w_buffer };
+    let buf = win.w_buffer;
     unsafe { (*buf).b_p_ma = 1 };
 
     let mut lines: Vec<Object> = Vec::new();
@@ -85,11 +85,10 @@ unsafe fn pum_preview_set_text(win: *mut Window, info: *mut c_char) -> (LineNr, 
 
         // 'wrap' off while measuring: 'showbreak'/'linebreak' would
         // inflate the answer in a narrow window.
-        let save_wrap = unsafe { (*win).w_onebuf_opt.wo_wrap };
-        unsafe { (*win).w_onebuf_opt.wo_wrap = 0 };
-        max_width =
-            max_width.max(unsafe { win_linetabsize(Win::new(win), 0, curr, MAXCOL as c_int) });
-        unsafe { (*win).w_onebuf_opt.wo_wrap = save_wrap };
+        let save_wrap = win.w_onebuf_opt.wo_wrap;
+        win.w_onebuf_opt.wo_wrap = 0;
+        max_width = max_width.max(unsafe { win_linetabsize(win, 0, curr, MAXCOL as c_int) });
+        win.w_onebuf_opt.wo_wrap = save_wrap;
 
         lines.push(Object::String(unsafe { cstr_to_string(curr) }));
 
@@ -149,7 +148,7 @@ unsafe fn pum_preview_set_text(win: *mut Window, info: *mut c_char) -> (LineNr, 
 ///
 /// # Safety
 /// `window` must be a live float and the menu's placement settled.
-unsafe fn pum_adjust_info_position(window: *mut Window, width: c_int) -> bool {
+unsafe fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     // SAFETY: `window` is live and `win_config_float` takes the config by value.
     let border_width = unsafe { pum_border_width() };
     let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
@@ -162,40 +161,33 @@ unsafe fn pum_adjust_info_position(window: *mut Window, width: c_int) -> bool {
     // 'completepopup' width/height options.
     let max_extra = right_extra.max(left_extra);
     if max_extra < 10 {
-        unsafe { (*window).w_config.hide = true };
+        window.w_config.hide = true;
         return false;
     }
 
     if right_extra > width {
-        unsafe { (*window).w_config.width = width };
-        unsafe { (*window).w_config.col = f64::from(col - 1) };
+        window.w_config.width = width;
+        window.w_config.col = f64::from(col - 1);
     } else if left_extra > width {
-        unsafe { (*window).w_config.width = width };
-        unsafe { (*window).w_config.col = f64::from(pum_col.get() - width - 1) };
+        window.w_config.width = width;
+        window.w_config.col = f64::from(pum_col.get() - width - 1);
     } else {
         // Neither side fits the text; take the bigger one.
-        unsafe { (*window).w_config.width = max_extra };
-        unsafe {
-            (*window).w_config.col = f64::from(if right_extra > left_extra {
-                col - 1
-            } else {
-                pum_col.get() - max_extra - 1
-            })
-        };
+        window.w_config.width = max_extra;
+        window.w_config.col = f64::from(if right_extra > left_extra {
+            col - 1
+        } else {
+            pum_col.get() - max_extra - 1
+        });
     }
 
-    unsafe { (*window).w_config.anchor = 0 }; // NW: align its top with the menu's top
-    let count = unsafe { (*(*window).w_buffer).b_ml.ml_line_count };
-    unsafe { (*window).w_view_width = (*window).w_config.width };
-    unsafe {
-        (*window).w_config.height =
-            plines_m_win(Win::new(window), (*window).w_topline, count, Rows.get())
-    };
-    unsafe { (*window).w_config.row = f64::from(pum_row.get()) };
-    unsafe { (*window).w_config.hide = false };
-    win_config_float(unsafe { Win::new(window) }, unsafe {
-        (*window).w_config.clone()
-    });
+    window.w_config.anchor = 0; // NW: align its top with the menu's top
+    let count = unsafe { (*window.w_buffer).b_ml.ml_line_count };
+    window.w_view_width = window.w_config.width;
+    unsafe { window.w_config.height = plines_m_win(window, window.w_topline, count, Rows.get()) };
+    window.w_config.row = f64::from(pum_row.get());
+    window.w_config.hide = false;
+    win_config_float(window, window.w_config.clone());
     true
 }
 
@@ -227,14 +219,14 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut Window {
         return ::core::ptr::null_mut();
     };
 
-    let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp.raw(), info) };
+    let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp, info) };
     no_u_sync.set(no_u_sync.get() - 1);
     RedrawingDisabled.set(RedrawingDisabled.get() - 1);
     unsafe { redraw_later(wp.raw(), UPD_NOT_VALID) };
 
     // `unblock_autocmds` has to run whichever way the placement went, so
     // the answer is settled before it rather than after.
-    let placed = unsafe { pum_adjust_info_position(wp.raw(), max_info_width) }.then(|| wp.raw());
+    let placed = unsafe { pum_adjust_info_position(wp, max_info_width) }.then(|| wp.raw());
     unsafe { unblock_autocmds() };
     placed.unwrap_or(::core::ptr::null_mut())
 }
@@ -307,8 +299,8 @@ unsafe fn pum_show_info(
     // SAFETY: every window pointer below is re-checked with `win_valid`
     // after anything that can run autocommands.
     let mut resized = false;
-    let curwin_save = Win::current_raw();
-    let curtab_save = TabPage::current_raw();
+    let curwin_save = Win::current();
+    let curtab_save = TabPage::current();
 
     if use_float {
         unsafe { block_autocmds() };
@@ -400,11 +392,11 @@ unsafe fn pum_fill_info(
     use_float: bool,
     prev_selected: c_int,
     mut resized: bool,
-    curwin_save: *mut Window,
+    curwin_save: Win,
 ) -> bool {
     // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
-    let (lnum, max_info_width) = unsafe { pum_preview_set_text(Win::current_raw(), info) };
+    let (lnum, max_info_width) = unsafe { pum_preview_set_text(Win::current(), info) };
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
@@ -426,10 +418,10 @@ unsafe fn pum_fill_info(
     Win::current().w_cursor.col = 0;
 
     if use_float
-        && !unsafe { pum_adjust_info_position(Win::current_raw(), max_info_width) }
-        && win_valid(curwin_save)
+        && !unsafe { pum_adjust_info_position(Win::current(), max_info_width) }
+        && win_valid(curwin_save.raw())
     {
-        unsafe { win_enter(Win::new(curwin_save), false) };
+        unsafe { win_enter(curwin_save, false) };
     }
     resized
 }
@@ -441,19 +433,15 @@ unsafe fn pum_fill_info(
 ///
 /// # Safety
 /// `curwin_save`/`curtab_save` are re-checked before use.
-unsafe fn pum_restore_window(
-    curwin_save: *mut Window,
-    curtab_save: *mut Tabpage,
-    resized: bool,
-) -> bool {
+unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bool) -> bool {
     // SAFETY: both pointers are validated before they are entered.
-    let left_window = Win::current_raw() != curwin_save && win_valid(curwin_save);
-    let left_tab = TabPage::current_raw() != curtab_save && valid_tabpage(curtab_save);
+    let left_window = Win::current_raw() != curwin_save.raw() && win_valid(curwin_save.raw());
+    let left_tab = TabPage::current_raw() != curtab_save.raw() && valid_tabpage(curtab_save.raw());
     if !left_window && !left_tab {
         return resized;
     }
     if left_tab {
-        unsafe { goto_tabpage_tp(TabPage::new(curtab_save), false, false) };
+        unsafe { goto_tabpage_tp(curtab_save, false, false) };
     }
 
     // On the first completion, with the preview window not resized, skip
@@ -467,9 +455,9 @@ unsafe fn pum_restore_window(
 
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.
-    if resized && win_valid(curwin_save) {
+    if resized && win_valid(curwin_save.raw()) {
         let no_sync = Suppress::undo_sync();
-        unsafe { win_enter(Win::new(curwin_save), true) };
+        unsafe { win_enter(curwin_save, true) };
         drop(no_sync);
         update_topline(Win::current());
     }
@@ -482,9 +470,9 @@ unsafe fn pum_restore_window(
     let _ = unsafe { update_screen() };
     pum_is_visible.set(true);
 
-    if !resized && win_valid(curwin_save) {
+    if !resized && win_valid(curwin_save.raw()) {
         let _no_sync = Suppress::undo_sync();
-        unsafe { win_enter(Win::new(curwin_save), true) };
+        unsafe { win_enter(curwin_save, true) };
     }
 
     // Autocommands may have changed it again.

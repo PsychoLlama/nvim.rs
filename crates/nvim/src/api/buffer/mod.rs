@@ -41,7 +41,7 @@ use crate::types::{
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,
     KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr,
     LuaRef, MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType,
-    WinSplit, WinStyle, Window, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
+    WinSplit, WinStyle, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

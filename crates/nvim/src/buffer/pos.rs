@@ -210,7 +210,7 @@ fn clear_window_folds(win: Win) {
 
 fn didset_options(win: Win) {
     // SAFETY: a live window; `false` is upstream's `valid_cursor`.
-    unsafe { didset_window_options(win.raw(), false) };
+    unsafe { didset_window_options(win, false) };
 }
 
 fn set_minimal_style(win: Win) {
@@ -220,7 +220,7 @@ fn set_minimal_style(win: Win) {
 /// The view (topline offset and skipcol) `win` would restore `pos` with.
 fn view_of(win: Win, pos: Pos) -> FileMarkView {
     // SAFETY: a live window.
-    unsafe { mark_view_make(win.raw(), pos) }
+    unsafe { mark_view_make(win, pos) }
 }
 
 fn current_win() -> Win {

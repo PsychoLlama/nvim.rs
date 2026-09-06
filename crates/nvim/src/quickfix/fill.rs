@@ -56,7 +56,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
 
     let old_line_count = buf.b_ml.ml_line_count;
     // SAFETY: a live buffer and a line number inside it.
-    let old_endcol = unsafe { ml_get_buf_len(buf.raw(), old_line_count) };
+    let old_endcol = unsafe { ml_get_buf_len(buf, old_line_count) };
     let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
@@ -83,7 +83,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
     if old_last.is_null() {
         // Set curwin/curbuf to buf and save a few things.
         // SAFETY: a live buffer, and `aco` outlives the restore below.
-        unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
     }
     qf_update_win_titlevar(qi);
     // SAFETY: a live list, buffer and entry.
@@ -91,7 +91,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
 
     let new_line_count = buf.b_ml.ml_line_count;
     // SAFETY: a live buffer and a line number inside it.
-    let new_endcol = unsafe { ml_get_buf_len(buf.raw(), new_line_count) };
+    let new_endcol = unsafe { ml_get_buf_len(buf, new_line_count) };
     let delta = new_line_count - old_line_count;
     if old_last.is_null() {
         let bytes = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
@@ -134,7 +134,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
     // Only redraw when the added lines are visible, to avoid flicker.
     if qf_find_win(qi).is_some_and(|win| old_line_count < win.w_botline) {
         // SAFETY: a live buffer.
-        unsafe { redraw_buf_later(buf.raw(), UPD_NOT_VALID) };
+        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
     }
 
     // Always called after incr_quickfix_busy().
@@ -224,7 +224,7 @@ unsafe fn qf_buf_add_line(
 
     unsafe {
         ml_append_buf(
-            buffer.raw(),
+            buffer,
             lnum,
             line.as_ptr().cast_mut().cast(),
             line.len() as ColNr,

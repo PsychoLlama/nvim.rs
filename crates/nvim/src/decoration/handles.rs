@@ -235,8 +235,7 @@ impl Buf {
     /// of the kind in question never touches the marktree.
     #[inline(always)]
     pub fn meta_total(self, kind: MetaIndex) -> uint32_t {
-        // SAFETY: a live buffer.
-        unsafe { buf_meta_total(Buf::new(self.raw()), kind) }
+        buf_meta_total(self, kind)
     }
 }
 

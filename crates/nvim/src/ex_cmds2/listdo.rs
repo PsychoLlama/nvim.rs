@@ -121,7 +121,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
     // SAFETY: module contract.
     let may_run = unsafe {
         !list.changes_buffer()
-            || buf_hide(Buf::current_raw())
+            || buf_hide(Buf::current())
             || !check_changed(
                 Buf::current_raw(),
                 CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
@@ -270,7 +270,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Windows => {
                 // Go to window "wp".
-                let Some(cur) = wp.filter(|wp| win_valid(wp.raw())) else {
+                let Some(cur) = wp.filter(|&wp| win_valid(wp.raw())) else {
                     break;
                 };
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
@@ -285,7 +285,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Tabs => {
                 // Go to tab page "tp".
-                let Some(cur) = tp.filter(|tp| valid_tabpage(tp.raw())) else {
+                let Some(cur) = tp.filter(|&tp| valid_tabpage(tp.raw())) else {
                     break;
                 };
                 goto_tab(cur, true, true);
@@ -403,7 +403,7 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
                 };
             } else {
                 let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
-                unsafe { aucmd_prepbuf(&raw mut aco, raw) };
+                unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
                 unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, raw) };
                 unsafe { aucmd_restbuf(&raw mut aco) };
             }

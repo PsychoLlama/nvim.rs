@@ -44,10 +44,10 @@ use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
-    Buffer, ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority,
-    DecorRangeKind, DecorSignHighlight, DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey,
-    MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MetaIndex, VirtLines, VirtText, VirtTextChunk,
-    VirtTextPos, Window, int32_t, uint8_t, uint16_t, uint32_t, virt_line,
+    ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
+    DecorSignHighlight, DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey, MTNode, MTPos,
+    MarkTreeIter, MarkTreeIterLevel, MetaIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
+    Window, int32_t, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -607,13 +607,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
 ///
 /// # Safety
 /// `buffer` must be live and `decor` must be its mark's decoration.
-pub unsafe fn decor_redraw(
-    buffer: *mut Buffer,
-    row1: c_int,
-    row2: c_int,
-    col1: c_int,
-    decor: DecorInline,
-) {
+pub unsafe fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
     // SAFETY: the caller's buffer and decoration.
     if !decor.ext {
         unsafe { decor_redraw_sh(buffer, row1, row2, decor_sh_from_inline(decor.data.hl)) };
@@ -630,13 +624,7 @@ pub unsafe fn decor_redraw(
         // line takes, so the cached line sizes have to go as well.
         if is_lines || unsafe { (*vt).pos } == kVPosInline {
             let vt_col: ColNr = if is_lines { 0 } else { col1 };
-            changed_lines_invalidate_buf(
-                unsafe { Buf::new(buffer) },
-                vt_lnum,
-                vt_col,
-                vt_lnum + 1,
-                0,
-            );
+            changed_lines_invalidate_buf(buffer, vt_lnum, vt_col, vt_lnum + 1, 0);
         }
         vt = unsafe { (*vt).next };
     }
@@ -653,12 +641,7 @@ pub unsafe fn decor_redraw(
 ///
 /// # Safety
 /// `buffer` must be live.
-pub unsafe fn decor_redraw_sh(
-    buffer: *mut Buffer,
-    row1: c_int,
-    row2: c_int,
-    sh: DecorSignHighlight,
-) {
+pub unsafe fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
     // SAFETY: the caller's buffer and the editor's window list.
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
     if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
@@ -669,7 +652,7 @@ pub unsafe fn decor_redraw_sh(
         // TODO(luukvbaal): redraw only unconcealed lines, and scroll
         // lines below it up or down. Also when opening/closing a fold.
         for wp in winlayer::windows() {
-            if wp.w_buffer == buffer {
+            if wp.w_buffer == buffer.raw() {
                 changed_window_setting(wp);
             }
         }
@@ -684,16 +667,16 @@ pub unsafe fn decor_redraw_sh(
 ///
 /// # Safety
 /// `buffer` must be live and `decor` must be its mark's decoration.
-pub unsafe fn buf_put_decor(buffer: *mut Buffer, decor: DecorInline, row: c_int, mut row2: c_int) {
+pub unsafe fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
     // SAFETY: the caller's buffer and decoration.
-    if !decor.ext || row as LineNr >= unsafe { (*buffer).b_ml.ml_line_count } {
+    if !decor.ext || row as LineNr >= buffer.b_ml.ml_line_count {
         return;
     }
-    row2 = (unsafe { (*buffer).b_ml.ml_line_count } - 1).min(row2 as LineNr) as c_int;
+    row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
     let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
     while idx != DECOR_ID_INVALID {
         let sh = decor_item(idx);
-        unsafe { buf_put_decor_sh(Buf::new(buffer), sh, row, row2) };
+        unsafe { buf_put_decor_sh(buffer, sh, row, row2) };
         idx = unsafe { (*sh).next };
     }
 }
@@ -704,7 +687,7 @@ pub unsafe fn buf_put_decor(buffer: *mut Buffer, decor: DecorInline, row: c_int,
 /// # Safety
 /// `buffer` must be live and `decor` must be its mark's decoration.
 pub unsafe fn buf_decor_remove(
-    buffer: *mut Buffer,
+    buffer: Buf,
     row1: c_int,
     mut row2: c_int,
     col1: c_int,
@@ -713,12 +696,12 @@ pub unsafe fn buf_decor_remove(
 ) {
     // SAFETY: the caller's buffer and decoration.
     unsafe { decor_redraw(buffer, row1, row2, col1, decor) };
-    if decor.ext && (row1 as LineNr) < unsafe { (*buffer).b_ml.ml_line_count } {
-        row2 = (unsafe { (*buffer).b_ml.ml_line_count } - 1).min(row2 as LineNr) as c_int;
+    if decor.ext && (row1 as LineNr) < buffer.b_ml.ml_line_count {
+        row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
         let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
         while idx != DECOR_ID_INVALID {
             let sh = decor_item(idx);
-            unsafe { buf_remove_decor_sh(Buf::new(buffer), row1, row2, sh) };
+            unsafe { buf_remove_decor_sh(buffer, row1, row2, sh) };
             idx = unsafe { (*sh).next };
         }
     }

@@ -65,8 +65,8 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle,
-    HlAttrs, LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
+    AcoSave, Arena, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle, HlAttrs,
+    LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
     SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell,
     VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, Window, int16_t, size_t, uint8_t,
 };
@@ -317,7 +317,7 @@ pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *
         while !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
             // SAFETY: a live buffer, deleting its own lines down to the one
             // empty line `MlFlags::EMPTY` stands for.
-            let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
+            let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buffer, 1 as LineNr, line_count) };
@@ -339,7 +339,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
     // SAFETY: paired with the `aucmd_restbuf` below.
-    unsafe { aucmd_prepbuf(&raw mut aco, buffer.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
     if term.sb.is_sized() {
         refresh_scrollback(term, buffer);
     } else {
@@ -401,7 +401,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     for i in 0..16 {
         let key = format!("terminal_color_{i}\0");
         // SAFETY: `key` is NUL-terminated and `buffer` is live.
-        let name = unsafe { get_config_string(buffer.raw(), key.as_ptr().cast::<c_char>()) };
+        let name = unsafe { get_config_string(buffer, key.as_ptr().cast::<c_char>()) };
         if name.is_null() {
             continue;
         }
@@ -526,7 +526,7 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
     {
         let last = buf.line_count();
         // SAFETY: a live buffer and a line of it.
-        unsafe { redraw_buf_line_later(buf.raw(), last, false) };
+        unsafe { redraw_buf_line_later(buf, last, false) };
     }
 }
 
@@ -915,9 +915,9 @@ unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
 /// The result BORROWS the variable's own bytes, or is null. It must not be
 /// freed, and it stays valid only until something assigns to or unsets the
 /// variable.
-unsafe fn get_config_string(buffer: *mut Buffer, key: *const c_char) -> *mut c_char {
+unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
     // SAFETY: `buffer` is a live buffer and `key` is NUL-terminated.
-    let mut obj = unsafe { dict_lookup((*buffer).b_vars, key) };
+    let mut obj = unsafe { dict_lookup(buffer.b_vars, key) };
     if obj.is_nil() {
         // SAFETY: as above, against the global variables.
         obj = unsafe { dict_lookup(get_globvar_dict(), key) };

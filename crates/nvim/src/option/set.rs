@@ -431,7 +431,7 @@ pub(crate) unsafe fn did_set_option(
     if !errmsg.is_null() {
         unsafe { set_option_varp(opt_idx, varp, old_value, true) };
         if restore_chartab {
-            unsafe { buf_init_chartab(Buf::current_raw(), true) };
+            unsafe { buf_init_chartab(Buf::current(), true) };
         }
         return errmsg;
     }
@@ -476,13 +476,13 @@ pub(crate) unsafe fn did_set_option(
 
     // The autocommands go last, once every flag they might read is set.
     match opt_idx {
-        kOptSyntax => unsafe { do_syntax_autocmd(Buf::current_raw(), value_changed) },
+        kOptSyntax => unsafe { do_syntax_autocmd(Buf::current(), value_changed) },
         // A modeline only forces the FileType autocommand when the
         // filetype really changed.
         kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
             do_filetype_autocmd(Buf::current(), value_changed);
         }
-        kOptSpelllang => unsafe { do_spelllang_source(Win::current_raw()) },
+        kOptSpelllang => unsafe { do_spelllang_source(Win::current()) },
         _ => {}
     }
 

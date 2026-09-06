@@ -673,7 +673,7 @@ pub(crate) unsafe fn expand_setting_subtract(
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
         return unsafe { expand_old_setting(num_matches, matches) };
     }
-    let (buf, win) = (Buf::current_raw(), Win::current_raw());
+    let (buf, win) = (Buf::current(), Win::current());
     let varp = unsafe { get_varp_scope_from(opt_idx, FLAGS.get(), buf, win) };
     let value = unsafe { *varp.string_var() };
     let flags = get_option(opt_idx).flags;

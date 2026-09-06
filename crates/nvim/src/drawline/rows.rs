@@ -16,6 +16,7 @@ use crate::grid::{SLF_INC_VCOL, SLF_WRAP, linebuf};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, NUL};
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 impl Cells {
@@ -209,7 +210,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buffer: *mut Buffer,
+        buffer: Buf,
         f: &LineFrame,
         grid: GridView,
     ) -> Step {
@@ -309,7 +310,7 @@ impl Cells {
                     HLF_AT,
                 )
             };
-            set_empty_rows(unsafe { Win::new(window.raw()) }, wlv.row);
+            set_empty_rows(window, wlv.row);
             wlv.row = f.endrow;
         }
         // The line got too long for the screen.
@@ -353,7 +354,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buffer: *mut Buffer,
+        buffer: Buf,
         f: &LineFrame,
     ) {
         let mut line = linebuf();

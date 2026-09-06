@@ -154,7 +154,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     };
     if is_aucmd_win(wp.raw())
         || unsafe { text_or_buf_locked() }
-        || unsafe { check_split_disallowed(wp.raw()) } == FAIL
+        || unsafe { check_split_disallowed(wp) } == FAIL
     {
         return;
     }

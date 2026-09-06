@@ -27,7 +27,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt, Window};
+use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -113,10 +113,10 @@ fn is_locked(win: Win) -> bool {
 /// Whether `win` is still in the window list -- asked about a pointer
 /// autocommands may already have freed, which is why it does not take a
 /// [`Win`].
-fn is_valid(win: *mut Window) -> bool {
+fn is_valid(win: Win) -> bool {
     // SAFETY: `win_valid` walks the window list and does not dereference its
     // argument.
-    win_valid(win)
+    win_valid(win.raw())
 }
 
 fn is_aucmd(win: Win) -> bool {
@@ -143,7 +143,7 @@ fn buf_changed(buffer: Buf) -> bool {
 
 fn buf_hidden(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer.raw()) }
+    unsafe { buf_hide(buffer) }
 }
 
 fn auto_write(buffer: Buf) -> Result<(), Failed> {
@@ -391,7 +391,7 @@ fn close_extra_windows(count: LineNr, open_wins: &mut c_int) {
             || !buf_changed(win.buffer())
             || auto_write(win.buffer()).is_ok())
             && !is_aucmd(win);
-        if !is_valid(win.raw()) {
+        if !is_valid(win) {
             // A BufWrite autocommand made the window invalid; start over.
             wp = last_window();
         } else if r {

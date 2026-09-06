@@ -19,6 +19,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::winlayer::Win;
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
@@ -130,7 +131,7 @@ impl Statusline {
         // is the editor's window, and no sink is asked for.
         let cells = unsafe {
             build_stl_str_hl(
-                curwin.get(),
+                Win::new(curwin.get()),
                 &mut out,
                 fmt.as_ptr().cast_mut(),
                 FmtSource::NONE,

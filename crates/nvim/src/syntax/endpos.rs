@@ -219,7 +219,7 @@ unsafe fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol:
         // with an end pattern in this line.
         return Skipped::PastLine;
     }
-    let line_len = unsafe { ml_get_buf_len(syn_buf.get(), startpos.lnum) };
+    let line_len = unsafe { ml_get_buf_len(syn_buffer(), startpos.lnum) };
 
     // Take care of an empty match or a negative offset.
     let col = if pos.col <= matchcol {
@@ -379,7 +379,7 @@ pub(crate) unsafe fn syn_add_start_off(
     let (lnum, col) = if base.lnum > syn_buf_line_count() {
         // A "\n" at the end of the pattern may take us below the last line.
         let lnum = syn_buf_line_count();
-        (lnum, unsafe { ml_get_buf_len(syn_buf.get(), lnum) })
+        (lnum, unsafe { ml_get_buf_len(syn_buffer(), lnum) })
     } else {
         (base.lnum, base.col)
     };
@@ -395,7 +395,7 @@ unsafe fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
     if off == 0 {
         return col;
     }
-    let base = unsafe { ml_get_buf(syn_buf.get(), lnum) };
+    let base = unsafe { ml_get_buf(syn_buffer(), lnum) };
     let mut p = unsafe { base.offset(col as isize) };
     let mut left = off;
     if off > 0 {
@@ -421,13 +421,13 @@ unsafe fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
 pub(crate) fn syn_getcurline() -> *mut c_char {
     // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at,
     // and `current_lnum` a line of it.
-    unsafe { ml_get_buf(syn_buf.get(), current_lnum.get()) }
+    unsafe { ml_get_buf(syn_buffer(), current_lnum.get()) }
 }
 
 /// Length of the current line of the syntax buffer.
 pub(crate) fn syn_getcurline_len() -> ColNr {
     // SAFETY: as [`syn_getcurline`].
-    unsafe { ml_get_buf_len(syn_buf.get(), current_lnum.get()) }
+    unsafe { ml_get_buf_len(syn_buffer(), current_lnum.get()) }
 }
 
 /// The byte at `col` of the line being parsed.
@@ -527,7 +527,7 @@ pub(crate) unsafe fn check_keyword_id(
     let mut kwlen: c_int = 0;
     loop {
         kwlen += unsafe { utfc_ptr2len(kwp.offset(kwlen as isize)) };
-        if !unsafe { vim_iswordp_buf(kwp.offset(kwlen as isize), syn_buf.get()) } {
+        if !unsafe { vim_iswordp_buf(kwp.offset(kwlen as isize), syn_buffer()) } {
             break;
         }
     }

@@ -33,7 +33,7 @@ use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::types::{
-    Buffer, CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, ptrdiff_t,
+    CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, ptrdiff_t,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::graph::cmdwin_buf;
@@ -168,10 +168,10 @@ pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
 
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
-pub unsafe fn buf_hide(buffer: *const Buffer) -> bool {
+pub unsafe fn buf_hide(buffer: Buf) -> bool {
     // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
     // this one without a null test.
-    let bufhidden = unsafe { *(*buffer).b_p_bh };
+    let bufhidden = unsafe { *buffer.b_p_bh };
     match bufhidden as u8 {
         b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
         b'h' => return true,                // "hide"
@@ -184,9 +184,9 @@ pub unsafe fn buf_hide(buffer: *const Buffer) -> bool {
 // The name a buffer without a file is shown under
 
 /// The name to display for a special buffer, or null for an ordinary one.
-pub unsafe fn buf_spname(buffer: *mut Buffer) -> *mut c_char {
+pub unsafe fn buf_spname(buffer: Buf) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
-    let b = unsafe { Buf::new(buffer) };
+    let b = buffer;
     if buf_is_quickfix(Some(b)) {
         if b.handle == qf_stack_get_bufnr() {
             return tr_raw(msg_qflist.get());
@@ -197,7 +197,7 @@ pub unsafe fn buf_spname(buffer: *mut Buffer) -> *mut c_char {
         if !b.b_fname.is_null() {
             return b.b_fname;
         }
-        if buffer == cmdwin_buf.get() {
+        if buffer == unsafe { Buf::new(cmdwin_buf.get()) } {
             return tr(c"[Command Line]");
         }
         if buf_is_prompt(Some(b)) {
@@ -211,9 +211,9 @@ pub unsafe fn buf_spname(buffer: *mut Buffer) -> *mut c_char {
     ptr::null_mut()
 }
 
-pub unsafe fn buf_get_fname(buffer: *const Buffer) -> *mut c_char {
+pub unsafe fn buf_get_fname(buffer: Buf) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
-    let name = unsafe { (*buffer).b_fname };
+    let name = buffer.b_fname;
     if name.is_null() {
         return tr(c"[No Name]");
     }
@@ -241,9 +241,9 @@ pub unsafe fn set_buflisted(on: c_int) {
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }
 
-pub unsafe fn buf_is_empty(buffer: *mut Buffer) -> bool {
+pub unsafe fn buf_is_empty(buffer: Buf) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
-    let b = unsafe { Buf::new(buffer) };
+    let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
     b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buffer, 1 as LineNr) } == 0

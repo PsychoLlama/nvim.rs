@@ -40,7 +40,7 @@ pub(crate) fn syn_clear_time(st: &mut SynTime) {
 
 /// `:syntime clear` — forget the timings of every pattern in this window.
 fn syntime_clear() {
-    if !unsafe { syntax_present(Win::current_raw()) } {
+    if !unsafe { syntax_present(Win::current()) } {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
@@ -84,7 +84,7 @@ unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -
 
 /// `:syntime report` — the timing table, slowest pattern last.
 fn syntime_report() {
-    if !unsafe { syntax_present(Win::current_raw()) } {
+    if !unsafe { syntax_present(Win::current()) } {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }

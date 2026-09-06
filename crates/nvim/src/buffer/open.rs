@@ -75,7 +75,7 @@ fn read_file(
 /// Open the memline (and the swap file) for `buffer`.
 fn open_memline(buffer: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer.
-    unsafe { ml_open(buffer.raw()) }
+    unsafe { ml_open(buffer) }
 }
 
 /// The mode bits of `fname`, negative when it cannot be stat'ed.
@@ -96,7 +96,7 @@ fn save_fileformat(buffer: Buf) {
 
 fn init_chartab(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `global` flag.
-    unsafe { buf_init_chartab(buffer.raw(), false) };
+    unsafe { buf_init_chartab(buffer, false) };
 }
 
 fn parse_cindent_options(buffer: Buf) {
@@ -112,7 +112,7 @@ fn collect_local_additions() {
 
 fn empty_buffer(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_empty(buffer.raw()) }
+    unsafe { buf_is_empty(buffer) }
 }
 
 /// `b:changedtick`.
@@ -147,7 +147,7 @@ fn set_option_false(id: c_int) {
 fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
     // SAFETY: two live buffers and a line number inside both, the caller
     // having compared the line counts.
-    unsafe { !(cstr::eq(ml_get_buf(buffer.raw(), lnum), ml_get(lnum))) }
+    unsafe { !(cstr::eq(ml_get_buf(buffer, lnum), ml_get(lnum))) }
 }
 
 /// Line `lnum` of `buffer` as bytes, its terminating NUL excluded.
@@ -155,8 +155,8 @@ fn line_bytes<'a>(buffer: Buf, lnum: LineNr) -> &'a [u8] {
     // SAFETY: a live buffer and a line of it; `ml_get_buf` answers that many
     // readable bytes, and the line stays put until the memline is touched.
     unsafe {
-        let len = ml_get_buf_len(buffer.raw(), lnum) as usize;
-        slice::from_raw_parts(ml_get_buf(buffer.raw(), lnum).cast::<u8>(), len)
+        let len = ml_get_buf_len(buffer, lnum) as usize;
+        slice::from_raw_parts(ml_get_buf(buffer, lnum).cast::<u8>(), len)
     }
 }
 
@@ -169,7 +169,7 @@ fn line_bytes<'a>(buffer: Buf, lnum: LineNr) -> &'a [u8] {
 fn in_buffer<R>(buffer: Buf, f: impl FnOnce() -> R) -> R {
     let mut aco = AcoSave::default();
     // SAFETY: a local to save into, and a live buffer.
-    unsafe { aucmd_prepbuf(&raw mut aco, buffer.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
     let answer = f();
     // SAFETY: the state `aucmd_prepbuf` has just saved.
     unsafe { aucmd_restbuf(&raw mut aco) };

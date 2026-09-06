@@ -138,8 +138,8 @@ impl Swapped {
         // usual `:edit` path has not been given the option's value.
         unsafe {
             (*buf).b_p_swf = 1;
-            ml_open(buf).expect("a memline");
-            ml_open_file(buf);
+            ml_open(Buf::new(buf)).expect("a memline");
+            ml_open_file(Buf::new(buf));
         }
         // SAFETY: the memline was just opened; appending after line `n`
         // puts each line at the end in turn.
@@ -147,7 +147,7 @@ impl Swapped {
             let text = cstr(*line);
             let appended = unsafe {
                 ml_append_buf(
-                    buf,
+                    Buf::new(buf),
                     n as LineNr,
                     text.as_ptr().cast_mut(),
                     line.len() as ColNr + 1,
@@ -159,11 +159,11 @@ impl Swapped {
         // The buffer starts with one empty line, which the appends pushed
         // to the end; drop it so the line set is exactly `LINES`.
         // SAFETY: the memline holds `LINES.len() + 1` lines.
-        unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false) }
+        unsafe { neovim::memline::ml_delete_buf(Buf::new(buf), LINES.len() as LineNr + 1, false) }
             .expect("the empty line goes");
 
         // SAFETY: as above; a swap file was opened, so this writes it.
-        unsafe { ml_preserve(buf, false, true) };
+        unsafe { ml_preserve(Buf::new(buf), false, true) };
 
         let swap = std::fs::read_dir(sandbox.root())
             .expect("the sandbox")
@@ -188,7 +188,7 @@ impl Drop for Swapped {
         // SAFETY: the buffer this case opened, wiped as `buffer.rs` does —
         // a buffer left on the list is visible to every later case.
         unsafe {
-            ml_close(self.buf, 1);
+            ml_close(Buf::new(self.buf), 1);
             close_buffer(None, Buf::new(self.buf), DOBUF_WIPE as c_int, false, false);
         }
         let _ = &self.sandbox;
@@ -387,7 +387,7 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
     unsafe {
         (*swapped.buf).b_changed = 1;
         neovim::memline::ml_setflags(Buf::new(swapped.buf));
-        ml_preserve(swapped.buf, false, true);
+        ml_preserve(Buf::new(swapped.buf), false, true);
     }
     assert_ne!(
         OnDisk::read(&swapped.swap).bytes[dirty_at],
@@ -400,7 +400,7 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
     // SAFETY: the buffer's memline holds `LINES`.
     let lines: Vec<String> = (1..=LINES.len() as LineNr)
         .map(|lnum| unsafe {
-            std::ffi::CStr::from_ptr(ml_get_buf(swapped.buf, lnum))
+            std::ffi::CStr::from_ptr(ml_get_buf(Buf::new(swapped.buf), lnum))
                 .to_string_lossy()
                 .into_owned()
         })
@@ -428,7 +428,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
         let lnum = n as LineNr + 1;
         assert_eq!(lines.line(lnum), want.as_bytes(), "line {lnum}");
         // SAFETY: a line of this buffer.
-        let len = unsafe { neovim::memline::ml_get_buf_len(swapped.buf, lnum) };
+        let len = unsafe { neovim::memline::ml_get_buf_len(Buf::new(swapped.buf), lnum) };
         assert_eq!(
             lines.line(lnum).len(),
             len as usize,
@@ -448,7 +448,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     // and not in a copy.
     // SAFETY: a line of this buffer, NUL-terminated as `ml_get_buf` promises.
     let through_pointer = unsafe {
-        std::ffi::CStr::from_ptr(ml_get_buf(swapped.buf, last))
+        std::ffi::CStr::from_ptr(ml_get_buf(Buf::new(swapped.buf), last))
             .to_string_lossy()
             .into_owned()
     };

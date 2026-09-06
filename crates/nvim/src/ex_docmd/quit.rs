@@ -95,28 +95,22 @@ pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
 /// # Safety
 /// `window` must be a live window on entry. It need not survive the call: the
 /// autocommands may close it, which is what `quit_was_cancelled` is for.
-pub(crate) unsafe fn before_quit_autocmds(
-    window: *mut Window,
-    quit_all: bool,
-    forceit: bool,
-) -> bool {
+pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
         set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
     }
-    unsafe {
-        apply_autocmds(
-            AutoEvent::QuitPre,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            (*window).w_buffer,
-        )
-    };
+    apply_autocmds(
+        AutoEvent::QuitPre,
+        ptr::null_mut(),
+        ptr::null_mut(),
+        false,
+        window.w_buffer,
+    );
     // The buffer is read *through* `window`, and only after `win_valid`
     // has said `window` is still there — QuitPre may have closed it.
-    if unsafe { quit_was_cancelled(window, || (*window).w_buffer) } {
+    if quit_was_cancelled(window, || window.w_buffer) {
         return true;
     }
 
@@ -145,8 +139,8 @@ pub(crate) unsafe fn before_quit_autocmds(
 /// autocommand may have closed `window` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-fn quit_was_cancelled(window: *mut Window, buf: impl FnOnce() -> *mut Buffer) -> bool {
-    if win_valid(window) && !curbuf_locked() {
+fn quit_was_cancelled(window: Win, buf: impl FnOnce() -> *mut Buffer) -> bool {
+    if win_valid(window.raw()) && !curbuf_locked() {
         let buf = buf();
         if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
             return false;
@@ -177,7 +171,7 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         return;
     }
     // SAFETY: `wp` is the window this `:quit` resolved to.
-    if unsafe { before_quit_autocmds(wp, false, args.forceit != 0) } {
+    if unsafe { before_quit_autocmds(Win::new(wp), false, args.forceit != 0) } {
         return;
     }
 
@@ -187,7 +181,7 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     }
     // The three refusals: unsaved changes in this buffer, files left in
     // the argument list, unsaved changes anywhere else.
-    if !unsafe { buf_hide((*wp).w_buffer) }
+    if !buf_hide(unsafe { Buf::new((*wp).w_buffer) })
         && unsafe {
             check_changed(
                 (*wp).w_buffer,
@@ -216,7 +210,7 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     not_exiting(save_exiting);
     // SAFETY: `wp` is the window this `:quit` resolved to.
     let (win, buffer) = unsafe { (Win::new(wp), (*wp).w_buffer) };
-    let free_buf = !buf_hide(buffer) || args.forceit != 0;
+    let free_buf = !buf_hide(unsafe { Buf::new(buffer) }) || args.forceit != 0;
     win_close(win, free_buf, args.forceit != 0);
 }
 
@@ -273,7 +267,7 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { before_quit_autocmds(Win::current_raw(), true, args.forceit != 0) } {
+    if unsafe { before_quit_autocmds(Win::current(), true, args.forceit != 0) } {
         return Err(Failed);
     }
     Ok(())
@@ -359,10 +353,10 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpa
     // Only the last window on a changed buffer has to ask.
     let mut need_hide =
         buf_is_changed(unsafe { Buf::new(buf) }) && unsafe { (*buf).b_nwindows } <= 1;
-    if need_hide && !buf_hide(buf) && forceit == 0 {
+    if need_hide && !buf_hide(unsafe { Buf::new(buf) }) && forceit == 0 {
         if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
             let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-            unsafe { dialog_changed(buf, false) };
+            unsafe { dialog_changed(Buf::new(buf), false) };
             // The dialog may have wiped the buffer, or written it.
             if bufref.valid() && buf_is_changed(unsafe { Buf::new(buf) }) {
                 return;
@@ -374,13 +368,13 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpa
         }
     }
 
-    let hide = !need_hide && !buf_hide(buf);
+    let hide = !need_hide && !buf_hide(unsafe { Buf::new(buf) });
     if tabpage.is_null() {
         win_close(w, hide, forceit != 0);
     } else {
         // SAFETY: the caller's tab page, not null by the test above.
         let tp = unsafe { TabPage::new(tabpage) };
-        unsafe { win_close_othertab(win, hide as c_int, tp, forceit != 0) };
+        unsafe { win_close_othertab(Win::new(win), hide as c_int, tp, forceit != 0) };
     }
 }
 
@@ -408,7 +402,7 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
         return;
     }
     if tp != TabPage::current_raw() {
-        unsafe { tabpage_close_other(tp, args.forceit) };
+        unsafe { tabpage_close_other(TabPage::new(tp), args.forceit) };
     } else if !text_locked() && !curbuf_locked() {
         unsafe { tabpage_close(args.forceit) };
     }
@@ -442,7 +436,7 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     while done < 1000 {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
-                unsafe { tabpage_close_other(tp.raw(), args.forceit) };
+                unsafe { tabpage_close_other(tp, args.forceit) };
                 if valid_tabpage(tp.raw()) {
                     done = 1000;
                 }
@@ -462,7 +456,7 @@ pub unsafe fn tabpage_close(forceit: c_int) {
     if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
-    trigger_tabclosedpre(TabPage::current_raw());
+    trigger_tabclosedpre(TabPage::current());
     // The flag stops the per-window closes triggering TabClosedPre
     // again; it is cleared only if this is still the tab page it was
     // set on.
@@ -487,12 +481,12 @@ pub unsafe fn tabpage_close(forceit: c_int) {
 ///
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
-pub unsafe fn tabpage_close_other(tabpage: *mut Tabpage, forceit: c_int) {
+pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
     if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
     trigger_tabclosedpre(tabpage);
-    unsafe { (*tabpage).tp_did_tabclosedpre = true };
+    tabpage.tp_did_tabclosedpre = true;
 
     let mut done = 0;
     let mut prev_idx: [c_char; 65] = [0; 65];
@@ -508,28 +502,28 @@ pub unsafe fn tabpage_close_other(tabpage: *mut Tabpage, forceit: c_int) {
                 &raw mut prev_idx as *mut c_char,
                 size_of::<[c_char; 65]>(),
                 c"%i".as_ptr(),
-                tabpage_index(tabpage),
+                tabpage_index(tabpage.raw()),
             )
         };
-        let wp = unsafe { (*tabpage).tp_lastwin };
+        let wp = tabpage.tp_lastwin;
         unsafe {
             ex_win_close(
                 forceit,
                 wp.and_then(WinId::get).map_or(ptr::null_mut(), Win::raw),
-                tabpage,
+                tabpage.raw(),
             )
         };
-        if !valid_tabpage(tabpage) {
+        if !valid_tabpage(tabpage.raw()) {
             break;
         }
-        if unsafe { (*tabpage).tp_lastwin } == wp {
+        if tabpage.tp_lastwin == wp {
             // Nothing closed: give up.
             done = 1000;
             break;
         }
     }
     if done >= 1000 {
-        unsafe { (*tabpage).tp_did_tabclosedpre = false };
+        tabpage.tp_did_tabclosedpre = false;
     }
 }
 
@@ -612,7 +606,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     if (args.cmdidx == CmdIdx::wq || curbuf_is_changed())
         && unsafe { do_write(&mut args) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
-        || unsafe { before_quit_autocmds(Win::current_raw(), false, args.forceit != 0) }
+        || unsafe { before_quit_autocmds(Win::current(), false, args.forceit != 0) }
         || check_more(true, args.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(args.forceit != 0, false)
     {
@@ -625,7 +619,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     not_exiting(save_exiting);
     win_close(
         Win::current(),
-        !buf_hide(Win::current().w_buffer),
+        !buf_hide(Win::current().buffer()),
         args.forceit != 0,
     );
 }
@@ -649,7 +643,7 @@ fn apply_autocmds(
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buffer: *const Buffer) -> bool {
+fn buf_hide(buffer: Buf) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buf_hide(buffer) }
 }

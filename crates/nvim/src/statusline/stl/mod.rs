@@ -84,7 +84,7 @@ use crate::state::mode::State;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
     ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VAR_NUMBER,
-    VarLock, VarNumber, Vv, Window, int64_t, size_t, stl_hlrec_t, typval_vval_union,
+    VarLock, VarNumber, Vv, int64_t, size_t, stl_hlrec_t, typval_vval_union,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
@@ -182,7 +182,7 @@ impl Env {
     /// optionally cut down to its last component.
     pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
         // SAFETY: a live buffer; `buf_spname` answers a string or null.
-        let name = unsafe { buf_spname(self.buf.raw()) };
+        let name = unsafe { buf_spname(self.buf) };
         let mut buf = [0 as c_char; MAXPATHL as usize];
         {
             let nb = &mut buf;
@@ -228,14 +228,7 @@ impl Env {
     /// The byte offset of the cursor line, for `%o`/`%O`.
     pub(super) fn line_offset(&self) -> c_int {
         // SAFETY: a live buffer and its own cursor line.
-        unsafe {
-            ml_find_line_or_offset(
-                self.buf.raw(),
-                self.win.w_cursor.lnum,
-                ptr::null_mut(),
-                false,
-            )
-        }
+        unsafe { ml_find_line_or_offset(self.buf, self.win.w_cursor.lnum, ptr::null_mut(), false) }
     }
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.
@@ -682,7 +675,7 @@ impl StlSinks {
 /// pointer in `sinks` must be null or writable. This re-enters the editor,
 /// so nothing may be held across it.
 pub unsafe fn build_stl_str_hl(
-    window: *mut Window,
+    window: Win,
     out: &mut [c_char],
     fmt: *mut c_char,
     from: FmtSource,
@@ -701,7 +694,7 @@ pub unsafe fn build_stl_str_hl(
     // bytes; the caller's slice spells them `char`.
     let out = unsafe { slice::from_raw_parts_mut(out.as_mut_ptr().cast::<u8>(), out.len()) };
     // SAFETY: the caller's live window.
-    let win = unsafe { Win::new(window) };
+    let win = window;
     let save_redraw_not_allowed = redraw_not_allowed.get();
     let save_key_typed = KeyTyped.get();
     let did_emsg_before = did_emsg.get();
@@ -768,7 +761,7 @@ pub unsafe fn build_stl_str_hl(
     // SAFETY: `ml_get_buf` answers a NUL-terminated line.
     let empty_line = unsafe { *line_ptr } == 0;
     // SAFETY: as above.
-    let len = unsafe { ml_get_buf_len(buf.raw(), lnum) };
+    let len = unsafe { ml_get_buf_len(buf, lnum) };
     let byteval = if win.w_cursor.col > len {
         // The line may have changed since the cursor column was checked, or
         // the line number was adjusted above.

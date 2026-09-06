@@ -332,7 +332,7 @@ unsafe fn update_placements(name: *const c_char, def: SignRef) {
                 // SAFETY: a live window's buffer is live.
                 if unsafe { buf_has_signs(buf.raw()) } {
                     // SAFETY: as above.
-                    unsafe { redraw_buf_later(buf.raw(), UPD_NOT_VALID) };
+                    unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
                 }
             }
             did_redraw = true;

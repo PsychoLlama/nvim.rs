@@ -250,7 +250,7 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
                 unsafe { (**(*buf).b_wininfo.items).wi_mark.mark.lnum as int64_t }
             };
             if !out.write(format_args!("badd +{lnum} "))
-                || !unsafe { ses_fname(out, buf, opts, true) }
+                || !unsafe { ses_fname(out, Buf::new(buf), opts, true) }
             {
                 return false;
             }
@@ -321,7 +321,9 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                     return false;
                 }
                 need_tabnext = false;
-                if !out.puts(c"edit ") || !unsafe { ses_fname(out, (*wp).w_buffer, opts, true) } {
+                if !out.puts(c"edit ")
+                    || !unsafe { ses_fname(out, Buf::new((*wp).w_buffer), opts, true) }
+                {
                     return false;
                 }
                 if !unsafe { (*wp).w_arg_idx_invalid } {
@@ -402,7 +404,8 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         // Each window's view.
         for wp in windows_in_tab(tab).map(Win::raw) {
             if unsafe { ses_do_win(Win::new(wp)) } {
-                if !unsafe { put_view(out, wp, tab.raw(), wp != edited_win, opts, cur_arg_idx) } {
+                if !unsafe { put_view(out, Win::new(wp), tab, wp != edited_win, opts, cur_arg_idx) }
+                {
                     return false;
                 }
                 if nr > 1 && !out.line(c"wincmd w") {

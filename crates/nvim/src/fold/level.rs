@@ -241,7 +241,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
     }
     if end != bot {
         // SAFETY: a live window.
-        unsafe { redraw_win_range_later(win.raw(), top, end) };
+        unsafe { redraw_win_range_later(win, top, end) };
     }
     invalid_top.set(0);
 }
@@ -645,7 +645,7 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window has a live buffer, and `lnum` is inside it.
     let buf = line.win().w_buffer;
-    let s = unsafe { skipwhite(ml_get_buf(buf, lnum)) };
+    let s = unsafe { skipwhite(ml_get_buf(Buf::new(buf), lnum)) };
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
     if unsafe { *s } as c_int == NUL
@@ -659,7 +659,9 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
             },
         );
     } else {
-        line.set_lvl(unsafe { get_indent_buf(buf, lnum) } / unsafe { get_sw_value(buf) });
+        line.set_lvl(
+            unsafe { get_indent_buf(Buf::new(buf), lnum) } / unsafe { get_sw_value(Buf::new(buf)) },
+        );
     }
     let foldnestmax = line.win().w_onebuf_opt.wo_fdn.max(0) as c_int;
     line.set_lvl(line.lvl().min(foldnestmax));
@@ -759,13 +761,13 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
 pub(super) unsafe fn foldlevel_syntax(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window, and a line inside its buffer.
-    line.set_lvl(unsafe { syn_get_foldlevel(line.win().raw(), lnum) });
+    line.set_lvl(unsafe { syn_get_foldlevel(Win::new(line.win().raw()), lnum) });
     line.set_start(0);
     if lnum < line.win().buffer().b_ml.ml_line_count {
         // A fold that starts on the next line starts here as far as the
         // tree is concerned, so the syntax item's first line is inside.
         // SAFETY: a live window, and the line after one inside its buffer.
-        let n = unsafe { syn_get_foldlevel(line.win().raw(), lnum + 1) };
+        let n = unsafe { syn_get_foldlevel(Win::new(line.win().raw()), lnum + 1) };
         if n > line.lvl() {
             line.set_start(n - line.lvl());
             line.set_lvl(n);

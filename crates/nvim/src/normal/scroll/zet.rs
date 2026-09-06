@@ -137,7 +137,7 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
         let (fwd, none) = (FORWARD as c_int, ptr::null_mut());
-        len = unsafe { spell_move_to(Win::current_raw(), fwd, SMT_ALL, true, none) };
+        len = unsafe { spell_move_to(Win::current(), fwd, SMT_ALL, true, none) };
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.

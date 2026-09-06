@@ -378,7 +378,7 @@ pub unsafe fn modify_keymap(
         // SAFETY: `target_buf` is the live buffer `find_buffer_by_handle`
         // answered.
         let answer = unsafe {
-            let target = Buf::new(target_buf.raw());
+            let target = target_buf;
             buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target)
         };
         // The four "already exists" texts hold a `%s`, so their literals are

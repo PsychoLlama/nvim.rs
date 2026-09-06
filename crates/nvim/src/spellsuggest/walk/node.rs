@@ -228,7 +228,7 @@ impl Walk<'_> {
                 || if self.soundfold {
                     ascii_iswhite(self.fword_at(bad_idx))
                 } else {
-                    !spell_iswordp(self.fword_ptr(bad_idx), Win::current_raw())
+                    !spell_iswordp(self.fword_ptr(bad_idx), Win::current())
                 }
         };
         self.tword[self.stack[level].good_len as usize] = NUL as c_char;
@@ -624,7 +624,7 @@ impl Walk<'_> {
             // character of `preword`, and the `&&` is what keeps the null
             // away from `spell_iswordp_nmw`.
             if !prev_word_tail.is_null()
-                && unsafe { spell_iswordp_nmw(prev_word_tail, Win::current_raw()) }
+                && unsafe { spell_iswordp_nmw(prev_word_tail, Win::current()) }
             {
                 caps.clear(WordFlags::ONECAP);
             }
@@ -675,13 +675,13 @@ impl Walk<'_> {
         p = unsafe { Walk::char_back(self.fword.as_ptr().cast(), p) };
         // SAFETY: `p` is a character of the bad word; the `&&` only saves
         // the work of measuring an empty `preword`.
-        if !unsafe { spell_iswordp(p, Win::current_raw()) } && self.preword[0] != NUL as c_char {
+        if !unsafe { spell_iswordp(p, Win::current()) } && self.preword[0] != NUL as c_char {
             let end = self.preword_len();
             // SAFETY: `end` is `preword`'s own length and it is not empty,
             // so the character before its terminator is inside it.
             let mut q = unsafe { self.preword.as_mut_ptr().add(end) };
             q = unsafe { Walk::char_back(self.preword.as_ptr(), q) };
-            if unsafe { spell_iswordp(q, Win::current_raw()) } {
+            if unsafe { spell_iswordp(q, Win::current()) } {
                 newscore += SCORE_NONWORD;
             }
         }

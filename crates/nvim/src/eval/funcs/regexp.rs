@@ -39,6 +39,7 @@ use crate::types::{
     VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
     kListLenMayKnow, kListLenUnknown, typval_vval_union,
 };
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -466,7 +467,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         return;
     };
     while slnum <= elnum {
-        let str = unsafe { ml_get_buf(buf, slnum) };
+        let str = unsafe { ml_get_buf(Buf::new(buf), slnum) };
         unsafe { get_matches_in_str(str, &raw mut prog.0, retlist, slnum, submatches, true) };
         slnum += 1;
     }

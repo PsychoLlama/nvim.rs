@@ -264,11 +264,7 @@ fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
 /// page that will be closed with it.
 ///
 /// `false` when there are other windows and nothing was done.
-pub(crate) fn close_last_tabpage_window(
-    win: Win,
-    free_buf: bool,
-    prev_curtab: *mut Tabpage,
-) -> bool {
+pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: TabPage) -> bool {
     let mut free_buf = free_buf;
     if firstwin.get() != lastwin.get() {
         return false;
@@ -292,7 +288,8 @@ pub(crate) fn close_last_tabpage_window(
 
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
-    if let Some(prev) = valid_tab(prev_curtab).filter(|_| TabPage::current_raw() != prev_curtab)
+    if let Some(prev) =
+        valid_tab(prev_curtab.raw()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
         && prev.tp_firstwin == Some(win.id())
     {
         close_othertab(win, free_buf, prev, false);
@@ -391,7 +388,7 @@ fn close_all_others(message: bool, forceit: bool) {
 
     // Be very careful here: autocommands may change the window layout.
     let mut next = first_window().map_or(ptr::null_mut(), Win::raw);
-    while let Some(mut wp) = valid_win(next) {
+    while let Some(mut wp) = valid_win(unsafe { Win::new(next).raw() }) {
         let mut nextwp = wp.next().map_or(ptr::null_mut(), Win::raw);
         'skip: {
             // autocommands messed this one up
@@ -403,7 +400,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip; // don't close the current window
             }
             // autocommands messed this one up
-            if !buf_is_valid(wp.w_buffer) && valid_win(wp.raw()).is_some() {
+            if !buf_is_valid(wp.buffer()) && valid_win(wp.raw()).is_some() {
                 wp.w_buffer = ptr::null_mut::<Buffer>();
                 close(wp, false, false);
                 break 'skip;
@@ -439,19 +436,19 @@ fn close_all_others(message: bool, forceit: bool) {
 }
 
 /// Whether `buffer` is still on the buffer list.
-fn buf_is_valid(buffer: *mut Buffer) -> bool {
+fn buf_is_valid(buffer: Buf) -> bool {
     // SAFETY: only compared against the buffer list, never read.
-    unsafe { buf_valid(buffer) }
+    unsafe { buf_valid(buffer.raw()) }
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
-    unsafe { can_abandon(buffer.raw(), forceit) }
+    unsafe { can_abandon(buffer, forceit) }
 }
 
 /// Put up the "Save changes?" dialogue for `buffer`, and act on the answer.
 fn ask_about_changes(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { dialog_changed(buffer.raw(), false) };
+    unsafe { dialog_changed(buffer, false) };
 }

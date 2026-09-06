@@ -390,12 +390,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     let (lnum, col) = (cur_match_pos.lnum, cur_match_pos.col);
     // SAFETY: `cur_match_pos` is a position in `ins_buf`, which the caller
     // has promised is live.
-    let (line, line_len) = unsafe {
-        (
-            ml_get_buf(ins_buf.raw(), lnum),
-            ml_get_buf_len(ins_buf.raw(), lnum),
-        )
-    };
+    let (line, line_len) = unsafe { (ml_get_buf(ins_buf, lnum), ml_get_buf_len(ins_buf, lnum)) };
     // SAFETY: `col` is inside the line.
     let mut ptr = unsafe { line.offset(col as isize) };
     let mut len = line_len - col;
@@ -409,8 +404,8 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
             // SAFETY: as above -- the line after this one exists.
             (ptr, len) = unsafe {
                 (
-                    ml_get_buf(ins_buf.raw(), lnum + 1),
-                    ml_get_buf_len(ins_buf.raw(), lnum + 1),
+                    ml_get_buf(ins_buf, lnum + 1),
+                    ml_get_buf_len(ins_buf, lnum + 1),
                 )
             };
             if p_paste.get() == 0 {
@@ -442,7 +437,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
                 // -- Acevedo
                 unsafe { strncpy(iobuff, ptr, len as size_t) };
                 // SAFETY: as above -- the line after this one exists.
-                ptr = unsafe { skipwhite(ml_get_buf(ins_buf.raw(), lnum + 1)) };
+                ptr = unsafe { skipwhite(ml_get_buf(ins_buf, lnum + 1)) };
                 // Find the start and then the end of the next word.
                 tmp_ptr = unsafe { find_word_end(find_word_start(ptr)) };
                 if tmp_ptr > ptr {
@@ -544,7 +539,7 @@ pub(crate) unsafe fn get_next_default_completion(
             let (buf, at, dir) = (ins_buf.raw(), match_pos.raw(), compl_direction.get());
             // SAFETY: `at` is a position in `buf` and `leader` is
             // NUL-terminated; `start_pos` is the caller's own position.
-            let hit = unsafe { search_for_fuzzy_match(buf, at, leader, dir, start_pos) };
+            let hit = unsafe { search_for_fuzzy_match(Buf::new(buf), at, leader, dir, start_pos) };
             found_new_match = Err(Failed);
             if let Some(hit) = hit {
                 (ptr, len) = (hit.ptr, hit.len);
@@ -874,7 +869,7 @@ pub(super) struct LineMatch {
 /// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
 /// point at valid positions in `buffer`.
 pub(super) unsafe fn search_for_fuzzy_match(
-    buffer: *mut Buffer,
+    buffer: Buf,
     pos: *mut Pos,
     pattern: *const c_char,
     dir: c_int,
@@ -885,11 +880,11 @@ pub(super) unsafe fn search_for_fuzzy_match(
 
     // Where the search has come full circle. Another buffer is walked
     // from wherever it is to its end rather than back to the start.
-    let circly_end = if buffer == Buf::current_raw() {
+    let circly_end = if buffer == Buf::current() {
         unsafe { *start_pos }
     } else {
         Pos {
-            lnum: unsafe { (*buffer).b_ml.ml_line_count },
+            lnum: buffer.b_ml.ml_line_count,
             col: 0,
             coladd: 0,
         }
@@ -908,7 +903,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
         {
             return None;
         }
-        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buffer).b_ml.ml_line_count } {
+        if current_pos.lnum >= 1 && current_pos.lnum <= buffer.b_ml.ml_line_count {
             let line = unsafe { ml_get_buf(buffer, current_pos.lnum) };
             let mut ptr = if whole_line {
                 line
@@ -945,7 +940,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
 
         // On to the next line, or round to the far end of the buffer
         // if `'wrapscan'` allows it.
-        let last = unsafe { (*buffer).b_ml.ml_line_count };
+        let last = buffer.b_ml.ml_line_count;
         current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
         if !(1..=last).contains(&current_pos.lnum) {
             if p_ws.get() == 0 {

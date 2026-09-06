@@ -137,7 +137,7 @@ unsafe fn apply_new_indent(
 ) {
     Win::current().w_cursor.lnum += 1;
     if did_si.get() {
-        let sw = unsafe { get_sw_value(Buf::current_raw()) };
+        let sw = unsafe { get_sw_value(Buf::current()) };
         if p_sr.get() != 0 {
             newindent -= newindent % sw;
         }

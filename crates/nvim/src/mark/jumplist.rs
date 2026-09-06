@@ -174,9 +174,9 @@ pub unsafe fn get_jumplist(mut win: Win, mut count: c_int) -> *mut FileMark {
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buffer: Buf, win: *mut Window, count: c_int) -> *mut FileMark {
+pub unsafe fn get_changelist(buffer: Buf, win: Win, count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
-    let (buf, mut win) = unsafe { (buffer, Win::new(win)) };
+    let (buf, mut win) = (buffer, win);
     if buf.b_changelistlen == 0 {
         return ptr::null_mut();
     }
@@ -325,9 +325,9 @@ pub unsafe fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
 ///
 /// # Safety
 /// Both windows must be live.
-pub unsafe fn copy_jumplist(from: *mut Window, to: *mut Window) {
+pub unsafe fn copy_jumplist(from: Win, to: Win) {
     // SAFETY: the caller promised two live windows.
-    let (from, mut to) = unsafe { (Win::new(from), Win::new(to)) };
+    let (from, mut to) = (from, to);
     for i in 0..from.w_jumplistlen {
         let entry = from.jump(i).read();
         to.jump(i).write(entry.clone());
@@ -501,11 +501,11 @@ pub unsafe fn ex_changes(_args: *mut ExArg) {
 /// the same window.
 pub unsafe fn mark_jumplist_iter(
     iter: *const c_void,
-    win: *const Window,
+    win: Win,
     fm: *mut XFileMark,
 ) -> *const c_void {
-    // SAFETY: the caller promised a live window and a live out-parameter.
-    let (win, out) = unsafe { (Win::new(win.cast_mut()), Xfmark::new(fm)) };
+    // SAFETY: the caller promised a live out-parameter.
+    let out = unsafe { Xfmark::new(fm) };
     if iter.is_null() && win.w_jumplistlen == 0 {
         out.write(UNSET_XFMARK);
         return ptr::null();

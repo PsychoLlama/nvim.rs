@@ -89,7 +89,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         }
         // When called from main() the storage structure still needs
         // initialising.
-        if called_from_main && unsafe { ml_open(Buf::current_raw()) }.is_err() {
+        if called_from_main && unsafe { ml_open(Buf::current()) }.is_err() {
             unsafe { getout(1) };
         }
 
@@ -218,11 +218,11 @@ pub unsafe fn ml_recover(checkext: bool) {
         // SAFETY: `home_replace` NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Using swap file \"{shown}\"");
-        if !unsafe { buf_spname(Buf::current_raw()) }.is_null() {
+        if !unsafe { buf_spname(Buf::current()) }.is_null() {
             unsafe {
                 xstrlcpy(
                     path.as_mut_ptr(),
-                    buf_spname(Buf::current_raw()),
+                    buf_spname(Buf::current()),
                     MAXPATHL as size_t,
                 )
             };
@@ -302,7 +302,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         unchanged(Buf::current(), true, true);
 
         serious_error = false;
-        let Ok((lnum, error)) = (unsafe { recover_lines(buf, mfp, &mut hp) }) else {
+        let Ok((lnum, error)) = (unsafe { recover_lines(Buf::new(buf), mfp, &mut hp) }) else {
             break 'theend;
         };
 
@@ -362,7 +362,7 @@ pub unsafe fn ml_recover(checkext: bool) {
     // it, and the memory goes back.
     drop(owned_buf);
     if serious_error && called_from_main {
-        unsafe { ml_close(Buf::current_raw(), 1) };
+        unsafe { ml_close(Buf::current(), 1) };
     } else {
         let (name, buf) = (Buf::current().b_fname, Buf::current_raw());
         let none = core::ptr::null_mut();
@@ -435,7 +435,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
 /// appended and the number of problems found, or `Err` when block 1 itself is
 /// unusable, which leaves nothing to recover.
 unsafe fn recover_lines(
-    buffer: *mut Buffer,
+    mut buffer: Buf,
     mfp: *mut MemFile,
     hp: &mut *mut BlockHdr,
 ) -> Result<(LineNr, c_int), ()> {
@@ -445,7 +445,7 @@ unsafe fn recover_lines(
     let mut line_count: LineNr = 0;
     let mut idx = 0; // start with the first index in block 1
     let mut error = 0;
-    unsafe { (*buffer).b_ml.stack_clear() };
+    buffer.b_ml.stack_clear();
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
@@ -537,14 +537,14 @@ unsafe fn recover_lines(
                     }
 
                     // One block deeper in the tree.
-                    let top = unsafe { ml_add_stack(Buf::new(buffer)) };
+                    let top = unsafe { ml_add_stack(buffer) };
                     let frame = InfoPtr {
                         ip_bnum: bnum,
                         ip_low: 0,
                         ip_high: 0,
                         ip_index: idx,
                     };
-                    unsafe { (*buffer).b_ml.stack_set(top, frame) };
+                    buffer.b_ml.stack_set(top, frame);
 
                     bnum = pe.pe_bnum;
                     line_count = pe.pe_line_count;
@@ -560,11 +560,11 @@ unsafe fn recover_lines(
                         append(&mut lnum, tr(c"???ILLEGAL BLOCK NUMBER"));
                         // Skip this entry and pop back up, to recover
                         // whatever else there is.
-                        let ip = unsafe { (*buffer).b_ml.stack_at(top) };
+                        let ip = buffer.b_ml.stack_at(top);
                         idx = ip.ip_index + 1;
                         bnum = ip.ip_bnum;
                         page_count = 1;
-                        unsafe { (*buffer).b_ml.stack_pop() };
+                        buffer.b_ml.stack_pop();
                         break 'step;
                     }
                     idx = 0;
@@ -647,7 +647,7 @@ unsafe fn recover_lines(
             }
 
             // One block back up the tree, and on to the next index.
-            let Some(ip) = (unsafe { (*buffer).b_ml.stack_pop() }) else {
+            let Some(ip) = buffer.b_ml.stack_pop() else {
                 break 'walk; // finished
             };
             bnum = ip.ip_bnum;
@@ -727,8 +727,8 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
         // SAFETY: a live buffer from the editor's own list, and the memfile
         // it owns.
         if !buf.b_ml.ml_mfp.is_null() && !unsafe { mf_fname(buf.b_ml.ml_mfp) }.is_null() {
-            unsafe { ml_flush_line(buf.raw(), false) }; // flush the buffered line
-            unsafe { ml_find_line(buf.raw(), 0, ML_FLUSH as c_int) }; // flush the locked block
+            unsafe { ml_flush_line(buf, false) }; // flush the buffered line
+            unsafe { ml_find_line(buf, 0, ML_FLUSH as c_int) }; // flush the locked block
 
             if buf_is_changed(buf)
                 && check_file != 0
@@ -743,7 +743,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                     || file_info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
                     || unsafe { os_fileinfo_size(&raw mut file_info) } != buf.b_orig_size
                 {
-                    unsafe { ml_preserve(buf.raw(), false, do_fsync) };
+                    unsafe { ml_preserve(buf, false, do_fsync) };
                     did_check_timestamps.set(false);
                     need_check_timestamps.set(true); // give the message later
                 }
@@ -776,8 +776,8 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
 ///
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
-pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
-    let mfp = unsafe { (*buffer).b_ml.ml_mfp };
+pub unsafe fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
+    let mfp = buffer.b_ml.ml_mfp;
     if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
         if message {
             complain(c"E313: Cannot preserve, there is no swap file");
@@ -795,7 +795,7 @@ pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
     // `ml_preserve` still answers OK/FAIL to its own callers, so the
     // memfile's result is converted here and again below.
     let mut status = unsafe { mf_sync(mfp, sync_flags) }.map_or(FAIL, |()| OK);
-    unsafe { (*buffer).b_ml.stack_clear() }; // the stack is invalid after MFS_ALL
+    buffer.b_ml.stack_clear(); // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
     // number, which means the pointer blocks referring to them need
@@ -807,19 +807,19 @@ pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
     'theend: {
         if unsafe { mf_need_trans(mfp) } && !got_int.get() {
             let mut lnum: LineNr = 1;
-            while unsafe { mf_need_trans(mfp) } && lnum <= unsafe { (*buffer).b_ml.ml_line_count } {
+            while unsafe { mf_need_trans(mfp) } && lnum <= buffer.b_ml.ml_line_count {
                 if unsafe { ml_find_line(buffer, lnum, ML_FIND as c_int) }.is_null() {
                     status = FAIL;
                     break 'theend;
                 }
-                lnum = unsafe { (*buffer).b_ml.locked_high() } + 1;
+                lnum = buffer.b_ml.locked_high() + 1;
             }
             unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
             // Sync the pointer blocks that were just updated.
             if unsafe { mf_sync(mfp, sync_flags) }.is_err() {
                 status = FAIL;
             }
-            unsafe { (*buffer).b_ml.stack_clear() }; // the stack is invalid now
+            buffer.b_ml.stack_clear(); // the stack is invalid now
         }
     }
     got_int.set(got_int.get() | got_int_save);

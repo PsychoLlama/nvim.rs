@@ -431,7 +431,7 @@ pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
     let lnum_last = buf.line_count();
 
     // SAFETY: the prompt's line is a line of the buffer.
-    let mut text = unsafe { ml_get_buf(buf.raw(), lnum_start) };
+    let mut text = unsafe { ml_get_buf(buf, lnum_start) };
     // The prompt itself is skipped, unless the line is shorter than
     // the recorded column.
     let col = buf.b_prompt_start.mark.col;
@@ -449,7 +449,7 @@ pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
         // SAFETY: the join copied what it needed.
         unsafe { xfree(full_text as *mut c_void) };
         // SAFETY: as above.
-        full_text = unsafe { concat_str(half_text, ml_get_buf(buf.raw(), i)) };
+        full_text = unsafe { concat_str(half_text, ml_get_buf(buf, i)) };
         // SAFETY: as above.
         unsafe { xfree(half_text as *mut c_void) };
     }

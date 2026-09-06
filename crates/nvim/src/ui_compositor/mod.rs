@@ -46,7 +46,7 @@ use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
     Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, ScreenGrid,
-    String_0, Window,
+    String_0,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -69,9 +69,9 @@ fn msg_layer() -> GridRef {
 ///
 /// # Safety
 /// `window` must be a live window.
-unsafe fn win_layer(window: *mut Window) -> GridRef {
+unsafe fn win_layer(mut window: Win) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
-    unsafe { GridRef::new(&raw mut (*window).w_grid_alloc) }
+    unsafe { GridRef::new(&raw mut window.w_grid_alloc) }
 }
 
 /// How many UIs this module draws for. Zero means nothing is composed.
@@ -270,7 +270,7 @@ pub unsafe fn ui_comp_put_grid(
         {
             let below = layer_at(insert_at - 1);
             // SAFETY: a live window, by the handle.
-            let curwin_grid = unsafe { win_layer(win.raw()) };
+            let curwin_grid = unsafe { win_layer(win) };
             if below.same(curwin_grid) && below.zindex == grid.zindex {
                 insert_at -= 1;
             }
@@ -398,7 +398,8 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
         // window list.
         for wp in windows_in_curtab() {
             // SAFETY: `wp` came from the live window list.
-            let (grid, winrow, wincol) = unsafe { (win_layer(wp), (*wp).w_winrow, (*wp).w_wincol) };
+            let (grid, winrow, wincol) =
+                unsafe { (win_layer(Win::new(wp)), (*wp).w_winrow, (*wp).w_wincol) };
             if grid.mouse_enabled
                 && row >= winrow
                 && row < winrow + grid.rows
@@ -423,7 +424,7 @@ pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGr
     // SAFETY: the caller's obligation.
     for wp in windows_in_curtab() {
         // SAFETY: `wp` came from the live window list.
-        let (grid, hidden) = unsafe { (win_layer(wp), (*wp).w_config.hide) };
+        let (grid, hidden) = unsafe { (win_layer(Win::new(wp)), (*wp).w_config.hide) };
         if grid.covers(row, col) && !hidden {
             return grid.raw();
         }

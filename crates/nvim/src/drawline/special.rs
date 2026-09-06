@@ -131,7 +131,7 @@ impl Cells {
             unsafe { into.write_bytes(b' ', FOLD_TEXT_LEN as size_t) };
             wlv.extra_text = unsafe {
                 get_foldtext(
-                    Win::new(window.raw()),
+                    window,
                     wlv.lnum,
                     lnume,
                     wlv.foldinfo,
@@ -249,7 +249,7 @@ impl Cells {
             unsafe { self.escaped(wlv, window) };
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
-            && virtual_active(unsafe { Win::new(window.raw()) })
+            && virtual_active(window)
             && wlv.tocol != MAXCOL as ::core::ffi::c_int
             && wlv.vcol < wlv.tocol
             && wlv.col < self.view_width
@@ -472,7 +472,7 @@ impl Cells {
         // For a diff line the highlighting continues after the "$".
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
             if !(self.area_highlighting
-                && virtual_active(unsafe { Win::new(window.raw()) })
+                && virtual_active(window)
                 && wlv.tocol != MAXCOL as ::core::ffi::c_int
                 && wlv.vcol < wlv.tocol)
             {
@@ -505,7 +505,7 @@ impl Cells {
         let wants_conceal = window.w_onebuf_opt.wo_cole > 0
             && (window.raw() != Win::current_raw()
                 || wlv.lnum != window.w_cursor.lnum
-                || unsafe { conceal_cursor_line(window.raw()) })
+                || unsafe { conceal_cursor_line(window) })
             && (self.syntax_flags.has(SynFlags::CONCEAL)
                 || self.has_match_conc > 0
                 || self.decor_conceal > 0)

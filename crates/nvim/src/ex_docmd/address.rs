@@ -558,7 +558,7 @@ pub unsafe fn get_address(
                     } as MarkGet;
                     let fm = unsafe {
                         mark_get(
-                            Buf::current_raw(),
+                            Buf::current(),
                             Win::current(),
                             &raw mut slot,
                             flag,

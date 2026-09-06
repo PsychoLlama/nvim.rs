@@ -135,12 +135,11 @@ pub(super) unsafe fn next_buffer_mark(
 /// the same buffer.
 pub unsafe fn mark_buffer_iter(
     iter: *const c_void,
-    buffer: *const Buffer,
+    buffer: Buf,
     name: *mut c_char,
     fm: *mut FileMark,
 ) -> *const c_void {
-    // SAFETY: the caller promised a live buffer and writable out-parameters.
-    let bufh = unsafe { Buf::new(buffer.cast_mut()) };
+    let bufh = buffer;
     // SAFETY: as above.
     unsafe { *name = NUL_BYTE };
     // Turn the token back into the name it stands for. The last arm reads
@@ -161,14 +160,14 @@ pub unsafe fn mark_buffer_iter(
         mark_name(c_int::try_from(idx).unwrap_or(0) + 'a' as c_int)
     };
     // SAFETY: `buffer` is live and `mark_name` is on this stack.
-    let mut iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
+    let mut iter_mark = unsafe { next_buffer_mark(buffer.raw(), &raw mut at) };
     while !iter_mark.is_null() {
         // SAFETY: every non-null answer names a live record of `buffer`.
         if unsafe { Fmark::new(iter_mark.cast_mut()) }.is_set() {
             break;
         }
         // SAFETY: as above.
-        iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
+        iter_mark = unsafe { next_buffer_mark(buffer.raw(), &raw mut at) };
     }
     if iter_mark.is_null() {
         return ptr::null();

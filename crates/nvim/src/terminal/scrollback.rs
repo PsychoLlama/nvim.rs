@@ -208,7 +208,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
         for _ in 0..diff {
             // SAFETY: a live buffer, deleting the line the row that is
             // about to be dropped was mirrored onto.
-            let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
+            let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
             term.sb.drop_oldest();
         }
         let (buf, diff) = (buffer.raw(), diff as LineNr);
@@ -259,7 +259,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     while deleted > 0 && buffer.line_count() > old_height as LineNr {
         // SAFETY: a live buffer, deleting a line the scrollback no longer
         // holds.
-        let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
+        let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buffer, 1 as LineNr, 1 as LineNr) };
         deleted -= 1;
@@ -274,7 +274,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
         let text = term.textbuf.as_mut_ptr();
         // SAFETY: a live buffer, taking the row this terminal's own line
         // buffer holds.
-        let _ = unsafe { ml_append_buf(buffer.raw(), at, text, 0 as ColNr, false) };
+        let _ = unsafe { ml_append_buf(buffer, at, text, 0 as ColNr, false) };
         // SAFETY: as above, reporting the line just appended.
         unsafe { appended_lines_buf(buffer, at, 1 as LineNr) };
         term.sb.mark_mirrored();
@@ -285,7 +285,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     while buffer.line_count() > max_line_count {
         let last = buffer.line_count();
         // SAFETY: a live buffer, deleting its own last line.
-        let _ = unsafe { ml_delete_buf(buffer.raw(), last, false) };
+        let _ = unsafe { ml_delete_buf(buffer, last, false) };
         // SAFETY: as above, reporting what the deletion took away.
         unsafe { deleted_lines_buf(buffer, buffer.line_count(), 1 as LineNr) };
     }

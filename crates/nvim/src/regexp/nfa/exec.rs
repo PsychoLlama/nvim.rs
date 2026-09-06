@@ -9,6 +9,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::Buffer;
+use crate::types::Window;
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
@@ -31,8 +35,7 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, RegProg, Window,
-    uint8_t,
+    ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, RegProg, uint8_t,
 };
 
 /// Try to match at column `col` of the current line.
@@ -413,10 +416,14 @@ pub(crate) unsafe fn nfa_regexec_multi(
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
+    // SAFETY: a live buffer.
+    let buffer = unsafe { Buf::new(buffer) };
     // SAFETY: the caller holds the context (`with_rex`) and hands us a live
     // match structure over a live buffer; `init_regexec_multi` points the
     // context at them, which is what `nfa_regexec_both` reads it out of.
     let rex = unsafe { Rex::acquire() };
+    // SAFETY: the caller's window (or none) and buffer.
+    let (win, buffer) = unsafe { (Win::from_raw(win), buffer) };
     init_regexec_multi(rex, rmp, win, buffer, lnum);
     nfa_regexec_both(rex, core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
 }

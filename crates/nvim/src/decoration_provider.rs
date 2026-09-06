@@ -38,9 +38,10 @@ use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, Buffer, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode,
-    NS, Object, Window,
+    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
+    Object,
 };
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 use core::ffi::{c_char, c_int};
@@ -189,7 +190,7 @@ unsafe fn decor_provider_invoke(
 /// # Safety
 /// `window` must point to a live window.
 pub(crate) unsafe fn decor_providers_invoke_spell(
-    window: *mut Window,
+    window: Win,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -200,10 +201,8 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
             let mut args = ArrayBuf::<6>::new();
-            args.push(Object::integer(unsafe { (*window).handle }.into()));
-            args.push(Object::integer(
-                unsafe { (*(*window).w_buffer).handle }.into(),
-            ));
+            args.push(Object::integer(window.handle.into()));
+            args.push(Object::integer(unsafe { (*window.w_buffer).handle }.into()));
             args.push(Object::integer(start_row.into()));
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
@@ -222,17 +221,15 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
 /// `window` must point to a live window.
 ///
 /// @return whether a provider placed any marks in the callback.
-pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: *mut Window, row: c_int) -> bool {
+pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
-    let keys = unsafe { (*(*window).w_buffer).b_marktree.n_keys };
+    let keys = unsafe { (*window.w_buffer).b_marktree.n_keys };
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::integer(unsafe { (*window).handle }.into()));
-            args.push(Object::integer(
-                unsafe { (*(*window).w_buffer).handle }.into(),
-            ));
+            args.push(Object::integer(window.handle.into()));
+            args.push(Object::integer(unsafe { (*window.w_buffer).handle }.into()));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"conceal_line".as_ptr(), p.conceal_line, args.array());
             // SAFETY: the provider is named by index, so the vector may
@@ -241,7 +238,7 @@ pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: *mut Window, ro
         }
     }
     // SAFETY: `window` is live, so its buffer and marktree are.
-    let now = unsafe { (*(*window).w_buffer).b_marktree.n_keys };
+    let now = unsafe { (*window.w_buffer).b_marktree.n_keys };
     now > keys
 }
 
@@ -306,17 +303,18 @@ fn set_provider_running(running: bool) {
 ///
 /// # Safety
 /// `window` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_win(window: *mut Window, state: DecorStateRef) {
+pub(crate) unsafe fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     // This might change in the future; then this would need
     // `set_provider_running` just like "on_line" below.
     debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
 
     if provider_count() > 0 {
-        validate_botline_win(unsafe { Win::new(window) });
+        validate_botline_win(window);
     }
-    let botline: LineNr =
-        unsafe { (*window).w_botline }.min(unsafe { (*(*window).w_buffer).b_ml.ml_line_count });
+    let botline: LineNr = window
+        .w_botline
+        .min(unsafe { (*window.w_buffer).b_ml.ml_line_count });
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
@@ -330,10 +328,10 @@ pub(crate) unsafe fn decor_providers_invoke_win(window: *mut Window, state: Deco
 
         if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::window(unsafe { (*window).handle }));
-            args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
+            args.push(Object::window(window.handle));
+            args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
             // TODO(bfredl): we are not using this, but should be first drawn line?
-            args.push(Object::integer((unsafe { (*window).w_topline } - 1).into()));
+            args.push(Object::integer((window.w_topline - 1).into()));
             args.push(Object::integer((botline - 1).into()));
             // TODO(bfredl): could skip a call if retval was interpreted like range?
             if !unsafe {
@@ -349,7 +347,7 @@ pub(crate) unsafe fn decor_providers_invoke_win(window: *mut Window, state: Deco
 ///
 /// # Safety
 /// `window` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_line(window: *mut Window, row: c_int) {
+pub(crate) unsafe fn decor_providers_invoke_line(window: Win, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     set_provider_running(true);
@@ -357,8 +355,8 @@ pub(crate) unsafe fn decor_providers_invoke_line(window: *mut Window, row: c_int
         let p = provider(idx);
         if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
             let mut args = ArrayBuf::<3>::new();
-            args.push(Object::window(unsafe { (*window).handle }));
-            args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
+            args.push(Object::window(window.handle));
+            args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"line".as_ptr(), p.redraw_line, args.array());
             // SAFETY: as above.
@@ -381,7 +379,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(window: *mut Window, row: c_int
 /// # Safety
 /// `window` must point to a live window; runs Lua.
 pub(crate) unsafe fn decor_providers_invoke_range(
-    window: *mut Window,
+    window: Win,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -399,8 +397,8 @@ pub(crate) unsafe fn decor_providers_invoke_range(
         }
 
         let mut args = ArrayBuf::<6>::new();
-        args.push(Object::window(unsafe { (*window).handle }));
-        args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
+        args.push(Object::window(window.handle));
+        args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
         args.push(Object::integer(start_row.into()));
         args.push(Object::integer(start_col.into()));
         args.push(Object::integer(end_row.into()));
@@ -450,13 +448,13 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 ///
 /// # Safety
 /// `buffer` must point to a live buffer; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_buf(buffer: *mut Buffer) {
+pub(crate) unsafe fn decor_providers_invoke_buf(buffer: Buf) {
     // SAFETY: the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::buffer(unsafe { (*buffer).handle }));
+            args.push(Object::buffer(buffer.handle));
             args.push(Object::integer(display_tick.get() as Integer));
             unsafe {
                 decor_provider_invoke(idx, c"buf".as_ptr(), p.redraw_buf, args.array(), true, None)

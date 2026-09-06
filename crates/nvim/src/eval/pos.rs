@@ -43,7 +43,7 @@ pub unsafe fn buf_byteidx_to_charidx(
         lnum = buf.line_count();
     }
     // SAFETY: `lnum` is a line of the buffer, clamped just above.
-    let str = unsafe { ml_get_buf(buf.raw(), lnum) };
+    let str = unsafe { ml_get_buf(buf, lnum) };
     // SAFETY: the line is NUL-terminated, so its first byte is readable.
     if unsafe { *str } as c_int == NUL {
         return 0;
@@ -90,7 +90,7 @@ pub unsafe fn buf_charidx_to_byteidx(
         lnum = buf.line_count();
     }
     // SAFETY: `lnum` is a line of the buffer, clamped just above.
-    let str = unsafe { ml_get_buf(buf.raw(), lnum) };
+    let str = unsafe { ml_get_buf(buf, lnum) };
     let mut t = str;
     // The decrement is inside the condition, so a `charidx` of 0 or 1
     // both answer byte 0.
@@ -152,9 +152,9 @@ pub unsafe fn var2fpos(
         // SAFETY (both arms): `pos.lnum` is a line of the buffer, checked
         // above, and a buffer line is NUL-terminated.
         let len = if charcol {
-            unsafe { mb_charlen(ml_get_buf(bp.raw(), pos.lnum)) }
+            unsafe { mb_charlen(ml_get_buf(bp, pos.lnum)) }
         } else {
-            unsafe { ml_get_buf_len(bp.raw(), pos.lnum) as c_int }
+            unsafe { ml_get_buf_len(bp, pos.lnum) as c_int }
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
@@ -208,7 +208,7 @@ pub unsafe fn var2fpos(
         let mname = unsafe { *name.add(1) } as uint8_t as c_int;
         // SAFETY: the buffer and the window are live, and `slot` is this
         // frame's record.
-        let fm: *const FileMark = unsafe { mark_get(bp.raw(), wp, &raw mut slot, kMarkAll, mname) };
+        let fm: *const FileMark = unsafe { mark_get(bp, wp, &raw mut slot, kMarkAll, mname) };
         // SAFETY: a non-null answer is a live record.
         if fm.is_null() || unsafe { (*fm).mark.lnum } <= 0 {
             return None;
@@ -262,9 +262,9 @@ pub unsafe fn var2fpos(
             pos.lnum = lnum;
             // SAFETY (both arms): the cursor is on a line of the buffer.
             pos.col = if charcol {
-                unsafe { mb_charlen(ml_get_buf(bp.raw(), lnum)) }
+                unsafe { mb_charlen(ml_get_buf(bp, lnum)) }
             } else {
-                unsafe { ml_get_buf_len(bp.raw(), lnum) }
+                unsafe { ml_get_buf_len(bp, lnum) }
             };
         }
         return Some(pos);

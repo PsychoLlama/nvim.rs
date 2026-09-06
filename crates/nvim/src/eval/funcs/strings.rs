@@ -353,7 +353,7 @@ fn with_spell(body: impl FnOnce()) {
     let win = Win::current_raw();
     let saved = unsafe { (*win).w_onebuf_opt.wo_spell };
     if unsafe { (*win).w_onebuf_opt.wo_spell } == 0 {
-        unsafe { parse_spelllang(win) };
+        unsafe { parse_spelllang(Win::new(win)) };
         unsafe { (*win).w_onebuf_opt.wo_spell = 1 };
     }
     if unsafe { *(*(*win).w_s).b_p_spl } == NUL as c_char {
@@ -379,7 +379,7 @@ pub unsafe fn f_spellbadword(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         reported = true;
         if !args.has(0) {
             let at = &raw mut attr;
-            len = unsafe { spell_move_to(Win::current_raw(), FORWARD, SMT_ALL, true, at) };
+            len = unsafe { spell_move_to(Win::current(), FORWARD, SMT_ALL, true, at) };
             if len != 0 {
                 word = get_cursor_pos_ptr();
                 Win::current().w_set_curswant = true;
@@ -391,7 +391,7 @@ pub unsafe fn f_spellbadword(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
                 while unsafe { *str } != NUL as c_char {
                     let p = str as *mut c_char;
                     let (at, cap) = (&raw mut attr, &raw mut capcol);
-                    len = unsafe { spell_check(Win::current_raw(), p, at, cap, false) };
+                    len = unsafe { spell_check(Win::current(), p, at, cap, false) };
                     if attr != HLF_COUNT {
                         word = str;
                         break;

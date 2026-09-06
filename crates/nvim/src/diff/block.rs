@@ -414,7 +414,7 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
             // one answers with.
             let line_org = unsafe {
                 CStr::from_ptr(ml_get_buf(
-                    tabpage.tp_diffbuf[i_org],
+                    tabpage.diffbuf(i_org),
                     (*dp).df_lnum[i_org] + off_org,
                 ))
             }
@@ -432,7 +432,7 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
                     }
                     let other = unsafe {
                         CStr::from_ptr(ml_get_buf(
-                            tabpage.tp_diffbuf[i_new],
+                            tabpage.diffbuf(i_new),
                             (*dp).df_lnum[i_new] + off_new,
                         ))
                     };

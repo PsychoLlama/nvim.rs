@@ -387,7 +387,7 @@ fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
 /// `window` is a live window, `value` a C string, and `errbuf` null or
 /// `errbuflen` writable bytes.
 pub unsafe fn set_chars_option<'a>(
-    window: *mut Window,
+    mut window: Win,
     value: *const c_char,
     what: CharsOption,
     apply: bool,
@@ -397,12 +397,10 @@ pub unsafe fn set_chars_option<'a>(
     let listchars = is_listchars(what);
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
     // SAFETY: the caller's window; both are C strings.
-    let local = unsafe {
-        if listchars {
-            (*window).w_onebuf_opt.wo_lcs
-        } else {
-            (*window).w_onebuf_opt.wo_fcs
-        }
+    let local = if listchars {
+        window.w_onebuf_opt.wo_lcs
+    } else {
+        window.w_onebuf_opt.wo_fcs
     };
     // An empty local value defers to the global one.
     let value = if unsafe { c_int::from(*local) } == NUL {
@@ -594,11 +592,11 @@ pub unsafe fn set_chars_option<'a>(
         // SAFETY: the caller's window; the two runs it held are this
         // module's to free, and the new ones move into the struct with it.
         if listchars {
-            unsafe { xfree((*window).w_p_lcs_chars.multispace.cast::<c_void>()) };
-            unsafe { xfree((*window).w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
-            unsafe { (*window).w_p_lcs_chars = lcs };
+            unsafe { xfree(window.w_p_lcs_chars.multispace.cast::<c_void>()) };
+            unsafe { xfree(window.w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
+            window.w_p_lcs_chars = lcs;
         } else {
-            unsafe { (*window).w_p_fcs_chars = fcs };
+            window.w_p_fcs_chars = fcs;
         }
     }
     None
@@ -674,7 +672,7 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
 /// `win` is a live window, `val` a C string, `errbuf` null or `errbuflen`
 /// writable bytes.
 pub(crate) unsafe fn did_set_global_chars_option<'a>(
-    win: *mut Window,
+    mut win: Win,
     val: *mut c_char,
     what: CharsOption,
     opt_flags: OptionSetFlags,
@@ -683,12 +681,10 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
 ) -> Option<&'a CStr> {
     let listchars = is_listchars(what);
     // SAFETY: the caller's window.
-    let local_ptr = unsafe {
-        if listchars {
-            &raw mut (*win).w_onebuf_opt.wo_lcs
-        } else {
-            &raw mut (*win).w_onebuf_opt.wo_fcs
-        }
+    let local_ptr = if listchars {
+        &raw mut win.w_onebuf_opt.wo_lcs
+    } else {
+        &raw mut win.w_onebuf_opt.wo_fcs
     };
     let local_is_empty = unsafe { c_int::from(**local_ptr) } == NUL;
     let for_this_window = local_is_empty || !opt_flags.has(OptionSetFlags::GLOBAL);
@@ -713,7 +709,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
                 (*wp).w_onebuf_opt.wo_fcs
             };
             if c_int::from(*opt) == NUL {
-                set_chars_option(wp, opt, what, true, errbuf, errbuflen);
+                set_chars_option(Win::new(wp), opt, what, true, errbuf, errbuflen);
             }
             None
         })
@@ -748,11 +744,13 @@ pub unsafe fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's frame and window; the comparisons are of
     // addresses only.
     if varp == option_var(idx).string_var() {
+        // SAFETY: a live window.
+        let win = unsafe { Win::new(win) };
         unsafe { did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen) }
     } else if varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_lcs }
         || varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_fcs }
     {
-        unsafe { set_chars_option(win, *varp, which, true, errbuf, errbuflen) }
+        unsafe { set_chars_option(Win::new(win), *varp, which, true, errbuf, errbuflen) }
     } else {
         None
     }
@@ -797,18 +795,28 @@ pub unsafe fn check_chars_options() -> Option<&'static CStr> {
         }
     };
 
-    if let Some(global) = check(Win::current_raw(), p_lcs.get(), kListchars, false) {
+    if let Some(global) = check(Win::current(), p_lcs.get(), kListchars, false) {
         return Some(global);
     }
-    if let Some(global) = check(Win::current_raw(), p_fcs.get(), kFillchars, false) {
+    if let Some(global) = check(Win::current(), p_fcs.get(), kFillchars, false) {
         return Some(global);
     }
     // SAFETY: `for_each_window` only visits live windows.
     for_each_window(|wp| {
-        if let Some(errmsg) = check(wp, unsafe { (*wp).w_onebuf_opt.wo_lcs }, kListchars, true) {
+        if let Some(errmsg) = check(
+            unsafe { Win::new(wp) },
+            unsafe { (*wp).w_onebuf_opt.wo_lcs },
+            kListchars,
+            true,
+        ) {
             return Some(errmsg);
         }
-        check(wp, unsafe { (*wp).w_onebuf_opt.wo_fcs }, kFillchars, true)
+        check(
+            unsafe { Win::new(wp) },
+            unsafe { (*wp).w_onebuf_opt.wo_fcs },
+            kFillchars,
+            true,
+        )
     })
 }
 

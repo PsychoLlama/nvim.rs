@@ -234,7 +234,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 let buf = unsafe { Buf::new((*st).ins_buf) };
                 let name = if buf.b_fname.is_null() {
                     // SAFETY: a live buffer; the special name is static.
-                    unsafe { buf_spname(buf.raw()) }
+                    unsafe { buf_spname(buf) }
                 } else if buf.b_sfname.is_null() {
                     buf.b_fname
                 } else {

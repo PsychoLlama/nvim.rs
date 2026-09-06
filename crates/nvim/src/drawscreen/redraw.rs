@@ -43,9 +43,9 @@ pub unsafe fn show_cursor_info_later(force: bool) {
     // "The cursor is on an empty line" is a status-line item of its own, and
     // in Insert mode it is deliberately always reported as false.
     let empty_line = State.get() & MODE_INSERT == 0
-        && unsafe { *ml_get_buf(wp.w_buffer, wp.w_cursor.lnum) } == 0;
+        && unsafe { *ml_get_buf(wp.buffer(), wp.w_cursor.lnum) } == 0;
 
-    validate_virtcol(unsafe { Win::new(wp.raw()) });
+    validate_virtcol(wp);
 
     let visual_moved = visual_active()
         && (visual_mode().raw() != wp.w_stl_visual_mode || visual_anchor() != wp.w_stl_visual_pos);
@@ -151,14 +151,14 @@ pub unsafe fn screen_invalidate_highlights() {
 /// from startup to exit.
 pub fn redraw_curbuf_later(redr_type: c_int) {
     // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { redraw_buf_later(Buf::current_raw(), redr_type) }
+    unsafe { redraw_buf_later(Buf::current(), redr_type) }
 }
 
 /// Mark every window showing `buffer`.
-pub unsafe fn redraw_buf_later(buffer: *mut Buffer, redr_type: c_int) {
+pub unsafe fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        if wp.w_buffer == buffer {
+        if wp.w_buffer == buffer.raw() {
             unsafe { redraw_later(wp.raw(), redr_type) };
         }
     }
@@ -168,12 +168,12 @@ pub unsafe fn redraw_buf_later(buffer: *mut Buffer, redr_type: c_int) {
 ///
 /// `force` also marks a line *past* the end of the buffer, which is how a
 /// deletion gets the rows it used to occupy redrawn.
-pub unsafe fn redraw_buf_line_later(buffer: *mut Buffer, line: LineNr, force: bool) {
+pub unsafe fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer {
-            unsafe { redraw_win_line(wp.raw(), line.min((*buffer).b_ml.ml_line_count)) };
-            if force && line > unsafe { (*buffer).b_ml.ml_line_count } {
+        if wp.w_buffer == buffer.raw() {
+            unsafe { redraw_win_line(wp, line.min(buffer.b_ml.ml_line_count)) };
+            if force && line > buffer.b_ml.ml_line_count {
                 wp.w_redraw_bot = line;
             }
         }
@@ -183,9 +183,9 @@ pub unsafe fn redraw_buf_line_later(buffer: *mut Buffer, line: LineNr, force: bo
 /// Widen window `window`'s pending redraw range to cover lines `first..=last`.
 ///
 /// Nothing is marked when the range is entirely outside the window.
-pub unsafe fn redraw_win_range_later(window: *mut Window, first: LineNr, last: LineNr) {
+pub unsafe fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
     // SAFETY: a live window on the main thread.
-    let mut win = unsafe { Win::new(window) };
+    let mut win = window;
     if last >= win.w_topline && first < win.w_botline {
         if win.w_redraw_top == 0 || win.w_redraw_top > first {
             win.w_redraw_top = first;
@@ -193,7 +193,7 @@ pub unsafe fn redraw_win_range_later(window: *mut Window, first: LineNr, last: L
         if win.w_redraw_bot == 0 || win.w_redraw_bot < last {
             win.w_redraw_bot = last;
         }
-        unsafe { redraw_later(window, UPD_VALID) };
+        unsafe { redraw_later(window.raw(), UPD_VALID) };
     }
 }
 
@@ -201,26 +201,26 @@ pub unsafe fn redraw_win_range_later(window: *mut Window, first: LineNr, last: L
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-pub unsafe fn redraw_win_line(window: *mut Window, lnum: LineNr) {
+pub unsafe fn redraw_win_line(window: Win, lnum: LineNr) {
     // SAFETY: a live window on the main thread.
     unsafe { redraw_win_range_later(window, lnum, lnum) }
 }
 
 /// Mark lines `first..=last` of `buffer` in every window showing it.
-pub unsafe fn redraw_buf_range_later(buffer: *mut Buffer, first: LineNr, last: LineNr) {
+pub unsafe fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        if wp.w_buffer == buffer {
-            unsafe { redraw_win_range_later(wp.raw(), first, last) };
+        if wp.w_buffer == buffer.raw() {
+            unsafe { redraw_win_range_later(wp, first, last) };
         }
     }
 }
 
 /// Mark the status lines and window bars of every window showing `buffer`.
-pub unsafe fn redraw_buf_status_later(buffer: *mut Buffer) {
+pub unsafe fn redraw_buf_status_later(buffer: Buf) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer
+        if wp.w_buffer == buffer.raw()
             && (wp.w_status_height != 0
                 || (wp.raw() == Win::current_raw() && global_stl_height() != 0)
                 || wp.w_winbar_height != 0)
@@ -249,15 +249,15 @@ pub unsafe fn status_redraw_all() {
 /// Mark the status lines and window bars of the current buffer.
 pub unsafe fn status_redraw_curbuf() {
     // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { status_redraw_buf(Buf::current_raw()) }
+    unsafe { status_redraw_buf(Buf::current()) }
 }
 
 /// Mark the status lines and window bars of `buffer`.
-pub unsafe fn status_redraw_buf(buffer: *mut Buffer) {
+pub unsafe fn status_redraw_buf(buffer: Buf) {
     // SAFETY: walking the current tab page's window list on the main thread.
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer
+        if wp.w_buffer == buffer.raw()
             && ((!is_stl_global && wp.w_status_height != 0)
                 || (is_stl_global && wp.raw() == Win::current_raw())
                 || wp.w_winbar_height != 0)
@@ -283,8 +283,8 @@ pub unsafe fn redraw_statuslines() {
     for wp in winlayer::windows() {
         if wp.w_redr_status {
             unsafe { win_check_ns_hl(wp.raw()) };
-            unsafe { win_redr_winbar(wp.raw()) };
-            unsafe { win_redr_status(wp.raw()) };
+            unsafe { win_redr_winbar(wp) };
+            unsafe { win_redr_status(wp) };
         }
     }
     unsafe { win_check_ns_hl(::core::ptr::null_mut()) };

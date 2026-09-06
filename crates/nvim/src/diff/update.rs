@@ -183,7 +183,7 @@ pub(crate) unsafe fn diff_write_buffer(
     let len = (start..=end)
         .map(|lnum| {
             // SAFETY: a live buffer, and a line number inside it.
-            let n = unsafe { ml_get_buf_len(buffer.raw(), lnum) };
+            let n = unsafe { ml_get_buf_len(buffer, lnum) };
             n as usize + 1
         })
         .sum::<usize>();
@@ -202,7 +202,7 @@ pub(crate) unsafe fn diff_write_buffer(
     let mut at = 0;
     for lnum in start..=end {
         // SAFETY: a live buffer, and a line number inside it.
-        let line = unsafe { CStr::from_ptr(ml_get_buf(buffer.raw(), lnum)) }.to_bytes();
+        let line = unsafe { CStr::from_ptr(ml_get_buf(buffer, lnum)) }.to_bytes();
         if diff_flags.get() & DIFF_ICASE == 0 {
             out[at..at + line.len()].copy_from_slice(line);
             let from = out[at..].as_mut_ptr().cast();
@@ -313,7 +313,7 @@ unsafe fn diff_write(
     let noeap = ::core::ptr::null_mut::<ExArg>();
     // SAFETY: a live buffer and one of this module's temp file names; no
     // short name and no `ExArg` are wanted.
-    let r = unsafe { buf_write(buffer.raw(), name, noshort, start, end, noeap, req) };
+    let r = unsafe { buf_write(buffer, name, noshort, start, end, noeap, req) };
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // SAFETY: the option string the buffer itself holds.
     unsafe { free_string_option(buffer.b_p_ff) };
@@ -435,8 +435,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
 
             let (start, end) = segment(idx_orig);
             // SAFETY: a live buffer of the diff, and `dio`'s own input side.
-            let wrote =
-                unsafe { diff_write(Buf::new(tp.tp_diffbuf[idx_orig]), orig_in, start, end) };
+            let wrote = unsafe { diff_write(tp.diffbuf(idx_orig), orig_in, start, end) };
             if wrote.is_err() {
                 if !orig_diff.is_null() {
                     tp.tp_first_diff = orig_diff;

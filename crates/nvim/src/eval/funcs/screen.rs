@@ -306,7 +306,7 @@ pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         && col >= 0
         && col < ml_get_len(lnum)
     {
-        id = unsafe { syn_get_id(Win::current_raw(), lnum, col, trans, ptr::null_mut(), 0) };
+        id = unsafe { syn_get_id(Win::current(), lnum, col, trans, ptr::null_mut(), 0) };
     }
     result.vval.v_number = id as VarNumber;
 }
@@ -348,7 +348,7 @@ pub unsafe fn f_synconcealed(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     {
         // Run the syntax engine for its side effect: `get_syntax_info`
         // reports on the position it last looked at.
-        unsafe { syn_get_id(Win::current_raw(), lnum, col, 0, ptr::null_mut(), 0) };
+        unsafe { syn_get_id(Win::current(), lnum, col, 0, ptr::null_mut(), 0) };
         syntax_flags = unsafe { get_syntax_info(&raw mut matchid) };
         if syntax_flags.has(SynFlags::CONCEAL) && Win::current().w_onebuf_opt.wo_cole < 3 {
             let mut cchar = schar_from_char(syn_get_sub_char());
@@ -390,7 +390,7 @@ pub unsafe fn f_synstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     {
         let list = list_alloc_ret(result, kListLenMayKnow as isize);
         // Run the syntax engine, keeping the stack this time.
-        unsafe { syn_get_id(Win::current_raw(), lnum, col, 0, ptr::null_mut(), 1) };
+        unsafe { syn_get_id(Win::current(), lnum, col, 0, ptr::null_mut(), 1) };
         for i in 0.. {
             let id = syn_get_stack_item(i);
             if id < 0 {

@@ -218,7 +218,7 @@ pub(super) unsafe fn add_fromto(out: &mut Vec<RepItem>, from: *mut c_char, to: *
         let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
         let (win, buf) = (Win::current_raw(), word.as_mut_ptr());
         let len = unsafe { cstr::bytes_at(s) }.len() as c_int;
-        let _ = unsafe { spell_casefold(win, s, len, buf, MAXWLEN as c_int) };
+        let _ = unsafe { spell_casefold(Win::new(win), s, len, buf, MAXWLEN as c_int) };
         unsafe { cstr::bytes_at(word.as_ptr()) }.into()
     };
     out.push(RepItem {

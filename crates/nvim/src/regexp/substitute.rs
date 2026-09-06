@@ -341,7 +341,7 @@ pub(crate) unsafe fn vim_regsub(
         rex.set_reg_match(rmp);
         rex.set_reg_mmatch(core::ptr::null_mut());
         rex.set_reg_maxline(0);
-        rex.set_reg_buf(Buf::current_raw());
+        rex.set_reg_buf(Buf::current());
         // A string replacement has no lines to cross, so a `\n` in it
         // is a literal newline rather than a line break.
         rex.set_reg_line_lbr(true);
@@ -364,7 +364,7 @@ pub(crate) unsafe fn vim_regsub_multi(
         let rex = unsafe { Rex::acquire() };
         rex.set_reg_match(core::ptr::null_mut());
         rex.set_reg_mmatch(rmp);
-        rex.set_reg_buf(Buf::current_raw());
+        rex.set_reg_buf(Buf::current());
         rex.set_reg_firstlnum(lnum);
         rex.set_reg_maxline(Buf::current().b_ml.ml_line_count - lnum);
         rex.set_reg_line_lbr(false);

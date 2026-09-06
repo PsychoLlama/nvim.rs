@@ -114,7 +114,7 @@ impl Searcher {
     /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
     unsafe fn line(&self, lnum: LineNr) -> *mut c_char {
-        unsafe { ml_get_buf(self.buf.raw(), lnum) }
+        unsafe { ml_get_buf(self.buf, lnum) }
     }
 
     /// Whether an error was reported or the timeout was passed — either
@@ -315,7 +315,7 @@ impl Searcher {
                 // line before.
                 if unsafe { (*pos).lnum } > 1 {
                     unsafe { (*pos).lnum -= 1 };
-                    unsafe { (*pos).col = ml_get_buf_len(self.buf.raw(), (*pos).lnum) };
+                    unsafe { (*pos).col = ml_get_buf_len(self.buf, (*pos).lnum) };
                 }
             } else {
                 unsafe { (*pos).col -= 1 };
@@ -439,7 +439,7 @@ pub unsafe fn searchit(
         {
             // Watch out for "col" being MAXCOL - 2, used in a closed fold.
             let line = unsafe { s.line((*pos).lnum) };
-            if unsafe { ml_get_buf_len(buffer.raw(), (*pos).lnum) } <= unsafe { (*pos).col } {
+            if unsafe { ml_get_buf_len(buffer, (*pos).lnum) } <= unsafe { (*pos).col } {
                 1
             } else {
                 unsafe { utfc_ptr2len(line.offset((*pos).col as isize)) }
@@ -658,7 +658,7 @@ pub unsafe fn searchit(
     // A pattern like "\n\zs" may go past the last line.
     if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
         unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
-        unsafe { (*pos).col = ml_get_buf_len(buffer.raw(), (*pos).lnum) };
+        unsafe { (*pos).col = ml_get_buf_len(buffer, (*pos).lnum) };
         if unsafe { (*pos).col } > 0 {
             unsafe { (*pos).col -= 1 };
         }
@@ -732,7 +732,7 @@ pub unsafe fn search_for_exact_line(
             start = unsafe { (*pos).lnum };
         }
 
-        let line = unsafe { ml_get_buf(buffer.raw(), (*pos).lnum) };
+        let line = unsafe { ml_get_buf(buffer, (*pos).lnum) };
         let text = unsafe { skipwhite(line) };
         unsafe { (*pos).col = text.offset_from(line) as ColNr };
 

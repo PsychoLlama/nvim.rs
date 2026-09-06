@@ -107,7 +107,7 @@ impl Regions {
 ///   redraw the lines a scroll brought in at either end.
 pub(crate) unsafe fn win_update(window: Win) {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut win = unsafe { Win::new(window.raw()) };
+    let mut win = window;
     // SAFETY: a live window of the current layout, during a redraw.
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
@@ -151,9 +151,9 @@ pub(crate) unsafe fn win_update(window: Win) {
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
     unsafe { decor_redraw_reset(window, decor) };
-    unsafe { decor_providers_invoke_win(window.raw(), decor) };
+    unsafe { decor_providers_invoke_win(window, decor) };
 
-    unsafe { add_suspended_terminal_note(buf, decor) };
+    unsafe { add_suspended_terminal_note(Buf::new(buf), decor) };
 
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
@@ -189,7 +189,7 @@ pub(crate) unsafe fn win_update(window: Win) {
         changed_line_abv_curs_win(win);
         win.w_nrwidth = nrwidth_new;
     } else {
-        unsafe { find_changed_lines(win, buf, &mut rg) };
+        unsafe { find_changed_lines(win, Buf::new(buf), &mut rg) };
     }
 
     win.w_redraw_top = 0; // reset for next time
@@ -214,26 +214,28 @@ pub(crate) unsafe fn win_update(window: Win) {
         };
     }
 
-    unsafe { plan_scroll(win, buf, &mut rg) };
+    unsafe { plan_scroll(win, Buf::new(buf), &mut rg) };
 
     if rg.redr_type == UPD_SOME_VALID {
         rg.redraw_all(window);
         rg.redr_type = UPD_NOT_VALID;
     }
 
-    unsafe { plan_visual_area(win, buf, &mut rg) };
-    unsafe { remember_visual_area(window, buf) };
+    unsafe { plan_visual_area(win, Buf::new(buf), &mut rg) };
+    unsafe { remember_visual_area(window, Buf::new(buf)) };
 
     let mut cursorline_fi = FoldInfo::default();
     unsafe { win_update_cursorline(window, &raw mut cursorline_fi) };
     if window.raw() == Win::current_raw() {
-        conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current_raw()) });
+        conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current()) });
     }
 
     unsafe { win_check_ns_hl(window.raw()) };
 
     let mut spv = SpellVars::default();
-    if unsafe { spell_check_window(window.raw()) } {
+    // SAFETY: a live buffer.
+    let buf = unsafe { Buf::new(buf) };
+    if unsafe { spell_check_window(window) } {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;
     }
@@ -269,7 +271,7 @@ pub(crate) unsafe fn win_update(window: Win) {
 ///
 /// # Safety
 /// Called from [`win_update`] with `state` reset for this window.
-unsafe fn add_suspended_terminal_note(buffer: *mut Buffer, state: DecorStateRef) {
+unsafe fn add_suspended_terminal_note(buffer: Buf, state: DecorStateRef) {
     // Both live for the whole process: `decor_range_add_virt` stores the
     // pointer and the range is dropped at the end of the redraw. Declarations,
     // so they sit outside the promise below.
@@ -293,11 +295,10 @@ unsafe fn add_suspended_terminal_note(buffer: *mut Buffer, state: DecorStateRef)
     });
 
     // SAFETY: the caller's buffer.
-    if unsafe { (*buffer).terminal }.is_null() || !unsafe { terminal_suspended((*buffer).terminal) }
-    {
+    if buffer.terminal.is_null() || !unsafe { terminal_suspended(buffer.terminal) } {
         return;
     }
-    let last = unsafe { (*buffer).b_ml.ml_line_count } - 1;
+    let last = buffer.b_ml.ml_line_count - 1;
     unsafe { decor_range_add_virt(state, last, 0, last, 0, VIRT_TEXT.ptr(), false) };
 }
 
@@ -315,7 +316,7 @@ unsafe fn clamp_skipcol(mut window: Win) {
         return;
     }
     let width1 = window.w_view_width - window.col_off();
-    let width2 = width1 + win_col_off2(unsafe { Win::new(window.raw()) });
+    let width2 = width1 + win_col_off2(window);
 
     // The first screen row of a wrapped line is `width1` wide and every
     // later one `width2`, so the valid skip columns are that series.
@@ -342,7 +343,7 @@ unsafe fn clamp_skipcol(mut window: Win) {
 ///
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
-unsafe fn find_changed_lines(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
+unsafe fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
     // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
@@ -352,17 +353,17 @@ unsafe fn find_changed_lines(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
         0
     };
 
-    if unsafe { (*buffer).b_mod_set } {
-        if rg.mod_top == 0 || rg.mod_top > unsafe { (*buffer).b_mod_top } {
-            rg.mod_top = unsafe { (*buffer).b_mod_top };
+    if buffer.b_mod_set {
+        if rg.mod_top == 0 || rg.mod_top > buffer.b_mod_top {
+            rg.mod_top = buffer.b_mod_top;
             // Lines above the change may be included in a pattern match.
-            if unsafe { syntax_present(win.raw()) } {
-                rg.mod_top -= unsafe { (*buffer).b_s.b_syn_sync_linebreaks };
+            if unsafe { syntax_present(win) } {
+                rg.mod_top -= buffer.b_s.b_syn_sync_linebreaks;
                 rg.mod_top = rg.mod_top.max(1);
             }
         }
-        if rg.mod_bot == 0 || rg.mod_bot < unsafe { (*buffer).b_mod_bot } {
-            rg.mod_bot = unsafe { (*buffer).b_mod_bot };
+        if rg.mod_bot == 0 || rg.mod_bot < buffer.b_mod_bot {
+            rg.mod_bot = buffer.b_mod_bot;
         }
 
         // With a multi-line 'hlsearch' or :match pattern, a change in one
@@ -410,7 +411,7 @@ unsafe fn find_changed_lines(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     if rg.mod_top != 0 && rg.mod_top < win.w_topline {
         if rg.mod_bot > win.w_topline {
             rg.mod_top = win.w_topline;
-        } else if unsafe { syntax_present(win.raw()) } {
+        } else if unsafe { syntax_present(win) } {
             rg.top_end = 1;
         }
     }
@@ -472,7 +473,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
-unsafe fn plan_scroll(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
+unsafe fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
     // concealed, which would read as a scroll that did not happen. Compare
@@ -482,16 +483,11 @@ unsafe fn plan_scroll(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // it: `decor_conceal_line` invokes the decoration providers, so
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
-    while topline_conceal < unsafe { (*buffer).b_ml.ml_line_count }
+    while topline_conceal < buffer.b_ml.ml_line_count
         && unsafe { decor_conceal_line(win, topline_conceal - 1, false) }
     {
         topline_conceal += 1;
-        has_folding(
-            unsafe { Win::new(win.raw()) },
-            topline_conceal,
-            None,
-            Some(&mut topline_conceal),
-        );
+        has_folding(win, topline_conceal, None, Some(&mut topline_conceal));
     }
 
     let scrollable = matches!(
@@ -677,8 +673,8 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
-unsafe fn plan_visual_area(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
-    let shown = visual_selection().filter(|_| buffer == Win::current().w_buffer);
+unsafe fn plan_visual_area(win: Win, buffer: Buf, rg: &mut Regions) {
+    let shown = visual_selection().filter(|_| buffer == Win::current().buffer());
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
         return;
     }
@@ -854,7 +850,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
         lnum >= anchor_lnum
     } {
         pos.lnum = lnum;
-        pos.col = unsafe { ml_get_buf_len(win.w_buffer, lnum) };
+        pos.col = unsafe { ml_get_buf_len(win.buffer(), lnum) };
         let mut end = 0;
         unsafe {
             getvvcol(
@@ -876,8 +872,8 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 ///
 /// # Safety
 /// `window` must be a live window and `buffer` its buffer.
-unsafe fn remember_visual_area(mut window: Win, buffer: *mut Buffer) {
-    if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().w_buffer) {
+unsafe fn remember_visual_area(mut window: Win, buffer: Buf) {
+    if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().buffer()) {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
         window.w_old_cursor_lnum = Win::current().w_cursor.lnum;
         window.w_old_visual_lnum = sel.anchor.lnum;
@@ -922,12 +918,7 @@ unsafe fn send_win_extmarks(window: Win) {
 ///
 /// # Safety
 /// `window` must be the window that was just drawn and `buffer` its buffer.
-unsafe fn finish_botline(
-    mut window: Win,
-    buffer: *mut Buffer,
-    old_botline: LineNr,
-    nrwidth_before: c_int,
-) {
+unsafe fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_before: c_int) {
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -956,7 +947,7 @@ unsafe fn finish_botline(
         }
     }
 
-    if nrwidth_before != window.w_nrwidth && !unsafe { (*buffer).terminal }.is_null() {
-        unsafe { terminal_check_size((*buffer).terminal) };
+    if nrwidth_before != window.w_nrwidth && !buffer.terminal.is_null() {
+        unsafe { terminal_check_size(buffer.terminal) };
     }
 }

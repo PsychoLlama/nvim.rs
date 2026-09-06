@@ -79,7 +79,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // When closing the last window in a tab page first go to another tab page
     // and then close the window and the tab page, so that `curwin` and `curtab`
     // are never invalid while memory is freed.
-    if close_last_tabpage_window(win, free_buf, prev_curtab) {
+    if close_last_tabpage_window(win, free_buf, unsafe { TabPage::new(prev_curtab) }) {
         return FAIL;
     }
 
@@ -149,7 +149,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         unclose_win_buffer(win, bufref, did_decrement);
         return FAIL;
     }
-    if close_last_tabpage_window(win, free_buf, prev_curtab) {
+    if close_last_tabpage_window(win, free_buf, unsafe { TabPage::new(prev_curtab) }) {
         return FAIL;
     }
 
@@ -336,7 +336,7 @@ fn leave_closing_window(win: Win) -> Leave {
     let wp = if win.w_floating {
         // SAFETY: `win` is only compared, never read; `None` means the
         // current tab page.
-        unsafe { win_float_find_altwin(win.raw(), None) }
+        unsafe { win_float_find_altwin(win, None) }
             .expect("a float being closed always has a window to fall back to")
     } else {
         frame2window(alt_frame(win, None))
@@ -419,21 +419,21 @@ fn fire_winclosed(win: Win) {
     RECURSIVE.set(false);
 }
 
-pub fn trigger_tabclosedpre(tabpage: *mut Tabpage) {
+pub fn trigger_tabclosedpre(tabpage: TabPage) {
     tabclosedpre(tabpage);
 }
 
 /// `TabClosedPre` for `tabpage`, fired from inside that tab page and never
 /// re-entered. Comes back to the tab page it started in, or to the first.
-fn tabclosedpre(tabpage: *mut Tabpage) {
+fn tabclosedpre(tabpage: TabPage) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
-    let ptp = TabPage::current_raw();
+    let ptp = TabPage::current();
     // Return quickly when there is no TabClosedPre autocommand to run, or one
     // is already running.
     if !event_wanted(AutoEvent::TabClosedPre) || RECURSIVE.get() {
         return;
     }
-    if let Some(tp) = valid_tab(tabpage) {
+    if let Some(tp) = valid_tab(tabpage.raw()) {
         goto_tab(tp, false, false);
     }
     RECURSIVE.set(true);
@@ -443,18 +443,13 @@ fn tabclosedpre(tabpage: *mut Tabpage) {
     RECURSIVE.set(false);
     // The tab page may have been modified or deleted by the autocommands: try
     // to recover it, and fall back to the first tab page.
-    let back = valid_tab(ptp).unwrap_or_else(first_tab);
+    let back = valid_tab(ptp.raw()).unwrap_or_else(first_tab);
     goto_tab(back, false, false);
 }
 
-pub unsafe fn win_close_othertab(
-    win: *mut Window,
-    free_buf: c_int,
-    tabpage: TabPage,
-    force: bool,
-) -> bool {
+pub unsafe fn win_close_othertab(win: Win, free_buf: c_int, tabpage: TabPage, force: bool) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page.
-    let (win, tp) = unsafe { (Win::new(win), tabpage) };
+    let (win, tp) = (win, tabpage);
     close_othertab(win, free_buf != 0, tp, force)
 }
 
@@ -518,7 +513,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             }
         }
         if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
-            tabclosedpre(tabpage.raw());
+            tabclosedpre(tabpage);
             // The autocommand may have freed the window already.
             if !valid_win_any_tab(win.raw()) {
                 return false;

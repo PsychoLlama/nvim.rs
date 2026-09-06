@@ -453,7 +453,7 @@ unsafe fn spell_find_suggest(
     su.su_badlen = if badlen != 0 {
         badlen
     } else {
-        let win = Win::current_raw();
+        let win = Win::current();
         (unsafe { spell_check(win, badptr, &raw mut attr, ptr::null_mut(), false) }) as c_int
     };
     su.su_maxcount = maxcount;
@@ -465,7 +465,7 @@ unsafe fn spell_find_suggest(
     let badword = su.su_badword() as *mut c_char as *mut c_void;
     unsafe { xmemcpyz(badword, badptr as *const c_void, su.su_badlen as usize) };
     let fbadword = su.su_fbadword() as *mut c_char;
-    let win = Win::current_raw();
+    let win = Win::current();
     let _ = unsafe { spell_casefold(win, badptr, su.su_badlen, fbadword, MAXWLEN as c_int) };
     // Upstream note: this breaks if the case-folded text comes out
     // longer than the original, because an illegal byte then throws
@@ -696,7 +696,7 @@ unsafe fn suggest_try_change(su: Sug) {
     // it may fill the `MAXWLEN - n` that are left.
     let taillen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     let dest = unsafe { fwordp.offset(n as isize) };
-    let win = Win::current_raw();
+    let win = Win::current();
     let _ = unsafe { spell_casefold(win, tail, taillen, dest, MAXWLEN as c_int - n) };
 
     // Keep the result no longer than the original text.

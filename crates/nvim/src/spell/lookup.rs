@@ -44,6 +44,7 @@
 
 use crate::cstr;
 use crate::spell::WordFlags;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
@@ -205,7 +206,8 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
         // end of a word — unless the language compounds or does not
         // break, in which case what follows may continue it.
 
-        let word_ends = if unsafe { spell_iswordp(ptr.offset(wlen as isize), mip.mi_win) } {
+        let word_ends = if unsafe { spell_iswordp(ptr.offset(wlen as isize), Win::new(mip.mi_win)) }
+        {
             if unsafe { (*slang).sl_compprog }.is_null() && !unsafe { (*slang).sl_nobreak } {
                 continue;
             }
@@ -521,7 +523,7 @@ unsafe fn compound_part_allowed(
             // no-caps part is accepted even where the dictionary word
             // says ONECAP.
             p = unsafe { p.offset(-(utf_head_off(mip.mi_word, p.offset(-1)) as isize + 1)) };
-            let reject = if unsafe { spell_iswordp_nmw(p, mip.mi_win) } {
+            let reject = if unsafe { spell_iswordp_nmw(p, Win::new(mip.mi_win)) } {
                 capflags == WordFlags::ONECAP
             } else {
                 flags.has(WordFlags::ONECAP) && capflags != WordFlags::ONECAP
@@ -545,7 +547,7 @@ unsafe fn compound_part_allowed(
             if word == mip.mi_word {
                 let win = mip.mi_win;
                 let out = fword.as_mut_ptr();
-                let _ = unsafe { spell_casefold(win, word, wlen, out, MAXWLEN as c_int) };
+                let _ = unsafe { spell_casefold(Win::new(win), word, wlen, out, MAXWLEN as c_int) };
             } else {
                 let to = fword.as_mut_ptr() as *mut ::core::ffi::c_void;
                 let from = word as *const ::core::ffi::c_void;
@@ -810,7 +812,9 @@ unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
     loop {
         mb_ptr_adv!(mip.mi_fend);
-        if unsafe { *mip.mi_fend } == 0 || !unsafe { spell_iswordp(mip.mi_fend, mip.mi_win) } {
+        if unsafe { *mip.mi_fend } == 0
+            || !unsafe { spell_iswordp(mip.mi_fend, Win::new(mip.mi_win)) }
+        {
             break;
         }
     }
@@ -825,7 +829,7 @@ unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let win = mip.mi_win;
     let taken = unsafe { mip.mi_fend.offset_from(p) } as c_int;
     let room = MAXWLEN as c_int - fwordlen;
-    let _ = unsafe { spell_casefold(win, p, taken, tail, room) };
+    let _ = unsafe { spell_casefold(Win::new(win), p, taken, tail, room) };
     let flen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     mip.mi_fwordlen += flen;
     flen

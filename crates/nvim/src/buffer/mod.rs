@@ -410,7 +410,7 @@ pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<
     let (none, raw) = (ptr::null_mut(), buffer.raw());
     let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.
-    unsafe { apply_autocmds_retval(event, none, none, false, raw, &raw mut status) };
+    unsafe { apply_autocmds_retval(event, none, none, false, Buf::new(raw), &raw mut status) };
     // The event can only *lose* the read, never claim one: `FAIL` is the
     // only value `apply_autocmds_retval` writes.
     if status == FAIL {
@@ -487,7 +487,7 @@ pub(crate) fn invalidate_window_folds(win: Win) {
 /// Drop the window's own syntax state (`:ownsyntax`).
 pub(crate) fn reset_syntax(win: Win) {
     // SAFETY: a live window.
-    unsafe { reset_synblock(win.raw()) };
+    unsafe { reset_synblock(win) };
 }
 
 /// Remember the cursor position in the jump list.

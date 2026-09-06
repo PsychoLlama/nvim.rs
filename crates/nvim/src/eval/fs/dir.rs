@@ -110,15 +110,13 @@ fn set_cwd(cwd: &Owned, from: *const c_char) {
 }
 
 /// The window's own directory, or NULL when it has none.
-fn win_localdir(win: *mut Window) -> *mut c_char {
-    // SAFETY: a live window.
-    unsafe { (*win).w_localdir }
+fn win_localdir(win: Win) -> *mut c_char {
+    win.w_localdir
 }
 
 /// The tabpage's own directory, or NULL when it has none.
-fn tab_localdir(tabpage: *mut Tabpage) -> *mut c_char {
-    // SAFETY: a live tabpage.
-    unsafe { (*tabpage).tp_localdir }
+fn tab_localdir(tabpage: TabPage) -> *mut c_char {
+    tabpage.tp_localdir
 }
 
 /// Tabpage number `n`, or NULL when there is none.
@@ -306,9 +304,9 @@ pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
                 return;
             }
         };
-    } else if !win_localdir(Win::current_raw()).is_null() {
+    } else if !win_localdir(Win::current()).is_null() {
         scope = kCdScopeWindow;
-    } else if !tab_localdir(TabPage::current_raw()).is_null() {
+    } else if !tab_localdir(TabPage::current()).is_null() {
         scope = kCdScopeTabpage;
     }
 
@@ -410,11 +408,11 @@ pub unsafe fn f_getcwd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let mut from: *const c_char = ptr::null();
     if s.scope == kCdScopeWindow {
         debug_assert!(!s.win.is_null(), "win");
-        from = win_localdir(s.win);
+        from = win_localdir(unsafe { Win::new(s.win) });
     }
     if from.is_null() && (kCdScopeWindow..=kCdScopeTabpage).contains(&s.scope) {
         debug_assert!(!s.tp.is_null(), "tp");
-        from = tab_localdir(s.tp);
+        from = tab_localdir(unsafe { TabPage::new(s.tp) });
     }
     if from.is_null() && (kCdScopeWindow..=kCdScopeGlobal).contains(&s.scope) {
         // `globaldir` is not always set.
@@ -447,11 +445,11 @@ pub unsafe fn f_haslocaldir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     result.vval.v_number = match s.scope {
         kCdScopeWindow => {
             debug_assert!(!s.win.is_null(), "win");
-            !win_localdir(s.win).is_null() as VarNumber
+            !win_localdir(unsafe { Win::new(s.win) }).is_null() as VarNumber
         }
         kCdScopeTabpage => {
             debug_assert!(!s.tp.is_null(), "tp");
-            !tab_localdir(s.tp).is_null() as VarNumber
+            !tab_localdir(unsafe { TabPage::new(s.tp) }).is_null() as VarNumber
         }
         kCdScopeInvalid => {
             // We should never get here: the read above defaulted it.

@@ -425,14 +425,14 @@ impl Writing {
             return;
         }
         for buf in buffers() {
-            if !unsafe { ignore_buf(buf.raw(), &self.removable_bufs) } {
-                unsafe { self.collect_one_buffer(buf.raw()) };
+            if !ignore_buf(Some(buf), &self.removable_bufs) {
+                unsafe { self.collect_one_buffer(buf) };
             }
         }
     }
 
-    unsafe fn collect_one_buffer(&mut self, buffer: *mut Buffer) {
-        let fname = unsafe { (*buffer).b_ffname };
+    unsafe fn collect_one_buffer(&mut self, buffer: Buf) {
+        let fname = buffer.b_ffname;
         let filemarks = unsafe { self.file_marks_for(fname) };
 
         let mut mark_iter: *const c_void = core::ptr::null();
@@ -462,8 +462,8 @@ impl Writing {
             }
         }
 
-        for i in 0..unsafe { (*buffer).b_changelistlen } as usize {
-            let fm = unsafe { (*buffer).b_changelist[i].clone() };
+        for i in 0..buffer.b_changelistlen as usize {
+            let fm = buffer.b_changelist[i].clone();
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: fm.timestamp,
@@ -479,7 +479,7 @@ impl Writing {
                 (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp)
             };
         }
-        unsafe { (*filemarks).changes_size = (*buffer).b_changelistlen as size_t };
+        unsafe { (*filemarks).changes_size = buffer.b_changelistlen as size_t };
     }
 
     /// The slot one file's marks are collected into, made on first use.
@@ -494,7 +494,7 @@ impl Writing {
     /// marks down and dropping `'9`.
     unsafe fn update_numbered_marks(&mut self) {
         if !self.limits.global_marks
-            || unsafe { ignore_buf(Buf::current_raw(), &self.removable_bufs) }
+            || ignore_buf(Buf::current_or_none(), &self.removable_bufs)
             || Win::current().w_cursor.lnum == 0
         {
             return;

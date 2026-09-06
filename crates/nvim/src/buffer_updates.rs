@@ -261,7 +261,7 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
     let (mut codepoints, mut codeunits) = (0, 0);
     let (cp, cu) = (&raw mut codepoints, &raw mut codeunits);
     // SAFETY: a live buffer and two live out-parameters.
-    let bytes = unsafe { ml_flush_deleted_bytes(buffer.raw(), cp, cu) };
+    let bytes = unsafe { ml_flush_deleted_bytes(buffer, cp, cu) };
     Deleted {
         bytes,
         codepoints,
@@ -277,7 +277,7 @@ fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Ar
     let (b, out, none) = (buffer.raw(), &raw mut linedata, ptr::null_mut());
     // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
     // array of `n` slots in the same arena the callee fills from.
-    unsafe { buf_collect_lines(b, n, first, 0, true, out, none, ar) };
+    unsafe { buf_collect_lines(Buf::new(b), n, first, 0, true, out, none, ar) };
     linedata
 }
 

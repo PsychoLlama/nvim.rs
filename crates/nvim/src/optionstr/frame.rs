@@ -9,6 +9,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
@@ -46,11 +47,11 @@ pub(crate) fn win(args: &OptSet) -> *mut Window {
 /// option; the comparison is of addresses only.
 pub(crate) unsafe fn local_window(
     varp: *mut *mut c_char,
-    window: *mut Window,
+    window: Win,
     local: *mut *mut c_char,
 ) -> *mut Window {
     if varp == local {
-        window
+        window.raw()
     } else {
         ptr::null_mut()
     }

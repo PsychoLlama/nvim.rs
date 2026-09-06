@@ -126,7 +126,7 @@ impl OptionContext {
                 if buf == Buf::current_raw() {
                     return false;
                 }
-                unsafe { aucmd_prepbuf(aco, buf) };
+                unsafe { aucmd_prepbuf(aco, Buf::new(buf)) };
                 true
             }
         }

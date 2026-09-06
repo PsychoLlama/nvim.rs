@@ -15,6 +15,7 @@ use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
 use crate::types::CpoFlag;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// Walks `search_hl` together with a window's match list.
@@ -220,7 +221,7 @@ unsafe fn next_search_hl_pos(
 /// # Safety
 /// `win`, `search_hl` and `shl` must be live; `cur` must be null or live.
 unsafe fn next_search_hl(
-    win: *mut Window,
+    win: Win,
     search_hl: *mut MatchState,
     shl: *mut MatchState,
     lnum: LineNr,
@@ -267,7 +268,7 @@ unsafe fn next_search_hl(
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
             let at = shl.rm.startpos[0].col;
-            let ml = unsafe { ml_get_buf(shl.buf, lnum).offset(at as isize) };
+            let ml = unsafe { ml_get_buf(Buf::new(shl.buf), lnum).offset(at as isize) };
             if unsafe { *ml } == 0 {
                 shl.lnum = 0;
                 break;
@@ -295,7 +296,7 @@ unsafe fn next_search_hl(
             let buf = shl.buf;
             // SAFETY: the caller's window and buffer.
             let out = &raw mut timed_out;
-            nmatched = unsafe { vim_regexec_multi(rm, win, buf, lnum, matchcol, tm, out) };
+            nmatched = unsafe { vim_regexec_multi(rm, win.raw(), buf, lnum, matchcol, tm, out) };
             if regprog_is_copy {
                 unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
             }
@@ -368,16 +369,7 @@ pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, 
         while shl.first_lnum < lnum
             && (!shl.rm.regprog.is_null() || (!cur.is_null() && pos_inprogress))
         {
-            unsafe {
-                next_search_hl(
-                    window.raw(),
-                    search_hl.raw(),
-                    shl.raw(),
-                    shl.first_lnum,
-                    n,
-                    cur,
-                )
-            };
+            unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), shl.first_lnum, n, cur) };
             pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
             if shl.lnum != 0 {
                 shl.first_lnum = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
@@ -441,10 +433,10 @@ pub(crate) unsafe fn prepare_search_hl_line(
         if !cur.is_null() {
             unsafe { (*cur).mit_pos_cur = 0 };
         }
-        unsafe { next_search_hl(window.raw(), search_hl.raw(), shl.raw(), lnum, mincol, cur) };
+        unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), lnum, mincol, cur) };
 
         // Re-read the line: a multi-line regexp may have invalidated it.
-        unsafe { *line = ml_get_buf(window.w_buffer, lnum) };
+        unsafe { *line = ml_get_buf(window.buffer(), lnum) };
 
         if shl.lnum == 0 || shl.lnum > lnum {
             continue;
@@ -556,11 +548,11 @@ pub(crate) unsafe fn update_search_hl(
 
             // Just past the end: look for the next match on this line.
             shl.attr_cur = 0;
-            unsafe { next_search_hl(window.raw(), search_hl.raw(), shl.raw(), lnum, col, cur) };
+            unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), lnum, col, cur) };
             pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
 
             // Re-read the line: a multi-line regexp may have invalidated it.
-            unsafe { *line = ml_get_buf(window.w_buffer, lnum) };
+            unsafe { *line = ml_get_buf(window.buffer(), lnum) };
 
             if shl.lnum != lnum {
                 break;

@@ -71,8 +71,9 @@ unsafe fn get_var_from(
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
         // SAFETY: `varname` is NUL-terminated and the handles are live.
         let lead = unsafe { *varname } as u8;
-        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tabpage, true) }.is_ok()
-        {
+        // SAFETY: a live window and its tab page -- both were null-checked.
+        let (w, tp) = unsafe { (Win::new(win), TabPage::new(tabpage)) };
+        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, tp, true) }.is_ok() {
             if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
                 let scoped = do_change_curbuf.then(|| {
@@ -328,7 +329,9 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
 
     let need_switch_win = !(tp == TabPage::current_raw() && win == Win::current_raw());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
-    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) }.is_ok() {
+    // SAFETY: a live window and its tab page.
+    let (w, t) = unsafe { (Win::new(win), TabPage::new(tp)) };
+    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, t, true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };
         } else {
@@ -421,14 +424,14 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         return;
     }
 
-    let save_curtab = TabPage::current_raw();
+    let save_curtab = TabPage::current();
     let save_lu_tp = lastused_tabpage.get();
     unsafe { goto_tabpage_tp(TabPage::new(tp), false, false) };
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
-    if valid_tabpage(save_curtab) {
-        unsafe { goto_tabpage_tp(TabPage::new(save_curtab), false, false) };
+    if valid_tabpage(save_curtab.raw()) {
+        unsafe { goto_tabpage_tp(save_curtab, false, false) };
         // Going back must not count as a use of the previous tab page.
         if valid_tabpage(save_lu_tp) {
             lastused_tabpage.set(save_lu_tp);
@@ -472,7 +475,7 @@ pub unsafe fn f_setbufvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         // An option: the buffer has to be current for the autocommands
         // the change fires, which `aucmd_prepbuf` arranges.
         let mut aco = AcoSave::default();
-        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(buf)) };
         unsafe { set_option_from_tv(varname.add(1), varp) };
         unsafe { aucmd_restbuf(&raw mut aco) };
     } else {

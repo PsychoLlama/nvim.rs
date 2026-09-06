@@ -42,9 +42,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
-use crate::types::{
-    Buffer, ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
-};
+use crate::types::{ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, uint8_t};
 use ::libc::strcpy;
 
 use crate::winlayer::{Buf, Win};
@@ -61,7 +59,7 @@ pub(crate) fn reg_breakcheck(rex: Rex) {
 /// being matched is not always the current one.
 pub(crate) fn reg_iswordc(rex: Rex, c: c_int) -> bool {
     // SAFETY: `reg_buf` is the buffer the match was set up against.
-    unsafe { vim_iswordc_buf(c, rex.reg_buf()) }
+    unsafe { vim_iswordc_buf(c, Buf::new(rex.reg_buf())) }
 }
 
 /// Which line numbering to resolve against: the running match, or the
@@ -120,7 +118,7 @@ pub(crate) fn reg_line(rex: Rex, lnum: LineNr, origin: LineOrigin) -> *mut c_cha
         Located::Past => c"".as_ptr().cast_mut(),
         // SAFETY: `reg_buf` is the buffer being matched and `locate` has
         // established the line is in it.
-        Located::At(lnum) => unsafe { ml_get_buf(rex.reg_buf(), lnum) },
+        Located::At(lnum) => unsafe { ml_get_buf(Buf::new(rex.reg_buf()), lnum) },
     }
 }
 
@@ -129,7 +127,7 @@ pub(crate) fn reg_line_len(rex: Rex, lnum: LineNr, origin: LineOrigin) -> ColNr 
     match locate(lnum, origin.first(rex), origin.maxline(rex)) {
         Located::Before | Located::Past => 0,
         // SAFETY: as `reg_line`.
-        Located::At(lnum) => unsafe { ml_get_buf_len(rex.reg_buf(), lnum) },
+        Located::At(lnum) => unsafe { ml_get_buf_len(Buf::new(rex.reg_buf()), lnum) },
     }
 }
 
@@ -477,8 +475,8 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut RegMatch, line_lbr: bool) {
     rex.set_reg_line_lbr(line_lbr);
     // A string match has no buffer of its own, but `\k` and friends still
     // need an 'iskeyword' to read.
-    rex.set_reg_buf(Buf::current_raw());
-    rex.set_reg_win(core::ptr::null_mut::<Window>());
+    rex.set_reg_buf(Buf::current());
+    rex.set_reg_win(None);
     // SAFETY: the caller's match structure, live with a program.
     rex.set_reg_ic(unsafe { (*rmp).rm_ic });
     rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
@@ -493,8 +491,8 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut RegMatch, line_lbr: bool) {
 pub(crate) fn init_regexec_multi(
     rex: Rex,
     rmp: *mut RegMMatch,
-    win: *mut Window,
-    buffer: *mut Buffer,
+    win: Option<Win>,
+    buffer: Buf,
     lnum: LineNr,
 ) {
     rex.set_reg_match(core::ptr::null_mut::<RegMatch>());
@@ -505,7 +503,7 @@ pub(crate) fn init_regexec_multi(
     rex.set_reg_line_lbr(false);
     rex.set_reg_icombine(false);
     // SAFETY: the caller's match structure and buffer, live for the match.
-    rex.set_reg_maxline(unsafe { (*buffer).b_ml.ml_line_count } - lnum);
+    rex.set_reg_maxline(buffer.b_ml.ml_line_count - lnum);
     rex.set_reg_ic(unsafe { (*rmp).rmm_ic } != 0);
     rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
     rex.set_reg_maxcol(unsafe { (*rmp).rmm_maxcol });

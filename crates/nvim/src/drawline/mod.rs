@@ -80,6 +80,7 @@ use crate::types::{
     uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 use ::libc::abs;
@@ -243,7 +244,7 @@ pub unsafe fn win_line(
         nextline: nextline.as_mut_ptr(),
         fold_buf: fold_buf.as_mut_ptr(),
     };
-    unsafe { Cells::new(setup).run(&mut wlv, window, buf, &frame) }
+    unsafe { Cells::new(setup).run(&mut wlv, window, Buf::new(buf), &frame) }
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so
@@ -368,7 +369,7 @@ unsafe fn decor_providers_setup(
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
     let rem_vcols = if window.w_onebuf_opt.wo_wrap != 0 {
         let width = window.w_view_width - window.col_off();
-        let width2 = width + win_col_off2(unsafe { Win::new(window.raw()) });
+        let width2 = width + win_col_off2(window);
         let first_row_width = if draw_from_line_start { width } else { width2 };
         first_row_width + (rows_to_draw - 1) * width2
     } else {
@@ -376,8 +377,8 @@ unsafe fn decor_providers_setup(
     };
 
     // Called here because the line pointer has to be invalidated anyway.
-    unsafe { decor_providers_invoke_line(window.raw(), lnum - 1) };
-    validate_virtcol(unsafe { Win::new(window.raw()) });
+    unsafe { decor_providers_invoke_line(window, lnum - 1) };
+    validate_virtcol(window);
 
     unsafe { invoke_range_next(window, lnum, col, rem_vcols + 1) }
 }
@@ -396,22 +397,20 @@ unsafe fn invoke_range_next(
     col_off: ColNr,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
-    let line_len = unsafe { ml_get_buf_len(window.w_buffer, lnum) };
+    let line = unsafe { ml_get_buf(window.buffer(), lnum) };
+    let line_len = unsafe { ml_get_buf_len(window.buffer(), lnum) };
     let col_off = col_off.max(1);
 
     if col_off <= line_len - begin_col {
         let mut end_col = begin_col + col_off;
         // Do not cut a character in half.
         end_col += unsafe { mb_off_next(line, line.offset(end_col as isize)) };
-        unsafe {
-            decor_providers_invoke_range(window.raw(), lnum - 1, begin_col, lnum - 1, end_col)
-        };
-        validate_virtcol(unsafe { Win::new(window.raw()) });
+        unsafe { decor_providers_invoke_range(window, lnum - 1, begin_col, lnum - 1, end_col) };
+        validate_virtcol(window);
         end_col
     } else {
-        unsafe { decor_providers_invoke_range(window.raw(), lnum - 1, begin_col, lnum, 0) };
-        validate_virtcol(unsafe { Win::new(window.raw()) });
+        unsafe { decor_providers_invoke_range(window, lnum - 1, begin_col, lnum, 0) };
+        validate_virtcol(window);
         ::core::ffi::c_int::MAX
     }
 }

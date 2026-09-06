@@ -230,7 +230,7 @@ unsafe fn special_feature(name: *const c_char) -> Option<bool> {
         _ if unsafe { same_name(name, c"multi_byte_encoding") } => true,
         _ if unsafe { same_name(name, c"gui_running") } => ui_gui_attached(),
         _ if unsafe { same_name(name, c"syntax_items") } => unsafe {
-            syntax_present(Win::current_raw())
+            syntax_present(Win::current())
         },
         _ if unsafe { same_name(name, c"wsl") } => has_wsl(),
         _ => return None,
@@ -496,11 +496,10 @@ pub unsafe fn f_shiftwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         if col < 0 {
             return;
         }
-        result.vval.v_number =
-            unsafe { get_sw_value_col(Buf::current_raw(), col, false) } as VarNumber;
+        result.vval.v_number = unsafe { get_sw_value_col(Buf::current(), col, false) } as VarNumber;
         return;
     }
-    result.vval.v_number = unsafe { get_sw_value(Buf::current_raw()) } as VarNumber;
+    result.vval.v_number = unsafe { get_sw_value(Buf::current()) } as VarNumber;
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in

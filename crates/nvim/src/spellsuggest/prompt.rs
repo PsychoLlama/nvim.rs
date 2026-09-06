@@ -94,7 +94,7 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
     // for it, which is what turning the option on does.
     let wo_spell_save = Win::current().w_onebuf_opt.wo_spell;
     if Win::current().w_onebuf_opt.wo_spell == 0 {
-        unsafe { parse_spelllang(Win::current_raw()) };
+        unsafe { parse_spelllang(Win::current()) };
         Win::current().w_onebuf_opt.wo_spell = 1;
     }
 
@@ -127,7 +127,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     // it, and the caller guarantees its spell state.
     let lnum = Win::current().w_cursor.lnum;
     let col = Win::current().w_cursor.col;
-    let need_cap = unsafe { check_need_cap(Win::current_raw(), lnum, col) };
+    let need_cap = unsafe { check_need_cap(Win::current(), lnum, col) };
 
     // Autocommands may free the line, so work from a copy.
     let line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize) };
@@ -201,7 +201,7 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 
     // SAFETY: `curwin` is set from startup to exit and the caller
     // guarantees its spell state; a null `attrp` asks for no attribute.
-    let win = Win::current_raw();
+    let win = Win::current();
     let moved = unsafe { spell_move_to(win, FORWARD as c_int, SMT_ALL, true, ptr::null_mut()) };
     if moved != 0 && Win::current().w_cursor.col <= prev_cursor.col {
         return Some(0);
@@ -213,14 +213,14 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     let curline = get_cursor_line_ptr();
     let mut p = unsafe { curline.offset(Win::current().w_cursor.col as isize) };
     // Back up to before the start of the word...
-    while p > curline && unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
+    while p > curline && unsafe { spell_iswordp_nmw(p, Win::current()) } {
         p = unsafe { p.sub(utf_head_off(curline, p.sub(1)) as usize + 1) };
     }
     // ...then forward to its start.
-    while unsafe { *p } as c_int != NUL && !unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
+    while unsafe { *p } as c_int != NUL && !unsafe { spell_iswordp_nmw(p, Win::current()) } {
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
-    if !unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
+    if !unsafe { spell_iswordp_nmw(p, Win::current()) } {
         beep_flush(); // no word at all
         return None;
     }

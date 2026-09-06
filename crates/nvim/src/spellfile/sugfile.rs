@@ -34,6 +34,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -300,7 +301,7 @@ unsafe fn sug_filltable(
 
         let at = wordnr as LineNr;
         let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as ColNr) };
-        if unsafe { ml_append_buf(spin.si_spellbuf, at, text, len, true) }.is_err() {
+        if unsafe { ml_append_buf(Buf::new(spin.si_spellbuf), at, text, len, true) }.is_err() {
             return -1;
         }
         wordnr += 1;
@@ -401,8 +402,8 @@ unsafe fn sug_write(spin: &mut SpellInfo, fname: *mut c_char) {
         // SAFETY: `lnum` is inside the buffer, and the line is
         // NUL-terminated: the stored terminator goes out with it.
         let line = unsafe {
-            let at = ml_get_buf(spin.si_spellbuf, lnum);
-            let len = ml_get_buf_len(spin.si_spellbuf, lnum) + 1;
+            let at = ml_get_buf(Buf::new(spin.si_spellbuf), lnum);
+            let len = ml_get_buf_len(Buf::new(spin.si_spellbuf), lnum) + 1;
             core::slice::from_raw_parts(at.cast::<u8>(), len as usize)
         };
         w.bytes(line);

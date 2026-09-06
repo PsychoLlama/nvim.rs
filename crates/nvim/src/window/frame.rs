@@ -41,10 +41,7 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
     let mut win_tp = tabpage.unwrap_or_else(TabPage::current);
     let (wp, dir) = if win.w_floating {
         // SAFETY: `win` is only compared, never read.
-        (
-            unsafe { win_float_find_altwin(win.raw(), tabpage) },
-            'h' as c_int,
-        )
+        (unsafe { win_float_find_altwin(win, tabpage) }, 'h' as c_int)
     } else {
         let frp = win.frame();
         let (wp, dir) = remove(win, tabpage, None);

@@ -82,7 +82,7 @@ unsafe fn ui_ext_tabline_update() {
         let mut info = arena_dict(arenap, 2);
         let (handle, cwp) = (tp.handle as TabpageHandle, unsafe { current_window_of(tp) });
         put(&mut info, c"tab", Object::tabpage(handle));
-        unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
+        unsafe { get_trans_bufname(Buf::new(cwp.buffer().raw()), &mut name) };
         put(
             &mut info,
             c"name",
@@ -97,7 +97,7 @@ unsafe fn ui_ext_tabline_update() {
     for buf in listed() {
         let mut info = arena_dict(arenap, 2);
         put(&mut info, c"buffer", Object::buffer(buf.handle));
-        unsafe { get_trans_bufname(buf.raw(), &mut name) };
+        unsafe { get_trans_bufname(buf, &mut name) };
         put(
             &mut info,
             c"name",
@@ -160,7 +160,7 @@ pub unsafe fn draw_tabline() {
         // Use the 'tabline' option instead.
         // SAFETY: a null window means "the tab line"; this evaluates the
         // option.
-        unsafe { win_redr_custom(ptr::null_mut::<Window>(), false, false, false) };
+        unsafe { win_redr_custom(Win::new(ptr::null_mut::<Window>()), false, false, false) };
     } else {
         // SAFETY: the editor's own lists.
         unsafe { draw_default_tabline() };
@@ -251,7 +251,7 @@ unsafe fn draw_default_tabline() {
         let room = scol - col + tabwidth - 1;
         if room > 0 {
             // SAFETY: a live window's buffer.
-            unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
+            unsafe { get_trans_bufname(Buf::new(cwp.buffer().raw()), &mut name) };
             col += paint_bufname(col, room, attr, &mut name);
         }
         paint_schar(col, schar_from_ascii(b' '), attr);

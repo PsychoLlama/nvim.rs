@@ -721,7 +721,7 @@ pub(super) unsafe fn stp_sal_score(
         // SAFETY: `su_badptr` points into the line the bad word came from,
         // of which the suggestion replaces `st_orglen` bytes; `fword` is
         // `MAXWLEN` bytes, which is the bound handed over.
-        let win = Win::current_raw();
+        let win = Win::current();
         let len = MAXWLEN as c_int;
         let _ = unsafe { spell_casefold(win, su.su_badptr, orglen, fword.as_mut_ptr(), len) };
 

@@ -15,12 +15,12 @@ use crate::pos::MAXCOL;
 use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
-pub(crate) unsafe fn syntax_present(win: *mut Window) -> bool {
+pub(crate) unsafe fn syntax_present(win: Win) -> bool {
     unsafe {
-        !(*(*win).w_s).b_syn_patterns.is_empty()
-            || !(*(*win).w_s).b_syn_clusters.is_empty()
-            || (*(*win).w_s).b_keywtab.ht_used > 0
-            || (*(*win).w_s).b_keywtab_ic.ht_used > 0
+        !(*win.w_s).b_syn_patterns.is_empty()
+            || !(*win.w_s).b_syn_clusters.is_empty()
+            || (*win.w_s).b_keywtab.ht_used > 0
+            || (*win.w_s).b_keywtab_ic.ht_used > 0
     }
 }
 
@@ -160,7 +160,7 @@ pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_
 /// applies there; `keep_state` keeps the state of the character at `col` so
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
 pub(crate) unsafe fn syn_get_id(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     col: ColNr,
     trans: c_int,
@@ -169,8 +169,8 @@ pub(crate) unsafe fn syn_get_id(
 ) -> c_int {
     // Parsing has to restart unless this position is at or after the
     // current one, in the same line of the same window and buffer.
-    if window != syn_win.get()
-        || unsafe { (*window).w_buffer } != syn_buf.get()
+    if window != unsafe { Win::new(syn_win.get()) }
+        || window.w_buffer != syn_buf.get()
         || lnum != current_lnum.get()
         || col < current_col.get()
     {
@@ -228,20 +228,20 @@ fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub(crate) unsafe fn syn_get_foldlevel(window: *mut Window, lnum: LineNr) -> c_int {
+pub(crate) unsafe fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.
-    if unsafe { (*(*window).w_s).b_syn_folditems } != 0
-        && !unsafe { (*(*window).w_s).b_syn_error }
-        && !unsafe { (*(*window).w_s).b_syn_slow }
+    if unsafe { (*window.w_s).b_syn_folditems } != 0
+        && !unsafe { (*window.w_s).b_syn_error }
+        && !unsafe { (*window.w_s).b_syn_slow }
     {
         unsafe { syntax_start(window, lnum) };
 
         // Start with the fold level at the start of the line.
         level = syn_cur_foldlevel();
 
-        if unsafe { (*(*window).w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
+        if unsafe { (*window.w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
             // Find the lowest fold level that is followed by a higher one.
             let mut low_level = level;
             while !current_finished.get() {
@@ -257,8 +257,8 @@ pub(crate) unsafe fn syn_get_foldlevel(window: *mut Window, lnum: LineNr) -> c_i
         }
     }
 
-    if level as OptInt > unsafe { (*window).w_onebuf_opt.wo_fdn } {
-        level = unsafe { (*window).w_onebuf_opt.wo_fdn } as c_int;
+    if level as OptInt > window.w_onebuf_opt.wo_fdn {
+        level = window.w_onebuf_opt.wo_fdn as c_int;
         if level < 0 {
             level = 0;
         }

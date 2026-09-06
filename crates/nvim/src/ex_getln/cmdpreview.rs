@@ -50,7 +50,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
 
     // Rename the preview buffer.
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
+    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(cmdpreview_buf)) };
     let retv = unsafe { rename_buffer(c"[Preview]".as_ptr().cast_mut()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
 
@@ -59,7 +59,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     }
 
     // Temporarily switch to the preview buffer to set it up.
-    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
+    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(cmdpreview_buf)) };
     buf_clear();
     Buf::current().b_p_ma = 1;
     Buf::current().b_p_ul = -1;
@@ -73,7 +73,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
 
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
-pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Window {
+pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> *mut Window {
     let save_curwin = Win::current();
 
     if win_split(
@@ -95,7 +95,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Wi
         DOBUF_GOTO as ::core::ffi::c_int,
         DOBUF_FIRST as ::core::ffi::c_int,
         FORWARD as ::core::ffi::c_int,
-        unsafe { (*cmdpreview_buf).handle },
+        cmdpreview_buf.handle,
         0,
     );
     unsafe { try_leave(&raw mut tstate, &mut err) };
@@ -297,7 +297,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             let mut aco = AcoSave::default();
             // SAFETY: `aco` is this frame's, and every `prepbuf` below is
             // paired with the `restbuf` that follows it.
-            unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+            unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
                 // SAFETY: syncing undo needs only a live editor.
                 u_sync(true);
@@ -464,7 +464,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // With 'inccommand' = "split" and a callback answering 2, open the
         // preview window.
         if icm_split && cmdpreview_type == 2 && {
-            cmdpreview_win = unsafe { cmdpreview_open_win(cmdpreview_buf) };
+            cmdpreview_win = unsafe { cmdpreview_open_win(Buf::new(cmdpreview_buf)) };
             cmdpreview_win.is_null()
         } {
             // Not enough room for the preview window: preview without it.

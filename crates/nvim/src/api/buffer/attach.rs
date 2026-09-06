@@ -97,7 +97,7 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
     };
     unsafe { try_enter(&raw mut tstate) };
     let mut aco: AcoSave = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, b.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, b) };
     let args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,

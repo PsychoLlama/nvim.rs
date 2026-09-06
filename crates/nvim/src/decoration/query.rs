@@ -39,7 +39,7 @@ impl Win {
     /// Whether `'concealcursor'` says the cursor line conceals too.
     fn conceals_cursor_line(self) -> bool {
         // SAFETY: a live window.
-        unsafe { conceal_cursor_line(self.raw()) }
+        unsafe { conceal_cursor_line(self) }
     }
 
     /// Asks every decoration provider to place `row`'s conceal marks, and
@@ -48,7 +48,7 @@ impl Win {
     /// Runs Lua, which can place and delete marks.
     fn providers_conceal_line(self, row: c_int) -> bool {
         // SAFETY: a live window.
-        unsafe { decor_providers_invoke_conceal_line(self.raw(), row) }
+        unsafe { decor_providers_invoke_conceal_line(self, row) }
     }
 }
 

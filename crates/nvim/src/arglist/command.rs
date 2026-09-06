@@ -160,7 +160,7 @@ fn report_no_such_arg(argn: c_int) {
 unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
     let mut other = true;
     // SAFETY: reads the current buffer's 'hidden' state.
-    if unsafe { buf_hide(Buf::current_raw()) } {
+    if unsafe { buf_hide(Buf::current()) } {
         // SAFETY: caller contract; `fix_fname` hands back an owned name.
         // SAFETY: caller contract; `fix_fname` hands back an owned name,
         // which is freed once `otherfile` has read it.
@@ -231,7 +231,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // the caller's own live command block.
     let wp = Win::current_raw();
     // SAFETY: `curwin` is live, so is its buffer.
-    let hidden = unsafe { buf_hide((*wp).w_buffer) };
+    let hidden = unsafe { buf_hide(Buf::new((*wp).w_buffer)) };
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     let name = arg_name(cur_arg_idx());
     let last = newlnum::LAST as LineNr;
@@ -264,7 +264,8 @@ pub unsafe fn ex_next(args: *mut ExArg) {
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
     let flags = CCGD_AW as c_int | CCGD_EXCMD as c_int | flag_if(forceit, CCGD_FORCEIT);
     let buffer = Buf::current_raw();
-    let blocked = unsafe { !buf_hide(buffer) && !is_snext && check_changed(buffer, flags) };
+    let blocked =
+        unsafe { !buf_hide(Buf::new(buffer)) && !is_snext && check_changed(buffer, flags) };
     if blocked {
         return;
     }

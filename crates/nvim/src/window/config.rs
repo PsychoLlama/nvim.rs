@@ -337,7 +337,7 @@ fn anchor_to_window(
     }
     let (mut row_off, mut col_off) = (0, 0);
     // SAFETY: a live window and its own grid.
-    unsafe { win_grid_alloc(parent.raw()) };
+    unsafe { win_grid_alloc(parent) };
     let own = parent.w_grid;
     // SAFETY: as above; `win_grid_alloc` has just run for this view.
     *grid = unsafe { grid_adjust(own, &mut row_off, &mut col_off) }.raw();
@@ -476,7 +476,7 @@ fn text_height(
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub unsafe fn check_split_disallowed(window: *const Window) -> c_int {
+pub unsafe fn check_split_disallowed(window: Win) -> c_int {
     let mut err = Error::none();
     // SAFETY: the caller's promise -- a live window; `err` is ours.
     let ok = unsafe { check_split_disallowed_err(window, &mut err) };
@@ -489,17 +489,12 @@ pub unsafe fn check_split_disallowed(window: *const Window) -> c_int {
     if ok { OK } else { FAIL }
 }
 
-pub unsafe fn check_split_disallowed_err(window: *const Window, err: &mut Error) -> bool {
+pub unsafe fn check_split_disallowed_err(window: Win, err: &mut Error) -> bool {
     if split_disallowed.get() > 0 {
         *err = Error::exception(c"E242: Can't split a window while closing another");
         return false;
     }
-    // SAFETY: the caller's promise -- a live window, whose buffer is live.
-    if unsafe { Win::new(window as *mut Window) }
-        .buffer()
-        .b_locked_split
-        != 0
-    {
+    if window.buffer().b_locked_split != 0 {
         *err = Error::exception(e_cannot_split_window_when_closing_buffer);
         return false;
     }

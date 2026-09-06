@@ -128,7 +128,7 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
         // did not delete -- which is why this is not `buffers()`.
         if !buf.b_ml.ml_mfp.is_null() && buf.raw() != Buf::current_raw() {
             // SAFETY: `aco` is this frame's own storage and `buf` is live.
-            unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+            unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             let bufref = BufRef::of(buf);
 
             // SAFETY: `arg` is the command's own argument and `did_aucmd`
@@ -276,7 +276,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         let mut aco = AcoSave::default();
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
         // the `prepbuf`/`restbuf` pair brackets the firing.
-        unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
         unsafe { apply_autocmds_group(event, fname, fname_io, false, group, buf.raw(), eap, data) };
         unsafe { aucmd_restbuf(&raw mut aco) };
         // SAFETY: the pair `get_v_event` above opened.

@@ -330,13 +330,11 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // never reads it, which is what lets an autocommand have freed it already.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn win_valid(win: *const Window) -> bool {
-    // SAFETY: `curtab` is always a live tab page, and `win` is only compared.
-    unsafe { tabpage_win_valid(TabPage::current_raw(), win) }
+    valid_win_in_tab(TabPage::current(), win)
 }
 
-pub unsafe fn tabpage_win_valid(tabpage: *const Tabpage, win: *const Window) -> bool {
-    // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
-    valid_win_in_tab(unsafe { TabPage::new(tabpage as *mut Tabpage) }, win)
+pub fn tabpage_win_valid(tabpage: TabPage, win: *const Window) -> bool {
+    valid_win_in_tab(tabpage, win)
 }
 
 /// Whether `win` is on `tabpage`'s window list. `win` is only compared.
@@ -368,7 +366,6 @@ pub fn win_count() -> ::core::ffi::c_int {
 /// The one-line bridge from [`win_valid`]'s pointer answer to a value the rest
 /// of the family may dereference.
 pub(crate) fn valid_win(win: *mut Window) -> Option<Win> {
-    // SAFETY: the walk only produced windows that are on the list.
     windows().find(|wp| wp.raw() == win)
 }
 
@@ -414,8 +411,7 @@ fn only_one_message() {
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.
 fn is_autocmd_window(win: Option<Win>) -> bool {
-    // SAFETY: a live window, or the null the callers pass for "no window".
-    is_aucmd_win(win.map_or(ptr::null_mut(), Win::raw))
+    is_aucmd_win(win.map_or(ptr::null(), |w| w.raw().cast_const()))
 }
 
 /// `xfree`, for the frames and click definitions the family owns.
@@ -494,7 +490,7 @@ fn beep() {
 /// `'bufhidden'`).
 fn hides(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer.raw()) }
+    unsafe { buf_hide(buffer) }
 }
 
 /// Clamp the cursor of `win` back into its buffer.

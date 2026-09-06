@@ -139,7 +139,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     // Read after the recompute, which runs `DiffUpdated` autocommands.
     //
     // SAFETY: a live window's buffer is live.
-    let tobuf = unsafe { Buf::new(towin.w_buffer) };
+    let tobuf = towin.buffer();
 
     let lnum = fromwin.w_topline;
     towin.w_topfill = 0;
@@ -306,7 +306,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let idx = idx as usize;
 
     // SAFETY: a live window's buffer is live.
-    let buf = unsafe { Buf::new(window.w_buffer) };
+    let buf = window.buffer();
     let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
     };

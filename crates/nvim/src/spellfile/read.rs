@@ -34,6 +34,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use std::ffi::OsStr;
@@ -500,6 +501,8 @@ unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
         }
         let sugbuf = slang.sl_sugbuf;
         let (at, len) = (wordnr as LineNr, line.len() as ColNr);
+        // SAFETY: a live buffer.
+        let sugbuf = unsafe { Buf::new(sugbuf) };
         // SAFETY: the buffer was just opened and the line is this frame's.
         let appended =
             unsafe { ml_append_buf(sugbuf, at, line.as_mut_ptr().cast::<c_char>(), len, true) };
@@ -757,6 +760,6 @@ pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
     // A word was added to a file no window had loaded; re-resolving
     // 'spelllang' is what picks it up.
     if added_word && !didit {
-        unsafe { parse_spelllang(Win::current_raw()) };
+        unsafe { parse_spelllang(Win::current()) };
     }
 }

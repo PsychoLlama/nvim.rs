@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::types::Buffer;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -27,7 +28,7 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::regexp::state::reg_do_extmatch;
 use crate::types::{
-    Buffer, ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, Window, uint8_t,
+    ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, Window, uint8_t,
 };
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
@@ -79,7 +80,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
     // being compiled, so point the context at a buffer.
     // SAFETY: nothing is matching, so nothing else holds the context;
     // only `reg_buf` is touched, which needs no line set up.
-    unsafe { Rex::acquire() }.set_reg_buf(Buf::current_raw());
+    unsafe { Rex::acquire() }.set_reg_buf(Buf::current());
 
     let called_emsg_before = called_emsg.get();
     let mut prog = if regexp_engine.get() != BACKTRACKING_ENGINE as c_int {

@@ -134,7 +134,7 @@ pub unsafe fn f_getmarklist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     if buf.is_null() {
         return;
     }
-    unsafe { get_buf_local_marks(buf, out) };
+    unsafe { get_buf_local_marks(Buf::new(buf), out) };
 }
 
 /// `gettagstack([{winnr}])`.

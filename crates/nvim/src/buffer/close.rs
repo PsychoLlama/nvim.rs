@@ -53,7 +53,7 @@ use crate::types::{
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
-use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
+use crate::window::{free_wininfo, goto_tabpage_win, one_window};
 use crate::winlayer::graph::{firstbuf, lastbuf, leave_curbuf};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
@@ -87,8 +87,7 @@ const ZERO_FMARK: FileMark = FileMark {
 /// dereferences its argument, so asking about a possibly-freed window is a
 /// safe operation -- and a hit means it is live.
 fn valid_win(win: *mut Window) -> Option<Win> {
-    // SAFETY: the pointer is only compared; a hit means a live window.
-    unsafe { win_valid_any_tab(win).then(|| Win::new(win)) }
+    tab_windows().find(|wp| wp.raw() == win)
 }
 
 /// Whether `win` is the only non-floating window of its tab page.
@@ -178,9 +177,11 @@ fn drop_mark(mark: FileMark) {
 fn forget_lines(buffer: Buf, count: LineNr) {
     let (raw, last) = (buffer.raw(), MAXLNUM as LineNr);
     // SAFETY: a live buffer.
+    let raw = unsafe { Buf::new(raw) };
+    // SAFETY: a live buffer.
     unsafe {
         mark_adjust_buf(
-            Buf::new(raw),
+            raw,
             1,
             count,
             last,
@@ -205,7 +206,7 @@ fn clear_syntax(syn: &mut SynBlock) {
 /// Close the memline and delete the swap file.
 fn close_memline(buffer: Buf) {
     // SAFETY: a live buffer; `true` is upstream's `del_file`.
-    unsafe { ml_close(buffer.raw(), 1) };
+    unsafe { ml_close(buffer, 1) };
 }
 
 fn mark_lines_deleted(count: LineNr) {
@@ -413,7 +414,7 @@ fn close_buffer_inner(
 ) -> bool {
     let mut how = Disposition::of(buffer, action);
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = Win::current_raw();
+    let the_curwin = Win::current();
     let the_curtab = TabPage::current();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
     // ABORT_ON_INTERNAL_ERROR builds.
@@ -601,11 +602,11 @@ fn leave_last_window(
 
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
-fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, tabpage: TabPage) {
-    if !was_curwin || Win::current_raw() == the_curwin {
+fn restore_curwin(was_curwin: bool, the_curwin: Win, tabpage: TabPage) {
+    if !was_curwin || Win::current_raw() == the_curwin.raw() {
         return;
     }
-    let Some(wp) = valid_win(the_curwin) else {
+    let Some(wp) = valid_win(the_curwin.raw()) else {
         return;
     };
     block_autocmds_now();
@@ -686,7 +687,7 @@ pub fn buf_clear() {
 pub fn buf_freeall(buffer: Buf, flags: c_int) {
     let is_curbuf = buffer.raw() == Buf::current_raw();
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = Win::current_raw();
+    let the_curwin = Win::current();
     let the_curtab = TabPage::current();
 
     let Some(mut buf) = announce_unload(buffer, flags) else {

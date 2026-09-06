@@ -76,7 +76,7 @@ fn update_topline_win(mut win: Win) {
     let old_topfill = win.w_topfill;
 
     // SAFETY: a live buffer.
-    if unsafe { buf_is_empty(win.buffer().raw()) } {
+    if unsafe { buf_is_empty(Buf::new(win.buffer().raw())) } {
         // Special case: an empty file always starts at line 1.
         if win.w_topline != 1 {
             win.redraw_later(UPD_NOT_VALID);

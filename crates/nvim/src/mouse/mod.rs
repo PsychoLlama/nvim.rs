@@ -439,7 +439,7 @@ fn mouse_tab_close(c1: c_int) {
         }
     } else if !tp.is_null() {
         // SAFETY: as above.
-        unsafe { tabpage_close_other(tp, false as c_int) };
+        unsafe { tabpage_close_other(TabPage::new(tp), false as c_int) };
     }
 }
 

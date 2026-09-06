@@ -48,6 +48,7 @@
 
 #![cfg(not(miri))]
 
+use neovim::winlayer::Win;
 use std::ffi::{CString, c_char, c_int};
 
 use neovim::garray::{ga_clear, ga_grow, ga_init};
@@ -421,7 +422,7 @@ fn the_golden_answers_spell_check() {
         // asked for.
         let len = unsafe {
             spell_check(
-                wp,
+                Win::new(wp),
                 text.as_ptr().cast_mut(),
                 &raw mut attr,
                 std::ptr::null_mut(),

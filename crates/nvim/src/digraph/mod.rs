@@ -39,8 +39,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, Buffer, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL,
-    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, int16_t,
+    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -740,9 +740,9 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
-    unsafe { read_keymap_entries(args, buf) };
+    unsafe { read_keymap_entries(args, Buf::new(buf)) };
     // SAFETY: the entries just read own two NUL-terminated strings each.
-    unsafe { apply_keymap_entries(buf) };
+    unsafe { apply_keymap_entries(Buf::new(buf)) };
     p_cpo.set(save_cpo);
     // SAFETY: curbuf is still valid.
     unsafe { (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t };
@@ -758,7 +758,7 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
 ///
 /// `args` must be a live command block whose line getter is the sourcing one,
 /// and `buffer` a valid buffer.
-unsafe fn read_keymap_entries(args: *mut ExArg, buffer: *mut Buffer) {
+unsafe fn read_keymap_entries(args: *mut ExArg, mut buffer: Buf) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.
@@ -779,14 +779,10 @@ unsafe fn read_keymap_entries(args: *mut ExArg, buffer: *mut Buffer) {
                     crate::semsg!("E791: Empty keymap entry");
                 }
             } else {
-                // SAFETY: the caller's buffer; both slices are copied out of
-                // `line`, which is freed below.
-                unsafe {
-                    (*buffer).b_kmap_ga.push(KeymapEntry {
-                        from: from.to_vec(),
-                        to: to.to_vec(),
-                    });
-                };
+                buffer.b_kmap_ga.push(KeymapEntry {
+                    from: from.to_vec(),
+                    to: to.to_vec(),
+                });
             }
         }
         // SAFETY: the line is ours to free, and nothing borrows it now.
@@ -799,10 +795,11 @@ unsafe fn read_keymap_entries(args: *mut ExArg, buffer: *mut Buffer) {
 /// # Safety
 ///
 /// `buffer` must be a valid buffer.
-unsafe fn apply_keymap_entries(buffer: *mut Buffer) {
+unsafe fn apply_keymap_entries(buffer: Buf) {
     // SAFETY: the caller's buffer. The commands are built before any of them
     // runs, so `do_map` cannot be reading the list it is driven by.
-    let cmds: Vec<Vec<u8>> = unsafe { &(*buffer).b_kmap_ga }
+    let cmds: Vec<Vec<u8>> = buffer
+        .b_kmap_ga
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
         .collect();

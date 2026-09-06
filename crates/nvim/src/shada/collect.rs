@@ -32,17 +32,15 @@ use crate::types::{
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
 /// file is on removable media.
-pub(crate) unsafe fn ignore_buf(buffer: *const Buffer, removable_bufs: &RemovableBufs) -> bool {
-    // SAFETY: the caller's promise -- null or a live buffer.
-    let Some(b) = (unsafe { Buf::from_raw(buffer.cast_mut()) }) else {
+pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) -> bool {
+    let Some(b) = buffer else {
         return true;
     };
     b.b_ffname.is_null()
         || (b.b_p_bl == 0 && b.b_p_initialized)
         || buf_is_quickfix(Some(b))
         || buf_is_terminal(Some(b))
-        // SAFETY: the caller's set, and the buffer is only compared.
-        || removable_bufs.contains(&buffer)
+        || removable_bufs.contains(&b.raw().cast_const())
 }
 
 /// Collect the buffers whose files are on removable media.
@@ -65,7 +63,7 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaE
     let max_bufs = unsafe { get_shada_parameter('%' as c_int) };
     let mut wanted = Vec::new();
     for buf in buffers() {
-        if !unsafe { ignore_buf(buf.raw(), removable_bufs) }
+        if !ignore_buf(Some(buf), removable_bufs)
             && buf.b_p_bl != 0
             && (max_bufs < 0 || wanted.len() < max_bufs as usize)
         {
@@ -288,7 +286,7 @@ pub(crate) unsafe fn shada_init_jumps(
     unsafe { cleanup_jumplist(Win::current(), false) };
     loop {
         let mut fm: XFileMark = unsafe { core::mem::zeroed() };
-        jump_iter = unsafe { mark_jumplist_iter(jump_iter, Win::current_raw(), &raw mut fm) };
+        jump_iter = unsafe { mark_jumplist_iter(jump_iter, Win::current(), &raw mut fm) };
 
         if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
             let entry = ShadaEntry {
@@ -334,14 +332,12 @@ unsafe fn jump_target(
         // Not in a loaded buffer: the entry carries the name itself.
         return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
     }
-    let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |b| b.raw());
-    if buf.is_null()
-        || unsafe { ignore_buf(buf, removable_bufs) }
-        || unsafe { (*buf).b_ffname.is_null() }
-    {
+    let buf = find_buf(fm.fmark.fnum);
+    if ignore_buf(buf, removable_bufs) || buf.is_none_or(|b| b.b_ffname.is_null()) {
         return None;
     }
-    Some(unsafe { (*buf).b_ffname })
+    let buf = buf.expect("`ignore_buf` answered true for a buffer that is not there");
+    Some(buf.b_ffname)
 }
 
 /// Every register, as msgpack.

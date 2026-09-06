@@ -38,7 +38,7 @@ use core::ffi::{CStr, c_int};
 /// for the whole of the parse.
 pub unsafe fn parse_cino(buffer: Buf) {
     // SAFETY: a live buffer, by `Buf`'s contract.
-    let sw = unsafe { get_sw_value(buffer.raw()) };
+    let sw = unsafe { get_sw_value(buffer) };
     // SAFETY: the caller promises nothing else holds the buffer, and the
     // option string walked below is a separate allocation.
     let buffer = unsafe { &mut *buffer.raw() };

@@ -146,11 +146,10 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usi
     for i in 0..unsafe { (*dp).df_count[idx1] } {
         // The copy is not optional: the second `ml_get_buf` invalidates
         // the buffer the first one answered with.
-        let line =
-            unsafe { CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx1], (*dp).df_lnum[idx1] + i)) }
-                .to_owned();
+        let line = unsafe { CStr::from_ptr(ml_get_buf(tp.diffbuf(idx1), (*dp).df_lnum[idx1] + i)) }
+            .to_owned();
         let other =
-            unsafe { CStr::from_ptr(ml_get_buf(tp.tp_diffbuf[idx2], (*dp).df_lnum[idx2] + i)) };
+            unsafe { CStr::from_ptr(ml_get_buf(tp.diffbuf(idx2), (*dp).df_lnum[idx2] + i)) };
         if !lines_equal(&line, other) {
             return false;
         }

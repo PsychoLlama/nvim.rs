@@ -48,7 +48,7 @@ use crate::startup::silent_mode;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
-    Window, size_t, uint8_t, uint32_t,
+    size_t, uint8_t, uint32_t,
 };
 
 use super::{
@@ -140,7 +140,7 @@ unsafe fn get_option_prefix(argp: &mut *mut c_char) -> Prefix {
 ///
 /// `win` must be a live window.
 unsafe fn validate_opt_idx(
-    win: *mut Window,
+    win: Win,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     flags: uint32_t,
@@ -169,9 +169,7 @@ unsafe fn validate_opt_idx(
         }
         // A modeline must not undo what `:diffthis` set up.
         // SAFETY: the caller's window is live.
-        if unsafe { (*win).w_onebuf_opt.wo_diff != 0 }
-            && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap)
-        {
+        if win.w_onebuf_opt.wo_diff != 0 && (opt_idx == kOptFoldmethod || opt_idx == kOptWrap) {
             return Err(Failed);
         }
     }
@@ -453,7 +451,7 @@ unsafe fn do_one_set_option(
     let flags = get_option(opt_idx).flags;
     let varp = get_varp_scope(opt_idx, opt_flags);
 
-    let win = Win::current_raw();
+    let win = Win::current();
     if unsafe { validate_opt_idx(win, opt_idx, opt_flags, flags, prefix, errmsg) }.is_err() {
         return;
     }

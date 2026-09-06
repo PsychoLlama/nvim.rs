@@ -368,20 +368,20 @@ pub(crate) unsafe fn sign_place(
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_unplace_inner(
-    buffer: *mut Buffer,
+    buffer: Buf,
     id: c_int,
     group: *const c_char,
     atlnum: LineNr,
 ) -> c_int {
     // SAFETY: the caller's buffer.
-    if !unsafe { buf_has_signs(buffer) } {
+    if !unsafe { buf_has_signs(buffer.raw()) } {
         return FAIL;
     }
     // SAFETY: the caller's group name, null or NUL-terminated.
     let all_groups = !group.is_null() && unsafe { *group } == STAR;
     if id == 0 || atlnum > 0 || all_groups {
         // SAFETY: the caller's buffer and group.
-        return unsafe { buf_delete_signs(Buf::new(buffer), group, id, atlnum) };
+        return unsafe { buf_delete_signs(buffer, group, id, atlnum) };
     }
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
@@ -390,7 +390,7 @@ unsafe fn sign_unplace_inner(
     }
     let ns = u32::try_from(ns).expect("a namespace id fits its own handle type");
     // SAFETY: the caller's buffer.
-    if !unsafe { extmark_del_id(Buf::new(buffer), ns, id.cast_unsigned()) } {
+    if !unsafe { extmark_del_id(buffer, ns, id.cast_unsigned()) } {
         return FAIL;
     }
     OK
@@ -408,13 +408,13 @@ pub(crate) unsafe fn sign_unplace(
 ) -> c_int {
     if !buffer.is_null() {
         // SAFETY: the caller's buffer and group.
-        return unsafe { sign_unplace_inner(buffer, id, group, atlnum) };
+        return unsafe { sign_unplace_inner(Buf::new(buffer), id, group, atlnum) };
     }
     let mut retval = OK;
     for cbuf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and the caller's
         // group name.
-        if unsafe { sign_unplace_inner(cbuf.raw(), id, group, atlnum) } == FAIL {
+        if unsafe { sign_unplace_inner(cbuf, id, group, atlnum) } == FAIL {
             retval = FAIL;
         }
     }

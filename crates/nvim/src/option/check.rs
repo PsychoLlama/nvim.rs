@@ -41,7 +41,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
 use crate::types::{
-    Buffer, DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, Window, size_t,
+    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, Window, size_t,
     uint32_t,
 };
 use crate::winlayer::Win;
@@ -142,7 +142,7 @@ pub(crate) fn didset_options() {
     // startup sweep has none to give.
     let _ = derive_cedit_key();
     unsafe { derive_breakat_flags() };
-    unsafe { didset_window_options(Win::current_raw(), true) };
+    unsafe { didset_window_options(Win::current(), true) };
 }
 
 /// The second startup sweep: what needs highlight groups, and the option
@@ -153,9 +153,9 @@ pub(crate) fn didset_options2() {
     let win = Win::current_raw();
     let no_err = ptr::null_mut::<c_char>();
     let fcs = unsafe { (*win).w_onebuf_opt.wo_fcs };
-    unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
+    unsafe { set_chars_option(Win::new(win), fcs, kFillchars, true, no_err, 0) };
     let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
-    unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
+    unsafe { set_chars_option(Win::new(win), lcs, kListchars, true, no_err, 0) };
     let _ = unsafe { check_opt_wim() };
     let buf = Buf::current_raw();
     unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
@@ -183,13 +183,13 @@ pub(crate) fn check_options() {
 ///
 /// `window` must be live for the options that keep their flag in a window.
 pub(crate) unsafe fn was_set_insecurely(
-    window: *mut Window,
+    window: Win,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the caller's window is live.
-    unsafe { insecure_flag(window, opt_idx, opt_flags).is_set() }
+    unsafe { insecure_flag(window.raw(), opt_idx, opt_flags).is_set() }
 }
 
 /// Where an option's `kOptFlagInsecure` mark lives.
@@ -413,7 +413,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: *mut Window) 
 /// # Safety
 ///
 /// `buffer` and `win` must be live.
-pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, flags: uint32_t) {
+pub(crate) unsafe fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     // SAFETY: the caller's buffer and window are live.
@@ -425,9 +425,9 @@ pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, fla
     }
     if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
         if flags & kOptFlagHLOnly != 0 {
-            unsafe { redraw_later(win, UPD_NOT_VALID) };
+            unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
         } else {
-            changed_window_setting(unsafe { Win::new(win) });
+            changed_window_setting(win);
         }
     }
     if flags & kOptFlagRedrBuf != 0 {
@@ -441,5 +441,5 @@ pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, fla
 /// [`check_redraw_for`] for the current buffer and window.
 pub(crate) fn check_redraw(flags: uint32_t) {
     // SAFETY: `curbuf`/`curwin` are live.
-    unsafe { check_redraw_for(Buf::current_raw(), Win::current_raw(), flags) }
+    unsafe { check_redraw_for(Buf::current(), Win::current(), flags) }
 }

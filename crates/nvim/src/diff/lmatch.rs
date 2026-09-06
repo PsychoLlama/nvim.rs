@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::winlayer::{Buf, TabPage};
+use crate::winlayer::TabPage;
 use core::ffi::c_int;
 
 /// Whether `dp` is short enough for the line-matching pass.
@@ -90,7 +90,7 @@ pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
         if unsafe { (*dp).df_count[i] } > 0 {
             let _ = unsafe {
                 diff_write_buffer(
-                    Buf::new(tp.tp_diffbuf[i]),
+                    tp.diffbuf(i),
                     &raw mut images[ndiffs],
                     (*dp).df_lnum[i],
                     (*dp).df_lnum[i] + (*dp).df_count[i] - 1,

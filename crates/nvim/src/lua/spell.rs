@@ -49,7 +49,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     let wo_spell_save = unsafe {
         let saved = (*win).w_onebuf_opt.wo_spell;
         if saved == 0 {
-            parse_spelllang(win);
+            parse_spelllang(Win::new(win));
             (*win).w_onebuf_opt.wo_spell = 1;
         }
         saved
@@ -74,6 +74,8 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     // the terminator, so `word` stays inside it.
     while unsafe { *word } != 0 {
         let mut attr: Hlf = HLF_COUNT;
+        // SAFETY: a live window.
+        let win = unsafe { Win::new(win) };
         // SAFETY: as above, with a live window.
         let len =
             unsafe { spell_check(win, word.cast_mut(), &raw mut attr, &raw mut capcol, false) };

@@ -75,7 +75,7 @@ pub unsafe fn spell_soundfold(
         let mut fword = [0 as c_char; MAXWLEN];
         let (win, out) = (Win::current_raw(), fword.as_mut_ptr());
         let len = unsafe { cstr::bytes_at(inword) }.len() as c_int;
-        let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
+        let _ = unsafe { spell_casefold(Win::new(win), inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
     }
 }
@@ -155,7 +155,7 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
 unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
     // `spell_iswordp*` answer for a window's `'iskeyword'`, and this whole
     // body runs in one: read the current one once.
-    let win = Win::current_raw();
+    let win = Win::current();
     // Widen the word, dropping what the language does not consider part
     // of a word when it asked for accents to be removed.
     let mut word = [0 as c_int; MAXWLEN];

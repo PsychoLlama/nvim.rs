@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::winlayer::{Buf, TabPage, Win, windows};
+use crate::winlayer::{TabPage, Win, windows};
 use core::ffi::c_int;
 
 /// `linestatus`: the line is *changed* -- present in every buffer of the
@@ -107,7 +107,7 @@ pub unsafe fn diff_check_with_linestatus(
 
     let tp = TabPage::current();
     // SAFETY: a live window's buffer is live; a diffed window always has one.
-    let buf = unsafe { Buf::new(window.w_buffer) };
+    let buf = window.buffer();
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };

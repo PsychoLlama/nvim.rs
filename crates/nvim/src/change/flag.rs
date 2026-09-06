@@ -105,7 +105,7 @@ pub unsafe fn changed(buffer: Buf) {
             let save_need_wait_return = need_wait_return.get();
             need_wait_return.set(false);
             // SAFETY: a live buffer.
-            unsafe { ml_open_file(buffer.raw()) };
+            unsafe { ml_open_file(buffer) };
 
             // ml_open_file() can produce an ATTENTION message. Wait two
             // seconds so the user reads it, and call wait_return() here
@@ -139,7 +139,7 @@ pub fn changed_internal(mut buffer: Buf) {
     buffer.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
     unsafe { ml_setflags(buffer) };
-    unsafe { redraw_buf_status_later(buffer.raw()) };
+    unsafe { redraw_buf_status_later(buffer) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }
@@ -166,7 +166,7 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
             save_file_ff(buffer);
         }
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { redraw_buf_status_later(buffer.raw()) };
+        unsafe { redraw_buf_status_later(buffer) };
         redraw_tabline.set(true);
         need_maketitle.set(true);
         // SAFETY: a live buffer, which is all it asks.
@@ -215,7 +215,7 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
         && buffer.b_flags.has(BufFlags::NEW)
         && buffer.b_ml.ml_line_count == 1
         // SAFETY: the line the count just promised, NUL-terminated.
-        && c_int::from(unsafe { *ml_get_buf(buffer.raw(), 1) }) == NUL
+        && c_int::from(unsafe { *ml_get_buf(buffer, 1) }) == NUL
     {
         return false;
     }

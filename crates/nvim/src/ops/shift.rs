@@ -319,7 +319,7 @@ fn shift_block(op: Op, amount: c_int) {
     let left = op.op_type == OpType::Lshift;
     let old_state = State.get();
     let old_col = Win::current().w_cursor.col;
-    let sw_val = unsafe { get_sw_value_indent(Buf::current_raw(), left) };
+    let sw_val = unsafe { get_sw_value_indent(Buf::current(), left) };
     let old_p_ri = p_ri.get();
 
     // No 'revins' and no MODE_REPLACE while we rebuild the indent.

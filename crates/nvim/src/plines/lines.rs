@@ -81,7 +81,7 @@ pub(crate) unsafe fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheigh
 /// # Safety
 /// `window` must be live and `lnum` a line of its buffer.
 pub(crate) unsafe fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
-    let s = unsafe { ml_get_buf(window.w_buffer, lnum) };
+    let s = unsafe { ml_get_buf(window.buffer(), lnum) };
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, s) };
     if unsafe { *s } == NUL as c_char && csarg.virt_row < 0 {
@@ -130,7 +130,7 @@ pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_lon
         return lines + 1;
     }
 
-    let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+    let line = unsafe { ml_get_buf(window.buffer(), lnum) };
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
 
@@ -142,10 +142,8 @@ pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_lon
             column -= 1;
             column >= 0
         } {
-            vcol += unsafe {
-                charsize_fast_impl(window.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value)
-            }
-            .width;
+            vcol += unsafe { charsize_fast_impl(window, ci.ptr, use_tabstop, vcol, ci.chr.value) }
+                .width;
             ci = unsafe { utfc_next(ci) };
         }
     } else {

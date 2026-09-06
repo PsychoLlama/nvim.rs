@@ -73,9 +73,9 @@ pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
 ///
 /// Takes a raw pointer deliberately — the question is asked about a buffer an
 /// autocommand may already have freed, and the pointer is only compared.
-fn buf_is_valid(buffer: *mut Buffer) -> bool {
+fn buf_is_valid(buffer: Buf) -> bool {
     // SAFETY: `buffer` is only compared, never read.
-    unsafe { buf_valid(buffer) }
+    unsafe { buf_valid(buffer.raw()) }
 }
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
@@ -144,7 +144,7 @@ pub(crate) unsafe fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option
 /// A window showing the quickfix buffer has no `w_llist_ref`; one showing a
 /// location list buffer points at the list it shows.
 fn is_qf_win(win: Win, qi: Qi) -> bool {
-    buf_is_valid(win.w_buffer)
+    buf_is_valid(win.buffer())
         && is_qf_buffer(win)
         && (qi.is_quickfix_stack() && win.w_llist_ref.is_null()
             || qi.qfl_type == QFLT_LOCATION && ptr::eq(win.w_llist_ref, qi.raw()))
@@ -271,7 +271,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         setheight_win(height, Win::current());
     }
     Win::current().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'
-    if valid_win(win).is_some() {
+    if valid_win(unsafe { Win::new(win).raw() }).is_some() {
         prevwin.set(win);
     }
     true

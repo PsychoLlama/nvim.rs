@@ -42,7 +42,8 @@ pub unsafe fn nvim_tabpage_list_wins(
 ) -> Result<Array, Error> {
     let mut err = Error::none();
     let mut rv = Array::EMPTY;
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
+    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|&t| valid_tabpage(t.raw()))
+    else {
         return rv.reported(err);
     };
     // Counted first, because the arena block has to be sized before it is
@@ -116,7 +117,8 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Re
 /// The window `tabpage` is showing.
 pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Error> {
     let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
+    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|&t| valid_tabpage(t.raw()))
+    else {
         return (0 as WindowHandle).reported(err);
     };
     if tab.is_current() {
@@ -145,7 +147,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
         return ().reported(err);
     };
     // SAFETY: both handles named a live object, which is all these ask.
-    if !unsafe { tabpage_win_valid(tp.raw(), wp.raw()) } {
+    if !tabpage_win_valid(tp, wp.raw()) {
         let handle = tp.handle;
         return Err(api_error!(
             kErrorTypeException,
@@ -233,7 +235,7 @@ pub unsafe fn nvim_open_tabpage(
 
     // SAFETY: as above; `tabpage_win_valid` reads both lists and nothing else.
     let new_win = unsafe { Win::from_raw(wp) }
-        .filter(|w| unsafe { tabpage_win_valid(tp.raw(), w.raw()) })
+        .filter(|&w| tabpage_win_valid(tp, w.raw()))
         .filter(|w| w.w_buffer != b.raw());
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the

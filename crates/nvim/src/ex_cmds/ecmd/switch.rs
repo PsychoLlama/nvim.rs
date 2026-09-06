@@ -218,6 +218,8 @@ unsafe fn leave_for_buffer(
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
+    // SAFETY: a live window.
+    let mut oldwin = unsafe { Win::new(oldwin) };
     let (eap, flags) = (args.eap, args.flags);
     // Should only be possible to get here if the cmdwin is closed, or if it's
     // opening and its buffer hasn't been set yet (the new buffer is for it).
@@ -285,7 +287,7 @@ unsafe fn leave_for_buffer(
 
     if Buf::current_raw() == old_curbuf.raw() {
         // SAFETY: a live buffer.
-        unsafe { buf_copy_options(buffer.raw(), BCO_ENTER as c_int) };
+        unsafe { buf_copy_options(buffer, BCO_ENTER as c_int) };
     }
 
     // A terminal buffer that is still running is hidden, never unloaded.
@@ -300,7 +302,7 @@ unsafe fn leave_for_buffer(
     let mode = if unload { DOBUF_UNLOAD as c_int } else { 0 };
     // SAFETY: `Win::from_raw` is the promise -- the window is the editor's
     // own and live, or NULL.
-    let win = unsafe { Win::from_raw(oldwin) };
+    let win = unsafe { Win::from_raw(oldwin.raw()) };
     let did_decrement = close_buffer(win, Buf::current(), mode, false, false);
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
@@ -334,8 +336,8 @@ unsafe fn leave_for_buffer(
         if did_decrement && unsafe { buf_valid(was_curbuf) } {
             unsafe { (*was_curbuf).b_nwindows += 1 };
         }
-        if win_valid_any_tab(oldwin) && unsafe { (*oldwin).w_buffer.is_null() } {
-            unsafe { (*oldwin).w_buffer = was_curbuf };
+        if win_valid_any_tab(oldwin.raw()) && oldwin.w_buffer.is_null() {
+            oldwin.w_buffer = was_curbuf;
         }
         state.auto_buf = true;
     } else {

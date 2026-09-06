@@ -257,8 +257,8 @@ pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
 
     // The record the lookup answers into; it outlives the jump below.
     let mut slot = FileMark::UNSET;
-    let (buffer, win) = (Buf::current_raw(), Win::current_raw());
-    let fm = unsafe { mark_get(buffer, Win::new(win), &raw mut slot, kMarkAll, name) };
+    let (buffer, win) = (Buf::current(), Win::current());
+    let fm = unsafe { mark_get(buffer, win, &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
@@ -289,7 +289,7 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     }
 
     let fm = if ca.cmdchar == 'g' as c_int {
-        unsafe { get_changelist(Buf::current(), Win::current_raw(), ca.count1) }
+        unsafe { get_changelist(Buf::current(), Win::current(), ca.count1) }
     } else {
         flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
         unsafe { get_jumplist(Win::current(), ca.count1) }

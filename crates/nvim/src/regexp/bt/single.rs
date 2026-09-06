@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::exec::re_num_cmp;
@@ -250,7 +251,7 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // window; `slot` is this frame's and outlives every use of `fm`.
     let buf = rex.reg_buf();
     let win = Win::current();
-    let fm = unsafe { mark_get(buf, win, &raw mut slot, kMarkBufLocal, mark) };
+    let fm = unsafe { mark_get(Buf::new(buf), win, &raw mut slot, kMarkBufLocal, mark) };
     // `mark_get` can move the buffer's line pointers, so re-anchor.
     if rex.multi() {
         rex.seek(reg_getline(rex, rex.lnum()).cast(), col);

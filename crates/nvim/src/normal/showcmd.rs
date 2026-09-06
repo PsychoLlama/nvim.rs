@@ -391,7 +391,7 @@ pub(crate) fn display_showcmd() {
         if clear {
             Win::current().w_redr_status = true;
         } else {
-            unsafe { win_redr_status(Win::current_raw()) };
+            unsafe { win_redr_status(Win::current()) };
             unsafe { setcursor() };
         }
         return;

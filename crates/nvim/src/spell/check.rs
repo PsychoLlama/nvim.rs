@@ -45,7 +45,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, Window, size_t, uint8_t};
+use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -78,7 +78,7 @@ fn is_upper(c: c_int) -> bool {
 /// Returns the length of the word in bytes, good or bad, so the caller can
 /// skip over it.
 pub unsafe fn spell_check(
-    window: *mut Window,
+    mut window: Win,
     text: *mut c_char,
     attrp: *mut Hlf,
     capcol: *mut c_int,
@@ -89,14 +89,14 @@ pub unsafe fn spell_check(
         return 1;
     }
     // Loading the language files failed.
-    if unsafe { (*(*window).w_s).b_langp.ga_len } <= 0 {
+    if unsafe { (*window.w_s).b_langp.ga_len } <= 0 {
         return 1;
     }
 
     let mut nrlen: size_t = 0; // a number came first
     let mut wrongcaplen: size_t = 0;
     let mut count_word = docount;
-    let use_camel_case = unsafe { (*(*window).w_s).b_p_spo_flags } & kOptSpoFlagCamel != 0;
+    let use_camel_case = unsafe { (*window.w_s).b_p_spo_flags } & kOptSpoFlagCamel != 0;
     let mut is_camel_case = false;
 
     // Nearly everything lives in "mi" so that it can be handed to the
@@ -140,7 +140,7 @@ pub unsafe fn spell_check(
 
         if !capcol.is_null()
             && unsafe { *capcol } == 0
-            && !unsafe { (*(*window).w_s).b_cap_prog }.is_null()
+            && !unsafe { (*window.w_s).b_cap_prog }.is_null()
         {
             // This word should have started with a capital.
             if !is_upper(unsafe { utf_ptr2char(text) }) {
@@ -159,7 +159,7 @@ pub unsafe fn spell_check(
     // The caps type is worked out later, on demand.
     mi.mi_capflags = WordFlags::NONE;
     mi.mi_cend = core::ptr::null_mut();
-    mi.mi_win = window;
+    mi.mi_win = window.raw();
 
     // Fold one character past the word, so the lookup can see where the
     // word ends.
@@ -182,8 +182,8 @@ pub unsafe fn spell_check(
     mi.mi_result2 = SP_BAD;
 
     // Every language is tried, because a later one may match longer.
-    let langp_data = unsafe { (*(*window).w_s).b_langp.ga_data } as *mut LangP;
-    let langp_len = unsafe { (*(*window).w_s).b_langp.ga_len };
+    let langp_data = unsafe { (*window.w_s).b_langp.ga_data } as *mut LangP;
+    let langp_len = unsafe { (*window.w_s).b_langp.ga_len };
     for lpi in 0..langp_len {
         mi.mi_lp = unsafe { langp_data.offset(lpi as isize) };
 
@@ -226,13 +226,13 @@ pub unsafe fn spell_check(
         } else if !unsafe { spell_iswordp_nmw(text, window) } {
             // Sitting on a non-word character is not an error; step over
             // it and look for a word after it.
-            if !capcol.is_null() && !unsafe { (*(*window).w_s).b_cap_prog }.is_null() {
+            if !capcol.is_null() && !unsafe { (*window.w_s).b_cap_prog }.is_null() {
                 // Did a sentence end here?
                 let mut regmatch: RegMatch = unsafe { mem::zeroed() };
-                regmatch.regprog = unsafe { (*(*window).w_s).b_cap_prog };
+                regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
                 regmatch.rm_ic = false;
                 let r = unsafe { vim_regexec(&raw mut regmatch, text, 0) };
-                unsafe { (*(*window).w_s).b_cap_prog = regmatch.regprog };
+                unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
                 if r {
                     unsafe { *capcol = regmatch.endp[0].offset_from(text) as c_int };
                 }
@@ -307,7 +307,7 @@ fn get_char_type(c: c_int) -> c_int {
 /// after it.
 unsafe fn advance_camelcase_word(
     str: *mut c_char,
-    window: *mut Window,
+    window: Win,
     is_camel_case: &mut bool,
 ) -> *mut c_char {
     *is_camel_case = false;
@@ -357,17 +357,17 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 }
 
 /// Whether spell checking is on for `window` and a language is actually loaded.
-pub unsafe fn spell_check_window(window: *mut Window) -> bool {
-    let on = unsafe { (*window).w_onebuf_opt.wo_spell != 0 && *(*(*window).w_s).b_p_spl != 0 };
-    on && unsafe { (*(*window).w_s).b_langp.ga_len } > 0
-        && !unsafe { *((*(*window).w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
+pub unsafe fn spell_check_window(window: Win) -> bool {
+    let on = unsafe { window.w_onebuf_opt.wo_spell != 0 && *(*window.w_s).b_p_spl != 0 };
+    on && unsafe { (*window.w_s).b_langp.ga_len } > 0
+        && !unsafe { *((*window.w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
 }
 
 /// Whether spell checking is *off* for `window`, giving an error if so.
-pub unsafe fn no_spell_checking(window: *mut Window) -> bool {
-    if unsafe { (*window).w_onebuf_opt.wo_spell } == 0
-        || unsafe { *(*(*window).w_s).b_p_spl } == 0
-        || unsafe { (*(*window).w_s).b_langp.ga_len } <= 0
+pub unsafe fn no_spell_checking(window: Win) -> bool {
+    if window.w_onebuf_opt.wo_spell == 0
+        || unsafe { *(*window.w_s).b_p_spl } == 0
+        || unsafe { (*window.w_s).b_langp.ga_len } <= 0
     {
         emsg(gettext(e_no_spell));
         return true;
@@ -381,14 +381,14 @@ pub unsafe fn no_spell_checking(window: *mut Window) -> bool {
 /// The question is whether a sentence ends just before it. At the start of
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
-pub unsafe fn check_need_cap(window: *mut Window, lnum: LineNr, col: ColNr) -> bool {
-    if unsafe { (*(*window).w_s).b_cap_prog }.is_null() {
+pub unsafe fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
+    if unsafe { (*window.w_s).b_cap_prog }.is_null() {
         return false;
     }
 
     let mut need_cap = false;
     let mut line = if col != 0 {
-        unsafe { ml_get_buf((*window).w_buffer, lnum) }
+        unsafe { ml_get_buf(window.buffer(), lnum) }
     } else {
         core::ptr::null_mut()
     };
@@ -401,7 +401,7 @@ pub unsafe fn check_need_cap(window: *mut Window, lnum: LineNr, col: ColNr) -> b
         if lnum == 1 {
             need_cap = true;
         } else {
-            line = unsafe { ml_get_buf((*window).w_buffer, lnum - 1) };
+            line = unsafe { ml_get_buf(window.buffer(), lnum - 1) };
             if unsafe { *skipwhite(line) } == 0 {
                 need_cap = true;
             } else {
@@ -418,7 +418,7 @@ pub unsafe fn check_need_cap(window: *mut Window, lnum: LineNr, col: ColNr) -> b
     if endcol > 0 {
         // Does a sentence end before the word?
         let mut regmatch: RegMatch = unsafe { mem::zeroed() };
-        regmatch.regprog = unsafe { (*(*window).w_s).b_cap_prog };
+        regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
         regmatch.rm_ic = false;
         let end = unsafe { line.offset(endcol as isize) };
         let mut p = end;
@@ -432,7 +432,7 @@ pub unsafe fn check_need_cap(window: *mut Window, lnum: LineNr, col: ColNr) -> b
                 break;
             }
         }
-        unsafe { (*(*window).w_s).b_cap_prog = regmatch.regprog };
+        unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
     }
 
     unsafe { xfree(line_copy as *mut core::ffi::c_void) };
@@ -440,7 +440,7 @@ pub unsafe fn check_need_cap(window: *mut Window, lnum: LineNr, col: ColNr) -> b
 }
 
 /// The end of the word starting at `start`, by the spell word characters.
-pub unsafe fn spell_to_word_end(start: *mut c_char, win: *mut Window) -> *mut c_char {
+pub unsafe fn spell_to_word_end(start: *mut c_char, win: Win) -> *mut c_char {
     let mut p = start;
     while unsafe { *p } != 0 && unsafe { spell_iswordp(p, win) } {
         p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
@@ -454,7 +454,7 @@ pub unsafe fn spell_to_word_end(start: *mut c_char, win: *mut Window) -> *mut c_
 /// Whether it is misspelled is not checked — completion can only replace
 /// the word before the cursor anyway.
 pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
-    if unsafe { no_spell_checking(Win::current_raw()) } {
+    if unsafe { no_spell_checking(Win::current()) } {
         return startcol;
     }
 
@@ -464,7 +464,7 @@ pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
     let mut p = unsafe { line.offset(startcol as isize) };
     while p > line {
         p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
+        if unsafe { spell_iswordp_nmw(p, Win::current()) } {
             break;
         }
     }
@@ -474,7 +474,7 @@ pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
     while p > line {
         col = unsafe { p.offset_from(line) } as c_int;
         p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if !unsafe { spell_iswordp(p, Win::current_raw()) } {
+        if !unsafe { spell_iswordp(p, Win::current()) } {
             break;
         }
         col = 0;
@@ -494,7 +494,7 @@ static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
 /// capital.
 pub unsafe fn spell_expand_check_cap(col: ColNr) {
     spell_expand_need_cap
-        .set(unsafe { check_need_cap(Win::current_raw(), Win::current().w_cursor.lnum, col) });
+        .set(unsafe { check_need_cap(Win::current(), Win::current().w_cursor.lnum, col) });
 }
 
 /// Insert-mode completion `CTRL-X ?`: fill `matchp` with suggestions for

@@ -453,17 +453,12 @@ unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
 
 /// The display form of the unprintable byte `c`, as a value.
 ///
-/// # Safety
-/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_nonprint(buffer: *const Buffer, c: c_int) -> render::Rendered {
+fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     let c = if c == NL {
         // A NUL is stored as a newline internally.
         NUL
-    // SAFETY: the caller's promise -- null, or a valid buffer.
-    } else if c == CAR
-        && unsafe { Buf::from_raw(buffer.cast_mut()) }.is_some_and(|b| get_fileformat(b) == EOL_MAC)
-    {
+    } else if c == CAR && buffer.is_some_and(|b| get_fileformat(b) == EOL_MAC) {
         NL
     } else {
         c
@@ -499,7 +494,7 @@ unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
         render::Rendered::literal(c as uint8_t)
     } else if c <= 0xff {
         // SAFETY: forwarded to this function's contract.
-        unsafe { render_nonprint(buffer, c) }
+        render_nonprint(unsafe { Buf::from_raw(buffer.cast_mut()) }, c)
     } else {
         render::hex_form(c)
     };
@@ -518,7 +513,7 @@ unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
 unsafe fn render_byte(buffer: *const Buffer, c: c_int) -> render::Rendered {
     if c >= 0x80 {
         // SAFETY: forwarded to this function's contract.
-        return unsafe { render_nonprint(buffer, c) };
+        return render_nonprint(unsafe { Buf::from_raw(buffer.cast_mut()) }, c);
     }
     // SAFETY: as above.
     unsafe { render_char(buffer, c) }
@@ -565,8 +560,8 @@ pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
 /// Write the display form of the unprintable byte `c` into `charbuf`.
 ///
 /// # Safety
-/// `charbuf` must have room for five bytes; `buffer` may be null.
-pub unsafe fn transchar_nonprint(buffer: *const Buffer, charbuf: *mut c_char, c: c_int) {
+/// `charbuf` must have room for five bytes.
+pub unsafe fn transchar_nonprint(buffer: Option<Buf>, charbuf: *mut c_char, c: c_int) {
     // SAFETY: forwarded to the caller's contract; a byte's rendering and its
     // terminator are at most five bytes.
     unsafe { write_rendered(charbuf, &render_nonprint(buffer, c)) };

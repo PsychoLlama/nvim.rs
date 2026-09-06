@@ -112,7 +112,7 @@ fn job_running(buffer: Buf) -> bool {
 
 fn special_name(buffer: Buf) -> *mut c_char {
     // SAFETY: a live buffer.
-    unsafe { buf_spname(buffer.raw()) }
+    unsafe { buf_spname(buffer) }
 }
 
 fn remembered_lnum(buffer: Buf) -> LineNr {
@@ -396,7 +396,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         } else {
             ptr::null_mut()
         };
-        out.put_home_replaced(help, name);
+        out.put_home_replaced(unsafe { Buf::new(help) }, name);
     }
 
     let dontwrite = buf_is_dontwrite(Some(buf));
@@ -577,11 +577,11 @@ impl Msg {
 
     /// `home_replace` into the tail, followed by the length it wrote --
     /// which upstream measures with `strlen` rather than taking the answer.
-    fn put_home_replaced(&mut self, buffer: *mut Buffer, name: *const c_char) {
+    fn put_home_replaced(&mut self, buffer: Buf, name: *const c_char) {
         let (dst, room) = self.tail();
         // SAFETY: a live buffer or null, a NUL-terminated name, and the
         // buffer's own tail.
-        unsafe { home_replace(buffer, name, dst, room, true) };
+        unsafe { home_replace(buffer.raw(), name, dst, room, true) };
         // SAFETY: what `home_replace` just NUL-terminated.
         self.len += unsafe { cstr::bytes_at(dst) }.len();
     }
@@ -681,7 +681,7 @@ fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: *mut c_char, opt: OptInde
         opt_scope: OptionSetFlags::NONE,
     };
     // SAFETY: a live window, a NUL-terminated format, and no sink asked for.
-    unsafe { build_stl_str_hl(win, dst, fmt, from, 0, maxlen, StlSinks::NONE) };
+    unsafe { build_stl_str_hl(Win::new(win), dst, fmt, from, 0, maxlen, StlSinks::NONE) };
 }
 
 /// The default icon text: the buffer's name, truncated to 100 bytes at a

@@ -259,7 +259,7 @@ pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value(buffer: *mut Buffer) -> c_int {
+pub unsafe fn get_sw_value(buffer: Buf) -> c_int {
     unsafe { get_sw_value_col(buffer, 0, false) }
 }
 
@@ -269,7 +269,7 @@ pub unsafe fn get_sw_value(buffer: *mut Buffer) -> c_int {
 /// # Safety
 /// `buffer` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
-unsafe fn get_sw_value_pos(buffer: *mut Buffer, pos: *mut Pos, left: bool) -> c_int {
+unsafe fn get_sw_value_pos(buffer: Buf, pos: *mut Pos, left: bool) -> c_int {
     let save_cursor = Win::current().w_cursor;
     unsafe { Win::current().w_cursor = *pos };
     let sw_value = unsafe { get_sw_value_col(buffer, get_nolist_virtcol(), left) };
@@ -281,7 +281,7 @@ unsafe fn get_sw_value_pos(buffer: *mut Buffer, pos: *mut Pos, left: bool) -> c_
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value_indent(buffer: *mut Buffer, left: bool) -> c_int {
+pub unsafe fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
     let mut pos = Win::current().w_cursor;
     pos.col = unsafe { getwhitecols_curline() } as ColNr;
     unsafe { get_sw_value_pos(buffer, &raw mut pos, left) }
@@ -291,11 +291,11 @@ pub unsafe fn get_sw_value_indent(buffer: *mut Buffer, left: bool) -> c_int {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value_col(buffer: *mut Buffer, col: ColNr, left: bool) -> c_int {
-    if unsafe { (*buffer).b_p_sw } != 0 {
-        unsafe { (*buffer).b_p_sw as c_int }
+pub unsafe fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
+    if buffer.b_p_sw != 0 {
+        buffer.b_p_sw as c_int
     } else {
-        unsafe { tabstop_at(col, (*buffer).b_p_ts, (*buffer).b_p_vts_array, left) }
+        unsafe { tabstop_at(col, buffer.b_p_ts, buffer.b_p_vts_array, left) }
     }
 }
 
@@ -306,7 +306,7 @@ pub unsafe fn get_sw_value_col(buffer: *mut Buffer, col: ColNr, left: bool) -> c
 /// There must be a current buffer.
 pub unsafe fn get_sts_value() -> c_int {
     if Buf::current().b_p_sts < 0 {
-        unsafe { get_sw_value(Buf::current_raw()) }
+        unsafe { get_sw_value(Buf::current()) }
     } else {
         Buf::current().b_p_sts as c_int
     }
@@ -344,12 +344,12 @@ pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line of `buffer`.
-pub unsafe fn get_indent_buf(buffer: *mut Buffer, lnum: LineNr) -> c_int {
+pub unsafe fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
     unsafe {
         indent_size_ts(
             ml_get_buf(buffer, lnum),
-            (*buffer).b_p_ts,
-            (*buffer).b_p_vts_array,
+            buffer.b_p_ts,
+            buffer.b_p_vts_array,
         )
     }
 }
@@ -731,9 +731,11 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
         // This may free `newline`.
         let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newline, false) };
         if flags & SIN_NOMARK as c_int == 0 {
+            // SAFETY: a live buffer.
+            let buf = unsafe { Buf::new(buf) };
             unsafe {
                 extmark_splice_cols(
-                    Buf::new(buf),
+                    buf,
                     Win::current().w_cursor.lnum as c_int - 1,
                     skipcols,
                     old_offset - skipcols,

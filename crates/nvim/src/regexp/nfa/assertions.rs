@@ -8,6 +8,7 @@
 
 use super::list::op;
 use crate::regexp::NfaOp;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use super::run::nfa_re_num_cmp;
@@ -112,7 +113,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     let col = if rex.multi() { col(rex) } else { 0 };
     let fm: *mut FileMark = unsafe {
         mark_get(
-            rex.reg_buf(),
+            Buf::new(rex.reg_buf()),
             Win::current(),
             &raw mut slot,
             kMarkBufLocal,

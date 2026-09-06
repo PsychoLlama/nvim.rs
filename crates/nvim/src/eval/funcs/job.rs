@@ -44,7 +44,7 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Buffer, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
     EvalFuncData, IOSIZE, Integer, List, ListItem, MAXPATHL, NUL, Object, TypVal, VAR_BOOL,
     VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, Vv, typval_vval_union,
     uint16_t, uint64_t,
@@ -593,9 +593,9 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     // SAFETY: the caller's obligation; both buffers outlive every call they
     // are handed to below.
     let pid = unsafe { (*channel_proc(chan)).pid };
-    let buf = Buf::current_raw();
-    unsafe { (*buf).b_p_swf = 0 };
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null() && unsafe { ml_open(buf) }.is_err() {
+    let mut buf = Buf::current();
+    buf.b_p_swf = 0;
+    if buf.b_ml.ml_mfp.is_null() && unsafe { ml_open(buf) }.is_err() {
         unsafe { proc_stop(channel_proc(chan)) };
         unsafe { channel_decref(chan) };
         return;
@@ -603,7 +603,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     unsafe { channel_incref(chan) };
     unsafe { channel_terminal_alloc(buf, chan) };
     let noname = ptr::null_mut::<c_char>();
-    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, buf) };
+    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, buf.raw()) };
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
@@ -625,20 +625,20 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let fmt = c"term://%s//%d:%s".as_ptr();
         let dir = shortened.as_ptr();
         unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
-        let _ = unsafe { setfname(Buf::new(buf), name.as_mut_ptr(), ptr::null_mut(), true) };
-        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, buf) };
+        let _ = unsafe { setfname(buf, name.as_mut_ptr(), ptr::null_mut(), true) };
+        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, buf.raw()) };
 
         if unsafe { terminal_live(chan) } {
             let mut err = Error::none();
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
-            unsafe { (*buf).b_locked += 1 };
+            buf.b_locked += 1;
             unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer, &mut err) };
             unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer, &mut err) };
-            unsafe { (*buf).b_locked -= 1 };
+            buf.b_locked -= 1;
 
             if unsafe { terminal_live(chan) } {
-                unsafe { terminal_open(&raw mut (*chan).term, Buf::new(buf)) };
+                unsafe { terminal_open(&raw mut (*chan).term, buf) };
             }
         }
     }
@@ -660,11 +660,11 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 ///
 /// # Safety
 /// `buffer` is a live buffer and `err` a live out-parameter.
-unsafe fn set_buf_var(buffer: *mut Buffer, name: &CStr, value: Integer, err: &mut Error) {
+unsafe fn set_buf_var(buffer: Buf, name: &CStr, value: Integer, err: &mut Error) {
     let value = Object::Integer(value);
     let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.
-    let vars = unsafe { (*buffer).b_vars };
+    let vars = buffer.b_vars;
     let name = unsafe { cstr_as_string(name.as_ptr()) };
     unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
     err.clear();

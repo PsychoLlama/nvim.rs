@@ -92,10 +92,8 @@ pub(super) unsafe fn add_mark(
 /// # Safety
 /// `buf` must be a live buffer, `l` a live list, and the editor's globals must
 /// be live.
-pub unsafe fn get_buf_local_marks(buffer: *const Buffer, l: *mut List) {
-    // SAFETY: the caller promised a live buffer; `curwin`/`curbuf` are live
-    // from startup to exit.
-    let (buf, win, cur) = unsafe { (Buf::new(buffer.cast_mut()), Win::current(), Buf::current()) };
+pub unsafe fn get_buf_local_marks(buffer: Buf, l: *mut List) {
+    let (buf, win, cur) = (buffer, Win::current(), Buf::current());
     let handle = buf.handle as c_int;
     let mut mname: [c_char; 3] = c_bytes(b"' \0");
     for i in 0..NMARKS {

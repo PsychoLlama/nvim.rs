@@ -177,7 +177,7 @@ fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
 
 fn copy_options_into(buffer: Buf, flags: c_int) {
     // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buffer.raw(), flags) };
+    unsafe { buf_copy_options(buffer, flags) };
 }
 
 fn check_cursor_column(win: Win) {
@@ -505,7 +505,7 @@ pub unsafe fn curbuf_reusable() -> bool {
         return false;
     };
     // SAFETY: a live buffer, in each of the three.
-    let empty = buf.b_ml.ml_mfp.is_null() || unsafe { buf_is_empty(buf.raw()) };
+    let empty = buf.b_ml.ml_mfp.is_null() || unsafe { buf_is_empty(buf) };
     buf.b_ffname.is_null()
         && buf.b_nwindows <= 1
         && buf.terminal.is_null()
@@ -679,8 +679,7 @@ fn goto_existing_window(buffer: Buf) -> bool {
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;
     // SAFETY: the current buffer.
-    if !wp.is_null() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current_raw()) }
-    {
+    if !wp.is_null() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current()) } {
         return true;
     }
     if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {

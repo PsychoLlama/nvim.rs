@@ -313,8 +313,8 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     Buf::current().b_p_fs = -1;
     Buf::current().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
 
-    unsafe { check_buf_options(Buf::current_raw()) };
-    unsafe { check_win_options(Win::current_raw()) };
+    unsafe { check_buf_options(Buf::current()) };
+    unsafe { check_win_options(Win::current()) };
     check_options();
     last_status(false);
     didset_options();
@@ -564,7 +564,7 @@ pub(crate) fn set_init_3() {
     // An empty buffer has no line endings to have detected a format
     // from, so it takes the first of 'fileformats' — but only if the
     // user gave that option a value; otherwise its own default stands.
-    if unsafe { buf_is_empty(Buf::current_raw()) } && option_was_set(kOptFileformats) {
+    if unsafe { buf_is_empty(Buf::current()) } && option_was_set(kOptFileformats) {
         set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
     }
     set_title_defaults();

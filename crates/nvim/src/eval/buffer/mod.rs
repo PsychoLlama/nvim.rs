@@ -104,9 +104,9 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
 ///
 /// # Safety
 /// `buffer` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: *mut Buffer) -> LineNr {
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: Buf) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(args.ptr(i), buffer) }
+    unsafe { tv_get_lnum_buf(args.ptr(i), buffer.raw()) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
@@ -163,7 +163,7 @@ impl SavedBufferState {
             // window.
             current.buffer().make_current();
             // SAFETY: `self.aco` is this frame's, and the buffer is live.
-            unsafe { aucmd_prepbuf(&raw mut self.aco, buffer.raw()) };
+            unsafe { aucmd_prepbuf(&raw mut self.aco, buffer) };
             self.using_aco = true;
         }
     }

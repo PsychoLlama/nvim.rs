@@ -102,21 +102,21 @@ impl AucmdWins {
 /// Safe, and it keeps the raw pointer on purpose: `win` is only ever
 /// *compared*, never dereferenced, so a caller may hand it an address an
 /// autocommand has already freed — exactly as `win_valid` is.
-pub fn is_aucmd_win(win: *mut Window) -> bool {
+pub fn is_aucmd_win(win: *const Window) -> bool {
     let vec = aucmd_wins();
     (0..vec.len()).any(|i| {
         // SAFETY: `i` is below `len`, so the slot is initialised.
         let entry = unsafe { &*vec.slot(i) };
-        entry.auc_win_used && entry.auc_win == win
+        entry.auc_win_used && core::ptr::eq(entry.auc_win, win)
     })
 }
 
 /// Make `buffer` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
+pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
-    let same_buffer = buffer == Buf::current_raw();
+    let same_buffer = buffer == Buf::current();
 
     // A window already showing `buffer` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
@@ -124,7 +124,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     let win: Option<Win> = if same_buffer {
         Some(Win::current())
     } else {
-        windows().find(|wp| wp.w_buffer == buffer)
+        windows().find(|wp| wp.w_buffer == buffer.raw())
     };
 
     // Allocate an autocommand window when there is no window to use.
@@ -176,9 +176,9 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         // field writes below stay raw on purpose: `w_s` is handed a pointer
         // *into* `buffer`, and a write through a handle would pop it.
         let auc = unsafe { Win::new(auc_win) };
-        unsafe { (*auc_win).w_buffer = buffer };
-        unsafe { (*auc_win).w_s = &raw mut (*buffer).b_s };
-        unsafe { (*buffer).b_nwindows += 1 };
+        unsafe { (*auc_win).w_buffer = buffer.raw() };
+        unsafe { (*auc_win).w_s = &raw mut buffer.b_s };
+        buffer.b_nwindows += 1;
         unsafe { win_init_empty(Win::new(auc_win)) };
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
@@ -215,7 +215,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     }
 
     // SAFETY: the caller's promise -- a live buffer.
-    unsafe { Buf::new(buffer) }.make_current();
+    buffer.make_current();
     unsafe { (*aco).new_curwin_handle = Win::current().handle };
     unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 
@@ -272,7 +272,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         // The window is given back, not freed: it is used again.
         unsafe { (*aucmd_wins().slot(idx)).auc_win_used = false };
 
-        if valid_tabpage_win(TabPage::current_raw()) == 0 {
+        if valid_tabpage_win(TabPage::current()) == 0 {
             unsafe { close_tabpage(TabPage::current()) };
         }
         unsafe { unblock_autocmds() };

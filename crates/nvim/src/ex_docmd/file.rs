@@ -56,8 +56,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Buffer, Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, Window, size_t,
-    uint8_t,
+    Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, Window, size_t, uint8_t,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -174,7 +173,7 @@ pub(crate) unsafe fn ex_blast(args: *mut ExArg) {
 
 /// `:preserve` — flush the swap file to disk now.
 pub(crate) unsafe fn ex_preserve(_args: *mut ExArg) {
-    unsafe { ml_preserve(Buf::current_raw(), true, true) };
+    unsafe { ml_preserve(Buf::current(), true, true) };
 }
 
 /// `:recover` — read the buffer back out of a swap file.
@@ -383,7 +382,7 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             ptr::null_mut(),
             args,
             ea.do_ecmd_lnum,
-            EcmdFlags::HIDE.when(buf_hide(Buf::current_raw()))
+            EcmdFlags::HIDE.when(buf_hide(Buf::current()))
                 | EcmdFlags::FORCEIT.when(ea.forceit != 0)
                 | EcmdFlags::OLDBUF.when(!old_curwin.is_null())
                 | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
@@ -401,10 +400,10 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             // being lost while the window is closed.
             if !old_curwin.is_null() {
                 let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
-                if !need_hide || buf_hide(Buf::current_raw()) {
+                if !need_hide || buf_hide(Buf::current()) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
-                    let free = !need_hide && !buf_hide(Buf::current_raw());
+                    let free = !need_hide && !buf_hide(Buf::current());
                     unsafe { win_close(Win::current(), free, false) };
                     unsafe { leave_cleanup(&raw mut cs) };
                 }
@@ -590,7 +589,7 @@ pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buffer: *const Buffer) -> bool {
+fn buf_hide(buffer: Buf) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buf_hide(buffer) }
 }

@@ -651,7 +651,7 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf(self.0, lnum) })
+        Line(unsafe { ml_get_buf(Buf::new(self.0), lnum) })
     }
 
     /// [`Buf::line`], marking the line dirty so the caller may write to it.
@@ -660,7 +660,7 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line_mut(self, lnum: LineNr) -> Line {
-        Line(unsafe { ml_get_buf_mut(self.0, lnum) })
+        Line(unsafe { ml_get_buf_mut(Buf::new(self.0), lnum) })
     }
 
     /// Bytes in line `lnum`, the terminating NUL excluded.
@@ -669,14 +669,14 @@ impl Buf {
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
     pub unsafe fn line_len(self, lnum: LineNr) -> ColNr {
-        unsafe { ml_get_buf_len(self.0, lnum) }
+        unsafe { ml_get_buf_len(Buf::new(self.0), lnum) }
     }
 
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
     pub fn snap_to_char(self, pos: PosRef) {
         // SAFETY: a live buffer and a live position in it.
-        unsafe { mark_mb_adjustpos(self.0, pos.0) };
+        unsafe { mark_mb_adjustpos(Buf::new(self.0), pos.0) };
     }
 
     /// The next buffer in the editor's buffer list, if any.
@@ -813,6 +813,22 @@ impl TabPage {
     #[inline(always)]
     pub fn raw(self) -> *mut Tabpage {
         self.0
+    }
+
+    /// One of the up-to-eight buffers this tab page is diffing, or a null
+    /// [`Buf`] for an empty slot -- [`Win::buffer`]'s shape, and the same
+    /// caveat: only a caller that has already ruled the slot out may read
+    /// through it.
+    ///
+    /// Safe for the reason [`Win::buffer`] is: the slot is read out of a tab
+    /// page the handle already promised is live.
+    ///
+    /// # Panics
+    ///
+    /// When `idx` is not a diff slot.
+    #[inline(always)]
+    pub fn diffbuf(self, idx: usize) -> Buf {
+        Buf(self.tp_diffbuf[idx])
     }
 
     /// This tab page's id. [`Win::handle`] for a tab page.

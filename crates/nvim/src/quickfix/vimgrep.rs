@@ -301,7 +301,7 @@ unsafe fn match_buflines(
                     end_lnum: end.lnum + lnum,
                     col: start.col as c_int + 1,
                     end_col: end.col as c_int + 1,
-                    ..NewEntry::new(unsafe { ml_get_buf(buffer.raw(), start.lnum + lnum) })
+                    ..NewEntry::new(unsafe { ml_get_buf(buffer, start.lnum + lnum) })
                 };
                 unsafe { qf_add_entry(qfl, new2) };
                 found_match = true;
@@ -319,13 +319,13 @@ unsafe fn match_buflines(
                 // Move past the match, and past one more column when the
                 // match was empty, so that the scan makes progress.
                 col = end.col + ColNr::from(col == end.col);
-                if col > unsafe { ml_get_buf_len(buffer.raw(), lnum) } {
+                if col > unsafe { ml_get_buf_len(buffer, lnum) } {
                     break;
                 }
             }
         } else {
-            let line = unsafe { ml_get_buf(buffer.raw(), lnum) };
-            let linelen = unsafe { ml_get_buf_len(buffer.raw(), lnum) };
+            let line = unsafe { ml_get_buf(buffer, lnum) };
+            let linelen = unsafe { ml_get_buf_len(buffer, lnum) };
             // The pattern length is in bytes while the matcher fills one
             // position per *character*, so for a multibyte pattern the
             // position read below is one the matcher never wrote. It has
@@ -566,7 +566,7 @@ unsafe fn keep_or_drop_dummy(
     let mut aco = AcoSave::default();
     let raw = buffer.raw();
     // SAFETY: a live buffer, entered and left again around the events.
-    unsafe { aucmd_prepbuf(&raw mut aco, raw) };
+    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
     unsafe {
         apply_autocmds(
             AutoEvent::FileType,

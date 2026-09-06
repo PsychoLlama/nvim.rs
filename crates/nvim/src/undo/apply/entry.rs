@@ -184,7 +184,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     curhead.uh_entry = newlist;
     curhead.uh_flags = new_flags;
     // SAFETY: a live buffer.
-    if old_flags & UH_EMPTYBUF != 0 && unsafe { buf_is_empty(buf.raw()) } {
+    if old_flags & UH_EMPTYBUF != 0 && unsafe { buf_is_empty(buf) } {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     if old_flags & UH_CHANGED != 0 {
@@ -325,9 +325,9 @@ unsafe fn apply_entry(
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
         // SAFETY: a live current window.
-        if unsafe { spell_check_window(Win::current_raw()) } && bot <= buffer.b_ml.ml_line_count {
+        if unsafe { spell_check_window(Win::current()) } && bot <= buffer.b_ml.ml_line_count {
             // SAFETY: as above.
-            unsafe { redraw_win_line(Win::current_raw(), bot) };
+            unsafe { redraw_win_line(Win::current(), bot) };
         }
     }
 

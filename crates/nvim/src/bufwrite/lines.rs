@@ -64,7 +64,7 @@ unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
 /// -1 nothing reaches a file: that pass only exists to find out whether the
 /// conversion works.
 pub(crate) unsafe fn write_lines(
-    buffer: *mut Buffer,
+    buffer: Buf,
     range: (LineNr, LineNr),
     writer: &mut ByteWriter,
     fileformat: c_int,
@@ -115,10 +115,9 @@ pub(crate) unsafe fn write_lines(
         // Write failed, or the last line has no end-of-line: stop here.
         if end == 0
             || (lnum == end
-                && (write_bin || unsafe { (*buffer).b_p_fixeol } == 0)
-                && ((write_bin && lnum == unsafe { (*buffer).b_no_eol_lnum })
-                    || (lnum == unsafe { (*buffer).b_ml.ml_line_count }
-                        && unsafe { (*buffer).b_p_eol } == 0)))
+                && (write_bin || buffer.b_p_fixeol == 0)
+                && ((write_bin && lnum == buffer.b_no_eol_lnum)
+                    || (lnum == buffer.b_ml.ml_line_count && buffer.b_p_eol == 0)))
         {
             lnum += 1; // written the line, count it
             no_eol = true;
@@ -167,7 +166,7 @@ pub(crate) unsafe fn write_lines(
         writer.conv_error_lnum = end;
         end = 0;
     }
-    if unsafe { (*buffer).b_p_fixeol } == 0 && unsafe { (*buffer).b_p_eof } != 0 {
+    if buffer.b_p_fixeol == 0 && buffer.b_p_eof != 0 {
         // Write the trailing CTRL-Z that 'endoffile' asks for.
         unsafe { write_eintr(writer.fd, c"\x1a".as_ptr().cast_mut().cast(), 1) };
     }

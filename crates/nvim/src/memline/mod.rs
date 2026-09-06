@@ -297,10 +297,10 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buffer` must point at a buffer with no memline open.
-pub unsafe fn ml_open(buffer: *mut Buffer) -> Result<(), Failed> {
+pub unsafe fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     // No stack, no cached block, no cached line, no chunk table yet.
     b.b_ml.stack_clear();
     b.b_ml.ml_locked = None;
@@ -311,10 +311,7 @@ pub unsafe fn ml_open(buffer: *mut Buffer) -> Result<(), Failed> {
         b.b_p_swf = 0;
     }
     // A swap file may still be opened later, when 'updatecount' is set.
-    unsafe {
-        (*buffer).b_may_swap =
-            (*buffer).terminal.is_null() && p_uc.get() != 0 && (*buffer).b_p_swf != 0
-    };
+    buffer.b_may_swap = buffer.terminal.is_null() && p_uc.get() != 0 && buffer.b_p_swf != 0;
 
     let mfp = unsafe { mf_open(::core::ptr::null_mut(), 0) };
     let mut hp: *mut BlockHdr = ::core::ptr::null_mut();
@@ -339,10 +336,10 @@ pub unsafe fn ml_open(buffer: *mut Buffer) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `mfp` must be a memfile with no blocks in it yet.
-unsafe fn ml_open_blocks(buffer: *mut Buffer, mfp: *mut MemFile, hp: &mut *mut BlockHdr) -> bool {
+unsafe fn ml_open_blocks(buffer: Buf, mfp: *mut MemFile, hp: &mut *mut BlockHdr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let b = unsafe { Buf::new(buffer) };
+    let b = buffer;
     // Block zero: the header that says what the rest of the file means.
     *hp = unsafe { mf_new(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 0 {
@@ -445,7 +442,7 @@ pub unsafe fn ml_open_files() {
         if buf.b_p_ro == 0 || buf.b_changed != 0 {
             // SAFETY: a live buffer from the editor's own list, on the main
             // thread as the caller promised.
-            unsafe { ml_open_file(buf.raw()) };
+            unsafe { ml_open_file(buf) };
         }
     }
 }
@@ -457,10 +454,10 @@ pub unsafe fn ml_open_files() {
 ///
 /// # Safety
 /// `buffer` must point at a buffer.
-pub unsafe fn ml_open_file(buffer: *mut Buffer) {
+pub unsafe fn ml_open_file(buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null()
         || unsafe { (*mfp).mf_fd } >= 0
@@ -548,7 +545,7 @@ pub unsafe fn check_need_swap(newfile: bool) {
     // reset this again.
     let _loud = Allow::messages();
     if Buf::current().b_may_swap && (Buf::current().b_p_ro == 0 || !newfile) {
-        unsafe { ml_open_file(Buf::current_raw()) };
+        unsafe { ml_open_file(Buf::current()) };
     }
 }
 
@@ -556,14 +553,14 @@ pub unsafe fn check_need_swap(newfile: bool) {
 ///
 /// # Safety
 /// `buffer` must point at a buffer.
-pub unsafe fn ml_close(buffer: *mut Buffer, del_file: ::core::ffi::c_int) {
+pub unsafe fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     if b.b_ml.ml_mfp.is_null() {
         return; // not open
     }
-    unsafe { mf_close((*buffer).b_ml.ml_mfp, del_file != 0) }; // closes the .swp file
+    unsafe { mf_close(buffer.b_ml.ml_mfp, del_file != 0) }; // closes the .swp file
     // The cached line, if the memline owns it -- which it can only be
     // while a line is cached at all.
     if let Some(owned) = b.b_ml.take_owned() {
@@ -587,7 +584,7 @@ pub unsafe fn ml_close_all(del_file: bool) {
         // SAFETY: a live buffer from the editor's own list, on the main
         // thread as the caller promised. `ml_close` drops the memline, not
         // the buffer, so the link the walk reads next stays good.
-        unsafe { ml_close(buf.raw(), del_file as ::core::ffi::c_int) };
+        unsafe { ml_close(buf, del_file as ::core::ffi::c_int) };
     }
     unsafe { spell_delete_wordlist() }; // delete the internal wordlist
     unsafe { vim_deltempdir() }; // delete the temp directory that was created
@@ -603,7 +600,7 @@ pub unsafe fn ml_close_notmod() {
         if !buf_is_changed(buf) {
             // SAFETY: a live buffer from the editor's own list, on the main
             // thread as the caller promised.
-            unsafe { ml_close(buf.raw(), 1) };
+            unsafe { ml_close(buf, 1) };
         }
     }
 }

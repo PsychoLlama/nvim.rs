@@ -186,7 +186,7 @@ pub(crate) unsafe fn find_ident_at_pos(
 ) -> size_t {
     let eval = find_type & FIND_EVAL as c_int != 0;
     // SAFETY: `window` is a live window, so its buffer is live too.
-    let mut line = ScanLine(unsafe { ml_get_buf(window.w_buffer, lnum) });
+    let mut line = ScanLine(unsafe { ml_get_buf(window.buffer(), lnum) });
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
@@ -965,12 +965,12 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     // means writing it first.
     let must_write = curbuf_is_changed()
         && Buf::current().b_nwindows <= 1
-        && !unsafe { buf_hide(Buf::current_raw()) };
+        && !unsafe { buf_hide(Buf::current()) };
     if must_write {
         let _ = unsafe { autowrite(Buf::current_raw(), false) };
     }
     setpcmark();
-    let hidden = unsafe { buf_hide(Buf::current_raw()) };
+    let hidden = unsafe { buf_hide(Buf::current()) };
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
     let win = Win::current_raw();

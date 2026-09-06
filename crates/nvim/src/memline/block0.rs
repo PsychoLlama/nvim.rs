@@ -87,7 +87,7 @@ impl ZeroBlock {
 }
 
 /// Record the file's timestamp in the swap file, after it has been written.
-pub unsafe fn ml_timestamp(buffer: *mut Buffer) {
+pub unsafe fn ml_timestamp(buffer: Buf) {
     unsafe { ml_upd_block0(buffer, UB_FNAME) }
 }
 
@@ -111,10 +111,10 @@ pub(crate) fn ml_check_b0_strings(b0: &ZeroBlock) -> bool {
 /// Bring block zero up to date with the buffer: either the file name and
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
-pub(crate) unsafe fn ml_upd_block0(buffer: *mut Buffer, what: UpdBlock0) {
+pub(crate) unsafe fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let b = unsafe { Buf::new(buffer) };
+    let b = buffer;
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {
         return;
@@ -139,10 +139,10 @@ pub(crate) unsafe fn ml_upd_block0(buffer: *mut Buffer, what: UpdBlock0) {
 /// `buffer.b_mtime` from the same `stat`.
 ///
 /// Must not use the caller's name buffer: some of them still hold it.
-pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
+pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     if b.b_ffname.is_null() {
         unsafe { (*b0p).b0_fname[0] = NUL as c_char };
     } else {
@@ -158,7 +158,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
         let name = unsafe { &mut (*b0p).b0_fname };
         let (out, room) = (name.as_mut_ptr(), B0_FNAME_SIZE_CRYPT as size_t);
         let none = core::ptr::null::<Buffer>();
-        unsafe { home_replace(none, (*buffer).b_ffname, out, room, true) };
+        unsafe { home_replace(none, buffer.b_ffname, out, room, true) };
         if name[0] as c_int == '~' as c_int {
             let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
             let named = unsafe { os_get_username(uname.as_mut_ptr(), B0_UNAME_SIZE as size_t) };
@@ -172,7 +172,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
                 unsafe {
                     xstrlcpy(
                         name.as_mut_ptr(),
-                        (*buffer).b_ffname,
+                        buffer.b_ffname,
                         B0_FNAME_SIZE_CRYPT as size_t,
                     )
                 };
@@ -183,12 +183,12 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
         }
 
         let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if unsafe { os_fileinfo((*buffer).b_ffname, &raw mut file_info) } {
+        if unsafe { os_fileinfo(buffer.b_ffname, &raw mut file_info) } {
             let mtime = file_info.stat.st_mtim.tv_sec;
             unsafe { b0_store_number(mtime, &mut (*b0p).b0_mtime) };
             let ino = unsafe { os_fileinfo_inode(&raw mut file_info) } as c_long;
             unsafe { b0_store_number(ino, &mut (*b0p).b0_ino) };
-            unsafe { buf_store_file_info(Buf::new(buffer), &raw mut file_info) };
+            unsafe { buf_store_file_info(buffer, &raw mut file_info) };
             b.b_mtime_read = b.b_mtime;
             b.b_mtime_read_ns = b.b_mtime_ns;
         } else {
@@ -211,13 +211,8 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
 /// Record whether the file and its swap file are in the same directory.
 ///
 /// Fail safe: anything short of proof leaves the flag clear.
-pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
-    let same = unsafe {
-        same_directory(
-            mf_fname((*buffer).b_ml.ml_mfp).cast_mut(),
-            (*buffer).b_ffname,
-        )
-    };
+pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
+    let same = unsafe { same_directory(mf_fname(buffer.b_ml.ml_mfp).cast_mut(), buffer.b_ffname) };
     unsafe { (*b0p).set_flag(B0_SAME_DIR, same) };
 }
 
@@ -458,7 +453,7 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
 /// swap file into one place.
 ///
 /// Also publishes [`proc_running`], which the dialog below reads.
-pub(crate) unsafe fn swapfile_is_for_other_file(buffer: *mut Buffer, fname: *mut c_char) -> bool {
+pub(crate) unsafe fn swapfile_is_for_other_file(buffer: Buf, fname: *mut c_char) -> bool {
     // The expanded name out of block zero; upstream shares `NameBuff`, and
     // `set_b0_fname` above documents that its callers hold it.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
@@ -470,20 +465,16 @@ pub(crate) unsafe fn swapfile_is_for_other_file(buffer: *mut Buffer, fname: *mut
         // directory names need not agree — they can be reached through
         // different mount points — so only the tails are compared.
         if b0.flags() & B0_SAME_DIR == 0
-            || unsafe {
-                path_fnamecmp(
-                    path_tail((*buffer).b_ffname),
-                    path_tail(b0.b0_fname.as_ptr()),
-                )
-            } != 0
-            || !unsafe { same_directory(fname, (*buffer).b_ffname) }
+            || unsafe { path_fnamecmp(path_tail(buffer.b_ffname), path_tail(b0.b0_fname.as_ptr())) }
+                != 0
+            || !unsafe { same_directory(fname, buffer.b_ffname) }
         {
             // The name in the swap file may be "~user/path/file".
             // Symlinks can point at the same file under two names, so the
             // inode has the last word.
             unsafe { expand_env(b0.b0_fname.as_mut_ptr(), expanded.as_mut_ptr(), MAXPATHL) };
             let (name, ino) = (expanded.as_mut_ptr(), b0_read_number(&b0.b0_ino));
-            differ = unsafe { files_differ((*buffer).b_ffname, name, ino) };
+            differ = unsafe { files_differ(buffer.b_ffname, name, ino) };
         }
     }
     differ

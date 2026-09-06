@@ -28,7 +28,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     }
     let fm: *mut FileMark = unsafe {
         mark_get(
-            b.raw(),
+            b,
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,
@@ -100,7 +100,7 @@ pub unsafe fn nvim_buf_get_mark(
     let mark: ::core::ffi::c_char = unsafe { *name.data() };
     let fm: *mut FileMark = unsafe {
         mark_get(
-            b.raw(),
+            b,
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,

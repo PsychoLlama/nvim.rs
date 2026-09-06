@@ -226,7 +226,7 @@ pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut 
     let res = unsafe {
         eval_to_string_safe(
             Buf::current().b_p_inex,
-            was_set_insecurely(Win::current_raw(), kOptIncludeexpr, OptionSetFlags::LOCAL),
+            was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL),
             true,
         )
     };

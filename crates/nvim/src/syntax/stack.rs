@@ -18,6 +18,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::*;
@@ -149,11 +150,11 @@ fn clamp_entries(len: c_int) -> c_int {
 ///
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
-pub(crate) unsafe fn syn_stack_apply_changes(buffer: *mut Buffer) {
-    unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut (*buffer).b_s), buffer) };
+pub(crate) unsafe fn syn_stack_apply_changes(mut buffer: Buf) {
+    unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut buffer.b_s), buffer) };
 
     for wp in windows() {
-        if wp.w_buffer == buffer && wp.w_s != unsafe { &raw mut (*buffer).b_s } {
+        if wp.w_buffer == buffer.raw() && wp.w_s != &raw mut buffer.b_s {
             unsafe { syn_stack_apply_changes_block(SynBlockRef::new(wp.w_s), buffer) };
         }
     }
@@ -164,13 +165,13 @@ pub(crate) unsafe fn syn_stack_apply_changes(buffer: *mut Buffer) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
-unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: *mut Buffer) {
+unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: Buf) {
     let mut prev = ::core::ptr::null_mut::<SynState>();
     let mut p = block.b_sst_first;
     while !p.is_null() {
-        if unsafe { (*p).sst_lnum } + block.b_syn_sync_linebreaks > unsafe { (*buffer).b_mod_top } {
-            let n = unsafe { (*p).sst_lnum } + unsafe { (*buffer).b_mod_xlines };
-            if n <= unsafe { (*buffer).b_mod_bot } {
+        if unsafe { (*p).sst_lnum } + block.b_syn_sync_linebreaks > buffer.b_mod_top {
+            let n = unsafe { (*p).sst_lnum } + buffer.b_mod_xlines;
+            if n <= buffer.b_mod_bot {
                 // Inside the changed area: remove it.
                 let np = unsafe { (*p).sst_next };
                 if prev.is_null() {
@@ -185,20 +186,18 @@ unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: *mut Buf
             // Below the changed area: remember the line that has to be
             // parsed before this entry is valid again.
             if unsafe { (*p).sst_change_lnum } != 0
-                && unsafe { (*p).sst_change_lnum } > unsafe { (*buffer).b_mod_top }
+                && unsafe { (*p).sst_change_lnum } > buffer.b_mod_top
             {
-                if unsafe { (*p).sst_change_lnum } + unsafe { (*buffer).b_mod_xlines }
-                    > unsafe { (*buffer).b_mod_top }
-                {
-                    unsafe { (*p).sst_change_lnum += (*buffer).b_mod_xlines };
+                if unsafe { (*p).sst_change_lnum } + buffer.b_mod_xlines > buffer.b_mod_top {
+                    unsafe { (*p).sst_change_lnum += buffer.b_mod_xlines };
                 } else {
-                    unsafe { (*p).sst_change_lnum = (*buffer).b_mod_top };
+                    unsafe { (*p).sst_change_lnum = buffer.b_mod_top };
                 }
             }
             if unsafe { (*p).sst_change_lnum } == 0
-                || unsafe { (*p).sst_change_lnum } < unsafe { (*buffer).b_mod_bot }
+                || unsafe { (*p).sst_change_lnum } < buffer.b_mod_bot
             {
-                unsafe { (*p).sst_change_lnum = (*buffer).b_mod_bot };
+                unsafe { (*p).sst_change_lnum = buffer.b_mod_bot };
             }
             unsafe { (*p).sst_lnum = n };
         }

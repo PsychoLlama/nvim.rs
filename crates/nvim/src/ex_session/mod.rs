@@ -267,29 +267,24 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 ///
 /// # Safety
 /// `buffer` is a live buffer.
-unsafe fn ses_get_fname(buffer: *mut Buffer, opts: SessionOpts) -> *mut c_char {
+unsafe fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
     // SAFETY: caller contract.
-    if !unsafe { (*buffer).b_sfname }.is_null()
+    if !buffer.b_sfname.is_null()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
         && p_acd.get() == 0
         && !did_lcd.get()
     {
-        return unsafe { (*buffer).b_sfname };
+        return buffer.b_sfname;
     }
-    unsafe { (*buffer).b_ffname }
+    buffer.b_ffname
 }
 
 /// Write `buffer`'s name, and a newline when `add_eol`.
 ///
 /// # Safety
 /// `buffer` is a live buffer.
-unsafe fn ses_fname(
-    out: SessionFile,
-    buffer: *mut Buffer,
-    opts: SessionOpts,
-    add_eol: bool,
-) -> bool {
+unsafe fn ses_fname(out: SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
     // SAFETY: caller contract.
     let name = unsafe { ses_get_fname(buffer, opts) };
     let put = unsafe { ses_put_fname(out, name) };
@@ -600,7 +595,7 @@ unsafe fn write_rc(
             // SAFETY: `fname` is NUL-terminated.
             failed |= unsafe { !write_session(out, fname) };
         } else {
-            let (win, tab) = (Win::current_raw(), TabPage::current_raw());
+            let (win, tab) = (Win::current(), TabPage::current());
             failed |= unsafe { !put_view(out, win, tab, !using_vdir, opts, -1) };
         }
         if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {

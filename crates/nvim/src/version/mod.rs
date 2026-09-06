@@ -389,7 +389,7 @@ pub(crate) unsafe fn list_version() {
 pub(crate) unsafe fn may_show_intro() -> bool {
     // SAFETY: the caller's obligation -- the globals are live, so each of
     // these reads a live buffer or window.
-    let empty = unsafe { buf_is_empty(Buf::current_raw()) };
+    let empty = unsafe { buf_is_empty(Buf::current()) };
     empty
         && Buf::current().b_fname.is_null()
         && Buf::current().handle == 1

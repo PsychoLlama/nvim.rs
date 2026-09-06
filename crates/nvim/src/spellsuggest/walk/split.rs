@@ -293,8 +293,8 @@ impl Walk<'_> {
 
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        let replacing_nonword = !try_compound
-            && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), Win::current_raw()) };
+        let replacing_nonword =
+            !try_compound && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), Win::current()) };
         if !((replacing_nonword || bad_word_ends)
             && self.fword_at(bad_idx) != NUL
             && good_word_ends)

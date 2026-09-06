@@ -131,7 +131,7 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     let sep_row = if corner.is_top() {
         window.w_winrow - 1
     } else {
-        unsafe { win_endrow(window.raw()) }
+        unsafe { win_endrow(window) }
     };
 
     // SAFETY: walking the layout tree of the caller's live window.
@@ -160,7 +160,7 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = unsafe { (*fr).fr_win };
-    sep_row == unsafe { (*other).w_winrow } - 1 || sep_row == unsafe { win_endrow(other) }
+    sep_row == unsafe { (*other).w_winrow } - 1 || sep_row == unsafe { win_endrow(Win::new(other)) }
 }
 
 /// Whether window `window`'s vertical separator at `corner` is continued by the
@@ -173,7 +173,7 @@ pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     let sep_col = if corner.is_left() {
         window.w_wincol - 1
     } else {
-        unsafe { win_endcol(window.raw()) }
+        unsafe { win_endcol(window) }
     };
 
     // SAFETY: walking the layout tree of the caller's live window.
@@ -198,7 +198,7 @@ pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = unsafe { (*fr).fr_win };
-    sep_col == unsafe { (*other).w_wincol } - 1 || sep_col == unsafe { win_endcol(other) }
+    sep_col == unsafe { (*other).w_wincol } - 1 || sep_col == unsafe { win_endcol(Win::new(other)) }
 }
 
 /// Draw the vertical separator right of window `window`.
@@ -208,8 +208,8 @@ pub(crate) unsafe fn draw_vsep_win(window: Win) {
         return;
     }
     let attr = unsafe { win_hl_attr(window, HLF_C) };
-    let col = unsafe { win_endcol(window.raw()) };
-    let end_row = unsafe { win_endrow(window.raw()) };
+    let col = unsafe { win_endcol(window) };
+    let end_row = unsafe { win_endrow(window) };
     for row in (window.w_winrow)..end_row {
         unsafe { grid_line_start(default_gridview(), row) };
         grid_line_put_schar(col, window.w_p_fcs_chars.vert, attr);
@@ -223,10 +223,10 @@ pub(crate) unsafe fn draw_hsep_win(window: Win) {
     if window.w_hsep_height == 0 {
         return;
     }
-    unsafe { grid_line_start(default_gridview(), win_endrow(window.raw())) };
+    unsafe { grid_line_start(default_gridview(), win_endrow(window)) };
     grid_line_fill(
         window.w_wincol,
-        unsafe { win_endcol(window.raw()) },
+        unsafe { win_endcol(window) },
         window.w_p_fcs_chars.horiz,
         unsafe { win_hl_attr(window, HLF_C) },
     );
@@ -282,9 +282,9 @@ pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
     let at_left = unsafe { neighbour_frame(window, FR_ROW, true) }.is_none();
 
     let top = window.w_winrow - 1;
-    let bottom = unsafe { win_endrow(window.raw()) };
+    let bottom = unsafe { win_endrow(window) };
     let left = window.w_wincol - 1;
-    let right = unsafe { win_endcol(window.raw()) };
+    let right = unsafe { win_endcol(window) };
 
     for (draw, row, col, corner) in [
         (!(at_top || at_left), top, left, WindowCorner::TopLeft),

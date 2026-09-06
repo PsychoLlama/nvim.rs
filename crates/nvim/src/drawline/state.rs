@@ -428,7 +428,7 @@ pub(crate) unsafe fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::c
 
     // SAFETY: the caller's window.
     let width1 = window.w_view_width - window.col_off();
-    let width2 = width1 + win_col_off2(unsafe { Win::new(window.raw()) });
+    let width2 = width1 + win_col_off2(window);
     if SAVED_W_VIRTCOL.get() == window.w_virtcol
         && PREV_WP.get() == window.raw()
         && PREV_WIDTH1.get() == width1
@@ -565,7 +565,7 @@ impl WinLineVars {
             self.line_attr_lowprio = self.cursorline_attr;
         } else if State.get() & MODE_INSERT == 0
             && buf_is_quickfix(unsafe { Buf::from_raw(window.w_buffer) })
-            && qf_current_entry(unsafe { Win::new(window.raw()) }) == self.lnum
+            && qf_current_entry(window) == self.lnum
         {
             // A quickfix window's current-entry highlight keeps its own
             // colours; CursorLine goes underneath it.

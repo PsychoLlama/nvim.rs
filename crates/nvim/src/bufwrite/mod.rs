@@ -274,7 +274,7 @@ impl WriteRequest {
 ///
 /// `args` may be null; it carries a forced `'ff'`/`'fenc'`.
 pub unsafe fn buf_write(
-    buffer: *mut Buffer,
+    buffer: Buf,
     fname: *mut ::core::ffi::c_char,
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,
@@ -283,7 +283,7 @@ pub unsafe fn buf_write(
     req: WriteRequest,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     // The quoted file name the failure path reports against.
     let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
     let (mut buf, mut start, mut end) = (buffer, start, end);
@@ -321,16 +321,16 @@ pub unsafe fn buf_write(
     if b.b_ffname.is_null()
         && req.reset_changed
         && whole
-        && buf == Buf::current_raw()
-        && !buf_is_nofilename(unsafe { Buf::from_raw(buf) })
+        && buf == Buf::current()
+        && !buf_is_nofilename(unsafe { Buf::from_raw(buf.raw()) })
         && !req.filtering
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
         unsafe { set_rw_fname(fname, sfname) }?;
-        buf = Buf::current_raw(); // just in case autocmds made "buf" invalid
+        buf = Buf::current(); // just in case autocmds made "buf" invalid
         // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
-        b = unsafe { Buf::new(buf) };
+        b = buf;
     }
     if sfname.is_null() {
         sfname = fname;
@@ -364,7 +364,8 @@ pub unsafe fn buf_write(
         sfname,
         ffname,
     };
-    let pre = unsafe { buf_write_do_autocmds(buf, &mut names, start, &mut end, args, mode, orig) };
+    let pre =
+        unsafe { buf_write_do_autocmds(buf.raw(), &mut names, start, &mut end, args, mode, orig) };
     // The autocommands may have renamed the buffer out from under them.
     let WriteNames {
         fname,
@@ -717,7 +718,7 @@ pub unsafe fn buf_write(
                         newfile: target.newfile,
                         fileformat,
                     };
-                    unsafe { report_written(Buf::new(buf), fname, &written, &notes, req.append) };
+                    unsafe { report_written(buf, fname, &written, &notes, req.append) };
                 }
 
                 // Everything went out correctly: reset 'modified'. Unless

@@ -269,7 +269,7 @@ impl StlJob<'_> {
         let (w, f, fc, mw) = (self.win.raw(), self.fmt.text, self.fillchar, self.maxwidth);
         // SAFETY: `fmt` is NUL-terminated by [`Fmt`]'s constructors, the
         // window is live, and every sink is null or a local of this frame.
-        let width = unsafe { build_stl_str_hl(w, out, f, from, fc, mw, sinks) };
+        let width = unsafe { build_stl_str_hl(Win::new(w), out, f, from, fc, mw, sinks) };
         StlBuilt {
             width,
             hl: (self.hl == HlDest::Runs).then_some(HlRuns(runs)),
@@ -604,7 +604,7 @@ pub unsafe fn fillchar_status(group: *mut Hlf, window: Win) -> ScreenChar {
 /// # Safety
 /// `window` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn redraw_custom_statusline(window: *mut Window) {
+pub unsafe fn redraw_custom_statusline(window: Win) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // A `'statusline'` expression that triggers a redraw gets here again.
     if ENTERED.get() {

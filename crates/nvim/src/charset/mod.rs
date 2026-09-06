@@ -229,7 +229,7 @@ fn is_xdigit(byte: uint8_t) -> bool {
 /// # Safety
 /// The current buffer must be valid.
 pub unsafe fn init_chartab() -> bool {
-    unsafe { buf_init_chartab(Buf::current_raw(), true) }
+    unsafe { buf_init_chartab(Buf::current(), true) }
 }
 
 /// Rebuild `buffer`'s keyword set from 'iskeyword', and — when `global` — the
@@ -241,7 +241,7 @@ pub unsafe fn init_chartab() -> bool {
 ///
 /// # Safety
 /// `buffer` must be a valid buffer.
-pub unsafe fn buf_init_chartab(buffer: *mut Buffer, global: bool) -> bool {
+pub unsafe fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     if global {
         // Control characters display as `^X` or `<xx>`; printable ASCII is
         // one cell wide; the Latin-1 upper half is printable and valid in a
@@ -263,10 +263,9 @@ pub unsafe fn buf_init_chartab(buffer: *mut Buffer, global: bool) -> bool {
         }
     }
 
-    // SAFETY: `buffer` is a valid buffer, so its keyword set is writable.
-    unsafe { (*buffer).b_chartab = [0; 4] };
+    buffer.b_chartab = [0; 4];
     // SAFETY: as above.
-    if unsafe { (*buffer).b_p_lisp } != 0 {
+    if buffer.b_p_lisp != 0 {
         // In Lisp, `-` belongs to a word even when 'iskeyword' omits it.
         // SAFETY: as above.
         unsafe { set_buf_chartab(buffer, b'-' as c_int, true) };
@@ -276,13 +275,11 @@ pub unsafe fn buf_init_chartab(buffer: *mut Buffer, global: bool) -> bool {
     // 'iskeyword'. Reading all four up front is what the C's loop does one
     // at a time — none of them can move while the tables are being filled.
     // SAFETY: as above.
-    let options = [p_isi.get(), p_isp.get(), p_isf.get(), unsafe {
-        (*buffer).b_p_isk
-    }];
+    let options = [p_isi.get(), p_isp.get(), p_isf.get(), buffer.b_p_isk];
     for &option in &options[if global { 0 } else { 3 }..] {
         // SAFETY: an option value is a NUL-terminated string, and `buffer` is
         // valid.
-        if unsafe { parse_isopt(option, buffer, false) }.is_err() {
+        if unsafe { parse_isopt(option, buffer.raw(), false) }.is_err() {
             return false;
         }
     }
@@ -304,13 +301,10 @@ pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
 /// # Safety
 /// `buffer` must be a valid buffer.
 #[inline(always)]
-unsafe fn set_buf_chartab(buffer: *mut Buffer, c: c_int, on: bool) {
+unsafe fn set_buf_chartab(mut buffer: Buf, c: c_int, on: bool) {
     let word = (c as c_uint >> 6) as usize;
     let bit = 1u64 << (c & 0x3f);
-    // SAFETY: `c` is under 256, so `word` is one of the set's four.
-    unsafe {
-        (*buffer).b_chartab[word] = ((*buffer).b_chartab[word] & !bit) | if on { bit } else { 0 }
-    };
+    buffer.b_chartab[word] = (buffer.b_chartab[word] & !bit) | if on { bit } else { 0 };
 }
 
 /// Which of the four tables an 'isident'-style option fills.
@@ -407,7 +401,7 @@ unsafe fn next_isopt_entry(cursor: &mut Bytes) -> Option<IsoptEntry> {
 ///
 /// # Safety
 /// `buffer` must be a valid buffer when `table` is the keyword set.
-unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: *mut Buffer) {
+unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
     for c in entry.first..=entry.last {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
@@ -465,7 +459,7 @@ unsafe fn parse_isopt(
         };
         if !only_check {
             // SAFETY: `buffer` is valid whenever an entry is applied.
-            unsafe { apply_isopt_entry(table, &entry, buffer) };
+            unsafe { apply_isopt_entry(table, &entry, Buf::new(buffer)) };
         }
     }
     Ok(())
@@ -484,7 +478,7 @@ pub unsafe fn vim_is_ident_char(c: c_int) -> bool {
 /// # Safety
 /// The current buffer must be valid.
 pub unsafe fn vim_iswordc(c: c_int) -> bool {
-    unsafe { vim_iswordc_buf(c, Buf::current_raw()) }
+    unsafe { vim_iswordc_buf(c, Buf::current()) }
 }
 
 /// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
@@ -518,9 +512,9 @@ pub unsafe fn vim_iswordc_tab(c: c_int, chartab: *const uint64_t) -> bool {
 ///
 /// # Safety
 /// `buffer` must be a valid buffer.
-pub unsafe fn vim_iswordc_buf(c: c_int, buffer: *mut Buffer) -> bool {
+pub unsafe fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
     // SAFETY: a valid buffer carries the four-word keyword set inline.
-    unsafe { vim_iswordc_tab(c, (&raw const (*buffer).b_chartab).cast()) }
+    unsafe { vim_iswordc_tab(c, (&raw const buffer.b_chartab).cast()) }
 }
 
 /// Whether the character at `p` belongs to a word in the current buffer.
@@ -528,14 +522,14 @@ pub unsafe fn vim_iswordc_buf(c: c_int, buffer: *mut Buffer) -> bool {
 /// # Safety
 /// `p` must point into a NUL-terminated string.
 pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
-    unsafe { vim_iswordp_buf(p, Buf::current_raw()) }
+    unsafe { vim_iswordp_buf(p, Buf::current()) }
 }
 
 /// Whether the character at `p` belongs to a word in `buffer`.
 ///
 /// # Safety
 /// `p` must point into a NUL-terminated string and `buffer` be a valid buffer.
-pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: *mut Buffer) -> bool {
+pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
     let lead = unsafe { Bytes::new(p) }.byte();
     let c = if utf8len_tab[lead as usize] > 1 {
         // SAFETY: as above; a lead byte promises the rest of its sequence.

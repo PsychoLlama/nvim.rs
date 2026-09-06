@@ -29,6 +29,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::pos::{MatchPos, PosKind};
@@ -192,7 +194,7 @@ impl Rex {
     /// current one.
     #[inline(always)]
     pub(crate) fn iswordp(self) -> bool {
-        unsafe { vim_iswordp_buf(self.input_str(), (*self.0).reg_buf) }
+        unsafe { vim_iswordp_buf(self.input_str(), Buf::new((*self.0).reg_buf)) }
     }
 
     // --------------------------------------------- what is being matched
@@ -205,8 +207,8 @@ impl Rex {
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_buf(self, buffer: *mut Buffer) {
-        unsafe { (*self.0).reg_buf = buffer }
+    pub(crate) fn set_reg_buf(self, buffer: Buf) {
+        unsafe { (*self.0).reg_buf = buffer.raw() }
     }
 
     /// The window the match runs in, or null: `\%#` and `\%V` need one.
@@ -216,8 +218,8 @@ impl Rex {
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_win(self, win: *mut Window) {
-        unsafe { (*self.0).reg_win = win }
+    pub(crate) fn set_reg_win(self, win: Option<Win>) {
+        unsafe { (*self.0).reg_win = win.map_or(core::ptr::null_mut(), Win::raw) }
     }
 
     /// The buffer line `lnum` 0 of the match sits on.

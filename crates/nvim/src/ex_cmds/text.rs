@@ -119,7 +119,7 @@ unsafe fn describe_byte(
     // seven into `raw` before the `  <%s>` wrapper takes it.
     if unsafe { vim_isprintc(c) } && !(' ' as c_int..='~' as c_int).contains(&c) {
         let mut raw: [c_char; 7] = [0; 7];
-        unsafe { transchar_nonprint(Buf::current_raw(), raw.as_mut_ptr(), c) };
+        unsafe { transchar_nonprint(Buf::current_or_none(), raw.as_mut_ptr(), c) };
         unsafe {
             vim_snprintf(
                 nonprint.as_mut_ptr(),

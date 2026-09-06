@@ -97,8 +97,8 @@ unsafe extern "C" fn input_cb(
             return c"".as_ptr();
         }
         let lnum: LineNr = position.row as LineNr + 1 as LineNr;
-        let line: *mut ::core::ffi::c_char = ml_get_buf(bp, lnum);
-        let len: size_t = ml_get_buf_len(bp, lnum) as size_t;
+        let line: *mut ::core::ffi::c_char = ml_get_buf(Buf::new(bp), lnum);
+        let len: size_t = ml_get_buf_len(Buf::new(bp), lnum) as size_t;
         if position.column as size_t > len {
             *bytes_read = 0 as uint32_t;
             return c"".as_ptr();

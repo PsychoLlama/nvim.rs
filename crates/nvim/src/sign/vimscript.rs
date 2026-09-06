@@ -244,14 +244,14 @@ pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> *mut List {
 /// # Safety
 /// `buffer` and `retlist` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_get_placed_in_buf(
-    buffer: *mut Buffer,
+    buffer: Buf,
     lnum: LineNr,
     sign_id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut List,
 ) {
     // SAFETY: the caller's buffer.
-    let cbuf = unsafe { Buf::new(buffer) };
+    let cbuf = buffer;
     // SAFETY: the caller's list, and the buffer handle it reports.
     let l = unsafe {
         let d = tv_dict_alloc();
@@ -264,7 +264,7 @@ unsafe fn sign_get_placed_in_buf(
 
     // SAFETY: the caller's buffer and group name.
     let ns = unsafe { group_get_ns(group) };
-    if !unsafe { buf_has_signs(buffer) } || ns < 0 {
+    if !unsafe { buf_has_signs(buffer.raw()) } || ns < 0 {
         return;
     }
 
@@ -307,7 +307,7 @@ unsafe fn sign_get_placed(
 ) {
     if !buffer.is_null() {
         // SAFETY: the caller's buffer and list.
-        unsafe { sign_get_placed_in_buf(buffer, lnum, id, group, retlist) };
+        unsafe { sign_get_placed_in_buf(Buf::new(buffer), lnum, id, group, retlist) };
         return;
     }
     for cbuf in buffers() {
@@ -316,7 +316,7 @@ unsafe fn sign_get_placed(
         if unsafe { buf_has_signs(cbuf.raw()) } {
             // `lnum` is deliberately dropped: an all-buffers query
             // reports every line whatever line was asked for.
-            unsafe { sign_get_placed_in_buf(cbuf.raw(), 0, id, group, retlist) };
+            unsafe { sign_get_placed_in_buf(cbuf, 0, id, group, retlist) };
         }
     }
 }

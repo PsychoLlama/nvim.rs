@@ -48,7 +48,8 @@ pub unsafe fn nvim_buf_set_text(
         return ().reported(error);
     }
     // SAFETY: not null, and the guard above is what says so.
-    let buffer = unsafe { Buf::new(b) };
+    let b = unsafe { Buf::new(b) };
+    let buffer = b;
     let mut oob: bool = false;
     start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
@@ -207,7 +208,7 @@ pub unsafe fn nvim_buf_set_text(
     };
     unsafe { try_enter(&raw mut tstate) };
     's_652: {
-        if unsafe { (*b).b_p_ma } == 0 {
+        if b.b_p_ma == 0 {
             let why = c"Buffer is not 'modifiable'";
             error = Error::exception(why);
         } else if u_save_buf(
@@ -303,7 +304,10 @@ pub unsafe fn nvim_buf_set_text(
                     kExtmarkNOOP,
                 )
             };
-            if visual_active() && b == Buf::current_raw() && !visual_mode().is_block() {
+            if visual_active()
+                && b == unsafe { Buf::new(Buf::current_raw()) }
+                && !visual_mode().is_block()
+            {
                 let mut anchor = visual_anchor();
                 unsafe {
                     fix_pos_col(
@@ -344,10 +348,12 @@ pub unsafe fn nvim_buf_set_text(
                 true,
             );
             for win in tab_windows().map(Win::raw) {
-                if unsafe { (*win).w_buffer } == b {
+                if unsafe { (*win).w_buffer } == b.raw() {
                     if unsafe { (*win).w_cursor.lnum } as Integer >= start_row
                         && unsafe { (*win).w_cursor.lnum } as Integer <= end_row
                     {
+                        // SAFETY: a live window.
+                        let win = unsafe { Win::new(win) };
                         unsafe {
                             fix_cursor_cols(
                                 win,
@@ -389,7 +395,7 @@ pub(crate) unsafe fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: Lin
 }
 
 unsafe fn fix_pos_col(
-    buffer: *mut Buffer,
+    buffer: Buf,
     pos: *mut Pos,
     start_row: LineNr,
     start_col: ColNr,
@@ -446,7 +452,7 @@ unsafe fn fix_pos_col(
 }
 
 unsafe fn fix_cursor_cols(
-    win: *mut Window,
+    mut win: Win,
     start_row: LineNr,
     start_col: ColNr,
     end_row: LineNr,
@@ -454,15 +460,15 @@ unsafe fn fix_cursor_cols(
     new_rows: LineNr,
     new_cols_at_end_row: ColNr,
 ) {
-    let mode_col_adj: ColNr = if win == Win::current_raw() && State.get() & MODE_INSERT != 0 {
+    let mode_col_adj: ColNr = if win == Win::current() && State.get() & MODE_INSERT != 0 {
         0 as ColNr
     } else {
         1 as ColNr
     };
     unsafe {
         fix_pos_col(
-            (*win).w_buffer,
-            &raw mut (*win).w_cursor,
+            win.buffer(),
+            &raw mut win.w_cursor,
             start_row,
             start_col,
             end_row,
@@ -472,7 +478,7 @@ unsafe fn fix_cursor_cols(
             mode_col_adj,
         )
     };
-    check_cursor_col(unsafe { Win::new(win) });
-    changed_cline_bef_curs(unsafe { Win::new(win) });
-    invalidate_botline_win(unsafe { Win::new(win) });
+    check_cursor_col(win);
+    changed_cline_bef_curs(win);
+    invalidate_botline_win(win);
 }

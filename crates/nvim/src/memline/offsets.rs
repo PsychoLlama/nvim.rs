@@ -39,15 +39,10 @@ static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buffer` must point at a buffer.
-pub(crate) unsafe fn ml_updatechunk(
-    buffer: *mut Buffer,
-    line: LineNr,
-    len_arg: c_int,
-    updtype: c_int,
-) {
+pub(crate) unsafe fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype: c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     let mut curline = ml_upd_lastcurline.get();
     let mut curix = ml_upd_lastcurix.get();
 
@@ -67,7 +62,7 @@ pub(crate) unsafe fn ml_updatechunk(
 
     // Find the chunk the line belongs to; `curline` ends up at the start
     // of it.
-    if buffer != ml_upd_lastbuf.get()
+    if buffer != unsafe { Buf::new(ml_upd_lastbuf.get()) }
         || line != ml_upd_lastline.get() + 1
         || updtype != ML_CHNK_ADDLINE
     {
@@ -102,7 +97,7 @@ pub(crate) unsafe fn ml_updatechunk(
         return;
     }
 
-    ml_upd_lastbuf.set(buffer);
+    ml_upd_lastbuf.set(buffer.raw());
     ml_upd_lastline.set(line);
     ml_upd_lastcurline.set(curline);
     ml_upd_lastcurix.set(curix);
@@ -114,15 +109,10 @@ pub(crate) unsafe fn ml_updatechunk(
 ///
 /// # Safety
 /// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_addline(
-    buffer: *mut Buffer,
-    line: LineNr,
-    curline: LineNr,
-    curix: usize,
-) -> bool {
+unsafe fn ml_chunk_addline(buffer: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     b.b_ml.ml_chunks.add_lines(curix, 1);
 
     if b.b_ml.ml_chunks.lines(curix) >= MLCS_MAXL {
@@ -140,7 +130,7 @@ unsafe fn ml_chunk_addline(
             // The line is just before the last one, so move the last
             // line's size over. This is the common case while loading a
             // file.
-            let hp = unsafe { ml_find_line(buffer, (*buffer).b_ml.ml_line_count, ML_FIND) };
+            let hp = unsafe { ml_find_line(buffer, buffer.b_ml.ml_line_count, ML_FIND) };
             if hp.is_null() {
                 b.b_ml.ml_chunks.switch_off();
                 return false;
@@ -171,10 +161,10 @@ unsafe fn ml_chunk_addline(
 ///
 /// # Safety
 /// `buffer` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_split(buffer: *mut Buffer, curix: usize, curline_arg: LineNr) -> bool {
+unsafe fn ml_chunk_split(buffer: Buf, curix: usize, curline_arg: LineNr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     b.b_ml.ml_chunks.split_at(curix);
 
     // Total size of the first MLCS_MINL lines of the chunk.
@@ -235,14 +225,14 @@ unsafe fn ml_chunk_split(buffer: *mut Buffer, curix: usize, curline_arg: LineNr)
 /// # Safety
 /// `buffer` must point at a buffer, and `offp` be NULL or writable.
 pub unsafe fn ml_find_line_or_offset(
-    buffer: *mut Buffer,
+    buffer: Buf,
     lnum: LineNr,
     offp: *mut c_int,
     no_ff: bool,
 ) -> c_int {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     let ffdos = (!no_ff && get_fileformat(b) == EOL_DOS) as c_int;
     let mut extra = 0;
 
@@ -256,7 +246,7 @@ pub unsafe fn ml_find_line_or_offset(
     // does invalidate the cache for the time being.
     let can_cache = lnum != 0 && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
     if lnum == 0 || b.b_ml.cached_lnum() < lnum || !no_ff {
-        unsafe { ml_flush_line(Buf::current_raw(), false) };
+        unsafe { ml_flush_line(Buf::current(), false) };
     } else if can_cache && b.b_ml.cached_offset() > 0 {
         return b.b_ml.cached_offset() as c_int;
     }
@@ -280,7 +270,7 @@ pub unsafe fn ml_find_line_or_offset(
     // in. The last chunk is special: it never qualifies.
     // SAFETY: the caller's buffer. The borrow is read-only and lasts only
     // for the search below.
-    let chunks = unsafe { &(*buffer).b_ml.ml_chunks };
+    let chunks = &buffer.b_ml.ml_chunks;
     let mut curline: LineNr = 1;
     let mut curix = 0usize;
     let mut size = 0;
@@ -385,12 +375,12 @@ pub unsafe fn ml_find_line_or_offset(
 /// Must run on the main thread, with a current buffer and window.
 pub unsafe fn goto_byte(cnt: c_int) {
     let mut boff = cnt;
-    unsafe { ml_flush_line(Buf::current_raw(), false) }; // the cached line may be dirty
+    unsafe { ml_flush_line(Buf::current(), false) }; // the cached line may be dirty
     setpcmark();
     if boff != 0 {
         boff -= 1;
     }
-    let lnum = unsafe { ml_find_line_or_offset(Buf::current_raw(), 0, &raw mut boff, false) };
+    let lnum = unsafe { ml_find_line_or_offset(Buf::current(), 0, &raw mut boff, false) };
     if lnum < 1 {
         // Past the end.
         Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;

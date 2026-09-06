@@ -30,8 +30,8 @@ use crate::semsg;
 use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::types::{
-    BlockDef, Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0,
-    TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
+    BlockDef, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0, TypVal,
+    VAR_DICT, VarNumber, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -185,8 +185,8 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
         emsg(gettext(e_buffer_is_not_loaded));
         return None;
     };
-    unsafe { check_corner(findbuf.raw(), &mut p1) }?;
-    unsafe { check_corner(findbuf.raw(), &mut p2) }?;
+    unsafe { check_corner(findbuf, &mut p1) }?;
+    unsafe { check_corner(findbuf, &mut p2) }?;
 
     findbuf.make_current();
     Win::current().w_buffer = findbuf.raw();
@@ -270,10 +270,10 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 ///
 /// # Safety
 /// `buffer` is a loaded buffer.
-unsafe fn check_corner(buffer: *mut Buffer, p: &mut Pos) -> Option<()> {
+unsafe fn check_corner(buffer: Buf, p: &mut Pos) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
-    if p.lnum < 1 || p.lnum > unsafe { (*buffer).b_ml.ml_line_count } {
+    if p.lnum < 1 || p.lnum > buffer.b_ml.ml_line_count {
         semsg!("E966: Invalid line number: {}", p.lnum);
         return None;
     }

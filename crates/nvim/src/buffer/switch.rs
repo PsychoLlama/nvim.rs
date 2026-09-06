@@ -51,7 +51,7 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, Window, int64_t,
+    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, int64_t,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -101,9 +101,8 @@ fn is_last_window(win: Win) -> bool {
     // SAFETY: a live window.
     unsafe { last_window(win) }
 }
-fn is_autocmd_window(win: *mut Window) -> bool {
-    // SAFETY: the pointer is only compared against the autocommand windows.
-    is_aucmd_win(win)
+fn is_autocmd_window(win: Win) -> bool {
+    is_aucmd_win(win.raw().cast_const())
 }
 fn split_window() -> Result<(), Failed> {
     win_split(0, 0)
@@ -124,17 +123,17 @@ fn forget_jumps(win: Win, fnum: c_int) {
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
-    unsafe { can_abandon(buffer.raw(), forceit) }
+    unsafe { can_abandon(buffer, forceit) }
 }
 
 /// The "save changes?" dialog. Re-enters, and may free the buffer.
 fn ask_about_changes(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `checkall`.
-    unsafe { dialog_changed(buffer.raw(), false) };
+    unsafe { dialog_changed(buffer, false) };
 }
 fn ask_about_terminal(buffer: Buf) -> bool {
     // SAFETY: a live buffer with a live terminal.
-    unsafe { dialog_close_terminal(buffer.raw()) }
+    unsafe { dialog_close_terminal(buffer) }
 }
 fn terminal_alive(buffer: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.
@@ -761,8 +760,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     // a window with this buffer.
     while buffer.raw() == Buf::current_raw()
         && !(window_locked(Win::current()) || Win::current().buffer().b_locked > 0)
-        && (last_listed_window().is_some_and(|wp| is_autocmd_window(wp.raw()))
-            || !is_last_window(Win::current()))
+        && (last_listed_window().is_some_and(is_autocmd_window) || !is_last_window(Win::current()))
     {
         if close_win(Win::current(), false, false) == FAIL {
             break;

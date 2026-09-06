@@ -285,7 +285,7 @@ unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
     for _ in 0..ca.count1 {
         if unsafe {
             spell_move_to(
-                Win::current_raw(),
+                Win::current(),
                 direction(cmd_arg),
                 what,
                 false,

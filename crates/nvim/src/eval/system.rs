@@ -420,7 +420,7 @@ unsafe fn buffer_as_string(tv: *mut TypVal, len: *mut ptrdiff_t) -> *mut c_char 
     for lnum in 1..=buf.line_count() {
         // SAFETY: `lnum` is a line of the buffer, and a line is
         // NUL-terminated; `len` is the caller's.
-        unsafe { *len += cstr::bytes_at(ml_get_buf(buf.raw(), lnum)).len() as ptrdiff_t + 1 };
+        unsafe { *len += cstr::bytes_at(ml_get_buf(buf, lnum)).len() as ptrdiff_t + 1 };
     }
     // SAFETY: the caller's promise about `len`.
     if unsafe { *len } == 0 {
@@ -434,7 +434,7 @@ unsafe fn buffer_as_string(tv: *mut TypVal, len: *mut ptrdiff_t) -> *mut c_char 
     for lnum in 1..=buf.line_count() {
         // SAFETY: `lnum` is a line of the buffer, and the measurement above
         // left room for its bytes and one separator.
-        end = unsafe { copy_swapping_nl(ml_get_buf(buf.raw(), lnum), end) };
+        end = unsafe { copy_swapping_nl(ml_get_buf(buf, lnum), end) };
         // SAFETY: as above -- the separator's byte was measured in.
         end = unsafe { put(end, b'\n' as c_char) };
     }

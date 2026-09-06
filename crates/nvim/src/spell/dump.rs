@@ -73,7 +73,7 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
 pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
-    if unsafe { no_spell_checking(Win::current_raw()) } {
+    if unsafe { no_spell_checking(Win::current()) } {
         return;
     }
 
@@ -105,7 +105,7 @@ pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
 pub unsafe fn ex_spelldump(args: *mut ExArg) {
-    if unsafe { no_spell_checking(Win::current_raw()) } {
+    if unsafe { no_spell_checking(Win::current()) } {
         return;
     }
     let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
@@ -118,7 +118,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
     optval_free(spl);
 
-    if !unsafe { buf_is_empty(Buf::current_raw()) } {
+    if !unsafe { buf_is_empty(Buf::current()) } {
         return;
     }
 

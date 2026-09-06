@@ -40,7 +40,8 @@ pub unsafe fn get_expr_indent() -> c_int {
     let buf = Buf::current_raw();
     // SAFETY: the caller's contract; `curwin` and `curbuf` are the current
     // window and buffer for the whole of this call.
-    let use_sandbox = unsafe { was_set_insecurely(win, kOptIndentexpr, OptionSetFlags::LOCAL) };
+    let use_sandbox =
+        unsafe { was_set_insecurely(Win::new(win), kOptIndentexpr, OptionSetFlags::LOCAL) };
     let save_sctx = current_sctx.get();
     // Saved because the expression can move the cursor via `:normal`.
     // SAFETY: as above.

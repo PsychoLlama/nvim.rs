@@ -48,7 +48,7 @@ pub unsafe fn nvim_buf_get_keymap(
         }
         .reported(error);
     };
-    unsafe { keymap_array(mode, Some(Buf::new(b.raw())), arena) }.reported(error)
+    unsafe { keymap_array(mode, Some(b), arena) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_set_keymap(
@@ -133,14 +133,14 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    let is_curbuf: bool = b == unsafe { Buf::new(Buf::current_raw()) };
+    let is_curbuf: bool = b == Buf::current();
     let save_acd: ::core::ffi::c_int = p_acd.get();
     let redraw_off = (!is_curbuf).then(Suppress::redraw);
     if !is_curbuf {
         p_acd.set(0 as ::core::ffi::c_int);
     }
     let mut aco: AcoSave = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, b.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, b) };
     let ren_ret = unsafe { rename_buffer(name.data()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
     drop(redraw_off);

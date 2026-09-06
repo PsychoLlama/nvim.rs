@@ -35,7 +35,7 @@ use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,
-    VirtLines, Window, int32_t, int64_t, uint32_t,
+    VirtLines, int32_t, int64_t, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -78,7 +78,7 @@ impl Win {
     /// `line` must be NUL-terminated.
     unsafe fn breakindent(self, line: *mut c_char) -> c_int {
         // SAFETY: a live window and the caller's line.
-        unsafe { get_breakindent_win(self.raw(), line) }
+        unsafe { get_breakindent_win(self, line) }
     }
 
     /// Whether a tab is expanded to a tabstop rather than shown as a
@@ -585,7 +585,7 @@ pub(crate) unsafe fn charsize_regular(
     // SAFETY: `csarg`'s window is live.
     if is_doublewidth
         && wp.w_onebuf_opt.wo_wrap != 0
-        && unsafe { in_win_border(wp.raw(), vcol + size - 2) }
+        && unsafe { in_win_border(wp, vcol + size - 2) }
     {
         // Count the ">" in the last column.
         size += 1;
@@ -619,7 +619,7 @@ pub(crate) unsafe fn charsize_regular(
 /// `window` must be live and `cur` must point into a NUL-terminated line.
 #[inline(always)]
 unsafe fn charsize_fast_impl(
-    window: *mut Window,
+    window: Win,
     cur: *const c_char,
     use_tabstop: bool,
     vcol: ColNr,
@@ -630,7 +630,7 @@ unsafe fn charsize_fast_impl(
         // SAFETY: a live window's buffer is live, and its 'vartabstop' array
         // is its own.
         let width = unsafe {
-            let buf = (*window).w_buffer;
+            let buf = window.w_buffer;
             tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array)
         };
         return CharSize { width, head: 0 };
@@ -648,7 +648,7 @@ unsafe fn charsize_fast_impl(
     // SAFETY: the caller's window, on both sides of the `&&`.
     if width == 2
         && cur_char >= 0x80
-        && unsafe { (*window).w_onebuf_opt.wo_wrap } != 0
+        && window.w_onebuf_opt.wo_wrap != 0
         && unsafe { in_win_border(window, vcol) }
     {
         CharSize { width: 3, head: 1 }
@@ -670,7 +670,7 @@ pub(crate) unsafe fn charsize_fast(
     cur_char: int32_t,
 ) -> CharSize {
     // SAFETY: `csarg` is initialised and `cur` points into its line.
-    unsafe { charsize_fast_impl(csarg.win, cur, csarg.use_tabstop, vcol, cur_char) }
+    unsafe { charsize_fast_impl(Win::new(csarg.win), cur, csarg.use_tabstop, vcol, cur_char) }
 }
 
 /// Dispatch to whichever charsize function `init_charsize_arg` chose.
@@ -724,16 +724,16 @@ pub(crate) unsafe fn charsize_nowrap(
 /// # Safety
 /// `window` must be live.
 #[inline]
-unsafe fn in_win_border(window: *mut Window, vcol: ColNr) -> bool {
+unsafe fn in_win_border(window: Win, vcol: ColNr) -> bool {
     // SAFETY: the caller's window.
-    let view_width = unsafe { (*window).w_view_width };
+    let view_width = window.w_view_width;
     if view_width == 0 {
         // There is no border.
         return false;
     }
     // Width of the first screen line, after the line number.
     // SAFETY: as above.
-    let width1 = view_width - unsafe { (Win::new(window)).col_off() };
+    let width1 = view_width - (window).col_off();
     if vcol < width1 - 1 {
         return false;
     }
@@ -742,7 +742,7 @@ unsafe fn in_win_border(window: *mut Window, vcol: ColNr) -> bool {
     }
     // Width of the wrapped screen lines after it.
     // SAFETY: as above.
-    let width2 = width1 + unsafe { win_col_off2(Win::new(window)) };
+    let width2 = width1 + win_col_off2(window);
     if width2 <= 0 {
         return false;
     }
@@ -812,6 +812,8 @@ pub(crate) unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len
     // inside it.
     while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL as c_char
     {
+        // SAFETY: a live window.
+        let wp = unsafe { Win::new(wp) };
         // SAFETY: as above, plus the live window `csarg` was built from.
         vcol += unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) }.width
             as int64_t;

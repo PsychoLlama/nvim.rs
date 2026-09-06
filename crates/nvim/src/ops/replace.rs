@@ -35,7 +35,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
     // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
-    let p = unsafe { ml_get_buf_mut(Buf::current_raw(), pos.lnum) };
+    let p = unsafe { ml_get_buf_mut(Buf::current(), pos.lnum) };
     let len = Buf::current().b_ml.cached_len();
 
     // Safety check: the caller's column may be past the line.

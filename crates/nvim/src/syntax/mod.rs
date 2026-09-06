@@ -94,6 +94,7 @@ use crate::types::{
     uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
+use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
 
@@ -617,6 +618,18 @@ static next_match_extmatch: GlobalCell<*mut RegExtMatch> =
 static syn_win: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut());
 /// The buffer being parsed.
 static syn_buf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut());
+/// The buffer being parsed, as a handle.
+///
+/// Null until [`syntax_start`] has run, and every caller here runs after it:
+/// the parser's own position (`current_lnum`) is only meaningful once the
+/// start has been set, and setting it is what writes this.
+#[inline(always)]
+pub(crate) fn syn_buffer() -> Buf {
+    // SAFETY: `syntax_start` sets it to the buffer being parsed and the
+    // parser is torn down before that buffer goes.
+    unsafe { Buf::new(syn_buf.get()) }
+}
+
 /// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not
 /// the buffer's. Reach it through [`syn_block`].
 static parsed_block: GlobalCell<*mut SynBlock> = GlobalCell::new(::core::ptr::null_mut());

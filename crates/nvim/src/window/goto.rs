@@ -87,7 +87,7 @@ pub(crate) fn goto_win(window: Win) {
 fn redraw_winline(window: Win) {
     let lnum = window.w_cursor.lnum;
     // SAFETY: a live window and a line of its own buffer.
-    unsafe { redraw_win_line(window.raw(), lnum) };
+    unsafe { redraw_win_line(window, lnum) };
 }
 
 /// The tab page `win` is on, or null.
@@ -212,7 +212,7 @@ fn neighbor(
     count: c_int,
 ) -> Option<Win> {
     if window.w_floating {
-        let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
+        let prev = valid_win(unsafe { Win::new(prevwin.get()).raw() }).filter(|p| !p.w_floating);
         return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 
@@ -321,7 +321,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     if window.w_buffer != Buf::current_raw() {
         let (buf, flags) = (window.w_buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
         // SAFETY: a live window's buffer.
-        unsafe { buf_copy_options(buf, flags) };
+        unsafe { buf_copy_options(Buf::new(buf), flags) };
     }
     if !curwin_invalid {
         prevwin.set(Win::current_raw()); // remember for CTRL-W p

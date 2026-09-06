@@ -137,7 +137,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     if win.w_buffer == buffer.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
         let at = win.w_cursor;
         // SAFETY: the current window is live.
-        view = unsafe { mark_view_make(win.raw(), at) };
+        view = unsafe { mark_view_make(win, at) };
     }
 
     // RESET_FMARK: the old mark's additional data is freed first.
@@ -368,12 +368,12 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
     // the next one, so schedule that line too -- but not when a `$` is
     // being displayed at the end of the changed text.
     // SAFETY: the current window is live; the short circuit is upstream's.
-    let spell_next = unsafe { spell_check_window(Win::current_raw()) }
+    let spell_next = unsafe { spell_check_window(Win::current()) }
         && lnum < Buf::current().b_ml.ml_line_count
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {
         // SAFETY: the current window is live.
-        unsafe { redraw_win_line(Win::current_raw(), lnum + 1) };
+        unsafe { redraw_win_line(Win::current(), lnum + 1) };
     }
 
     // Notify any channels that are watching.

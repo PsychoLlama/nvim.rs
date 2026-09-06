@@ -77,15 +77,15 @@ pub(crate) unsafe fn load_dummy_buffer(
     let newbufref = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
 
     // Init the options.
-    unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP) as c_int) };
+    unsafe { buf_copy_options(Buf::new(newbuf), (BCO_ENTER | BCO_NOHELP) as c_int) };
 
     // Need to open the memfile before putting the buffer in a window.
-    if unsafe { ml_open(newbuf) }.is_ok() {
+    if unsafe { ml_open(Buf::new(newbuf)) }.is_ok() {
         // Make sure this buffer isn't wiped out by autocommands.
         unsafe { (*newbuf).b_locked += 1 };
         // Set curwin/curbuf to buf and save a few things.
         let mut aco = AcoSave::default();
-        unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
+        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(newbuf)) };
 
         // Need to set the filename for autocommands.
         let _ = unsafe { setfname(Buf::current(), fname, ptr::null_mut(), false) };

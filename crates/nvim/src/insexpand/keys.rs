@@ -320,7 +320,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
         retval = true;
         // May need to remove ComplMatchIns highlight.
-        unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
+        unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
     }
 
     // When a match was inserted but the pum was never displayed (e.g. only

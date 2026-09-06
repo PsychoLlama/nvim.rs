@@ -175,7 +175,7 @@ pub unsafe fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
     let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_briopt };
-    let for_window = unsafe { local_window(varp, wp, local) };
+    let for_window = unsafe { local_window(varp, Win::new(wp), local) };
     // SAFETY: the option's value is a C string.
     if unsafe { briopt_check(*varp, for_window) } as c_int == FAIL {
         return invalid();
@@ -195,7 +195,7 @@ pub unsafe fn did_set_colorcolumn(args: &mut OptSet) -> Option<&CStr> {
     let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window, and the option's C string value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_cc };
-    unsafe { check_colorcolumn(*varp, local_window(varp, wp, local)) }
+    unsafe { check_colorcolumn(*varp, local_window(varp, Win::new(wp), local)) }
 }
 
 /// # Safety
@@ -249,7 +249,7 @@ pub unsafe fn did_set_guicursor(_args: &mut OptSet) -> Option<&CStr> {
     // The Visual-mode cursor shape is drawn as part of the line.
     if visual_active() {
         // SAFETY: the current window is live.
-        unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
+        unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
     }
     None
 }
@@ -411,7 +411,7 @@ pub unsafe fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
     let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window and value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_scl };
-    if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) }.is_err() {
+    if unsafe { check_signcolumn(*varp, local_window(varp, Win::new(wp), local)) }.is_err() {
         return invalid();
     }
     // "number" shares the sign column with the number column, so
@@ -583,7 +583,7 @@ pub unsafe fn did_set_winhighlight(args: &mut OptSet) -> Option<&CStr> {
     let (wp, varp) = (win(args), varp(args));
     // SAFETY: the frame's window and C string value.
     let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_winhl };
-    if !unsafe { parse_winhl_opt(*varp, local_window(varp, wp, local)) } {
+    if !unsafe { parse_winhl_opt(*varp, local_window(varp, Win::new(wp), local)) } {
         return invalid();
     }
     None

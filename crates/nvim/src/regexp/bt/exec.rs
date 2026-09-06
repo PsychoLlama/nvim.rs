@@ -13,6 +13,10 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::types::Buffer;
+use crate::types::Window;
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::compile::BtProg;
@@ -34,8 +38,7 @@ use crate::regexp::{
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
-    uint32_t,
+    ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, uint8_t, uint32_t,
 };
 
 /// How many start columns may be tried between two reads of the caller's
@@ -403,10 +406,14 @@ pub(crate) unsafe fn bt_regexec_multi(
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
+    // SAFETY: a live buffer.
+    let buffer = unsafe { Buf::new(buffer) };
     // SAFETY: the caller holds the context (`with_rex`) and hands us a live
     // match structure over a live buffer; `init_regexec_multi` points the
     // context at them, which is what `bt_regexec_both` reads it out of.
     let rex = unsafe { Rex::acquire() };
+    // SAFETY: the caller's window (or none) and buffer.
+    let (win, buffer) = unsafe { (Win::from_raw(win), buffer) };
     init_regexec_multi(rex, rmp, win, buffer, lnum);
     bt_regexec_both(rex, core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
 }

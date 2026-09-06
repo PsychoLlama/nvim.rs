@@ -24,7 +24,6 @@ use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
@@ -73,7 +72,7 @@ impl WinLineVars {
         while ptr < end && self.off < window.w_view_width {
             let cells = unsafe {
                 line_putchar(
-                    window.w_buffer,
+                    window.buffer(),
                     &mut ptr,
                     &mut line.chars_mut()[self.off as usize..],
                     window.w_view_width - self.off,
@@ -392,7 +391,7 @@ unsafe fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_c
     let (num, fmt) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
         (lnum, c"%*d ")
     } else {
-        let rel = unsafe { abs(get_cursor_rel_lnum(Win::new(window.raw()), lnum)) } as LineNr;
+        let rel = unsafe { abs(get_cursor_rel_lnum(window, lnum)) } as LineNr;
         if rel == 0 && window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
             (lnum, c"%-*d ")
         } else {
@@ -445,7 +444,7 @@ impl WinLineVars {
                 unsafe {
                     decor_redraw_signs(
                         window,
-                        Buf::new(window.w_buffer),
+                        window.buffer(),
                         self.lnum - 2,
                         ::core::ptr::null_mut(),
                         ::core::ptr::null_mut(),
@@ -582,7 +581,7 @@ impl WinLineVars {
             || virtnum == 0
             || virtnum == self.n_virt_below - self.filler_lines
         {
-            unsafe { abs(get_cursor_rel_lnum(Win::new(window.raw()), lnum)) as LineNr }
+            unsafe { abs(get_cursor_rel_lnum(window, lnum)) as LineNr }
         } else {
             -1
         };
@@ -757,13 +756,12 @@ impl WinLineVars {
             } else {
                 0
             };
-            let mut num = unsafe {
-                get_breakindent_win(window.raw(), ml_get_buf(window.w_buffer, self.lnum))
-            };
+            let mut num =
+                unsafe { get_breakindent_win(window, ml_get_buf(window.buffer(), self.lnum)) };
             if self.row == self.startrow {
                 // The first row of a line whose top is scrolled off: the
                 // indent is measured from the second row's left edge.
-                num -= win_col_off2(unsafe { Win::new(window.raw()) });
+                num -= win_col_off2(window);
                 if self.extra_todo < 0 {
                     num = 0;
                 }

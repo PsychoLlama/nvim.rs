@@ -18,6 +18,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
+use crate::winlayer::Buf;
 use crate::winlayer::TabPage;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
@@ -125,7 +126,7 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
     w.w_set_curswant = true;
     let mut switchwin = SwitchWin::default();
     let any_tab = ptr::null_mut::<Tabpage>();
-    let _ = unsafe { switch_win(&raw mut switchwin, w.raw(), any_tab, true) };
+    let _ = unsafe { switch_win(&raw mut switchwin, w, TabPage::new(any_tab), true) };
     update_topline(Win::current());
     validate_cursor(Win::current());
     unsafe { restore_win(&raw mut switchwin, true) };
@@ -308,7 +309,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
             unsafe { win_close(w, false, false) };
         } else {
             // SAFETY: as above, in the tab page `w` is in rather than this one.
-            unsafe { win_close_othertab(w.raw(), 0, TabPage::new(tabpage), false) };
+            unsafe { win_close_othertab(w, 0, TabPage::new(tabpage), false) };
         }
     });
     ().reported(err)
@@ -350,7 +351,8 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
         let mut res = Object::Nil;
         // SAFETY: `switch_args` is this frame's own and nothing the call runs
         // can reach it.
-        let switched = unsafe { win_execute_before(&raw mut switch_args, w.raw(), tabpage) };
+        let switched =
+            unsafe { win_execute_before(&raw mut switch_args, w, TabPage::new(tabpage)) };
         if switched {
             let no_arena = ptr::null_mut::<Arena>();
             let name = ptr::null::<::core::ffi::c_char>();
@@ -420,11 +422,13 @@ pub unsafe fn nvim_win_text_height(
     // SAFETY: as above; `buf` is live and `oob` is this frame's own.
     if set(OPTIDX_START_ROW) {
         let row = unsafe { (*opts).start_row } as int64_t;
-        start_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
+        start_lnum =
+            number_as_int(unsafe { normalize_index(Buf::new(buf), row, false, &raw mut oob) });
     }
     if set(OPTIDX_END_ROW) {
         let row = unsafe { (*opts).end_row } as int64_t;
-        end_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
+        end_lnum =
+            number_as_int(unsafe { normalize_index(Buf::new(buf), row, false, &raw mut oob) });
     }
     if oob {
         return Err(Error::validation(c"Line index out of bounds"));

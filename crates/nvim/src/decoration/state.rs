@@ -63,7 +63,7 @@ use crate::marktree::{
 use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::types::{
-    Buffer, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
+    DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
     VirtTextPos, uint32_t,
 };
@@ -226,11 +226,11 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
 ///
 /// # Safety
 /// `buffer` must be live or null.
-pub unsafe fn decor_state_invalidate(buffer: *mut Buffer) {
+pub unsafe fn decor_state_invalidate(buffer: Buf) {
     decor_state.with_mut(|state| {
         // SAFETY: `state.win` is a live window while a redraw is running.
         if let Some(win) = unsafe { Win::from_raw(state.win) } {
-            state.itr_valid &= win.w_buffer != buffer;
+            state.itr_valid &= win.w_buffer != buffer.raw();
         }
     });
 }

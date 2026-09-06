@@ -49,7 +49,7 @@ pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
 pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     let cur = Win::current();
     // SAFETY: a live window.
-    if unsafe { check_split_disallowed(cur.raw()) } == FAIL {
+    if unsafe { check_split_disallowed(cur) } == FAIL {
         return Err(Failed);
     }
     // When the ":tab" modifier was used, open a new tab page instead.
@@ -797,7 +797,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_fraction = oldp.w_fraction;
     newp.w_prev_fraction_row = oldp.w_prev_fraction_row;
     // SAFETY: two live windows.
-    unsafe { copy_jumplist(oldp.raw(), newp.raw()) };
+    unsafe { copy_jumplist(oldp, newp) };
     if flags & WSP_NEWLOC as c_int != 0 {
         // Don't copy the location list.
         newp.w_llist = ptr::null_mut::<QfInfo>();
@@ -838,7 +838,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     unsafe { (*newp.w_alist).al_refcount.retain() };
     newp.w_arg_idx = oldp.w_arg_idx;
     // SAFETY: two live windows.
-    unsafe { win_copy_options(oldp.raw(), newp.raw()) };
+    unsafe { win_copy_options(oldp, newp) };
     newp.w_winbar_height = oldp.w_winbar_height;
 }
 

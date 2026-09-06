@@ -732,7 +732,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         pos.col -= 1;
         // SAFETY: `curbuf` is set from startup to exit, and `pos` is lent for
         // the length of the call.
-        unsafe { mark_mb_adjustpos(Buf::current_raw(), pos) };
+        unsafe { mark_mb_adjustpos(Buf::current(), pos) };
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.

@@ -704,7 +704,7 @@ pub fn u_find_first_changed() {
     let mut lnum: LineNr = 1;
     while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
         let saved = unsafe { *(*uep).ue_array.offset((lnum - 1) as isize) };
-        if !unsafe { cstr::eq(ml_get_buf(b.raw(), lnum), saved) } {
+        if !unsafe { cstr::eq(ml_get_buf(b, lnum), saved) } {
             clearpos(&mut uhp.uh_cursor);
             uhp.uh_cursor.lnum = lnum;
             return;

@@ -255,7 +255,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
         return Ok(());
     }
     // SAFETY: a live window.
-    if is_autocmd_window(Some(window)) || unsafe { check_split_disallowed(window.raw()) } == FAIL {
+    if is_autocmd_window(Some(window)) || unsafe { check_split_disallowed(window) } == FAIL {
         return Err(Failed);
     }
 

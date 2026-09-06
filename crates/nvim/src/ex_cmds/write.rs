@@ -335,7 +335,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // command block is the one borrowed here.
     let retval = unsafe {
         buf_write(
-            Buf::current_raw(),
+            Buf::current(),
             ffname,
             fname,
             line1,
@@ -711,7 +711,7 @@ unsafe fn write_one_buffer(
     } else {
         let bufref = BufRef::of(buffer);
         if unsafe { handle_mkdir_p_arg(args, buffer.b_fname) }.is_err()
-            || unsafe { buf_write_all(buffer.raw(), args.forceit != 0) }.is_err()
+            || unsafe { buf_write_all(buffer, args.forceit != 0) }.is_err()
         {
             *error += 1;
         }
@@ -840,13 +840,13 @@ pub unsafe fn getfile(
     if other
         && !forceit
         && Buf::current().b_nwindows == 1
-        && !unsafe { buf_hide(Buf::current_raw()) }
+        && !unsafe { buf_hide(Buf::current()) }
         && curbuf_is_changed()
         && unsafe { autowrite(Buf::current_raw(), forceit) }.is_err()
     {
         if p_confirm.get() != 0 && p_write.get() != 0 {
             // SAFETY: as above.
-            unsafe { dialog_changed(Buf::current_raw(), false) };
+            unsafe { dialog_changed(Buf::current(), false) };
         }
         // SAFETY: as above.
         if curbuf_is_changed() {
@@ -882,7 +882,7 @@ pub unsafe fn getfile(
             sfname,
             ptr::null_mut(),
             lnum,
-            EcmdFlags::HIDE.when(buf_hide(Buf::current_raw())) | EcmdFlags::FORCEIT.when(forceit),
+            EcmdFlags::HIDE.when(buf_hide(Buf::current())) | EcmdFlags::FORCEIT.when(forceit),
             Win::current_raw(),
         )
     }

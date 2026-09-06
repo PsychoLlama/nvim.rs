@@ -360,7 +360,7 @@ unsafe fn do_filter(
             // SAFETY: `args` is live and the range is the current buffer's.
             && unsafe {
                 buf_write(
-                    Buf::current_raw(),
+                    Buf::current(),
                     TempFile::name(&itmp),
                     ptr::null_mut(),
                     line1,

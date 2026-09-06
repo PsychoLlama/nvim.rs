@@ -516,7 +516,7 @@ impl DoTag {
             self.current().fmark.mark = cursor;
             self.current().fmark.fnum = Buf::current().handle;
             // SAFETY: `curwin` is live and `cursor` is a position in it.
-            self.current().fmark.view = unsafe { mark_view_make(Win::current_raw(), cursor) };
+            self.current().fmark.view = unsafe { mark_view_make(Win::current(), cursor) };
         }
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an

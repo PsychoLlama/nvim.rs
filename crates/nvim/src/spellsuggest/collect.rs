@@ -247,7 +247,7 @@ pub(super) unsafe fn check_suggestions(su: *mut SugInfo, gap: *mut Vec<Suggest>)
         unsafe { xstrlcpy(tail, rest, MAXWLEN + 1 - len as usize) };
 
         let mut attr: Hlf = HLF_COUNT;
-        let win = Win::current_raw();
+        let win = Win::current();
         let longwordp = longword.as_mut_ptr();
         let attrp = &raw mut attr;
         // SAFETY: `longword` is NUL-terminated by the copies above and

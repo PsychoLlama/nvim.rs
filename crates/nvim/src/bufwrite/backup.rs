@@ -63,12 +63,12 @@ pub(crate) struct Backup {
 ///
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
-unsafe fn check_mtime(buffer: *mut Buffer, file_info: *mut FileInfo) -> bool {
-    if unsafe { (*buffer).b_mtime_read } == 0
+unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
+    if buffer.b_mtime_read == 0
         || !time_differs(
             unsafe { &*file_info },
-            unsafe { (*buffer).b_mtime_read },
-            unsafe { (*buffer).b_mtime_read_ns },
+            buffer.b_mtime_read,
+            buffer.b_mtime_read_ns,
         )
     {
         return true;
@@ -124,7 +124,7 @@ unsafe fn get_fileinfo_os(
 /// `Err(None)` is the user declining the "file has changed since reading it"
 /// prompt — a failure with nothing left to report.
 pub(crate) unsafe fn get_fileinfo(
-    buffer: *mut Buffer,
+    buffer: Buf,
     fname: *mut c_char,
     overwriting: bool,
     forceit: bool,
@@ -673,7 +673,7 @@ pub(crate) unsafe fn open_write_file(
 /// Sync and close the file just written, and give it the original's
 /// ownership, permissions and ACL.
 pub(crate) unsafe fn finish_write(
-    buffer: *mut Buffer,
+    buffer: Buf,
     fd: c_int,
     wfname: *mut c_char,
     target: &TargetFile,
@@ -687,8 +687,8 @@ pub(crate) unsafe fn finish_write(
     // meta-data is journalled. Syncing slows the system down but assures
     // the data reached the disk. For a device the fsync is attempted but
     // not complained about; it could be a pipe.
-    let fsync = if unsafe { (*buffer).b_p_fs } >= 0 {
-        unsafe { (*buffer).b_p_fs }
+    let fsync = if buffer.b_p_fs >= 0 {
+        buffer.b_p_fs
     } else {
         p_fs.get()
     };
@@ -719,9 +719,9 @@ pub(crate) unsafe fn finish_write(
                 unsafe { os_setperm(wfname, target.perm) }; // may have changed
             }
         }
-        unsafe { buf_set_file_id(Buf::new(buffer)) };
-    } else if !unsafe { (*buffer).file_id_valid } {
-        unsafe { buf_set_file_id(Buf::new(buffer)) }; // the file is new
+        unsafe { buf_set_file_id(buffer) };
+    } else if !buffer.file_id_valid {
+        unsafe { buf_set_file_id(buffer) }; // the file is new
     }
 
     let error = unsafe { os_close(fd) };

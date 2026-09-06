@@ -21,6 +21,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::memline::MlFlags;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -51,7 +52,7 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlOpt, String_0, Tabpage, Window, int64_t, ssize_t,
+    ScreenChar, StlOpt, String_0, Tabpage, int64_t, ssize_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
@@ -96,17 +97,13 @@ impl Target {
     ///
     /// # Safety
     /// `window` must be null or a live window.
-    unsafe fn of(
-        window: *mut Window,
-        draw_winbar: bool,
-        draw_ruler: bool,
-    ) -> Option<(Target, Source)> {
+    unsafe fn of(mut window: Win, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
         // SAFETY: the caller's promise.
-        let win = unsafe { win_opt(window) };
+        let win = Some(window);
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
         // SAFETY: a floating window owns its grid allocation.
-        let own = || unsafe { GridRef::new(&raw mut (*window).w_grid_alloc) };
+        let mut own = || unsafe { GridRef::new(&raw mut window.w_grid_alloc) };
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 
@@ -133,7 +130,7 @@ impl Target {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_wbr);
             let mut row = -1; // Row zero is the first row of text.
             // SAFETY: a live window whose grid view is live.
-            canvas = unsafe { grid_adjust((*window).w_grid, &mut row, &mut col) };
+            canvas = unsafe { grid_adjust(window.w_grid, &mut row, &mut col) };
             if row < 0 {
                 return None;
             }
@@ -455,7 +452,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
 /// `window` must be null or a live window. Expanding the format re-enters the
 /// editor, so nothing may be held across this.
 pub(crate) unsafe fn win_redr_custom(
-    window: *mut Window,
+    window: Win,
     draw_winbar: bool,
     draw_ruler: bool,
     ui_event: bool,
@@ -476,14 +473,12 @@ pub(crate) unsafe fn win_redr_custom(
 ///
 /// # Safety
 /// As [`win_redr_custom`].
-unsafe fn draw_custom(window: *mut Window, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
+unsafe fn draw_custom(window: Win, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
     // SAFETY: the caller's promise.
     let Some((target, source)) = (unsafe { Target::of(window, draw_winbar, draw_ruler) }) else {
         return;
     };
-    // SAFETY: the caller's promise; `curwin` is live from startup to exit.
-    let (win, mut ewp) = unsafe { (win_opt(window), win_opt(window).unwrap_or(Win::current())) };
-    let _ = &ewp;
+    let (win, mut ewp) = (Some(window), window);
 
     // Temporarily reset 'cursorbind': a side effect from moving the cursor
     // away and back is not wanted.
@@ -541,7 +536,7 @@ unsafe fn draw_custom(window: *mut Window, draw_winbar: bool, draw_ruler: bool, 
 /// # Safety
 /// `window` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn win_redr_winbar(window: *mut Window) {
+pub unsafe fn win_redr_winbar(window: Win) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // Reached recursively when the winbar contains an expression that
     // triggers a redraw.
@@ -550,7 +545,7 @@ pub unsafe fn win_redr_winbar(window: *mut Window) {
     }
     ENTERED.set(true);
     // SAFETY: the caller's promise.
-    let win = unsafe { Win::new(window) };
+    let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()
         && (!opt_is_empty(p_wbr.get()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
@@ -622,7 +617,7 @@ pub unsafe fn redraw_ruler() {
         && (p_ch.get() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
     {
         // SAFETY: a live window; this evaluates the option.
-        unsafe { win_redr_custom(win.raw(), false, true, ui_has(kUIMessages)) };
+        unsafe { win_redr_custom(win, false, true, ui_has(kUIMessages)) };
         return;
     }
 
@@ -720,7 +715,7 @@ pub unsafe fn redraw_ruler() {
 fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
     // SAFETY: a live window's cursor line, which is NUL-terminated.
-    let first = unsafe { *ml_get_buf(win.buffer().raw(), win.w_cursor.lnum) };
+    let first = unsafe { *ml_get_buf(Buf::new(win.buffer().raw()), win.w_cursor.lnum) };
     let empty_line = State.get() & MODE_INSERT == 0 && c_int::from(first) == NUL;
     let lnum = if empty_buffer {
         0 as int64_t

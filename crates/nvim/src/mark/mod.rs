@@ -429,9 +429,8 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
 
 /// # Safety
 /// `window` must be a live window.
-pub unsafe fn mark_view_make(window: *const Window, pos: Pos) -> FileMarkView {
-    // SAFETY: the caller promised a live window.
-    mark_view_make_at(unsafe { Win::new(window.cast_mut()) }, pos)
+pub unsafe fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
+    mark_view_make_at(window, pos)
 }
 
 /// The view [`mark_view_make`] records: how far below the window's topline the
@@ -638,7 +637,7 @@ pub unsafe fn set_last_cursor(win: Win) {
 /// # Safety
 /// `buffer` must be a live buffer and `pos` must point at a live, writable
 /// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buffer: *mut Buffer, pos: *mut Pos) {
+pub unsafe fn mark_mb_adjustpos(buffer: Buf, pos: *mut Pos) {
     // SAFETY: the caller promised a live position.
     let mut adjusted = unsafe { *pos };
     if adjusted.col <= 0 && adjusted.coladd <= 1 {

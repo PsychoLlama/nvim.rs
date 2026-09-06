@@ -221,7 +221,7 @@ impl BreakindentCache {
     /// and `flp` NUL-terminated strings.
     unsafe fn refill(
         &mut self,
-        window: *mut Window,
+        window: Win,
         key: &BreakindentKey,
         line: *mut c_char,
         flp: *const c_char,
@@ -234,7 +234,7 @@ impl BreakindentCache {
         self.flp = unsafe { xstrdup(flp) };
         self.key = *key;
         self.list = 0;
-        if unsafe { (*window).w_briopt_vcol } != 0 {
+        if window.w_briopt_vcol != 0 {
             // A fixed column needs no measurement.
             return;
         }
@@ -243,7 +243,7 @@ impl BreakindentCache {
         } else {
             unsafe { indent_size_ts(line, key.ts, key.vts) }
         };
-        if unsafe { (*window).w_briopt_list } != 0 {
+        if window.w_briopt_list != 0 {
             unsafe { self.add_list_indent(window, line) };
         }
     }
@@ -255,7 +255,7 @@ impl BreakindentCache {
     /// # Safety
     /// `window` must be a window and `line` a NUL-terminated string; `self.flp`
     /// must hold the current 'formatlistpat'.
-    unsafe fn add_list_indent(&mut self, window: *mut Window, line: *mut c_char) {
+    unsafe fn add_list_indent(&mut self, window: Win, line: *mut c_char) {
         // SAFETY: the caller's window and line, and the cache's own pattern.
         let mut regmatch: RegMatch = RegMatch {
             regprog: unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
@@ -268,8 +268,8 @@ impl BreakindentCache {
             return;
         }
         if unsafe { vim_regexec(&raw mut regmatch, line, 0 as ColNr) } {
-            if unsafe { (*window).w_briopt_list } > 0 {
-                self.list += unsafe { (*window).w_briopt_list };
+            if window.w_briopt_list > 0 {
+                self.list += window.w_briopt_list;
             } else {
                 // Measure the match with `win_chartabsize`, so that a TAB
                 // is the right width and wrapping is ignored.
@@ -277,7 +277,7 @@ impl BreakindentCache {
                 let mut ptr = regmatch.startp[0];
                 let mut indent = 0;
                 while ptr < end {
-                    indent += unsafe { win_chartabsize(Win::new(window), ptr, indent as ColNr) };
+                    indent += unsafe { win_chartabsize(window, ptr, indent as ColNr) };
                     ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
                 }
                 self.indent = indent;
@@ -293,10 +293,10 @@ impl BreakindentCache {
 ///
 /// # Safety
 /// `window` must be a window and `line` a NUL-terminated string.
-pub unsafe fn get_breakindent_win(window: *mut Window, line: *mut c_char) -> c_int {
+pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
     // SAFETY: the caller's window and its buffer.
     // SAFETY: the caller's window; a live window has a live buffer.
-    let win = unsafe { Win::new(window) };
+    let win = window;
     let buf = win.buffer();
     let key = BreakindentKey {
         fnum: buf.handle,
@@ -317,7 +317,7 @@ pub unsafe fn get_breakindent_win(window: *mut Window, line: *mut c_char) -> c_i
     // SAFETY: a live window.
     let (col_off2, flp) = (win_col_off2(win), get_flp_value(buf));
     // The window width minus its margins: what is left for text.
-    let eff_wwidth = win.w_view_width - unsafe { (Win::new(window)).col_off() } + col_off2;
+    let eff_wwidth = win.w_view_width - (window).col_off() + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.

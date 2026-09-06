@@ -279,7 +279,7 @@ fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     // Only on a keyword character that follows a non-keyword one.
     let line = syn_getcurline();
     let cur_pos = unsafe { line.offset(current_col.get() as isize) };
-    if !unsafe { vim_iswordp_buf(cur_pos, syn_buf.get()) } {
+    if !unsafe { vim_iswordp_buf(cur_pos, syn_buffer()) } {
         return None;
     }
     if current_col.get() != 0 {
@@ -287,7 +287,7 @@ fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
         // SAFETY: `prev` is inside the line the parser is on.
         let head = unsafe { prev.offset(-(utf_head_off(line, prev) as isize)) };
         // SAFETY: the buffer the parser was started for.
-        if unsafe { vim_iswordp_buf(head, syn_buf.get()) } {
+        if unsafe { vim_iswordp_buf(head, syn_buffer()) } {
             return None;
         }
     }

@@ -418,7 +418,7 @@ pub unsafe fn delete_fold(
         emsg_nofold();
         if had_visual {
             // SAFETY: `win` is live, so its buffer is.
-            unsafe { redraw_buf_later(win.w_buffer, UPD_INVERTED) };
+            unsafe { redraw_buf_later(win.buffer(), UPD_INVERTED) };
         }
     } else {
         // SAFETY: the caller's promise.

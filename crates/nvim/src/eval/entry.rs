@@ -681,7 +681,8 @@ pub unsafe fn eval_foldexpr(window: *mut Window, marker: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
     // SAFETY: the caller's promise -- a live window.
-    let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL) };
+    let use_sandbox =
+        unsafe { was_set_insecurely(Win::new(window), kOptFoldexpr, OptionSetFlags::LOCAL) };
     // SAFETY: as above; the window outlives this call.
     let window = unsafe { Win::new(window) };
     // SAFETY: an option string is NUL-terminated.
@@ -735,7 +736,7 @@ pub unsafe fn eval_foldexpr(window: *mut Window, marker: *mut c_int) -> c_int {
 ///
 /// # Safety
 /// `window` must be valid.
-pub unsafe fn eval_foldtext(window: *mut Window) -> Object {
+pub unsafe fn eval_foldtext(window: Win) -> Object {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     /// The empty String an error answers with.
@@ -746,7 +747,7 @@ pub unsafe fn eval_foldtext(window: *mut Window) -> Object {
     // SAFETY: the caller's promise -- a live window.
     let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL) };
     // SAFETY: as above; the window outlives this call.
-    let arg = unsafe { Win::new(window) }.w_onebuf_opt.wo_fdt;
+    let arg = window.w_onebuf_opt.wo_fdt;
     let mut funccal_entry = FuncCallEntry {
         top_funccal: null_mut(),
         next: null_mut(),

@@ -30,6 +30,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::{FR_COL, FR_ROW, FRACTION_MULT, NOWIN};
@@ -79,8 +80,8 @@ impl NextCurwin {
 
     /// Whether this asks about `win` in particular — the C's
     /// `topfrp->fr_win == next_curwin`, which neither sentinel can satisfy.
-    fn is(self, win: *mut Window) -> bool {
-        self == Self::Win(win)
+    fn is(self, win: Win) -> bool {
+        self == Self::Win(win.raw())
     }
 }
 
@@ -104,7 +105,7 @@ pub fn frame_minheight(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize)
     if let Some(win) = topfrp.win() {
         // Combined height of window bar and separator column or status line.
         let extra_height = win.w_winbar_height + win.w_hsep_height + win.w_status_height;
-        if next_curwin.is(win.raw()) {
+        if next_curwin.is(win) {
             // Saturating: `'winheight'` is an unclamped option.
             return opts.wanted.saturating_add(extra_height);
         }
@@ -133,7 +134,7 @@ pub fn frame_minheight(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize)
 /// sum, and the separator column standing in for the status line.
 pub fn frame_minwidth(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize) -> c_int {
     if let Some(win) = topfrp.win() {
-        if next_curwin.is(win.raw()) {
+        if next_curwin.is(win) {
             // Saturating: `'winwidth'` is an unclamped option.
             return opts.wanted.saturating_add(win.w_vsep_width);
         }

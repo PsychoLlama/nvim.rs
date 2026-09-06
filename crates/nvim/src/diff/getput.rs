@@ -221,7 +221,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
     if put {
         let other = tp.tp_diffbuf[idx_other as usize];
         // SAFETY: `aco` is a local, and `other` a live buffer of the diff.
-        unsafe { aucmd_prepbuf(&raw mut aco, other) };
+        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(other)) };
     }
     let (idx_from, idx_to) = if put {
         (idx_cur, idx_other)
@@ -357,7 +357,7 @@ fn diffgetput(
             }
 
             // SAFETY: the current buffer is live.
-            let mut buf_empty = unsafe { buf_is_empty(Buf::current_raw()) };
+            let mut buf_empty = unsafe { buf_is_empty(Buf::current()) };
             let mut added: c_int = 0;
             for _ in 0..count {
                 buf_empty = Buf::current().b_ml.ml_line_count == 1 as LineNr;
@@ -375,7 +375,7 @@ fn diffgetput(
                     break;
                 }
                 // SAFETY: a live buffer and a line number inside it.
-                let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
+                let p = unsafe { xstrdup(ml_get_buf(Buf::new(src), nr)) };
                 // SAFETY: the editor exists; `p` is our own copy of the line.
                 let _ = unsafe { ml_append(lnum + i - 1 as LineNr, p, 0 as ColNr, false) };
                 unsafe { xfree(p.cast()) };

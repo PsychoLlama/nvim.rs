@@ -94,7 +94,7 @@ unsafe fn qf_jump_edit_buffer(
     let opened = if qf_ptr.qf_type == 1 {
         // A help file: `do_ecmd` sets 'buftype', `readfile` sets
         // 'readonly'.
-        if !unsafe { can_abandon(Buf::current_raw(), forceit != 0) } {
+        if !unsafe { can_abandon(Buf::current(), forceit != 0) } {
             no_write_message();
             return Jumped::Restore;
         }
@@ -277,7 +277,7 @@ unsafe fn qf_jump_print_msg(
     qi: *mut QfInfo,
     qf_index: c_int,
     qf_ptr: *mut QfLine,
-    old_curbuf: *mut Buffer,
+    old_curbuf: Buf,
     old_lnum: LineNr,
 ) {
     // SAFETY: the caller's promise -- a live entry on a live stack.
@@ -325,7 +325,7 @@ unsafe fn qf_jump_print_msg(
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
     let old_msg_scroll = msg_scroll.get();
-    if Buf::current_raw() == old_curbuf && Win::current().w_cursor.lnum == old_lnum {
+    if Buf::current_raw() == old_curbuf.raw() && Win::current().w_cursor.lnum == old_lnum {
         msg_scroll.set(true as c_int);
     } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
         && shortmess(ShmFlag::OVERALL)
@@ -426,7 +426,7 @@ unsafe fn qf_jump_to_buffer(
         unsafe { fold_open_cursor() };
     }
     if print_message {
-        unsafe { qf_jump_print_msg(qi, qf_index, qf_ptr.raw(), old_curbuf, old_lnum) };
+        unsafe { qf_jump_print_msg(qi, qf_index, qf_ptr.raw(), Buf::new(old_curbuf), old_lnum) };
     }
     Jumped::Done
 }

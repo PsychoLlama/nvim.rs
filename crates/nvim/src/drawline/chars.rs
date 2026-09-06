@@ -429,7 +429,7 @@ impl Cells {
         unsafe { (*f.spv).spv_cap_col -= prev_at as ::core::ffi::c_int };
         let tmplen = unsafe {
             spell_check(
-                window.raw(),
+                window,
                 p,
                 &raw mut spell_hlf,
                 &raw mut (*f.spv).spv_cap_col,
@@ -528,7 +528,7 @@ impl Cells {
 
         let mut csarg = CharsizeArg::default();
         // `lnum` 0: virtual text is not to be counted here.
-        let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(window.raw()), 0, self.line) };
+        let cstype = unsafe { init_charsize_arg(&mut csarg, window, 0, self.line) };
         wlv.extra_todo =
             unsafe { win_charsize(cstype, wlv.vcol, p, utf_ptr2char_info(p).value, &mut csarg) }
                 .width

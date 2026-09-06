@@ -151,9 +151,9 @@ fn len(p: *const c_char) -> size_t {
 }
 
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
-fn edit(ea: Ex, old_curwin: *mut Window) {
+fn edit(ea: Ex, old_curwin: Option<Win>) {
     // SAFETY: a live command, and a live window or null.
-    unsafe { do_exedit(ea.raw(), old_curwin) };
+    unsafe { do_exedit(ea.raw(), old_curwin.map_or(ptr::null_mut(), Win::raw)) };
 }
 
 /// `get_tabpage_arg()`: the tab page number the command names, setting
@@ -243,7 +243,7 @@ fn splitview(mut ea: Ex) {
     }
 
     if use_tab {
-        open_tabpage(ea, old_curwin);
+        open_tabpage(ea, unsafe { Win::new(old_curwin) });
     } else if split(ea.count(0), vertical_flag(ea.cmd)).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
@@ -253,7 +253,7 @@ fn splitview(mut ea: Ex) {
             // SAFETY: reads the window list and the current window.
             unsafe { do_check_scrollbind(false) };
         }
-        edit(ea, old_curwin);
+        edit(ea, unsafe { Win::from_raw(old_curwin) });
     }
     free(fname);
 }
@@ -297,7 +297,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
 ///
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
-fn open_tabpage(ea: Ex, old_curwin: *mut Window) {
+fn open_tabpage(ea: Ex, old_curwin: Win) {
     let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
         cmdmod.with(|m| m.cmod_tab)
     } else if ea.addr_count == 0 {
@@ -308,15 +308,15 @@ fn open_tabpage(ea: Ex, old_curwin: *mut Window) {
     if new_tabpage(after, ea.arg, true).is_none() {
         return;
     }
-    edit(ea, old_curwin);
+    edit(ea, Some(old_curwin));
     let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_raw());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
     unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };
 
     // The window left behind gets the new buffer as its alternate file.
-    if Win::current_raw() != old_curwin
-        && let Some(mut old) = valid_win(old_curwin)
+    if Win::current_raw() != old_curwin.raw()
+        && let Some(mut old) = valid_win(old_curwin.raw())
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
@@ -439,16 +439,12 @@ pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
         unsafe { vim_snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
         msg_line(&line, HLF_T);
         os_breakcheck();
-        list_tab_windows(tp, lastused_win, &mut line);
+        list_tab_windows(tp, unsafe { Win::new(lastused_win) }, &mut line);
     }
 }
 
 /// The `:tabs` entry for each window of `tabpage`.
-fn list_tab_windows(
-    tabpage: TabPage,
-    lastused_win: *mut Window,
-    line: &mut [c_char; IOSIZE as usize],
-) {
+fn list_tab_windows(tabpage: TabPage, lastused_win: Win, line: &mut [c_char; IOSIZE as usize]) {
     for wp in windows_in_tab(tabpage) {
         if got_int.get() {
             break;
@@ -460,7 +456,7 @@ fn list_tab_windows(
         msg_char('\n' as c_int);
         msg_char(if wp.is_current() {
             '>' as c_int
-        } else if ptr::eq(wp.raw(), lastused_win) {
+        } else if ptr::eq(wp.raw(), lastused_win.raw()) {
             '#' as c_int
         } else {
             ' ' as c_int
@@ -482,7 +478,7 @@ fn list_tab_windows(
 /// its file name with the home directory folded back to `~`.
 fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
     // SAFETY: a live buffer; the answer is a static name or null.
-    let special = unsafe { buf_spname(buffer.raw()) };
+    let special = unsafe { buf_spname(buffer) };
     let (raw, fname) = (buffer.raw(), buffer.b_fname);
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
@@ -683,15 +679,15 @@ pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
 pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
-    let curwin_save = Win::current_raw();
+    let curwin_save = Win::current();
     prepare_preview_window();
-    edit(ea, ptr::null_mut());
+    edit(ea, None);
     back_to_current_window(curwin_save);
 }
 
 /// `:pbuffer`.
 pub(crate) unsafe fn ex_pbuffer(args: *mut ExArg) {
-    let curwin_save = Win::current_raw();
+    let curwin_save = Win::current();
     prepare_preview_window();
     // SAFETY: the caller's promise -- a live command.
     do_exbuffer(unsafe { Ea::new(args) });
@@ -706,9 +702,9 @@ fn prepare_preview_window() {
 }
 
 /// Go back to the window `:pedit` was run from, if it is still there.
-fn back_to_current_window(curwin_save: *mut Window) {
-    if Win::current_raw() != curwin_save
-        && let Some(saved) = valid_win(curwin_save)
+fn back_to_current_window(curwin_save: Win) {
+    if Win::current_raw() != curwin_save.raw()
+        && let Some(saved) = valid_win(curwin_save.raw())
     {
         // The preview window is left drawn but not current.
         Win::current().validate_cursor();

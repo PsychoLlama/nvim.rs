@@ -145,7 +145,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool)
     }
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
-    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
+    let lnum = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
     if did_emsg.get() == did_emsg_before {
         unsafe { set_buffer_lines(buf, lnum, append, args.ptr(2), result) };
     }
@@ -198,12 +198,12 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
-    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
+    let lnum = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let end = if args.has(2) {
-        unsafe { arg_lnum_buf(args, 2, buf) }
+        unsafe { arg_lnum_buf(args, 2, Buf::new(buf)) }
     } else {
         lnum
     };
@@ -285,12 +285,12 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if buf.is_null() {
         return;
     }
-    let first = unsafe { arg_lnum_buf(args, 1, buf) };
+    let first = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let mut last = if args.has(2) {
-        unsafe { arg_lnum_buf(args, 2, buf) }
+        unsafe { arg_lnum_buf(args, 2, Buf::new(buf)) }
     } else {
         first
     };

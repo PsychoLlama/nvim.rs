@@ -30,7 +30,7 @@ pub unsafe fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
     for lnum in 1..=buffer.b_ml.ml_line_count {
         // SAFETY: a live buffer, so every line up to its own count is there.
-        let line: *mut c_char = unsafe { ml_get_buf(buffer.raw(), lnum) };
+        let line: *mut c_char = unsafe { ml_get_buf(buffer, lnum) };
         // The terminating NUL goes in too, as a line separator.
         // SAFETY: that line, NUL-terminated, as `ml_get_buf` hands it back.
         let bytes =

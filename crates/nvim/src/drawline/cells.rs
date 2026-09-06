@@ -39,6 +39,7 @@ use super::*;
 use crate::r#move::WinValid;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 
 /// The filler that stands in for the half of a double-width character that
 /// did not fit, at either edge of the text.
@@ -422,7 +423,7 @@ impl Cells {
         at: ::core::ffi::c_int,
     ) {
         // SAFETY: the caller's window and line.
-        self.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+        self.line = unsafe { ml_get_buf(window.buffer(), lnum) };
         self.ptr = unsafe { self.line.offset(at as isize) };
     }
 
@@ -451,7 +452,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buffer: *mut Buffer,
+        buffer: Buf,
         f: &LineFrame,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
@@ -599,7 +600,7 @@ impl Cells {
         if self.did_cursor_col
             || wlv.filler_todo > 0
             || !self.in_curline
-            || !unsafe { conceal_cursor_line(window.raw()) }
+            || !unsafe { conceal_cursor_line(window) }
             || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol
                 || self.cell_char == NUL as ScreenChar)
         {

@@ -137,16 +137,16 @@ fn dup_static(name: &CStr) -> *mut c_char {
 ///
 /// Both windows must be live, and `wp_to`'s option fields uninitialised or
 /// already released.
-pub(crate) unsafe fn win_copy_options(wp_from: *mut Window, wp_to: *mut Window) {
+pub(crate) unsafe fn win_copy_options(wp_from: Win, wp_to: Win) {
     // SAFETY: the caller's windows; naming a field of one reads nothing,
     // so the four addresses below are ordinary checked code.
     let one = (
-        win_field!(wp_from, w_onebuf_opt),
-        win_field!(wp_to, w_onebuf_opt),
+        win_field!(wp_from.raw(), w_onebuf_opt),
+        win_field!(wp_to.raw(), w_onebuf_opt),
     );
     let all = (
-        win_field!(wp_from, w_allbuf_opt),
-        win_field!(wp_to, w_allbuf_opt),
+        win_field!(wp_from.raw(), w_allbuf_opt),
+        win_field!(wp_to.raw(), w_allbuf_opt),
     );
     unsafe { copy_winopt(one.0, one.1) };
     unsafe { copy_winopt(all.0, all.1) };
@@ -292,11 +292,11 @@ fn winopt_strings(wop: *mut WinOpt) -> [*mut *mut c_char; 23] {
 /// # Safety
 ///
 /// `win` must be a live window.
-pub(crate) unsafe fn check_win_options(win: *mut Window) {
+pub(crate) unsafe fn check_win_options(win: Win) {
     // SAFETY: the caller's window, whose two option sets the addresses
     // below name without reading it.
-    unsafe { check_winopt(win_field!(win, w_onebuf_opt)) };
-    unsafe { check_winopt(win_field!(win, w_allbuf_opt)) };
+    unsafe { check_winopt(win_field!(win.raw(), w_onebuf_opt)) };
+    unsafe { check_winopt(win_field!(win.raw(), w_allbuf_opt)) };
 }
 
 /// Replace any null string value with the shared unset string.
@@ -334,11 +334,11 @@ pub(crate) unsafe fn clear_winopt(wop: *mut WinOpt) {
 /// # Safety
 ///
 /// `window` must be a live window.
-pub(crate) unsafe fn didset_window_options(window: *mut Window, valid_cursor: bool) {
+pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
     // SAFETY: the caller's window. The handle borrows it for the one field
     // access that asked and never across a call, so none of the callees
     // below is reached while a `&mut Window` is live.
-    let mut w = unsafe { Win::new(window) };
+    let mut w = window;
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
     if w.w_onebuf_opt.wo_wrap != 0 {
@@ -349,8 +349,8 @@ pub(crate) unsafe fn didset_window_options(window: *mut Window, valid_cursor: bo
     let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
     // null out-parameters say "report nothing", which each accepts.
-    unsafe { check_colorcolumn(ptr::null_mut(), window) };
-    unsafe { briopt_check(ptr::null_mut(), window) };
+    unsafe { check_colorcolumn(ptr::null_mut(), window.raw()) };
+    unsafe { briopt_check(ptr::null_mut(), window.raw()) };
     let _ = unsafe { fill_culopt_flags(None, w) };
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
@@ -360,10 +360,10 @@ pub(crate) unsafe fn didset_window_options(window: *mut Window, valid_cursor: bo
     let lcs = w.w_onebuf_opt.wo_lcs;
     unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
-    unsafe { parse_winhl_opt(ptr::null(), window) };
-    unsafe { check_blending(Win::new(window)) };
-    unsafe { set_winbar_win(Win::new(window), false, valid_cursor) };
-    let _ = unsafe { check_signcolumn(ptr::null_mut(), window) };
+    unsafe { parse_winhl_opt(ptr::null(), window.raw()) };
+    unsafe { check_blending(window) };
+    unsafe { set_winbar_win(window, false, valid_cursor) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), window.raw()) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 
@@ -396,12 +396,12 @@ fn copy_sctx(mut buffer: Buf, bv: BufOptIndex) {
 /// # Safety
 ///
 /// `buffer` must be a live buffer.
-pub(crate) unsafe fn buf_copy_options(buffer: *mut Buffer, flags: c_int) {
+pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
     let mut did_isk = false;
     // SAFETY: the caller's buffer. Every field write below goes through
     // this handle, which borrows the buffer for the one access that asked
     // and never across a call.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
 
     // Before the defaults exist there is nothing to copy: `main` makes
     // the first buffer that early.
@@ -431,9 +431,9 @@ pub(crate) unsafe fn buf_copy_options(buffer: *mut Buffer, flags: c_int) {
         };
 
         if b.b_p_initialized {
-            unsafe { free_buf_options(Buf::new(buffer), false) };
+            unsafe { free_buf_options(buffer, false) };
         } else {
-            unsafe { free_buf_options(Buf::new(buffer), true) };
+            unsafe { free_buf_options(buffer, true) };
             b.b_p_ro = 0;
             b.b_p_fenc = dup_global(&p_fenc);
             // A new buffer takes the *first* of 'fileformats' rather
@@ -562,7 +562,7 @@ pub(crate) unsafe fn buf_copy_options(buffer: *mut Buffer, flags: c_int) {
         b.b_s.b_p_spc = dup_global(&p_spc);
         copy_sctx(b, kBufOptSpellcapcheck);
         // SAFETY: `b_s` is the buffer's own syntax block.
-        unsafe { compile_cap_prog(buf_field!(buffer, b_s)) };
+        unsafe { compile_cap_prog(buf_field!(buffer.raw(), b_s)) };
         b.b_s.b_p_spf = dup_global(&p_spf);
         copy_sctx(b, kBufOptSpellfile);
         b.b_s.b_p_spl = dup_global(&p_spl);
@@ -595,26 +595,26 @@ pub(crate) unsafe fn buf_copy_options(buffer: *mut Buffer, flags: c_int) {
         b.b_p_fs = -1;
         b.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
         for field in [
-            buf_field!(buffer, b_p_bkc),
-            buf_field!(buffer, b_p_gefm),
-            buf_field!(buffer, b_p_gp),
-            buf_field!(buffer, b_p_mp),
-            buf_field!(buffer, b_p_efm),
-            buf_field!(buffer, b_p_ep),
-            buf_field!(buffer, b_p_ffu),
-            buf_field!(buffer, b_p_kp),
-            buf_field!(buffer, b_p_path),
-            buf_field!(buffer, b_p_tags),
-            buf_field!(buffer, b_p_tc),
-            buf_field!(buffer, b_p_def),
-            buf_field!(buffer, b_p_inc),
-            buf_field!(buffer, b_p_cot),
-            buf_field!(buffer, b_p_dict),
-            buf_field!(buffer, b_p_dia),
-            buf_field!(buffer, b_p_tsr),
-            buf_field!(buffer, b_p_tsrfu),
-            buf_field!(buffer, b_p_lw),
-            buf_field!(buffer, b_p_menc),
+            buf_field!(buffer.raw(), b_p_bkc),
+            buf_field!(buffer.raw(), b_p_gefm),
+            buf_field!(buffer.raw(), b_p_gp),
+            buf_field!(buffer.raw(), b_p_mp),
+            buf_field!(buffer.raw(), b_p_efm),
+            buf_field!(buffer.raw(), b_p_ep),
+            buf_field!(buffer.raw(), b_p_ffu),
+            buf_field!(buffer.raw(), b_p_kp),
+            buf_field!(buffer.raw(), b_p_path),
+            buf_field!(buffer.raw(), b_p_tags),
+            buf_field!(buffer.raw(), b_p_tc),
+            buf_field!(buffer.raw(), b_p_def),
+            buf_field!(buffer.raw(), b_p_inc),
+            buf_field!(buffer.raw(), b_p_cot),
+            buf_field!(buffer.raw(), b_p_dict),
+            buf_field!(buffer.raw(), b_p_dia),
+            buf_field!(buffer.raw(), b_p_tsr),
+            buf_field!(buffer.raw(), b_p_tsrfu),
+            buf_field!(buffer.raw(), b_p_lw),
+            buf_field!(buffer.raw(), b_p_menc),
         ] {
             unsafe { *field = unset_string() };
         }
@@ -647,7 +647,7 @@ pub(crate) unsafe fn buf_copy_options(buffer: *mut Buffer, flags: c_int) {
             // SAFETY: 'buftype' is a string option, so never null, and
             // its variable is the buffer's own.
             if (unsafe { *b.b_p_bt }) as c_int == 'h' as c_int {
-                unsafe { clear_string_option(buf_field!(buffer, b_p_bt)) };
+                unsafe { clear_string_option(buf_field!(buffer.raw(), b_p_bt)) };
             }
             b.b_p_ma = p_ma.get();
             copy_sctx(b, kBufOptModifiable);
@@ -706,9 +706,9 @@ pub(crate) fn reset_modifiable() {
 /// # Safety
 ///
 /// `buffer` must be a live buffer.
-pub(crate) unsafe fn set_iminsert_global(buffer: *mut Buffer) {
+pub(crate) unsafe fn set_iminsert_global(buffer: Buf) {
     // SAFETY: the caller's buffer.
-    p_iminsert.set(unsafe { (*buffer).b_p_iminsert });
+    p_iminsert.set(buffer.b_p_iminsert);
 }
 
 /// As [`set_iminsert_global`], for 'imsearch'.
@@ -716,7 +716,7 @@ pub(crate) unsafe fn set_iminsert_global(buffer: *mut Buffer) {
 /// # Safety
 ///
 /// `buffer` must be a live buffer.
-pub(crate) unsafe fn set_imsearch_global(buffer: *mut Buffer) {
+pub(crate) unsafe fn set_imsearch_global(buffer: Buf) {
     // SAFETY: the caller's buffer.
-    p_imsearch.set(unsafe { (*buffer).b_p_imsearch });
+    p_imsearch.set(buffer.b_p_imsearch);
 }

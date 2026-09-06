@@ -291,7 +291,7 @@ pub(crate) unsafe fn autowrite(buffer: *mut Buffer, forceit: bool) -> Result<(),
         return Err(Failed);
     }
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
-    let r = unsafe { buf_write_all(buffer, forceit) };
+    let r = unsafe { buf_write_all(Buf::new(buffer), forceit) };
 
     // The write can succeed and still leave the buffer changed, e.g. on
     // a conversion error. That is a failure.
@@ -316,7 +316,7 @@ pub(crate) unsafe fn autowrite_all() {
     while let Some(b) = cur {
         if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
             let bufref = BufRef::of(b);
-            let _ = unsafe { buf_write_all(b.raw(), false) };
+            let _ = unsafe { buf_write_all(b, false) };
             if !bufref.valid() {
                 cur = first_buffer();
             }
@@ -369,7 +369,7 @@ pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
     if !bufref.valid() {
         return false;
     }
-    unsafe { dialog_changed(buffer, count > 1) };
+    unsafe { dialog_changed(Buf::new(buffer), count > 1) };
     if !bufref.valid() {
         return false;
     }
@@ -382,7 +382,7 @@ pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_changed(buffer: *mut Buffer, checkall: bool) {
+pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
     let mut ea = ExArg::default();
@@ -393,7 +393,7 @@ pub(crate) unsafe fn dialog_changed(buffer: *mut Buffer, checkall: bool) {
         dialog_msg(
             buff.as_mut_ptr(),
             c"Save changes to \"%s\"?".as_ptr().cast_mut(),
-            (*buffer).b_fname,
+            buffer.b_fname,
         )
     };
     let ret = if checkall {
@@ -403,12 +403,12 @@ pub(crate) unsafe fn dialog_changed(buffer: *mut Buffer, checkall: bool) {
     };
 
     if ret == VIM_YES as c_int {
-        let empty_bufname = unsafe { (*buffer).b_fname }.is_null();
+        let empty_bufname = buffer.b_fname.is_null();
         if empty_bufname {
-            unsafe { buf_set_name((*buffer).handle as c_int, c"Untitled".as_ptr().cast_mut()) };
+            unsafe { buf_set_name(buffer.handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
-        let target = unsafe { Buf::new(buffer) };
-        if unsafe { check_overwrite(&mut ea, target, (*buffer).b_fname, (*buffer).b_ffname, false) }.is_ok()
+        let target = buffer;
+        if unsafe { check_overwrite(&mut ea, target, buffer.b_fname, buffer.b_ffname, false) }.is_ok()
             // didn't hit Cancel
             && unsafe { buf_write_all(buffer, false) }.is_ok()
         {
@@ -416,14 +416,14 @@ pub(crate) unsafe fn dialog_changed(buffer: *mut Buffer, checkall: bool) {
         }
         // Restore the empty name when the write failed or was cancelled.
         if empty_bufname {
-            unsafe { (*buffer).b_fname = ptr::null_mut() };
-            unsafe { xfree((*buffer).b_ffname.cast()) };
-            unsafe { (*buffer).b_ffname = ptr::null_mut() };
-            unsafe { xfree((*buffer).b_sfname.cast()) };
-            unsafe { (*buffer).b_sfname = ptr::null_mut() };
+            buffer.b_fname = ptr::null_mut();
+            unsafe { xfree(buffer.b_ffname.cast()) };
+            buffer.b_ffname = ptr::null_mut();
+            unsafe { xfree(buffer.b_sfname.cast()) };
+            buffer.b_sfname = ptr::null_mut();
         }
     } else if ret == VIM_NO as c_int {
-        unchanged(unsafe { Buf::new(buffer) }, true, false);
+        unchanged(buffer, true, false);
     } else if ret == VIM_ALL as c_int {
         unsafe { write_all_writable() };
     } else if ret == VIM_DISCARDALL as c_int {
@@ -453,7 +453,7 @@ unsafe fn write_all_writable() {
                 .is_ok()
             {
                 // didn't hit Cancel
-                let _ = unsafe { buf_write_all(target.raw(), false) };
+                let _ = unsafe { buf_write_all(target, false) };
             }
             if !bufref.valid() {
                 cur = first_buffer();
@@ -467,13 +467,13 @@ unsafe fn write_all_writable() {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_close_terminal(buffer: *mut Buffer) -> bool {
+pub(crate) unsafe fn dialog_close_terminal(buffer: Buf) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
-    let name = if unsafe { (*buffer).b_fname }.is_null() {
+    let name = if buffer.b_fname.is_null() {
         c"?".as_ptr().cast_mut()
     } else {
-        unsafe { (*buffer).b_fname }
+        buffer.b_fname
     };
     unsafe {
         dialog_msg(
@@ -493,13 +493,13 @@ pub(crate) unsafe fn dialog_close_terminal(buffer: *mut Buffer) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn can_abandon(buffer: *mut Buffer, forceit: bool) -> bool {
+pub(crate) unsafe fn can_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: module contract.
     let hidden = unsafe { buf_hide(buffer) };
     hidden
-        || !buf_is_changed(unsafe { Buf::new(buffer) })
-        || unsafe { (*buffer).b_nwindows } > 1
-        || unsafe { autowrite(buffer, forceit) }.is_ok()
+        || !buf_is_changed(buffer)
+        || buffer.b_nwindows > 1
+        || unsafe { autowrite(buffer.raw(), forceit) }.is_ok()
         || forceit
 }
 
@@ -574,7 +574,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     exiting.set(false);
     // With ":confirm" the dialog was the message; do not add an error.
     if !(p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) {
-        unsafe { report_unwritten(culprit) };
+        unsafe { report_unwritten(Buf::new(culprit)) };
     }
 
     // Try to find a window that already shows the buffer.
@@ -595,9 +595,11 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 
     // Otherwise open the changed buffer in the current window.
     if culprit != Buf::current_raw() {
+        // SAFETY: a live buffer.
+        let culprit = unsafe { Buf::new(culprit) };
         unsafe {
             set_curbuf(
-                Buf::new(culprit),
+                culprit,
                 if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,
                 true,
             )
@@ -611,7 +613,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn report_unwritten(buffer: *mut Buffer) {
+unsafe fn report_unwritten(buffer: Buf) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if vgetc_busy.get() > 0 {
@@ -620,18 +622,18 @@ unsafe fn report_unwritten(buffer: *mut Buffer) {
         msg_didout.set(false);
     }
     // SAFETY: module contract.
-    let shown = if !unsafe { (*buffer).terminal }.is_null()
-        && unsafe { channel_job_running((*buffer).b_p_channel as uint64_t) }
+    let shown = if !buffer.terminal.is_null()
+        && unsafe { channel_job_running(buffer.b_p_channel as uint64_t) }
     {
         unsafe {
             semsg!(
                 "E947: Job still running in buffer \"{}\"",
-                c_str((*buffer).b_fname)
+                c_str(buffer.b_fname)
             )
         }
     } else {
         let name = if unsafe { buf_spname(buffer) }.is_null() {
-            unsafe { (*buffer).b_fname }
+            buffer.b_fname
         } else {
             unsafe { buf_spname(buffer) }
         };
@@ -667,16 +669,16 @@ pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn buf_write_all(buffer: *mut Buffer, forceit: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = Buf::current_raw();
     // SAFETY: module contract.
     let retval = unsafe {
         buf_write(
             buffer,
-            (*buffer).b_ffname,
-            (*buffer).b_fname,
+            buffer.b_ffname,
+            buffer.b_fname,
             1 as LineNr,
-            (*buffer).b_ml.ml_line_count,
+            buffer.b_ml.ml_line_count,
             ptr::null_mut(),
             WriteRequest {
                 append: false,
@@ -866,7 +868,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // split or data could be lost. 'hidden' makes that unnecessary,
     // since then the buffer is not lost.
     let mut split = false;
-    if !unsafe { buf_hide(Buf::current_raw()) } {
+    if !unsafe { buf_hide(Buf::current()) } {
         let _no_emsg = Suppress::emsg();
         split = unsafe { check_changed(Buf::current_raw(), CCGD_AW | CCGD_EXCMD) };
     }

@@ -8,6 +8,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -133,10 +134,10 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             // untouched: no call, no results, and nothing to restore.
             let entered = if let Some(win) = win {
                 let tabpage = win_find_tabpage(win.raw());
-                win_execute_before(&raw mut win_execute_args, win.raw(), tabpage)
+                win_execute_before(&raw mut win_execute_args, win, TabPage::new(tabpage))
             } else {
                 if let Some(buf) = buf {
-                    aucmd_prepbuf(&raw mut aco, buf.raw());
+                    aucmd_prepbuf(&raw mut aco, buf);
                 }
                 true
             };

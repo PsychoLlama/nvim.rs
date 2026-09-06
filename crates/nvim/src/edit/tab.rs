@@ -426,7 +426,7 @@ fn nolist_virtcol() -> ColNr {
 #[inline(always)]
 fn sw_value() -> c_int {
     // SAFETY: `curbuf` is live for the whole session.
-    unsafe { get_sw_value(Buf::current_raw()) }
+    unsafe { get_sw_value(Buf::current()) }
 }
 
 /// The effective 'softtabstop' of the current buffer.

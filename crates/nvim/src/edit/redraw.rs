@@ -57,7 +57,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // Update the screen first so syntax highlighting is right after a
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
-        if unsafe { syntax_present(Win::current_raw()) } && must_redraw.get() != 0 {
+        if unsafe { syntax_present(Win::current()) } && must_redraw.get() != 0 {
             let _ = unsafe { update_screen() };
         }
         // An autocommand may call getcurpos(), so curswant has to be
@@ -81,7 +81,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
 
         // Save and restore curwin/curbuf, in case the autocommand changes
         // them.
-        unsafe { aucmd_prepbuf(&raw mut aco, Buf::current_raw()) };
+        unsafe { aucmd_prepbuf(&raw mut aco, Buf::current()) };
         let none = ::core::ptr::null_mut();
         unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) };
         unsafe { aucmd_restbuf(&raw mut aco) };
@@ -214,9 +214,9 @@ pub(crate) unsafe fn edit_unputchar() {
         // restored a cell at a time; redraw the whole line instead.
         PutChar::Right => {
             win.w_wcol += 1;
-            unsafe { redraw_win_line(win.raw(), win.w_cursor.lnum) };
+            unsafe { redraw_win_line(win, win.w_cursor.lnum) };
         }
-        PutChar::Left => unsafe { redraw_win_line(win.raw(), win.w_cursor.lnum) },
+        PutChar::Left => unsafe { redraw_win_line(win, win.w_cursor.lnum) },
         PutChar::Set => {
             unsafe { grid_line_start(win.w_grid, pc_row.get()) };
             grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
@@ -267,7 +267,7 @@ pub(crate) unsafe fn undisplay_dollar() {
         return;
     }
     dollar_vcol.set(-1);
-    unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
+    unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
 }
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'

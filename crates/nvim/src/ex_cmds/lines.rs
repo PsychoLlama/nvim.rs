@@ -61,9 +61,9 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // NULL length is upstream's way of asking only for the byte offset.
     let (start_byte, end_byte, dest_byte) = unsafe {
         (
-            ml_find_line_or_offset(Buf::current_raw(), line1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(Buf::current_raw(), line2 + 1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(Buf::current_raw(), dest + 1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current(), line1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current(), line2 + 1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current(), dest + 1, ptr::null_mut(), true) as BCount,
         )
     };
     let extent_byte = end_byte - start_byte;

@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::*;
@@ -25,8 +26,8 @@ use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::memory::xstrlcpy;
 use crate::os::env::home_replace;
+use crate::types::MAXPATHL;
 use crate::types::ui::kUIWildmenu;
-use crate::types::{Buffer, MAXPATHL, Window};
 use crate::ui::ui_has;
 use crate::winlayer::FrameRef;
 
@@ -35,9 +36,9 @@ use crate::winlayer::FrameRef;
 /// # Safety
 /// `window` must be a live window. Evaluating `'statusline'` re-enters the
 /// editor, so nothing may be held across this.
-pub unsafe fn win_redr_status(window: *mut Window) {
+pub unsafe fn win_redr_status(window: Win) {
     // SAFETY: the caller's promise.
-    let mut win = unsafe { Win::new(window) };
+    let mut win = window;
     let is_stl_global = stl_is_global();
 
     static BUSY: GlobalCell<bool> = GlobalCell::new(false);
@@ -69,7 +70,7 @@ pub unsafe fn win_redr_status(window: *mut Window) {
     if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
         let mut group = HLF_C;
         // SAFETY: a live window's frame chain.
-        let fillchar = if unsafe { stl_connected(Win::new(window)) } {
+        let fillchar = if unsafe { stl_connected(window) } {
             let (g, fillchar) = fillchar_status_of(win);
             group = g;
             fillchar
@@ -119,10 +120,7 @@ pub unsafe fn stl_connected(window: Win) -> bool {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub(crate) unsafe fn get_trans_bufname(
-    buffer: *mut Buffer,
-    name: &mut [c_char; MAXPATHL as usize],
-) {
+pub(crate) unsafe fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
     // SAFETY: the caller's promise.
     let spname = unsafe { buf_spname(buffer) };
     let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
@@ -130,7 +128,7 @@ pub(crate) unsafe fn get_trans_bufname(
     // each of the three writes below is told.
     unsafe {
         if spname.is_null() {
-            home_replace(buffer, (*buffer).b_fname, out, room, true);
+            home_replace(buffer.raw(), buffer.b_fname, out, room, true);
         } else {
             xstrlcpy(out, spname, room);
         }

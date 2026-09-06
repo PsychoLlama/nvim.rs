@@ -31,7 +31,7 @@ pub(crate) unsafe fn getvcol(
     cursor: *mut ColNr,
     end: *mut ColNr,
 ) {
-    let line = unsafe { ml_get_buf(window.w_buffer, (*pos).lnum) };
+    let line = unsafe { ml_get_buf(window.buffer(), (*pos).lnum) };
     let end_col = unsafe { (*pos).col };
 
     let mut csarg = CharsizeArg::default();
@@ -51,9 +51,8 @@ pub(crate) unsafe fn getvcol(
                 char_size = CharSize { width: 1, head: 0 };
                 break;
             }
-            char_size = unsafe {
-                charsize_fast_impl(window.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value)
-            };
+            char_size =
+                unsafe { charsize_fast_impl(window, ci.ptr, use_tabstop, vcol, ci.chr.value) };
             let next = unsafe { utfc_next(ci) };
             if unsafe { next.ptr.offset_from(line) } > end_col as isize {
                 break;
@@ -160,8 +159,8 @@ pub(crate) unsafe fn getvvcol(
     let mut endadd: ColNr = 0;
 
     // The cursor cannot sit on part of a wide character.
-    let ptr = unsafe { ml_get_buf(window.w_buffer, (*pos).lnum) };
-    if unsafe { (*pos).col } < unsafe { ml_get_buf_len(window.w_buffer, (*pos).lnum) } {
+    let ptr = unsafe { ml_get_buf(window.buffer(), (*pos).lnum) };
+    if unsafe { (*pos).col } < unsafe { ml_get_buf_len(window.buffer(), (*pos).lnum) } {
         let c = unsafe { utf_ptr2char(ptr.offset((*pos).col as isize)) };
         if c != TAB && unsafe { vim_isprintc(c) } {
             endadd = unsafe { ptr2cells(ptr.offset((*pos).col as isize)) } - 1;

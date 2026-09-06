@@ -153,8 +153,8 @@ pub unsafe fn ex_luado(eap: *mut ExArg) {
                 break;
             }
             lua_pushvalue(lstate, -1);
-            let old_line = ml_get_buf(Buf::current_raw(), l);
-            let old_line_len = ml_get_buf_len(Buf::current_raw(), l);
+            let old_line = ml_get_buf(Buf::current(), l);
+            let old_line_len = ml_get_buf_len(Buf::current(), l);
             lua_pushstring(lstate, old_line);
             lua_pushnumber(lstate, l as lua_Number);
             if nlua_pcall(lstate, 2, 1) != 0 {

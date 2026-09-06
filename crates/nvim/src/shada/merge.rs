@@ -693,7 +693,7 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
             let mut fm: FileMark = FileMark::UNSET;
             let name = entry.data.filemark().name as c_int;
             let win = Win::current();
-            unsafe { mark_get(buf.raw(), win, &raw mut fm, kMarkBufLocal, name) };
+            unsafe { mark_get(buf, win, &raw mut fm, kMarkBufLocal, name) };
             if fm.timestamp >= entry.timestamp {
                 return true;
             }

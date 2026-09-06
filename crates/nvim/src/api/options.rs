@@ -222,13 +222,13 @@ unsafe fn do_ft_buf(
         return ptr::null_mut::<Buffer>();
     }
     // SAFETY: `ftbuf` is the buffer just created.
-    if unsafe { ml_open(ftbuf) }.is_err() {
+    if unsafe { ml_open(Buf::new(ftbuf)) }.is_err() {
         *err = Error::exception(c"Could not load internal buffer");
         return ftbuf;
     }
     // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(ftbuf) });
-    unsafe { aucmd_prepbuf(aco, ftbuf) };
+    unsafe { aucmd_prepbuf(aco, Buf::new(ftbuf)) };
     unsafe { *aco_used = true };
     // 'bufhidden' and 'buftype' keep the scratch buffer out of everything the
     // user can see; both are set without autocommands, as `:setlocal` would.
@@ -284,19 +284,18 @@ fn static_option(text: &'static CStr) -> OptVal {
 /// # Safety
 /// `buffer` must be a live buffer.
 unsafe fn wipe_ft_buf(buffer: *mut Buffer) {
+    // SAFETY: a live buffer.
+    let mut buffer = unsafe { Buf::new(buffer) };
     // SAFETY: `buffer` is the caller's live buffer; the `bufref` re-checks it
     // after each step that can delete it.
     unsafe { block_autocmds() };
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
-    unsafe { close_windows(Buf::new(buffer), false) };
-    if bufref.valid() && buffer != Buf::current_raw() && unsafe { (*buffer).b_nwindows } == 0 {
-        wipe_buffer(unsafe { Buf::new(buffer) }, false);
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer.raw()) });
+    unsafe { close_windows(buffer, false) };
+    if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows == 0 {
+        wipe_buffer(buffer, false);
     }
     if bufref.valid() {
-        // SAFETY: `buffer` is still live -- `bufref` says so. The region has to
-        // cover the `clear`: a `flags!` set is `Copy`, so a region ending at
-        // the dereference would hand `&mut self` a copy and drop the change.
-        unsafe { (*buffer).b_flags.clear(BufFlags::DUMMY) };
+        buffer.b_flags.clear(BufFlags::DUMMY);
     }
     unsafe { unblock_autocmds() };
 }
@@ -438,6 +437,10 @@ pub unsafe fn nvim_get_option_info2(
         true => target.from.cast(),
         false => Win::current_raw(),
     };
+    // SAFETY: a live buffer.
+    let buf = unsafe { Buf::new(buf) };
+    // SAFETY: a live window.
+    let win = unsafe { Win::new(win) };
     // SAFETY: `buf` and `win` are live, `name` and `arena` are the caller's,
     // and `err` is this frame's own.
     let info = unsafe { get_vimoption(name, target.opt_flags, buf, win, arena, &mut err) };

@@ -25,16 +25,12 @@ use crate::types::VAR_STRING;
 /// # Safety
 /// `args` must point at a writable `WinExecute`, and `window`/`tabpage` must be a
 /// live window and tab page.
-pub unsafe fn win_execute_before(
-    args: *mut WinExecute,
-    window: *mut Window,
-    tabpage: *mut Tabpage,
-) -> bool {
+pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: TabPage) -> bool {
     // SAFETY: the caller's obligation. `args` is the caller's own storage and
     // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
     // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
-    let (args, win, tab) = unsafe { (&mut *args, Win::new(window), TabPage::new(tabpage)) };
-    args.wp = window;
+    let (args, win, tab) = unsafe { (&mut *args, window, tabpage) };
+    args.wp = window.raw();
     args.curpos = win.w_cursor;
     args.cwd_status = Err(Failed);
     args.apply_acd = false;
@@ -62,7 +58,9 @@ pub unsafe fn win_execute_before(
             args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, window, tabpage, true) }.is_ok() {
+    if unsafe { switch_win_noblock(&raw mut args.switchwin, window.raw(), tabpage.raw(), true) }
+        .is_ok()
+    {
         check_cursor(Win::current());
         return true;
     }
@@ -115,7 +113,7 @@ pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         return;
     };
     let mut saved: WinExecute = unsafe { mem::zeroed() };
-    if unsafe { win_execute_before(&raw mut saved, wp.raw(), tp.raw()) } {
+    if unsafe { win_execute_before(&raw mut saved, wp, tp) } {
         unsafe { execute_common(args.ptr(0), result, 1) };
     }
     unsafe { win_execute_after(&raw mut saved) };
@@ -134,13 +132,13 @@ pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// or NULL.
 pub unsafe fn switch_win(
     switchwin: *mut SwitchWin,
-    win: *mut Window,
-    tabpage: *mut Tabpage,
+    win: Win,
+    tabpage: TabPage,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation.
     unsafe { block_autocmds() };
-    unsafe { switch_win_noblock(switchwin, win, tabpage, no_display) }
+    unsafe { switch_win_noblock(switchwin, win.raw(), tabpage.raw(), no_display) }
 }
 
 /// [`switch_win`] without blocking autocommands.

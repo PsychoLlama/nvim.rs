@@ -20,6 +20,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::allocator::Owned;
@@ -311,7 +312,7 @@ pub unsafe fn open_spellbuf() -> *mut Buffer {
 
     unsafe { (*buf).b_spell = true };
     unsafe { (*buf).b_p_swf = 1 };
-    if unsafe { ml_open(buf) }.is_err() {
+    if unsafe { ml_open(Buf::new(buf)) }.is_err() {
         logmsg!(
             LOGLVL_ERR,
             c"open_spellbuf",
@@ -319,7 +320,7 @@ pub unsafe fn open_spellbuf() -> *mut Buffer {
             "Error opening a new memline"
         );
     }
-    unsafe { ml_open_file(buf) }; // create the swap file now
+    unsafe { ml_open_file(Buf::new(buf)) }; // create the swap file now
 
     buf
 }
@@ -329,7 +330,7 @@ pub unsafe fn close_spellbuf(buffer: *mut Buffer) {
     if buffer.is_null() {
         return;
     }
-    unsafe { ml_close(buffer, 1) };
+    unsafe { ml_close(Buf::new(buffer), 1) };
     // The free: `Buffer`'s destructor runs and the memory goes back.
     // SAFETY: `open_spellbuf` gave up this address and nothing else
     // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after

@@ -184,7 +184,7 @@ pub(crate) unsafe fn read_stdin() {
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
         let stdin_buf_handle: Handle = unsafe { (*stdin_buf).handle };
-        let stdin_buf_empty = unsafe { buf_is_empty(Buf::current_raw()) };
+        let stdin_buf_empty = unsafe { buf_is_empty(Buf::current()) };
 
         // Done as commands rather than calls so the autocommands and the
         // window bookkeeping happen as they would for the user.
@@ -202,7 +202,7 @@ pub(crate) unsafe fn read_stdin() {
     } else {
         unsafe { set_buflisted(1) };
         let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
-        if unsafe { buf_is_empty(Buf::current_raw()) } && Buf::current().b_next.is_some() {
+        if unsafe { buf_is_empty(Buf::current()) } && Buf::current().b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
         }

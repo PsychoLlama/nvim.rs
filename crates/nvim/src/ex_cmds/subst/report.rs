@@ -203,8 +203,8 @@ impl PreviewBuf {
             if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
                 c"".as_ptr() as *mut c_char
             } else {
-                let line = ml_get_buf(orig_buf.raw(), lnum);
-                self.line_size = ml_get_buf_len(orig_buf.raw(), lnum) + self.col_width + 1 as c_int;
+                let line = ml_get_buf(orig_buf, lnum);
+                self.line_size = ml_get_buf_len(orig_buf, lnum) + self.col_width + 1 as c_int;
                 // Reallocate if the line is not long enough.
                 if self.line_size > self.old_line_size {
                     self.str =
@@ -228,11 +228,11 @@ impl PreviewBuf {
             )
         };
         if self.linenr_preview == 0 as LineNr {
-            let _ = unsafe { ml_replace_buf(self.buf.raw(), 1 as LineNr, self.str, true, false) };
+            let _ = unsafe { ml_replace_buf(self.buf, 1 as LineNr, self.str, true, false) };
         } else {
             let _ = unsafe {
                 ml_append_buf(
-                    self.buf.raw(),
+                    self.buf,
                     self.linenr_preview,
                     self.str,
                     self.line_size,

@@ -180,7 +180,7 @@ fn diff_find_change_simple(
     // A copy: every `ml_get_buf` below invalidates the last one's buffer.
     let line_org = (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| {
         // SAFETY: a live window's buffer, and a line number inside it.
-        unsafe { CStr::from_ptr(ml_get_buf(window.w_buffer, lnum)) }.to_owned()
+        unsafe { CStr::from_ptr(ml_get_buf(window.buffer(), lnum)) }.to_owned()
     });
     let off = lnum - dp.df_lnum[idx as usize];
     let tp = TabPage::current();
@@ -200,7 +200,7 @@ fn diff_find_change_simple(
         let other = dp.df_lnum[i] + off;
         // SAFETY: a live buffer of the diff, and a line number inside the
         // block, so inside the buffer.
-        let new = unsafe { CStr::from_ptr(ml_get_buf(buf, other)) }.to_bytes();
+        let new = unsafe { CStr::from_ptr(ml_get_buf(Buf::new(buf), other)) }.to_bytes();
 
         let (si_org, si_new) = common_prefix(org, new);
         *startp = (*startp).min(si_org as c_int);

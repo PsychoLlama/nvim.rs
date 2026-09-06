@@ -257,13 +257,13 @@ impl Win {
     /// Whether the cursor line is drawn concealed in the current mode.
     pub(super) fn conceal_cursor_line(self) -> bool {
         // SAFETY: a live window.
-        unsafe { conceal_cursor_line(self.raw()) }
+        unsafe { conceal_cursor_line(self) }
     }
 
     /// Whether 'cursorline' would draw this window's cursor line differently.
     fn cursorline_standout(self) -> bool {
         // SAFETY: a live window.
-        unsafe { win_cursorline_standout(self.raw()) }
+        unsafe { win_cursorline_standout(self) }
     }
 
     /// 'scrolloff' for this window, its window-local value preferred.
@@ -279,7 +279,7 @@ impl Win {
     /// Redraw just the cursor's line.
     pub(super) fn redraw_cursor_line(self) {
         // SAFETY: a live window.
-        unsafe { redraw_win_line(self.raw(), self.w_cursor.lnum) };
+        unsafe { redraw_win_line(self, self.w_cursor.lnum) };
     }
 
     /// Let any float anchored to this window follow it.
@@ -414,7 +414,7 @@ fn redraw_for_cursorcolumn(win: Win) {
     // The current buffer's cursor moving in Visual mode changes the highlight.
     if visual_active() && win.w_buffer == Buf::current_raw() {
         // SAFETY: `curbuf` is set from startup to exit.
-        unsafe { redraw_buf_later(Buf::current_raw(), UPD_INVERTED) };
+        unsafe { redraw_buf_later(Buf::current(), UPD_INVERTED) };
     }
 }
 

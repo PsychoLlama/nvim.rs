@@ -43,6 +43,8 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     let num_changed = (1 + end.lnum - start.lnum) as int64_t;
     // SAFETY: the caller's promise; both lines are inside the buffer.
     parse_marker(window);
+    // SAFETY: a live buffer.
+    let buf = unsafe { Buf::new(buf) };
     unsafe {
         fold_add_marker(
             buf,
@@ -52,8 +54,8 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
         )
     };
     unsafe { fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get()) };
-    changed_lines(unsafe { Buf::new(buf) }, start.lnum, 0, end.lnum, 0, false);
-    unsafe { buf_updates_send_changes(Buf::new(buf), start.lnum, num_changed, num_changed) };
+    changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
+    unsafe { buf_updates_send_changes(buf, start.lnum, num_changed, num_changed) };
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
@@ -62,14 +64,14 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
 /// `buffer` must be a live buffer, `pos` a line inside it, and
 /// `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_add_marker(
-    buffer: *mut Buffer,
+    buffer: Buf,
     pos: Pos,
     marker: *const c_char,
     markerlen: size_t,
 ) {
     let lnum = pos.lnum;
     // SAFETY: the caller's promise.
-    let cms = unsafe { (*buffer).b_p_cms };
+    let cms = buffer.b_p_cms;
     // Where 'commentstring' puts the text, if it has a place for it.
     let p = unsafe { strstr(cms, c"%s".as_ptr()) };
     let line = unsafe { ml_get_buf(buffer, lnum) };
@@ -125,7 +127,7 @@ pub(super) unsafe fn fold_add_marker(
     if added != 0 {
         unsafe {
             extmark_splice_cols(
-                Buf::new(buffer),
+                buffer,
                 lnum as c_int - 1,
                 line_len as ColNr,
                 0,
@@ -158,7 +160,7 @@ pub(super) unsafe fn delete_fold_markers(
     // SAFETY: the caller's promise.
     unsafe {
         fold_del_marker(
-            window.w_buffer,
+            window.buffer(),
             fold.top() + lnum_off,
             window.w_onebuf_opt.wo_fmr,
             foldstartmarkerlen.get(),
@@ -166,7 +168,7 @@ pub(super) unsafe fn delete_fold_markers(
     };
     unsafe {
         fold_del_marker(
-            window.w_buffer,
+            window.buffer(),
             fold.last() + lnum_off,
             foldendmarker.get(),
             foldendmarkerlen.get(),
@@ -182,18 +184,18 @@ pub(super) unsafe fn delete_fold_markers(
 /// # Safety
 /// `buffer` must be a live buffer and `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_del_marker(
-    buffer: *mut Buffer,
+    buffer: Buf,
     lnum: LineNr,
     marker: *mut c_char,
     markerlen: size_t,
 ) {
     // SAFETY: the caller's promise.
-    if lnum > unsafe { (*buffer).b_ml.ml_line_count } {
+    if lnum > buffer.b_ml.ml_line_count {
         return;
     }
     // SAFETY: the caller's promise; `line` is NUL-terminated, so the walk
     // below stops inside it.
-    let cms = unsafe { (*buffer).b_p_cms };
+    let cms = buffer.b_p_cms;
     let line = unsafe { ml_get_buf(buffer, lnum) };
     let mut p = line;
     while unsafe { *p } as c_int != NUL {
@@ -237,7 +239,7 @@ pub(super) unsafe fn fold_del_marker(
             let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
             unsafe {
                 extmark_splice_cols(
-                    Buf::new(buffer),
+                    buffer,
                     lnum as c_int - 1,
                     p.offset_from(line) as ColNr,
                     len as ColNr,
@@ -289,7 +291,7 @@ pub(super) unsafe fn foldlevel_marker(line: FLine) {
     let cend = unsafe { *foldendmarker.get() };
     unsafe { (*flp).start = 0 };
     unsafe { (*flp).lvl_next = (*flp).lvl };
-    let mut s = unsafe { ml_get_buf((*(*flp).wp).w_buffer, (*flp).lnum + (*flp).off) };
+    let mut s = unsafe { ml_get_buf(Buf::new((*(*flp).wp).w_buffer), (*flp).lnum + (*flp).off) };
     while unsafe { *s } != 0 {
         if unsafe { *s } as c_int == cstart as c_int
             && unsafe {

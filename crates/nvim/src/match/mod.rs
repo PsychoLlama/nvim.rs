@@ -181,7 +181,7 @@ unsafe fn match_add(
     if !pos_list.is_null() {
         match unsafe { fill_pos_array(m.raw(), pos_list) } {
             Some((toplnum, botlnum)) if toplnum != 0 => {
-                unsafe { redraw_win_range_later(window.raw(), toplnum, botlnum) };
+                unsafe { redraw_win_range_later(window, toplnum, botlnum) };
                 m.mit_toplnum = toplnum;
                 m.mit_botlnum = botlnum;
                 rtype = UPD_VALID;
@@ -361,7 +361,7 @@ unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     unsafe { vim_regfree((*cur).mit_match.regprog) };
     unsafe { xfree((*cur).mit_pattern.cast()) };
     if unsafe { (*cur).mit_toplnum } != 0 {
-        unsafe { redraw_win_range_later(window.raw(), (*cur).mit_toplnum, (*cur).mit_botlnum) };
+        unsafe { redraw_win_range_later(window, (*cur).mit_toplnum, (*cur).mit_botlnum) };
         rtype = UPD_VALID;
     }
     unsafe { xfree((*cur).mit_pos_array.cast()) };

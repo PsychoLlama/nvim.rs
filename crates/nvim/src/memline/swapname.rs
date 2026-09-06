@@ -32,8 +32,8 @@ use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
 /// The name is what identifies the swap file to the next `:recover`, so it
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
-pub unsafe fn ml_setname(buffer: *mut Buffer) {
-    let mfp = unsafe { (*buffer).b_ml.ml_mfp };
+pub unsafe fn ml_setname(buffer: Buf) {
+    let mfp = buffer.b_ml.ml_mfp;
     if unsafe { (*mfp).mf_fd } < 0 {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
@@ -291,12 +291,12 @@ pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_
 ///
 /// `fhname` is `fname` with the home directory replaced by `~`.
 unsafe fn attention_message(
-    buffer: *mut Buffer,
+    buffer: Buf,
     fname: *mut c_char,
     fhname: *mut c_char,
     msg: &mut Vec<u8>,
 ) {
-    debug_assert!(!unsafe { (*buffer).b_fname.is_null() });
+    debug_assert!(!buffer.b_fname.is_null());
 
     complain(c"E325: ATTENTION");
     push_tr(msg, c"Found a swap file by the name \"");
@@ -305,11 +305,11 @@ unsafe fn attention_message(
     msg.extend_from_slice(b"\"\n");
     let swap_mtime = unsafe { swapfile_info(fname, msg) };
     push_tr(msg, c"While opening file \"");
-    msg.extend_from_slice(unsafe { cstr::bytes_at((*buffer).b_fname) });
+    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.b_fname) });
     msg.extend_from_slice(b"\"\n");
 
     let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-    if !unsafe { os_fileinfo((*buffer).b_fname, &raw mut file_info) } {
+    if !unsafe { os_fileinfo(buffer.b_fname, &raw mut file_info) } {
         push_tr(msg, c"      CANNOT BE FOUND");
     } else {
         push_tr(msg, c"             dated: ");
@@ -333,7 +333,7 @@ unsafe fn attention_message(
         c"    If this is the case, use \":recover\" or \"nvim -r ",
     );
     // SAFETY: the buffer's own name, NUL-terminated.
-    msg.extend_from_slice(unsafe { cstr::bytes_at((*buffer).b_fname) });
+    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.b_fname) });
     push_tr(
         msg,
         c"\"\n    to recover the changes (see \":help recovery\").\n",
@@ -346,14 +346,14 @@ unsafe fn attention_message(
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
-unsafe fn do_swapexists(buffer: *mut Buffer, fname: *mut c_char) -> SwapExistsChoice {
+unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     unsafe { set_vim_var_string(Vv::Swapname, fname, -1) };
     unsafe { set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1) };
 
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     let locked = Lock::all_buffers();
-    let name = unsafe { (*buffer).b_fname };
+    let name = buffer.b_fname;
     let (no_io, no_buf) = (core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, no_buf) };
     drop(locked);
@@ -383,7 +383,7 @@ unsafe fn resolve_swapfile_clash(
 ) -> bool {
     // Only worth a word if the swap file belongs to *this* file, the
     // buffer was not already recovered, and 'shortmess' allows it.
-    if unsafe { swapfile_is_for_other_file(buffer, fname) }
+    if unsafe { swapfile_is_for_other_file(Buf::new(buffer), fname) }
         || Buf::current().b_flags.has(BufFlags::RECOVERED)
         || ShmFlag::ATTENTION.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
     {
@@ -408,7 +408,7 @@ unsafe fn resolve_swapfile_clash(
         && swap_exists_action.get() != SEA_NONE
         && unsafe { has_autocmd(AutoEvent::SwapExists, buf_fname, Buf::from_raw(buffer)) }
     {
-        choice = unsafe { do_swapexists(buffer, fname) };
+        choice = unsafe { do_swapexists(Buf::new(buffer), fname) };
     }
     if choice == SEA_CHOICE_NONE && swap_exists_action.get() == SEA_READONLY {
         choice = SEA_CHOICE_READONLY;
@@ -417,7 +417,7 @@ unsafe fn resolve_swapfile_clash(
     // Set by attention_message -> swapfile_info, below.
     proc_running.set(0);
     if choice == SEA_CHOICE_NONE {
-        choice = unsafe { ask_about_swapfile(buffer, fname) };
+        choice = unsafe { ask_about_swapfile(Buf::new(buffer), fname) };
     }
 
     match choice {
@@ -447,7 +447,7 @@ unsafe fn resolve_swapfile_clash(
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
-unsafe fn ask_about_swapfile(buffer: *mut Buffer, fname: *mut c_char) -> SwapExistsChoice {
+unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
 
@@ -514,12 +514,12 @@ unsafe fn ask_about_swapfile(buffer: *mut Buffer, fname: *mut c_char) -> SwapExi
 ///
 /// Returns the allocated name, or null.
 pub(crate) unsafe fn findswapname(
-    buffer: *mut Buffer,
+    buffer: Buf,
     dirp: *mut *mut c_char,
     old_fname: *const c_char,
     found_existing_dir: *mut bool,
 ) -> *mut c_char {
-    let buf_fname = unsafe { (*buffer).b_fname };
+    let buf_fname = buffer.b_fname;
 
     // Isolate one directory name out of *dirp. The rest of the option is
     // the longest one entry can be, so the buffer is its own bound.
@@ -529,7 +529,7 @@ pub(crate) unsafe fn findswapname(
     let dir_name = dir_buf.as_mut_ptr();
     unsafe { copy_option_part(dirp, dir_name, dir_len, c",".as_ptr().cast_mut()) };
 
-    let mut fname = unsafe { makeswapname(buf_fname, (*buffer).b_ffname, buffer, dir_name) };
+    let mut fname = unsafe { makeswapname(buf_fname, buffer.b_ffname, buffer.raw(), dir_name) };
     loop {
         if fname.is_null() {
             break; // out of memory
@@ -570,9 +570,9 @@ pub(crate) unsafe fn findswapname(
         if ext == b"wp"
             && !recoverymode.get()
             && !buf_fname.is_null()
-            && !unsafe { (*buffer).b_help }
-            && !unsafe { (*buffer).b_flags.has(BufFlags::DUMMY) }
-            && unsafe { resolve_swapfile_clash(buffer, fname, buf_fname) }
+            && !buffer.b_help
+            && !buffer.b_flags.has(BufFlags::DUMMY)
+            && unsafe { resolve_swapfile_clash(buffer.raw(), fname, buf_fname) }
         {
             break;
         }

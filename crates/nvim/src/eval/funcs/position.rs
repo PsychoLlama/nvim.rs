@@ -33,8 +33,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Buffer, ColNr, Direction, EvalFuncData, List, NUL, Pos, TypVal, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VarNumber, Window,
+    ColNr, Direction, EvalFuncData, List, NUL, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VarNumber, Window,
 };
 use crate::window::state::skip_update_topline;
 use crate::winlayer::Buf;
@@ -62,7 +62,7 @@ pub unsafe fn f_byte2line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     result.vval.v_number = if boff < 0 {
         -1
     } else {
-        unsafe { ml_find_line_or_offset(Buf::current_raw(), 0, &raw mut boff, false) as VarNumber }
+        unsafe { ml_find_line_or_offset(Buf::current(), 0, &raw mut boff, false) as VarNumber }
     };
 }
 
@@ -76,9 +76,7 @@ pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     result.vval.v_number = if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
-        unsafe {
-            ml_find_line_or_offset(Buf::current_raw(), lnum, ptr::null_mut(), false) as VarNumber
-        }
+        unsafe { ml_find_line_or_offset(Buf::current(), lnum, ptr::null_mut(), false) as VarNumber }
     };
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
@@ -134,13 +132,13 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
             // MAXCOL means "end of line"; past the last line there is
             // no line to measure, so it stays MAXCOL.
             col = if fp.lnum <= unsafe { (*bp).b_ml.ml_line_count } {
-                (unsafe { ml_get_buf_len(bp, fp.lnum) }) + 1
+                (unsafe { ml_get_buf_len(Buf::new(bp), fp.lnum) }) + 1
             } else {
                 END_OF_LINE
             };
         } else {
             col = fp.col + 1;
-            col += unsafe { virtualedit_tail(Win::new(wp), bp, &raw mut fp) };
+            col += unsafe { virtualedit_tail(Win::new(wp), Buf::new(bp), &raw mut fp) };
         }
     }
     result.vval.v_number = col as VarNumber;
@@ -158,7 +156,7 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
 ///
 /// # Safety
 /// `window`, `bp` and `pos` are live, and `pos` is a position in `bp`.
-unsafe fn virtualedit_tail(mut win: Win, buffer: *mut Buffer, pos: *mut Pos) -> ColNr {
+unsafe fn virtualedit_tail(mut win: Win, buffer: Buf, pos: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
@@ -212,7 +210,7 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
             if fp.col < 0 {
                 fp.col = 0;
             } else {
-                let len = unsafe { ml_get_buf_len(bp, fp.lnum) };
+                let len = unsafe { ml_get_buf_len(Buf::new(bp), fp.lnum) };
                 if fp.col > len {
                     fp.col = len;
                 }

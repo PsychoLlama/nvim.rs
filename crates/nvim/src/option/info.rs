@@ -13,8 +13,8 @@ use core::ptr;
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::options::*;
 use crate::types::{
-    ApiDict, Arena, Buffer, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags,
-    ScriptCtx, String_0, Window, int64_t, key_value_pair, size_t,
+    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, ScriptCtx,
+    String_0, int64_t, key_value_pair, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -70,8 +70,8 @@ fn int_value(n: Integer) -> Object {
 pub(crate) unsafe fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
-    buffer: *mut Buffer,
-    win: *mut Window,
+    buffer: Buf,
+    win: Win,
     arena: *mut Arena,
     err: &mut Error,
 ) -> ApiDict {
@@ -106,7 +106,8 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
             Win::current_raw(),
         );
         // SAFETY: the caller's arena, and `curbuf`/`curwin` are live.
-        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win, arena) };
+        let opt_dict =
+            unsafe { vimoption2dict(opt_idx, scope, Buf::new(buf), Win::new(win), arena) };
         let pair = key_value_pair {
             // SAFETY: the option table's names are static C strings.
             key: unsafe { cstr_as_string(get_option(opt_idx).fullname) },
@@ -131,8 +132,8 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
 unsafe fn last_set(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buffer: *mut Buffer,
-    win: *mut Window,
+    buffer: Buf,
+    win: Win,
 ) -> ScriptCtx {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live for the scopes reached below.
@@ -141,13 +142,10 @@ unsafe fn last_set(
     }
     let mut script_ctx = ScriptCtx::NONE;
     if option_has_scope(opt_idx, kOptScopeBuf) {
-        script_ctx =
-            unsafe { (*buffer).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize] };
+        script_ctx = buffer.b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize];
     }
     if option_has_scope(opt_idx, kOptScopeWin) {
-        script_ctx = unsafe {
-            (*win).w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize]
-        };
+        script_ctx = win.w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize];
     }
     if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
         script_ctx = option_last_set(opt_idx);
@@ -163,8 +161,8 @@ unsafe fn last_set(
 pub(crate) unsafe fn vimoption2dict(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buffer: *mut Buffer,
-    win: *mut Window,
+    buffer: Buf,
+    win: Win,
     arena: *mut Arena,
 ) -> ApiDict {
     let opt = get_option(opt_idx);

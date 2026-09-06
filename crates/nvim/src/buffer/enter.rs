@@ -55,7 +55,8 @@ use crate::types::{
     Terminal, TypVal, VAR_NUMBER, VarLock, Window, time_t, typval_vval_union, uint8_t, uint64_t,
 };
 use crate::undo::u_sync;
-use crate::window::{get_last_winid, win_valid};
+use crate::window::get_last_winid;
+use crate::winlayer::windows;
 use ::libc::time;
 
 // ---------------------------------------------------------------------------
@@ -73,15 +74,14 @@ fn last_winid() -> c_int {
 /// dereferences its argument, so asking about a possibly-closed window is a
 /// safe operation.
 fn valid_win(win: *mut Window) -> Option<Win> {
-    // SAFETY: the pointer is only compared; a hit means a live window.
-    unsafe { win_valid(win).then(|| Win::new(win)) }
+    windows().find(|wp| wp.raw() == win)
 }
 
 /// Whether `buffer` may stay loaded when it is no longer shown -- `'hidden'`,
 /// `'bufhidden'` or a `:hide` modifier.
 fn may_hide(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer.raw()) }
+    unsafe { buf_hide(buffer) }
 }
 
 /// Sync the undo state, so that what follows starts a new change.
@@ -106,7 +106,7 @@ fn restore_winopts(buffer: Buf) {
 /// Copy the buffer-local option values into `buffer`.
 fn copy_options_into(buffer: Buf, flags: c_int) {
     // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buffer.raw(), flags) };
+    unsafe { buf_copy_options(buffer, flags) };
 }
 
 fn diff_add(buffer: Buf) {
@@ -164,7 +164,7 @@ fn init_keymap() {
 /// Work out the spell-checking languages for `win`.
 fn set_spelllang(win: Win) {
     // SAFETY: a live window with a syntax block.
-    unsafe { parse_spelllang(win.raw()) };
+    unsafe { parse_spelllang(win) };
 }
 
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
@@ -348,7 +348,7 @@ fn leave_prevbuf(
     // SAFETY: `prevbuf` is still live, the guard above having said so.
     unsafe { close_buffer(Win::from_raw(win), Buf::new(prevraw), how, false, false) };
     if Win::current_raw() != previouswin
-        && let Some(previous) = valid_win(previouswin)
+        && let Some(previous) = valid_win(unsafe { Win::new(previouswin).raw() })
     {
         // autocommands changed curwin, Grr!
         previous.make_current();

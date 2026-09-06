@@ -29,7 +29,7 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
     }
     let old_row_offset = window.w_grid.row_offset;
     // SAFETY: `window` is a live window.
-    unsafe { win_grid_alloc(window.raw()) };
+    unsafe { win_grid_alloc(window) };
     let flush = flush || window.w_lines_valid == 0 || window.w_grid.row_offset != old_row_offset;
     let status = opts.statusline || opts.winbar;
     if flush && status {
@@ -40,10 +40,10 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
         unsafe {
             win_check_ns_hl(window.raw());
             if opts.winbar {
-                win_redr_winbar(window.raw());
+                win_redr_winbar(window);
             }
             if opts.statusline {
-                win_redr_status(window.raw());
+                win_redr_status(window);
             }
             win_check_ns_hl(::core::ptr::null_mut::<Window>());
         }
@@ -95,7 +95,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             if let Some(win) = win {
                 redraw_later(win.raw(), type_0);
             } else if let Some(buf) = buf {
-                redraw_buf_later(buf.raw(), type_0);
+                redraw_buf_later(buf, type_0);
             } else {
                 redraw_all_later(type_0);
             }
@@ -126,7 +126,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         if begin < end {
             let (first, last) = (1 + begin as LineNr, end as LineNr);
             // SAFETY: a live buffer.
-            unsafe { redraw_buf_range_later(rbuf.raw(), first, last) };
+            unsafe { redraw_buf_range_later(rbuf, first, last) };
         }
     }
     // Marking lines stale flushes by default; every other key does not.

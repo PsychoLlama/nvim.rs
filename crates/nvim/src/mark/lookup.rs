@@ -49,7 +49,7 @@ use crate::search::{BACKWARD, FORWARD};
 /// `buffer` must be a live buffer and `win` a live window; `fmp` must point at a
 /// live, writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get(
-    buffer: *mut Buffer,
+    buffer: Buf,
     win: Win,
     fmp: *mut FileMark,
     flag: MarkGet,
@@ -57,7 +57,7 @@ pub unsafe fn mark_get(
 ) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "mark_get needs the caller's record");
     // SAFETY: the caller promised a live buffer.
-    let handle = unsafe { Buf::new(buffer) }.handle;
+    let handle = buffer.handle;
     let mut fm: *mut FileMark = ptr::null_mut();
     if ascii_isupper(name) || ascii_isdigit(name) {
         // SAFETY: `name` is a digit or an upper-case letter, which is what
@@ -70,13 +70,13 @@ pub unsafe fn mark_get(
         // position the caller would then apply to the wrong file.
         if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark().fnum() != handle {
             // SAFETY: `buffer` is live and `fmp` is the caller's record.
-            return unsafe { pos_to_mark(Buf::new(buffer), fmp, UNSET_POS) };
+            return unsafe { pos_to_mark(buffer, fmp, UNSET_POS) };
         }
         fm = xfm.fmark().raw();
     } else if name > 0 && name < NMARK_LOCAL_MAX {
         // SAFETY: the caller promised a live buffer and window, and `fmp` is
         // the caller's record.
-        fm = unsafe { mark_get_local(Buf::new(buffer), win, fmp, name) };
+        fm = unsafe { mark_get_local(buffer, win, fmp, name) };
     }
     if fm.is_null() {
         return fm;

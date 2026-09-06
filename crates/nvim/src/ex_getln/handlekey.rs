@@ -114,9 +114,9 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
 
     if !b_im_ptr.is_null() {
         if b_im_ptr == cur_buf_iminsert() {
-            unsafe { set_iminsert_global(Buf::current_raw()) };
+            unsafe { set_iminsert_global(Buf::current()) };
         } else {
-            unsafe { set_imsearch_global(Buf::current_raw()) };
+            unsafe { set_imsearch_global(Buf::current()) };
         }
     }
     unsafe { ui_cursor_shape() }; // may show a different cursor shape

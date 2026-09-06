@@ -161,7 +161,7 @@ pub(crate) unsafe fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
             changed_window_setting(win);
         }
         // SAFETY: a live window's buffer is live.
-        let mut buf = unsafe { Buf::new(win.w_buffer) };
+        let mut buf = win.buffer();
         buf.b_p_iminsert = B_IMODE_NONE as OptInt;
         buf.b_p_imsearch = B_IMODE_USE_INSERT as OptInt;
         return None;
@@ -419,7 +419,7 @@ pub(crate) unsafe fn did_set_lines_or_columns(args: &mut OptSet) -> Option<&CStr
 /// 'lisp': the word characters change with it.
 pub(crate) unsafe fn did_set_lisp(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
-    unsafe { buf_init_chartab(Frame::read(args).buf.raw(), false) };
+    unsafe { buf_init_chartab(Buf::new(Frame::read(args).buf.raw()), false) };
     None
 }
 
@@ -565,7 +565,7 @@ pub(crate) unsafe fn did_set_spell(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_spell != 0 {
-        return unsafe { parse_spelllang(win.raw()) };
+        return unsafe { parse_spelllang(win) };
     }
     None
 }
@@ -575,9 +575,9 @@ pub(crate) unsafe fn did_set_swapfile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let buf = unsafe { Frame::read(args) }.buf;
     if buf.b_p_swf != 0 && p_uc.get() != 0 {
-        unsafe { ml_open_file(buf.raw()) };
+        unsafe { ml_open_file(buf) };
     } else {
-        unsafe { mf_close_file(buf.raw(), true) };
+        unsafe { mf_close_file(buf, true) };
     }
     None
 }
@@ -754,19 +754,18 @@ pub(crate) unsafe fn did_set_xhistory(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 ///
 /// `buffer` must be a live buffer.
-pub(crate) unsafe fn do_syntax_autocmd(buffer: *mut Buffer, value_changed: bool) {
+pub(crate) unsafe fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
     static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
     let _syn_recursive = Depth::of(&syn_recursive);
-    // SAFETY: the caller's buffer is live.
-    unsafe { (*buffer).b_flags |= BufFlags::SYN_SET };
+    buffer.b_flags |= BufFlags::SYN_SET;
     unsafe {
         apply_autocmds(
             AutoEvent::Syntax,
-            (*buffer).b_p_syn,
-            (*buffer).b_fname,
+            buffer.b_p_syn,
+            buffer.b_fname,
             value_changed || syn_recursive.get() == 1,
-            buffer,
+            buffer.raw(),
         )
     };
 }
@@ -779,12 +778,12 @@ pub(crate) unsafe fn do_syntax_autocmd(buffer: *mut Buffer, value_changed: bool)
 /// # Safety
 ///
 /// `win` must be a live window.
-pub(crate) unsafe fn do_spelllang_source(win: *mut Window) {
+pub(crate) unsafe fn do_spelllang_source(win: Win) {
     let mut fname: [c_char; 200] = [0; 200];
 
     // SAFETY: the caller's window is live, and its 'spelllang' is a
     // NUL-terminated option value.
-    let mut q = unsafe { (*(*win).w_s).b_p_spl };
+    let mut q = unsafe { (*win.w_s).b_p_spl };
     // "cjk" is a modifier, not a language.
     if unsafe { cstr::starts_with(q, b"cjk,") } {
         q = unsafe { q.add(4) };

@@ -325,7 +325,7 @@ unsafe fn sign_place_cmd(
 /// `buf` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_unplace_cmd(
-    buffer: *mut Buffer,
+    buffer: Buf,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -338,12 +338,12 @@ unsafe fn sign_unplace_cmd(
     }
 
     let (buf, lnum) = if id == -1 {
-        (Win::current().w_buffer, Win::current().w_cursor.lnum)
+        (Win::current().buffer(), Win::current().w_cursor.lnum)
     } else {
         (buffer, lnum)
     };
 
-    if unsafe { sign_unplace(buf, id.max(0), group, lnum) } == FAIL && lnum > 0 {
+    if unsafe { sign_unplace(buf.raw(), id.max(0), group, lnum) } == FAIL && lnum > 0 {
         emsg(gettext(c"E159: Missing sign number"));
     }
 }
@@ -545,7 +545,9 @@ pub(crate) unsafe fn ex_sign(args: *mut ExArg) {
             SIGNCMD_PLACE => unsafe {
                 sign_place_cmd(a.buf, a.lnum, a.name, a.id, a.group, a.prio)
             },
-            SIGNCMD_UNPLACE => unsafe { sign_unplace_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
+            SIGNCMD_UNPLACE => unsafe {
+                sign_unplace_cmd(Buf::new(a.buf), a.lnum, a.name, a.id, a.group)
+            },
             SIGNCMD_JUMP => unsafe { sign_jump_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
             _ => {}
         }

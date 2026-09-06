@@ -129,7 +129,7 @@ pub unsafe fn apply_autocmds_exarg(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buffer: *mut Buffer,
+    buffer: Buf,
     args: *mut ExArg,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
@@ -142,7 +142,7 @@ pub unsafe fn apply_autocmds_exarg(
             fname_io,
             force,
             AUGROUP_ALL,
-            buffer,
+            buffer.raw(),
             args,
             ::core::ptr::null_mut(),
         )
@@ -157,7 +157,7 @@ pub unsafe fn apply_autocmds_retval(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buffer: *mut Buffer,
+    buffer: Buf,
     retval: *mut ::core::ffi::c_int,
 ) -> bool {
     if should_abort(unsafe { *retval }) {
@@ -170,7 +170,7 @@ pub unsafe fn apply_autocmds_retval(
             fname_io,
             force,
             AUGROUP_ALL,
-            buffer,
+            buffer.raw(),
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
         )

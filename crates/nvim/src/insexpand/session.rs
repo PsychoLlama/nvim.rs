@@ -702,7 +702,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 /// `spell_bad_len`.
 pub(crate) unsafe fn spell_back_to_badword() {
     let mut tpos = Win::current().w_cursor;
-    let win = Win::current_raw();
+    let win = Win::current();
     spell_bad_len.set(unsafe { spell_move_to(win, BACKWARD, SMT_ALL, true, ptr::null_mut()) });
     if Win::current().w_cursor.col != tpos.col {
         unsafe { start_arrow(&raw mut tpos) };

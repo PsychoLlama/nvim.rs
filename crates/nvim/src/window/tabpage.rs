@@ -348,8 +348,8 @@ pub(crate) fn valid_tab(tpc: *mut Tabpage) -> Option<TabPage> {
     tabs().find(|tp| tp.raw() == tpc)
 }
 
-pub fn valid_tabpage_win(tpc: *mut Tabpage) -> c_int {
-    let Some(tp) = valid_tab(tpc) else {
+pub fn valid_tabpage_win(tpc: TabPage) -> c_int {
+    let Some(tp) = valid_tab(tpc.raw()) else {
         return 0; // shouldn't happen
     };
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int

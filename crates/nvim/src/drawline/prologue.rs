@@ -23,7 +23,6 @@ use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;
-use crate::winlayer::Buf;
 
 /// Work out everything about `wlv.lnum` that does not depend on which cell is
 /// being drawn, and leave `wlv` ready for the character loop.
@@ -78,7 +77,7 @@ pub(crate) unsafe fn prepare_line(
     }
 
     s.bg_attr = unsafe { win_bg_attr(window) };
-    unsafe { s.diff_state(wlv, Win::new(window.raw())) };
+    unsafe { s.diff_state(wlv, window) };
     unsafe { s.filler_lines(wlv, window) };
     unsafe { s.cursorline(wlv, window) };
     unsafe { s.signs_and_statuscolumn(wlv, window) };
@@ -90,7 +89,7 @@ pub(crate) unsafe fn prepare_line(
     }
 
     s.line = if s.draw_text {
-        unsafe { ml_get_buf(window.w_buffer, lnum) }
+        unsafe { ml_get_buf(window.buffer(), lnum) }
     } else {
         c"".as_ptr().cast_mut()
     };
@@ -124,7 +123,7 @@ pub(crate) unsafe fn prepare_line(
             decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window)
         };
         // A provider is Lua and may have changed the buffer under us.
-        s.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+        s.line = unsafe { ml_get_buf(window.buffer(), lnum) };
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
@@ -156,7 +155,7 @@ pub(crate) unsafe fn prepare_line(
 
     // Insert-mode completion highlights the text it inserted.
     if State.get() & MODE_INSERT != 0
-        && ins_compl_win_active(unsafe { Win::new(window.raw()) })
+        && ins_compl_win_active(window)
         && (s.in_curline || unsafe { ins_compl_lnum_in_range(lnum) })
     {
         s.area_highlighting = true;
@@ -170,8 +169,7 @@ pub(crate) unsafe fn prepare_line(
         s.has_terminal = true;
         s.extra_check = true;
     }
-    s.may_have_inline_virt = !s.has_foldtext
-        && buf_meta_total(unsafe { Win::new(window.raw()) }.buffer(), kMTMetaInline) > 0;
+    s.may_have_inline_virt = !s.has_foldtext && buf_meta_total(window.buffer(), kMTMetaInline) > 0;
 
     s
 }
@@ -263,7 +261,7 @@ impl LineSetup {
     /// `window` must be a live window.
     unsafe fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window.
-        if !unsafe { syntax_present(window.raw()) }
+        if !unsafe { syntax_present(window) }
             || unsafe { (*window.w_s).b_syn_error }
             || unsafe { (*window.w_s).b_syn_slow }
             || self.has_foldtext
@@ -272,7 +270,7 @@ impl LineSetup {
         }
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
-        unsafe { syntax_start(window.raw(), lnum) };
+        unsafe { syntax_start(window, lnum) };
         if did_emsg.get() != 0 {
             unsafe { (*window.w_s).b_syn_error = true };
         } else {
@@ -316,7 +314,7 @@ impl LineSetup {
                 } else {
                     unsafe {
                         getvvcol(
-                            Win::new(window.raw()),
+                            window,
                             &raw mut top,
                             &raw mut wlv.fromcol,
                             ::core::ptr::null_mut(),
@@ -345,7 +343,7 @@ impl LineSetup {
                     if unsafe { *p_sel.get() } == b'e' as ::core::ffi::c_char {
                         unsafe {
                             getvvcol(
-                                Win::new(window.raw()),
+                                window,
                                 &raw mut pos,
                                 &raw mut wlv.tocol,
                                 ::core::ptr::null_mut(),
@@ -355,7 +353,7 @@ impl LineSetup {
                     } else {
                         unsafe {
                             getvvcol(
-                                Win::new(window.raw()),
+                                window,
                                 &raw mut pos,
                                 ::core::ptr::null_mut(),
                                 ::core::ptr::null_mut(),
@@ -538,7 +536,7 @@ impl LineSetup {
         unsafe {
             decor_redraw_signs(
                 window,
-                Buf::new(window.w_buffer),
+                window.buffer(),
                 wlv.lnum - 1,
                 &raw mut wlv.sign_attrs as *mut SignTextAttrs,
                 &raw mut sign_line_attr,
@@ -575,9 +573,7 @@ impl LineSetup {
         }
 
         // The quickfix window highlights the entry the cursor is on.
-        if is_qf_buffer(unsafe { Win::new(window.raw()) })
-            && qf_current_entry(unsafe { Win::new(window.raw()) }) == wlv.lnum
-        {
+        if is_qf_buffer(window) && qf_current_entry(window) == wlv.lnum {
             wlv.line_attr = unsafe { win_hl_attr(window, HLF_QFL) };
         }
         if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
@@ -610,9 +606,7 @@ impl LineSetup {
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if unsafe { (*spv).spv_capcol_lnum } == 0
-            && unsafe { check_need_cap(window.raw(), lnum, 0) }
-        {
+        if unsafe { (*spv).spv_capcol_lnum } == 0 && unsafe { check_need_cap(window, lnum, 0) } {
             unsafe { (*spv).spv_cap_col = 0 };
         } else if lnum != unsafe { (*spv).spv_capcol_lnum } {
             unsafe { (*spv).spv_cap_col = -1 };
@@ -623,10 +617,10 @@ impl LineSetup {
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
         if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
-            let next = unsafe { ml_get_buf(window.w_buffer, lnum + 1) };
+            let next = unsafe { ml_get_buf(window.buffer(), lnum + 1) };
             unsafe { spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN) };
         }
-        let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+        let line = unsafe { ml_get_buf(window.buffer(), lnum) };
 
         // An empty line: check the first word of the next one for a
         // capital instead.
@@ -644,7 +638,7 @@ impl LineSetup {
             self.nextline_idx = 0;
             return;
         }
-        let line_len = unsafe { ml_get_buf_len(window.w_buffer, lnum) } as usize;
+        let line_len = unsafe { ml_get_buf_len(window.buffer(), lnum) } as usize;
         if line_len < SPELL_LOOKAHEAD {
             // Short line: use all of it, then move the next line's start
             // up against it.
@@ -687,7 +681,7 @@ impl LineSetup {
             self.extra_check = true;
         }
         if window.w_p_lcs_chars.trail != 0 {
-            let mut trailcol = unsafe { ml_get_buf_len(window.w_buffer, lnum) };
+            let mut trailcol = unsafe { ml_get_buf_len(window.buffer(), lnum) };
             while trailcol > 0
                 && ascii_iswhite(
                     unsafe { *self.ptr.offset(trailcol as isize - 1) } as ::core::ffi::c_int
@@ -734,8 +728,7 @@ impl LineSetup {
         let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
         let mut csarg = CharsizeArg::default();
-        let cstype =
-            unsafe { init_charsize_arg(&mut csarg, Win::new(window.raw()), wlv.lnum, self.line) };
+        let cstype = unsafe { init_charsize_arg(&mut csarg, window, wlv.lnum, self.line) };
         csarg.max_head_vcol = start_vcol;
         let mut vcol = wlv.vcol;
         let mut ci = unsafe { utf_ptr2str_char_info(self.ptr) };
@@ -761,7 +754,7 @@ impl LineSetup {
         if wlv.vcol < start_vcol
             && (window.w_onebuf_opt.wo_cuc != 0
                 || !wlv.color_cols.is_null()
-                || virtual_active(unsafe { Win::new(window.raw()) })
+                || virtual_active(window)
                 || (visual_active() && window.w_buffer == Win::current().w_buffer)
                 || self.has_fold)
         {
@@ -846,17 +839,16 @@ impl LineSetup {
         let saved_cursor = window.w_cursor;
         window.w_cursor.lnum = lnum;
         window.w_cursor.col = linecol;
-        let len =
-            unsafe { spell_move_to(window.raw(), FORWARD, SMT_ALL, true, &raw mut spell_hlf) };
+        let len = unsafe { spell_move_to(window, FORWARD, SMT_ALL, true, &raw mut spell_hlf) };
 
         // `spell_move_to` may call `ml_get` and invalidate "line".
-        self.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+        self.line = unsafe { ml_get_buf(window.buffer(), lnum) };
         self.ptr = unsafe { self.line.offset(linecol as isize) };
 
         if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
-            let end = unsafe { spell_to_word_end(self.ptr, window.raw()) };
+            let end = unsafe { spell_to_word_end(self.ptr, window) };
             self.word_end = (unsafe { end.offset_from(self.line) } + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.
@@ -870,7 +862,7 @@ impl LineSetup {
 
         // Syntax highlighting has to be restarted for this line.
         if self.has_syntax {
-            unsafe { syntax_start(window.raw(), lnum) };
+            unsafe { syntax_start(window, lnum) };
         }
     }
 

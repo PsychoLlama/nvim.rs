@@ -134,7 +134,7 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
     buf.b_locked -= 1;
     err.clear();
     // SAFETY: a live buffer, whose status line names the title.
-    unsafe { status_redraw_buf(buf.raw()) };
+    unsafe { status_redraw_buf(buf) };
 }
 
 /// Accumulate a fragmented title, publishing it once the last fragment

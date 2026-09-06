@@ -4,6 +4,7 @@
 
 pub mod state;
 use crate::types::AutoEvent;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use crate::autocmd::apply_autocmds;
@@ -106,10 +107,9 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    Buffer, ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame,
-    Handle, Hlf, Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg,
-    ScreenChar, SpellVars, VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t,
-    size_t, uint16_t,
+    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame, Handle, Hlf,
+    Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg, ScreenChar, SpellVars,
+    VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t, size_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -186,9 +186,8 @@ static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// `window` must be a live window.
-pub(crate) unsafe fn win_endrow(window: *const Window) -> c_int {
-    // SAFETY: caller's promise.
-    unsafe { (*window).w_winrow + (*window).w_height }
+pub(crate) unsafe fn win_endrow(window: Win) -> c_int {
+    window.w_winrow + window.w_height
 }
 
 /// The screen column right of window `window`'s last one -- `W_ENDCOL`.
@@ -197,9 +196,8 @@ pub(crate) unsafe fn win_endrow(window: *const Window) -> c_int {
 ///
 /// # Safety
 /// `window` must be a live window.
-pub(crate) unsafe fn win_endcol(window: *const Window) -> c_int {
-    // SAFETY: caller's promise.
-    unsafe { (*window).w_wincol + (*window).w_width }
+pub(crate) unsafe fn win_endcol(window: Win) -> c_int {
+    window.w_wincol + window.w_width
 }
 
 /// Redraw the cursor line if `'concealcursor'` changed what it does to it.
@@ -208,20 +206,20 @@ pub(crate) unsafe fn win_endcol(window: *const Window) -> c_int {
 /// anyway, so this only matters when it did not.
 pub unsafe fn conceal_check_cursor_line() {
     let wp = Win::current();
-    let should_conceal = unsafe { conceal_cursor_line(wp.raw()) };
+    let should_conceal = unsafe { conceal_cursor_line(wp) };
     if wp.w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
         return;
     }
 
-    unsafe { redraw_win_line(wp.raw(), wp.w_cursor.lnum) };
+    unsafe { redraw_win_line(wp, wp.w_cursor.lnum) };
 
     // Whether the line is displayed at all may have changed with it.
     if unsafe { decor_conceal_line(wp, wp.w_cursor.lnum - 1, true) } {
-        changed_window_setting(unsafe { Win::new(wp.raw()) });
+        changed_window_setting(wp);
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
     // mode stops the line being concealed.
-    curs_columns(unsafe { Win::new(wp.raw()) }, c_int::from(true)); // may_scroll
+    curs_columns(wp, c_int::from(true)); // may_scroll
 }
 
 /// Whether redrawing should happen right now.
@@ -277,12 +275,12 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
             if wp.w_floating {
                 continue;
             }
-            if unsafe { win_endrow(wp.raw()) } > valid {
+            if unsafe { win_endrow(wp) } > valid {
                 // Pessimistic: `redr_type` could be UPD_NOT_VALID only
                 // because of windows above the separator.
                 wp.w_redr_type = wp.w_redr_type.max(UPD_NOT_VALID);
             }
-            if !is_stl_global && unsafe { win_endrow(wp.raw()) } + wp.w_status_height > valid {
+            if !is_stl_global && unsafe { win_endrow(wp) } + wp.w_status_height > valid {
                 wp.w_redr_status = true;
             }
         }
@@ -321,14 +319,12 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
         if !unsafe { (*buf).b_mod_set } {
             continue;
         }
-        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get()
-            && unsafe { syntax_present(wp.raw()) }
-        {
-            unsafe { syn_stack_apply_changes(buf) };
+        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && unsafe { syntax_present(wp) } {
+            unsafe { syn_stack_apply_changes(Buf::new(buf)) };
             unsafe { (*buf).b_mod_tick_syn = display_tick.get() };
         }
         if unsafe { (*buf).b_mod_tick_decor } < display_tick.get() {
-            unsafe { decor_providers_invoke_buf(buf) };
+            unsafe { decor_providers_invoke_buf(Buf::new(buf)) };
             unsafe { (*buf).b_mod_tick_decor = display_tick.get() };
         }
     }
@@ -502,7 +498,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
         }
 
         unsafe { win_check_ns_hl(wp.raw()) };
-        unsafe { win_grid_alloc(wp.raw()) };
+        unsafe { win_grid_alloc(wp) };
 
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
             unsafe {
@@ -527,8 +523,8 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
         // The status line and window bar go after the window, to minimise
         // cursor movement.
         if wp.w_redr_status {
-            unsafe { win_redr_winbar(wp.raw()) };
-            unsafe { win_redr_status(wp.raw()) };
+            unsafe { win_redr_winbar(wp) };
+            unsafe { win_redr_status(wp) };
         }
     }
 
@@ -676,7 +672,7 @@ pub unsafe fn setcursor_mayforce(window: Win, force: bool) {
         // With 'rightleft' and the cursor on a double-width character, the
         // cursor goes on its leftmost column.
         let cursor = unsafe {
-            ml_get_buf(window.w_buffer, window.w_cursor.lnum).add(window.w_cursor.col as usize)
+            ml_get_buf(window.buffer(), window.w_cursor.lnum).add(window.w_cursor.col as usize)
         };
         let cells = if unsafe { utf_ptr2cells(cursor) } == 2
             && unsafe { vim_isprintc(utf_ptr2char(cursor)) }
@@ -760,7 +756,7 @@ pub unsafe fn number_width(mut window: Win) -> c_int {
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
     if n < 2
-        && buf_meta_total(unsafe { Win::new(window.raw()) }.buffer(), kMTMetaSignText) != 0
+        && buf_meta_total(window.buffer(), kMTMetaSignText) != 0
         && window.w_minscwidth == SCL_NUM
     {
         n = 2;
@@ -772,9 +768,9 @@ pub unsafe fn number_width(mut window: Win) -> c_int {
 
 /// Whether the cursor line in window `window` may be concealed, per
 /// `'concealcursor'`.
-pub unsafe fn conceal_cursor_line(window: *const Window) -> bool {
+pub unsafe fn conceal_cursor_line(window: Win) -> bool {
     // SAFETY: a live window, on the main thread.
-    if unsafe { *(*window).w_onebuf_opt.wo_cocu } == 0 {
+    if unsafe { *window.w_onebuf_opt.wo_cocu } == 0 {
         return false;
     }
     let mode = if get_real_state() & MODE_VISUAL != 0 {
@@ -788,19 +784,19 @@ pub unsafe fn conceal_cursor_line(window: *const Window) -> bool {
     } else {
         return false;
     };
-    !unsafe { vim_strchr((*window).w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
+    !unsafe { vim_strchr(window.w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
 }
 
 /// Whether the cursor line of window `window` is drawn differently from any other.
 ///
 /// When it is, moving the cursor within the window means redrawing both the old
 /// cursor line and the new one.
-pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
+pub unsafe fn win_cursorline_standout(window: Win) -> bool {
     // SAFETY: a live window, on the main thread.
     unsafe {
-        (*window).w_onebuf_opt.wo_cul != 0
-            || (window == Win::current_raw()
-                && (*window).w_onebuf_opt.wo_cole > 0
+        window.w_onebuf_opt.wo_cul != 0
+            || (window == Win::current()
+                && window.w_onebuf_opt.wo_cole > 0
                 && !conceal_cursor_line(window))
     }
 }
@@ -814,14 +810,14 @@ pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
 pub unsafe fn win_update_cursorline(mut window: Win, foldinfo: *mut FoldInfo) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
     unsafe {
-        window.w_cursorline = if win_cursorline_standout(window.raw()) {
+        window.w_cursorline = if win_cursorline_standout(window) {
             window.w_cursor.lnum
         } else {
             0
         }
     };
     if window.w_onebuf_opt.wo_cul != 0 {
-        unsafe { *foldinfo = fold_info(Win::new(window.raw()), window.w_cursor.lnum) };
+        unsafe { *foldinfo = fold_info(window, window.w_cursor.lnum) };
         if unsafe { (*foldinfo).fi_level } != 0 && unsafe { (*foldinfo).fi_lines } > 0 {
             unsafe { window.w_cursorline = (*foldinfo).fi_lnum };
         }

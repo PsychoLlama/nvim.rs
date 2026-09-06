@@ -49,6 +49,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::semsg;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
@@ -70,7 +71,7 @@ use crate::os::fs::{
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
 use crate::startup::main_loop;
-use crate::types::{BlockNr, Buffer, FileInfo, FileOffset};
+use crate::types::{BlockNr, FileInfo, FileOffset};
 use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};
 
@@ -402,15 +403,15 @@ pub(crate) unsafe fn mf_close(mfp: *mut MemFile, del_file: bool) {
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub(crate) unsafe fn mf_close_file(buffer: *mut Buffer, getlines: bool) {
+pub(crate) unsafe fn mf_close_file(buffer: Buf, getlines: bool) {
     unsafe {
-        let mfp = (*buffer).b_ml.ml_mfp;
+        let mfp = buffer.b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fd < 0 {
             return;
         }
 
         if getlines {
-            for lnum in 1..=(*buffer).b_ml.ml_line_count {
+            for lnum in 1..=buffer.b_ml.ml_line_count {
                 ml_get_buf(buffer, lnum);
             }
         }
@@ -662,7 +663,7 @@ pub(crate) unsafe fn mf_release_all() -> bool {
         unsafe {
             // Nothing can be released without somewhere to put it.
             if (*mfp).mf_fd < 0 && buf.b_may_swap {
-                ml_open_file(buf.raw());
+                ml_open_file(buf);
             }
 
             if (*mfp).mf_fd >= 0 {
