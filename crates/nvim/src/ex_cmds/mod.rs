@@ -537,12 +537,10 @@ pub const __DBL_MAX__: ::core::ffi::c_double = 1.7976931348623157e+308f64;
 /// One copy for the whole family: every file here had its own, which is
 /// seventeen `unsafe` lines saying the same thing.
 pub(super) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in.
 pub(super) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

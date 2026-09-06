@@ -124,14 +124,12 @@ pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut Buffer {
 
 /// The window the editor is working in.
 pub(super) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in.
 pub(super) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The editor state [`SavedBufferState::prepare`] saves so that
@@ -164,8 +162,7 @@ impl SavedBufferState {
     unsafe fn prepare(&mut self, buffer: Buf) {
         self.save_visual_active = visual_active();
         set_visual_active(false);
-        // SAFETY: the caller's promise -- `curwin` is set.
-        self.curwin_save = unsafe { Win::current() };
+        self.curwin_save = Win::current();
         buffer.make_current();
         // SAFETY: `curbuf` was just set to the caller's live buffer.
         unsafe { find_win_for_curbuf() };

@@ -69,13 +69,11 @@ pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
 }
 
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is always a live window.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is always a live buffer.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// `buf_valid()`: whether `buffer` is still on the buffer list.

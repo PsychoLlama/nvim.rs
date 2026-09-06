@@ -486,7 +486,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_reg_var(get_default_register_name()) };
 
     if cur_win().w_onebuf_opt.wo_diff != 0 && cur_win().w_onebuf_opt.wo_scb != 0 {
-        update_topline(unsafe { Win::current() });
+        update_topline(Win::current());
         unsafe { check_scrollbind(0 as LineNr, 0) };
         time_msg_at(c"diff scrollbinding");
     }
@@ -554,12 +554,10 @@ fn first_win() -> Win {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

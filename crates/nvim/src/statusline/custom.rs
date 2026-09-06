@@ -576,8 +576,7 @@ static DID_RULER_COL: GlobalCell<c_int> = GlobalCell::new(-1);
 pub unsafe fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
-    // SAFETY: `curwin` is live from startup to exit.
-    let cur = unsafe { Win::current() };
+    let cur = Win::current();
     // SAFETY: a live window.
     let use_cur = !is_aucmd_win(cur.raw()) && cur.w_status_height == 0;
     // SAFETY: `lastwin_nofloating` answers a live window of this tab page.

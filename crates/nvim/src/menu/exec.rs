@@ -330,8 +330,7 @@ fn real_state() -> c_int {
 }
 
 fn check_cursor_now() {
-    // SAFETY: `curwin` names a live window.
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
 }
 
 fn char_at_cursor() -> c_int {

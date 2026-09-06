@@ -149,8 +149,7 @@ impl Env {
         // Upstream publishes the *real* current buffer and window under
         // `g:actual_curbuf`/`g:actual_curwin`, because the two below are
         // about to be swapped out from under the expression.
-        // SAFETY: `curbuf`/`curwin` are set from startup to exit.
-        let (real_buf, real_win) = unsafe { (Buf::current(), Win::current()) };
+        let (real_buf, real_win) = (Buf::current(), Win::current());
         set_str_var(c"g:actual_curbuf", real_buf.handle);
         set_str_var(c"g:actual_curwin", real_win.handle);
 

@@ -327,7 +327,7 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
     }
 
     // Try to advance to the cursor column.
-    validate_virtcol(unsafe { Win::current() });
+    validate_virtcol(Win::current());
     let end_vcol = cur_win().w_virtcol;
     let line = ml_get(lnum);
 
@@ -400,12 +400,10 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

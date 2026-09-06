@@ -125,8 +125,8 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
     let mut switchwin = SwitchWin::default();
     let any_tab = ptr::null_mut::<Tabpage>();
     let _ = unsafe { switch_win(&raw mut switchwin, w.raw(), any_tab, true) };
-    update_topline(unsafe { Win::current() });
-    validate_cursor(unsafe { Win::current() });
+    update_topline(Win::current());
+    validate_cursor(Win::current());
     unsafe { restore_win(&raw mut switchwin, true) };
     w.redraw_later(UPD_VALID);
     w.w_redr_status = true;

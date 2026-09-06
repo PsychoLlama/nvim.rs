@@ -328,8 +328,7 @@ fn resume_redo_visual(mut cmd_arg: Cmd, mut op: Op) {
         } else if redo.rv_line_count <= 1 {
             // A one-line charwise region is that many columns *from the
             // cursor*, not to a fixed column.
-            // SAFETY: a live window.
-            validate_virtcol(unsafe { Win::current() });
+            validate_virtcol(Win::current());
             cur_win().w_curswant = cur_win().w_virtcol + redo.rv_vcol - 1;
         } else {
             cur_win().w_curswant = redo.rv_vcol;
@@ -705,7 +704,7 @@ fn run_operator(
                 op.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
                 unsafe { op_yank(op.raw(), !gui_yank) };
             }
-            check_cursor_col(unsafe { Win::current() });
+            check_cursor_col(Win::current());
         }
 
         OpType::Change => {
@@ -736,7 +735,7 @@ fn run_operator(
             } else {
                 unsafe { op_tilde(op.raw()) };
             }
-            check_cursor_col(unsafe { Win::current() });
+            check_cursor_col(Win::current());
         }
 
         OpType::Format => {
@@ -814,7 +813,7 @@ fn run_operator(
                 unsafe { op_addsub(op.raw(), count, g) };
                 set_visual_active(false);
             }
-            check_cursor_col(unsafe { Win::current() });
+            check_cursor_col(Win::current());
         }
 
         _ => unsafe { clearopbeep(op.raw()) },
@@ -900,12 +899,10 @@ fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

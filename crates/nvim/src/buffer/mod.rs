@@ -370,8 +370,7 @@ pub(crate) fn err_raw(msg: *mut c_char) {
 /// The current buffer. Null only between `open_buffer()` freeing the last one
 /// and finding a replacement, which is why [`current_buf`] exists beside it.
 pub(crate) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit, bar that one window.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The current buffer, or `None` where the C tests `curbuf != NULL`.
@@ -384,8 +383,7 @@ pub(crate) fn current_buf() -> Option<Buf> {
 /// The current window. Null only while exiting, which is why
 /// [`current_win`] exists beside it.
 pub(crate) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The current window, or `None` where the C tests `curwin != NULL`.

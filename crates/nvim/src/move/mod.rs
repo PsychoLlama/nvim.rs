@@ -480,8 +480,7 @@ pub fn changed_cline_bef_curs(window: Win) {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn changed_line_abv_curs() {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }.invalidate_above_cursor();
+    Win::current().invalidate_above_cursor();
 }
 
 /// As [`changed_line_abv_curs`], for a given window.

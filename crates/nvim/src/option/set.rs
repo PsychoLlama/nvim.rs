@@ -481,7 +481,7 @@ pub(crate) unsafe fn did_set_option(
         // A modeline only forces the FileType autocommand when the
         // filetype really changed.
         kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
-            do_filetype_autocmd(unsafe { Buf::current() }, value_changed);
+            do_filetype_autocmd(Buf::current(), value_changed);
         }
         kOptSpelllang => unsafe { do_spelllang_source(curwin.get()) },
         _ => {}
@@ -809,12 +809,10 @@ pub(crate) fn didset_options_sctx(opt_flags: OptionSetFlags, opts: &[OptIndex]) 
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

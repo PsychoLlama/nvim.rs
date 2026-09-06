@@ -20,20 +20,17 @@ use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, tabs};
 
 /// The current buffer, which exists from startup to exit.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` names a live buffer for the editor's whole run.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The current window, which exists from startup to exit.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` names a live window for the editor's whole run.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The current tab page, which exists from startup to exit.
 fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` names a live tab page for the editor's whole run.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }
 
 /// One `String` option's value, borrowing the literal's bytes.

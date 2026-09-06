@@ -179,14 +179,12 @@ impl Session {
 
 /// The window the editor is working in.
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in.
 fn current_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// Tell the child whether it has focus, so it can show its own cursor

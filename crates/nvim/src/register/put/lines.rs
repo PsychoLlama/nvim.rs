@@ -127,11 +127,8 @@ impl Put {
                 if lnum == cur_win().w_cursor.lnum {
                     // Land the cursor on the last character put, keeping
                     // w_virtcol right.
-                    //
-                    // SAFETY (both): a live window, whose cursor line is the
-                    // one that just changed.
-                    changed_cline_bef_curs(unsafe { Win::current() });
-                    invalidate_botline_win(unsafe { Win::current() });
+                    changed_cline_bef_curs(Win::current());
+                    invalidate_botline_win(Win::current());
                     cur_win().w_cursor.col += (totlen - 1) as ColNr;
                 }
                 // SAFETY: `lnum`/`col` is where the line changed.
@@ -459,12 +456,10 @@ struct FixIndent {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

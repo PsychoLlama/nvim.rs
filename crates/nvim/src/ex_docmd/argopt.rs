@@ -486,14 +486,12 @@ pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_c
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --

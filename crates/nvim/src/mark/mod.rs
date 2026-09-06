@@ -150,8 +150,7 @@ pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_
 /// # Safety
 /// The editor's globals must be live, which they are from startup to exit.
 pub unsafe fn setmark(c: c_int) -> Result<(), Failed> {
-    // SAFETY: `curwin`/`curbuf` are live from startup to exit.
-    let (win, buf) = unsafe { (Win::current(), Buf::current()) };
+    let (win, buf) = (Win::current(), Buf::current());
     let mut view = mark_view_make_at(win, win.w_cursor);
     // SAFETY: the cursor and the view live on the stack for the call, and
     // `curbuf`'s handle names a live buffer.
@@ -270,8 +269,7 @@ pub unsafe fn setmark_pos(
     // the buffer's: setting it from the cursor pushes a jumplist entry, while
     // setting it from anywhere else just moves it.
     if c == '\'' as c_int || c == '`' as c_int {
-        // SAFETY: `curwin` is live from startup to exit.
-        let mut win = unsafe { Win::current() };
+        let mut win = Win::current();
         if ptr::eq(pos, &raw const win.w_cursor) {
             // SAFETY: the editor's globals are live.
             setpcmark();
@@ -411,8 +409,7 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
     if topline < 1 {
         return;
     }
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     // SAFETY: as above.
     set_topline(win, topline);
     // A remembered `skipcol` is dropped when the line it names is now folded
@@ -561,8 +558,7 @@ pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString
         }
         return false;
     }
-    // SAFETY: `curbuf` is live from startup to exit.
-    let buf = unsafe { Buf::current() };
+    let buf = Buf::current();
     // SAFETY: as above; the record and the out-parameter are the caller's.
     fm.fnum() != buf.handle || unsafe { mark_check_line_bounds(buf.raw(), fm.raw(), errormsg) }
 }

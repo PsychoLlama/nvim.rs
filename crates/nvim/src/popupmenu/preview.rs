@@ -463,7 +463,7 @@ unsafe fn pum_restore_window(
         unsafe { (*curwin.get()).w_redr_status = false };
     }
 
-    validate_cursor(unsafe { Win::current() });
+    validate_cursor(Win::current());
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
 
     // A resized preview window needs the buffer view updated, which only
@@ -472,7 +472,7 @@ unsafe fn pum_restore_window(
         let no_sync = Suppress::undo_sync();
         unsafe { win_enter(curwin_save, true) };
         drop(no_sync);
-        update_topline(unsafe { Win::current() });
+        update_topline(Win::current());
     }
 
     // Draw the screen before the menu goes back on top of it, with the

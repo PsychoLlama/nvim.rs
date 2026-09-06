@@ -226,6 +226,5 @@ pub(crate) unsafe fn cin_get_equal_amount(lnum: LineNr) -> c_int {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

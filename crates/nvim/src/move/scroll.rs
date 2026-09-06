@@ -121,8 +121,7 @@ impl Win {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn scroll_redraw(up: c_int, count: LineNr) {
-    // SAFETY: `curwin` is set from startup to exit.
-    scroll_redraw_cur(unsafe { Win::current() }, up != 0, count);
+    scroll_redraw_cur(Win::current(), up != 0, count);
 }
 
 /// Scroll `count` lines up or down, and redraw.
@@ -422,8 +421,7 @@ impl Win {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn adjust_skipcol() {
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     if !do_sms(win) || win.w_cursor.lnum != win.w_topline {
         return;
     }
@@ -519,8 +517,7 @@ impl Win {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn scrolldown_clamp() {
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     let can_fill = win.w_topfill < win.fill_above(win.w_topline);
     if win.w_topline <= 1 && !can_fill {
         return;
@@ -564,8 +561,7 @@ pub unsafe fn scrolldown_clamp() {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn scrollup_clamp() {
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     if win.w_topline == win.buffer().line_count() && win.w_topfill == 0 {
         return;
     }

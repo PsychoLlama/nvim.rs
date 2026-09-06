@@ -349,8 +349,7 @@ pub unsafe fn expand_mappings(
     // abbreviation list either way.
     let abbr = EXPAND_ISABBREV.get();
     let table = if !abbr && EXPAND_BUFFER.get() {
-        // SAFETY: `curbuf` is set from startup to exit.
-        MapTable::Buffer(unsafe { Buf::current() })
+        MapTable::Buffer(Buf::current())
     } else {
         MapTable::Global
     };

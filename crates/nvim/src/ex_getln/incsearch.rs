@@ -81,8 +81,7 @@ pub(crate) fn set_search_match(t: &mut Pos) {
     t.col = search_match_endcol.get();
     if t.lnum > cur_buf().b_ml.ml_line_count {
         t.lnum = cur_buf().b_ml.ml_line_count;
-        // SAFETY: `curwin` is a live window.
-        coladvance(unsafe { Win::current() }, MAXCOL);
+        coladvance(Win::current(), MAXCOL);
     }
 }
 
@@ -671,8 +670,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     let no_emsg = Suppress::emsg();
     let save = unsafe { *pat.offset(patlen as isize) };
     unsafe { *pat.offset(patlen as isize) = NUL as ::core::ffi::c_char };
-    // SAFETY: `curwin` and `curbuf` are the live window and buffer.
-    let (w, b) = unsafe { (Some(Win::current()), Buf::current()) };
+    let (w, b) = (Some(Win::current()), Buf::current());
     let (tp, e) = (&raw mut t, ::core::ptr::null_mut::<Pos>());
     let dir = if next_match { FORWARD } else { BACKWARD } as Direction;
     let (plen, flags) = (patlen as size_t, search_flags);
@@ -813,25 +811,21 @@ fn set_cmd_byte(cc: Cc, i: ::core::ffi::c_int, b: ::core::ffi::c_char) {
 /// C's `changed_cline_bef_curs(curwin); update_topline(curwin);`, the pair
 /// that follows every cursor move the preview makes.
 fn curwin_cursor_moved() {
-    // SAFETY: `curwin` is a live window.
-    changed_cline_bef_curs(unsafe { Win::current() });
-    update_topline(unsafe { Win::current() });
+    changed_cline_bef_curs(Win::current());
+    update_topline(Win::current());
 }
 
 /// C's `validate_cursor(curwin)`.
 fn validate_curwin_cursor() {
-    // SAFETY: `curwin` is a live window.
-    validate_cursor(unsafe { Win::current() });
+    validate_cursor(Win::current());
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

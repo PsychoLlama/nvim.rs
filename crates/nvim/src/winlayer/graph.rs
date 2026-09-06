@@ -9,9 +9,12 @@
 //! command-line window's saved graph (`cmdwin_*`) belongs with them: it is a
 //! second, temporary editor tree that the first one is swapped out for.
 //!
-//! Only the `cur*` pointers are raw. The list heads already carry the
-//! [`WinId`]/[`BufId`]/[`TabId`] handles this module's registries hand out,
-//! which is the shape the rest of them are headed for.
+//! Which one is current is a [`WinId`]/[`BufId`]/[`TabId`], like the list
+//! heads: [`CURRENT_WIN`] and its two siblings are the truth, and the raw
+//! `curwin`/`curbuf`/`curtab` beside them are mirrors the same setters
+//! write. The rest of the raw pointers here — `prevwin`, `topframe`,
+//! `lastused_tabpage`, the `cmdwin_*` block — are the shape the handles
+//! are headed for.
 //!
 //! [`winlayer`]: super
 #![deny(
@@ -62,21 +65,50 @@ pub(crate) static cmdline_win: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
 
 // ---------------------------------------------------------------------------
+// Which one is current
+//
+// The truth is the **identity**: an `Option<WinId>`/`BufId`/`TabId` the
+// registry answers for, so that "the current window" is a question with a
+// checked answer rather than an address nobody promised. The three raw
+// statics above are *mirrors* the same setters write, kept for two reasons
+// and no others: `curwin` is a data symbol plugins and
+// `test/functional/lua/ffi_spec.lua` read (`extern win_T *curwin`), and all
+// three answer `is_current()` without touching a registry.
+//
+// They are written together, always, by the funnel below. Nothing else in
+// the tree writes either half.
+
+/// The window the editor is working in, as the registry names it.
+///
+/// `None` only before `win_alloc_first` and after the last window goes.
+pub(super) static CURRENT_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+
+/// The buffer the editor is working in. `None` where [`leave_curbuf`] left
+/// it -- the editor really has none for those few statements.
+pub(super) static CURRENT_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+
+/// The tab page the editor is working in. [`CURRENT_WIN`].
+pub(super) static CURRENT_TAB: GlobalCell<Option<TabId>> = GlobalCell::new(None);
+
+// ---------------------------------------------------------------------------
 // Becoming current
 //
-// **Everything below is the only code in the tree that writes `curwin`,
-// `curbuf` or `curtab`.** Nothing else calls `.set()` on the three statics,
-// and that is the point: the next slice retypes them to
-// `GlobalCell<Option<WinId>>` and mirrors the `no_mangle` `curwin` pointer
-// beside the truth, which is a change to a handful of functions here rather
-// than to the 125 assignments that used to be spread over 33 files.
+// **Everything below is the only code in the tree that writes which window,
+// buffer or tab page is current** — either half of it, the id and the
+// mirror. That is what lets the two be relied on to agree, and it is why
+// retyping the truth from an address to an id was a change to the six
+// functions here rather than to the 125 assignments that used to be spread
+// over 33 files.
 //
 // The funnel takes handles, never raw pointers, so "make this current" cannot
 // be spelled with an address whose liveness nobody promised. Building a
-// `Win`/`Buf` out of the statics needs no `unsafe` *here* — this module is
-// inside `winlayer`, which is where the promise those types carry is made,
-// and `curwin`/`curbuf`/`curtab` are set from startup to exit, which is
-// exactly the promise `Win::current()` already takes.
+// `Win`/`Buf` out of the mirrors needs no `unsafe` *here* — this module is
+// inside `winlayer`, which is where the promise those types carry is made.
+//
+// Taking the id costs one field read of an object the caller has already
+// promised is live, and it is the read that makes `Win::current()` safe: an
+// id the registry cannot answer for is a window that is gone, which the
+// accessor says out loud instead of handing back a dangling address.
 
 impl Win {
     /// Make this the window the editor is working in.
@@ -86,6 +118,7 @@ impl Win {
     /// that move only one half mean it.
     #[inline]
     pub fn make_current(self) {
+        CURRENT_WIN.set(Some(self.id()));
         curwin.set(self.raw());
     }
 }
@@ -94,6 +127,7 @@ impl Buf {
     /// Make this the buffer the editor is working in. [`Win::make_current`].
     #[inline]
     pub fn make_current(self) {
+        CURRENT_BUF.set(Some(self.id()));
         curbuf.set(self.raw());
     }
 }
@@ -102,6 +136,7 @@ impl TabPage {
     /// Make this the tab page the editor is working in.
     #[inline]
     pub(crate) fn make_current(self) {
+        CURRENT_TAB.set(Some(self.id()));
         curtab.set(self.raw());
     }
 }
@@ -116,6 +151,7 @@ impl TabPage {
 /// `Option` argument that would read as ordinary.
 #[inline]
 pub(crate) fn leave_curbuf() {
+    CURRENT_BUF.set(None);
     curbuf.set(::core::ptr::null_mut::<Buffer>());
 }
 
@@ -131,8 +167,8 @@ pub(crate) fn leave_curbuf() {
               the editor standing in the wrong window"]
 pub(crate) fn switch_to(win: Win) -> Saved {
     let saved = Saved(Displaced::WindowAndBuffer(Win(curwin.get())));
-    curwin.set(win.raw());
-    curbuf.set(win.w_buffer);
+    win.make_current();
+    Buf(win.w_buffer).make_current();
     saved
 }
 
@@ -141,7 +177,7 @@ pub(crate) fn switch_to(win: Win) -> Saved {
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_window(win: Win) -> Saved {
     let saved = Saved(Displaced::Window(Win(curwin.get())));
-    curwin.set(win.raw());
+    win.make_current();
     saved
 }
 
@@ -150,7 +186,7 @@ pub(crate) fn switch_window(win: Win) -> Saved {
 #[must_use = "the switch is undone by Saved::restore"]
 pub(crate) fn switch_buffer(buffer: Buf) -> Saved {
     let saved = Saved(Displaced::Buffer(Buf(curbuf.get())));
-    curbuf.set(buffer.raw());
+    buffer.make_current();
     saved
 }
 
@@ -192,11 +228,11 @@ impl Saved {
     pub(crate) fn restore(self) {
         match self.0 {
             Displaced::WindowAndBuffer(win) => {
-                curwin.set(win.raw());
-                curbuf.set(win.w_buffer);
+                win.make_current();
+                Buf(win.w_buffer).make_current();
             }
-            Displaced::Window(win) => curwin.set(win.raw()),
-            Displaced::Buffer(buf) => curbuf.set(buf.raw()),
+            Displaced::Window(win) => win.make_current(),
+            Displaced::Buffer(buf) => buf.make_current(),
         }
     }
 }

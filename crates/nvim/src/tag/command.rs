@@ -436,7 +436,7 @@ impl DoTag {
         if jop_flags.get() & kOptJopFlagView as c_uint != 0 {
             unsafe { mark_view_restore(&raw mut self.saved_fmark) };
         }
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
         if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
             unsafe { fold_open_cursor() };
         }
@@ -926,12 +926,10 @@ pub(crate) unsafe fn forget_matches() {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

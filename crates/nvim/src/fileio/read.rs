@@ -757,7 +757,7 @@ pub(crate) unsafe fn readfile(
 
         if set_options {
             // Remember the current file format.
-            save_file_ff(unsafe { Buf::current() });
+            save_file_ff(Buf::current());
             // When editing a new file set 'fileencoding' for this buffer.
             // Also for ":read ++edit file".
             set_option_direct(
@@ -811,10 +811,10 @@ pub(crate) unsafe fn readfile(
             if how.newfile || how.buffer {
                 redraw_curbuf_later(UPD_NOT_VALID as c_int);
                 // The diff info needs updating now that the text is in.
-                diff_invalidate(unsafe { Buf::current() });
+                diff_invalidate(Buf::current());
                 // All folds in the window are invalid now. Mark them for
                 // update before triggering autocommands.
-                fold_update_all(unsafe { Win::current() });
+                fold_update_all(Win::current());
             } else if linecnt != 0 {
                 // At least one line was appended.
                 unsafe { appended_lines_mark(from, linecnt) };
@@ -900,6 +900,5 @@ pub(crate) unsafe fn readfile(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

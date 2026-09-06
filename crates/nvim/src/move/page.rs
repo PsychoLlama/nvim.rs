@@ -72,8 +72,7 @@ struct Saved {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
-    // SAFETY: `curwin` is set from startup to exit.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let saved = Saved {
         buflen: win.buffer().line_count(),
         cursor: win.w_cursor,
@@ -221,8 +220,7 @@ pub unsafe fn do_check_cursorbind() {
         coladd: 0,
     });
 
-    // SAFETY: `curwin` is set from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
     if old_curwin.raw() == prev_curwin.get() && equalpos(old_curwin.w_cursor, prev_cursor.get()) {
         return;
     }
@@ -232,8 +230,7 @@ pub unsafe fn do_check_cursorbind() {
     let cursor = old_curwin.w_cursor;
     let curswant = old_curwin.w_curswant;
     let set_curswant = old_curwin.w_set_curswant;
-    // SAFETY: `curbuf` is set from startup to exit.
-    let old_curbuf = unsafe { Buf::current() };
+    let old_curbuf = Buf::current();
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
 

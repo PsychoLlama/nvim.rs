@@ -489,8 +489,7 @@ pub(crate) unsafe fn word_at(
 /// The window the editor is working in.
 #[inline]
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`

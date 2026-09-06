@@ -691,6 +691,6 @@ pub unsafe fn ex_vimgrep(args: *mut ExArg) {
     // Reading the files may have messed up the folds of the window the
     // command was given in.
     if out.redraw_for_dummy {
-        fold_update_all(unsafe { Win::current() });
+        fold_update_all(Win::current());
     }
 }

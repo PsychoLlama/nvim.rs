@@ -322,7 +322,7 @@ pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFun
     // Check for undo allowed here, because if something was already
     // inserted the line was already saved for undo and this check isn't
     // done.
-    if !undo_allowed(unsafe { Buf::current() }) {
+    if !undo_allowed(Buf::current()) {
         return;
     }
 
@@ -522,6 +522,5 @@ pub unsafe fn f_complete_info(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

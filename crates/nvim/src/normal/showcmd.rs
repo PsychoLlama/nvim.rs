@@ -182,8 +182,8 @@ fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr)
     } else {
         (cur_win().w_cursor.lnum, sel.anchor.lnum)
     };
-    has_folding(unsafe { Win::current() }, top, Some(&mut top), None);
-    has_folding(unsafe { Win::current() }, bot, None, Some(&mut bot));
+    has_folding(Win::current(), top, Some(&mut top), None);
+    has_folding(Win::current(), bot, None, Some(&mut bot));
     (top, bot)
 }
 
@@ -477,6 +477,5 @@ fn draw_on_last_line(clear: bool) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

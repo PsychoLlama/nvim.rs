@@ -195,14 +195,12 @@ fn send_event(channel_id: uint64_t, name: &'static CStr, args: Array) -> bool {
 /// switched windows has the saved position written into whatever window it
 /// left current — not into the one the position came from.
 fn textlock_wrap<R>(f: impl FnOnce() -> R) -> R {
-    // SAFETY: `curwin` is set from startup to exit.
-    let save_cursor = unsafe { Win::current() }.w_cursor;
+    let save_cursor = Win::current().w_cursor;
     let result = {
         let _locked = Lock::text();
         f()
     };
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     win.w_cursor = save_cursor;
     result
 }

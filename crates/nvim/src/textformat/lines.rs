@@ -102,7 +102,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
         cur_win().w_cursor = saved_cursor.get();
         saved_cursor.set(saved_cursor.get().with_lnum(0));
         // Formatting may have made the position invalid.
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
     }
     if op.is_visual {
         // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The macro's tab page test is
@@ -370,7 +370,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
                 // Put the cursor on the last non-space.
                 State.set(MODE_NORMAL); // don't go past end-of-line
-                coladvance(unsafe { Win::current() }, MAXCOL);
+                coladvance(Win::current(), MAXCOL);
                 while cur_win().w_cursor.col != 0 && ascii_isspace(gchar_cursor()) {
                     dec_cursor();
                 }
@@ -440,12 +440,10 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

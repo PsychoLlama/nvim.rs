@@ -95,8 +95,7 @@ fn names_equal(a: *const c_char, b: *const c_char) -> bool {
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +153,7 @@ pub unsafe fn setfname(
         xfree_clear(&mut b.b_ffname);
     } else {
         // SAFETY: two locals holding a name each.
-        unsafe { fname_expand(buffer, &raw mut ffname, &raw mut sfname) };
+        unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
         if ffname.is_null() {
             // Out of memory.
             return Err(Failed);
@@ -219,7 +218,7 @@ pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
     b.b_sfname = ptr::null_mut();
     // Allocate ffname and expand into a full path.
     // SAFETY: the buffer's own two name slots.
-    unsafe { fname_expand(b, &raw mut b.b_ffname, &raw mut b.b_sfname) };
+    unsafe { fname_expand(&raw mut b.b_ffname, &raw mut b.b_sfname) };
     b.b_fname = b.b_sfname;
 }
 
@@ -363,7 +362,7 @@ pub unsafe fn buf_set_file_id(mut b: Buf) {
 /// Make `*ffname` a full file name and point `*sfname` at the name given, if
 /// it had none. The value `*ffname` comes back as should be treated as not
 /// allocated.
-pub unsafe fn fname_expand(_buffer: Buf, ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
+pub unsafe fn fname_expand(ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
     // SAFETY: the caller's promise -- two name slots to read and write.
     let (ffname, sfname) = unsafe { (&mut *ffname, &mut *sfname) };
     if ffname.is_null() {

@@ -39,9 +39,7 @@ use crate::winlayer::Buf;
 // The neighbours, wrapped
 
 fn current_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit. Read afresh at every use
-    // below: `do_set` can fire an autocommand that changes it.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// Line `lnum` of the current buffer, including its NUL terminator, so that

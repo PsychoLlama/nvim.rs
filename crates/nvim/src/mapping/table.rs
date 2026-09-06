@@ -492,8 +492,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 /// # Safety
 /// `rhs` must be live and NUL-terminated, and `curbuf` a live buffer.
 pub unsafe fn map_to_exists_mode(rhs: *const c_char, mode: c_int, abbr: bool) -> bool {
-    // SAFETY: the caller's promise — `curbuf` is a live buffer.
-    let cur = unsafe { Buf::current() };
+    let cur = Buf::current();
     // Do it twice: once for global maps and once for local maps.
     // SAFETY: the caller's promise — `rhs` is live and NUL-terminated.
     let needle = unsafe { cstr::bytes_at(rhs) };
@@ -537,8 +536,7 @@ pub(crate) unsafe fn check_map(
     // SAFETY: the caller's promise — `keys` is NUL-terminated, and `curbuf` a
     // live buffer.
     let keys = unsafe { cstr::bytes_at(keys) };
-    // SAFETY: as above.
-    let cur = unsafe { Buf::current() };
+    let cur = Buf::current();
     let visit = |local: bool| {
         move |mp: Mb| {
             // Skip entries with the wrong mode, the wrong length, and the

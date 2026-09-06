@@ -540,6 +540,5 @@ pub fn diff_mode_buf(buffer: Buf) -> bool {
 
 /// The tab page the editor is working in.
 fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }

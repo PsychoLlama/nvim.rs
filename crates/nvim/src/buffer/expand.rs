@@ -111,8 +111,7 @@ fn diff_mode(buffer: Buf) -> bool {
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 // ---------------------------------------------------------------------------

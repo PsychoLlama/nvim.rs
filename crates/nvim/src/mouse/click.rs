@@ -164,8 +164,7 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: Pos) -> bool {
         return true;
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let cursor = win.w_cursor;
     let visual = visual_anchor();
 

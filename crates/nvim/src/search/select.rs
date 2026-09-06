@@ -202,6 +202,5 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

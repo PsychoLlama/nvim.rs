@@ -182,8 +182,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         opts.flush = true;
     }
     if opts.flush && !cmdpreview.get() {
-        // SAFETY: `curwin` names a live window for the editor's whole run.
-        let cur = unsafe { Win::current() };
+        let cur = Win::current();
         validate_cursor(cur);
         update_topline(cur);
         // SAFETY: the editor's own screen.

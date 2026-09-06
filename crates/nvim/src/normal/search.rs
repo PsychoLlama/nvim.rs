@@ -157,7 +157,7 @@ pub(crate) unsafe fn normal_search(
     if !equalpos(cur_win().w_cursor, prev_cursor) && current_match_is_distinct() {
         unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     }
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     i
 }
 
@@ -317,12 +317,10 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

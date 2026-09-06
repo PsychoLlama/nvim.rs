@@ -192,7 +192,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
     cur_win().w_cursor = save_pos;
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     unsafe { (*info).dv_refcount.release() };
 
     if result == FAIL {
@@ -379,12 +379,10 @@ unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

@@ -94,8 +94,7 @@ impl CursorPick {
 ///
 /// A live current buffer and window.
 pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
-    // SAFETY: a live current buffer and window, by the contract above.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     let Some(mut curhead) = buf.header(buf.b_u_curhead) else {
         return;
     };
@@ -130,7 +129,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // SAFETY: a live current window.
     let mut pick = CursorPick {
         line: MAXLNUM as LineNr,
-        pos: unsafe { Win::current() }.w_cursor,
+        pos: Win::current().w_cursor,
     };
     // The entries come back in the reverse of the order they are applied,
     // which is the order the next move wants them in.
@@ -177,8 +176,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
 
     // The cursor goes where the entries decided; check the line exists.
-    // SAFETY: a live current window.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     win.w_cursor = pick.pos;
     // SAFETY: a live window.
     check_cursor_lnum(win);
@@ -287,8 +285,7 @@ unsafe fn apply_entry(
         }
     }
     // Make sure the cursor is on a line that still exists.
-    // SAFETY: a live current window.
-    check_cursor_lnum(unsafe { Win::current() });
+    check_cursor_lnum(Win::current());
 
     // Put the entry's saved lines in between top and bot.
     if newsize != 0 {

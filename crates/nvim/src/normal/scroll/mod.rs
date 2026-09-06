@@ -93,7 +93,7 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
 pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // SAFETY (throughout): walks the current tab page's window list, restoring `curwin`
     // and `curbuf` before returning.
-    let (old_curwin, old_curbuf) = unsafe { (Win::current(), Buf::current()) };
+    let (old_curwin, old_curbuf) = (Win::current(), Buf::current());
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
     let tgt_leftcol = old_curwin.w_leftcol;
@@ -221,12 +221,10 @@ pub(crate) unsafe fn nv_exit_command(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

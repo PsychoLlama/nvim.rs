@@ -224,8 +224,7 @@ fn view_of(win: Win, pos: Pos) -> FileMarkView {
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 // ---------------------------------------------------------------------------

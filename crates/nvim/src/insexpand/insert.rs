@@ -240,7 +240,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
 
     // TODO(vim): is this sufficient for redrawing?  Redrawing everything
     // causes flicker, thus we can't do that.
-    changed_cline_bef_curs(unsafe { Win::current() });
+    changed_cline_bef_curs(Win::current());
     // Clear v:completed_item.
     unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
 }
@@ -610,12 +610,10 @@ pub(crate) unsafe fn ins_compl_next(
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

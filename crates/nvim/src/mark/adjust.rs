@@ -325,8 +325,7 @@ pub unsafe fn mark_adjust_buf(
     // rather than to `buffer`, so they only move when the two agree. They are
     // NOT under the `:lockmarks` guard above — upstream leaves them out, and
     // `:lockmarks` is documented as being about the *named* marks.
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut curwin_handle = unsafe { Win::current() };
+    let mut curwin_handle = Win::current();
     if curwin_handle.w_buffer == buffer.raw() {
         shift.line(&mut curwin_handle.w_pcmark.lnum);
         shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
@@ -457,8 +456,7 @@ pub unsafe fn mark_col_adjust(
         return;
     }
 
-    // SAFETY: `curbuf` and `curwin` are live from startup to exit.
-    let (mut buf, mut cur) = unsafe { (Buf::current(), Win::current()) };
+    let (mut buf, mut cur) = (Buf::current(), Win::current());
     let fnum = buf.handle as c_int;
     let shift = ColShift {
         lnum,

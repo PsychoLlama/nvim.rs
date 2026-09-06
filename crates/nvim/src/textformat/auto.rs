@@ -126,9 +126,9 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     if cur_win().w_cursor.lnum > cur_buf().b_ml.ml_line_count {
         // "cannot happen"
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-        coladvance(unsafe { Win::current() }, MAXCOL);
+        coladvance(Win::current(), MAXCOL);
     } else {
-        check_cursor_col(unsafe { Win::current() });
+        check_cursor_col(Win::current());
     }
 
     // Insert mode: the cursor being past the end of the line when it was
@@ -151,7 +151,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         }
     }
 
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
 }
 
 /// Delete the space [`auto_format`] added to continue a paragraph, if it is
@@ -187,12 +187,10 @@ pub unsafe fn check_auto_format(end_insert: bool) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

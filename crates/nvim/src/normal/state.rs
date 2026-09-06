@@ -489,7 +489,7 @@ fn normal_check_safe_state() {
 fn normal_check_folds() {
     // SAFETY (throughout): reads and adjusts the current window's folds.
     unsafe { fold_adjust_visual() };
-    if unsafe { has_any_folding(Win::current()) } != 0 && !char_avail() {
+    if has_any_folding(Win::current()) != 0 && !char_avail() {
         unsafe { fold_check_close() };
         if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
             unsafe { fold_open_cursor() };
@@ -501,8 +501,8 @@ fn normal_check_folds() {
 /// back the message the last command left to be shown.
 fn normal_redraw() {
     // SAFETY (throughout): all of this is the current window's and buffer's own state.
-    update_topline(unsafe { Win::current() });
-    validate_cursor(unsafe { Win::current() });
+    update_topline(Win::current());
+    validate_cursor(Win::current());
     unsafe { show_cursor_info_later(false) };
     if must_redraw.get() != 0 {
         let _ = unsafe { update_screen() };
@@ -562,8 +562,8 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         unsafe { setcursor() };
     } else if do_redraw.get() || stuff_empty() {
         unsafe { terminal_check_refresh() };
-        update_topline(unsafe { Win::current() });
-        validate_cursor(unsafe { Win::current() });
+        update_topline(Win::current());
+        validate_cursor(Win::current());
         normal_check_cursor_moved();
         normal_check_text_changed();
         normal_check_window_scrolled();
@@ -639,14 +639,12 @@ pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// Fire `event` on the current buffer, with no file name to match against.

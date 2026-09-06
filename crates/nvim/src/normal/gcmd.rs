@@ -352,9 +352,9 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             op.inclusive = false;
             let width = unsafe { linetabsize(Win::new(curwin.get()), cur_win().w_cursor.lnum) };
             if ca.count0 > 0 && ca.count0 <= 100 {
-                coladvance(unsafe { Win::current() }, width * ca.count0 / 100);
+                coladvance(Win::current(), width * ca.count0 / 100);
             } else {
-                coladvance(unsafe { Win::current() }, width / 2);
+                coladvance(Win::current(), width / 2);
             }
             cur_win().w_set_curswant = true;
         }
@@ -472,12 +472,10 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

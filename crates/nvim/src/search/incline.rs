@@ -221,6 +221,5 @@ pub(crate) unsafe fn show_pat_in_path(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

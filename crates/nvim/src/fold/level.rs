@@ -775,8 +775,7 @@ pub(super) unsafe fn foldlevel_syntax(line: FLine) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// Ask the chosen 'foldmethod' getter for the level at `line`.

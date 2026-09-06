@@ -757,14 +757,12 @@ pub(crate) fn qf_free_stack(mut window: Option<Win>, mut qi: Qi) {
 /// the promise `Win::current` wants is the same everywhere, and paying it
 /// once is the point of the exercise.
 pub(crate) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in — see [`cur_win`].
 pub(crate) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 #[cfg(test)]

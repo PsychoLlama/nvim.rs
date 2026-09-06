@@ -195,8 +195,7 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
     }
     unmap_args.buffer = buffer;
     let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
-    // SAFETY: `curbuf` is live.
-    let cur = unsafe { Buf::current() };
+    let cur = Buf::current();
     // SAFETY: as above.
     unsafe { buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur) };
     drop(unmap_args);

@@ -113,8 +113,12 @@ def masked(src: bytes) -> bytes:
         elif c == b"'":
             # a char literal, or a lifetime. `'"'` is why this arm exists:
             # without it the quote opens a string that swallows the rest of
-            # the file, and every call site after it goes unseen.
-            k = i + 2 if src[i + 1 : i + 2] == b"\\" else i + 1
+            # the file, and every call site after it goes unseen. The
+            # escaped form starts the search *past* the escaped byte:
+            # `b'\\''` is a backslash, a quote and then the terminator, and
+            # reading the middle one as the terminator left the last quote
+            # to open a string that swallowed the rest of `indent_c/decl.rs`.
+            k = i + 3 if src[i + 1 : i + 2] == b"\\" else i + 1
             while src[k : k + 1] not in (b"'", b"", b"\n") and k < i + 12:
                 k += 1
             if src[k : k + 1] == b"'":

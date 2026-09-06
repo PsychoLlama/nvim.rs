@@ -294,8 +294,7 @@ fn lua_chunk(src: &'static CStr) -> String_0 {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// `strncmp()`'s prefix test as checked code.

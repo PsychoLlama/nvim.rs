@@ -795,6 +795,5 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

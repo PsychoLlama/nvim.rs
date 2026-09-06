@@ -292,9 +292,9 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
     loop {
         // SAFETY: caller contract; curtab is valid, and `tpnext` is
         // re-validated below because closing windows runs autocommands.
-        // SAFETY: `curtab` is live; the next page is read *before* the
-        // close, which may leave the current one.
-        let tpnext = unsafe { TabPage::current() }.next();
+        // The next page is read *before* the close, which may leave the
+        // current one.
+        let tpnext = TabPage::current().next();
         // SAFETY: as above.
         unsafe { close_unused_windows_in_tab(aall, old_curwin, old_curtab) };
         // Without the ":tab" modifier only do the current tab page.
@@ -594,12 +594,10 @@ pub unsafe fn arg_all() -> *mut c_char {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

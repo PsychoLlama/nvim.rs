@@ -104,8 +104,7 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut DiffHunk, diffstyle: &mut DiffS
 /// more existing blocks (they are widened to cover it and the extra ones
 /// freed), or it touches none (a new block).
 unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut DiffHunk) {
-    // SAFETY: `curtab` is set from startup to exit.
-    let tp = unsafe { TabPage::current() };
+    let tp = TabPage::current();
     let end_orig = unsafe { (*hunk).lnum_orig } + unsafe { (*hunk).count_orig };
 
     // Blocks entirely above the hunk: they keep whatever an earlier pass

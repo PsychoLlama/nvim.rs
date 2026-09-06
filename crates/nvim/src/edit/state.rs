@@ -110,7 +110,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if gchar_cursor() == TAB || unsafe { buf_meta_total(Buf::current(), kMTMetaInline) } > 0 {
+    if gchar_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
         cur_win()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -134,7 +134,7 @@ fn insert_enter(s: &mut InsertState) {
     if restart_edit.get() != 0 && stuff_empty() {
         arrow_used.set(where_paste_started.get().lnum == 0);
         restart_edit.set(0);
-        validate_virtcol(unsafe { Win::current() });
+        validate_virtcol(Win::current());
         unsafe { update_curswant() };
         restore_ctrl_o_column();
         ins_at_eol.set(false);
@@ -244,7 +244,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
         let save_state = State.get();
         cur_win().w_cursor = save_cursor;
         State.set(MODE_INSERT);
-        check_cursor_col(unsafe { Win::current() });
+        check_cursor_col(Win::current());
         State.set(save_state);
     }
 }
@@ -341,11 +341,11 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     may_scroll_for_wrap(s);
 
     if s.count <= 1 {
-        update_topline(unsafe { Win::current() });
+        update_topline(Win::current());
     }
     s.did_backspace = false;
     if s.count <= 1 {
-        validate_cursor(unsafe { Win::current() });
+        validate_cursor(Win::current());
     }
 
     unsafe { ins_redraw(true) };
@@ -412,9 +412,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     }
 
     s.mincol = cur_win().w_wcol;
-    // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all
-    // these editor-wide routines ask for.
-    validate_cursor_col(unsafe { Win::current() });
+    validate_cursor_col(Win::current());
 
     let vcol = unsafe { get_nolist_virtcol() };
     let tabstop = unsafe { tabstop_at(vcol, cur_buf().b_p_ts, cur_buf().b_p_vts_array, false) };
@@ -431,9 +429,9 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
             None,
             Some(&mut s.old_topline),
         ) {
-            set_topline(unsafe { Win::current() }, s.old_topline + 1);
+            set_topline(Win::current(), s.old_topline + 1);
         } else {
-            set_topline(unsafe { Win::current() }, cur_win().w_topline + 1);
+            set_topline(Win::current(), cur_win().w_topline + 1);
         }
     }
 }
@@ -784,12 +782,10 @@ fn c_expr_indent() {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

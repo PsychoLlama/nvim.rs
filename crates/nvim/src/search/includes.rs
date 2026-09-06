@@ -769,7 +769,7 @@ unsafe fn goto_match(
                 setpcmark();
             }
             cur_win().w_cursor.lnum = walk.lnum;
-            check_cursor(unsafe { Win::current() });
+            check_cursor(Win::current());
         } else {
             let file = walk.files.innermost();
             let (name, flnum) = (file.name.as_ptr(), file.lnum);
@@ -788,7 +788,7 @@ unsafe fn goto_match(
 
     if tagpreview != 0 && curwin.get() != curwin_save && win_valid(curwin_save) {
         // Return the cursor to where it was.
-        validate_cursor(unsafe { Win::current() });
+        validate_cursor(Win::current());
         unsafe { redraw_later(curwin.get(), UPD_VALID) };
         unsafe { win_enter(curwin_save, true) };
     }
@@ -947,12 +947,10 @@ pub unsafe fn find_pattern_in_path(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

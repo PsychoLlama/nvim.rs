@@ -211,8 +211,7 @@ pub(crate) unsafe fn do_mouse(
     } else {
         MOUSE_FOCUS | MOUSE_DID_MOVE
     };
-    // SAFETY: `curwin` is live from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
 
     // Only when initialized.
     // SAFETY: the tabline's definitions cover the screen's columns, which is
@@ -306,8 +305,7 @@ pub(crate) unsafe fn do_mouse(
         return false;
     }
 
-    // SAFETY: `curwin` is live; `jump_to_mouse` may have moved focus.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
 
     // When jumping to another window, clear a pending operator.  That's a bit
     // friendlier than beeping and not jumping to that window.
@@ -653,8 +651,7 @@ fn click_definition(
     if landed.global_status_line {
         // The global statusline is displayed for the current window, and
         // spans the whole screen.
-        // SAFETY: `curwin` is live from startup to exit.
-        let (defs, size) = unsafe { Win::current() }.status_click_defs();
+        let (defs, size) = Win::current().status_click_defs();
         (click_defs, limit) = (defs, size);
         click_col = mouse_col.get();
     }
@@ -765,8 +762,7 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    // SAFETY: `curbuf` is live from startup to exit.
-    let buf = unsafe { Buf::current() };
+    let buf = Buf::current();
     let in_quickfix = buf_is_quickfix(Some(buf));
     let double_click = mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK;
     if (mods.has(ModMask::CTRL) || double_click) && in_quickfix {

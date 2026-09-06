@@ -49,20 +49,17 @@ pub(crate) fn arg_win(args: Args<'_>, i: usize) -> Option<Win> {
 
 /// The window the editor is working in.
 pub(crate) fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The buffer the editor is working in.
 pub(crate) fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The tab page the editor is working in.
 pub(crate) fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }
 
 /// The window with id `id`, in whichever tab page holds it.

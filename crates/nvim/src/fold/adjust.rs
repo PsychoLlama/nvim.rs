@@ -138,8 +138,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn fold_adjust_visual() {
-    // SAFETY: the caller's promise.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     if !visual_active() || has_any_folding(win) == 0 {
         return;
     }
@@ -661,8 +660,7 @@ fn drop_fold(folds: FoldList, i: c_int, recursive: bool) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// [`adjust_fold_list`] over a bare growarray: upstream's own entry point,

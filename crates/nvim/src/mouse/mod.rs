@@ -558,8 +558,7 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
 /// # Safety
 /// `cmd_arg` must be a live command argument.
 pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
-    // SAFETY: `curwin` is live from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
 
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
@@ -574,7 +573,7 @@ pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
 
     // SAFETY: the caller's promise, and `curwin` is a live window.
     unsafe { do_mousescroll(cmd_arg) };
-    unsafe { Win::current() }.w_redr_status = true;
+    Win::current().w_redr_status = true;
     // `old_curwin` was live when it was taken and nothing above closes a
     // window, so it is still the window to go back to.
     old_curwin.make_current();

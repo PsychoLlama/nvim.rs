@@ -58,8 +58,7 @@ pub(crate) unsafe fn report_and_place(
     } else {
         from + 1
     };
-    // SAFETY: the current window is live, in both calls.
-    check_cursor_lnum(unsafe { Win::current() });
+    check_cursor_lnum(Win::current());
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // first non-blank
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -92,8 +91,7 @@ pub(crate) unsafe fn run_read_autocmds(
     // Save the fileformat now, or the buffer would be considered modified
     // because the format or encoding was auto-detected.
     if set_options {
-        // SAFETY: the current buffer is live.
-        save_file_ff(unsafe { Buf::current() });
+        save_file_ff(Buf::current());
     }
 
     // The output from the autocommands should neither overwrite anything nor
@@ -126,12 +124,10 @@ pub(crate) unsafe fn run_read_autocmds(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

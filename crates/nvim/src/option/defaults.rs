@@ -325,7 +325,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     if unsafe { os_env_exists(c"NVIM_NOTTYFAST".as_ptr(), false) } {
         set_option_value_give_err(kOptTtyfast, OFF, OptionSetFlags::NONE);
     }
-    save_file_ff(unsafe { Buf::current() });
+    save_file_ff(Buf::current());
     if unsafe { os_env_exists(c"MLTERM".as_ptr(), false) } {
         set_option_value_give_err(kOptTermbidi, ON, OptionSetFlags::NONE);
     }
@@ -616,6 +616,5 @@ pub(crate) fn set_title_defaults() {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

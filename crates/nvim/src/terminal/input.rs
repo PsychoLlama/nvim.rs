@@ -410,8 +410,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     // Whatever the scroll left as the current window, which need not be the
     // one it started in.
     //
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut scrolled = unsafe { Win::current() };
+    let mut scrolled = Win::current();
     scrolled.w_redr_status = true;
     saved.restore();
 }

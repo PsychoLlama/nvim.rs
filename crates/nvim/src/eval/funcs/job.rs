@@ -517,7 +517,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
                 semsg!("Terminal already connected to buffer {}", handle);
                 bail!();
             }
-            buf_close_terminal(unsafe { Buf::current() });
+            buf_close_terminal(Buf::current());
         }
         // `pty && rpc` was refused above and `term` implies `pty`.
         debug_assert!(!rpc);

@@ -19,7 +19,7 @@ use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
     TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Window, kBoolVarFalse, kBoolVarTrue,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, typval_vval_union,
 };
 use neovim::winlayer::Win;
@@ -812,22 +812,19 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
 /// `describe('lnum()') itp('works')`, spec line 3205.
 ///
 /// The only case in the whole spec that touches `curwin`: a `"."` resolves
-/// through `var2fpos` to the cursor's line, which is what pinned `Window`
-/// for the file. Everything else here allocates nothing, and says so.
+/// through `var2fpos` to the cursor's line. Everything else here allocates
+/// nothing, and says so.
 #[test]
 fn getting_a_line_number_resolves_the_cursor() {
     let log = AllocLog::start();
-    // A window is all `var2fpos` needs for `"."`; it never reaches the
-    // buffer on that path.
-    // Zeroed, and left `MaybeUninit`: a `Window` owns allocations (its grid's
-    // cell buffers among them) that all-zero bytes are not a valid form of,
-    // so no `Window` value is produced or dropped here.
-    let mut win = Box::new(std::mem::MaybeUninit::<Window>::zeroed());
-    let wp = win.as_mut_ptr();
-    // SAFETY: `curwin` is the editor's own window, live under the lock.
-    let saved_curwin = unsafe { Win::current() };
-    // SAFETY: `win` is this case's own and outlives the case.
-    unsafe { Win::new(wp) }.make_current();
+    // The editor's own window, not a boxed one of the case's: "current" is
+    // the *identity* of a registered window ([`Win::current`]), and a boxed
+    // `Window` is in no registry, so pointing `curwin` at one is no longer
+    // something the editor can stand in. The cursor line is the only field
+    // the case writes, and it is put back at the end -- which is what the
+    // LuaJIT spec's forked child got for free.
+    let mut win = Win::current();
+    let saved_cursor = win.w_cursor;
 
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
@@ -849,7 +846,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
 
         for (row, want) in rows.into_iter().zip(answers) {
-            (*wp).w_cursor.lnum = 46;
+            win.w_cursor.lnum = 46;
             let tv = raw(row.v_type, row.vval);
             log.check(&[]);
             let got = check_emsg(log.editor(), || tv_get_lnum(&raw const tv), row.emsg);
@@ -862,7 +859,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         }
     }
 
-    saved_curwin.make_current();
+    win.w_cursor = saved_cursor;
 }
 
 /// `describe('float()') itp('works')`, spec line 3241: only a number and a

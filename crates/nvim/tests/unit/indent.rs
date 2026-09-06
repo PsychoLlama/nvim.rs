@@ -16,39 +16,27 @@
 use std::ffi::c_int;
 
 use neovim::indent::{get_sts_value, indent_size_ts};
-use neovim::types::{Buffer, ColNr, OptInt};
+use neovim::types::{ColNr, OptInt};
 use neovim::winlayer::Buf;
 
 use crate::support::{Editor, Sandbox, cstr};
 
-/// Run `f` with `curbuf` pointing at a buffer of the case's own, so that
-/// writing 'softtabstop' and friends cannot outlive the case.
+/// Run `f` on the current buffer with the 'softtabstop' family put back
+/// afterwards, so that writing it cannot outlive the case.
 ///
-/// The spec wrote them straight onto the editor's own buffer, which a forked
-/// child could get away with. Zeroed is the right starting point: every
-/// field `get_sts_value` reads is set below, and `b_p_vts_array` being null
-/// is what "no 'vartabstop'" means.
-fn with_buffer(f: impl FnOnce(&mut Buffer)) {
+/// The spec wrote the options straight onto the editor's own buffer, which a
+/// forked child could get away with; this file then pointed `curbuf` at a
+/// zeroed `Buffer` of the case's own instead. That is no longer a buffer the
+/// editor can stand in -- "current" is the *identity* of a registered buffer
+/// ([`Buf::current`]), and a boxed one is in no registry -- so the editor's
+/// own buffer is used again, with the three fields the cases write saved and
+/// restored around them. That is the fork's isolation, spelled out.
+fn with_buffer(f: impl FnOnce(&mut Buf)) {
     let _sandbox = Sandbox::globals();
-    // Boxed rather than a local: `curbuf` is a raw pointer the crate reads
-    // through, and a heap allocation has an address that is nobody else's.
-    let mut buf: Box<Buffer> = {
-        let mut storage = Box::<Buffer>::new_zeroed();
-        // SAFETY: all-zero bytes are what upstream's `xcalloc` hands a fresh
-        // buffer, and the one field a zeroed `Buffer` is *not* a valid value
-        // for -- `b_ucmds`, whose empty `Vec` holds a non-null dangling
-        // pointer -- is written before anything can read or drop it.
-        unsafe {
-            (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
-            storage.assume_init()
-        }
-    };
-    // SAFETY: `curbuf` is the editor's own buffer, live under the lock.
-    let saved = unsafe { Buf::current() };
-    // SAFETY: `buf` is this case's own and outlives the call below.
-    unsafe { Buf::new(&raw mut *buf) }.make_current();
+    let mut buf = Buf::current();
+    let saved = (buf.b_p_sts, buf.b_p_sw, buf.b_p_ts);
     f(&mut buf);
-    saved.make_current();
+    (buf.b_p_sts, buf.b_p_sw, buf.b_p_ts) = saved;
 }
 
 /// A non-negative 'softtabstop' is the answer, zero included.
@@ -56,7 +44,7 @@ fn with_buffer(f: impl FnOnce(&mut Buffer)) {
 fn a_non_negative_softtabstop_is_its_own_value() {
     with_buffer(|buf| {
         buf.b_p_sts = 5;
-        // SAFETY: `curbuf` is this case's buffer, under the editor lock.
+        // SAFETY: `curbuf` is set, under the editor lock.
         assert_eq!(unsafe { get_sts_value() }, 5);
 
         buf.b_p_sts = 0;
@@ -73,7 +61,7 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
         buf.b_p_sts = -2;
         buf.b_p_sw = 2;
         buf.b_p_ts = 5;
-        // SAFETY: `curbuf` is this case's buffer, under the editor lock.
+        // SAFETY: `curbuf` is set, under the editor lock.
         assert_eq!(unsafe { get_sts_value() }, 2, "'shiftwidth'");
 
         buf.b_p_sw = 0;

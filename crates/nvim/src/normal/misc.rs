@@ -287,7 +287,7 @@ pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
     }
     if visual_active() {
         end_visual_mode();
-        check_cursor_col(unsafe { Win::current() });
+        check_cursor_col(Win::current());
         cur_win().w_set_curswant = true;
         redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {
@@ -325,12 +325,10 @@ pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

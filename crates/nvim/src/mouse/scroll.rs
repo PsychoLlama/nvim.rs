@@ -38,8 +38,7 @@ use crate::types::{CmdArg, Direction, OpArg};
 /// # Safety
 /// `c` must be a mouse key code.
 pub(crate) unsafe fn ins_mouse(c: c_int) {
-    // SAFETY: `curwin` is live from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
 
     // SAFETY: both only touch the current window's Insert-mode state.
     unsafe { undisplay_dollar() };
@@ -47,8 +46,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 
     // SAFETY: `do_mouse` accepts a null operator.
     if unsafe { do_mouse(ptr::null_mut(), c, BACKWARD as c_int, 1, false) } {
-        // SAFETY: `curwin` is live.
-        let new_curwin = unsafe { Win::current() };
+        let new_curwin = Win::current();
         if new_curwin != old_curwin && old_curwin.is_valid() {
             // Mouse took us to another window.  We need to go back to the
             // previous one to stop insert there properly.
@@ -94,8 +92,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 /// `cmd_arg` must be a live command argument.
 pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
     let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
-    // SAFETY: `curwin` is live from startup to exit.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     // SAFETY: the caller's promise.
     let arg = unsafe { (*cmd_arg).arg };
 
@@ -155,8 +152,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         }
     };
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
         // Find the window at the mouse pointer coordinates.
         // NOTE: Must restore "curwin" to "old_curwin" before returning!
@@ -168,8 +164,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         win.buffer().make_current();
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     if win == old_curwin {
         // Don't scroll the current window if the popup menu is visible.
         if pum_visible() {
@@ -185,8 +180,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     // SAFETY: `cmd_arg` is a live local command argument.
     unsafe { do_mousescroll(&raw mut cmd_arg) };
 
-    // SAFETY: `curwin` may have moved under `do_mousescroll`.
-    win = unsafe { Win::current() };
+    win = Win::current();
     win.w_redr_status = true;
     // `old_curwin` was live when it was taken and nothing above closes a
     // window, so it is still the window to go back to.

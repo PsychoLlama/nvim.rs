@@ -192,8 +192,7 @@ unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) 
     // The message may be the first thing that scrolls, so make sure the
     // window is up to date before it is written.
     //
-    // SAFETY: main thread, with a current window and buffer.
-    update_topline(unsafe { Win::current() });
+    update_topline(Win::current());
     if must_redraw.get() != 0 {
         // SAFETY: as above.
         let _ = unsafe { update_screen() };
@@ -533,12 +532,10 @@ pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

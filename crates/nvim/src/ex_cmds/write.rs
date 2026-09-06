@@ -822,7 +822,7 @@ pub unsafe fn getfile(
     if fnum == 0 {
         // make ffname full path, set sfname
         // SAFETY: caller's contract; `curbuf` is live.
-        unsafe { fname_expand(cur_buf(), &raw mut ffname, &raw mut sfname) };
+        unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
         other = unsafe { otherfile(ffname) };
         free_me = Owned(ffname);
     } else {

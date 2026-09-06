@@ -109,8 +109,7 @@ impl Buf {
 
 /// The buffer the editor is working in -- `curbuf`.
 fn current_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 // ---------------------------------------------------------------------------

@@ -304,12 +304,10 @@ pub unsafe fn f_diff_filler(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The tab page the editor is working in.
 fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }

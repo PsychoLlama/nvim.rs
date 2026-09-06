@@ -141,8 +141,7 @@ fn jump(mut flags: c_int, inclusive: Option<&mut bool>, which_button: c_int) -> 
         pos = MousePos::current();
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let old_curwin = unsafe { Win::current() };
+    let old_curwin = Win::current();
     let old_cursor = old_curwin.w_cursor;
 
     let answered = if keep_focus {
@@ -316,8 +315,7 @@ fn enter_window(
         win.enter(); // can make `win` invalid!
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut curwin_now = unsafe { Win::current() };
+    let mut curwin_now = Win::current();
     // Set topline, to be able to check for double click ourselves.
     if curwin_now != old_curwin {
         set_mouse_topline(curwin_now);
@@ -382,8 +380,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         stop_visual();
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     if pos.grid == 0 {
         pos.row -= win.w_grid_alloc.comp_row + win.w_grid.row_offset;
         pos.col -= win.w_grid_alloc.comp_col + win.w_grid.col_offset;
@@ -493,8 +490,7 @@ fn move_cursor_there(
 ) -> c_int {
     let (col_from_screen, mouse_fold_flags) = mouse_check_grid();
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     // Compute the position in the buffer line from the position on the screen.
     let (lnum, below_last) = comp_pos(win, &mut pos.row, &mut pos.col);
     win.w_cursor.lnum = lnum;

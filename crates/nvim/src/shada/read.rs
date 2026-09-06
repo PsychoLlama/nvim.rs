@@ -451,9 +451,7 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
 unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry) {
-    // SAFETY: `curwin` is set from startup to exit, and nothing below can
-    // change which window that is.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     let mut i = win.w_jumplistlen;
     while i > 0 {
         let existing = &win.w_jumplist[i as usize - 1];

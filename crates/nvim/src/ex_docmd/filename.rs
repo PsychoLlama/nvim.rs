@@ -745,8 +745,7 @@ pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// `strncmp()`'s prefix test as checked code.

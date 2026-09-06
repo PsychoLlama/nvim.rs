@@ -220,7 +220,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
         unsafe { maketitle() };
 
         unsafe { changed_line_abv_curs() };
-        invalidate_botline_win(unsafe { Win::current() });
+        invalidate_botline_win(Win::current());
 
         // At a more prompt, running an external command, in Ex mode or at a
         // one-key cmdline prompt, only the cursor is repositioned; anywhere
@@ -253,7 +253,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                     unsafe { cmdline_pum_display(false) };
                 }
             } else {
-                update_topline(unsafe { Win::current() });
+                update_topline(Win::current());
                 if pum_drawn() {
                     // Same again: `ins_compl_show_pum` wants the screen
                     // redrawn first, and the nested `update_screen` inside

@@ -604,8 +604,8 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     drop(locked);
 
     cur_win().w_cursor = pos; // restore the cursor position
-    check_cursor(unsafe { Win::current() }); // make sure the position is valid, just in case
-    validate_cursor(unsafe { Win::current() });
+    check_cursor(Win::current()); // make sure the position is valid, just in case
+    validate_cursor(Win::current());
     if !equalpos(cur_win().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
     } else if !matchlist.is_null() {
@@ -854,12 +854,10 @@ unsafe fn next_cpt_part(p: *mut *mut c_char, buf: *mut c_char, len: size_t) -> s
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

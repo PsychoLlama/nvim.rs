@@ -185,7 +185,7 @@ use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
-use crate::winlayer::graph::{curbuf, curtab, curwin};
+use crate::winlayer::graph::{curtab, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -334,11 +334,29 @@ impl Win {
 
     /// The window the editor is working in.
     ///
-    /// # Safety
-    /// `curwin` must be set, which it is from startup to exit.
-    #[inline(always)]
-    pub unsafe fn current() -> Self {
-        Self(curwin.get())
+    /// Safe, and checked: the editor's idea of "current" is the *identity*
+    /// of a window ([`WinId`]), so this is a registry lookup rather than a
+    /// raw pointer nobody promised. [`Win::current_or_none`] is the same
+    /// question where the answer may be "none".
+    ///
+    /// # Panics
+    ///
+    /// When there is no current window — before `win_alloc_first` and after
+    /// the last one goes — or when the window it names has been freed
+    /// without anything being made current in its place. Both are a bug in
+    /// whatever last called `Win::make_current`, which is the only writer.
+    #[inline]
+    pub fn current() -> Self {
+        Self::current_or_none().expect("no current window: nothing called Win::make_current")
+    }
+
+    /// The window the editor is working in, `None` where there is none.
+    ///
+    /// The `curwin != NULL` test, as a question with an answer: a caller
+    /// that means to cope with having no window asks this one.
+    #[inline]
+    pub fn current_or_none() -> Option<Self> {
+        graph::CURRENT_WIN.get().and_then(WinId::get)
     }
 
     #[inline(always)]
@@ -559,13 +577,23 @@ impl Buf {
         if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
-    /// The buffer the editor is working in.
+    /// The buffer the editor is working in. [`Win::current`].
     ///
-    /// # Safety
-    /// `curbuf` must be set, which it is from startup to exit.
-    #[inline(always)]
-    pub unsafe fn current() -> Self {
-        Self(curbuf.get())
+    /// # Panics
+    ///
+    /// When there is none — the few statements after `leave_curbuf`, and
+    /// startup before the first buffer exists. [`Buf::current_or_none`] is
+    /// the form for the callers that mean to be there.
+    #[inline]
+    pub fn current() -> Self {
+        Self::current_or_none().expect("no current buffer: see winlayer::graph::leave_curbuf")
+    }
+
+    /// The buffer the editor is working in, `None` where there is none.
+    /// [`Win::current_or_none`].
+    #[inline]
+    pub fn current_or_none() -> Option<Self> {
+        graph::CURRENT_BUF.get().and_then(BufId::get)
     }
 
     #[inline(always)]
@@ -731,13 +759,23 @@ impl TabPage {
         if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
-    /// The tab page the editor is working in.
+    /// The tab page the editor is working in. [`Win::current`].
     ///
-    /// # Safety
-    /// `curtab` must be set, which it is from startup to exit.
-    #[inline(always)]
-    pub unsafe fn current() -> Self {
-        Self(curtab.get())
+    /// # Panics
+    ///
+    /// When there is none, which is startup before `win_alloc_first` and
+    /// nowhere else. [`TabPage::current_or_none`] for the two callers that
+    /// run there.
+    #[inline]
+    pub fn current() -> Self {
+        Self::current_or_none().expect("no current tab page: nothing called TabPage::make_current")
+    }
+
+    /// The tab page the editor is working in, `None` where there is none.
+    /// [`Win::current_or_none`].
+    #[inline]
+    pub fn current_or_none() -> Option<Self> {
+        graph::CURRENT_TAB.get().and_then(TabId::get)
     }
 
     #[inline(always)]

@@ -299,8 +299,7 @@ pub fn has_folding_win(
 /// # Safety
 /// The current window must be live.
 unsafe fn fold_level(lnum: LineNr) -> c_int {
-    // SAFETY: the caller's promise.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     if invalid_top.get() == 0 {
         checkupdate(win);
     } else if lnum == prev_lnum.get() && prev_lnum_lvl.get() >= 0 {
@@ -448,8 +447,7 @@ pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn fold_update_after_insert() {
-    // SAFETY: the caller's promise.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     if foldmethod_is_manual(win) || foldmethod_is_syntax(win) || foldmethod_is_expr(win) {
         return;
     }

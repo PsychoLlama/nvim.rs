@@ -375,8 +375,7 @@ unsafe fn smatch(s: String_0, names: &[&CStr]) -> Option<usize> {
 
 /// The current window, which exists from startup to exit.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` names a live window for the editor's whole run.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// Fill `fconfig` in from `config`, reporting the first thing wrong with it

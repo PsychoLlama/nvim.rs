@@ -296,8 +296,7 @@ fn check_top_offset(win: Win) -> bool {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn update_curswant_force() {
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     win.validate_virtcol();
     win.w_curswant = win.w_virtcol;
     win.w_set_curswant = false;
@@ -308,8 +307,7 @@ pub unsafe fn update_curswant_force() {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn update_curswant() {
-    // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { Win::current() }.w_set_curswant {
+    if Win::current().w_set_curswant {
         // SAFETY: the caller's promise.
         unsafe { update_curswant_force() };
     }

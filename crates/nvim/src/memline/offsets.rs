@@ -395,14 +395,14 @@ pub unsafe fn goto_byte(cnt: c_int) {
         // Past the end.
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
         cur_win().w_curswant = MAXCOL as c_int;
-        coladvance(unsafe { Win::current() }, MAXCOL as c_int);
+        coladvance(Win::current(), MAXCOL as c_int);
     } else {
         cur_win().w_cursor.lnum = lnum;
         cur_win().w_cursor.col = boff;
         cur_win().w_cursor.coladd = 0;
         cur_win().w_set_curswant = true;
     }
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
 
     // Make sure the cursor is on the first byte of a multi-byte char.
     unsafe { mb_adjust_cursor() };
@@ -410,12 +410,10 @@ pub unsafe fn goto_byte(cnt: c_int) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

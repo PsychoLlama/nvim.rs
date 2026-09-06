@@ -173,7 +173,7 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
         }
     } else {
         cur_win().w_cursor = op.end;
-        check_cursor_col(unsafe { Win::current() });
+        check_cursor_col(Win::current());
         // Works just like `i` on the next character.
         if unsafe { *ml_get(cur_win().w_cursor.lnum) } as c_int != NUL
             && op.start_vcol != op.end_vcol
@@ -298,7 +298,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
             unsafe { block_insert(op.raw(), ins_text, n, insert, &raw mut *bd) };
         }
         cur_win().w_cursor.col = op.start.col;
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
         unsafe { xfree(ins_text as *mut c_void) };
     }
 }
@@ -449,7 +449,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
     }
 
     let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     changed_lines(cur_buf(), first, 0, last, 0, true);
     unsafe { xfree(ins_text as *mut c_void) };
 }
@@ -484,12 +484,10 @@ pub unsafe fn adjust_cursor_eol() {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

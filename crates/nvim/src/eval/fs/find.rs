@@ -499,6 +499,5 @@ pub unsafe fn f_readdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

@@ -320,18 +320,15 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The tab page the editor is working in.
 fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }

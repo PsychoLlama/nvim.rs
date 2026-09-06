@@ -370,8 +370,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buff
     }
     // Both would tie the terminal window's scroll position to another
     // window's, which fights the emulator for the topline.
-    // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
     win.w_cursor = Pos {
@@ -891,8 +890,7 @@ fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
 
 /// Whether the user is typing at this terminal right now.
 fn is_focused(term: Term) -> bool {
-    // SAFETY: `curbuf` is set from startup to exit.
-    State.get() & MODE_TERMINAL != 0 && unsafe { Buf::current() }.terminal == term.raw()
+    State.get() & MODE_TERMINAL != 0 && Buf::current().terminal == term.raw()
 }
 
 /// What `dict` holds under `key`, or nil.

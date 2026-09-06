@@ -333,8 +333,7 @@ pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// `skipwhite()` as checked code.

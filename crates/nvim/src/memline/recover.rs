@@ -339,7 +339,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             let _ = unsafe { ml_delete(cur_buf().b_ml.ml_line_count) };
         }
         cur_buf().b_flags |= BufFlags::RECOVERED;
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
 
         msg_ext_skip_flush.set(!got_int.get());
         recoverymode.set(false);
@@ -833,6 +833,5 @@ pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

@@ -443,6 +443,5 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

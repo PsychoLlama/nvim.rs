@@ -723,6 +723,5 @@ pub(crate) unsafe fn set_imsearch_global(buffer: *mut Buffer) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

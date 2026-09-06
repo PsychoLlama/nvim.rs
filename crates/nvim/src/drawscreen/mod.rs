@@ -208,8 +208,7 @@ pub(crate) unsafe fn win_endcol(window: *const Window) -> c_int {
 /// When the cursor also moved, both the old and the new line are redrawn
 /// anyway, so this only matters when it did not.
 pub unsafe fn conceal_check_cursor_line() {
-    // SAFETY: `curwin` is the editor's current window, on the main thread.
-    let wp = unsafe { Win::current() };
+    let wp = Win::current();
     let should_conceal = unsafe { conceal_cursor_line(wp.raw()) };
     if wp.w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
         return;
@@ -458,7 +457,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     //
     // Upstream special-cases `curwin` here and says so in a comment; either
     // every window should be checked or none should. Reproduced.
-    let mut wp = unsafe { Win::current() };
+    let mut wp = Win::current();
     // `number_width` is NOT pure -- it caches its answer in the window and
     // resets the 'statuscolumn' width estimate -- so it stays behind the
     // `w_redr_type` test, where upstream's `&&` puts it.

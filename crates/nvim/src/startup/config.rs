@@ -339,6 +339,5 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

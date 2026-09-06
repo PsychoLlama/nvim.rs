@@ -113,7 +113,7 @@ unsafe fn read_undo_file(
 ) {
     // SAFETY: an open file and a live current buffer, by the contract above.
     let mut bi = BufInfo {
-        bi_buf: unsafe { Buf::current() },
+        bi_buf: Buf::current(),
         bi_fp: stream,
     };
     let bi = &raw mut bi;
@@ -340,8 +340,7 @@ unsafe fn graft(
         unsafe { (*uhp).uh_alt_prev = resolve(seq, (*uhp).uh_alt_prev) };
     }
 
-    // SAFETY: a live current buffer, by the contract above.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     u_blockfree(buf);
     // The links already name these headers; the store is what turns a
     // name back into one.
@@ -379,6 +378,5 @@ unsafe fn graft(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

@@ -74,8 +74,8 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
         // where both walks stop.
         unsafe { unshowmode(true) };
     }
-    validate_cursor(unsafe { Win::current() });
-    let mut win = unsafe { Win::current() };
+    validate_cursor(Win::current());
+    let mut win = Win::current();
     let old_wcol = win.w_wcol;
     let old_wrow = win.w_wrow;
 
@@ -170,8 +170,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
         }
         // The showcmd area is drawn relative to the cursor position the
         // <Esc> peek above left, not the one the cursor is at now.
-        // SAFETY: `curwin` is set from startup to exit.
-        let mut win = unsafe { Win::current() };
+        let mut win = Win::current();
         let old_wcol = win.w_wcol;
         let old_wrow = win.w_wrow;
         win.w_wcol = at.wcol;

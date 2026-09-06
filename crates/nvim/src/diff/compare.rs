@@ -139,8 +139,7 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usi
     if unsafe { (*dp).df_count[idx1] } != unsafe { (*dp).df_count[idx2] } {
         return false;
     }
-    // SAFETY: `curtab` is set from startup to exit.
-    let tp = unsafe { TabPage::current() };
+    let tp = TabPage::current();
     if unsafe { diff_check_sanity(tp, dp) }.is_err() {
         return false;
     }

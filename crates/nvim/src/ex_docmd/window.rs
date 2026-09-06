@@ -151,13 +151,11 @@ fn len(p: *const c_char) -> size_t {
 }
 
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is always a live window.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is always a live buffer.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.

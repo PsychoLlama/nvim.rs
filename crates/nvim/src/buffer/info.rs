@@ -85,13 +85,11 @@ fn tr_n(one: &'static CStr, many: &'static CStr, n: LineNr) -> *mut c_char {
 }
 
 fn current_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// Whether `arg` contains the flag character `c` -- `:ls`'s argument is a

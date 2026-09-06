@@ -125,13 +125,11 @@ fn raw_tab(tabpage: Option<TabPage>) -> *mut Tabpage {
 }
 
 fn current_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 // ---------------------------------------------------------------------------

@@ -385,7 +385,7 @@ pub unsafe fn pum_display(
         // not set `must_redraw` under us.
         pum_is_visible.set(true);
         pum_is_drawn.set(true);
-        validate_cursor_col(unsafe { Win::current() });
+        validate_cursor_col(Win::current());
 
         let anchor = unsafe { pum_compute_anchor(cmd_startcol) };
 

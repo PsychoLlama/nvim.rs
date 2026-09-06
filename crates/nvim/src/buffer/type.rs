@@ -226,8 +226,7 @@ pub unsafe fn buf_get_fname(buffer: *const Buffer) -> *mut c_char {
 /// Set `'buflisted'` for the current buffer, firing `BufAdd`/`BufDelete` if
 /// it changed.
 pub unsafe fn set_buflisted(on: c_int) {
-    // SAFETY: `curbuf` is set from startup to exit.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     if on == buf.b_p_bl {
         return;
     }

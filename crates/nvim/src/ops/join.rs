@@ -439,19 +439,17 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     } else {
         col
     };
-    check_cursor_col(unsafe { Win::current() });
+    check_cursor_col(Win::current());
     cur_win().w_cursor.coladd = 0;
     cur_win().w_set_curswant = true;
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

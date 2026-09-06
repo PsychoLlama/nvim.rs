@@ -326,8 +326,11 @@ unsafe fn leave_for_buffer(
         return Switch::Abandon;
     }
 
+    // `close_buffer` may have left the editor with no buffer at all --
+    // upstream compares a non-NULL `buf` against a NULL `curbuf` here and
+    // finds them unequal, which is what the `Option` says.
     // SAFETY: the windows and buffers are live; `eap` is the caller's.
-    if buffer.raw() == cur_buf().raw() {
+    if Some(buffer) == Buf::current_or_none() {
         // already in new buffer -- close_buffer() has decremented the
         // window count, increment it again here and restore w_buffer.
         if did_decrement && unsafe { buf_valid(was_curbuf) } {

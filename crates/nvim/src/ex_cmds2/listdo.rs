@@ -262,9 +262,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 }
                 // Don't call `do_argfile` when already there, it would
                 // try reloading the file.
-                if unsafe { (*curwin.get()).w_arg_idx } != i
-                    || !editing_arg_idx(unsafe { Win::current() })
-                {
+                if unsafe { (*curwin.get()).w_arg_idx } != i || !editing_arg_idx(Win::current()) {
                     unsafe { do_argfile(args, i) };
                 }
                 if unsafe { (*curwin.get()).w_arg_idx } != i {
@@ -298,7 +296,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 // Remember the number of the next listed buffer, in case
                 // ":bwipe" is used or autocommands do something strange.
                 next_fnum = -1;
-                let mut bp = unsafe { Buf::current() }.next();
+                let mut bp = Buf::current().next();
                 while let Some(b) = bp {
                     if b.b_p_bl != 0 {
                         next_fnum = b.handle as c_int;
@@ -353,7 +351,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             ListDo::Windows => {
                 if execute {
                     // The cursor may have moved.
-                    validate_cursor(unsafe { Win::current() });
+                    validate_cursor(Win::current());
                     // Required when 'scrollbind' has been set.
                     if unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0 {
                         unsafe { do_check_scrollbind(true) };

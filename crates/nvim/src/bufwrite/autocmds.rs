@@ -143,8 +143,8 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 // BufWriteCmd wrote everything correctly and reset
                 // 'modified': correct the undo information so that an
                 // undo now sets it again.
-                u_unchanged(unsafe { Buf::current() });
-                u_update_save_nr(unsafe { Buf::current() });
+                u_unchanged(Buf::current());
+                u_update_save_nr(Buf::current());
             }
         } else {
             nofile_err =
@@ -304,6 +304,5 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

@@ -238,7 +238,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
     unsafe { pum_compute_size() };
     pum_scrollbar.set(0);
     pum_height.set(pum_size.get());
-    pum_rl.set(unsafe { Win::current() }.w_onebuf_opt.wo_rl != 0);
+    pum_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
     unsafe { pum_position_at_mouse(PUM_POPUP_MIN_WIDTH) };
 
     pum_selected.set(-1);
@@ -302,8 +302,7 @@ fn set_mousemoveevent(on: bool) {
 pub unsafe fn pum_make_popup(path_name: *const c_char, use_mouse_pos: c_int) {
     if use_mouse_pos == 0 {
         // Put the mouse where the cursor is, so the menu pops up there.
-        // SAFETY: `curwin` is live from startup to exit.
-        let win = unsafe { Win::current() };
+        let win = Win::current();
         mouse_row.set(win.w_grid.row_offset + win.w_wrow);
         mouse_col.set(
             win.w_grid.col_offset

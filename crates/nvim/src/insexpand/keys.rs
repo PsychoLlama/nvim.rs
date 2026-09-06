@@ -256,7 +256,7 @@ pub unsafe fn ins_compl_addfrommatch() {
 /// Stop insert completion mode.
 pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
     // Remove pre-inserted text when present.
-    if unsafe { ins_compl_preinsert_effect() } && ins_compl_win_active(unsafe { Win::current() }) {
+    if unsafe { ins_compl_preinsert_effect() } && ins_compl_win_active(Win::current()) {
         unsafe { ins_compl_delete(false) };
     }
 
@@ -626,6 +626,5 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

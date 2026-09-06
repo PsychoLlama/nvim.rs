@@ -474,6 +474,5 @@ pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

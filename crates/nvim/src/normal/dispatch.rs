@@ -529,11 +529,11 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     unsafe { mb_check_adjust_col(curwin.get().cast::<c_void>()) };
 
     if cur_win().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
-        validate_cursor(unsafe { Win::current() });
+        validate_cursor(Win::current());
         unsafe { do_check_scrollbind(true) };
     }
     if cur_win().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
-        validate_cursor(unsafe { Win::current() });
+        validate_cursor(Win::current());
         unsafe { do_check_cursorbind() };
     }
 
@@ -891,12 +891,10 @@ pub(crate) fn may_clear_cmdline() {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

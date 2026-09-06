@@ -359,8 +359,7 @@ pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> 
             MAXCOL as ColNr
         };
     }
-    // SAFETY: `curbuf` is live from startup to exit.
-    let buf = unsafe { Buf::current() };
+    let buf = Buf::current();
     let mut result: Option<Fmark> = None;
     for mark in buf.named_marks() {
         // `> 0` rather than `!= 0`: a negative line number is what a mangled
@@ -442,8 +441,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
         setpcmark();
     }
 
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     // SAFETY: `fm` is either the caller's live record or `in_flight`.
     let pos = unsafe { Fmark::new(fm) }.pos();
     let prev_pos = win.w_cursor;
@@ -480,8 +478,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
 pub(super) unsafe fn switch_to_mark_buf(fm: *mut FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
     // SAFETY: the caller promised a live record.
     let fm = unsafe { Fmark::new(fm) };
-    // SAFETY: `curbuf` is live from startup to exit.
-    if fm.fnum() == unsafe { Buf::current() }.handle {
+    if fm.fnum() == Buf::current().handle {
         return 0;
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };

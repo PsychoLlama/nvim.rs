@@ -350,7 +350,7 @@ pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
         if flags & CCGD_EXCMD != 0 {
             no_write_message();
         } else {
-            no_write_message_nobang(unsafe { Buf::current() });
+            no_write_message_nobang(Buf::current());
         }
         return true;
     }
@@ -840,7 +840,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
         }
         unsafe { goto_tabpage_win(tp, wp) };
         unsafe { (*curwin.get()).w_arg_idx = 0 };
-        if !buf_is_changed(unsafe { Buf::current() }) {
+        if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.
             let save_ar = unsafe { (*curbuf.get()).b_p_ar };
             unsafe { (*curbuf.get()).b_p_ar = 1 };

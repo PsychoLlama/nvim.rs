@@ -111,7 +111,7 @@ pub(crate) fn ins_reg() {
         regname = unsafe { get_expr_register() };
         // The cursor may have been moved back a column.
         cur_win().w_cursor = curpos;
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
     }
 
     if regname == NUL || !unsafe { valid_yank_reg(regname, false) } {
@@ -331,7 +331,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     unsafe { may_trigger_modechanged() };
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
-    if char_at_cursor() == TAB || unsafe { buf_meta_total(Buf::current(), kMTMetaInline) } > 0 {
+    if char_at_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
         cur_win()
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
@@ -478,12 +478,10 @@ fn beep(flag: ::core::ffi::c_uint) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

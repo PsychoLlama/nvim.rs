@@ -742,8 +742,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
                 edit_submode_extra.set(msg);
                 edit_submode_highl.set(HLF_R);
                 if dollar_vcol.get() >= 0 {
-                    // SAFETY: the current window is live.
-                    unsafe { curs_columns(Win::current(), 0) };
+                    curs_columns(Win::current(), 0);
                 }
             }
         }
@@ -798,6 +797,5 @@ pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

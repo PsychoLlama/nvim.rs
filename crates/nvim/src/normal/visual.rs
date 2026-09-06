@@ -383,7 +383,7 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     let (l, r) = (&raw mut left, &raw mut right);
     unsafe { getvcols(win, from, to, l, r) };
     cur_win().w_cursor.lnum = visual_anchor().lnum;
-    coladvance(unsafe { Win::current() }, left);
+    coladvance(Win::current(), left);
     set_visual_anchor(cur_win().w_cursor);
     cur_win().w_cursor.lnum = old_cursor.lnum;
     cur_win().w_curswant = right;
@@ -391,7 +391,7 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
     if old_cursor.lnum >= visual_anchor().lnum && sel_exclusive() {
         cur_win().w_curswant += 1;
     }
-    coladvance(unsafe { Win::current() }, cur_win().w_curswant);
+    coladvance(Win::current(), cur_win().w_curswant);
 
     // Nothing moved: the block's two columns are the same width, so swap
     // them the other way round instead.
@@ -402,10 +402,10 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
         if old_cursor.lnum <= visual_anchor().lnum && sel_exclusive() {
             right += 1;
         }
-        coladvance(unsafe { Win::current() }, right);
+        coladvance(Win::current(), right);
         set_visual_anchor(cur_win().w_cursor);
         cur_win().w_cursor.lnum = old_cursor.lnum;
-        coladvance(unsafe { Win::current() }, left);
+        coladvance(Win::current(), left);
         cur_win().w_curswant = left;
     }
 }
@@ -481,7 +481,7 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
                 .wrapping_mul(ca.count0 as LineNr)
                 .wrapping_sub(1),
         );
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
     }
     set_visual_mode(resel_VIsual_mode.get());
 
@@ -497,12 +497,12 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
         } else {
             cur_win().w_curswant = resel_VIsual_vcol.get();
         }
-        coladvance(unsafe { Win::current() }, cur_win().w_curswant);
+        coladvance(Win::current(), cur_win().w_curswant);
     }
 
     if resel_VIsual_vcol.get() == MAXCOL as c_int {
         cur_win().w_curswant = MAXCOL as ColNr;
-        coladvance(unsafe { Win::current() }, MAXCOL as c_int);
+        coladvance(Win::current(), MAXCOL as c_int);
     } else if visual_mode().is_block() {
         // The width is measured from the *start* line, so the cursor goes
         // there while 'curswant' is recomputed and comes back after.
@@ -519,7 +519,7 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
         if sel_exclusive() {
             cur_win().w_curswant += 1;
         }
-        coladvance(unsafe { Win::current() }, cur_win().w_curswant);
+        coladvance(Win::current(), cur_win().w_curswant);
     } else {
         cur_win().w_set_curswant = true;
     }
@@ -616,8 +616,8 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
         && get_ve_flags(cur_win()) & kOptVeFlagBlock as c_int as c_uint != 0
         && gchar_cursor() == TAB
     {
-        validate_virtcol(unsafe { Win::current() });
-        coladvance(unsafe { Win::current() }, cur_win().w_virtcol);
+        validate_virtcol(Win::current());
+        coladvance(Win::current(), cur_win().w_virtcol);
     }
     set_visual_anchor(cur_win().w_cursor);
     unsafe { fold_adjust_visual() };
@@ -675,11 +675,11 @@ pub(crate) unsafe fn nv_gv_cmd(cmd_arg: *mut CmdArg) {
     set_visual_active(true);
     VIsual_reselect.set(1);
     // Both ends are checked against the buffer: it may have shrunk since.
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     set_visual_anchor(cur_win().w_cursor);
     cur_win().w_cursor = tpos;
-    check_cursor(unsafe { Win::current() });
-    update_topline(unsafe { Win::current() });
+    check_cursor(Win::current());
+    update_topline(Win::current());
     if ca.arg != 0 {
         set_visual_select(true);
         VIsual_select_reg.set(0);
@@ -818,14 +818,12 @@ pub(crate) unsafe fn nv_object(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// The `i(`/`a{`-family text object: the block `open`..`close` around the

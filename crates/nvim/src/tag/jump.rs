@@ -473,7 +473,7 @@ impl Jump {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
             if cur_buf().b_help {
-                set_topline(unsafe { Win::current() }, cur_win().w_cursor.lnum);
+                set_topline(Win::current(), cur_win().w_cursor.lnum);
             }
             if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
                 unsafe { fold_open_cursor() };
@@ -490,7 +490,7 @@ impl Jump {
             && win_valid(saved.raw())
         {
             // Put the cursor back where it was.
-            validate_cursor(unsafe { Win::current() });
+            validate_cursor(Win::current());
             unsafe { redraw_later(curwin.get(), UPD_VALID) };
             unsafe { win_enter(saved.raw(), true) };
         }
@@ -642,7 +642,7 @@ impl Jump {
         p_scs.set(save_p_scs);
         // A search command may have put the cursor beyond the end of
         // the line; correct that here.
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
         retval
     }
 
@@ -810,12 +810,10 @@ impl Pattern {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

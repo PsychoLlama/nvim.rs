@@ -105,7 +105,7 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
 
     cur_win().w_cursor = op.start;
     let (lnum, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     changed_lines(cur_buf(), lnum, col, last, 0, true);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -368,12 +368,10 @@ fn replace_virtual_tail(op: Op, c: c_int) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

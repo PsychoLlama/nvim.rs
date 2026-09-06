@@ -630,8 +630,7 @@ pub(super) unsafe fn check_closed(
 
 /// The tab page the editor is working in.
 fn cur_tab() -> TabPage {
-    // SAFETY: `curtab` is set from startup to exit.
-    unsafe { TabPage::current() }
+    TabPage::current()
 }
 
 /// C's `emsg(_(e_nofold))`, which every command that found no fold gives.
@@ -642,6 +641,5 @@ fn emsg_nofold() {
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

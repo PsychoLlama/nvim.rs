@@ -125,10 +125,11 @@ mod write {
     /// enough of `u_write_undo`'s inputs filled in to be worth writing, and
     /// the hash the writer stamps into the header.
     struct Fixture {
-        // `p_udir` and `curbuf` are process-wide, so the cases run one at a
-        // time and put them back. This is the *same* lock every other case
-        // in this binary takes: a second mutex over the same globals would
-        // serialise these cases against each other and against nothing else.
+        // `p_udir` and the current buffer's `b_u_synced` are process-wide,
+        // so the cases run one at a time and put them back. This is the
+        // *same* lock every other case in this binary takes: a second mutex
+        // over the same globals would serialise these cases against each
+        // other and against nothing else.
         _guard: Editor,
         dir: PathBuf,
         buf: Box<Buffer>,
@@ -137,7 +138,7 @@ mod write {
         _udir: CString,
         ffname: Option<CString>,
         old_udir: *mut c_char,
-        old_curbuf: Buf,
+        old_synced: bool,
     }
 
     impl Fixture {
@@ -167,13 +168,17 @@ mod write {
             buf.b_u_numhead = 1;
 
             let old_udir = p_udir.get();
-            // SAFETY: `curbuf` is the editor's own buffer, live under the lock.
-            let old_curbuf = unsafe { Buf::current() };
             p_udir.set(udir.as_ptr().cast_mut());
-            // `u_write_undo` syncs the current buffer before serialising;
-            // ours is already synced, so this only has to be non-NULL.
-            // SAFETY: the fixture owns `buf` and outlives the case.
-            unsafe { Buf::new(&raw mut *buf) }.make_current();
+            // `u_write_undo` syncs the *current* buffer before serialising
+            // the one it was handed, and this fixture's buffer is not one
+            // the editor can stand in: it is in no registry, and "current"
+            // is the identity of a registered buffer. So the editor's own
+            // buffer stays current and is only marked synced, which is all
+            // that pointing `curbuf` at an already-synced fixture bought --
+            // `u_sync` returns at its first test either way.
+            let mut current = Buf::current();
+            let old_synced = current.b_u_synced;
+            current.b_u_synced = true;
 
             let mut fixture = Fixture {
                 _guard: guard,
@@ -183,7 +188,7 @@ mod write {
                 _udir: udir,
                 ffname: None,
                 old_udir,
-                old_curbuf,
+                old_synced,
             };
             // SAFETY: the buffer is live and `hash` is `UNDO_HASH_SIZE` long.
             unsafe { u_compute_hash(Buf::new(&raw mut *fixture.buf), fixture.hash.as_mut_ptr()) };
@@ -234,7 +239,7 @@ mod write {
     impl Drop for Fixture {
         fn drop(&mut self) {
             p_udir.set(self.old_udir);
-            self.old_curbuf.make_current();
+            Buf::current().b_u_synced = self.old_synced;
             let _ = fs::remove_dir_all(&self.dir);
         }
     }

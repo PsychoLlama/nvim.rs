@@ -304,7 +304,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                 (tab.tp_firstwin, tab.tp_topframe)
             }
         } else {
-            tab = unsafe { TabPage::current() };
+            tab = TabPage::current();
             (firstwin.get(), topframe.get())
         };
 

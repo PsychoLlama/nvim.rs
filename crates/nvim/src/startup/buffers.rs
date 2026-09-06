@@ -203,7 +203,7 @@ pub(crate) unsafe fn read_stdin() {
     } else {
         unsafe { set_buflisted(1) };
         let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
-        if unsafe { buf_is_empty(curbuf.get()) } && unsafe { Buf::current() }.b_next.is_some() {
+        if unsafe { buf_is_empty(curbuf.get()) } && Buf::current().b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
         }
@@ -284,12 +284,12 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
                 first_win().make_current();
             }
         } else if parm.window_layout == WIN_TABS as c_int {
-            if unsafe { TabPage::current() }.next().is_none() {
+            if TabPage::current().next().is_none() {
                 break;
             }
             goto_tabpage(0);
         } else {
-            let Some(next) = unsafe { Win::current() }.next() else {
+            let Some(next) = Win::current().next() else {
                 break;
             };
             next.make_current();
@@ -372,7 +372,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
         if advance {
             if parm.window_layout == WIN_TABS as c_int {
-                if unsafe { TabPage::current() }.next().is_none() {
+                if TabPage::current().next().is_none() {
                     break;
                 }
                 goto_tabpage(0);
@@ -384,7 +384,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                     unsafe { set_shortmess(shm.as_mut_ptr()) };
                 }
             } else {
-                let Some(next) = unsafe { Win::current() }.next() else {
+                let Some(next) = Win::current().next() else {
                     break;
                 };
                 unsafe { win_enter(next.raw(), false) };
@@ -484,12 +484,10 @@ fn first_win() -> Win {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

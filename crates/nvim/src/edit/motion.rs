@@ -319,18 +319,15 @@ fn start_arrow_changing(pos: &mut Pos, end_change: bool) {
 /// Move the cursor to virtual column `vcol` of its line.
 #[inline(always)]
 fn coladvance_to(vcol: c_int) {
-    // SAFETY: `curwin` is live for the whole session.
-    coladvance(unsafe { Win::current() }, vcol);
+    coladvance(Win::current(), vcol);
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

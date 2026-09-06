@@ -171,8 +171,7 @@ unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
         result.vval.v_number = -1;
         return;
     }
-    // SAFETY: `curtab` is set from startup to exit.
-    let tp = unsafe { TabPage::current() };
+    let tp = TabPage::current();
     // `bufwinnr()` skips a window the numbering has no number for;
     // `bufwinid()` still answers its id.
     let mut winnr = 0;

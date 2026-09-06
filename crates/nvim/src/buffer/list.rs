@@ -162,8 +162,7 @@ fn current_buf() -> Option<Buf> {
 }
 
 fn current_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 fn current_last() -> Option<Buf> {
@@ -208,8 +207,8 @@ pub unsafe fn buflist_new(
     let mut sfname = sfname_arg;
 
     // Will allocate ffname.
-    // SAFETY: two locals holding a name each, and the current buffer.
-    unsafe { fname_expand(cur_buf(), &raw mut ffname, &raw mut sfname) };
+    // SAFETY: two locals holding a name each.
+    unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
 
     // The file id works better than the name for hard links, when the file
     // exists.
@@ -807,8 +806,7 @@ pub unsafe fn buflist_findpat(
 /// the regexp.
 fn match_shorthand(head: c_char, diffmode: bool) -> c_int {
     let matched = if head == b'%' as c_char {
-        // SAFETY: `curbuf` is set from startup to exit.
-        unsafe { Buf::current() }.handle as c_int
+        Buf::current().handle as c_int
     } else {
         current_win().w_alt_fnum
     };

@@ -110,8 +110,7 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
     let len = col - scol;
     // Buffer-local abbreviations first, then the global ones.
     let mut found = None;
-    // SAFETY: `curbuf` is set from startup to exit.
-    let cur = unsafe { Buf::current() };
+    let cur = Buf::current();
     // SAFETY: `mincol <= scol < col`, so this names `len` bytes of the
     // caller's text.
     let word = unsafe { core::slice::from_raw_parts(word.cast::<u8>(), len as usize) };

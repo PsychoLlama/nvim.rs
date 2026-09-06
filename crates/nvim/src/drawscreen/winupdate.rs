@@ -943,13 +943,13 @@ unsafe fn finish_botline(
         if window.raw() == curwin.get() && window.w_botline != old_botline && !RECURSIVE.get() {
             RECURSIVE.set(true);
             unsafe { (*curwin.get()).w_valid.clear(WinValid::TOPLINE) };
-            update_topline(unsafe { Win::current() }); // may invalidate w_botline again
+            update_topline(Win::current()); // may invalidate w_botline again
             // A new redraw, either from a moved topline or a reset skipcol.
             if must_redraw.get() != 0 {
                 // Do not update for the buffer changes a second time.
                 let mod_set = unsafe { (*curbuf.get()).b_mod_set };
                 unsafe { (*curbuf.get()).b_mod_set = false };
-                curs_columns(unsafe { Win::current() }, c_int::from(true));
+                curs_columns(Win::current(), c_int::from(true));
                 unsafe { win_update(Win::current()) };
                 must_redraw.set(0);
                 unsafe { (*curbuf.get()).b_mod_set = mod_set };
@@ -965,6 +965,5 @@ unsafe fn finish_botline(
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

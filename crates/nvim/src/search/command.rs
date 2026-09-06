@@ -503,10 +503,10 @@ pub unsafe fn do_search(
     // If the cursor is in a closed fold, don't find another match in
     // the same fold.
     if cmd.dirc == '/' as c_int {
-        if unsafe { has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) } {
+        if has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) {
             pos.col = (MAXCOL - 2) as ColNr; // avoid overflow when adding 1
         }
-    } else if unsafe { has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) } {
+    } else if has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) {
         pos.col = 0;
     }
 
@@ -596,8 +596,7 @@ pub unsafe fn do_search(
             } else {
                 SEARCH_NOOF
             };
-            // SAFETY: `curwin` and `curbuf` are the live window and buffer.
-            let (w, b) = unsafe { (Some(Win::current()), Buf::current()) };
+            let (w, b) = (Some(Win::current()), Buf::current());
             let (at, end) = (&raw mut pos, ptr::null_mut());
             let dir = if cmd.dirc == '/' as c_int {
                 FORWARD
@@ -763,7 +762,7 @@ pub unsafe fn showmatch(c: c_int) {
 
     // 'scrolloff' and 'sidescrolloff' are window-local with a global
     // fallback; the blink writes through whichever is in effect.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let so = ScrollOff::of(win, ScrollMargin::Lines);
     let siso = ScrollOff::of(win, ScrollMargin::Columns);
 
@@ -812,12 +811,10 @@ pub unsafe fn showmatch(c: c_int) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

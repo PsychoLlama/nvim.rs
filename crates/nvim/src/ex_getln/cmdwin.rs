@@ -263,7 +263,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     cur_win().w_cursor.col = Cc::current().cmdpos as ColNr;
     unsafe { changed_line_abv_curs() };
-    invalidate_botline_win(unsafe { Win::current() });
+    invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
 
@@ -420,12 +420,10 @@ fn wipe_buffer(buffer: *mut Buffer) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

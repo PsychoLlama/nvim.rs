@@ -720,6 +720,5 @@ pub unsafe fn finish_yankreg_from_object(reg: *mut YankReg, clipboard_adjust: bo
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

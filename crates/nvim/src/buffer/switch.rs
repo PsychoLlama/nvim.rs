@@ -274,8 +274,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         swap_exists_action.set(SEA_NONE); // don't want it again
         swap_exists_did_quit.set(true);
         let unload = DOBUF_UNLOAD as c_int;
-        // SAFETY: the current window and the current buffer.
-        unsafe { close_buffer(Some(Win::current()), Buf::current(), unload, false, false) };
+        close_buffer(Some(Win::current()), Buf::current(), unload, false, false);
 
         let kept = old_curbuf
             .and_then(BufRef::get)

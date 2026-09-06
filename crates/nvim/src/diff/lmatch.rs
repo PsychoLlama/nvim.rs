@@ -39,8 +39,7 @@ pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
 /// of identical decisions is one diff block, so the block list grows by one
 /// every time the set changes.
 unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
-    // SAFETY: `curtab` is set from startup to exit.
-    let tp = unsafe { TabPage::current() };
+    let tp = TabPage::current();
     let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
     let mut outputmap = [0usize; DB_COUNT as usize];
     let mut ndiffs = 0;
@@ -80,8 +79,7 @@ unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
 /// alignment is computed over all of them at once, and the answer replaces
 /// the block.
 pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
-    // SAFETY: `curtab` is set from startup to exit.
-    let tp = unsafe { TabPage::current() };
+    let tp = TabPage::current();
     let mut images = [MMFILE_INIT; DB_COUNT as usize];
     let mut lengths = [0 as c_int; DB_COUNT as usize];
     let mut ndiffs = 0;

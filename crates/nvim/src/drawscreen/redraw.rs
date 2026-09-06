@@ -37,8 +37,7 @@ pub unsafe fn redraw_custom_title_later() -> bool {
 /// status line, the window bar or the ruler shows has *changed* since they were
 /// last drawn, and if so which of them to mark. `force` reports unconditionally.
 pub unsafe fn show_cursor_info_later(force: bool) {
-    // SAFETY: `curwin` is the editor's current window on the main thread.
-    let mut wp = unsafe { Win::current() };
+    let mut wp = Win::current();
     let state = get_real_state();
     // "The cursor is on an empty line" is a status-line item of its own, and
     // in Insert mode it is deliberately always reported as false.
@@ -269,7 +268,7 @@ pub unsafe fn status_redraw_buf(buffer: *mut Buffer) {
     // With no status line at all the ruler lives on the command line, so it
     // has to be marked separately -- but only if the loop above did not
     // already mark the current window.
-    let wp = unsafe { Win::current() };
+    let wp = Win::current();
     if p_ru.get() != 0 && wp.w_status_height == 0 && !wp.w_redr_status {
         redraw_cmdline.set(true);
         unsafe { redraw_later(wp.raw(), UPD_VALID) };

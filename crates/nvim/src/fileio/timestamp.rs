@@ -651,8 +651,8 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // have been removed.
     cur_win().w_topline = old_topline.min(cur_buf().b_ml.ml_line_count);
     cur_win().w_cursor = old_cursor;
-    check_cursor(unsafe { Win::current() });
-    update_topline(unsafe { Win::current() });
+    check_cursor(Win::current());
+    update_topline(Win::current());
     cur_buf().b_keep_filetype = false;
 
     // Update folds unless they are defined manually.
@@ -701,12 +701,10 @@ pub unsafe fn write_lnum_adjust(offset: LineNr) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

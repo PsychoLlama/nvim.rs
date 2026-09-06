@@ -21,8 +21,7 @@ use crate::winlayer::Buf;
 
 /// The terminal the current buffer shows, if it shows one.
 fn cur_buf_terminal() -> *mut Terminal {
-    // SAFETY: `curbuf` names a live buffer for the editor's whole run.
-    unsafe { Buf::current() }.terminal
+    Buf::current().terminal
 }
 
 /// Hand `data` to the `vim.paste()` Lua handler as one chunk of a paste.

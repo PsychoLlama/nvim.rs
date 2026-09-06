@@ -358,8 +358,7 @@ pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         .is_some_and(|at| unsafe { tv_get_bool(at) } != 0);
     // SAFETY: as above.
     unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
-    // SAFETY: `curbuf` is set from startup to exit.
-    let cur = unsafe { Buf::current() };
+    let cur = Buf::current();
 
     // Do it twice: once for global maps and once for local maps.
     for (buffer_local, table) in [(0, MapTable::Global), (1, MapTable::Buffer(cur))] {

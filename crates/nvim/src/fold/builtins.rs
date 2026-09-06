@@ -39,8 +39,7 @@ pub(super) unsafe fn foldclosed_both(args: *mut TypVal, result: *mut TypVal, end
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         let mut first: LineNr = 0;
         let mut last: LineNr = 0;
-        // SAFETY: `curwin` is set from startup to exit.
-        let win = unsafe { Win::current() };
+        let win = Win::current();
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
             rv.vval.v_number = (if end { last } else { first }) as VarNumber;
@@ -166,8 +165,7 @@ pub unsafe fn f_foldtextresult(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
     entered.set(true);
     // SAFETY: the caller's promise, plus a live current window.
     let lnum = unsafe { tv_get_lnum(args) }.max(0);
-    // SAFETY: `curwin` is set from startup to exit.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let info = fold_info(win, lnum);
     if info.fi_lines > 0 {
         let mut vt: VirtText = VIRTTEXT_EMPTY;
@@ -204,6 +202,5 @@ type Tv = Live<TypVal>;
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }

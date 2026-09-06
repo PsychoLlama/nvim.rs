@@ -155,13 +155,11 @@ pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
         return;
     }
     // The change we are navigating past has to be synced first.
-    // SAFETY: a live current buffer, by the contract above.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     if !buf.b_u_synced {
         // SAFETY: as above.
         u_sync(true);
-        // SAFETY: as above; `u_sync` may have moved the tree under us.
-        buf = unsafe { Buf::current() };
+        buf = Buf::current();
     }
     u_newcount.set(0);
     u_oldcount.set(if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -425,8 +423,7 @@ unsafe fn undo_up_to(dest: &UndoDest) {
         // The change warning first, for the reason `u_doit` gives.
         // SAFETY: a live current buffer, by the contract above.
         unsafe { change_warning(Buf::current(), 0) };
-        // SAFETY: as above — the warning may have reloaded the buffer.
-        let mut buf = unsafe { Buf::current() };
+        let mut buf = Buf::current();
         let above = match buf.header(buf.b_u_curhead) {
             Some(curhead) => buf.header(curhead.uh_next),
             None => buf.header(buf.b_u_newhead),
@@ -459,8 +456,7 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
     while !got_int.get() {
         // SAFETY: a live current buffer, by the contract above.
         unsafe { change_warning(Buf::current(), 0) };
-        // SAFETY: as above — the warning may have reloaded the buffer.
-        let mut buf = unsafe { Buf::current() };
+        let mut buf = Buf::current();
         let Some(fork) = buf.header(buf.b_u_curhead) else {
             break;
         };

@@ -205,8 +205,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
         cms_elen = cms_elen.wrapping_sub(gap(s, cms_end));
         cms_end = s;
     }
-    // SAFETY: `curwin` is set from startup to exit.
-    parse_marker(unsafe { Win::current() });
+    parse_marker(Win::current());
 
     // Each half of 'commentstring' is only removed once.
     let mut did1 = false;
@@ -262,12 +261,10 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

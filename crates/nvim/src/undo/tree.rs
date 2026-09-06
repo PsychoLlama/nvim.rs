@@ -303,7 +303,7 @@ pub unsafe fn u_undoline() {
     }
     cur_win().w_cursor.col = t;
     cur_win().w_cursor.lnum = cur_buf().b_u_line_lnum;
-    check_cursor_col(unsafe { Win::current() });
+    check_cursor_col(Win::current());
 }
 
 /// A fresh copy of line `lnum` of the current buffer.
@@ -328,12 +328,10 @@ pub(crate) unsafe fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

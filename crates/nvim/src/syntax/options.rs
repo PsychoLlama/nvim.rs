@@ -213,10 +213,8 @@ pub(crate) unsafe fn get_syn_options(
                     if arg.is_null() {
                         return ::core::ptr::null_mut();
                     }
-                } else if f.flags == SynFlags::FOLD
-                    && foldmethod_is_syntax(unsafe { Win::current() })
-                {
-                    fold_update_all(unsafe { Win::current() }); // Need to update folds later.
+                } else if f.flags == SynFlags::FOLD && foldmethod_is_syntax(Win::current()) {
+                    fold_update_all(Win::current()); // Need to update folds later.
                 }
             }
         }

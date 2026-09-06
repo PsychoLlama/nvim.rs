@@ -216,7 +216,7 @@ fn selection_is_old() -> bool {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn getviscol() -> ColNr {
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     win.virtual_vcol(win.cursor())
 }
 
@@ -225,7 +225,7 @@ pub unsafe fn getviscol() -> ColNr {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let mut pos = Pos {
         lnum: win.cursor().lnum(),
         col,
@@ -240,7 +240,7 @@ pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn coladvance_force(wcol: ColNr) -> bool {
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     let reached = unsafe { coladvance2(win, win.cursor(), true, false, wcol) };
     if wcol == MAXCOL {
         win.invalidate_virtcol();
@@ -265,8 +265,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
     // it.
     } else if unsafe { win.buffer().line(cursor.lnum()).byte(cursor.col()) } as c_int != TAB {
         // The current window, not `win` — which is what the C does.
-        // SAFETY: `curwin` is set from startup to exit.
-        unsafe { Win::current() }.note_virtcol(wcol);
+        Win::current().note_virtcol(wcol);
     }
     reached
 }
@@ -550,7 +549,7 @@ pub fn check_cursor(window: Win) {
 /// The current window and buffer must be valid.
 pub unsafe fn check_visual_pos() {
     let visual = visual_anchor();
-    let last = unsafe { Buf::current() }.line_count();
+    let last = Buf::current().line_count();
     if visual.lnum > last {
         set_visual_anchor(Pos {
             lnum: last,
@@ -575,7 +574,7 @@ pub unsafe fn check_visual_pos() {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn adjust_cursor_col() {
-    let cursor = unsafe { Win::current() }.cursor();
+    let cursor = Win::current().cursor();
     if cursor.col() > 0 && (!visual_active() || selection_is_old()) && gchar_cursor() == NUL {
         cursor.set_col(cursor.col() - 1);
     }
@@ -587,7 +586,7 @@ pub unsafe fn adjust_cursor_col() {
 /// # Safety
 /// The current window must be valid.
 pub unsafe fn set_leftcol(leftcol: ColNr) -> bool {
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     if win.leftcol() == leftcol {
         return false;
     }
@@ -643,7 +642,7 @@ pub fn gchar_cursor() -> c_int {
 /// # Safety
 /// The current window and buffer must be valid.
 pub unsafe fn char_before_cursor() -> c_int {
-    let col = unsafe { Win::current() }.cursor().col();
+    let col = Win::current().cursor().col();
     if col == 0 {
         return -1;
     }
@@ -661,7 +660,7 @@ pub unsafe fn char_before_cursor() -> c_int {
 /// The current window and buffer must be valid, and the cursor's column must
 /// lie within the line.
 pub unsafe fn pchar_cursor(c: c_char) {
-    let cursor = unsafe { Win::current() }.cursor();
+    let cursor = Win::current().cursor();
     unsafe {
         *Buf::current()
             .line_mut(cursor.lnum())
@@ -683,7 +682,7 @@ pub fn get_cursor_line_ptr() -> *mut c_char {
 ///
 /// Safe: as [`get_cursor_line_ptr`] -- an address, computed, not read.
 pub fn get_cursor_pos_ptr() -> *mut c_char {
-    let cursor = unsafe { Win::current() }.cursor();
+    let cursor = Win::current().cursor();
     unsafe {
         Buf::current()
             .line(cursor.lnum())
@@ -703,6 +702,6 @@ pub fn get_cursor_line_len() -> ColNr {
 ///
 /// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_pos_len() -> ColNr {
-    let cursor = unsafe { Win::current() }.cursor();
+    let cursor = Win::current().cursor();
     unsafe { Buf::current().line_len(cursor.lnum()) - cursor.col() }
 }

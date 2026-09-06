@@ -54,8 +54,7 @@ pub fn setpcmark() {
     if global_busy.get() != 0 || listcmd_busy.get() || cmdmod_has(CmdModFlags::KEEPJUMPS) {
         return;
     }
-    // SAFETY: `curwin`/`curbuf` are live from startup to exit.
-    let (mut win, buf) = unsafe { (Win::current(), Buf::current()) };
+    let (mut win, buf) = (Win::current(), Buf::current());
     win.w_prev_pcmark = win.w_pcmark;
     win.w_pcmark = win.w_cursor;
     if win.w_pcmark.lnum == 0 {
@@ -106,8 +105,7 @@ pub fn setpcmark() {
 /// # Safety
 /// The editor's globals must be live.
 pub unsafe fn checkpcmark() {
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     if win.w_prev_pcmark.lnum != 0
         && (equalpos(win.w_pcmark, win.w_cursor) || win.w_pcmark.lnum == 0)
     {
@@ -157,8 +155,7 @@ pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut FileMark 
             // SAFETY: the entry is live and its name, if any, is a C string.
             unsafe { fname2fnum(jump.raw()) };
         }
-        // SAFETY: `curbuf` is live from startup to exit.
-        let here = unsafe { Buf::current() }.handle;
+        let here = Buf::current().handle;
         // An entry whose buffer no longer exists is skipped rather than
         // jumped to, and the step continues in the same direction.
         if jump.fmark().fnum() == here || find_buf(jump.fmark().fnum()).is_some() {
@@ -205,8 +202,7 @@ pub unsafe fn get_changelist(buffer: *mut Buffer, win: *mut Window, count: c_int
     let change = buf.change(n);
     // The entries carry no buffer of their own, so the answer is stamped with
     // the CURRENT buffer rather than with `buf`.
-    // SAFETY: `curbuf` is live from startup to exit.
-    change.set_fnum(unsafe { Buf::current() }.handle as c_int);
+    change.set_fnum(Buf::current().handle as c_int);
     change.raw()
 }
 
@@ -320,8 +316,7 @@ pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
         return;
     }
     let last = window.jump(window.w_jumplistlen - 1);
-    // SAFETY: `curbuf` is live from startup to exit.
-    let here = unsafe { Buf::current() }.handle;
+    let here = Buf::current().handle;
     if last.fmark().fnum() == here && last.fmark().lnum() == window.w_cursor.lnum {
         // SAFETY: the name is this entry's to free.
         unsafe { xfree(last.fname().cast()) };
@@ -370,8 +365,7 @@ pub unsafe fn free_jumplist(window: *mut Window) {
 /// The editor's globals must be live.
 pub unsafe fn ex_jumps(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `curwin`/`curbuf` are live from startup to exit.
-    let win = unsafe { Win::current() };
+    let win = Win::current();
     // SAFETY: as above.
     unsafe { cleanup_jumplist(win.raw(), true) };
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
@@ -398,8 +392,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
                     unsafe { xfree(name.cast()) };
                     break;
                 }
-                // SAFETY: `curbuf` is live.
-                let here = unsafe { Buf::current() }.handle;
+                let here = Buf::current().handle;
                 unsafe {
                     snprintf(
                         row.as_mut_ptr(),
@@ -439,8 +432,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
 /// # Safety
 /// The editor's globals must be live.
 pub unsafe fn ex_clearjumps(_args: *mut ExArg) {
-    // SAFETY: `curwin` is live from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let mut win = Win::current();
     // SAFETY: as above.
     unsafe { free_jumplist(win.raw()) };
     win.w_jumplistlen = 0;
@@ -453,8 +445,7 @@ pub unsafe fn ex_clearjumps(_args: *mut ExArg) {
 /// The editor's globals must be live.
 pub unsafe fn ex_changes(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `curwin`/`curbuf` are live from startup to exit.
-    let (buf, win) = unsafe { (Buf::current(), Win::current()) };
+    let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: as above.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     unsafe { msg_puts_title(gettext(c"\nchange line  col text").as_ptr()) };

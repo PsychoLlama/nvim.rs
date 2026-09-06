@@ -84,8 +84,7 @@ pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     // SAFETY: as above.
     unsafe { u_doit(count, true, do_buf_event) };
 
-    // SAFETY: as above.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     let Some(mut forgotten) = buf.header(buf.b_u_curhead) else {
         return false; // nothing was undone
     };
@@ -124,8 +123,7 @@ pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
 ///
 /// A live current buffer.
 unsafe fn count_after_sync(count: c_int) -> c_int {
-    // SAFETY: a live current buffer, by the contract above.
-    if unsafe { Buf::current() }.b_u_synced {
+    if Buf::current().b_u_synced {
         return count;
     }
     // SAFETY: as above.
@@ -139,13 +137,11 @@ unsafe fn count_after_sync(count: c_int) -> c_int {
 ///
 /// A live current buffer and window.
 pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
-    // SAFETY: a live current buffer, by the contract above.
-    if !undo_allowed(unsafe { Buf::current() }) {
+    if !undo_allowed(Buf::current()) {
         return;
     }
     u_newcount.set(0);
-    // SAFETY: as above.
-    let empty = unsafe { Buf::current() }.b_ml.ml_flags.has(MlFlags::EMPTY);
+    let empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     u_oldcount.set(if empty { -1 } else { 0 });
     // SAFETY: a NUL-terminated literal.
     unsafe { msg_ext_set_kind(c"undo".as_ptr()) };
@@ -159,8 +155,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
         // `b_u_curhead` and more.
         // SAFETY: a live current buffer.
         unsafe { change_warning(Buf::current(), 0) };
-        // SAFETY: as above — and the reload may have replaced it.
-        let mut buf = unsafe { Buf::current() };
+        let mut buf = Buf::current();
         if undo_undoes.get() {
             if buf.b_u_curhead.is_none() {
                 buf.b_u_curhead = buf.b_u_newhead; // the first undo
@@ -246,8 +241,7 @@ pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
         return;
     }
 
-    // SAFETY: a live current buffer.
-    let buf = unsafe { Buf::current() };
+    let buf = Buf::current();
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         u_newcount.set(u_newcount.get() - 1);
     }

@@ -121,8 +121,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     // has the fewest side effects.  Only `curtab` is searched, which is
     // why `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` starts at `firstwin`.
     let win: Option<Win> = if same_buffer {
-        // SAFETY: `curwin` is set from startup to exit.
-        Some(unsafe { Win::current() })
+        Some(Win::current())
     } else {
         windows().find(|wp| wp.w_buffer == buffer)
     };
@@ -255,13 +254,18 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
         cur_buf().b_nwindows -= 1;
         unsafe { win_remove(curwin.get(), ::core::ptr::null_mut()) };
+        // The autocommand window, held as an address across its own
+        // deregistration: it is still current and still perfectly alive, but
+        // `Win::current()` answers from the registry and would say there is
+        // no current window between here and the `make_current` below.
+        let mut auc = cur_win();
         // The window is given back, not freed, so it goes out of the
         // registry rather than being forgotten by a free path.
-        forget_window(cur_win().handle);
-        if cur_win().w_grid_alloc.is_allocated() {
-            unsafe { ui_comp_remove_grid(&raw mut (*curwin.get()).w_grid_alloc) };
-            ui_call_win_hide(cur_win().w_grid_alloc.handle as Integer);
-            cur_win().w_grid_alloc.free();
+        forget_window(auc.handle);
+        if auc.w_grid_alloc.is_allocated() {
+            unsafe { ui_comp_remove_grid(&raw mut (*auc.raw()).w_grid_alloc) };
+            ui_call_win_hide(auc.w_grid_alloc.handle as Integer);
+            auc.w_grid_alloc.free();
         }
 
         // The window is given back, not freed: it is used again.
@@ -305,7 +309,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
         // The buffer's contents may have changed under the cursor.
         set_visual_active(unsafe { (*aco).save_visual_active });
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
         if cur_win().w_topline > cur_buf().b_ml.ml_line_count {
             cur_win().w_topline = cur_buf().b_ml.ml_line_count;
             cur_win().w_topfill = 0;
@@ -342,26 +346,24 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             // The autocommand may have left the cursor where curbuf has
             // no such position.
             set_visual_active(unsafe { (*aco).save_visual_active });
-            check_cursor(unsafe { Win::current() });
+            check_cursor(Win::current());
         }
     }
 
     set_visual_active(unsafe { (*aco).save_visual_active });
     // Just in case lines got deleted.
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     if visual_active() {
-        with_visual_anchor(|anchor| unsafe { check_pos(Buf::current(), anchor) });
+        with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

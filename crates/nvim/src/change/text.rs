@@ -460,18 +460,16 @@ pub unsafe fn del_lines(nlines: LineNr, undo: bool) {
     }
 
     cur_win().w_cursor.col = 0;
-    check_cursor_lnum(unsafe { Win::current() });
+    check_cursor_lnum(Win::current());
     unsafe { deleted_lines_mark(first, n) };
 }
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

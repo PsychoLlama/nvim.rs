@@ -405,8 +405,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
 
     // `diff_read` reads both of these: the list it appends to, and the
     // table that says which buffers are active.
-    // SAFETY: `curtab` is set from startup to exit.
-    let mut tp = unsafe { TabPage::current() };
+    let mut tp = TabPage::current();
     let orig_diff = tp.tp_first_diff;
     let orig_diffbuf = tp.tp_diffbuf;
     tp.tp_first_diff = ::core::ptr::null_mut();

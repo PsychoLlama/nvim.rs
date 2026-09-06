@@ -272,7 +272,7 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
     }
 
     let (lnum, col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
-    check_cursor_col(unsafe { Win::current() });
+    check_cursor_col(Win::current());
     changed_lines(cur_buf(), lnum, col, op.end.lnum + 1, 0, true);
     // No whole lines were deleted, so `msgmore` must not report any.
     op.line_count = 0;
@@ -504,12 +504,10 @@ pub(crate) unsafe fn mb_adjust_opend(op: *mut OpArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

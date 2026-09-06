@@ -56,8 +56,7 @@ pub unsafe fn ex_marks(args: *mut ExArg) {
     if !arg.is_null() && c_int::from(unsafe { *arg }) == NUL {
         arg = ptr::null_mut();
     }
-    // SAFETY: `curwin`/`curbuf` are live from startup to exit.
-    let (win, buf) = unsafe { (Win::current(), Buf::current()) };
+    let (win, buf) = (Win::current(), Buf::current());
     // SAFETY: a `'static` C string.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
 
@@ -214,8 +213,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
     // SAFETY: the caller promised a live command whose `arg` is a
     // NUL-terminated string.
     let (arg, forceit) = unsafe { ((*args).arg, (*args).forceit != 0) };
-    // SAFETY: `curbuf` is live from startup to exit.
-    let mut buf = unsafe { Buf::current() };
+    let mut buf = Buf::current();
     // SAFETY: `arg` is a NUL-terminated string.
     let empty = c_int::from(unsafe { *arg }) == NUL;
 
@@ -414,8 +412,7 @@ unsafe fn delmarks_one(
 /// # Safety
 /// `curbuf` must be live, which it is from startup to exit.
 pub(super) unsafe fn mark_line(pos: Pos, lead_len: c_int) -> *mut c_char {
-    // SAFETY: `curbuf` is live from startup to exit.
-    let buf = unsafe { Buf::current() };
+    let buf = Buf::current();
     if pos.lnum == 0 || pos.lnum > buf.b_ml.ml_line_count {
         // SAFETY: a `'static` C string.
         return unsafe { xstrdup(c"-invalid-".as_ptr()) };

@@ -333,7 +333,7 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
         }
         n -= 1;
     }
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     cur_win().w_set_curswant = true;
     if did_change {
         let (from, col) = (startpos.lnum, startpos.col);
@@ -485,7 +485,7 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
         // past the end.
         let save_state = State.get();
         State.set(MODE_INSERT);
-        coladvance(unsafe { Win::current() }, MAXCOL as c_int);
+        coladvance(Win::current(), MAXCOL as c_int);
         State.set(save_state);
     } else {
         cur_win().w_cursor.col += unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as ColNr;
@@ -783,12 +783,10 @@ pub(crate) unsafe fn nv_open(cmd_arg: *mut CmdArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

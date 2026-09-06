@@ -449,8 +449,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: *mut Buf
 
     // SAFETY: a live buffer.
     if !unsafe { buf_jump_open_win(buffer.raw()) }.is_null() {
-        // SAFETY: `curwin` is live from startup to exit.
-        let mut win = unsafe { Win::current() };
+        let mut win = Win::current();
         win.w_cursor.lnum = lnum;
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);

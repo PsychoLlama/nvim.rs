@@ -308,8 +308,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     // Might need to scroll the old window before switching, e.g. when the
     // cursor was moved.
     if split_keep_cursor() && !curwin_invalid {
-        // SAFETY: a live window.
-        update_topline(unsafe { Win::current() });
+        update_topline(Win::current());
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
     if window.w_buffer != curbuf.get() {

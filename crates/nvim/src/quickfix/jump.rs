@@ -258,12 +258,12 @@ unsafe fn qf_jump_goto_line(
     }
     cur_win().w_cursor.coladd = 0;
     if qf_viscol as c_int == 1 {
-        coladvance(unsafe { Win::current() }, qf_col as ColNr - 1);
+        coladvance(Win::current(), qf_col as ColNr - 1);
     } else {
         cur_win().w_cursor.col = (qf_col - 1) as ColNr;
     }
     cur_win().w_set_curswant = true;
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
 }
 
 /// Say which entry of how many the jump landed on, and what it said.
@@ -287,7 +287,7 @@ unsafe fn qf_jump_print_msg(
     // Update the screen before showing the message, unless messages
     // have scrolled.
     if msg_scrolled.get() == 0 {
-        update_topline(unsafe { Win::current() });
+        update_topline(Win::current());
         if must_redraw.get() != 0 {
             let _ = unsafe { update_screen() };
         }

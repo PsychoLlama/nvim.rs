@@ -61,10 +61,8 @@ unsafe fn search_here(
     opts: c_int,
     sa: *mut SearchItArg,
 ) -> c_int {
-    // SAFETY: `curwin`/`curbuf` name live objects from startup to exit;
-    // everything else is the caller's obligation, handed straight on.
-    let win = Some(unsafe { Win::current() });
-    let buf = unsafe { Buf::current() };
+    let win = Some(Win::current());
+    let buf = Buf::current();
     let (nul, re) = (ptr::null_mut(), RE_SEARCH as c_int);
     unsafe { searchit(win, buf, at, nul, dir, pat, len, 1, opts, re, sa) }
 }
@@ -297,7 +295,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
             match_pos.col = pos.col + 1;
         }
         // A `/$` match leaves the cursor past the end of the line.
-        check_cursor(unsafe { Win::current() });
+        check_cursor(Win::current());
     }
 
     if flags & SP_NOMOVE != 0 {

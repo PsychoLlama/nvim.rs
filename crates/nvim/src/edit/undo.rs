@@ -217,7 +217,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
             let prev_col = unsafe { (*end_insert_pos).col };
 
             cur_win().w_cursor = unsafe { *end_insert_pos };
-            check_cursor_col(unsafe { Win::current() }); // make sure it is not past the line
+            check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
                 if char_at_cursor() == NUL && cur_win().w_cursor.col > 0 {
                     cur_win().w_cursor.col -= 1;
@@ -299,12 +299,10 @@ fn save_cursor_line() -> Result<(), Failed> {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

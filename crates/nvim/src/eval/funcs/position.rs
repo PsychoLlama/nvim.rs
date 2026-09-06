@@ -455,7 +455,7 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     }
     unsafe { (*curwin.get()).w_cursor.col = col };
     unsafe { (*curwin.get()).w_cursor.coladd = coladd };
-    check_cursor(unsafe { Win::current() });
+    check_cursor(Win::current());
     unsafe { mb_adjust_cursor() };
     unsafe { (*curwin.get()).w_set_curswant = set_curswant };
     result.vval.v_number = 0;
@@ -500,7 +500,7 @@ fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
                 unsafe { (*curwin.get()).w_curswant = curswant - 1 };
                 unsafe { (*curwin.get()).w_set_curswant = false };
             }
-            check_cursor(unsafe { Win::current() });
+            check_cursor(Win::current());
             result.vval.v_number = 0;
         }
         // A mark name is exactly one byte after the quote.

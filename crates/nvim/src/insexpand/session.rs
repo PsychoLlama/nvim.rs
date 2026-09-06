@@ -297,8 +297,8 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
     State.set(save_state);
     cur_win().w_cursor = pos; // restore the cursor position
-    check_cursor(unsafe { Win::current() }); // make sure the position is valid, just in case
-    validate_cursor(unsafe { Win::current() });
+    check_cursor(Win::current()); // make sure the position is valid, just in case
+    validate_cursor(Win::current());
     if !equalpos(cur_win().w_cursor, pos) {
         emsg(gettext(E_COMPLDEL));
         return Err(Failed);
@@ -674,9 +674,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         unsafe { ui_flush() };
         loop {
             if char_avail() {
-                if unsafe { ins_compl_preinsert_effect() }
-                    && ins_compl_win_active(unsafe { Win::current() })
-                {
+                if unsafe { ins_compl_preinsert_effect() } && ins_compl_win_active(Win::current()) {
                     unsafe { ins_compl_delete(false) }; // Remove pre-inserted text
                     compl_ins_end_col.set(compl_col.get());
                 }
@@ -743,12 +741,10 @@ pub(crate) unsafe fn compl_text_from_line(line: *mut c_char) -> String_0 {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }

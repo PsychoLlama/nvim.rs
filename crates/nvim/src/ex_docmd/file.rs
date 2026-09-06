@@ -527,7 +527,7 @@ pub(crate) unsafe fn ex_bang(args: *mut ExArg) {
 pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
-    unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
+    u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
     unsafe {
         u_write_undo(
             args.arg,
@@ -542,7 +542,7 @@ pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
 pub(crate) unsafe fn ex_rundo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
-    unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
+    u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
     unsafe { u_read_undo(args.arg, &raw mut hash as *mut uint8_t, ptr::null()) };
 }
 
@@ -596,14 +596,12 @@ pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
+    Buf::current()
 }
 
 /// The window the editor is working in.
 fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    Win::current()
 }
 
 /// `buf_hide()` as checked code.

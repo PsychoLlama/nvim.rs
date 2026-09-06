@@ -333,7 +333,7 @@ unsafe fn clear_qf_buffer() -> bool {
             false
         })
     };
-    u_clearallandblockfree(unsafe { Buf::current() });
+    u_clearallandblockfree(Buf::current());
     true
 }
 

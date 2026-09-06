@@ -220,9 +220,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         };
         (top, bot, sel.mode, wp.w_curswant)
     } else {
-        // SAFETY: `curbuf` is set from startup to exit; its `b_visual`
-        // records the area the last Visual mode left behind.
-        let buf = unsafe { Buf::current() };
+        let buf = Buf::current();
         let (start, end) = (buf.b_visual.vi_start, buf.b_visual.vi_end);
         let (top, mut bot) = if lt(start, end) {
             (start, end)

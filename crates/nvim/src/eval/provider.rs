@@ -500,8 +500,7 @@ pub unsafe fn prompt_invoke_callback() {
         clear_local(&mut rettv);
     }
 
-    // SAFETY: the current buffer is live.
-    unsafe { u_clearallandblockfree(Buf::current()) };
+    u_clearallandblockfree(Buf::current());
     cur_buf().b_prompt_start.mark.lnum = cur_buf().line_count();
     cur_buf().b_prompt_append_new_line = true;
 }
