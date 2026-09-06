@@ -9,99 +9,52 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
-- Broke up the transpiled `globals.h`. Upstream declares the editor's ~880
-  globals in a header with no translation unit, so the port had parked all
-  of them in one module beside `main()`. Each now lives in the module that
-  owns it — the window and buffer lists with the window layer, the mode
-  word with the mode loop, the message cursor with the message code, the
-  option variables with the option code — and the startup module holds only
-  the process. Nothing about the editor's behaviour changes; the crate's
-  public item paths do, and all but eight of the globals are no longer
-  visible outside it.
-- Renamed every type the C-to-Rust transpiler left with a C name: the 212
-  `_T` typedefs, the tag structs under them and the lowercase struct tags
-  beside them all read as Rust types now (`buf_T` is `Buffer`, `typval_T`
-  is `TypVal`, `vimoption_T` is `VimOption`), and only the names a linked
-  library defines keep their own spelling. Nothing about the editor's
-  behaviour changes; the crate's public type names do.
-- Renamed the abbreviated parameter names the same transpiler left behind —
-  some 3,400 of them across the tree, so a function's arguments now say what
-  they are. **The API's own parameter names are deliberately unchanged**: they
-  are what `nvim_get_api_info()` publishes and what an `Invalid '<name>'`
-  message prints, so the RPC surface reads exactly as before.
-- Rewrote the growable buffers the editor builds text and match lists in:
-  `:execute`/`:echomsg`/`:echoerr`, `string()`, `json_encode()`, `:echo` of
-  a container, `substitute()`, `tr()`, `state()`, `winrestcmd()`, the
-  `assert_*()` messages appended to `v:errors`, `print()` from Lua, the
-  `@:` and `<Cmd>` replay paths, and the completion of shell commands,
-  mappings, user functions and `:s` patterns. Every one of them answers the
-  same bytes, in the same order, as before.
-- Rewrote the growable arrays the editor keeps _state_ in, as opposed to the
-  ones it builds a single answer in: the argument list, a diff block's
-  inline changes and a diff run's hunks, a buffer's `:loadkeymap` entries, a
-  profiled script's per-line counters, the lines `:source` reads from a
-  buffer or a string, the window sizes the command-line window and the
-  `:substitute` preview save and put back, and the `:breakadd`/`:profile`
-  lists. `:args`, `:argadd`, `:argdelete`, `:diffupdate` with
-  `'diffopt'`+=`inline:`, `:loadkeymap`, `:profile`, `:source`, `q:` and
-  `:breaklist` all behave as before, in the same order.
-- Rewrote the hash tables the editor files objects in by name or by id:
-  namespaces, autocommand groups, the loaded treesitter parsers, the
-  'runtimepath'/'packpath' search path, the ShaDa file's marks, variables
-  and buffer memos, a buffer's extmark namespaces, a window's visible ones,
-  and the marktree's mark index. `nvim_get_namespaces()` and `:augroup`
-  still list in creation order, and a ShaDa write still cuts the same files
-  at `'shada'`'s `'N`.
-- Rewrote the last of the growable buffers the editor built with klib's
-  `kvec`: the swap-file ATTENTION message and `:recover`'s listing, the
-  Replace-mode stack of overwritten characters, the resolved
-  'runtimepath'/'packpath' search path, and the command string `nvim_cmd()`
-  hands back to `:execute`. The ATTENTION message, `:recover`, `swapinfo()`,
-  `swapfilelist()`, Replace mode's backspace, `:packadd` and `nvim_cmd()`
-  all behave as before, byte for byte.
-- Rewrote how a mapping or abbreviation holds its text: the left- and
-  right-hand sides, the `desc` and the Lua callback are owned by the entry
-  rather than allocated and released by hand, and a `<C-H>`-style mapping
-  and its unsimplified twin no longer share one right-hand side between
-  them. `:map` and `:abbrev` list in the same order, `maparg()`,
-  `maplist()`, `mapcheck()`, `mapset()`, `nvim_get_keymap()` and
-  `nvim_set_keymap()` answer the same dicts, and `:mkexrc`/`:mksession`
-  write the same commands.
-- Rewrote how a syntax block holds what `:syntax` defines: the patterns, the
-  clusters, their names, and the `contains=`/`containedin=`/`nextgroup=` id
-  lists are owned by the block rather than allocated and released by hand,
-  and the start patterns of one `:syntax region` no longer share one copy of
-  those lists between them. `:syntax list`, `:syntax sync`, `:syntime report`,
-  `synID()`/`synstack()`/`synconcealed()` and the highlighting itself all
-  answer as before.
-- Rewrote how a loaded spell file holds its tables: the four word tries, the
-  `SAL`/`SOFO` sound-folding rules, the `REP`/`REPSAL` pairs, the
-  `CHECKCOMPOUNDPATTERN` list and the `SYLLABLE` items are owned by the
-  language rather than allocated and released by hand, and the two
-  suggestion lists own the words in them. Spell checking, `z=`,
-  `spellbadword()`, `spellsuggest()` (in all three `'spellsuggest'`
-  methods), `soundfold()`, `:spelldump`, `:spellinfo` and `:mkspell` all
-  answer as before, byte for byte.
-- Rewrote how spell files are read and written. A `.spl` or `.sug` is now
-  read through a buffered handle whose every answer says what went wrong,
-  and `:mkspell` builds its `REP`/`REPSAL`/`SAL`, `MAP`,
-  `CHECKCOMPOUNDPATTERN` and prefix-condition tables as owned collections
-  and writes them through a buffered sink. Every `E7xx` a malformed spell
-  file draws comes out where it did, and `:mkspell` produces the same bytes
-  for the same dictionary. The one visible change is `E5042`, which now
-  names the error the read actually failed with.
-- Rewrote the built-in Ex commands that read, write and rearrange buffer
-  text: `:write`/`:read`, `:!`/`:range!`, `:sort`/`:uniq`, `:global`,
+- Rewrote the collections the editor builds its answers and keeps its state
+  in, covering `:execute`/`:echomsg`/`:echoerr`, `string()`, `json_encode()`,
+  `:echo` of a container, `substitute()`, `tr()`, `state()`, `winrestcmd()`,
+  `print()` from Lua, the `assert_*()` messages appended to `v:errors`, the
+  `@:` and `<Cmd>` replay paths, completion of shell commands, mappings, user
+  functions and `:s` patterns, `:args`/`:argadd`/`:argdelete`, `:diffupdate`
+  with `'diffopt'`+=`inline:`, `:loadkeymap`, `:profile` and `:breaklist`,
+  `:source` and `q:`, `:packadd` and the `'runtimepath'`/`'packpath'` search,
+  `:recover` with the swap-file ATTENTION message, `swapinfo()` and
+  `swapfilelist()`, Replace mode's backspace, `:augroup`, namespaces and
+  extmarks with `nvim_get_namespaces()`, the loaded treesitter parsers, the
+  marks and variables a ShaDa file carries between sessions, and
+  `nvim_cmd()`.
+- Rewrote mappings and abbreviations, covering `:map` and `:abbrev` and their
+  listings, `maparg()`, `maplist()`, `mapcheck()`, `mapset()`,
+  `nvim_get_keymap()`, `nvim_set_keymap()`, and the commands `:mkexrc` and
+  `:mksession` write for them.
+- Rewrote syntax highlighting, covering everything `:syntax` defines,
+  `:syntax list`, `:syntax sync`, `:syntime report`, `synID()`,
+  `synstack()`, `synconcealed()` and the highlighting itself.
+- Rewrote spell checking and the files behind it, covering `z=`,
+  `spellbadword()`, `spellsuggest()` in all three `'spellsuggest'` methods,
+  `soundfold()`, `:spelldump`, `:spellinfo`, `:mkspell`, and how a `.spl` or
+  `.sug` file is read. The one visible change is `E5042`, which now names
+  the error the read actually failed with.
+- Rewrote the Ex commands that read, write and rearrange buffer text, covering
+  `:write`/`:read`, `:!`/`:range!`, `:sort`/`:uniq`, `:global`,
   `:append`/`:insert`/`:change`, `:move`/`:copy`, `:edit`, `:normal`,
-  `:left`/`:right`/`:center`, `:z` and `:ascii`. The Ex command block is
-  passed by reference, the text each of them copies out of the buffer is
-  owned, and `:sort` builds each line's key once instead of once per
-  comparison. All of them behave as before; two details differ. `:sort` and
-  `:uniq` are interruptible while they read the lines and build the keys,
+  `:left`/`:right`/`:center`, `:z` and `:ascii`. One detail differs: `:sort`
+  and `:uniq` are interruptible while they read the lines and build the keys,
   not while the sort itself runs, so `CTRL-C` during a very large sort is
-  honoured a little later -- the buffer is left untouched either way. And
-  `:s///c` in Ex mode now sizes its `^^^` marker to the columns it has
-  rather than crashing when the match ends on a later line.
+  honoured a little later. The buffer is left untouched either way.
+- Renamed and rehoused what the C-to-Rust transpiler left behind: the 212
+  `_T` typedefs and the structs under them, some 3,400 abbreviated parameter
+  names, the functions and globals it spelled in C's case conventions, and
+  the ~880 globals it parked in one module beside `main()`, which now live
+  with the code that owns them. The names the editor publishes are
+  deliberately untouched: `nvim_get_api_info()` reports the same parameter
+  names, `nvim__*` keeps its spelling, and an `Invalid '<name>'` message
+  reads as it did. What changes is the crate's own type names and item
+  paths, and all but eight of the globals are no longer visible outside it.
+
+### Fixed
+
+- `:s///c` in Ex mode no longer crashes when the match ends on a later line.
+  It sizes its `^^^` marker to the columns it has.
 
 ## [2026.09.02-bc9e0f515a]
 
