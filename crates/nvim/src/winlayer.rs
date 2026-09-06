@@ -133,9 +133,10 @@
 //!
 //! Nothing warns. `cargo check`, clippy and a release build are all silent;
 //! only Miri sees it, and only if a test happens to walk that path. p23-5
-//! found the same edge from the other side: `scripts/root-deref.py` refuses
-//! `&raw mut (*curwin.get()).field` precisely because the address would take
-//! its provenance from a transient `&mut Window`.
+//! found the same edge from the other side, and it is why the sweep that
+//! retired the raw `curwin`/`curbuf` reads left `&raw mut (*cur_win().raw())
+//! .field` alone rather than writing `&raw mut cur_win().field`: the address
+//! would take its provenance from a transient `&mut Window`.
 //!
 //! So when a body holds an interior raw pointer across writes through a
 //! `Win`/`Buf`, one of the two has to go: derive the address with
