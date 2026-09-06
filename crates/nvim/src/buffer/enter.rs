@@ -20,7 +20,6 @@
 
 use crate::semsg;
 use crate::types::AutoEvent;
-use crate::winlayer::WinId;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -57,7 +56,7 @@ use crate::types::{
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
-use crate::winlayer::windows;
+use crate::winlayer::window_at;
 use ::libc::time;
 
 // ---------------------------------------------------------------------------
@@ -67,15 +66,6 @@ use ::libc::time;
 /// autocommand open a window?" probe.
 fn last_winid() -> c_int {
     get_last_winid()
-}
-
-/// The window `win` names, if it is still in the current tab page.
-///
-/// `win_valid` walks the window list comparing pointers and never
-/// dereferences its argument, so asking about a possibly-closed window is a
-/// safe operation.
-fn valid_win(win: WinId) -> Option<Win> {
-    windows().find(|wp| wp.id() == win)
 }
 
 /// Whether `buffer` may stay loaded when it is no longer shown -- `'hidden'`,
@@ -322,6 +312,9 @@ fn leave_prevbuf(
     let Some(prevbuf) = prevbufref.get().filter(|_| !aborting_now()) else {
         return;
     };
+    // The address, not an identity: `close_buffer` below can free this window,
+    // and `window_at` compares without reading it. Taking a `WinId` here would
+    // be the tidier answer, but the C's own test is `curwin != previouswin`.
     let previouswin = Win::current_raw();
 
     // Do not sync when in Insert mode and the buffer is open in another
@@ -348,7 +341,7 @@ fn leave_prevbuf(
 
     unsafe { close_buffer(__hoisted_0, Buf::new(prevbuf.raw()), how, false, false) };
     if Win::current_raw() != previouswin
-        && let Some(previous) = valid_win(unsafe { Win::new(previouswin) }.id())
+        && let Some(previous) = window_at(previouswin)
     {
         // autocommands changed curwin, Grr!
         previous.make_current();
