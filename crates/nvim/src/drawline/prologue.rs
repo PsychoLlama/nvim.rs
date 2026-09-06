@@ -552,7 +552,7 @@ impl LineSetup {
             self.statuscol.lnum = wlv.lnum;
             self.statuscol.foldinfo = wlv.foldinfo;
             self.statuscol.width =
-                window.col_off() - (window.raw() == cmdwin_win.get()) as ::core::ffi::c_int;
+                window.col_off() - (cmdwin_win.get() == Some(window.id())) as ::core::ffi::c_int;
             self.statuscol.sign_cul_id = if unsafe { use_cursor_line_highlight(window, wlv.lnum) } {
                 wlv.sign_cul_attr
             } else {

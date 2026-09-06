@@ -159,8 +159,8 @@ use crate::types::{
     HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
     OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
     ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
-    String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
-    Window, XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
+    String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window,
+    XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -178,10 +178,10 @@ use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
+use crate::winlayer::BufId;
 use crate::winlayer::Cc;
 use crate::winlayer::graph::{
-    cmdline_win, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
-    cmdwin_win,
+    cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
 };
 use ::libc::{abort, strcpy, strrchr};
 
@@ -270,7 +270,9 @@ pub struct CommandLineState {
     pub break_ctrl_c: bool,
     pub xpc: Expand,
     pub b_im_ptr: *mut OptInt,
-    pub b_im_ptr_buf: *mut Buffer,
+    /// The buffer `b_im_ptr` points into, as a handle: the command line can
+    /// run user code that wipes it.
+    pub(crate) b_im_ptr_buf: Option<BufId>,
     pub cmdline_type: ::core::ffi::c_int,
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,

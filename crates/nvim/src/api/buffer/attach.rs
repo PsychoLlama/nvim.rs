@@ -10,17 +10,16 @@
 
 use super::*;
 use crate::api::private::helpers::{Reported, dict_put, has_key};
+use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
-pub unsafe fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
-    let Some(b) = find_buffer_by_handle(buffer, err) else {
-        return ::core::ptr::null_mut::<Buffer>();
-    };
+pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> Option<Buf> {
+    let b = find_buffer_by_handle(buffer, err)?;
     if b.b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
         *err = Error::exception(c"Failed to load buffer");
-        return ::core::ptr::null_mut::<Buffer>();
+        return None;
     }
-    b.raw()
+    Some(b)
 }
 
 pub unsafe fn nvim_buf_attach(

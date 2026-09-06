@@ -34,9 +34,9 @@ pub unsafe fn diff_redraw(dofold: bool) {
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: the current tabpage's windows
     // are always the `firstwin` list.
     for mut wp in windows() {
-        // SAFETY: a live window's buffer pointer is a buffer or null, which
-        // is what `buf_valid` is for. The short circuit is upstream's.
-        if wp.w_onebuf_opt.wo_diff == 0 || !unsafe { buf_valid(wp.w_buffer) } {
+        // A live window's buffer pointer is a buffer or null, which is what
+        // the `Option` is for. The short circuit is upstream's.
+        if wp.w_onebuf_opt.wo_diff == 0 || !wp.buffer_or_none().is_some_and(|b| buf_valid(b.id())) {
             continue;
         }
         wp.redraw_later(UPD_SOME_VALID);

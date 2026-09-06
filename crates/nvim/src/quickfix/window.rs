@@ -71,11 +71,10 @@ pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
 
 /// `buf_valid()`: whether `buffer` is still on the buffer list.
 ///
-/// Takes a raw pointer deliberately — the question is asked about a buffer an
-/// autocommand may already have freed, and the pointer is only compared.
+/// Takes the identity deliberately — the question is asked about a buffer an
+/// autocommand may already have freed, and only its identity is compared.
 fn buf_is_valid(buffer: Buf) -> bool {
-    // SAFETY: `buffer` is only compared, never read.
-    unsafe { buf_valid(buffer.raw()) }
+    buf_valid(buffer.id())
 }
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
@@ -83,9 +82,8 @@ fn buf_is_valid(buffer: Buf) -> bool {
 fn load_buffer(fnum: c_int, flags: EcmdFlags, oldwin: Option<Win>) -> Result<(), Failed> {
     let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
     let one = newlnum::ONE as LineNr;
-    let oldwin = oldwin.map_or(ptr::null_mut(), Win::raw);
-    // SAFETY: a buffer number the caller has just looked up, and a live
-    // window or null.
+    let oldwin = oldwin.map(Win::id);
+    // SAFETY: a buffer number the caller has just looked up.
     unsafe { do_ecmd(fnum, no_name, no_name, no_cmd, one, flags, oldwin) }
 }
 
@@ -223,7 +221,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     // leaves this reading a freed buffer either way.
     let qf_buf = qf_find_buf(qi);
     // The current window becomes the previous window afterwards.
-    let win = Win::current_raw();
+    let win = Win::current().id();
 
     if split(height, split_flags(qi)).is_err() {
         return false; // not enough room for the window
@@ -271,8 +269,8 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         setheight_win(height, Win::current());
     }
     Win::current().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'
-    if valid_win(unsafe { Win::new(win).raw() }).is_some() {
-        prevwin.set(win);
+    if let Some(win) = valid_win(win) {
+        prevwin.set(Some(win.id()));
     }
     true
 }

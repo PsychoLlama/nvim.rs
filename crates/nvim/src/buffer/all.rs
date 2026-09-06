@@ -83,7 +83,7 @@ fn goto_tab(tabpage: TabPage) {
 /// The last non-floating window of the current tab page.
 fn last_nofloat() -> Win {
     // SAFETY: null asks for the current tab page, which always has a window.
-    unsafe { Win::new(lastwin_nofloating(ptr::null_mut())) }
+    lastwin_nofloating(None)
 }
 
 fn enter_win(win: Win) {
@@ -116,16 +116,16 @@ fn is_locked(win: Win) -> bool {
 fn is_valid(win: Win) -> bool {
     // SAFETY: `win_valid` walks the window list and does not dereference its
     // argument.
-    win_valid(win.raw())
+    win_valid(win.id())
 }
 
 fn is_aucmd(win: Win) -> bool {
     // SAFETY: a live window.
-    is_aucmd_win(win.raw())
+    is_aucmd_win(win)
 }
 
 fn tab_index() -> c_int {
-    tabpage_index(ptr::null_mut())
+    tabpage_index(None)
 }
 
 fn tabline_rows() -> c_int {

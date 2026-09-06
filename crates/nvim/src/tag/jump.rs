@@ -17,6 +17,7 @@ use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
 use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
+use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -488,7 +489,7 @@ impl Jump {
         if self.preview
             && let Some(saved) = saved
             && !saved.is_current()
-            && win_valid(saved.raw())
+            && win_valid(saved.id())
         {
             // Put the cursor back where it was.
             validate_cursor(Win::current());
@@ -544,7 +545,7 @@ impl Jump {
             cmdmod_add_split(WSP_VERT as c_int);
         }
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
-            cmdmod_set_tab(tabpage_index(TabPage::current_raw()) + 1);
+            cmdmod_set_tab(tab_index(TabPage::current()) + 1);
         }
         if win_split(postponed_split.get().max(0), postponed_split_flags.get()).is_err() {
             return false;

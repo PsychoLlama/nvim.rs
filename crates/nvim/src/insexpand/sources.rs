@@ -319,34 +319,31 @@ pub(crate) unsafe fn ins_compl_files(
 /// remembers between calls is vetted below rather than trusted.
 pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
     // This outlives the call, and a completion runs user functions and Lua in
-    // between, so it stays a raw pointer that `win_valid` vets -- a `Win`
-    // would be promising a liveness nothing here can keep.
-    static wp: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
+    // between, so it stays a handle that `win_valid` vets -- a `Win` would
+    // be promising a liveness nothing here can keep.
+    static wp: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
     if flag == 'w' as c_int {
         // Just windows.
-        if buffer.raw() == Buf::current_raw() || !win_valid(wp.get()) {
+        if buffer.raw() == Buf::current_raw() || !wp.get().is_some_and(win_valid) {
             // First call for this flag/expansion, or the window was closed.
-            wp.set(Win::current_raw());
+            wp.set(Some(Win::current().id()));
         }
-        debug_assert!(!wp.get().is_null());
-        // SAFETY: `wp` is `curwin` or a window `win_valid` just vouched for,
-        // and from there the editor's own window list, which is live.
+        debug_assert!(wp.get().is_some());
+        // `wp` is `curwin` or a window `win_valid` just vouched for, and from
+        // there the editor's own window list, which is live.
+        let mut at = wp.get().and_then(WinId::get).expect("just set above");
         loop {
             // Move to the next window, wrapping to the first at the end.
-            let cur = unsafe { Win::new(wp.get()) };
-            let next = cur.next().or_else(first_window);
-            wp.set(next.map_or(::core::ptr::null_mut(), Win::raw));
+            at = at.next().or_else(first_window).expect("a non-empty list");
+            wp.set(Some(at.id()));
             // Stop if we're back at the start, or found an unscanned
             // buffer in a focusable window.
-            if wp.get() == Win::current_raw()
-                || (!unsafe { (*(*wp.get()).w_buffer).b_scanned }
-                    && unsafe { (*wp.get()).w_config.focusable })
-            {
+            if at.is_current() || (!at.buffer().b_scanned && at.w_config.focusable) {
                 break;
             }
         }
-        buffer = unsafe { Buf::new((*wp.get()).w_buffer) };
+        buffer = at.buffer();
     } else {
         // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
         // (unlisted buffers).  When completing whole lines skip unloaded

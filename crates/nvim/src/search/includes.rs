@@ -18,6 +18,8 @@ use crate::message_fmt::c_str;
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::window::valid_win;
+use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -726,7 +728,7 @@ unsafe fn goto_match(
     tagpreview: c_int,
 ) -> After {
     walk.found = true;
-    let mut curwin_save: *mut Window = ptr::null_mut();
+    let mut curwin_save: Option<WinId> = None;
     if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum && tagpreview == 0 {
         emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {
@@ -738,7 +740,7 @@ unsafe fn goto_match(
     } else {
         // ":psearch" uses the preview window.
         if tagpreview != 0 {
-            curwin_save = Win::current_raw();
+            curwin_save = Some(Win::current().id());
             unsafe { prepare_tagpreview(true) };
         }
         if action == ACTION_SPLIT {
@@ -753,12 +755,11 @@ unsafe fn goto_match(
         if walk.files.depth() == -1 {
             // The match is in the current file.
             if tagpreview != 0 {
-                if !win_valid(curwin_save) {
+                let Some(saved) = curwin_save.and_then(valid_win) else {
                     return After::Stop;
-                }
+                };
                 // GETFILE_SUCCESS: anything but a positive answer.
-                // SAFETY: `curwin_save` was just checked by `win_valid`.
-                let handle = unsafe { (*(*curwin_save).w_buffer).handle as c_int };
+                let handle = saved.buffer().handle as c_int;
                 let (no_name, no_alt) = (ptr::null_mut(), ptr::null_mut());
                 // SAFETY: jumping to a buffer named by its own handle.
                 let failed = unsafe { getfile(handle, no_name, no_alt, true, walk.lnum, forceit) };
@@ -786,11 +787,13 @@ unsafe fn goto_match(
         Win::current().w_set_curswant = true;
     }
 
-    if tagpreview != 0 && Win::current_raw() != curwin_save && win_valid(curwin_save) {
+    if let Some(saved) = curwin_save.and_then(valid_win).filter(|_| tagpreview != 0)
+        && !saved.is_current()
+    {
         // Return the cursor to where it was.
         validate_cursor(Win::current());
         redraw_later(Win::current(), UPD_VALID);
-        unsafe { win_enter(Win::new(curwin_save), true) };
+        unsafe { win_enter(saved, true) };
     }
     After::Stop
 }

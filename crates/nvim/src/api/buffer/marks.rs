@@ -54,10 +54,9 @@ pub unsafe fn nvim_buf_set_mark(
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let mut res: bool = false;
-    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = api_buf_ensure_loaded(buf, &mut error) else {
         return (res as Boolean).reported(error);
-    }
+    };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
@@ -65,7 +64,7 @@ pub unsafe fn nvim_buf_set_mark(
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    res = unsafe { set_mark(b, name, line, col, &mut error) };
+    res = unsafe { set_mark(b.raw(), name, line, col, &mut error) };
     (res as Boolean).reported(error)
 }
 

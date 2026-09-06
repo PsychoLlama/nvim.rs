@@ -167,7 +167,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         room_cmdline = if curfrp.fr_width != Columns.get() {
             0
         } else {
-            let wp = last_nonfloating(None);
+            let wp = lastwin_nofloating(None);
             let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
             (Rows.get() - p_ch.get() as c_int - global_stl_rows() - below).max(0)
         };

@@ -33,12 +33,12 @@ use crate::option::vars::{p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_w
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Frame, Integer, OptInt, QfInfo, Window};
+use crate::types::{FAIL, Failed, Frame, Integer, OptInt, QfInfo};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
-use crate::winlayer::{FrameRef, Win, WinId, frames, tabs};
+use crate::winlayer::{FrameRef, Win, frames, tabs};
 
 pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
     split(size, flags)
@@ -84,14 +84,13 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
 pub unsafe fn win_split_ins(
     size: c_int,
     flags: c_int,
-    new_wp: *mut Window,
+    new_wp: Option<Win>,
     dir: c_int,
     to_flatten: *mut Frame,
-) -> *mut Window {
-    // SAFETY: the caller's promise -- a live window or null, and a live frame
-    // or null.
-    let (new_wp, to_flatten) = unsafe { (Win::from_raw(new_wp), FrameRef::from_raw(to_flatten)) };
-    raw_win(split_ins(size, flags, new_wp, dir, to_flatten))
+) -> Option<Win> {
+    // SAFETY: the caller's promise -- a live frame or null.
+    let to_flatten = unsafe { FrameRef::from_raw(to_flatten) };
+    split_ins(size, flags, new_wp, dir, to_flatten)
 }
 
 /// The room a split needs and the size it will take, from the first half of
@@ -134,7 +133,7 @@ fn split_ins(
         first_win()
     } else if flags & WSP_BOT as c_int != 0 || Win::current().w_floating {
         // Can't split a float: use the last non-floating window instead.
-        last_nonfloating(None)
+        lastwin_nofloating(None)
     } else {
         Win::current()
     };
@@ -239,7 +238,7 @@ fn split_ins(
     opt.set(saved as OptInt);
     // An autocommand may have closed `oldwin`.
     // SAFETY: only compares the pointer against the window list.
-    if win_valid(oldwin.raw()) {
+    if win_valid(oldwin.id()) {
         oldwin.w_pos_changed = true;
     }
     Some(wp)
@@ -454,15 +453,14 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
             || (flags & WSP_ABOVE as c_int == 0 && split_after(_vertical)));
     let after = if below { Some(oldwin) } else { oldwin.prev() };
     let Some(mut wp) = new_wp else {
-        // SAFETY: `win_alloc` answers a live window.
-        let wp = unsafe { Win::new(win_alloc(raw_win(after), false)) };
+        let wp = win_alloc(after, false);
         attach_frame(wp);
         // Make the contents of the new window the same as the current one.
         // SAFETY: two live windows.
         unsafe { win_init(wp, Win::current(), flags) };
         return Some(wp);
     };
-    append(after, wp, None);
+    win_append(after, wp, None);
     if !wp.w_floating {
         return Some(wp);
     }
@@ -480,11 +478,8 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     // `curwin` of others.
     if wp.w_config.external {
         for mut tp in tabs().filter(|tp| !tp.is_current()) {
-            if tp.tp_curwin == wp.raw() {
-                tp.tp_curwin = tp
-                    .tp_firstwin
-                    .and_then(WinId::get)
-                    .map_or(ptr::null_mut(), Win::raw);
+            if tp.tp_curwin == Some(wp.id()) {
+                tp.tp_curwin = tp.tp_firstwin;
             }
         }
     }

@@ -119,7 +119,7 @@ use crate::ui::{
 use crate::ui_compositor::ui_comp_set_screen_valid;
 use crate::version::{intro_message, may_show_intro};
 use crate::window::{
-    frame2win, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
+    frame2window, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
     win_fdccol_count, win_new_screensize, win_ui_flush,
 };
 use crate::winlayer::{self, Cc, Win};
@@ -461,8 +461,10 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
         unsafe { update_window_hl(Win::current(), redr_type >= UPD_NOT_VALID) };
         for tp in winlayer::tabs() {
-            if !tp.is_current() {
-                unsafe { update_window_hl(Win::new(tp.tp_curwin), redr_type >= UPD_NOT_VALID) };
+            if !tp.is_current()
+                && let Some(w) = tp.current_window()
+            {
+                unsafe { update_window_hl(w, redr_type >= UPD_NOT_VALID) };
             }
         }
         unsafe { draw_tabline() };

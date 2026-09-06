@@ -36,7 +36,7 @@ use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, ScreenGrid, SwitchWin, TryState,
-    WinConfig, WinStyle, Window, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
+    WinConfig, WinStyle, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
     kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
     size_t,
 };
@@ -73,12 +73,12 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     // window, so its identity is taken now, while it is provably live: the
     // error message below may have to name a window that is already gone.
     let win_id = win.id();
-    let tab = win_find_tabpage(win.raw());
+    let tab = win_find_tabpage(win.id());
     let _redraw_off = Suppress::redraw();
 
     let mut switchwin = SwitchWin {
-        sw_curwin: ptr::null_mut::<Window>(),
-        sw_curtab: ptr::null_mut(),
+        sw_curwin: None,
+        sw_curtab: None,
         sw_same_win: false,
         sw_visual_active: false,
     };
@@ -88,7 +88,7 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     // window and tab page are live.
     let win_result = unsafe {
         try_enter(ts);
-        switch_win_noblock(sw, win.raw(), tab, true)
+        switch_win_noblock(sw, win, tab, true)
     };
     if win_result.is_ok() {
         // Do not trigger 'autochdir' in the window we switched to.
@@ -332,7 +332,7 @@ fn anchor_to_window(
     col: &mut Float,
 ) {
     // SAFETY: only compares the pointer against the window list.
-    if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.raw()) {
+    if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.id()) {
         ext_win_position(parent, validate);
     }
     let (mut row_off, mut col_off) = (0, 0);

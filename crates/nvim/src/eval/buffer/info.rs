@@ -68,7 +68,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     );
     nr(
         c"command",
-        VarNumber::from(buffer.raw() == cmdwin_buf.get()),
+        VarNumber::from(cmdwin_buf.get() == Some(buffer.id())),
     );
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
     let vars = c"variables";

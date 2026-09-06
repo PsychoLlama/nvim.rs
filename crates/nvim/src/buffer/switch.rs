@@ -102,7 +102,7 @@ fn is_last_window(win: Win) -> bool {
     unsafe { last_window(win) }
 }
 fn is_autocmd_window(win: Win) -> bool {
-    is_aucmd_win(win.raw().cast_const())
+    is_aucmd_win(win)
 }
 fn split_window() -> Result<(), Failed> {
     win_split(0, 0)

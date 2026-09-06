@@ -229,16 +229,16 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // Edit the file, always at the last known line number.
     // SAFETY: the argument name outlives `do_ecmd`'s use of it, and `args` is
     // the caller's own live command block.
-    let wp = Win::current_raw();
+    let wp = Win::current();
     // SAFETY: `curwin` is live, so is its buffer.
-    let hidden = unsafe { buf_hide(Buf::new((*wp).w_buffer)) };
+    let hidden = unsafe { buf_hide(wp.buffer()) };
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     let name = arg_name(cur_arg_idx());
     let last = newlnum::LAST as LineNr;
     let none = ptr::null_mut();
     // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
     // is held across it.
-    let opened = unsafe { do_ecmd(0, name, none, args.raw(), last, flags, wp) };
+    let opened = unsafe { do_ecmd(0, name, none, args.raw(), last, flags, Some(wp.id())) };
     if opened.is_err() {
         // It failed (Abort for an already-edited file, say): restore the
         // argument index of whichever window is current now.

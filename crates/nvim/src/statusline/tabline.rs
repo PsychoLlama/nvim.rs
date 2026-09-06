@@ -57,7 +57,7 @@ unsafe fn current_window_of(tabpage: TabPage) -> Win {
         Win::new(if tabpage.is_current() {
             Win::current_raw()
         } else {
-            tabpage.tp_curwin
+            tabpage.current_window().map_or(ptr::null_mut(), Win::raw)
         })
     }
 }

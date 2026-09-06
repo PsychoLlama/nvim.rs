@@ -6,6 +6,7 @@ pub(crate) mod state;
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
+use crate::winlayer::cmdline_window;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::api::buffer::nvim_buf_set_lines;
@@ -78,7 +79,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
-use crate::winlayer::graph::{cmdline_win, cmdwin_type};
+use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{Win, windows};
 
 // The carve of the transpiled module; see each child's docs.
@@ -206,9 +207,9 @@ unsafe fn pum_border_width() -> c_int {
 
 /// Where the menu is anchored: the position the placement is computed from.
 struct PumAnchor {
-    /// The window the menu belongs to. Null only for a cmdline menu with no
-    /// cmdline window, which is why the placement code guards on it.
-    target_win: *mut Window,
+    /// The window the menu belongs to. `None` only for a cmdline menu with
+    /// no cmdline window, which is why the placement code guards on it.
+    target_win: Option<Win>,
     /// Grid row of the line the menu hangs off.
     win_row: c_int,
     /// Grid column the menu is aligned with.
@@ -227,16 +228,14 @@ struct PumAnchor {
 /// `curwin` must be live and the cursor column validated.
 unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
-    let win = Win::current_raw();
+    let win = Win::current();
     let cmdline = State.get() & MODE_CMDLINE != 0;
-    let target_win = if cmdline { cmdline_win.get() } else { win };
+    let target_win = if cmdline { cmdline_window() } else { Some(win) };
     let mut above_row = 0;
     let mut below_row = if cmdline {
         cmdline_row.get()
     } else {
-        cmdline_row
-            .get()
-            .max(unsafe { (*win).w_winrow } + unsafe { (*win).w_view_height })
+        cmdline_row.get().max(win.w_winrow + win.w_view_height)
     };
 
     pum_win_row_offset.set(0);
@@ -245,24 +244,14 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     let (mut win_row, mut cursor_col);
     if cmdline {
         // wildoptions=pum
-        let cw = cmdline_win.get();
-        win_row = if !cw.is_null() {
-            unsafe { (*cw).w_wrow }
-        } else if ui_has(kUICmdline) {
-            0
-        } else {
-            cmdline_row.get()
+        let cw = cmdline_window();
+        win_row = match cw {
+            Some(cw) => cw.w_wrow,
+            None if ui_has(kUICmdline) => 0,
+            None => cmdline_row.get(),
         };
-        cursor_col = if cw.is_null() {
-            0
-        } else {
-            unsafe { (*cw).w_config._cmdline_offset }
-        } + cmd_startcol;
-        cursor_col %= if cw.is_null() {
-            Columns.get()
-        } else {
-            unsafe { (*cw).w_view_width }
-        };
+        cursor_col = cw.map_or(0, |cw| cw.w_config._cmdline_offset) + cmd_startcol;
+        cursor_col %= cw.map_or_else(|| Columns.get(), |cw| cw.w_view_width);
         pum_anchor_grid.set(if ui_has(kUICmdline) {
             -1
         } else {
@@ -270,24 +259,25 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         });
     } else {
         // The start of the completed word.
-        win_row = unsafe { (*win).w_wrow };
+        win_row = win.w_wrow;
         cursor_col = if pum_rl.get() {
-            unsafe { (*win).w_view_width - (*win).w_wcol - 1 }
+            win.w_view_width - win.w_wcol - 1
         } else {
-            unsafe { (*win).w_wcol }
+            win.w_wcol
         };
     }
 
-    if !target_win.is_null() {
-        pum_anchor_grid.set(unsafe { (*(*target_win).w_grid.target).handle } as c_int);
-        win_row += unsafe { (*target_win).w_grid.row_offset };
-        cursor_col += unsafe { (*target_win).w_grid.col_offset };
-        if unsafe { (*target_win).w_grid.target } != default_grid_ref().raw() {
-            win_row += unsafe { (*target_win).w_winrow };
-            cursor_col += unsafe { (*target_win).w_wincol };
+    if let Some(target) = target_win {
+        // SAFETY: a live window's grid target is live.
+        pum_anchor_grid.set(unsafe { (*target.w_grid.target).handle } as c_int);
+        win_row += target.w_grid.row_offset;
+        cursor_col += target.w_grid.col_offset;
+        if target.w_grid.target != default_grid_ref().raw() {
+            win_row += target.w_winrow;
+            cursor_col += target.w_wincol;
             if ui_has(kUIMultigrid) {
-                pum_win_row_offset.set(unsafe { (*target_win).w_winrow });
-                pum_win_col_offset.set(unsafe { (*target_win).w_wincol });
+                pum_win_row_offset.set(target.w_winrow);
+                pum_win_col_offset.set(target.w_wincol);
             } else {
                 // ext_popupmenu always anchors to the default grid when
                 // multigrid is off.
@@ -298,9 +288,9 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
 
     // A preview window takes its space away from the menu.
     if let Some(pvwin) = windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
-        if pvwin.w_winrow < unsafe { (*win).w_winrow } {
+        if pvwin.w_winrow < win.w_winrow {
             above_row = pvwin.w_winrow + pvwin.w_height;
-        } else if pvwin.w_winrow > unsafe { (*win).w_winrow } + unsafe { (*win).w_height } {
+        } else if pvwin.w_winrow > win.w_winrow + win.w_height {
             below_row = pvwin.w_winrow;
         }
     }
@@ -396,16 +386,14 @@ pub unsafe fn pum_display(
             unsafe { pum_publish_external(array, size, selected, &anchor) };
         }
 
-        unsafe {
-            pum_compute_vertical_placement(
-                size,
-                anchor.target_win,
-                anchor.win_row,
-                anchor.above_row,
-                anchor.below_row,
-                border_width,
-            )
-        };
+        pum_compute_vertical_placement(
+            size,
+            anchor.target_win,
+            anchor.win_row,
+            anchor.above_row,
+            anchor.below_row,
+            border_width,
+        );
 
         // Do not display when there is only room for one line.
         if border_width == 0 && (pum_height.get() < 1 || (pum_height.get() == 1 && size > 1)) {
@@ -422,9 +410,7 @@ pub unsafe fn pum_display(
         unsafe { pum_compute_size() };
         // More items than room means a scrollbar.
         pum_scrollbar.set(c_int::from(pum_height.get() < size));
-        unsafe {
-            pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width)
-        };
+        pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width);
 
         if !unsafe { pum_set_selected(selected, redo_count) } {
             break;

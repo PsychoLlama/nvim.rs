@@ -111,12 +111,13 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
     // The window this completes for is the one the command line was
     // opened over, which is `prevwin` while the command-line window is
     // current.
-    let win = unsafe { prevwin_curwin() };
-    let bvars = unsafe { &raw const (*(*(*win).w_buffer).b_vars).dv_hashtab };
+    let win = prevwin_curwin();
+    // SAFETY: a live window's buffer and variable dictionaries are live.
+    let bvars = unsafe { &raw const (*win.buffer().b_vars).dv_hashtab };
     if let Some(key) = step(&bdone, bvars) {
         return unsafe { cat_prefix_varname(b'b' as c_int, key) };
     }
-    if let Some(key) = step(&wdone, unsafe { &raw const (*(*win).w_vars).dv_hashtab }) {
+    if let Some(key) = step(&wdone, unsafe { &raw const (*win.w_vars).dv_hashtab }) {
         return unsafe { cat_prefix_varname(b'w' as c_int, key) };
     }
     let tvars = unsafe { &raw const (*TabPage::current().tp_vars).dv_hashtab };

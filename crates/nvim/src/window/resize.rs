@@ -475,7 +475,7 @@ pub unsafe fn command_height() {
     let mut old_p_ch = TabPage::current().tp_ch_used as c_int;
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
-    let mut frp = Some(last_nonfloating(None).frame());
+    let mut frp = Some(lastwin_nofloating(None).frame());
     while let Some(fr) = frp.filter(|fr| fr.fr_width != Columns.get()) {
         frp = fr.parent();
         if frp.is_none() {

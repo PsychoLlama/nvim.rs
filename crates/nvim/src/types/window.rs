@@ -11,15 +11,21 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::types::Failed;
+use crate::winlayer::{TabId, WinId};
 
 pub struct SwitchWin {
-    pub sw_curwin: *mut Window,
-    pub sw_curtab: *mut Tabpage,
+    /// The window and tab page to go back to. Handles: `switch_win` runs
+    /// user code between the save and the restore, and that code can close
+    /// either of them.
+    pub(crate) sw_curwin: Option<WinId>,
+    pub(crate) sw_curtab: Option<TabId>,
     pub sw_same_win: bool,
     pub sw_visual_active: bool,
 }
 pub struct WinExecute {
-    pub wp: *mut Window,
+    /// The window the command ran in, as a handle: it may be gone by the
+    /// time `win_execute_after` looks.
+    pub(crate) wp: Option<WinId>,
     pub curpos: Pos,
     pub cwd: [::core::ffi::c_char; 4096],
     pub cwd_status: Result<(), Failed>,
@@ -33,8 +39,8 @@ impl Default for SwitchWin {
     /// which fills every field. Nothing reads one of these before that.
     fn default() -> Self {
         SwitchWin {
-            sw_curwin: ::core::ptr::null_mut(),
-            sw_curtab: ::core::ptr::null_mut(),
+            sw_curwin: None,
+            sw_curtab: None,
             sw_same_win: false,
             sw_visual_active: false,
         }
@@ -47,7 +53,7 @@ impl Default for WinExecute {
     /// `cwd` in particular is only written when 'autochdir' is on.
     fn default() -> Self {
         WinExecute {
-            wp: ::core::ptr::null_mut(),
+            wp: None,
             curpos: Pos {
                 lnum: 0,
                 col: 0,

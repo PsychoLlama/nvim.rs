@@ -40,7 +40,7 @@ impl Cells {
         }
         debug_assert!(wlv.off == 0);
 
-        if window.raw() == cmdwin_win.get() {
+        if cmdwin_win.get() == Some(window.id()) {
             unsafe {
                 wlv.draw_col_fill(
                     schar_from_ascii(cmdwin_type.get() as u8),

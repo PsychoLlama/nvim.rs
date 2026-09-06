@@ -4,7 +4,9 @@
 use crate::cstr;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
+use crate::window::tab_index;
 use crate::winlayer::TabPage;
+use crate::winlayer::last_used_tab;
 
 use std::ffi::CString;
 
@@ -38,7 +40,6 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
-use crate::winlayer::graph::lastused_tabpage;
 
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
@@ -47,7 +48,7 @@ use crate::types::{
     CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK, int32_t,
     intmax_t, size_t,
 };
-use crate::window::{only_one_window, tabpage_index, valid_tabpage};
+use crate::window::{only_one_window, tabpage_index};
 
 /// Take a `+cmd` argument, and answer the command it names.
 ///
@@ -298,12 +299,12 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                 if equals(p, b"$") {
                     tab_number = last_tab();
                 } else if equals(p, b"#") {
-                    if !valid_tabpage(lastused_tabpage.get()) {
+                    if last_used_tab().is_none() {
                         ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
                         tab_number = 0;
                         break 'theend;
                     }
-                    tab_number = tabpage_index(lastused_tabpage.get());
+                    tab_number = tabpage_index(last_used_tab());
                 } else if p == p_save
                     || byte(p_save) == '-' as c_int
                     || byte(p) != NUL
@@ -331,7 +332,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                 // case that reaches it.
                 tab_number = tab_number
                     .wrapping_mul(relative)
-                    .wrapping_add(tabpage_index(TabPage::current_raw()));
+                    .wrapping_add(tab_index(TabPage::current()));
                 // `:tabmove -1` moves *before* the tab to the left,
                 // which is one place further than counting says.
                 if unaccept_arg0 == 0 && relative == -1 {
@@ -371,12 +372,12 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
         } else {
             // No argument at all.
             tab_number = if ea.cmdidx == CmdIdx::tabnext {
-                let next = tabpage_index(TabPage::current_raw()) + 1;
+                let next = tab_index(TabPage::current()) + 1;
                 if next > last_tab() { 1 } else { next }
             } else if ea.cmdidx == CmdIdx::tabmove {
                 last_tab()
             } else {
-                tabpage_index(TabPage::current_raw())
+                tab_index(TabPage::current())
             };
         }
     }

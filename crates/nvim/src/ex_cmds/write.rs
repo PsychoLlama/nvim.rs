@@ -883,7 +883,7 @@ pub unsafe fn getfile(
             ptr::null_mut(),
             lnum,
             EcmdFlags::HIDE.when(buf_hide(Buf::current())) | EcmdFlags::FORCEIT.when(forceit),
-            Win::current_raw(),
+            Some(Win::current().id()),
         )
     }
     .is_ok();

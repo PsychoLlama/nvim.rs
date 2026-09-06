@@ -8,7 +8,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -47,7 +46,7 @@ const FLAG_KEYS: [(&CStr, CmdModFlags); 11] = [
 
 /// An all-zero [`WinExecute`]; `win_execute_before` fills it.
 const WIN_EXECUTE_INIT: WinExecute = WinExecute {
-    wp: ptr::null_mut(),
+    wp: None,
     curpos: Pos {
         lnum: 0,
         col: 0,
@@ -58,8 +57,8 @@ const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     apply_acd: false,
     save_sfname: ptr::null_mut(),
     switchwin: SwitchWin {
-        sw_curwin: ptr::null_mut(),
-        sw_curtab: ptr::null_mut(),
+        sw_curwin: None,
+        sw_curtab: None,
         sw_same_win: false,
         sw_visual_active: false,
     },
@@ -133,8 +132,8 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             // A window that cannot be entered leaves everything below
             // untouched: no call, no results, and nothing to restore.
             let entered = if let Some(win) = win {
-                let tabpage = win_find_tabpage(win.raw());
-                win_execute_before(&raw mut win_execute_args, win, TabPage::new(tabpage))
+                let tabpage = win_find_tabpage(win.id()).expect("a live window is on a tab page");
+                win_execute_before(&raw mut win_execute_args, win, tabpage)
             } else {
                 if let Some(buf) = buf {
                     aucmd_prepbuf(&raw mut aco, buf);

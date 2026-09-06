@@ -138,7 +138,7 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
             if call_do_modelines && did_aucmd {
                 // Don't set window-local options when the window we are
                 // in belongs to another buffer.
-                do_modelines(if is_aucmd_win(Win::current_raw()) {
+                do_modelines(if is_aucmd_win(Win::current()) {
                     OptionSetFlags::NOWIN
                 } else {
                     OptionSetFlags::NONE

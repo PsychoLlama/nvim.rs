@@ -31,6 +31,7 @@ use super::{
 use crate::arglist::check_arg_idx;
 use crate::ex_cmds::say;
 use crate::types::AutoEvent;
+use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
 
@@ -72,8 +73,7 @@ use crate::strings::vim_snprintf_safelen;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, Window, ptrdiff_t,
-    time_t,
+    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, ptrdiff_t, time_t,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -220,25 +220,25 @@ enum Target {
 /// NULL to start an empty buffer.  `eap` carries the command to run after
 /// loading and the forced 'ff'/'fenc', and can be NULL.  `newlnum` is the line
 /// to put the cursor on, or one of [`newlnum`]'s sentinels.
-/// `oldwin` should be `curwin` when editing in the current window, and NULL
-/// when the window was split first; when it is not NULL, the previous buffer's
+/// `oldwin` should be the current window when editing in it, and `None` when
+/// the window was split first; when it is `Some`, the previous buffer's
 /// position is remembered for it.
 ///
 /// Answers `Err` for failure.
 ///
 /// # Safety
-/// The names, `eap` and `oldwin` must be live, or NULL where that is allowed
-/// above. `oldwin` stays a raw pointer: an autocommand may close that window,
-/// and `win_valid` below is what asks -- the one case `winlayer`'s docs
-/// reserve for an address rather than a [`Win`].
-pub unsafe fn do_ecmd(
+/// The names and `eap` must be live, or NULL where that is allowed above.
+/// `oldwin` is a handle: an autocommand may close that window, and `win_valid`
+/// below is what asks -- the one case `winlayer`'s docs reserve for an
+/// identity rather than a [`Win`].
+pub(crate) unsafe fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
     args: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
-    oldwin: *mut Window,
+    oldwin: Option<WinId>,
 ) -> Result<(), Failed> {
     let mut ffname = ffname;
     let mut sfname = sfname;
@@ -339,11 +339,8 @@ pub unsafe fn do_ecmd(
         reset_visual();
 
         // autocommands freed window :(
-        // SAFETY: `oldwin` is the caller's, and `win_valid` tolerates a stale
-        // pointer -- that is what it is for.
-        if !oldwin.is_null() && !win_valid(oldwin) {
-            oldwin = ptr::null_mut();
-        }
+        // A stale id answers `None`, which is what this check is for.
+        oldwin = oldwin.filter(|&w| win_valid(w));
 
         // SAFETY: `command` is live when non-NULL.
         did_set_swapcommand = unsafe { set_swapcommand(command, state.newlnum) };

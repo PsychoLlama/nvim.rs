@@ -364,11 +364,12 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
         let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
-                let buf = tp.tp_diffbuf[idx];
-                // SAFETY: `buf_valid` compares against the live buffer list,
-                // and a valid buffer is what `buf_check_timestamp` wants.
-                if unsafe { buf_valid(buf) } {
-                    unsafe { buf_check_timestamp(Buf::new(buf)) };
+                // SAFETY: a tab page's diff buffers are live or null.
+                let buf = unsafe { Buf::from_raw(tp.tp_diffbuf[idx]) };
+                // `buf_valid` compares against the live buffer list, and a
+                // valid buffer is what `buf_check_timestamp` wants.
+                if let Some(buf) = buf.filter(|b| buf_valid(b.id())) {
+                    unsafe { buf_check_timestamp(buf) };
                 }
             }
         }

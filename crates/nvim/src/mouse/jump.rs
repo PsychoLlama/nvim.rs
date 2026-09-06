@@ -20,6 +20,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::cmdwin_window;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -286,7 +287,7 @@ fn enter_window(
     let past_columns = if win.w_onebuf_opt.wo_rl != 0 {
         pos.col < win.w_view_width - fdc
     } else {
-        pos.col >= fdc + (win.raw() == cmdwin_win.get()) as c_int
+        pos.col >= fdc + (cmdwin_win.get() == Some(win.id())) as c_int
     };
     if visual_active()
         && (win.buffer() != old_curwin.buffer()
@@ -298,14 +299,13 @@ fn enter_window(
         stop_visual();
     }
 
-    if cmdwin_type.get() != 0 && win.raw() != cmdwin_win.get() {
+    if cmdwin_type.get() != 0 && cmdwin_win.get() != Some(win.id()) {
         // A click outside the command-line window: Use modeless selection if
         // possible.  Allow dragging the status lines.
         sep_line_offset.set(0);
         pos.row = 0;
         pos.col += win.w_wincol;
-        // SAFETY: `cmdwin_win` is a live window while `cmdwin_type` is set.
-        win = unsafe { Win::new(cmdwin_win.get()) };
+        win = cmdwin_window().expect("a command-line window while cmdwin_type is set");
     }
 
     // Only change window focus when not clicking on or dragging the status

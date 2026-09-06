@@ -80,16 +80,12 @@ pub unsafe fn nvim_buf_set_lines(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
-    if b.is_null() {
+    let Some(buffer) = api_buf_ensure_loaded(buf, &mut error) else {
         return ().reported(error);
-    }
-    // SAFETY: not null, and the guard above is what says so.
-    let buffer = unsafe { Buf::new(b) };
+    };
     let mut oob: bool = false;
-    start =
-        unsafe { normalize_index(Buf::new(b), start as int64_t, true, &raw mut oob) } as Integer;
-    end = unsafe { normalize_index(Buf::new(b), end as int64_t, true, &raw mut oob) } as Integer;
+    start = unsafe { normalize_index(buffer, start as int64_t, true, &raw mut oob) } as Integer;
+    end = unsafe { normalize_index(buffer, end as int64_t, true, &raw mut oob) } as Integer;
     if !(!strict_indexing || !oob) {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -159,7 +155,7 @@ pub unsafe fn nvim_buf_set_lines(
             };
             let mut i_0: size_t = 0 as size_t;
             while i_0 < to_delete {
-                if unsafe { ml_delete_buf(Buf::new(b), start as LineNr, false) }.is_err() {
+                if unsafe { ml_delete_buf(buffer, start as LineNr, false) }.is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_382;
@@ -183,7 +179,7 @@ pub unsafe fn nvim_buf_set_lines(
                     // SAFETY: `i_1` is below `new_len`.
                     let line = unsafe { *lines.add(i_1) };
                     // SAFETY: `b` is the live buffer, `lnum` one of its lines.
-                    unsafe { ml_replace_buf(Buf::new(b), lnum as LineNr, line, false, true) }
+                    unsafe { ml_replace_buf(buffer, lnum as LineNr, line, false, true) }
                 }
                 .is_err()
                 {
@@ -208,7 +204,7 @@ pub unsafe fn nvim_buf_set_lines(
                     let line = unsafe { *lines.add(i_2) };
                     let at = lnum_0 as LineNr;
                     // SAFETY: `b` is the live buffer.
-                    unsafe { ml_append_buf(Buf::new(b), at, line, 0 as ColNr, false) }
+                    unsafe { ml_append_buf(buffer, at, line, 0 as ColNr, false) }
                 }
                 .is_err()
                 {
@@ -240,7 +236,7 @@ pub unsafe fn nvim_buf_set_lines(
                 )
             };
             if visual_active() as ::core::ffi::c_int != 0
-                && b == Buf::current_raw()
+                && Some(buffer) == Buf::current_or_none()
                 && visual_anchor().lnum >= start as LineNr
             {
                 if visual_anchor().lnum >= end as LineNr {
@@ -271,7 +267,7 @@ pub unsafe fn nvim_buf_set_lines(
                 true,
             );
             for win in tab_windows() {
-                if win.w_buffer == b {
+                if win.w_buffer == buffer.raw() {
                     let (lo, hi) = (start as LineNr, end as LineNr);
                     // SAFETY: a live window showing this buffer.
                     unsafe { fix_cursor(win, lo, hi, extra as LineNr) };

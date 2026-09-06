@@ -93,7 +93,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 /// Handle CTRL-^: toggle the use of the language `:lmap` mappings and/or the
 /// Input Method.
 pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
-    let b_im_ptr = if unsafe { buf_valid(s.b_im_ptr_buf) } {
+    let b_im_ptr = if s.b_im_ptr_buf.is_some_and(buf_valid) {
         s.b_im_ptr
     } else {
         ::core::ptr::null_mut::<OptInt>()

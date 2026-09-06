@@ -18,6 +18,7 @@ use super::*;
 use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
+use crate::winlayer::FrameRef;
 use crate::winlayer::Win;
 
 /// Which corner of a window a separator connector is being drawn in.
@@ -152,15 +153,17 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
             }
         } else {
             while !unsafe { (*fr).fr_next }.is_null()
-                && unsafe { (*frame2win(fr)).w_winrow } + unsafe { (*fr).fr_height } < sep_row
+                && unsafe { frame2window(FrameRef::new(fr)) }.w_winrow + unsafe { (*fr).fr_height }
+                    < sep_row
             {
                 fr = unsafe { (*fr).fr_next };
             }
         }
     }
 
-    let other = unsafe { (*fr).fr_win };
-    sep_row == unsafe { (*other).w_winrow } - 1 || sep_row == unsafe { win_endrow(Win::new(other)) }
+    // SAFETY: a leaf frame's window is live.
+    let other = unsafe { Win::new((*fr).fr_win) };
+    sep_row == other.w_winrow - 1 || sep_row == unsafe { win_endrow(other) }
 }
 
 /// Whether window `window`'s vertical separator at `corner` is continued by the
@@ -190,15 +193,17 @@ pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
             }
         } else {
             while !unsafe { (*fr).fr_next }.is_null()
-                && unsafe { (*frame2win(fr)).w_wincol } + unsafe { (*fr).fr_width } < sep_col
+                && unsafe { frame2window(FrameRef::new(fr)) }.w_wincol + unsafe { (*fr).fr_width }
+                    < sep_col
             {
                 fr = unsafe { (*fr).fr_next };
             }
         }
     }
 
-    let other = unsafe { (*fr).fr_win };
-    sep_col == unsafe { (*other).w_wincol } - 1 || sep_col == unsafe { win_endcol(Win::new(other)) }
+    // SAFETY: a leaf frame's window is live.
+    let other = unsafe { Win::new((*fr).fr_win) };
+    sep_col == other.w_wincol - 1 || sep_col == unsafe { win_endcol(other) }
 }
 
 /// Draw the vertical separator right of window `window`.

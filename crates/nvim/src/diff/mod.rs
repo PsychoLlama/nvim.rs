@@ -97,7 +97,7 @@ use crate::types::NL;
 use crate::types::{
     AcoSave, CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
     ExtmarkOp, FILE, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
-    VarNumber, Window, mmfile_t, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    VarNumber, mmfile_t, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

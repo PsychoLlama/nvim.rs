@@ -38,7 +38,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
 use crate::types::{CmdMod, CmdModFlags, ExArg, ExArgt, NUL, UserCmd, int64_t, size_t};
-use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
+use crate::window::tab_index;
+use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use crate::winlayer::TabPage;
 use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int};
@@ -332,7 +333,7 @@ pub(crate) unsafe fn add_win_cmd_modifiers(
         let mut text = Scratch::new();
         // For compatibility, a tab number that is `:tab`'s own default is
         // left off.
-        if tabnr == tabpage_index(TabPage::current_raw()) {
+        if tabnr == tab_index(TabPage::current()) {
             add(c"tab".as_ptr(), true);
         } else {
             let _ = write!(text, "{tabnr}tab");

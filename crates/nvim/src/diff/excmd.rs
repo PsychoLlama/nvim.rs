@@ -62,9 +62,8 @@ fn emsg_gettext(msg: *const c_char) {
 pub unsafe fn ex_diffpatch(args: *mut ExArg) {
     // SAFETY: the caller's command.
     let mut args = unsafe { Live::<ExArg>::new(args) };
-    let old_curwin: *mut Window = Win::current_raw();
-    // SAFETY: a live window.
-    let old_curwin = unsafe { Win::new(old_curwin) };
+    let old_curwin = Win::current();
+    let old_curwin_id = old_curwin.id();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
     let mut fullname: *mut c_char = ptr::null_mut();
@@ -156,10 +155,8 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
                 args.arg = tmp_new;
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
-                unsafe { do_exedit(args.raw(), old_curwin.raw()) };
-                // SAFETY: `win_valid` takes any pointer and compares it
-                // against the live window list.
-                if Win::current_raw() != old_curwin.raw() && win_valid(old_curwin.raw()) {
+                unsafe { do_exedit(args.raw(), Some(old_curwin_id)) };
+                if !old_curwin.is_current() && win_valid(old_curwin_id) {
                     // SAFETY: both windows are live, as just checked.
                     diff_win_options(Win::current(), true);
                     diff_win_options(old_curwin, true);
@@ -229,9 +226,8 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     // SAFETY: the caller's command.
     let mut args = unsafe { Live::<ExArg>::new(args) };
-    let old_curwin: *mut Window = Win::current_raw();
-    // SAFETY: a live window.
-    let old_curwin = unsafe { Win::new(old_curwin) };
+    let old_curwin = Win::current();
+    let old_curwin_id = old_curwin.id();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
     validate_cursor(old_curwin);
@@ -245,14 +241,13 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     args.cmdidx = CmdIdx::split;
     Win::current().w_onebuf_opt.wo_diff = 1;
     // SAFETY: the caller's command, and a window that was live when read.
-    unsafe { do_exedit(args.raw(), old_curwin.raw()) };
-    if Win::current_raw() == old_curwin.raw() {
+    unsafe { do_exedit(args.raw(), Some(old_curwin_id)) };
+    if old_curwin.is_current() {
         return;
     }
     // SAFETY: the current window is live.
     diff_win_options(Win::current(), true);
-    // SAFETY: `win_valid` compares against the live window list.
-    if win_valid(old_curwin.raw()) {
+    if win_valid(old_curwin_id) {
         // SAFETY: the window is live, as just checked.
         diff_win_options(old_curwin, true);
         if let Some(old_buf) = old_curbuf.get() {

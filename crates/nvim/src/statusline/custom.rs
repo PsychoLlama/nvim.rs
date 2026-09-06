@@ -51,7 +51,7 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlOpt, String_0, Tabpage, int64_t, ssize_t,
+    ScreenChar, StlOpt, String_0, int64_t, ssize_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
@@ -575,13 +575,11 @@ pub unsafe fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
     let cur = Win::current();
-    // SAFETY: a live window.
-    let use_cur = !is_aucmd_win(cur.raw()) && cur.w_status_height == 0;
-    // SAFETY: `lastwin_nofloating` answers a live window of this tab page.
+    let use_cur = !is_aucmd_win(cur) && cur.w_status_height == 0;
     let mut win = if use_cur {
         cur
     } else {
-        unsafe { Win::new(lastwin_nofloating(ptr::null_mut::<Tabpage>())) }
+        lastwin_nofloating(None)
     };
     let is_stl_global = stl_is_global();
 

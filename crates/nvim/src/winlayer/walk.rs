@@ -51,8 +51,12 @@
 
 use core::iter;
 
-use super::graph::{first_tabpage, firstbuf, firstwin, lastbuf, lastwin};
+use super::graph::{
+    cmdline_win, cmdwin_win, first_tabpage, firstbuf, firstwin, lastbuf, lastused_tabpage, lastwin,
+    prevwin,
+};
 use super::{Buf, BufId, FrameRef, TabId, TabPage, Win, WinId};
+use crate::types::Window;
 
 /// `first` and every window after it in its tab page's list.
 pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
@@ -70,6 +74,36 @@ pub(crate) fn first_window() -> Option<Win> {
 #[inline]
 pub(crate) fn last_window() -> Option<Win> {
     lastwin.get().and_then(WinId::get)
+}
+
+/// The window `CTRL-W p` goes back to -- the C's `prevwin` -- `None` when
+/// there is none or it has been closed since it was named.
+///
+/// The five below are the same shape: a global that remembers one window,
+/// buffer or tab page across a call that may free it, and answers `None`
+/// rather than a dangling address when it did.
+#[inline]
+pub(crate) fn prev_window() -> Option<Win> {
+    prevwin.get().and_then(WinId::get)
+}
+
+/// The tab page `:tab` and `g<Tab>` go back to -- `lastused_tabpage`.
+#[inline]
+pub(crate) fn last_used_tab() -> Option<TabPage> {
+    lastused_tabpage.get().and_then(TabId::get)
+}
+
+/// The command-line window, while one is open -- `cmdwin_win`.
+#[inline]
+pub(crate) fn cmdwin_window() -> Option<Win> {
+    cmdwin_win.get().and_then(WinId::get)
+}
+
+/// The window the cmdline is drawn in when `'cmdheight'` is zero and a float
+/// stands in for the message area -- `cmdline_win`.
+#[inline]
+pub(crate) fn cmdline_window() -> Option<Win> {
+    cmdline_win.get().and_then(WinId::get)
 }
 
 /// Every window of the current tab page, in list order: the C's
@@ -90,6 +124,19 @@ pub(crate) fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
     } else {
         tabpage.tp_firstwin.and_then(WinId::get)
     })
+}
+
+/// The window at address `raw`, if it is on the current tab page's list.
+///
+/// The one lookup that still speaks in addresses, and it lives here for the
+/// reason `winlayer`'s docs give: the caller is holding a `Window *` an
+/// autocommand may already have freed (a layout snapshot's `fr_win`), so the
+/// address can only be *compared*, never read. Everything else asks by
+/// [`WinId`].
+pub(crate) fn window_at(raw: *const Window) -> Option<Win> {
+    (!raw.is_null())
+        .then(|| windows().find(|wp| wp.raw().cast_const() == raw))
+        .flatten()
 }
 
 /// Every tab page, in list order: the C's `FOR_ALL_TABS`.

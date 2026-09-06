@@ -67,7 +67,7 @@ pub(crate) unsafe fn cmdline_pum_create(
         expand.xp_pattern
     };
     let col = unsafe { endpos.offset_from(ccline.text()) } as c_int;
-    compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_null() {
+    compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_none() {
         col
     } else {
         unsafe { cmd_screencol(col) }
@@ -129,7 +129,7 @@ pub unsafe fn cmdline_compl_is_fuzzy() -> bool {
 pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
     (need_wildmenu
         && wop_flags.get() & kOptWopFlagPum as c_uint != 0
-        && !(ui_has(kUICmdline) && cmdline_win.get().is_null()))
+        && !(ui_has(kUICmdline) && cmdline_win.get().is_none()))
         || ui_has(kUIWildmenu)
         || (ui_has(kUICmdline) && ui_has(kUIPopupmenu))
 }

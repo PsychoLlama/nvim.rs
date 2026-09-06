@@ -47,7 +47,7 @@ pub unsafe fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
 ///
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
-    let prev_curtab = TabPage::current_raw();
+    let prev_curtab = TabPage::current();
     let win_frame = if win.w_floating {
         ptr::null_mut::<Frame>()
     } else {
@@ -79,7 +79,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // When closing the last window in a tab page first go to another tab page
     // and then close the window and the tab page, so that `curwin` and `curtab`
     // are never invalid while memory is freed.
-    if close_last_tabpage_window(win, free_buf, unsafe { TabPage::new(prev_curtab) }) {
+    if close_last_tabpage_window(win, free_buf, prev_curtab) {
         return FAIL;
     }
 
@@ -105,7 +105,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // Fire WinClosed just before starting to free window-related resources.
     fire_winclosed(win);
     // The autocommand may have freed the window already.
-    if !valid_win_any_tab(win.raw()) {
+    if !valid_win_any_tab(win.id()) {
         return OK;
     }
 
@@ -113,7 +113,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
     let did_decrement = close_win_buffer(win, action, true);
 
-    if valid_win(win.raw()).is_some()
+    if valid_win(win.id()).is_some()
         && win.buffer_or_none().is_none()
         && !win.w_floating
         && is_last_window(win)
@@ -126,12 +126,9 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         quit_now();
     }
     // Autocommands may have moved to another tab page.
-    if TabPage::current_raw() != prev_curtab
-        && valid_win_any_tab(win.raw())
-        && win.buffer_or_none().is_none()
-    {
+    if !prev_curtab.is_current() && valid_win_any_tab(win.id()) && win.buffer_or_none().is_none() {
         // The window has to be closed anyway, since the buffer is gone.
-        if let Some(prev) = valid_tab(prev_curtab) {
+        if let Some(prev) = valid_tab(prev_curtab.id()) {
             close_othertab(win, false, prev, force);
         }
         return FAIL;
@@ -139,7 +136,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     // Autocommands may have closed the window already, or closed the only other
     // window, or moved to another tab page.
-    if valid_win(win.raw()).is_none() {
+    if valid_win(win.id()).is_none() {
         return FAIL;
     }
     if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
@@ -149,7 +146,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         unclose_win_buffer(win, bufref, did_decrement);
         return FAIL;
     }
-    if close_last_tabpage_window(win, free_buf, unsafe { TabPage::new(prev_curtab) }) {
+    if close_last_tabpage_window(win, free_buf, prev_curtab) {
         return FAIL;
     }
 
@@ -165,11 +162,11 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         debug_assert!(tabs().next().is_some(), "first_tabpage != NULL");
         if win.w_config.external {
             for mut tp in tabs() {
-                if !tp.is_current() && tp.tp_curwin == win.raw() {
+                if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
                     // An autocommand can still abort the closing of this
                     // window, but carrying the change out anyway is no
                     // catastrophe.
-                    tp.tp_curwin = raw_win(tp.tp_firstwin.and_then(WinId::get));
+                    tp.tp_curwin = tp.tp_firstwin;
                 }
             }
         }
@@ -190,7 +187,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // Closing the help window moves the cursor back to the window that was
         // current when the snapshot was taken.
         let idx = snapshot_index(help_window);
-        if let Some(prev) = snapshot_curwin(idx).and_then(|w| valid_win(w.raw())) {
+        if let Some(prev) = snapshot_curwin(idx).and_then(|w| valid_win(w.id())) {
             wp = prev;
         }
     }
@@ -262,7 +259,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     // If the window had 'diff' set and only one window with 'diff' is left in
     // the tab page, and "closeoff" is in 'diffopt', run ":diffoff!".
-    if diffopt_closeoff() && had_diffmode && TabPage::current_raw() == prev_curtab {
+    if diffopt_closeoff() && had_diffmode && prev_curtab.is_current() {
         let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
         if diffcount == 1 {
             run_cmd(c"diffoff!".as_ptr());
@@ -305,7 +302,7 @@ fn close_the_floats(win: Win, force: bool) -> Option<c_int> {
             return Some(FAIL);
         }
     }
-    if !valid_win_any_tab(win.raw()) {
+    if !valid_win_any_tab(win.id()) {
         return Some(FAIL); // already closed by autocommands
     }
     // Autocommands may have closed all other tab pages; check again.
@@ -348,12 +345,12 @@ fn leave_closing_window(win: Win) -> Leave {
     if wp.w_buffer != Buf::current_raw() {
         reset_visual_and_resel(); // stop Visual mode
         other_buffer = true;
-        if valid_win(win.raw()).is_none() {
+        if valid_win(win.id()).is_none() {
             return Leave::Failed;
         }
         win.w_locked = true;
         fire(AutoEvent::BufLeave, Buf::current());
-        if valid_win(win.raw()).is_none() {
+        if valid_win(win.id()).is_none() {
             return Leave::Failed;
         }
         win.w_locked = false;
@@ -363,7 +360,7 @@ fn leave_closing_window(win: Win) -> Leave {
     }
     win.w_locked = true;
     fire(AutoEvent::WinLeave, Buf::current());
-    if valid_win(win.raw()).is_none() {
+    if valid_win(win.id()).is_none() {
         return Leave::Failed;
     }
     win.w_locked = false;
@@ -433,7 +430,7 @@ fn tabclosedpre(tabpage: TabPage) {
     if !event_wanted(AutoEvent::TabClosedPre) || RECURSIVE.get() {
         return;
     }
-    if let Some(tp) = valid_tab(tabpage.raw()) {
+    if let Some(tp) = valid_tab(tabpage.id()) {
         goto_tab(tp, false, false);
     }
     RECURSIVE.set(true);
@@ -443,7 +440,7 @@ fn tabclosedpre(tabpage: TabPage) {
     RECURSIVE.set(false);
     // The tab page may have been modified or deleted by the autocommands: try
     // to recover it, and fall back to the first tab page.
-    let back = valid_tab(ptp.raw()).unwrap_or_else(first_tab);
+    let back = valid_tab(ptp.id()).unwrap_or_else(first_tab);
     goto_tab(back, false, false);
 }
 
@@ -497,7 +494,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
                     break 'leave_open;
                 }
             }
-            if !valid_win_any_tab(win.raw()) {
+            if !valid_win_any_tab(win.id()) {
                 return false; // already closed by autocommands
             }
         }
@@ -508,14 +505,14 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         if win.buffer_or_none().is_some() {
             fire_winclosed(win);
             // The autocommand may have freed the window already.
-            if !valid_win_any_tab(win.raw()) {
+            if !valid_win_any_tab(win.id()) {
                 return false;
             }
         }
         if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
             tabclosedpre(tabpage);
             // The autocommand may have freed the window already.
-            if !valid_win_any_tab(win.raw()) {
+            if !valid_win_any_tab(win.id()) {
                 return false;
             }
         }
@@ -529,12 +526,12 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
 
         // Careful: autocommands may have closed the tab page, or made it the
         // current one.
-        if valid_tab(tabpage.raw()).is_none() || tabpage.is_current() {
+        if valid_tab(tabpage.id()).is_none() || tabpage.is_current() {
             break 'leave_open;
         }
         // Autocommands may have closed the window already, or
         // `nvim_win_set_config` moved it to a different tab page.
-        if !valid_win_in_tab(tabpage, win.raw()) {
+        if !valid_win_in_tab(tabpage, win.id()) {
             break 'leave_open;
         }
         // Autocommands may again leave only floats; check again, but this time
@@ -586,7 +583,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         return true;
     }
 
-    if let Some(win) = valid_win_any_tab(win.raw()).then_some(win) {
+    if let Some(win) = valid_win_any_tab(win.id()).then_some(win) {
         unclose_win_buffer(win, bufref, did_decrement);
     }
     false

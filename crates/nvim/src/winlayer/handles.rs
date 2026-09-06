@@ -215,7 +215,7 @@ pub(crate) struct WinId(pub(super) NonZero<Handle>);
 
 /// A buffer's identity, taken from a live buffer: its number. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct BufId(pub(super) NonZero<Handle>);
+pub struct BufId(pub(super) NonZero<Handle>);
 
 /// A tab page's identity, taken from a live tab page. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

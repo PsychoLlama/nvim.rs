@@ -104,8 +104,9 @@ pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
         if w.w_buffer != Buf::current_raw() {
             reset_visual_and_resel();
         }
+        let tab = win_find_tabpage(w.id()).expect("a live window is on a tab page");
         // SAFETY: `w` is the live window just found.
-        unsafe { goto_tabpage_win(TabPage::new(win_find_tabpage(w.raw())), w) };
+        unsafe { goto_tabpage_win(tab, w) };
     });
     ().reported(err)
 }

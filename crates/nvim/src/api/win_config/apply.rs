@@ -13,14 +13,17 @@ use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::winlayer::{TabPage, Win};
 
-/// `NULL` for "the current tab page", which is how the window family spells
+/// `None` for "the current tab page", which is how the window family spells
 /// it throughout.
-fn other_tab(tabpage: TabPage) -> *mut Tabpage {
-    if tabpage == TabPage::current() {
-        ::core::ptr::null_mut::<Tabpage>()
-    } else {
-        tabpage.raw()
-    }
+fn other_tab(tabpage: TabPage) -> Option<TabPage> {
+    (tabpage != TabPage::current()).then_some(tabpage)
+}
+
+/// The tab page a window was just found on. [`win_find_tabpage`] answers an
+/// `Option` because it is asked about windows that may be gone; here it is
+/// asked about a window the caller promised is live.
+fn expect_tab(tabpage: Option<TabPage>) -> TabPage {
+    tabpage.expect("a live window is on a tab page")
 }
 
 /// How many frames sit in `frame`'s row or column, `frame` included.
@@ -84,30 +87,28 @@ unsafe fn win_config_split(
         if stays_put {
             break '_resize;
         }
-        let mut parent: *mut Window = ::core::ptr::null_mut::<Window>();
-        let mut parent_tp: *mut Tabpage = ::core::ptr::null_mut::<Tabpage>();
+        let mut parent: Option<Win> = None;
+        let mut parent_tp: Option<TabPage> = None;
         if config.win == 0 {
-            parent = Win::current_raw();
-            parent_tp = TabPage::current_raw();
+            parent = Some(Win::current());
+            parent_tp = Some(TabPage::current());
         } else if config.win > 0 {
             // SAFETY: `err` names the caller's error slot.
-            parent = find_window_by_handle(fconfig.window, slot_mut(err))
-                .map_or(::core::ptr::null_mut(), Win::raw);
-            if parent.is_null() {
+            let Some(found) = find_window_by_handle(fconfig.window, slot_mut(err)) else {
                 return false;
-            }
-            parent_tp = win_find_tabpage(parent);
+            };
+            parent = Some(found);
+            parent_tp = win_find_tabpage(found.id());
         }
-        let mut win_tp: *mut Tabpage = win_find_tabpage(win.raw());
-        if !parent.is_null() {
-            // SAFETY: `parent` is the live window found above.
-            if unsafe { (*parent).w_floating } {
+        let mut win_tp = win_find_tabpage(win.id());
+        if let Some(p) = parent {
+            if p.w_floating {
                 err_msg(err, kErrorTypeException, c"Cannot split a floating window");
                 return false;
             }
-            // SAFETY: both windows are live, and `err` is the caller's slot.
+            // SAFETY: `err` is the caller's slot.
             if win_tp != parent_tp
-                && !unsafe { win_can_move_tp(win, TabPage::new(win_tp), slot_mut(err)) }
+                && !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) }
             {
                 return false;
             }
@@ -117,17 +118,16 @@ unsafe fn win_config_split(
             return false;
         }
         let to_split_ok;
-        let curwin_moving_tp = win == Win::current() && !parent.is_null() && win_tp != parent_tp;
+        let curwin_moving_tp = win == Win::current() && parent.is_some() && win_tp != parent_tp;
         let mut dir: ::core::ffi::c_int = 0;
         let mut unflat_altfr: *mut Frame = ::core::ptr::null_mut::<Frame>();
-        let altwin_0: *mut Window;
+        let altwin_0: Option<Win>;
         '_restore_curwin: {
             if curwin_moving_tp {
                 // SAFETY: the caller's window, still in its tab page.
-                let altwin = unsafe { win_find_altwin(win, TabPage::new(win_tp)) };
-                debug_assert!(!altwin.is_null(), "altwin");
+                let altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) }.expect("altwin");
                 // SAFETY: `altwin` is the live neighbour just found.
-                unsafe { win_goto(Win::new(altwin)) };
+                unsafe { win_goto(altwin) };
                 if Win::current_raw() == win.raw() {
                     // SAFETY: the caller's window.
                     let handle = win.handle;
@@ -138,15 +138,15 @@ unsafe fn win_config_split(
                     store(err, why);
                     return false;
                 }
-                win_tp = win_find_tabpage(win.raw());
+                win_tp = win_find_tabpage(win.id());
                 // `win_valid_any_tab` is the check for whether `parent` is
-                // still there at all, so it takes the pointer.
-                if win_tp.is_null() || !win_valid_any_tab(parent) {
+                // still there at all.
+                let live_parent = parent.filter(|p| win_valid_any_tab(p.id()));
+                let (Some(_), Some(p)) = (win_tp, live_parent) else {
                     err_msg(err, kErrorTypeException, c"Windows to split were closed");
                     break '_restore_curwin;
-                }
-                // SAFETY: both windows are live -- the check above says so.
-                let changed = unsafe { was_split == win.w_floating || (*parent).w_floating };
+                };
+                let changed = was_split == win.w_floating || p.w_floating;
                 if changed {
                     let msg = c"Floating state of windows to split changed";
                     err_msg(err, kErrorTypeException, msg);
@@ -164,21 +164,20 @@ unsafe fn win_config_split(
                     break '_restore_curwin;
                 }
                 // SAFETY: both windows are live.
-                let into_itself = !parent.is_null() && unsafe { (*parent).handle == win.handle };
+                let into_itself = parent.is_some_and(|p| p.handle == win.handle);
                 if into_itself {
                     // SAFETY: the frame's parent is live -- checked above.
                     let n_frames = unsafe { sibling_count((*frame).fr_parent) };
-                    let mut neighbor: *mut Window = ::core::ptr::null_mut::<Window>();
+                    let mut neighbor: Option<Win> = None;
                     if n_frames > 2 {
                         // SAFETY: as above.
                         let nested = !unsafe { (*(*frame).fr_parent).fr_parent }.is_null();
-                        // SAFETY: a live tab page.
-                        let win_tp = unsafe { TabPage::new(win_tp) };
+                        let win_tp = expect_tab(win_tp);
                         if nested {
                             let ahead =
                                 fconfig.split == kWinSplitAbove || fconfig.split == kWinSplitLeft;
                             let live = w;
-                            neighbor = raw_win(if ahead { live.next() } else { live.prev() });
+                            neighbor = if ahead { live.next() } else { live.prev() };
                         }
                         // SAFETY: the caller's window, and `dir`/`unflat_altfr`
                         // are this frame's own.
@@ -191,8 +190,7 @@ unsafe fn win_config_split(
                             )
                         };
                     } else if n_frames == 2 {
-                        // SAFETY: a live tab page.
-                        let win_tp = unsafe { TabPage::new(win_tp) };
+                        let win_tp = expect_tab(win_tp);
                         // SAFETY: as above.
                         altwin_0 = unsafe {
                             winframe_remove(
@@ -210,73 +208,60 @@ unsafe fn win_config_split(
                     }
                     parent = neighbor;
                 } else {
-                    // SAFETY: a live tab page.
-                    let win_tp = unsafe { TabPage::new(win_tp) };
-                    // SAFETY: as above.
+                    let win_tp = expect_tab(win_tp);
+                    // SAFETY: `dir` and `unflat_altfr` are this frame's own.
                     altwin_0 = unsafe {
                         winframe_remove(w, &raw mut dir, other_tab(win_tp), &raw mut unflat_altfr)
                     };
                 }
             } else {
                 // SAFETY: the caller's window and its tab page.
-                altwin_0 = unsafe {
-                    let at = (win_tp != TabPage::current_raw()).then(|| TabPage::new(win_tp));
-                    win_float_find_altwin(win, at).map_or(::core::ptr::null_mut(), Win::raw)
-                };
+                altwin_0 = unsafe { win_float_find_altwin(win, other_tab(expect_tab(win_tp))) };
             }
-            // SAFETY: the caller's window, taken out of `win_tp`'s list.
-            unsafe { win_remove(w, other_tab(TabPage::new(win_tp))) };
-            if win_tp == TabPage::current_raw() {
+            win_remove(w, other_tab(expect_tab(win_tp)));
+            if win_tp == Some(TabPage::current()) {
                 last_status(false);
                 win_comp_pos();
             }
-            let flags = win_split_flags(fconfig.split, parent.is_null())
+            let flags = win_split_flags(fconfig.split, parent.is_none())
                 | WSP_NOENTER as ::core::ffi::c_int;
-            parent_tp = if parent.is_null() {
-                TabPage::current_raw()
-            } else {
-                win_find_tabpage(parent)
+            parent_tp = match parent {
+                None => Some(TabPage::current()),
+                Some(p) => win_find_tabpage(p.id()),
             };
             let mut tstate = TryState::default();
             // SAFETY: `tstate` is this frame's own, live until `try_leave`.
             unsafe { try_enter(&raw mut tstate) };
-            let need_switch: bool = !parent.is_null() && parent != Win::current_raw();
+            let need_switch: bool = parent.is_some_and(|p| !p.is_current());
             let mut switchwin = SwitchWin {
-                sw_curwin: ::core::ptr::null_mut::<Window>(),
-                sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
+                sw_curwin: None,
+                sw_curtab: None,
                 sw_same_win: false,
                 sw_visual_active: false,
             };
             if need_switch {
-                // SAFETY: a live tab page.
-                let parent_tp = unsafe { TabPage::new(parent_tp) };
-                // SAFETY: a live window.
-                let parent = unsafe { Win::new(parent) };
+                let parent_tp = expect_tab(parent_tp);
+                let parent = parent.expect("`need_switch` says there is a parent");
                 // SAFETY: `switchwin` is this frame's own, and `parent`/
                 // `parent_tp` are the live window and tab page to split in.
-                let result = unsafe { switch_win(&raw mut switchwin, parent, parent_tp, true) };
+                let result =
+                    unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
                 debug_assert!(result.is_ok(), "the window was switched to");
             }
             // SAFETY: the caller's window, and `unflat_altfr` the frame the
             // removal above left behind.
-            to_split_ok = !unsafe {
+            to_split_ok = unsafe {
                 win_split_ins(
                     0 as ::core::ffi::c_int,
                     flags,
-                    win.raw(),
+                    Some(win),
                     0 as ::core::ffi::c_int,
                     unflat_altfr,
                 )
             }
-            .is_null();
+            .is_some();
             if !to_split_ok {
-                // SAFETY: a live tab page.
-                let win_tp = unsafe { TabPage::new(win_tp) };
-                // SAFETY: the caller's window, put back where it was.
-                unsafe {
-                    let prev = raw_win(w.prev());
-                    win_append(prev, w, other_tab(win_tp));
-                }
+                win_append(w.prev(), w, other_tab(expect_tab(win_tp)));
             }
             if need_switch {
                 // SAFETY: the matching restore of the switch above.
@@ -286,11 +271,9 @@ unsafe fn win_config_split(
             // `err` is the caller's slot.
             unsafe { try_leave(&raw mut tstate, slot_mut(err)) };
             if to_split_ok {
-                // SAFETY: `win_tp` is a live tab page.
-                let stale = win_tp != parent_tp && unsafe { (*win_tp).tp_curwin } == win.raw();
-                if stale {
-                    // SAFETY: as above.
-                    unsafe { (*win_tp).tp_curwin = altwin_0 };
+                let mut tp = expect_tab(win_tp);
+                if win_tp != parent_tp && tp.tp_curwin == Some(win.id()) {
+                    tp.tp_curwin = altwin_0.map(Win::id);
                 }
                 break '_resize;
             }
@@ -308,7 +291,7 @@ unsafe fn win_config_split(
                 store(err, why);
             }
         }
-        if curwin_moving_tp && win_valid(win.raw()) {
+        if curwin_moving_tp && win_valid(win.id()) {
             // SAFETY: the caller's window, still valid -- just checked.
             unsafe { win_goto(w) };
         }
@@ -346,34 +329,33 @@ unsafe fn win_config_float_tp(
 ) -> bool {
     // SAFETY: the caller's window, live for the whole call.
     let w = win;
-    let mut win_tp: *mut Tabpage = win_find_tabpage(win.raw());
-    let mut parent: *mut Window = win.raw();
-    let mut parent_tp: *mut Tabpage = win_tp;
+    let mut win_tp = win_find_tabpage(win.id());
+    let mut parent = win;
+    let mut parent_tp = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
-        parent = find_window_by_handle(fconfig.window, slot_mut(err))
-            .map_or(::core::ptr::null_mut(), Win::raw);
-        if parent.is_null() {
+        let Some(found) = find_window_by_handle(fconfig.window, slot_mut(err)) else {
             return false;
-        }
-        parent_tp = win_find_tabpage(parent);
+        };
+        parent = found;
+        parent_tp = win_find_tabpage(found.id());
     }
     let mut curwin_moving_tp = false;
-    let mut altwin: *mut Window = ::core::ptr::null_mut::<Window>();
+    let mut altwin: Option<Win> = None;
     '_restore_curwin: {
         if win_tp != parent_tp {
             // SAFETY: the caller's window and error slot.
-            if !unsafe { win_can_move_tp(win, TabPage::new(win_tp), slot_mut(err)) } {
+            if !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) } {
                 return false;
             }
             // SAFETY: the caller's window, still in its tab page.
-            altwin = unsafe { win_find_altwin(win, TabPage::new(win_tp)) };
-            debug_assert!(!altwin.is_null(), "altwin");
-            if Win::current_raw() == win.raw() {
+            altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) };
+            debug_assert!(altwin.is_some(), "altwin");
+            if win.is_current() {
                 curwin_moving_tp = true;
                 // SAFETY: `altwin` is the live neighbour just found.
-                unsafe { win_goto(Win::new(altwin)) };
-                if Win::current_raw() == win.raw() {
+                unsafe { win_goto(altwin.expect("altwin")) };
+                if win.is_current() {
                     // SAFETY: the caller's window.
                     let handle = win.handle;
                     let why = api_error!(
@@ -383,47 +365,40 @@ unsafe fn win_config_float_tp(
                     store(err, why);
                     return false;
                 }
-                win_tp = win_find_tabpage(win.raw());
-                parent_tp = win_find_tabpage(parent);
-                if win_tp.is_null() || parent_tp.is_null() {
+                win_tp = win_find_tabpage(win.id());
+                parent_tp = win_find_tabpage(parent.id());
+                if win_tp.is_none() || parent_tp.is_none() {
                     err_msg(err, kErrorTypeException, c"Target windows were closed");
                     break '_restore_curwin;
                 }
                 // SAFETY: as above.
                 if win_tp != parent_tp
-                    && !unsafe { win_can_move_tp(win, TabPage::new(win_tp), slot_mut(err)) }
+                    && !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) }
                 {
                     break '_restore_curwin;
                 }
                 // SAFETY: as above.
-                altwin = unsafe { win_find_altwin(win, TabPage::new(win_tp)) };
-                debug_assert!(!altwin.is_null(), "altwin");
+                altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) };
+                debug_assert!(altwin.is_some(), "altwin");
             }
         }
-        // SAFETY: the caller's window.
         if !win.w_floating {
             let config = (*fconfig).clone();
-            // SAFETY: the caller's window and error slot.
-            if unsafe { win_new_float(win.raw(), false, config, slot_mut(err)) }.is_null() {
+            if win_new_float(Some(win), false, config, slot_mut(err)).is_none() {
                 break '_restore_curwin;
             }
             // SAFETY: as above.
             redraw_later(win, UPD_NOT_VALID);
         }
         if win_tp != parent_tp {
-            let append_tp = other_tab(unsafe { TabPage::new(parent_tp) });
-            // SAFETY: the caller's window, moved from one tab page's list to
-            // the other's.
-            unsafe {
-                win_remove(w, other_tab(TabPage::new(win_tp)));
-                win_append(lastwin_nofloating(append_tp), w, append_tp);
-            }
-            // SAFETY: `win_tp` is a live tab page.
-            let stale =
-                win_tp != TabPage::current_raw() && unsafe { (*win_tp).tp_curwin } == win.raw();
-            if stale {
-                // SAFETY: as above.
-                unsafe { (*win_tp).tp_curwin = altwin };
+            let append_tp = other_tab(expect_tab(parent_tp));
+            // The caller's window, moved from one tab page's list to the
+            // other's.
+            win_remove(w, other_tab(expect_tab(win_tp)));
+            win_append(Some(lastwin_nofloating(append_tp)), w, append_tp);
+            let mut tp = expect_tab(win_tp);
+            if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
+                tp.tp_curwin = altwin.map(Win::id);
             }
             // SAFETY: the window's own grid, which is live with it.
             unsafe {
@@ -436,7 +411,7 @@ unsafe fn win_config_float_tp(
         win_config_float(w, config);
         return true;
     }
-    if curwin_moving_tp && win_valid(win.raw()) {
+    if curwin_moving_tp && win_valid(win.id()) {
         // SAFETY: the caller's window, still valid -- just checked.
         unsafe { win_goto(w) };
     }
@@ -503,19 +478,12 @@ pub unsafe fn nvim_win_set_config(
         win_set_minimal_style(w);
         // SAFETY: as above.
         unsafe { didset_window_options(w, true) };
-        // SAFETY: as above.
         changed_window_setting(w);
     }
     if fconfig._cmdline_offset < INT_MAX {
-        cmdline_win.set(w.raw());
-    } else if w.raw() == cmdline_win.get() && fconfig._cmdline_offset == INT_MAX {
-        cmdline_win.set(::core::ptr::null_mut::<Window>());
+        cmdline_win.set(Some(w.id()));
+    } else if cmdline_win.get() == Some(w.id()) && fconfig._cmdline_offset == INT_MAX {
+        cmdline_win.set(None);
     }
     ().reported(error)
-}
-
-/// `Win::raw`, or a null for "no neighbour" — the shape the transpiled
-/// window family still takes.
-fn raw_win(window: Option<Win>) -> *mut Window {
-    window.map_or(::core::ptr::null_mut(), Win::raw)
 }

@@ -43,7 +43,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{AcoSave, ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
-use crate::winlayer::graph::prevwin;
+use crate::winlayer::prev_window;
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -154,8 +154,8 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
         emsg(E_WINFIXBUF);
         return false;
     }
-    if win_valid(prevwin.get()) && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0 {
-        unsafe { win_goto(Win::new(prevwin.get())) };
+    if let Some(prev) = prev_window().filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0) {
+        unsafe { win_goto(prev) };
     }
     if Win::current().w_onebuf_opt.wo_wfb != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
@@ -269,7 +269,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Windows => {
                 // Go to window "wp".
-                let Some(cur) = wp.filter(|&wp| win_valid(wp.raw())) else {
+                let Some(cur) = wp.filter(|&wp| win_valid(wp.id())) else {
                     break;
                 };
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
@@ -284,7 +284,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Tabs => {
                 // Go to tab page "tp".
-                let Some(cur) = tp.filter(|&tp| valid_tabpage(tp.raw())) else {
+                let Some(cur) = tp.filter(|&tp| valid_tabpage(tp.id())) else {
                     break;
                 };
                 goto_tab(cur, true, true);

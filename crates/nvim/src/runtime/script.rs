@@ -170,7 +170,7 @@ unsafe fn edit_script(args: *mut ExArg, by_number: bool) {
         unsafe { expand_env((*args).arg, namebuff, MAXPATHL) };
         unsafe { (*args).arg = namebuff };
     }
-    unsafe { do_exedit(args, ptr::null_mut()) };
+    unsafe { do_exedit(args, None) };
 }
 
 /// A script's name, for `":verbose set"` -- the text appended to "Last set

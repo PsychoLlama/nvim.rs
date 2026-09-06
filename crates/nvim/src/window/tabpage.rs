@@ -14,6 +14,8 @@
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::winlayer::TabId;
+use crate::winlayer::last_used_tab;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -62,7 +64,7 @@ pub(crate) fn stash_tabpage(tabpage: TabPage) {
     tabpage.tp_topframe = topframe.get();
     tabpage.tp_firstwin = firstwin.get();
     tabpage.tp_lastwin = lastwin.get();
-    tabpage.tp_curwin = Win::current_raw();
+    tabpage.tp_curwin = Win::current_or_none().map(Win::id);
 }
 
 pub unsafe fn use_tabpage(tabpage: TabPage) {
@@ -75,7 +77,10 @@ pub(crate) fn adopt_tabpage(tabpage: TabPage) {
     topframe.set(tabpage.tp_topframe);
     firstwin.set(tabpage.tp_firstwin);
     lastwin.set(tabpage.tp_lastwin);
-    tabpage.current_window().make_current();
+    tabpage
+        .current_window()
+        .expect("a live tab page has a current window")
+        .make_current();
 }
 
 /// Allocate a `Tabpage` and fill in its defaults.
@@ -125,8 +130,8 @@ pub(crate) fn free_tab(tabpage: TabPage) {
         vars_clear(&raw mut (*vars).dv_hashtab);
         unref_var_dict(vars);
     }
-    if tabpage.raw() == lastused_tabpage.get() {
-        lastused_tabpage.set(ptr::null_mut::<Tabpage>());
+    if lastused_tabpage.get() == Some(tabpage.id()) {
+        lastused_tabpage.set(None);
     }
     free(tabpage.tp_localdir);
     free(tabpage.tp_prevdir);
@@ -195,8 +200,7 @@ pub(crate) fn new_tabpage(
     newtp.make_current();
 
     // Create a new empty window.
-    // SAFETY: the old tab page's current window, which is live.
-    let result = unsafe { win_alloc_firstwin(old_curtab.tp_curwin) };
+    let result = win_alloc_firstwin(old_curtab.current_window());
     debug_assert!(result.is_ok(), "result.is_ok()");
     let opened = Win::current();
 
@@ -219,7 +223,7 @@ pub(crate) fn new_tabpage(
         newtp.tp_next = tp.tp_next;
         tp.tp_next = Some(newtp.id());
     }
-    newtp.tp_curwin = opened.raw();
+    newtp.tp_curwin = Some(opened.id());
     newtp.tp_lastwin = Some(opened.id());
     newtp.tp_firstwin = newtp.tp_lastwin;
 
@@ -235,7 +239,7 @@ pub(crate) fn new_tabpage(
     if enter {
         redraw_all(UPD_NOT_VALID);
         check_tabpage_windows(old_curtab);
-        lastused_tabpage.set(old_curtab.raw());
+        lastused_tabpage.set(Some(old_curtab.id()));
         enter_window(Win::current());
         fire(AutoEvent::WinNew, Buf::current());
         fire(AutoEvent::WinEnter, Buf::current());
@@ -263,14 +267,17 @@ pub(crate) fn new_tabpage(
 /// unwinding path either.
 fn in_window(tabpage: TabPage, body: impl FnOnce()) {
     let mut switchwin = SwitchWin {
-        sw_curwin: ptr::null_mut::<Window>(),
-        sw_curtab: ptr::null_mut::<Tabpage>(),
+        sw_curwin: None,
+        sw_curtab: None,
         sw_same_win: false,
         sw_visual_active: false,
     };
-    let (slot, win, raw) = (&raw mut switchwin, tabpage.tp_curwin, tabpage.raw());
+    let slot = &raw mut switchwin;
+    let win = tabpage
+        .current_window()
+        .expect("a live tab page has a current window");
     // SAFETY: a slot of our own, and a live window of the live tab page.
-    let sw_result = unsafe { switch_win_noblock(slot, win, raw, true) };
+    let sw_result = unsafe { switch_win_noblock(slot, win, Some(tabpage), true) };
     debug_assert!(sw_result.is_ok(), "the window was switched to");
     body();
     // SAFETY: the slot `switch_win_noblock` just filled in.
@@ -335,24 +342,24 @@ pub unsafe fn make_tabpages(maxcount: c_int) -> c_int {
     count - todo
 }
 
-pub fn valid_tabpage(tpc: *mut Tabpage) -> bool {
+pub(crate) fn valid_tabpage(tpc: TabId) -> bool {
     valid_tab(tpc).is_some()
 }
 
 /// The tab page `tpc` names, if it is still on the tab page list.
 ///
-/// Takes a raw pointer deliberately: the question is asked about a tab page
-/// autocommands may already have freed, and the answer is the bridge back to a
-/// value the rest of the family may dereference.
-pub(crate) fn valid_tab(tpc: *mut Tabpage) -> Option<TabPage> {
-    tabs().find(|tp| tp.raw() == tpc)
+/// Takes an id deliberately: the question is asked about a tab page
+/// autocommands may already have closed, and the answer is the bridge back to
+/// a value the rest of the family may dereference.
+pub(crate) fn valid_tab(tpc: TabId) -> Option<TabPage> {
+    tabs().find(|tp| tp.id() == tpc)
 }
 
 pub fn valid_tabpage_win(tpc: TabPage) -> c_int {
-    let Some(tp) = valid_tab(tpc.raw()) else {
+    let Some(tp) = valid_tab(tpc.id()) else {
         return 0; // shouldn't happen
     };
-    windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int
+    windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.id())) as c_int
 }
 
 pub unsafe fn close_tabpage(tab: TabPage) {
@@ -393,26 +400,21 @@ fn nth_tab(n: c_int) -> Option<TabPage> {
     tabs().nth(n as usize - 1)
 }
 
-pub fn tabpage_index(ftp: *mut Tabpage) -> c_int {
-    index_of_tab(ftp)
-}
-
-/// The index of `tabpage`, the first being 1. The number of tab pages plus one when
-/// it is not on the list.
-pub(crate) fn tab_index(tabpage: TabPage) -> c_int {
-    index_of_tab(tabpage.raw())
-}
-
-/// [`tab_index`] over a pointer, which is how the C's callers ask it.
-fn index_of_tab(ftp: *mut Tabpage) -> c_int {
+pub(crate) fn tabpage_index(ftp: Option<TabPage>) -> c_int {
     let mut i = 1;
     for tp in tabs() {
-        if tp.raw() == ftp {
+        if Some(tp) == ftp {
             break;
         }
         i += 1;
     }
     i
+}
+
+/// The index of `tabpage`, the first being 1. The number of tab pages plus one when
+/// it is not on the list.
+pub(crate) fn tab_index(tabpage: TabPage) -> c_int {
+    tabpage_index(Some(tabpage))
 }
 
 /// Prepare for leaving the current tab page, `new_curbuf` being what is going
@@ -441,7 +443,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
         }
     }
     reset_dragwin();
-    tp.tp_curwin = Win::current_raw();
+    tp.tp_curwin = Win::current_or_none().map(Win::id);
     tp.tp_prevwin = prevwin.get();
     tp.tp_firstwin = firstwin.get();
     tp.tp_lastwin = lastwin.get();
@@ -499,9 +501,14 @@ fn enter_tab(
         } else {
             0
         };
-    // SAFETY: the tab page's own current window, which `adopt_tabpage` just
-    // made the editor's.
-    enter_ext(unsafe { Win::new(tabpage.tp_curwin) }, flags);
+    // The tab page's own current window, which `adopt_tabpage` just made the
+    // editor's.
+    enter_ext(
+        tabpage
+            .current_window()
+            .expect("a live tab page has a current window"),
+        flags,
+    );
     prevwin.set(next_prevwin);
 
     update_last_status(false); // a status line may appear or disappear
@@ -524,7 +531,7 @@ fn enter_tab(
             TabPage::current().tp_old_columns = -1 as int64_t; // update window widths later
         }
     }
-    lastused_tabpage.set(old_curtab.raw());
+    lastused_tabpage.set(Some(old_curtab.id()));
 
     // Apply autocommands after updating the display, once 'lines' and 'columns'
     // have been set correctly.
@@ -553,8 +560,8 @@ fn check_tabpage_windows(old_curtab: TabPage) {
         let next_wp = wp.next();
         if wp.w_floating {
             if wp.w_config.external {
-                remove(wp, Some(old_curtab));
-                append(Some(last_nonfloating(None)), wp, None);
+                win_remove(wp, Some(old_curtab));
+                win_append(Some(lastwin_nofloating(None)), wp, None);
             } else {
                 drop_grid(wp);
             }
@@ -653,10 +660,9 @@ pub(crate) fn goto_tab(
     unsafe { set_keep_msg(ptr::null(), 0) };
 
     skip_win_fix_scroll.set(true);
-    // SAFETY: the tab page's own current window, which is live.
-    let new_curbuf = unsafe { Win::new(tabpage.tp_curwin) }.buffer_or_none();
+    let new_curbuf = tabpage.current_window().and_then(Win::buffer_or_none);
     if !tabpage.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
-        let target = valid_tab(tabpage.raw()).unwrap_or_else(TabPage::current);
+        let target = valid_tab(tabpage.id()).unwrap_or_else(TabPage::current);
         enter_tab(
             target,
             Buf::current(),
@@ -673,7 +679,7 @@ pub fn goto_tabpage_lastused() -> bool {
 
 /// Go to the last accessed tab page, if there still is one.
 pub(crate) fn goto_last_used_tab() -> bool {
-    let Some(tp) = valid_tab(lastused_tabpage.get()) else {
+    let Some(tp) = last_used_tab() else {
         return false;
     };
     goto_tab(tp, true, true);
@@ -689,7 +695,7 @@ pub unsafe fn goto_tabpage_win(tabpage: TabPage, window: Win) {
 pub(crate) fn goto_tab_win(tabpage: TabPage, window: Win) {
     goto_tab(tabpage, true, true);
     if tabpage.is_current()
-        && let Some(wp) = valid_win(window.raw())
+        && let Some(wp) = valid_win(window.id())
     {
         enter(wp, true);
     }

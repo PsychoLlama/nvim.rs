@@ -249,10 +249,10 @@ pub unsafe fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
 /// `err` is set.
 fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
     if cmdwin_type.get() != 0 {
-        if win.raw() == cmdwin_win.get() {
+        if cmdwin_win.get() == Some(win.id()) {
             cmdwin_result.set(Ctrl_C);
             return false;
-        } else if win.raw() == cmdwin_old_curwin.get() {
+        } else if cmdwin_old_curwin.get() == Some(win.id()) {
             set_err(err, e_cmdwin.as_ptr());
             return false;
         }
@@ -289,7 +289,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
     if let Some(prev) =
-        valid_tab(prev_curtab.raw()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
+        valid_tab(prev_curtab.id()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
         && prev.tp_firstwin == Some(win.id())
     {
         close_othertab(win, free_buf, prev, false);
@@ -325,7 +325,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     let bufref = BufRef::of(Buf::current());
     win.w_locked = true;
     let retval = close_buffer(Some(win), buf, action, abort_if_last, true);
-    if valid_win_any_tab(win.raw()) {
+    if valid_win_any_tab(win.id()) {
         win.w_locked = false;
     }
     // Make sure `curbuf` is valid: it can become invalid if 'bufhidden' is
@@ -387,12 +387,12 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 
     // Be very careful here: autocommands may change the window layout.
-    let mut next = first_window().map_or(ptr::null_mut(), Win::raw);
-    while let Some(mut wp) = valid_win(unsafe { Win::new(next).raw() }) {
-        let mut nextwp = wp.next().map_or(ptr::null_mut(), Win::raw);
+    let mut next = first_window().map(Win::id);
+    while let Some(mut wp) = next.and_then(valid_win) {
+        let mut nextwp = wp.next().map(Win::id);
         'skip: {
             // autocommands messed this one up
-            if !old_curwin.is_current() && valid_win(old_curwin.raw()).is_some() {
+            if !old_curwin.is_current() && valid_win(old_curwin.id()).is_some() {
                 old_curwin.make_current();
                 old_curwin.buffer().make_current();
             }
@@ -400,23 +400,23 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip; // don't close the current window
             }
             // autocommands messed this one up
-            if !buf_is_valid(wp.buffer()) && valid_win(wp.raw()).is_some() {
+            if !buf_is_valid(wp.buffer()) && valid_win(wp.id()).is_some() {
                 wp.w_buffer = ptr::null_mut::<Buffer>();
                 close(wp, false, false);
                 break 'skip;
             }
             // Check whether it is allowed to abandon this window.
             let r = may_abandon(wp.buffer(), forceit);
-            if valid_win(wp.raw()).is_none() {
-                nextwp = first_window().map_or(ptr::null_mut(), Win::raw); // messed up
+            if valid_win(wp.id()).is_none() {
+                nextwp = first_window().map(Win::id); // messed up
                 break 'skip;
             }
             if !r {
                 let confirm = p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM);
                 if message && confirm && p_write.get() != 0 {
                     ask_about_changes(wp.buffer());
-                    if valid_win(wp.raw()).is_none() {
-                        nextwp = first_window().map_or(ptr::null_mut(), Win::raw); // messed up
+                    if valid_win(wp.id()).is_none() {
+                        nextwp = first_window().map(Win::id); // messed up
                         break 'skip;
                     }
                 }
@@ -437,8 +437,7 @@ fn close_all_others(message: bool, forceit: bool) {
 
 /// Whether `buffer` is still on the buffer list.
 fn buf_is_valid(buffer: Buf) -> bool {
-    // SAFETY: only compared against the buffer list, never read.
-    unsafe { buf_valid(buffer.raw()) }
+    buf_valid(buffer.id())
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.

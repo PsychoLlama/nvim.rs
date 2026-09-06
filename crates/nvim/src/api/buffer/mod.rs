@@ -37,7 +37,7 @@ use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::types::{
-    AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks, Buffer,
+    AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks,
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,
     KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr,
     LuaRef, MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType,

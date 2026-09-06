@@ -275,7 +275,7 @@ fn dict_of<const N: usize>(
 /// # Safety
 /// Module contract; `arena` must be the dispatcher's.
 pub(crate) unsafe fn commands_array(buffer: Option<Buf>, arena: *mut Arena) -> ApiDict {
-    let table = buffer.map_or(Table::Global, |b| Table::Buffer(b.raw()));
+    let table = buffer.map_or(Table::Global, Table::Buffer);
     // SAFETY: caller contract; nothing below adds or removes a command.
     let cmds = unsafe { table.list() };
     let mut rv = arena_dict(arena, cmds.len());

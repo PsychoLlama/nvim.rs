@@ -12,9 +12,12 @@
 //! Which one is current is a [`WinId`]/[`BufId`]/[`TabId`], like the list
 //! heads: [`CURRENT_WIN`] and its two siblings are the truth, and the raw
 //! `curwin`/`curbuf`/`curtab` beside them are mirrors the same setters
-//! write. The rest of the raw pointers here — `prevwin`, `topframe`,
-//! `lastused_tabpage`, the `cmdwin_*` block — are the shape the handles
-//! are headed for.
+//! `prevwin`, `lastused_tabpage` and the `cmdwin_*` block are ids too, and
+//! for the same reason the list heads are: each one is read *after* a call
+//! that may have freed what it names, and a stale id answers `None` where a
+//! stale address answers with whatever the allocator has put there since.
+//! `topframe` is the last raw pointer here, and is waiting on a frame
+//! registry.
 //!
 //! [`winlayer`]: super
 #![deny(
@@ -37,8 +40,7 @@ use core::ffi::c_int;
 
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static prevwin: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
+pub(crate) static prevwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 /// The current window's address, mirroring [`CURRENT_WIN`].
 ///
 /// `pub` and unmangled because it is read as a **data symbol** from outside
@@ -55,8 +57,7 @@ pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(Non
 /// minus the symbol: only [`TabPage::is_current`] reads it.
 pub(super) static curtab: GlobalCell<*mut Tabpage> =
     GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
-pub(crate) static lastused_tabpage: GlobalCell<*mut Tabpage> =
-    GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
+pub(crate) static lastused_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 /// The current buffer's address, mirroring [`CURRENT_BUF`]. Private: a
@@ -66,14 +67,10 @@ static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::
 pub(crate) static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) static cmdwin_buf: GlobalCell<*mut Buffer> =
-    GlobalCell::new(::core::ptr::null_mut::<Buffer>());
-pub(crate) static cmdwin_win: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub(crate) static cmdwin_old_curwin: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub(crate) static cmdline_win: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
+pub(crate) static cmdwin_buf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+pub(crate) static cmdwin_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static cmdwin_old_curwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(crate) static cmdline_win: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 
 // ---------------------------------------------------------------------------
 // Which one is current

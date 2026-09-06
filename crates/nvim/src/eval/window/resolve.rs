@@ -23,6 +23,8 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::normal::visual_active;
 use crate::types::{VAR_UNKNOWN, kListLenMayKnow};
+use crate::window::tab_index;
+use crate::winlayer::last_used_tab;
 
 /// Argument `i` as a Number.
 ///
@@ -359,7 +361,7 @@ pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals; the tab page globals are set.
     let nr = if !args.has(0) {
-        tabpage_index(TabPage::current_raw())
+        tab_index(TabPage::current())
     } else {
         // SAFETY: the arguments are live typvals, and `tv_get_string_chk`
         // hands back a NUL-terminated string or NULL.
@@ -368,14 +370,11 @@ pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         match word.map(CStr::to_bytes) {
             None => 0,
             // `tabpage_index(NULL)` counts one past the last tab page.
-            Some(b"$") => tabpage_index(ptr::null_mut()) - 1,
-            Some(b"#") => {
-                let last = lastused_tabpage.get();
-                match valid_tabpage(last) {
-                    true => tabpage_index(last),
-                    false => 0,
-                }
-            }
+            Some(b"$") => tabpage_index(None) - 1,
+            Some(b"#") => match last_used_tab() {
+                Some(last) => tab_index(last),
+                None => 0,
+            },
             Some(_) => {
                 let text = word.unwrap_or(c"").to_string_lossy();
                 crate::semsg!("E15: Invalid expression: \"{}\"", text);

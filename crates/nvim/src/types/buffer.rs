@@ -502,6 +502,10 @@ pub struct Frame {
     pub fr_next: *mut Frame,
     pub fr_prev: *mut Frame,
     pub fr_child: *mut Frame,
+    /// The window a leaf frame holds; null for a row or a column. Still an
+    /// address, not a handle: `window::arith`'s unit tests build frame trees
+    /// over `Window`s that were never registered. `winlayer::window_at` is
+    /// how a saved tree's copy is compared safely.
     pub fr_win: *mut Window,
 }
 pub type GetFileRet = ::core::ffi::c_int;
@@ -656,12 +660,17 @@ pub struct Tabpage {
     /// are how it is walked.
     pub(crate) tp_next: Option<TabId>,
     pub tp_topframe: *mut Frame,
-    pub tp_curwin: *mut Window,
-    pub tp_prevwin: *mut Window,
+    /// The window this tab page was last working in, and the one before it.
+    /// Handles, as its window list's ends are: both are read *after* a call
+    /// that can close a window. **Stale while the tab page is current**,
+    /// exactly as `tp_firstwin` is.
+    pub(crate) tp_curwin: Option<WinId>,
+    pub(crate) tp_prevwin: Option<WinId>,
     /// This tab page's window list, its two ends. Handles, as the links
     /// between them are. **Stale while the tab page is the current one** —
     /// the `firstwin`/`lastwin` globals are then the truth, which is what
     /// `winlayer::windows_in_tab` encodes.
+    ///
     pub(crate) tp_firstwin: Option<WinId>,
     pub(crate) tp_lastwin: Option<WinId>,
     pub tp_old_rows_avail: int64_t,

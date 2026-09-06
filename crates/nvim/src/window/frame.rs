@@ -12,16 +12,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::last_used_tab;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::guard::Lock;
 use crate::option::vars::{p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
-use crate::types::{Frame, Tabpage, Window};
+use crate::types::Frame;
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::graph::{cmdline_win, first_tabpage, lastused_tabpage};
+use crate::winlayer::graph::{cmdline_win, first_tabpage};
 use crate::winlayer::{FrameRef, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
@@ -49,12 +49,12 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
         (wp, dir)
     };
     // SAFETY: a live window and tab page.
-    unsafe { win_free(win, raw_tab(tabpage)) };
-    if win_tp.tp_curwin == win.raw() {
-        win_tp.tp_curwin = wp.map_or(ptr::null_mut(), Win::raw);
+    win_free(win, unsafe { TabPage::from_raw(raw_tab(tabpage)) });
+    if win_tp.tp_curwin == Some(win.id()) {
+        win_tp.tp_curwin = wp.map(Win::id);
     }
-    if win.raw() == cmdline_win.get() {
-        cmdline_win.set(ptr::null_mut::<Window>());
+    if cmdline_win.get() == Some(win.id()) {
+        cmdline_win.set(None);
     }
     (wp, dir)
 }
@@ -62,17 +62,17 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
 pub unsafe fn winframe_remove(
     win: Win,
     dirp: *mut c_int,
-    tabpage: *mut Tabpage,
+    tabpage: Option<TabPage>,
     unflat_altfr: *mut *mut Frame,
-) -> *mut Window {
+) -> Option<Win> {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`unflat_altfr` may be null).
     unsafe {
         // `then_some` would form the reference before testing the pointer.
         let unflat = unflat_altfr.as_mut();
-        let (wp, dir) = remove(win, TabPage::from_raw(tabpage), unflat);
+        let (wp, dir) = remove(win, tabpage, unflat);
         *dirp = dir;
-        wp.map_or(ptr::null_mut(), Win::raw)
+        wp
     }
 }
 
@@ -131,20 +131,18 @@ fn remove(
 pub unsafe fn winframe_find_altwin(
     win: Win,
     dirp: *mut c_int,
-    tabpage: *mut Tabpage,
+    tabpage: Option<TabPage>,
     altfr: *mut *mut Frame,
-) -> *mut Window {
+) -> Option<Win> {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`altfr` may be null).
     unsafe {
-        let Some(alt) = find_altwin(win, TabPage::from_raw(tabpage)) else {
-            return ptr::null_mut();
-        };
+        let alt = find_altwin(win, tabpage)?;
         *dirp = alt.dir;
         if !altfr.is_null() {
             *altfr = alt.frame.raw();
         }
-        alt.win.raw()
+        Some(alt.win)
     }
 }
 
@@ -345,8 +343,10 @@ pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
     );
     if is_only_window(win, tabpage) {
         // Last window in this tab page, will go to next tab page.
-        // SAFETY: every tab page has a current window, which is live.
-        return unsafe { Win::new(alt_tab_page().tp_curwin) }.frame();
+        return alt_tab_page()
+            .current_window()
+            .expect("a live tab page has a current window")
+            .frame();
     }
     let frp = win.frame();
     let (Some(next), Some(prev)) = (frp.next(), frp.prev()) else {
@@ -374,9 +374,10 @@ pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
 /// `'tabclose'` says so, otherwise the next, or the previous when the current
 /// is last (or `'tabclose'` says "left" and it is not first).
 pub(crate) fn alt_tab_page() -> TabPage {
-    if tcl_flags.get() & kOptTclFlagUselast != 0 && valid_tabpage(lastused_tabpage.get()) {
-        // SAFETY: just proved live.
-        return unsafe { TabPage::new(lastused_tabpage.get()) };
+    if tcl_flags.get() & kOptTclFlagUselast != 0
+        && let Some(last) = last_used_tab()
+    {
+        return last;
     }
     let cur = TabPage::current();
     let forward = cur.next().is_some()
@@ -387,11 +388,6 @@ pub(crate) fn alt_tab_page() -> TabPage {
             .find(|tp| tp.tp_next == Some(cur.id()))
             .expect("a tab page before the current one"),
     }
-}
-
-pub unsafe fn frame2win(frp: *mut Frame) -> *mut Window {
-    // SAFETY: the caller's promise -- a live frame.
-    frame2window(unsafe { FrameRef::new(frp) }).raw()
 }
 
 /// The first window in frame `frp`, following `fr_child` down to a leaf.

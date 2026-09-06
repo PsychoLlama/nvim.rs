@@ -19,7 +19,7 @@ use neovim::buffer::{
     close_buffer,
 };
 use neovim::types::Buffer;
-use neovim::winlayer::Buf;
+use neovim::winlayer::{Buf, BufId};
 
 use crate::support::{Sandbox, cstr};
 
@@ -100,11 +100,17 @@ impl Buffers {
         unsafe { (*buffer).handle }
     }
 
-    /// `buf_valid`, which is the whole of the first `describe` block.
-    fn valid(&self, buffer: *mut Buffer) -> bool {
-        // SAFETY: `buf_valid` walks the list and compares addresses; it
-        // never dereferences the pointer it is given.
-        unsafe { buf_valid(buffer) }
+    /// `buf_valid`, which is the whole of the first `describe` block. It
+    /// takes the *identity*, so a case that wipes the buffer first has to
+    /// have taken one while it was live -- which [`Buffers::id`] does.
+    fn valid(&self, buffer: Option<BufId>) -> bool {
+        buffer.is_some_and(buf_valid)
+    }
+
+    /// The identity of a buffer that is live now.
+    fn id(&self, buffer: *mut Buffer) -> Option<BufId> {
+        // SAFETY: a buffer this case opened and has not wiped.
+        Some(unsafe { Buf::new(buffer) }.id())
     }
 
     /// `buflist_findpat(pat, NULL, unlisted, 0, 0)` — the buffer's handle,
@@ -131,15 +137,15 @@ impl Drop for Buffers {
 // buf_valid
 
 #[test]
-fn a_null_buffer_is_not_valid() {
+fn no_buffer_is_not_valid() {
     let bufs = Buffers::new("valid-null");
-    assert!(!bufs.valid(std::ptr::null_mut()));
+    assert!(!bufs.valid(None));
 }
 
 #[test]
 fn an_open_buffer_is_valid() {
     let bufs = Buffers::new("valid-open");
-    let buf = bufs.open(PATH1);
+    let buf = bufs.id(bufs.open(PATH1));
     assert!(bufs.valid(buf));
 }
 
@@ -148,8 +154,9 @@ fn an_open_buffer_is_valid() {
 fn a_hidden_buffer_is_still_valid() {
     let bufs = Buffers::new("valid-hidden");
     let buf = bufs.open(PATH1);
+    let id = bufs.id(buf);
     bufs.close(buf, 0);
-    assert!(bufs.valid(buf));
+    assert!(bufs.valid(id));
 }
 
 /// Unloading frees the buffer's contents but not the buffer.
@@ -157,8 +164,9 @@ fn a_hidden_buffer_is_still_valid() {
 fn an_unloaded_buffer_is_still_valid() {
     let bufs = Buffers::new("valid-unloaded");
     let buf = bufs.open(PATH1);
+    let id = bufs.id(buf);
     bufs.close(buf, DOBUF_UNLOAD as c_int);
-    assert!(bufs.valid(buf));
+    assert!(bufs.valid(id));
 }
 
 /// Wiping is the one action that takes the buffer out of the list, which is
@@ -167,8 +175,9 @@ fn an_unloaded_buffer_is_still_valid() {
 fn a_wiped_buffer_is_not_valid() {
     let bufs = Buffers::new("valid-wiped");
     let buf = bufs.open(PATH1);
+    let id = bufs.id(buf);
     bufs.close(buf, DOBUF_WIPE as c_int);
-    assert!(!bufs.valid(buf));
+    assert!(!bufs.valid(id));
 }
 
 // ---------------------------------------------------------------------------

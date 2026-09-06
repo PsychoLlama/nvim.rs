@@ -22,6 +22,7 @@ use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
 use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::Win;
+use crate::winlayer::prev_window;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{ptr, slice};
 
@@ -106,11 +107,7 @@ unsafe fn qf_jump_edit_buffer(
                 ptr::null_mut(),
                 1,
                 EcmdFlags::HIDE | EcmdFlags::SET_HELP,
-                if prev_winid == Win::current().handle {
-                    Win::current_raw()
-                } else {
-                    ptr::null_mut()
-                },
+                (prev_winid == Win::current().handle).then(|| Win::current().id()),
             )
             .is_ok()
         }
@@ -185,11 +182,11 @@ unsafe fn escape_winfixbuf(
         return None;
     }
     // Try the previously used window, if it can take another buffer.
-    if win_valid(prevwin.get())
-        && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
-        && !buf_is_quickfix(unsafe { Buf::from_raw((*prevwin.get()).w_buffer) })
-    {
-        unsafe { win_goto(Win::new(prevwin.get())) };
+    let usable = prev_window().filter(|p| {
+        win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0 && !buf_is_quickfix(p.buffer_or_none())
+    });
+    if let Some(prev) = usable {
+        unsafe { win_goto(prev) };
     }
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return Some(true);

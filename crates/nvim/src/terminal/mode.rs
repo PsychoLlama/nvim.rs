@@ -309,7 +309,7 @@ fn saved_winopts(s: Session) -> Option<*mut WinOpt> {
     // registered by construction. What is asked here is the *layout*
     // question — is it still on this tab page's window list — which stays a
     // list walk. SAFETY: the pointer is only compared.
-    if win_valid(wp.raw()) {
+    if win_valid(wp.id()) {
         if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
             wp.redraw_later(UPD_SOME_VALID);
         } else if s.save_w_p_cul as c_int != wp.w_onebuf_opt.wo_cul

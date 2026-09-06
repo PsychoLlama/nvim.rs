@@ -159,7 +159,7 @@ pub(crate) use self::restart::*;
 mod window;
 pub use self::window::*;
 mod file;
-pub use self::file::*;
+pub(crate) use self::file::*;
 mod path;
 pub use self::path::*;
 mod edit;

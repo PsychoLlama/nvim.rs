@@ -12,6 +12,7 @@
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -44,15 +45,14 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    Buffer, CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Tabpage, Vv, Window,
-    ptrdiff_t,
+    Buffer, CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, Window, ptrdiff_t,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 
 use crate::window::{
-    find_tabpage, goto_tabpage, tabpage_index, trigger_tabclosedpre, valid_tabpage,
-    win_close_othertab, win_goto, win_valid, window_layout_locked,
+    find_tabpage, goto_tabpage, trigger_tabclosedpre, valid_tabpage, win_close_othertab, win_goto,
+    win_valid, window_layout_locked,
 };
 
 use crate::winlayer::{Buf, Ea, Win, WinId, first_tab, first_window, last_window, tabs, windows};
@@ -140,7 +140,7 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
 fn quit_was_cancelled(window: Win, buf: impl FnOnce() -> *mut Buffer) -> bool {
-    if win_valid(window.raw()) && !curbuf_locked() {
+    if win_valid(window.id()) && !curbuf_locked() {
         let buf = buf();
         if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
             return false;
@@ -298,26 +298,26 @@ pub(crate) unsafe fn ex_close(args: *mut ExArg) {
         return;
     }
     let win = if args.addr_count == 0 {
-        Win::current_raw()
+        Win::current()
     } else {
         numbered_window(args.line2)
     };
-    unsafe { ex_win_close(args.forceit, win, ptr::null_mut()) };
+    unsafe { ex_win_close(args.forceit, win, None) };
 }
 
 /// The window with this number in the current tab page, or the last one.
 ///
 /// Unlike `window_at`, this counts from one and falls back to `lastwin`
 /// rather than stopping at the end.
-fn numbered_window(nr: LineNr) -> *mut Window {
+fn numbered_window(nr: LineNr) -> Win {
     let mut winnr = 0;
     for wp in windows() {
         winnr += 1;
         if winnr as LineNr == nr {
-            return wp.raw();
+            return wp;
         }
     }
-    last_window().map_or(ptr::null_mut(), Win::raw)
+    last_window().expect("the editor always has a window")
 }
 
 /// `:pclose` — close the preview window, wherever it is.
@@ -325,7 +325,7 @@ pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     for win in windows() {
         if win.w_onebuf_opt.wo_pvw != 0 {
-            unsafe { ex_win_close(args.forceit, win.raw(), ptr::null_mut()) };
+            unsafe { ex_win_close(args.forceit, win, None) };
             return;
         }
     }
@@ -336,20 +336,19 @@ pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
 /// `tabpage` is the tab page the window belongs to, or null for this one; a
 /// window in another tab page cannot simply be entered, so it takes the
 /// other close path.
-pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpage) {
-    // SAFETY: the caller's window.
-    let w = unsafe { Win::new(win) };
+pub(crate) unsafe fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
+    let w = win;
     if is_aucmd_win(win) {
         emsg(gettext(e_autocmd_close.as_ptr()));
         return;
     }
     // A floating window is not part of the layout, so a locked layout
     // does not protect it.
-    if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::close) {
+    if !win.w_floating && window_layout_locked(CmdIdx::close) {
         return;
     }
 
-    let buf = unsafe { (*win).w_buffer };
+    let buf = win.w_buffer;
     // Only the last window on a changed buffer has to ask.
     let mut need_hide =
         buf_is_changed(unsafe { Buf::new(buf) }) && unsafe { (*buf).b_nwindows } <= 1;
@@ -369,12 +368,13 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpa
     }
 
     let hide = !need_hide && !buf_hide(unsafe { Buf::new(buf) });
-    if tabpage.is_null() {
-        win_close(w, hide, forceit != 0);
-    } else {
-        // SAFETY: the caller's tab page, not null by the test above.
-        let tp = unsafe { TabPage::new(tabpage) };
-        unsafe { win_close_othertab(Win::new(win), hide as c_int, tp, forceit != 0) };
+    match tabpage {
+        None => {
+            win_close(w, hide, forceit != 0);
+        }
+        Some(tp) => {
+            unsafe { win_close_othertab(win, hide as c_int, tp, forceit != 0) };
+        }
     }
 }
 
@@ -437,7 +437,7 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
                 unsafe { tabpage_close_other(tp, args.forceit) };
-                if valid_tabpage(tp.raw()) {
+                if valid_tabpage(tp.id()) {
                     done = 1000;
                 }
                 break;
@@ -464,13 +464,13 @@ pub unsafe fn tabpage_close(forceit: c_int) {
     let save_curtab = TabPage::current_raw();
 
     while Win::current().w_floating {
-        unsafe { ex_win_close(forceit, Win::current_raw(), ptr::null_mut()) };
+        unsafe { ex_win_close(forceit, Win::current(), None) };
     }
     if firstwin.get() != lastwin.get() {
         close_others(1, forceit);
     }
     if firstwin.get() == lastwin.get() {
-        unsafe { ex_win_close(forceit, Win::current_raw(), ptr::null_mut()) };
+        unsafe { ex_win_close(forceit, Win::current(), None) };
     }
     if TabPage::current_raw() == save_curtab {
         TabPage::current().tp_did_tabclosedpre = false;
@@ -502,18 +502,14 @@ pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
                 &raw mut prev_idx as *mut c_char,
                 size_of::<[c_char; 65]>(),
                 c"%i".as_ptr(),
-                tabpage_index(tabpage.raw()),
+                tab_index(tabpage),
             )
         };
         let wp = tabpage.tp_lastwin;
-        unsafe {
-            ex_win_close(
-                forceit,
-                wp.and_then(WinId::get).map_or(ptr::null_mut(), Win::raw),
-                tabpage.raw(),
-            )
-        };
-        if !valid_tabpage(tabpage.raw()) {
+        if let Some(last) = wp.and_then(WinId::get) {
+            unsafe { ex_win_close(forceit, last, Some(tabpage)) };
+        }
+        if !valid_tabpage(tabpage.id()) {
             break;
         }
         if tabpage.tp_lastwin == wp {
@@ -566,14 +562,14 @@ pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
         return;
     }
     let win = if args.addr_count == 0 {
-        Win::current_raw()
+        Win::current()
     } else {
         numbered_window(args.line2)
     };
-    if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::hide) {
+    if !win.w_floating && window_layout_locked(CmdIdx::hide) {
         return;
     }
-    win_close(unsafe { Win::new(win) }, false, args.forceit != 0);
+    win_close(win, false, args.forceit != 0);
 }
 
 /// `:stop` and `:suspend`.

@@ -128,6 +128,16 @@ impl CptScan {
 
 /// Thesaurus completion goes through a function rather than a word list:
 /// `'thesaurusfunc'` is set.
+/// Whether the scan's buffer is still on the buffer list.
+///
+/// # Safety
+/// `st` must be the live scan state.
+unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
+    // SAFETY: the caller's state; its buffer is live or wiped, which is the
+    // question this asks.
+    unsafe { Buf::from_raw((*st).ins_buf) }.is_some_and(|b| buf_valid(b.id()))
+}
+
 pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
         && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
@@ -683,8 +693,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
         }
         unsafe { (*st).first_match_pos = start_pos };
         unsafe { (*st).last_match_pos = start_pos };
-    } else if unsafe { (*st).ins_buf } != Buf::current_raw() && !unsafe { buf_valid((*st).ins_buf) }
-    {
+    } else if unsafe { (*st).ins_buf } != Buf::current_raw() && !unsafe { scan_buf_valid(st) } {
         // In case the buffer was wiped out.
         unsafe { (*st).ins_buf = Buf::current_raw() };
     }
@@ -808,9 +817,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
             compl_started.set(!compl_time_slice_expired.get());
         } else {
             // Mark a buffer scanned when it has been scanned completely.
-            if unsafe { buf_valid((*st).ins_buf) }
-                && (type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS)
-            {
+            if unsafe { scan_buf_valid(st) } && (type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS) {
                 debug_assert!(!unsafe { (*st).ins_buf }.is_null());
                 unsafe { (*(*st).ins_buf).b_scanned = true };
             }

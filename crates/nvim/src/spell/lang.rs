@@ -342,7 +342,7 @@ pub unsafe fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
                 unsafe { spell_load_lang(lang.as_mut_ptr()) };
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
-                if !bufref.valid() || !win_valid_any_tab(window.raw()) {
+                if !bufref.valid() || !win_valid_any_tab(window.id()) {
                     ret_msg = Some(c"E797: SpellFileMissing autocommand deleted buffer");
                     break 'names;
                 }

@@ -42,6 +42,8 @@ use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::TAB;
+use crate::winlayer::WinId;
+use crate::winlayer::prev_window;
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, is_aucmd_win};
@@ -67,7 +69,7 @@ use crate::types::{
     kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
-use crate::winlayer::graph::{first_tabpage, firstwin, lastwin, prevwin, topframe};
+use crate::winlayer::graph::{first_tabpage, firstwin, lastwin, topframe};
 use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.
@@ -261,14 +263,10 @@ fn winfixbuf_allows() -> bool {
     true
 }
 
-pub unsafe fn prevwin_curwin() -> *mut Window {
-    // SAFETY: reads the cmdline-window state, which is always set up.
-    let in_cmdwin = is_in_cmdwin();
-    let prev = prevwin.get();
-    if in_cmdwin && !prev.is_null() {
-        prev
-    } else {
-        Win::current_raw()
+pub(crate) fn prevwin_curwin() -> Win {
+    match prev_window() {
+        Some(prev) if is_in_cmdwin() => prev,
+        _ => Win::current(),
     }
 }
 
@@ -294,67 +292,50 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // ---------------------------------------------------------------------------
 // Is this window still there?
 //
-// These four take a raw `Window *` and never dereference it, deliberately: they
-// are asked about a pointer an autocommand may already have freed, and the
-// whole answer is whether it is still on a list. Handing them a `Win` would
-// mean promising exactly what the caller is asking about. `valid_win` below is
-// the bridge back for a caller that wants to go on and use the window.
+// These four take a [`WinId`] and never a window: they are asked about a
+// window an autocommand may already have closed, and the whole answer is
+// whether it is still on a list. Taking a `Win` would mean promising exactly
+// what the caller is asking about; taking an *address* — which is what they
+// took while the C's shape survived — meant answering "yes" for a window the
+// allocator had since handed out again at the same place. `valid_win` below
+// is the bridge back for a caller that wants to go on and use the window.
 //
 // They stay list walks, and the handle registry (`winlayer::window`) does not
-// replace them. Two reasons, both of them about *semantics* rather than cost:
-//
-//   * The question is asked about an **address**, not a handle, and reading
-//     `wp->handle` to look one up would be the very dereference these avoid.
-//     A caller that has the handle already can use the registry; a caller
-//     holding a pointer an autocommand may have freed cannot.
-//   * `win_valid` is **tab-scoped** — a window on another tab page is not
-//     "valid" — while the registry knows nothing about tab pages, and holds
-//     windows that are on no list at all (a hidden `win_alloc`). The three
-//     answers are genuinely different: `win_valid` (this tab page),
-//     `win_valid_any_tab` (any tab page's list) and "registered" (allocated
-//     and not yet freed).
+// replace them: `win_valid` is **tab-scoped** — a window on another tab page
+// is not "valid" — while the registry knows nothing about tab pages, and
+// holds windows that are on no list at all (a hidden `win_alloc`). The three
+// answers are genuinely different: `win_valid` (this tab page),
+// `win_valid_any_tab` (any tab page's list) and `WinId::get` (allocated and
+// not yet freed).
 //
 // A window list is a handful of entries, so the walk is not the cost the O(n)
-// makes it look; the registry's job here is to make *identity* answerable by
-// handle, which `Win::handle` and `winlayer::window` now do.
+// makes it look.
 
 /// Whether `win` is a window on the **current tab page**.
-///
-/// Safe, and deliberately so: like [`win_find_tabpage`], this is asked about
-/// an *address* an autocommand may already have freed, and answers by
-/// comparing it against the list rather than reading it. See the note above
-/// for why that is not the same question as `WinId::valid`.
-// `not_unsafe_ptr_arg_deref` sees a raw pointer reaching an `unsafe` call and
-// assumes a dereference. Here the premise is false and the falseness is the
-// whole point: `tabpage_win_valid` compares the address against the list and
-// never reads it, which is what lets an autocommand have freed it already.
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn win_valid(win: *const Window) -> bool {
+pub(crate) fn win_valid(win: WinId) -> bool {
     valid_win_in_tab(TabPage::current(), win)
 }
 
-pub fn tabpage_win_valid(tabpage: TabPage, win: *const Window) -> bool {
+pub(crate) fn tabpage_win_valid(tabpage: TabPage, win: WinId) -> bool {
     valid_win_in_tab(tabpage, win)
 }
 
-/// Whether `win` is on `tabpage`'s window list. `win` is only compared.
-fn valid_win_in_tab(tabpage: TabPage, win: *const Window) -> bool {
-    !win.is_null() && windows_in_tab(tabpage).any(|wp| ptr::eq(wp.raw(), win))
+/// Whether `win` is on `tabpage`'s window list.
+fn valid_win_in_tab(tabpage: TabPage, win: WinId) -> bool {
+    windows_in_tab(tabpage).any(|wp| wp.id() == win)
 }
 
-pub fn win_find_by_handle(handle: Handle) -> *mut Window {
-    windows()
-        .find(|wp| wp.handle == handle)
-        .map_or(ptr::null_mut(), Win::raw)
+pub fn win_find_by_handle(handle: Handle) -> Option<Win> {
+    windows().find(|wp| wp.handle == handle)
 }
 
-pub fn win_valid_any_tab(win: *mut Window) -> bool {
+pub(crate) fn win_valid_any_tab(win: WinId) -> bool {
     valid_win_any_tab(win)
 }
 
-/// Whether `win` is on the window list of any tab page. `win` is only compared.
-fn valid_win_any_tab(win: *mut Window) -> bool {
-    !win.is_null() && tab_windows().any(|wp| wp.raw() == win)
+/// Whether `win` is on the window list of any tab page.
+fn valid_win_any_tab(win: WinId) -> bool {
+    tab_windows().any(|wp| wp.id() == win)
 }
 
 pub fn win_count() -> ::core::ffi::c_int {
@@ -363,10 +344,10 @@ pub fn win_count() -> ::core::ffi::c_int {
 
 /// The window `win` names, if it is still on the current tab page's list.
 ///
-/// The one-line bridge from [`win_valid`]'s pointer answer to a value the rest
-/// of the family may dereference.
-pub(crate) fn valid_win(win: *mut Window) -> Option<Win> {
-    windows().find(|wp| wp.raw() == win)
+/// The one-line bridge from [`win_valid`]'s yes-or-no to a value the rest of
+/// the family may dereference.
+pub(crate) fn valid_win(win: WinId) -> Option<Win> {
+    windows().find(|wp| wp.id() == win)
 }
 
 // ---------------------------------------------------------------------------
@@ -411,7 +392,7 @@ fn only_one_message() {
 
 /// Whether `win` is one of the hidden windows autocommands are executed in.
 fn is_autocmd_window(win: Option<Win>) -> bool {
-    is_aucmd_win(win.map_or(ptr::null(), |w| w.raw().cast_const()))
+    win.is_some_and(is_aucmd_win)
 }
 
 /// `xfree`, for the frames and click definitions the family owns.

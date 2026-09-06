@@ -99,7 +99,7 @@ pub unsafe fn comp_textwidth(ff: bool) -> c_int {
     let mut textwidth = Buf::current().b_p_tw as c_int;
     if textwidth == 0 && Buf::current().b_p_wm != 0 {
         textwidth = unsafe { (*win).w_view_width } - Buf::current().b_p_wm as c_int;
-        if Buf::current_raw() == cmdwin_buf.get() {
+        if cmdwin_buf.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;
         }
         textwidth -= unsafe { win_fdccol_count(Win::new(win)) };

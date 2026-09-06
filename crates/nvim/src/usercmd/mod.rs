@@ -76,8 +76,8 @@ use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, UserCmd,
-    int64_t, size_t,
+    CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, UserCmd, int64_t,
+    size_t,
 };
 use crate::window::prevwin_curwin;
 use crate::winlayer::Buf;
@@ -105,23 +105,20 @@ pub(crate) enum Table {
     /// The global [`ucmds`].
     Global,
     /// `buf`'s own `b_ucmds`.
-    Buffer(*mut Buffer),
+    Buffer(Buf),
 }
 
 impl Table {
     /// The commands in this table, as a slice.
     ///
     /// # Safety
-    /// A [`Table::Buffer`] must name a live buffer, and -- as the module
-    /// docs say -- the borrow must not outlive anything that can add or
-    /// remove a command, because growing a `Vec` moves its contents.
+    /// As the module docs say, the borrow must not outlive anything that can
+    /// add or remove a command, because growing a `Vec` moves its contents.
     pub(crate) unsafe fn list<'a>(self) -> &'a [UserCmd] {
         let (data, len) = match self {
             Table::Global => ucmds.with(|cmds| (cmds.as_ptr(), cmds.len())),
             Table::Buffer(buf) => {
-                // SAFETY: caller contract. The field is reached by raw
-                // projection, so no reference to the whole buffer is formed.
-                let cmds = unsafe { &(*buf).b_ucmds };
+                let cmds = &buf.b_ucmds;
                 (cmds.as_ptr(), cmds.len())
             }
         };
@@ -138,14 +135,10 @@ impl Table {
     /// into Lua, so every caller here moves the entry *out* under `f` and
     /// frees it afterwards.
     ///
-    /// # Safety
-    /// A [`Table::Buffer`] must name a live buffer.
-    unsafe fn with_mut<R>(self, f: impl FnOnce(&mut Vec<UserCmd>) -> R) -> R {
+    fn with_mut<R>(self, f: impl FnOnce(&mut Vec<UserCmd>) -> R) -> R {
         match self {
             Table::Global => ucmds.with_mut(f),
-            // SAFETY: caller contract; the raw projection borrows the field
-            // and not the buffer around it.
-            Table::Buffer(buf) => unsafe { f(&mut (*buf).b_ucmds) },
+            Table::Buffer(mut buf) => f(&mut buf.b_ucmds),
         }
     }
 }
@@ -170,13 +163,9 @@ impl Scope {
 
     /// The table this scope names.
     ///
-    /// # Safety
-    /// Buffer scope reads `prevwin_curwin()`, which must have a buffer --
-    /// true whenever there is a current window.
-    pub(crate) unsafe fn table(self) -> Table {
+    pub(crate) fn table(self) -> Table {
         match self {
-            // SAFETY: caller contract.
-            Scope::Buffer => Table::Buffer(unsafe { (*prevwin_curwin()).w_buffer }),
+            Scope::Buffer => Table::Buffer(prevwin_curwin().buffer()),
             Scope::Global => Table::Global,
         }
     }
@@ -390,7 +379,7 @@ pub(crate) unsafe fn uc_add_command(
     }
 
     let table = if flags & UC_BUFFER != 0 {
-        Table::Buffer(Buf::current_raw())
+        Table::Buffer(Buf::current())
     } else {
         Table::Global
     };
@@ -447,7 +436,7 @@ pub(crate) unsafe fn uc_add_command(
             )
         };
         // SAFETY: module contract; `steal` is a leaf.
-        let (old_rep, old_compl_arg, old_luarefs) = unsafe { table.with_mut(steal) };
+        let (old_rep, old_compl_arg, old_luarefs) = table.with_mut(steal);
         // SAFETY: the entry owned all five and no longer names any of them.
         unsafe { xfree(old_rep.cast()) };
         unsafe { xfree(old_compl_arg.cast()) };
@@ -488,8 +477,8 @@ pub(crate) unsafe fn uc_add_command(
             }
         }
     };
-    // SAFETY: module contract; `store` is a leaf.
-    unsafe { table.with_mut(store) };
+    // `store` is a leaf.
+    table.with_mut(store);
     Ok(())
 }
 
@@ -639,7 +628,8 @@ pub(crate) unsafe fn ex_comclear(_args: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { uc_clear(Table::Global) };
     if let Some(buffer) = Buf::current_or_none() {
-        unsafe { uc_clear(Table::Buffer(buffer.raw())) };
+        // SAFETY: module contract.
+        unsafe { uc_clear(Table::Buffer(buffer)) };
     }
 }
 
@@ -669,10 +659,10 @@ unsafe fn free_ucmd(mut cmd: UserCmd) {
 /// that has been emptied cannot free the same entry twice.
 ///
 /// # Safety
-/// Module contract; a [`Table::Buffer`] must name a live buffer.
+/// Module contract.
 pub(crate) unsafe fn uc_clear(table: Table) {
-    // SAFETY: caller contract; `mem::take` cannot re-enter.
-    let cmds = unsafe { table.with_mut(mem::take) };
+    // `mem::take` cannot re-enter.
+    let cmds = table.with_mut(mem::take);
     for cmd in cmds {
         // SAFETY: the entry is out of the table and owns what it names.
         unsafe { free_ucmd(cmd) };
@@ -754,7 +744,7 @@ pub(crate) unsafe fn ex_delcommand(args: *mut ExArg) {
 /// name a live buffer.
 pub(crate) unsafe fn uc_del_command(table: Table, idx: usize) {
     // SAFETY: caller contract; the closure is a leaf.
-    let cmd = unsafe { table.with_mut(|cmds| cmds.remove(idx)) };
+    let cmd = table.with_mut(|cmds| cmds.remove(idx));
     // SAFETY: the entry is out of the table and owns what it names.
     unsafe { free_ucmd(cmd) };
 }

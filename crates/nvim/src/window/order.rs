@@ -124,15 +124,15 @@ pub(crate) fn exchange(prenum: c_int) {
     let wp2 = cur.prev();
     let frp2 = frame.prev();
     if wp.w_prev != Some(cur.id()) {
-        remove(cur, None);
+        win_remove(cur, None);
         frame_remove(frame);
-        append(wp.prev(), cur, None);
+        win_append(wp.prev(), cur, None);
         frame_insert(frp, frame);
     }
     if Some(wp) != wp2 {
-        remove(wp, None);
+        win_remove(wp, None);
         frame_remove(wp.frame());
-        append(wp2, wp, None);
+        win_append(wp2, wp, None);
         match frp2 {
             None => {
                 let first = wp
@@ -197,12 +197,12 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             // First window becomes last window.
             let frp = parent.child().expect("frp != NULL");
             let w1 = frp.win().expect("a leaf frame holds a window");
-            remove(w1, None);
+            win_remove(w1, None);
             frame_remove(frp);
             debug_assert!(parent.child().is_some(), "frp->fr_parent->fr_child");
             // Find the last frame and append the removed window after it.
             let last = frames(Some(frp)).last().expect("at least one");
-            append(last.win(), w1, None);
+            win_append(last.win(), w1, None);
             frame_append(last, w1.frame());
             wp1 = Some(w1);
             wp2 = last.win();
@@ -213,11 +213,11 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
                 .expect("at least one");
             let w1 = frp.win().expect("a leaf frame holds a window");
             wp2 = w1.prev();
-            remove(w1, None);
+            win_remove(w1, None);
             frame_remove(frp);
             let first = parent.child().expect("frp->fr_parent->fr_child");
             let head = first.win().expect("a leaf frame holds a window");
-            append(head.prev(), w1, None);
+            win_append(head.prev(), w1, None);
             frame_insert(first, frp);
             wp1 = Some(w1);
         }
@@ -262,35 +262,34 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     let mut dir = 0;
     let mut unflat_altfr = ptr::null_mut::<Frame>();
     if window.w_floating {
-        remove(window, None);
+        win_remove(window, None);
     } else {
         // Remove the window and frame from the tree of frames, but leave the
         // altframe unflattened so a failure can be undone.
         let (d, alt) = (&raw mut dir, &raw mut unflat_altfr);
         // SAFETY: a live window, and two out-parameters we own.
-        unsafe { winframe_remove(window, d, ptr::null_mut(), alt) };
+        unsafe { winframe_remove(window, d, TabPage::from_raw(ptr::null_mut()), alt) };
         debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
-        remove(window, None);
+        win_remove(window, None);
         last_status(false);
         comp_positions();
     }
 
     // SAFETY: a live window and the unflattened frame from above.
-    if unsafe { win_split_ins(size, flags, window.raw(), dir, unflat_altfr) }.is_null() {
+    if unsafe { win_split_ins(size, flags, Some(window), dir, unflat_altfr) }.is_none() {
         // Restore the window to its original position.
         if !window.w_floating {
             debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
             // SAFETY: as above.
             unsafe { winframe_restore(window, dir, unflat_altfr) };
         }
-        append(window.prev(), window, None);
+        win_append(window.prev(), window, None);
         return Err(Failed);
     }
 
     // Keep the window's height when it was moved horizontally.
     // SAFETY: only compares the pointer against the window list.
-    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.raw()) && !window.w_floating
-    {
+    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.id()) && !window.w_floating {
         setheight_win(height, window);
         if p_ea.get() != 0 {
             let cur = Win::current();
@@ -339,9 +338,9 @@ fn move_after(win1: Win, win2: Win) {
                 win1.frame().fr_width -= 1;
             }
         }
-        remove(win1, None);
+        win_remove(win1, None);
         frame_remove(win1.frame());
-        append(Some(win2), win1, None);
+        win_append(Some(win2), win1, None);
         frame_append(win2.frame(), win1.frame());
         comp_positions(); // recompute window positions
         Win::current().redraw_later(UPD_NOT_VALID);

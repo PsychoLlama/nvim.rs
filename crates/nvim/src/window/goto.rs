@@ -14,6 +14,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::types::AutoEvent;
+use crate::winlayer::WinId;
+use crate::winlayer::prev_window;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -38,7 +40,7 @@ use crate::path::pathcmp;
 use crate::state::mode::restart_edit;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
-    CdScope, MAXPATHL, NUL, OptInt, Tabpage, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
+    CdScope, MAXPATHL, NUL, OptInt, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
 };
 use crate::undo::u_sync;
 use crate::winlayer::graph::prevwin;
@@ -66,13 +68,13 @@ pub(crate) fn goto_win(window: Win) {
     }
 
     // autocommand may have made `window` invalid
-    let Some(window) = valid_win(window.raw()) else {
+    let Some(window) = valid_win(window.id()) else {
         return;
     };
     enter(window, true);
 
     // Conceal cursor line in previous window, unconceal in current window.
-    if let Some(owp) = valid_win(owp.raw())
+    if let Some(owp) = valid_win(owp.id())
         && owp.w_onebuf_opt.wo_cole > 0 as OptInt
         && msg_scrolled.get() == 0
     {
@@ -96,14 +98,8 @@ fn redraw_winline(window: Win) {
 /// of the questions the editor asks about a window an autocommand may already
 /// have closed. `nvim_open_win` calls it right after `win_set_buf`, whose
 /// `BufEnter`/`BufLeave` handlers can close the very window being asked about.
-pub fn win_find_tabpage(win: *mut Window) -> *mut Tabpage {
-    raw_tab(find_tab_of(win))
-}
-
-/// The tab page `win` is on, `None` when it is on none. `win` is only
-/// compared -- see [`win_find_tabpage`].
-fn find_tab_of(win: *mut Window) -> Option<TabPage> {
-    tabs().find(|tp| windows_in_tab(*tp).any(|wp| wp.raw() == win))
+pub(crate) fn win_find_tabpage(win: WinId) -> Option<TabPage> {
+    tabs().find(|tp| windows_in_tab(*tp).any(|wp| wp.id() == win))
 }
 
 /// The axis a directional move travels along.
@@ -212,7 +208,7 @@ fn neighbor(
     count: c_int,
 ) -> Option<Win> {
     if window.w_floating {
-        let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
+        let prev = prev_window().filter(|p| !p.w_floating);
         return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 
@@ -293,12 +289,12 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         if window.w_buffer != Buf::current_raw() {
             fire(AutoEvent::BufLeave, Buf::current());
             other_buffer = true;
-            if valid_win(window.raw()).is_none() {
+            if valid_win(window.id()).is_none() {
                 return;
             }
         }
         fire(AutoEvent::WinLeave, Buf::current());
-        if valid_win(window.raw()).is_none() {
+        if valid_win(window.id()).is_none() {
             return;
         }
         // autocmds may abort script processing
@@ -324,7 +320,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         unsafe { buf_copy_options(Buf::new(buf), flags) };
     }
     if !curwin_invalid {
-        prevwin.set(Win::current_raw()); // remember for CTRL-W p
+        prevwin.set(Win::current_or_none().map(Win::id)); // remember for CTRL-W p
         Win::current().w_redr_status = true;
     }
     window.make_current();
@@ -403,8 +399,7 @@ fn split_keep_cursor() -> bool {
 
 /// The window CTRL-W p goes back to, `None` when there is none.
 fn current_prevwin() -> Option<Win> {
-    // SAFETY: non-null, hence a live window.
-    unsafe { Win::from_raw(prevwin.get()) }
+    prev_window()
 }
 
 pub fn win_fix_current_dir() {

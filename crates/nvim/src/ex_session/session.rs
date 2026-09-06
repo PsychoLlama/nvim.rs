@@ -50,7 +50,7 @@ use crate::types::{
     VarType, Window, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
-use crate::window::tabpage_index;
+use crate::window::tab_index;
 use crate::winlayer::graph::{firstwin, topframe};
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
 use ::libc::fprintf;
@@ -155,7 +155,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     }
 
     if opts.has(kOptSsopFlagTabpages) {
-        let index = tabpage_index(TabPage::current_raw());
+        let index = tab_index(TabPage::current());
         if !out.write(format_args!("tabnext {index}\n")) {
             return false;
         }
@@ -556,6 +556,7 @@ unsafe fn ses_skipframe(fr: *mut Frame) -> *mut Frame {
 unsafe fn ses_do_frame(fr: *const Frame) -> bool {
     // SAFETY: caller contract.
     if unsafe { (*fr).fr_layout } == FR_LEAF {
+        // SAFETY: a leaf frame's window is live.
         return unsafe { ses_do_win(Win::new((*fr).fr_win)) };
     }
     let mut frc = unsafe { (*fr).fr_child };

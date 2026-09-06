@@ -72,7 +72,7 @@ use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::types::*;
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win, lastused_tabpage, prevwin};
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win, prevwin};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
@@ -86,9 +86,8 @@ pub const FR_ROW: c_int = 1;
 pub const LOWEST_WIN_ID: c_int = 1000;
 use crate::window::{
     check_split_disallowed, find_tabpage, goto_tabpage_tp, goto_tabpage_win, tabpage_index,
-    unuse_tabpage, use_tabpage, valid_tabpage, win_drag_status_line, win_drag_vsep_line,
-    win_get_tabwin, win_goto, win_horz_neighbor, win_new_height, win_new_width, win_splitmove,
-    win_valid, win_vert_neighbor,
+    unuse_tabpage, use_tabpage, win_drag_status_line, win_drag_vsep_line, win_get_tabwin, win_goto,
+    win_horz_neighbor, win_new_height, win_new_width, win_splitmove, win_valid, win_vert_neighbor,
 };
 /// The three window pointers a tab page keeps, read the way upstream reads
 /// them.
@@ -106,6 +105,8 @@ impl TabPage {
             Win::current_raw()
         } else {
             self.tp_curwin
+                .and_then(WinId::get)
+                .map_or(ptr::null_mut(), Win::raw)
         };
         // SAFETY: a live tab page's current window is live, and `curwin` is
         // set from startup to exit.
@@ -124,13 +125,12 @@ impl TabPage {
     /// The window that was current before this tab page's current one — `None`
     /// until something has been left, which is what `winnr("#")` reports as 0.
     fn prevwin(self) -> Option<Win> {
-        let wp = if self.is_current() {
+        if self.is_current() {
             prevwin.get()
         } else {
             self.tp_prevwin
-        };
-        // SAFETY: a live tab page's previous window is live or null.
-        unsafe { Win::from_raw(wp) }
+        }
+        .and_then(WinId::get)
     }
 }
 

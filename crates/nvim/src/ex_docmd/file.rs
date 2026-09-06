@@ -10,6 +10,8 @@ use crate::guard::Allow;
 use crate::memline::MlFlags;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::window::valid_win;
+use crate::winlayer::WinId;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -56,12 +58,12 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, Window, size_t, uint8_t,
+    Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, size_t, uint8_t,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
 
-use crate::window::{check_can_set_curbuf_forceit, win_close, win_valid};
+use crate::window::{check_can_set_curbuf_forceit, win_close};
 use crate::winfloat::win_float_remove;
 use crate::winlayer::{Buf, Ea, Win};
 
@@ -227,7 +229,7 @@ pub(crate) unsafe fn ex_find(args: *mut ExArg) {
         return;
     }
     args.arg = fname;
-    unsafe { do_exedit(args.raw(), ptr::null_mut()) };
+    unsafe { do_exedit(args.raw(), None) };
     xfree(fname as *mut c_void);
 }
 
@@ -295,16 +297,16 @@ pub(crate) unsafe fn ex_edit(args: *mut ExArg) {
         emsg(c"cannot :edit a prompt buffer");
         return;
     }
-    unsafe { do_exedit(args.raw(), ptr::null_mut()) };
+    unsafe { do_exedit(args.raw(), None) };
 }
 
 /// The shared body of every command that opens a file into a window.
 ///
-/// `old_curwin` is the window a *split* came from, and is null for a plain
+/// `old_curwin` is the window a *split* came from, and is `None` for a plain
 /// `:edit`. It is what tells the failure path that there is a new window
 /// to close again, and what makes the alternate file be set on the window
 /// left behind.
-pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
+pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
     let mut ea = unsafe { Ea::new(args) };
     // `:visual` and `:view` with no argument leave Ex mode.
     if exmode_active.get() && (ea.cmdidx == CmdIdx::visual || ea.cmdidx == CmdIdx::view) {
@@ -352,11 +354,7 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             args,
             newlnum::ONE as LineNr,
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(ea.forceit != 0),
-            if old_curwin.is_null() {
-                Win::current_raw()
-            } else {
-                ptr::null_mut()
-            },
+            old_curwin.is_none().then(|| Win::current().id()),
         );
     } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(ea.arg) != NUL {
         if byte(ea.arg) != NUL && unsafe { text_or_buf_locked() } {
@@ -384,21 +382,17 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             ea.do_ecmd_lnum,
             EcmdFlags::HIDE.when(buf_hide(Buf::current()))
                 | EcmdFlags::FORCEIT.when(ea.forceit != 0)
-                | EcmdFlags::OLDBUF.when(!old_curwin.is_null())
+                | EcmdFlags::OLDBUF.when(old_curwin.is_some())
                 | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
                 | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt),
-            if old_curwin.is_null() {
-                Win::current_raw()
-            } else {
-                ptr::null_mut()
-            },
+            old_curwin.is_none().then(|| Win::current().id()),
         );
 
         if opened.is_err() {
             // The split has already happened; close it again. The
             // cleanup pair keeps an exception from the failed edit from
             // being lost while the window is closed.
-            if !old_curwin.is_null() {
+            if old_curwin.is_some() {
                 let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
                 if !need_hide || buf_hide(Buf::current()) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
@@ -422,14 +416,13 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
         }
     }
 
-    if !old_curwin.is_null()
+    if let Some(mut old) = old_curwin.and_then(valid_win)
         && byte(ea.arg) != NUL
-        && Win::current_raw() != old_curwin
-        && win_valid(old_curwin)
-        && unsafe { (*old_curwin).w_buffer } != Buf::current_raw()
+        && !old.is_current()
+        && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        unsafe { (*old_curwin).w_alt_fnum = Buf::current().handle as c_int };
+        old.w_alt_fnum = Buf::current().handle as c_int;
     }
     ex_no_reprint.set(true);
 }
@@ -609,7 +602,7 @@ fn do_ecmd(
     args: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
-    oldwin: *mut Window,
+    oldwin: Option<WinId>,
 ) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, args, newlnum, flags, oldwin) }

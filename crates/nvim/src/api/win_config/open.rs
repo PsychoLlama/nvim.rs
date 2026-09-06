@@ -39,7 +39,7 @@ pub unsafe fn nvim_open_win(
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as WindowHandle).reported(error);
     };
-    if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
+    if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return (0 as WindowHandle).reported(error);
@@ -64,24 +64,18 @@ pub unsafe fn nvim_open_win(
         // SAFETY: paired with the `unblock_autocmds` at the end.
         unsafe { block_autocmds() };
     }
-    let wp: *mut Window;
-    let mut tp: *mut Tabpage = TabPage::current_raw();
+    let wp: Option<Win>;
+    let mut tp = Some(TabPage::current());
     debug_assert!(Win::current_or_none().is_some(), "curwin != NULL");
-    let mut parent: *mut Window = if keys.win == 0 {
-        Win::current_raw()
-    } else {
-        ::core::ptr::null_mut::<Window>()
-    };
+    let mut parent: Option<Win> = (keys.win == 0).then(Win::current);
     '_cleanup: {
         if keys.win > 0 {
             // SAFETY: `error` is this frame's slot.
-            parent = find_window_by_handle(fconfig.window, &mut error)
-                .map_or(::core::ptr::null_mut(), Win::raw);
-            if parent.is_null() {
+            let Some(found) = find_window_by_handle(fconfig.window, &mut error) else {
                 break '_cleanup;
-            }
-            // SAFETY: `parent` is the live window the lookup answered.
-            if is_split && unsafe { (*parent).w_floating } {
+            };
+            parent = Some(found);
+            if is_split && found.w_floating {
                 err_msg(
                     report,
                     kErrorTypeException,
@@ -89,16 +83,12 @@ pub unsafe fn nvim_open_win(
                 );
                 break '_cleanup;
             }
-            tp = win_find_tabpage(parent);
+            tp = win_find_tabpage(found.id());
         }
         if is_split {
-            let target = if parent.is_null() {
-                Win::current_raw()
-            } else {
-                parent
-            };
-            // SAFETY: `target` is a live window and `error` this frame's slot.
-            if !unsafe { check_split_disallowed_err(Win::new(target), &mut error) } {
+            let target = parent.unwrap_or_else(Win::current);
+            // SAFETY: `error` is this frame's slot.
+            if !unsafe { check_split_disallowed_err(target, &mut error) } {
                 break '_cleanup;
             }
             // `vertical` without `split` picks the side from 'splitright' and
@@ -118,7 +108,7 @@ pub unsafe fn nvim_open_win(
                     kWinSplitAbove
                 };
             }
-            let flags = win_split_flags(fconfig.split, parent.is_null())
+            let flags = win_split_flags(fconfig.split, parent.is_none())
                 | WSP_NOENTER as ::core::ffi::c_int;
             let vertical = flags & WSP_VERT as ::core::ffi::c_int != 0;
             let size = if vertical {
@@ -129,45 +119,37 @@ pub unsafe fn nvim_open_win(
             let mut tstate = TryState::default();
             // SAFETY: `tstate` is this frame's own, live until `try_leave`.
             unsafe { try_enter(&raw mut tstate) };
-            if parent.is_null() || parent == Win::current_raw() {
-                // SAFETY: a split of the current window, which is live.
-                wp = unsafe { split_ins(size, flags) };
-            } else {
-                let mut switchwin = SwitchWin {
-                    sw_curwin: ::core::ptr::null_mut::<Window>(),
-                    sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
-                    sw_same_win: false,
-                    sw_visual_active: false,
-                };
-                // SAFETY: a live tab page.
-                let tp = unsafe { TabPage::new(tp) };
-                // SAFETY: a live window.
-                let parent = unsafe { Win::new(parent) };
-                // SAFETY: `switchwin` is this frame's own, and `parent`/`tp`
-                // are the live window and tab page to split in.
-                let result = unsafe { switch_win(&raw mut switchwin, parent, tp, true) };
-                debug_assert!(result.is_ok(), "the window was switched to");
-                // SAFETY: the window switched to is live.
-                wp = unsafe { split_ins(size, flags) };
-                // SAFETY: the matching restore of the switch above.
-                unsafe { restore_win(&raw mut switchwin, true) };
+            match parent.filter(|p| !p.is_current()) {
+                None => {
+                    // SAFETY: a split of the current window, which is live.
+                    wp = unsafe { split_ins(size, flags) };
+                }
+                Some(parent) => {
+                    let mut switchwin = SwitchWin::default();
+                    let tp = tp.expect("a live window is on a tab page");
+                    // SAFETY: `switchwin` is this frame's own, and `parent`/`tp`
+                    // are the live window and tab page to split in.
+                    let result = unsafe { switch_win(&raw mut switchwin, parent, Some(tp), true) };
+                    debug_assert!(result.is_ok(), "the window was switched to");
+                    // SAFETY: the window switched to is live.
+                    wp = unsafe { split_ins(size, flags) };
+                    // SAFETY: the matching restore of the switch above.
+                    unsafe { restore_win(&raw mut switchwin, true) };
+                }
             }
             // SAFETY: `tstate` is what the `try_enter` above filled in, and
             // `error` is this frame's slot.
             unsafe { try_leave(&raw mut tstate, &mut error) };
-            if !wp.is_null() {
-                // SAFETY: `wp` is the window the split just made.
-                let (width, height) = unsafe {
-                    (*wp).w_config = fconfig;
-                    ((*wp).w_width, (*wp).w_height)
-                };
+            if let Some(mut new) = wp {
+                new.w_config = fconfig;
+                let (width, height) = (new.w_width, new.w_height);
                 if size > 0 {
                     if vertical && width != size {
-                        // SAFETY: `wp` is live.
-                        unsafe { win_setwidth_win(size, Win::new(wp)) };
+                        // SAFETY: `new` is live.
+                        unsafe { win_setwidth_win(size, new) };
                     } else if !vertical && height != size {
-                        // SAFETY: `wp` is live.
-                        unsafe { win_setheight_win(size, Win::new(wp)) };
+                        // SAFETY: `new` is live.
+                        unsafe { win_setheight_win(size, new) };
                     }
                 }
             }
@@ -180,27 +162,23 @@ pub unsafe fn nvim_open_win(
                 err_msg(report, kErrorTypeException, msg);
                 break '_cleanup;
             }
-            // SAFETY: `error` is this frame's slot.
-            let (none, slot) = (::core::ptr::null_mut::<Window>(), &mut error);
-            wp = unsafe { win_new_float(none, false, fconfig, slot) };
+            wp = win_new_float(None, false, fconfig, &mut error);
         }
-        if wp.is_null() {
+        let Some(window) = wp else {
             if !report.is_set() {
                 err_msg(report, kErrorTypeException, c"Failed to create window");
             }
             break '_cleanup;
-        }
-        // SAFETY: not null, and the guard above is what says so.
-        let window = unsafe { Win::new(wp) };
+        };
+        let wp = window;
         if cmdline_offset < INT_MAX {
-            cmdline_win.set(wp);
+            cmdline_win.set(Some(wp.id()));
         }
-        // SAFETY: `b` is the live buffer found above.
-        bufref = BufRef::of_opt(unsafe { Buf::from_raw(b.raw()) });
+        bufref = BufRef::of(b);
         if !noautocmd {
             let mut switchwin_0 = SwitchWin {
-                sw_curwin: ::core::ptr::null_mut::<Window>(),
-                sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
+                sw_curwin: None,
+                sw_curtab: None,
                 sw_same_win: false,
                 sw_visual_active: false,
             };
@@ -219,30 +197,29 @@ pub unsafe fn nvim_open_win(
                 )
             };
             if switched {
-                tp = win_find_tabpage(wp);
+                tp = win_find_tabpage(wp.id());
             }
             // SAFETY: the matching restore of the switch above.
             unsafe { restore_win_noblock(&raw mut switchwin_0, true) };
         }
-        if !tp.is_null() && enter {
-            // SAFETY: `tp` still holds `wp`, so both are live.
-            unsafe { goto_tabpage_win(TabPage::new(tp), window) };
-            tp = win_find_tabpage(wp);
+        if let (Some(at), true) = (tp, enter) {
+            // SAFETY: `at` still holds `wp`, so both are live.
+            unsafe { goto_tabpage_win(at, window) };
+            tp = win_find_tabpage(wp.id());
         }
-        // SAFETY: `wp` is read only once its tab page still holds it, which
-        // is what says the autocommands above did not close it.
-        let other_buf = !tp.is_null() && bufref.valid() && b != unsafe { Buf::new((*wp).w_buffer) };
+        // `wp` is read only once its tab page still holds it, which is what
+        // says the autocommands above did not close it.
+        let other_buf = tp.is_some() && bufref.valid() && Some(b) != wp.buffer_or_none();
         if other_buf {
-            let quiet =
-                (Win::current_raw() != wp && !noautocmd).then(Suppress::win_enter_leave_autocmds);
+            let quiet = (!wp.is_current() && !noautocmd).then(Suppress::win_enter_leave_autocmds);
             // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
             unsafe { win_set_buf(window, b, &mut error) };
             if !noautocmd {
-                tp = win_find_tabpage(wp);
+                tp = win_find_tabpage(wp.id());
             }
             drop(quiet);
         }
-        if tp.is_null() {
+        if tp.is_none() {
             error.clear();
             err_msg(
                 report,
@@ -252,12 +229,11 @@ pub unsafe fn nvim_open_win(
         } else {
             if style == kWinStyleMinimal {
                 win_set_minimal_style(window);
-                // SAFETY: as above.
-                unsafe { didset_window_options(Win::new(wp), true) };
+                // SAFETY: a live window.
+                unsafe { didset_window_options(wp, true) };
                 changed_window_setting(window);
             }
-            // SAFETY: as above.
-            rv = unsafe { (*wp).handle };
+            rv = wp.handle;
         }
     }
     if noautocmd {
@@ -272,13 +248,13 @@ pub unsafe fn nvim_open_win(
 ///
 /// # Safety
 /// The current window must be the one to split.
-unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> *mut Window {
+unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win> {
     // SAFETY: the caller's promise.
     unsafe {
         win_split_ins(
             size,
             flags,
-            ::core::ptr::null_mut::<Window>(),
+            None,
             0 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<Frame>(),
         )
@@ -375,12 +351,12 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
         unsafe { err_msg_raw(report, kErrorTypeException, e_textlock.as_ptr()) };
         return false;
     }
-    if is_aucmd_win(window.raw()) {
+    if is_aucmd_win(window) {
         let msg = c"Cannot move autocmd window to another tabpage";
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
-    if window.raw() == cmdwin_win.get() || window.raw() == cmdwin_old_curwin.get() {
+    if cmdwin_win.get() == Some(window.id()) || cmdwin_old_curwin.get() == Some(window.id()) {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return false;
@@ -393,16 +369,15 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
 ///
 /// # Safety
 /// `win` must be a live window and `tabpage` a live tab page.
-pub(crate) unsafe fn win_find_altwin(win: Win, tabpage: TabPage) -> *mut Window {
+pub(crate) unsafe fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> {
     let w = win;
     let at = (tabpage != TabPage::current()).then_some(tabpage);
-    let other_tab = at.map_or(::core::ptr::null_mut::<Tabpage>(), TabPage::raw);
     if win.w_floating {
         // SAFETY: the caller's window, and `at` names the tab page to look in.
-        unsafe { win_float_find_altwin(win, at) }.map_or(::core::ptr::null_mut(), Win::raw)
+        unsafe { win_float_find_altwin(win, at) }
     } else {
         let mut dir: ::core::ffi::c_int = 0;
         // SAFETY: as above; `dir` is this frame's own.
-        unsafe { winframe_find_altwin(w, &raw mut dir, other_tab, ::core::ptr::null_mut()) }
+        unsafe { winframe_find_altwin(w, &raw mut dir, at, ::core::ptr::null_mut()) }
     }
 }

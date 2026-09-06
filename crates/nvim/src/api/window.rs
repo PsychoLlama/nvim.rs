@@ -32,8 +32,8 @@ use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Buffer, BufferHandle, Error, Integer, KeyDict_win_text_height,
-    LineNr, LuaRef, Object, String_0, SwitchWin, Tabpage, TabpageHandle, WinExecute, WindowHandle,
-    int64_t, size_t,
+    LineNr, LuaRef, Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t,
+    size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -60,9 +60,9 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
     let (Some(w), Some(b)) = (w, b) else {
         return ().reported(err);
     };
-    if w.raw() == cmdwin_win.get()
-        || w.raw() == cmdwin_old_curwin.get()
-        || b.raw() == cmdwin_buf.get()
+    if cmdwin_win.get() == Some(w.id())
+        || cmdwin_old_curwin.get() == Some(w.id())
+        || cmdwin_buf.get() == Some(b.id())
     {
         return Err(Error::exception(e_cmdwin));
     }
@@ -125,8 +125,8 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
     check_cursor_col(w);
     w.w_set_curswant = true;
     let mut switchwin = SwitchWin::default();
-    let any_tab = ptr::null_mut::<Tabpage>();
-    let _ = unsafe { switch_win(&raw mut switchwin, w, TabPage::new(any_tab), true) };
+    // `None`: the window may be on any tab page, and the switch stays here.
+    let _ = unsafe { switch_win(&raw mut switchwin, w, None, true) };
     update_topline(Win::current());
     validate_cursor(Win::current());
     unsafe { restore_win(&raw mut switchwin, true) };
@@ -252,14 +252,19 @@ pub unsafe fn nvim_win_get_position(win: WindowHandle, arena: *mut Arena) -> Res
     rv.reported(err)
 }
 
+/// The tab page a window the API just looked up is on. Every live window is
+/// on one, so the `Option` `win_find_tabpage` answers is `Some` here.
+fn tab_of(win: Win) -> TabPage {
+    win_find_tabpage(win.id()).expect("a live window is on a tab page")
+}
+
 /// The tab page `win` is on.
 pub fn nvim_win_get_tabpage(win: WindowHandle) -> Result<TabpageHandle, Error> {
     let mut err = Error::none();
     let Some(w) = find_window_by_handle(win, &mut err) else {
         return (0 as TabpageHandle).reported(err);
     };
-    // SAFETY: `w` is live, and every live window is on a tab page.
-    let handle = unsafe { (*win_find_tabpage(w.raw())).handle };
+    let handle = tab_of(w).handle;
     (handle as TabpageHandle).reported(err)
 }
 
@@ -295,10 +300,10 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
     else {
         return ().reported(err);
     };
-    let tabpage = win_find_tabpage(w.raw());
+    let tabpage = tab_of(w);
     let refused = e_autocmd_close.as_ptr();
-    let is_aucmd = is_aucmd_win(w.raw());
-    let same_tab = tabpage == TabPage::current_raw();
+    let is_aucmd = is_aucmd_win(w);
+    let same_tab = tabpage.is_current();
     api_try(&mut err, |_| {
         if is_aucmd {
             // SAFETY: `e_autocmd_close` is a static message.
@@ -309,7 +314,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
             unsafe { win_close(w, false, false) };
         } else {
             // SAFETY: as above, in the tab page `w` is in rather than this one.
-            unsafe { win_close_othertab(w, 0, TabPage::new(tabpage), false) };
+            unsafe { win_close_othertab(w, 0, tabpage, false) };
         }
     });
     ().reported(err)
@@ -324,17 +329,13 @@ pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
     else {
         return ().reported(err);
     };
-    let tabpage = win_find_tabpage(w.raw());
-    // `ex_win_close` reads a null tab page as "the current one", which is the
-    // only case where it may close the window the user is in.
-    let other_tab = if tabpage == TabPage::current_raw() {
-        ptr::null_mut::<Tabpage>()
-    } else {
-        tabpage
-    };
+    let tabpage = tab_of(w);
+    // `ex_win_close` reads an absent tab page as "the current one", which is
+    // the only case where it may close the window the user is in.
+    let other_tab = (!tabpage.is_current()).then_some(tabpage);
     // SAFETY: as `nvim_win_hide`.
     api_try(&mut err, |_| unsafe {
-        ex_win_close(::core::ffi::c_int::from(force), w.raw(), other_tab);
+        ex_win_close(::core::ffi::c_int::from(force), w, other_tab);
     });
     ().reported(err)
 }
@@ -345,14 +346,13 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
     let Some(w) = find_window_by_handle(win, &mut err) else {
         return Object::Nil.reported(err);
     };
-    let tabpage = win_find_tabpage(w.raw());
+    let tabpage = tab_of(w);
     let res = api_try(&mut err, |err| {
         let mut switch_args = WinExecute::default();
         let mut res = Object::Nil;
         // SAFETY: `switch_args` is this frame's own and nothing the call runs
         // can reach it.
-        let switched =
-            unsafe { win_execute_before(&raw mut switch_args, w, TabPage::new(tabpage)) };
+        let switched = unsafe { win_execute_before(&raw mut switch_args, w, tabpage) };
         if switched {
             let no_arena = ptr::null_mut::<Arena>();
             let name = ptr::null::<::core::ffi::c_char>();

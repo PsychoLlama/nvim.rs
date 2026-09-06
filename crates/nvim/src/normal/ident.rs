@@ -973,7 +973,7 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     let hidden = unsafe { buf_hide(Buf::current()) };
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
-    let win = Win::current_raw();
+    let win = Some(Win::current().id());
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
     if opened.is_ok() && unsafe { (*cmd_arg).nchar } == 'F' as c_int && lnum >= 0 {

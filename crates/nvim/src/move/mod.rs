@@ -118,7 +118,7 @@ impl Win {
     /// column. None of them move when the window scrolls horizontally.
     pub(super) fn col_off(self) -> c_int {
         self.number_col()
-            + (self.raw() == cmdwin_win.get()) as c_int
+            + (cmdwin_win.get() == Some(self.id())) as c_int
             + self.fdccol_count()
             + self.w_scwidth * SIGN_WIDTH
     }

@@ -21,6 +21,7 @@ use crate::keycodes::{
     Ctrl_X, Ctrl_Z, Key, NotAKey,
 };
 use crate::types::AutoEvent;
+use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -57,7 +58,7 @@ use crate::types::{ExArg, Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin, prevwin};
+use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin};
 
 // The keys CTRL-W dispatches on. `const` blocks because a cast expression
 // is not a `match` pattern, and a plain integer `const` would also land in
@@ -227,13 +228,12 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         // cursor to the top-left window
         Err(NotAKey(TOP | Ctrl_T)) => goto_win(first_win()),
         // cursor to the bottom-right window
-        Err(NotAKey(BOTTOM | Ctrl_B)) => goto_win(last_nonfloating(None)),
+        Err(NotAKey(BOTTOM | Ctrl_B)) => goto_win(lastwin_nofloating(None)),
         // cursor to the last accessed (previous) window. Upstream tests the
         // configuration without asking whether the window floats, unlike
         // [`focusable`] below.
         Err(NotAKey(LAST_USED | Ctrl_P)) => {
-            let prev =
-                valid_win(prevwin.get()).filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
+            let prev = prev_window().filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
             match prev {
                 None => beep(),
                 Some(wp) => goto_win(wp),
@@ -475,17 +475,17 @@ fn move_to_new_tabpage(prenum: c_int) {
         only_one_message();
         return;
     }
-    let oldtab = TabPage::current_raw();
-    let wp = Win::current_raw();
+    let oldtab = TabPage::current().id();
+    let wp = Win::current().id();
     if new_tabpage(prenum, ptr::null_mut(), true).is_none() {
         return;
     }
     let Some(oldtab) = valid_tab(oldtab) else {
         return;
     };
-    let newtab = TabPage::current_raw();
+    let newtab = TabPage::current().id();
     goto_tab(oldtab, true, true);
-    if Win::current_raw() == wp {
+    if Win::current().id() == wp {
         close(Win::current(), false, false);
     }
     if let Some(newtab) = valid_tab(newtab) {
@@ -648,9 +648,8 @@ fn detach_window() {
         ..WIN_CONFIG_INIT
     };
     let mut error = Error::none();
-    // SAFETY: a live window, its own size, and an error slot of ours.
-    let made = unsafe { win_new_float(Win::current_raw(), false, config, &mut error) };
-    if made.is_null() {
+    let made = win_new_float(Win::current_or_none(), false, config, &mut error);
+    if made.is_none() {
         err_raw(error.message_or_empty().as_ptr());
         // SAFETY: an error the call above filled in, which owns its message.
         error.clear();
@@ -735,10 +734,10 @@ fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
 
 /// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.
 fn edit_file(name: *mut c_char) -> Result<(), Failed> {
-    let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<ExArg>(), ptr::null_mut());
+    let (sfname, eap) = (ptr::null_mut(), ptr::null_mut::<ExArg>());
     let lnum = newlnum::LASTL as LineNr;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
-    unsafe { do_ecmd(0, name, sfname, eap, lnum, EcmdFlags::HIDE, win) }
+    unsafe { do_ecmd(0, name, sfname, eap, lnum, EcmdFlags::HIDE, None) }
 }
 
 /// Clamp `window`'s cursor line into its buffer.

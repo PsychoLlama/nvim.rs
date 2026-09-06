@@ -11,6 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::types::NUL;
+use crate::winlayer::cmdline_window;
 
 /// The screen width of the command-line byte at `idx`.
 pub(crate) unsafe fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
@@ -36,13 +37,9 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     // The maximum column. A weird 'columns'/'lines' can overflow the
     // product, which reads as negative.
     let m = if KeyTyped.get() {
-        let cells = if !cmdline_win.get().is_null() {
-            let w = cmdline_win.get();
-            // SAFETY: just tested non-null; the command-line window is live
-            // for as long as it is set.
-            unsafe { (*w).w_view_width * (*w).w_view_height }
-        } else {
-            Columns.get() * Rows.get()
+        let cells = match cmdline_window() {
+            Some(w) => w.w_view_width * w.w_view_height,
+            None => Columns.get() * Rows.get(),
         };
         if cells < 0 { MAXCOL } else { cells }
     } else {
@@ -392,13 +389,9 @@ pub unsafe fn compute_cmdrow() {
     if exmode_active.get() || msg_scrolled.get() != 0 {
         cmdline_row.set(Rows.get() - 1);
     } else {
-        let wp = unsafe { lastwin_nofloating(::core::ptr::null_mut::<Tabpage>()) };
+        let wp = lastwin_nofloating(None);
         cmdline_row.set(
-            unsafe { (*wp).w_winrow }
-                + unsafe { (*wp).w_height }
-                + unsafe { (*wp).w_hsep_height }
-                + unsafe { (*wp).w_status_height }
-                + global_stl_height(),
+            wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height + global_stl_height(),
         );
     }
     if cmdline_row.get() == Rows.get() && p_ch.get() > 0 {

@@ -162,15 +162,18 @@ mod walk;
 
 pub(crate) use live::{Cc, Ea, Live};
 
+pub use handles::BufId;
+
 pub(crate) use handles::{
-    BufId, TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer,
-    forget_tabpage, forget_window, free_deferred, register_buffer, register_tabpage,
-    register_window, tabpage, window,
+    TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer, forget_tabpage,
+    forget_window, free_deferred, register_buffer, register_tabpage, register_window, tabpage,
+    window,
 };
 
 pub(crate) use walk::{
-    buffers, buffers_back, first_buffer, first_tab, first_window, frames, frames_back, last_buffer,
-    last_window, tab_windows, tabs, windows, windows_back, windows_in_tab,
+    buffers, buffers_back, cmdline_window, cmdwin_window, first_buffer, first_tab, first_window,
+    frames, frames_back, last_buffer, last_used_tab, last_window, prev_window, tab_windows, tabs,
+    window_at, windows, windows_back, windows_in_tab,
 };
 
 use core::ffi::c_char;
@@ -636,7 +639,7 @@ impl Buf {
 
     /// This buffer's identity, taken while it is live. [`Win::id`].
     #[inline(always)]
-    pub(crate) fn id(self) -> BufId {
+    pub fn id(self) -> BufId {
         // A live buffer's number is `top_file_num`, which is incremented
         // before it is read, so it is never zero.
         BufId(NonZero::new(self.handle).expect("a live buffer has a number"))
@@ -881,7 +884,9 @@ impl TabPage {
     }
 
     /// The window this tab page is working in — the one it goes back to when
-    /// it is entered again, `tp_curwin` verbatim.
+    /// it is entered again, `tp_curwin` resolved. `None` once that window
+    /// has been closed, which an autocommand can do between the write and
+    /// the read.
     ///
     /// Stale while the tab page *is* the current one: `curwin` is the answer
     /// then, and `stash_tabpage` writes this field on the way out. Reading it
@@ -889,9 +894,8 @@ impl TabPage {
     /// too, so the two agree — but a caller that wants "the window in use"
     /// wants `Win::current()`.
     #[inline(always)]
-    pub(crate) fn current_window(self) -> Win {
-        // A live tab page's `tp_curwin` is a live window.
-        Win(self.tp_curwin)
+    pub(crate) fn current_window(self) -> Option<Win> {
+        self.tp_curwin.and_then(WinId::get)
     }
 }
 

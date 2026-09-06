@@ -145,9 +145,9 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             while let Some(wp) = win {
                 // An autocommand may already have closed the buffer.
                 let buf = wp.w_buffer;
-                // `buf_valid` does the null test itself.
-                if unsafe { buf_valid(buf) } && buf_get_changedtick(unsafe { Buf::new(buf) }) != -1
-                {
+                // SAFETY: a live window's buffer is live.
+                let live = unsafe { Buf::from_raw(buf) }.filter(|b| buf_valid(b.id()));
+                if live.is_some_and(|b| buf_get_changedtick(b) != -1) {
                     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
                     let fname = unsafe { (*buf).b_fname };
                     let event = AutoEvent::BufWinLeave;

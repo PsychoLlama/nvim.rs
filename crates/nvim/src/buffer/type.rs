@@ -197,7 +197,7 @@ pub unsafe fn buf_spname(buffer: Buf) -> *mut c_char {
         if !b.b_fname.is_null() {
             return b.b_fname;
         }
-        if buffer.raw() == cmdwin_buf.get() {
+        if cmdwin_buf.get() == Some(buffer.id()) {
             return tr(c"[Command Line]");
         }
         if buf_is_prompt(Some(b)) {

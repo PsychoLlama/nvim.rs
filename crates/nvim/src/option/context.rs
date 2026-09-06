@@ -12,7 +12,6 @@
 #![allow(non_upper_case_globals)]
 
 use core::ffi::{c_char, c_void};
-use core::ptr;
 
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
@@ -83,8 +82,8 @@ impl OptionContext {
     pub(crate) fn new(scope: OptScope) -> Self {
         match scope {
             kOptScopeWin => OptionContext::Win(SwitchWin {
-                sw_curwin: ptr::null_mut(),
-                sw_curtab: ptr::null_mut(),
+                sw_curwin: None,
+                sw_curtab: None,
                 sw_same_win: false,
                 sw_visual_active: false,
             }),
@@ -110,9 +109,10 @@ impl OptionContext {
                 if win == Win::current_raw() {
                     return false;
                 }
-                if unsafe { switch_win_noblock(switchwin, win, win_find_tabpage(win), true) }
-                    .is_err()
-                {
+                // SAFETY: `win` is the window this context named, still live.
+                let win = unsafe { Win::new(win) };
+                let tab = win_find_tabpage(win.id());
+                if unsafe { switch_win_noblock(switchwin, win, tab, true) }.is_err() {
                     unsafe { restore_win_noblock(switchwin, true) };
                     if !err.is_set() {
                         *err = Error::exception(c"Problem while switching windows");

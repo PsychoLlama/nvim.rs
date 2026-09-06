@@ -240,7 +240,7 @@ pub(crate) unsafe fn qf_guess_filepath(mut qfl: Qfl, filename: *mut c_char) -> *
 pub(crate) fn qflist_valid(window: Option<Win>, qf_id: c_uint) -> bool {
     let qi = match window {
         None => QfStack::Global.raw(),
-        Some(wp) if win_valid(wp.raw()) => win_loclist(wp),
+        Some(wp) if win_valid(wp.id()) => win_loclist(wp),
         Some(_) => return false,
     };
     // SAFETY: a live stack, tested for null.

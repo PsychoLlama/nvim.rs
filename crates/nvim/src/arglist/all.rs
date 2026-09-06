@@ -16,6 +16,9 @@ use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Lock, Suppress};
 use crate::memory::xstrdup;
 use crate::types::CmdIdx;
+use crate::window::valid_tab;
+use crate::window::valid_win;
+use crate::winlayer::{TabId, WinId};
 
 use crate::types::Failed;
 use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
@@ -40,8 +43,11 @@ struct ArgAllState {
     opened: *mut uint8_t,
     /// Length of `opened`, i.e. `ARGCOUNT` when `:all` started.
     opened_len: c_int,
-    new_curwin: *mut Window,
-    new_curtab: *mut Tabpage,
+    /// The window and tab page `:all` will end in. Handles: they are picked
+    /// during the walk and entered at the very end, with every window's
+    /// autocommands in between.
+    new_curwin: Option<WinId>,
+    new_curtab: Option<TabId>,
 }
 
 // ---------------------------------------------------------------------------
@@ -50,18 +56,12 @@ struct ArgAllState {
 /// Where the window walk starts, and where it restarts when an autocommand
 /// invalidated it: floating windows are walked first, backwards, then the
 /// ordinary ones.
-fn first_window_to_walk() -> *mut Window {
+fn first_window_to_walk() -> Option<Win> {
     let last = last_window().expect("the editor always has a window");
-    let head = match last.w_floating {
+    match last.w_floating {
         true => Some(last),
         false => first_window(),
-    };
-    raw_win(head)
-}
-
-/// `Win::raw`, or a null for "no window", as the walk above answers.
-fn raw_win(window: Option<Win>) -> *mut Window {
-    window.map_or(ptr::null_mut(), Win::raw)
+    }
 }
 
 /// The window after `window` in that walk, or null at its end.
@@ -69,17 +69,17 @@ fn raw_win(window: Option<Win>) -> *mut Window {
 /// # Safety
 ///
 /// `window` must be a valid window.
-unsafe fn next_window_to_walk(window: Win) -> *mut Window {
+unsafe fn next_window_to_walk(window: Win) -> Option<Win> {
     // SAFETY: the caller's promise -- a live `Window`.
     // SAFETY: caller contract; the window list is well formed.
     if window.w_floating {
         let prev = window.prev().expect("a float is never the first window");
-        raw_win(match prev.w_floating {
+        match prev.w_floating {
             true => Some(prev),
             false => first_window(),
-        })
+        }
     } else {
-        raw_win(window.next().filter(|next| !next.w_floating))
+        window.next().filter(|next| !next.w_floating)
     }
 }
 
@@ -105,7 +105,7 @@ unsafe fn arg_index_for_window(
     // SAFETY: `window` is the window being considered, live for this walk.
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect and the chain has no bounds check in it.
-    let aucmd_win = is_aucmd_win(window.raw());
+    let aucmd_win = is_aucmd_win(window);
     let unwanted = buffer.b_ffname.is_null()
         || !aall.keep_tabs
             && (buffer.b_nwindows > 1
@@ -147,12 +147,11 @@ unsafe fn arg_index_for_window(
             // SAFETY: as above.
             unsafe { *aall.opened.offset(i as isize) = weight as uint8_t };
             if i == 0 {
-                if !aall.new_curwin.is_null() {
-                    // SAFETY: as above.
-                    unsafe { (*aall.new_curwin).w_arg_idx = aall.opened_len };
+                if let Some(mut prev) = aall.new_curwin.and_then(WinId::get) {
+                    prev.w_arg_idx = aall.opened_len;
                 }
-                aall.new_curwin = window.raw();
-                aall.new_curtab = TabPage::current_raw();
+                aall.new_curwin = Some(window.id());
+                aall.new_curtab = Some(TabPage::current().id());
             }
         } else if aall.keep_tabs {
             i = aall.opened_len;
@@ -179,20 +178,20 @@ unsafe fn arg_index_for_window(
 /// # Safety
 ///
 /// `aall` must be the live state, `window` a valid window holding `buffer`, and
-/// `wpnext` the window the walk would continue to.
+/// `wpnext` the window the walk would continue to, if there is one.
 unsafe fn close_unused_window(
     aall: &mut ArgAllState,
     window: Win,
     buffer: Buf,
-    wpnext: Win,
-) -> *mut Window {
+    wpnext: Option<Win>,
+) -> Option<Win> {
     // SAFETY: `buffer` is the window's own buffer.
     let hide = unsafe { buf_hide(buffer) };
     // SAFETY: as above.
     let changed = buf_is_changed(buffer);
     let nwindows = buffer.b_nwindows;
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
-        return wpnext.raw();
+        return wpnext;
     }
     if !hide && nwindows <= 1 && changed {
         // The buffer was changed and we would like to hide it, so try
@@ -202,10 +201,11 @@ unsafe fn close_unused_window(
         // `buffer` is live until the autowrite -- which is exactly what the
         // re-check afterwards is for.
         let bufref = BufRef::of(buffer);
+        let window_id = window.id();
         // SAFETY: as above; this may fire autocommands.
         let _ = unsafe { autowrite(buffer.raw(), false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
-        let survived = win_valid(window.raw()) && bufref.valid();
+        let survived = win_valid(window_id) && bufref.valid();
         if !survived {
             // Autocommands removed the window; start all over.
             return first_window_to_walk();
@@ -216,7 +216,7 @@ unsafe fn close_unused_window(
         let only_tab = first_tab().is_none_or(|tp| tp.next().is_none());
         if only_tab || aall.had_tab == 0 {
             aall.use_firstwin = true;
-            return wpnext.raw();
+            return wpnext;
         }
     }
     // SAFETY: `window` is live, and `wpnext` is re-validated because closing a
@@ -226,10 +226,11 @@ unsafe fn close_unused_window(
     // SAFETY: `buffer` is `window`'s buffer; a hidden or changed one is kept.
     // SAFETY: `buffer` is `window`'s buffer; a hidden or changed one is kept.
     let free_buf = unsafe { !buf_hide(buffer) } && !buf_is_changed(buffer);
+    let wpnext_id = wpnext.map(Win::id);
     // SAFETY: `window` is a live window, and not the last one (checked above).
     unsafe { win_close(window, free_buf, false) };
-    if win_valid(wpnext.raw()) {
-        return wpnext.raw();
+    if let Some(next) = wpnext_id.and_then(valid_win) {
+        return Some(next);
     }
     // Autocommands removed the next window; start all over.
     first_window_to_walk()
@@ -247,21 +248,19 @@ unsafe fn close_unused_windows_in_tab(
     old_curwin: Win,
     old_curtab: TabPage,
 ) {
-    let mut wp = first_window_to_walk();
-    while !wp.is_null() {
+    let mut next = first_window_to_walk();
+    while let Some(mut wp) = next {
         // SAFETY: caller contract; `wp` is live on entry, and both callees
         // answer a window that has been re-validated.
-        // SAFETY: `wp` is a live window for as long as this step runs, and
+        // `wp` is a live window for as long as this step runs, and
         // `arg_index_for_window` may not close it.
-        let wpnext = unsafe { next_window_to_walk(Win::new(wp)) };
-        let buf = unsafe { (*wp).w_buffer };
-        // SAFETY: a live buffer.
-        let buf = unsafe { Buf::new(buf) };
-        let i = unsafe { arg_index_for_window(aall, Win::new(wp), buf, old_curwin, old_curtab) };
-        unsafe { (*wp).w_arg_idx = i };
-        wp = if i == aall.opened_len && !aall.keep_tabs {
+        let wpnext = unsafe { next_window_to_walk(wp) };
+        let buf = wp.buffer();
+        let i = unsafe { arg_index_for_window(aall, wp, buf, old_curwin, old_curtab) };
+        wp.w_arg_idx = i;
+        next = if i == aall.opened_len && !aall.keep_tabs {
             // SAFETY: as above.
-            unsafe { close_unused_window(aall, Win::new(wp), buf, Win::new(wpnext)) }
+            unsafe { close_unused_window(aall, wp, buf, wpnext) }
         } else {
             wpnext
         };
@@ -295,7 +294,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
             break;
         };
         // A tab page that is gone falls back to the first one.
-        let tpnext = match valid_tabpage(tpnext.raw()) {
+        let tpnext = match valid_tabpage(tpnext.id()) {
             true => tpnext,
             false => first_tab().expect("there is always a first tab page"),
         };
@@ -322,8 +321,8 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
         return false;
     };
     if aall.keep_tabs {
-        aall.new_curwin = wp.raw();
-        aall.new_curtab = TabPage::current_raw();
+        aall.new_curwin = Some(wp.id());
+        aall.new_curtab = Some(TabPage::current().id());
         return false;
     }
     // SAFETY: `wp` is a live window with a frame, as is `curwin`.
@@ -379,8 +378,8 @@ unsafe fn open_window_for_arg(
     // argument name outlives `do_ecmd`'s use of it.
     Win::current().w_arg_idx = i;
     if i == 0 {
-        aall.new_curwin = Win::current_raw();
-        aall.new_curtab = TabPage::current_raw();
+        aall.new_curwin = Some(Win::current().id());
+        aall.new_curtab = Some(TabPage::current().id());
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
     let buf = Win::current().buffer();
@@ -390,7 +389,8 @@ unsafe fn open_window_for_arg(
     let sfname = ptr::null_mut();
     let eap2 = ptr::null_mut();
     let newlnum = newlnum::ONE as LineNr;
-    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, Win::current_raw()) };
+    let here = Some(Win::current().id());
+    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, here) };
     aall.use_firstwin = false;
     Ok(())
 }
@@ -442,7 +442,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
         if !split_failed {
             os_breakcheck();
             // With ":tab", open a new tab page for each new window.
-            let room = tabpage_index(ptr::null_mut()) as OptInt <= p_tpm.get();
+            let room = tabpage_index(None) as OptInt <= p_tpm.get();
             if aall.had_tab > 0 && room {
                 cmdmod.with_mut(|m| m.cmod_tab = 9999);
             }
@@ -478,12 +478,12 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
         use_firstwin: false,
         opened,
         opened_len: argcount(),
-        new_curwin: ptr::null_mut(),
-        new_curtab: ptr::null_mut(),
+        new_curwin: None,
+        new_curtab: None,
     };
     let prev_arglist_locked = ARGLIST_LOCKED.get();
     ARGLIST_LOCKED.set(true);
-    let new_lu_tp = TabPage::current_raw();
+    let new_lu_tp = TabPage::current().id();
     // Stop Visual mode: the cursor and "VIsual" may well be invalid after
     // switching to another buffer.
     // SAFETY: the state is this frame's and the list is locked.
@@ -499,10 +499,10 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // Don't run the Win/Buf Enter/Leave autocommands here.
     let no_enter = Suppress::win_enter_autocmds();
     let no_leave = Suppress::win_leave_autocmds();
-    let last_curwin = Win::current();
-    let last_curtab = TabPage::current_raw();
+    let last_curwin = Win::current().id();
+    let last_curtab = TabPage::current().id();
     // SAFETY: lastwin may be aucmd_win, which `lastwin_nofloating` skips.
-    unsafe { win_enter(Win::new(lastwin_nofloating(ptr::null_mut())), false) };
+    unsafe { win_enter(lastwin_nofloating(None), false) };
     unsafe { arg_all_open_windows(&mut aall, count) };
     // Remove the "lock" on the argument list.
     unsafe { alist_unlink(aall.alist) };
@@ -513,24 +513,24 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // SAFETY: every window and tab page recorded above is checked for still
     // being live before it is entered.
     // Restore the last referenced tab page's current window.
-    if last_curtab != aall.new_curtab {
-        if valid_tabpage(last_curtab) {
-            unsafe { goto_tabpage_tp(TabPage::new(last_curtab), true, true) };
+    if Some(last_curtab) != aall.new_curtab {
+        if let Some(tp) = valid_tab(last_curtab) {
+            unsafe { goto_tabpage_tp(tp, true, true) };
         }
-        if win_valid(last_curwin.raw()) {
-            unsafe { win_enter(last_curwin, false) };
+        if let Some(win) = valid_win(last_curwin) {
+            unsafe { win_enter(win, false) };
         }
     }
     // Go to the window holding the first argument.
-    if valid_tabpage(aall.new_curtab) {
-        unsafe { goto_tabpage_tp(TabPage::new(aall.new_curtab), true, true) };
+    if let Some(tp) = aall.new_curtab.and_then(valid_tab) {
+        unsafe { goto_tabpage_tp(tp, true, true) };
     }
     // Set the last used tab page to where we started.
     if valid_tabpage(new_lu_tp) {
-        lastused_tabpage.set(new_lu_tp);
+        lastused_tabpage.set(Some(new_lu_tp));
     }
-    if win_valid(aall.new_curwin) {
-        unsafe { win_enter(Win::new(aall.new_curwin), false) };
+    if let Some(win) = aall.new_curwin.and_then(valid_win) {
+        unsafe { win_enter(win, false) };
     }
     drop(no_leave);
     // SAFETY: `opened` is this frame's allocation and nothing refers to it.

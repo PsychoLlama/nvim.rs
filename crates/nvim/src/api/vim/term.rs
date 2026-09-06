@@ -14,7 +14,6 @@ use crate::api_error;
 use crate::cstr;
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 pub unsafe fn nvim_open_term(
@@ -22,23 +21,19 @@ pub unsafe fn nvim_open_term(
     opts: *mut KeyDict_open_term,
 ) -> Result<Integer, Error> {
     let mut slot = Error::none();
-    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
-    if b.is_null() {
+    let Some(buffer) = api_buf_ensure_loaded(buf, &mut slot) else {
         return (0 as Integer).reported(slot);
-    }
-    // SAFETY: not null, and the guard above is what says so.
-    let buffer = unsafe { Buf::new(b) };
-    if b == cmdwin_buf.get() {
+    };
+    if cmdwin_buf.get() == Some(buffer.id()) {
         let msg = e_cmdwin.as_ptr();
         // SAFETY: the message the caller handed over, live for this call.
         slot = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
         return (0 as Integer).reported(slot);
     }
     let mut may_read_buffer: bool = true;
-    if !unsafe { (*b).terminal }.is_null() {
-        if unsafe { terminal_running((*b).terminal) } {
-            // SAFETY: `b` is the live buffer.
-            let handle = unsafe { (*b).handle };
+    if !buffer.terminal.is_null() {
+        if unsafe { terminal_running(buffer.terminal) } {
+            let handle = buffer.handle;
             slot = api_error!(
                 kErrorTypeException,
                 "Terminal already connected to buffer {handle}"
@@ -93,7 +88,7 @@ pub unsafe fn nvim_open_term(
         items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     if may_read_buffer {
-        unsafe { read_buffer_into(buffer, 1, (*b).b_ml.ml_line_count, &raw mut contents) };
+        unsafe { read_buffer_into(buffer, 1, buffer.b_ml.ml_line_count, &raw mut contents) };
     }
     unsafe { channel_incref(chan) };
     unsafe { (*chan).term = terminal_alloc(buffer, topts) };

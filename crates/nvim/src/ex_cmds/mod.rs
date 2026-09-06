@@ -62,8 +62,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
-    LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, Window, size_t,
-    uint8_t,
+    LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, size_t, uint8_t,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -367,7 +366,7 @@ pub unsafe fn ex_oldfiles(args: *mut ExArg) {
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
     // SAFETY: the command block is the one borrowed here; the argument it
     // points at outlives the call.
-    unsafe { do_exedit(&raw mut *args, ptr::null_mut::<Window>()) };
+    unsafe { do_exedit(&raw mut *args, None) };
 }
 
 /// Number and print every entry of `list`, stopping on an interrupt.

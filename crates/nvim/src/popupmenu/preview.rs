@@ -349,7 +349,7 @@ unsafe fn pum_show_info(
                     ::core::ptr::null_mut(),
                     newlnum::ONE,
                     EcmdFlags::NONE,
-                    ::core::ptr::null_mut(),
+                    None,
                 )
             };
             drop(no_sync);
@@ -419,7 +419,7 @@ unsafe fn pum_fill_info(
 
     if use_float
         && !unsafe { pum_adjust_info_position(Win::current(), max_info_width) }
-        && win_valid(curwin_save.raw())
+        && win_valid(curwin_save.id())
     {
         unsafe { win_enter(curwin_save, false) };
     }
@@ -435,8 +435,8 @@ unsafe fn pum_fill_info(
 /// `curwin_save`/`curtab_save` are re-checked before use.
 unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bool) -> bool {
     // SAFETY: both pointers are validated before they are entered.
-    let left_window = Win::current_raw() != curwin_save.raw() && win_valid(curwin_save.raw());
-    let left_tab = TabPage::current_raw() != curtab_save.raw() && valid_tabpage(curtab_save.raw());
+    let left_window = Win::current_raw() != curwin_save.raw() && win_valid(curwin_save.id());
+    let left_tab = TabPage::current_raw() != curtab_save.raw() && valid_tabpage(curtab_save.id());
     if !left_window && !left_tab {
         return resized;
     }
@@ -455,7 +455,7 @@ unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bo
 
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.
-    if resized && win_valid(curwin_save.raw()) {
+    if resized && win_valid(curwin_save.id()) {
         let no_sync = Suppress::undo_sync();
         unsafe { win_enter(curwin_save, true) };
         drop(no_sync);
@@ -470,7 +470,7 @@ unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bo
     let _ = unsafe { update_screen() };
     pum_is_visible.set(true);
 
-    if !resized && win_valid(curwin_save.raw()) {
+    if !resized && win_valid(curwin_save.id()) {
         let _no_sync = Suppress::undo_sync();
         unsafe { win_enter(curwin_save, true) };
     }

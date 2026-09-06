@@ -238,13 +238,13 @@ pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
             }
         }
     };
-    let kind = if is_aucmd_win(wp.raw()) {
+    let kind = if is_aucmd_win(wp) {
         c"autocmd"
     } else if wp.w_onebuf_opt.wo_pvw != 0 {
         c"preview"
     } else if wp.w_floating {
         c"popup"
-    } else if wp.raw() == cmdwin_win.get() {
+    } else if cmdwin_win.get() == Some(wp.id()) {
         c"command"
     } else if buf_is_quickfix(wp.buffer_or_none()) {
         if wp.w_llist_ref.is_null() {

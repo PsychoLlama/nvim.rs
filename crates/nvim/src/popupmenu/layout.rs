@@ -69,21 +69,20 @@ pub(crate) unsafe fn pum_compute_size() {
 /// `above_row`/`below_row` bound the area the menu may use (a preview window
 /// moves them) and `pum_border_size` is the room `'pumborder'` needs.
 ///
-/// # Safety
-/// `target_win` must be live, or null — and null is only reached in cmdline
-/// mode, which is the one case that never dereferences it.
-pub(crate) unsafe fn pum_compute_vertical_placement(
+/// `target_win` is absent only in cmdline mode, which is the one case that
+/// never reads it.
+pub(crate) fn pum_compute_vertical_placement(
     size: c_int,
-    target_win: *mut Window,
+    target_win: Option<Win>,
     pum_win_row: c_int,
     above_row: c_int,
     below_row: c_int,
     pum_border_size: c_int,
 ) {
-    // SAFETY: `target_win` is live wherever it is read. `validate_cheight` is
-    // the only call out of here and reaches nothing that reads the pum state,
-    // which is why the row and height can be settled in locals first.
-    let cmdline_pum = State.get() & MODE_CMDLINE != 0 && target_win.is_null();
+    // `validate_cheight` is the only call out of here and reaches nothing
+    // that reads the pum state, which is why the row and height can be
+    // settled in locals first.
+    let cmdline_pum = State.get() & MODE_CMDLINE != 0 && target_win.is_none();
     let mut height = clamp_to_option(size.min(PUM_DEF_HEIGHT), p_ph.get());
     let mut row;
 
@@ -92,10 +91,9 @@ pub(crate) unsafe fn pum_compute_vertical_placement(
     {
         // Above "pum_win_row", leaving two lines of context if possible.
         pum_above.set(true);
-        let context_lines = if cmdline_pum {
-            0
-        } else {
-            2.min(unsafe { (*target_win).w_wrow } - unsafe { (*target_win).w_cline_row })
+        let context_lines = match target_win.filter(|_| !cmdline_pum) {
+            None => 0,
+            Some(target) => 2.min(target.w_wrow - target.w_cline_row),
         };
 
         if pum_win_row >= size + context_lines {
@@ -121,14 +119,14 @@ pub(crate) unsafe fn pum_compute_vertical_placement(
     } else {
         // Below "pum_win_row", leaving three lines of context if possible.
         pum_above.set(false);
-        let context_lines = if cmdline_pum {
-            0
-        } else {
-            validate_cheight(unsafe { Win::new(target_win) });
-            let cline_visible_offset = unsafe { (*target_win).w_cline_row }
-                + unsafe { (*target_win).w_cline_height }
-                - unsafe { (*target_win).w_wrow };
-            3.min(cline_visible_offset)
+        let context_lines = match target_win.filter(|_| !cmdline_pum) {
+            None => 0,
+            Some(target) => {
+                validate_cheight(target);
+                let cline_visible_offset =
+                    target.w_cline_row + target.w_cline_height - target.w_wrow;
+                3.min(cline_visible_offset)
+            }
         };
 
         row = pum_win_row + context_lines;
@@ -176,19 +174,12 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
 /// at least `'pumwidth'` cells; failing that it is pushed against the far
 /// edge of the screen, and failing that it takes whatever the screen has.
 ///
-/// # Safety
-/// `target_win` must be live, or null.
-pub(crate) unsafe fn pum_compute_horizontal_placement(
-    target_win: *mut Window,
+pub(crate) fn pum_compute_horizontal_placement(
+    target_win: Option<Win>,
     cursor_col: c_int,
     border_width: c_int,
 ) {
-    // SAFETY: `target_win` is live when it is not null.
-    let win_end_col = if target_win.is_null() {
-        0
-    } else {
-        unsafe { (*target_win).w_wincol + (*target_win).w_view_width }
-    };
+    let win_end_col = target_win.map_or(0, |t| t.w_wincol + t.w_view_width);
     let max_col = Columns.get().max(win_end_col);
     let desired_width = pum_base_width.get() + pum_kind_width.get() + pum_extra_width.get();
 

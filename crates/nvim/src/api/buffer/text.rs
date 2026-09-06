@@ -43,12 +43,9 @@ pub unsafe fn nvim_buf_set_text(
         unsafe { array_add(&mut scratch, put_value) };
         replacement = scratch;
     }
-    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = api_buf_ensure_loaded(buf, &mut error) else {
         return ().reported(error);
-    }
-    // SAFETY: not null, and the guard above is what says so.
-    let b = unsafe { Buf::new(b) };
+    };
     let buffer = b;
     let mut oob: bool = false;
     start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;

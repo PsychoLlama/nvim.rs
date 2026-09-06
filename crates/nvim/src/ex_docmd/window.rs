@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::winlayer::last_used_tab;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -57,9 +58,8 @@ use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
-    tabpage_move, valid_tab, valid_win,
+    tabpage_move, valid_win,
 };
-use crate::winlayer::graph::lastused_tabpage;
 use crate::winlayer::{Buf, Ea, TabPage, Win, tabs, windows, windows_in_tab};
 use ::libc::atol;
 
@@ -153,7 +153,7 @@ fn len(p: *const c_char) -> size_t {
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
 fn edit(ea: Ex, old_curwin: Option<Win>) {
     // SAFETY: a live command, and a live window or null.
-    unsafe { do_exedit(ea.raw(), old_curwin.map_or(ptr::null_mut(), Win::raw)) };
+    unsafe { do_exedit(ea.raw(), old_curwin.map(Win::id)) };
 }
 
 /// `get_tabpage_arg()`: the tab page number the command names, setting
@@ -316,7 +316,7 @@ fn open_tabpage(ea: Ex, old_curwin: Win) {
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
-        && let Some(mut old) = valid_win(old_curwin.raw())
+        && let Some(mut old) = valid_win(old_curwin.id())
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
@@ -422,7 +422,7 @@ pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
     unsafe { msg_start() };
     msg_scroll.set(1);
 
-    let lastused_win = valid_tab(lastused_tabpage.get()).map_or(ptr::null_mut(), |tp| tp.tp_curwin);
+    let lastused_win = last_used_tab().and_then(TabPage::current_window);
     // The listing's scratch line. Upstream assembles it in `IObuff`, which
     // `msg_outtrans` reads again as it re-enters the message machinery.
     let mut line = [0 as c_char; IOSIZE as usize];
@@ -439,12 +439,16 @@ pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
         unsafe { vim_snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
         msg_line(&line, HLF_T);
         os_breakcheck();
-        list_tab_windows(tp, unsafe { Win::new(lastused_win) }, &mut line);
+        list_tab_windows(tp, lastused_win, &mut line);
     }
 }
 
 /// The `:tabs` entry for each window of `tabpage`.
-fn list_tab_windows(tabpage: TabPage, lastused_win: Win, line: &mut [c_char; IOSIZE as usize]) {
+fn list_tab_windows(
+    tabpage: TabPage,
+    lastused_win: Option<Win>,
+    line: &mut [c_char; IOSIZE as usize],
+) {
     for wp in windows_in_tab(tabpage) {
         if got_int.get() {
             break;
@@ -456,7 +460,7 @@ fn list_tab_windows(tabpage: TabPage, lastused_win: Win, line: &mut [c_char; IOS
         msg_char('\n' as c_int);
         msg_char(if wp.is_current() {
             '>' as c_int
-        } else if ptr::eq(wp.raw(), lastused_win.raw()) {
+        } else if lastused_win == Some(wp) {
             '#' as c_int
         } else {
             ' ' as c_int
@@ -704,7 +708,7 @@ fn prepare_preview_window() {
 /// Go back to the window `:pedit` was run from, if it is still there.
 fn back_to_current_window(curwin_save: Win) {
     if Win::current_raw() != curwin_save.raw()
-        && let Some(saved) = valid_win(curwin_save.raw())
+        && let Some(saved) = valid_win(curwin_save.id())
     {
         // The preview window is left drawn but not current.
         Win::current().validate_cursor();

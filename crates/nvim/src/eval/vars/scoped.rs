@@ -23,8 +23,8 @@ use crate::winlayer::{Buf, TabPage, Win, WinId, first_window};
 
 /// The zeroed `SwitchWin` [`switch_win`] fills in.
 const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
-    sw_curwin: ptr::null_mut(),
-    sw_curtab: ptr::null_mut(),
+    sw_curwin: None,
+    sw_curtab: None,
     sw_same_win: false,
     sw_visual_active: false,
 };
@@ -73,7 +73,8 @@ unsafe fn get_var_from(
         let lead = unsafe { *varname } as u8;
         // SAFETY: a live window and its tab page -- both were null-checked.
         let (w, tp) = unsafe { (Win::new(win), TabPage::new(tabpage)) };
-        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, tp, true) }.is_ok() {
+        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, Some(tp), true) }.is_ok()
+        {
             if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
                 let scoped = do_change_curbuf.then(|| {
@@ -331,7 +332,7 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
     // SAFETY: a live window and its tab page.
     let (w, t) = unsafe { (Win::new(win), TabPage::new(tp)) };
-    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, t, true) }.is_ok() {
+    if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, Some(t), true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };
         } else {
@@ -430,10 +431,10 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
-    if valid_tabpage(save_curtab.raw()) {
+    if valid_tabpage(save_curtab.id()) {
         unsafe { goto_tabpage_tp(save_curtab, false, false) };
         // Going back must not count as a use of the previous tab page.
-        if valid_tabpage(save_lu_tp) {
+        if save_lu_tp.is_some_and(valid_tabpage) {
             lastused_tabpage.set(save_lu_tp);
         }
     }

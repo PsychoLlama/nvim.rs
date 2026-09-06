@@ -16,6 +16,8 @@ use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
 use crate::types::Failed;
 use crate::types::VAR_STRING;
+use crate::window::valid_tab;
+use crate::window::valid_win;
 
 /// Switch to a window for executing user code.
 ///
@@ -30,7 +32,7 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: Ta
     // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
     // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
     let (args, win, tab) = unsafe { (&mut *args, window, tabpage) };
-    args.wp = window.raw();
+    args.wp = Some(window.id());
     args.curpos = win.w_cursor;
     args.cwd_status = Err(Failed);
     args.apply_acd = false;
@@ -58,9 +60,7 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: Ta
             args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, window.raw(), tabpage.raw(), true) }
-        .is_ok()
-    {
+    if unsafe { switch_win_noblock(&raw mut args.switchwin, window, Some(tabpage), true) }.is_ok() {
         check_cursor(Win::current());
         return true;
     }
@@ -89,11 +89,10 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
             buf.b_fname = buf.b_sfname;
         }
     }
-    if win_valid(args.wp) {
-        let mut win = unsafe { Win::new(args.wp) };
-        if !equalpos(args.curpos, win.w_cursor) {
-            win.w_redr_status = true;
-        }
+    if let Some(mut win) = args.wp.and_then(valid_win)
+        && !equalpos(args.curpos, win.w_cursor)
+    {
+        win.w_redr_status = true;
     }
     check_cursor(Win::current());
     if visual_active() {
@@ -133,12 +132,12 @@ pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn switch_win(
     switchwin: *mut SwitchWin,
     win: Win,
-    tabpage: TabPage,
+    tabpage: Option<TabPage>,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation.
     unsafe { block_autocmds() };
-    unsafe { switch_win_noblock(switchwin, win.raw(), tabpage.raw(), no_display) }
+    unsafe { switch_win_noblock(switchwin, win, tabpage, no_display) }
 }
 
 /// [`switch_win`] without blocking autocommands.
@@ -147,8 +146,8 @@ pub unsafe fn switch_win(
 /// As [`switch_win`].
 pub unsafe fn switch_win_noblock(
     switchwin: *mut SwitchWin,
-    win: *mut Window,
-    tabpage: *mut Tabpage,
+    win: Win,
+    tabpage: Option<TabPage>,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
@@ -157,30 +156,28 @@ pub unsafe fn switch_win_noblock(
     let into = switchwin.cast::<u8>();
     unsafe { into.write_bytes(0, size_of::<SwitchWin>()) };
     let switchwin = unsafe { &mut *switchwin };
-    switchwin.sw_curwin = Win::current_raw();
-    if win == Win::current_raw() {
+    switchwin.sw_curwin = Win::current_or_none().map(Win::id);
+    if win.is_current() {
         switchwin.sw_same_win = true;
     } else {
         // A Visual selection belongs to the window it was made in.
         switchwin.sw_visual_active = visual_active();
         set_visual_active(false);
     }
-    // SAFETY: a live tab page or NULL, and `win_valid` re-checks the window
-    // before it is entered -- entering the tab page can close it.
-    if !tabpage.is_null() {
-        switchwin.sw_curtab = TabPage::current_raw();
+    // SAFETY: `win_valid` re-checks the window before it is entered --
+    // entering the tab page can close it.
+    if let Some(tabpage) = tabpage {
+        switchwin.sw_curtab = Some(TabPage::current().id());
         if no_display {
             unsafe { unuse_tabpage(TabPage::current()) };
-            unsafe { use_tabpage(TabPage::new(tabpage)) };
+            unsafe { use_tabpage(tabpage) };
         } else {
-            unsafe { goto_tabpage_tp(TabPage::new(tabpage), false, false) };
+            unsafe { goto_tabpage_tp(tabpage, false, false) };
         }
     }
-    if !win_valid(win) {
+    let Some(win) = valid_win(win.id()) else {
         return Err(Failed);
-    }
-    // SAFETY: `win_valid` above says the window is live.
-    let win = unsafe { Win::new(win) };
+    };
     win.make_current();
     win.buffer().make_current();
     Ok(())
@@ -207,7 +204,7 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
     // re-checked before being entered, because the code that ran may have
     // closed them.
     let switchwin = unsafe { &mut *switchwin };
-    if !switchwin.sw_curtab.is_null() && valid_tabpage(switchwin.sw_curtab) {
+    if let Some(back) = switchwin.sw_curtab.and_then(valid_tab) {
         if no_display {
             // `unuse_tabpage` writes the current window back into the tab
             // page it is leaving; that is the wrong window here, because
@@ -216,18 +213,16 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
             let old_tp_curwin = leaving.tp_curwin;
             unsafe { unuse_tabpage(leaving) };
             leaving.tp_curwin = old_tp_curwin;
-            unsafe { use_tabpage(TabPage::new(switchwin.sw_curtab)) };
+            unsafe { use_tabpage(back) };
         } else {
-            unsafe { goto_tabpage_tp(TabPage::new(switchwin.sw_curtab), false, false) };
+            unsafe { goto_tabpage_tp(back, false, false) };
         }
     }
     if !switchwin.sw_same_win {
         set_visual_active(switchwin.sw_visual_active);
     }
-    // SAFETY: the saved window is live or freed, which `win_valid` tells
-    // apart, and a live window's buffer is live.
-    if win_valid(switchwin.sw_curwin) {
-        let win = unsafe { Win::new(switchwin.sw_curwin) };
+    // The saved window is live or freed, which `valid_win` tells apart.
+    if let Some(win) = switchwin.sw_curwin.and_then(valid_win) {
         win.make_current();
         win.buffer().make_current();
     }

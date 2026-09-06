@@ -74,7 +74,7 @@ pub unsafe fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Re
         let Some(b) = find_buffer_by_handle(buf, &mut error) else {
             return ().reported(error);
         };
-        Table::Buffer(b.raw())
+        Table::Buffer(b)
     };
     // SAFETY: `table` names the global table or a live buffer's, the borrow
     // does not outlive the search, and `name` is the caller's C string.

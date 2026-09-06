@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::window_at;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
@@ -27,7 +28,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Tabpage, Window};
+use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Window};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -187,9 +188,7 @@ fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
     {
         return Some(wp);
     }
-    // SAFETY: a saved leaf's `fr_win` is the still-live `curwin` of the moment
-    // the snapshot was taken, or null.
-    unsafe { Win::from_raw(ft.fr_win) }
+    window_at(ft.fr_win)
 }
 
 /// The window the snapshot in slot `idx` of the current tab page remembers as
@@ -241,7 +240,7 @@ fn snapshot_matches(sn: FrameRef, fr: FrameRef) -> bool {
         return false;
     }
     // SAFETY: `win_valid` only compares the saved pointer against the list.
-    !(!sn.fr_win.is_null() && !win_valid(sn.fr_win))
+    sn.fr_win.is_null() || window_at(sn.fr_win).is_some()
 }
 
 /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
@@ -254,8 +253,7 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
     if fr.fr_layout as c_int == FR_LEAF {
         new_height(fr, fr.fr_height, false, false, false);
         new_width(fr, fr.fr_width, false, false);
-        // SAFETY: as in [`snapshot_curwin_rec`].
-        wp = unsafe { Win::from_raw(sn.fr_win) };
+        wp = window_at(sn.fr_win);
     }
     if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next()) {
         wp = restore_snapshot_rec(sn_next, fr_next).or(wp);
@@ -444,13 +442,8 @@ pub unsafe fn win_ui_flush(validate: bool) {
     }
 }
 
-pub unsafe fn lastwin_nofloating(tabpage: *mut Tabpage) -> *mut Window {
-    // SAFETY: the caller's promise -- a live tab page or null.
-    last_nonfloating(unsafe { TabPage::from_raw(tabpage) }).raw()
-}
-
 /// The last non-floating window of `tabpage`, or of the current tab page.
-pub(crate) fn last_nonfloating(tabpage: Option<TabPage>) -> Win {
+pub(crate) fn lastwin_nofloating(tabpage: Option<TabPage>) -> Win {
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp != curtab || !tp"

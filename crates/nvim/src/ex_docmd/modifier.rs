@@ -11,6 +11,7 @@ use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
+use crate::window::tab_index;
 use crate::winlayer::TabPage;
 
 use crate::winlayer::{Buf, Ea, Win};
@@ -54,7 +55,7 @@ use crate::types::{
     CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0,
     size_t,
 };
-use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
+use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::atoi;
 
 /// One recognised modifier name, for the two callers that only need to know
@@ -331,7 +332,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                             return Err(Failed);
                         }
                         if tabnr == MAXLNUM as c_int {
-                            cm.cmod_tab = tabpage_index(TabPage::current_raw()) + 1;
+                            cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(ptr::null_mut()) {
                                 *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });

@@ -117,7 +117,7 @@ const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
     break_ctrl_c: false,
     xpc: EXPAND_T_INIT,
     b_im_ptr: ::core::ptr::null_mut::<OptInt>(),
-    b_im_ptr_buf: ::core::ptr::null_mut::<Buffer>(),
+    b_im_ptr_buf: None,
     cmdline_type: 0,
     event_cmdlineleavepre_triggered: false,
     did_hist_navigate: false,
@@ -296,7 +296,7 @@ pub(crate) unsafe fn command_line_enter(
             } else {
                 cur_buf_imsearch()
             };
-            s.b_im_ptr_buf = Buf::current_raw();
+            s.b_im_ptr_buf = Some(Buf::current().id());
             if unsafe { *s.b_im_ptr } == B_IMODE_LMAP as OptInt {
                 State.set(State.get() | MODE_LANGMAP);
             }

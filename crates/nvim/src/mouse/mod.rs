@@ -27,6 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
@@ -52,8 +53,8 @@ use crate::types::{
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
-    self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
-    win_enter, win_valid,
+    self, find_tabpage, tabpage_move, win_drag_status_line, win_drag_vsep_line, win_enter,
+    win_valid,
 };
 use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
@@ -228,7 +229,7 @@ impl Win {
     /// Whether the window is still in a tab page's list.
     fn is_valid(self) -> bool {
         // SAFETY: `win_valid` only compares the pointer against the lists.
-        win_valid(self.raw())
+        win_valid(self.id())
     }
 
     /// Move this window's status line down by `count` rows.
@@ -414,7 +415,7 @@ fn move_tab_to_mouse(defs: ClickDefs) {
     let tabnr = defs.at(mouse_col.get()).tabnr;
     // The index is read even where the C would not ask for it, which is a
     // pure walk of the tab page list.
-    let current = tabpage_index(TabPage::current_raw());
+    let current = tab_index(TabPage::current());
     let target = if tabnr <= 0 {
         9999
     } else if tabnr < current {

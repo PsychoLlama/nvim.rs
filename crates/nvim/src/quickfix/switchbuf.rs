@@ -203,13 +203,11 @@ fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
     while win.buffer().handle != qf_fnum {
         win = prev_window(win);
         if is_qf_window(win) {
-            win = if swb_flags.get() & kOptSwbFlagUselast as c_uint != 0
-                && win_valid(prevwin.get())
-                // SAFETY: `win_valid` just established it.
-                && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
-            {
-                // SAFETY: as the test above.
-                unsafe { Win::new(prevwin.get()) }
+            let last = crate::winlayer::prev_window()
+                .filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0)
+                .filter(|_| swb_flags.get() & kOptSwbFlagUselast as c_uint != 0);
+            win = if let Some(last) = last {
+                last
             } else if let Some(altwin) = altwin {
                 altwin
             } else {

@@ -405,8 +405,8 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
             };
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let null_ea = ptr::null_mut::<ExArg>();
-            let win = Win::current_raw();
-            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, win) };
+            let win = Win::current().id();
+            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, Some(win)) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || unsafe { only_one_window() } {
                     quit_on_swap_exists(true);

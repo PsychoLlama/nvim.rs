@@ -39,8 +39,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Frame, Handle, Integer, LineNr, OptInt, ScreenGrid, Tabpage, VAR_SCOPE,
-    WinConfig, WinInfo, WinOpt, Window,
+    Error, Failed, Frame, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig,
+    WinInfo, WinOpt, Window,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
@@ -87,7 +87,7 @@ fn clear_options(opt: *mut WinOpt) {
 // The first window, and the one autocommands run in
 
 pub unsafe fn win_alloc_first() {
-    if alloc_firstwin(None).is_err() {
+    if win_alloc_firstwin(None).is_err() {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
     }
@@ -107,27 +107,17 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
         mouse: false,
         ..WIN_CONFIG_INIT
     };
-    // SAFETY: a hidden float over a fresh scratch buffer, and a live `Error`.
-    let win = unsafe { win_new_float(ptr::null_mut::<Window>(), true, fconfig, &mut err) };
+    // A hidden float over a fresh scratch buffer; it always answers a window.
+    let mut win = win_new_float(None, true, fconfig, &mut err).expect("the autocommand window");
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
-    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win };
-    // SAFETY: `win_new_float` answers a live window here.
-    let mut win = unsafe { Win::new(win) };
+    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win.raw() };
     win.buffer().b_nwindows -= 1;
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
 }
 
-pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut Window) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live window or null.
-    alloc_firstwin(unsafe { Win::from_raw(oldwin) })
-}
-
-/// Make the first window of a tab page, taking its settings from `oldwin` when
-/// there is one and from the defaults when there is not.
-fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
-    // SAFETY: `win_alloc` answers a live window.
-    let mut win = unsafe { Win::new(win_alloc(ptr::null_mut::<Window>(), false)) };
+pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
+    let mut win = win_alloc(None, false);
     win.make_current();
     match oldwin {
         None => {
@@ -201,14 +191,7 @@ fn first_win() -> Win {
 // ---------------------------------------------------------------------------
 // One window's memory
 
-pub unsafe fn win_alloc(after: *mut Window, hidden: bool) -> *mut Window {
-    // SAFETY: the caller's promise -- a live window or null.
-    alloc(unsafe { Win::from_raw(after) }, hidden).raw()
-}
-
-/// Allocate a window, link it into the list after `after` unless `hidden`, and
-/// give it the defaults a fresh window starts from.
-fn alloc(after: Option<Win>, hidden: bool) -> Win {
+pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     // SAFETY: a fresh window, which is live from here on.
     let mut new_wp = unsafe { Win::new(zeroed_window()) };
     last_win_id.set(last_win_id.get() + 1);
@@ -225,7 +208,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     if !hidden {
         // A window in another tab page goes on that tab page's list.
         let tp = after.and_then(win_tabpage).and_then(TabPage::into_other);
-        append(after, new_wp, tp);
+        win_append(after, new_wp, tp);
     }
     new_wp.w_wincol = 0;
     new_wp.w_width = Columns.get();
@@ -256,8 +239,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
 
 /// The tab page a window is on, from `win_find_tabpage()`.
 fn win_tabpage(win: Win) -> Option<TabPage> {
-    // SAFETY: a live window; the answer is a live tab page or null.
-    unsafe { TabPage::from_raw(win_find_tabpage(win.raw())) }
+    win_find_tabpage(win.id())
 }
 
 pub unsafe fn free_wininfo(wip: *mut WinInfo) {
@@ -270,14 +252,7 @@ pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     free(wip);
 }
 
-pub unsafe fn win_free(window: Win, tabpage: *mut Tabpage) {
-    // SAFETY: the caller's promise -- a live window and a live tab page or
-    // null.
-    unsafe { free_win(window, TabPage::from_raw(tabpage)) };
-}
-
-/// Take `window` off the window list and free everything hanging off it.
-fn free_win(window: Win, tabpage: Option<TabPage>) {
+pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     let mut window = window;
     // SAFETY: a live window; reduces the reference count to its argument list.
     clear_folding(window);
@@ -303,12 +278,12 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
     unsafe { hash_init(vars) };
     // SAFETY: as above.
     unsafe { unref_var_dict(window.w_vars) };
-    if prevwin.get() == window.raw() {
-        prevwin.set(ptr::null_mut::<Window>());
+    if prevwin.get() == Some(window.id()) {
+        prevwin.set(None);
     }
     for mut ttp in tabs() {
-        if ttp.tp_prevwin == window.raw() {
-            ttp.tp_prevwin = ptr::null_mut::<Window>();
+        if ttp.tp_prevwin == Some(window.id()) {
+            ttp.tp_prevwin = None;
         }
     }
     free(window.w_lines);
@@ -342,8 +317,8 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
     qf_free_all(Some(window));
     free(window.w_p_cc_cols);
     free_grid(window, false);
-    if win_valid_any_tab(window.raw()) {
-        remove(window, tabpage);
+    if win_valid_any_tab(window.id()) {
+        win_remove(window, tabpage);
     }
     // Out of the registry only now, *after* the unlink: the list links are
     // handles, so a window that is still on a list has to stay findable or
@@ -416,15 +391,9 @@ pub(crate) fn free_grid(window: Win, reinit: bool) {
 // ---------------------------------------------------------------------------
 // The lists
 
-pub unsafe fn win_append(after: *mut Window, window: Win, tabpage: *mut Tabpage) {
-    // SAFETY: the caller's promise -- live windows (`after` may be null) and a
-    // live tab page or null.
-    unsafe { append(Win::from_raw(after), window, TabPage::from_raw(tabpage)) };
-}
-
 /// Put `window` in the window list of `tabpage` (or of the current tab page) after
 /// `after`, or at the front when there is no `after`.
-pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
+pub(crate) fn win_append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
     let mut window = window;
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
@@ -448,14 +417,8 @@ pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) 
     }
 }
 
-pub unsafe fn win_remove(window: Win, tabpage: *mut Tabpage) {
-    // SAFETY: the caller's promise -- a live window and a live tab page or
-    // null.
-    unsafe { remove(window, TabPage::from_raw(tabpage)) };
-}
-
 /// Take `window` out of the window list of `tabpage` (or of the current tab page).
-pub(crate) fn remove(window: Win, tabpage: Option<TabPage>) {
+pub(crate) fn win_remove(window: Win, tabpage: Option<TabPage>) {
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"

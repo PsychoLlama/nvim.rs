@@ -84,8 +84,8 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::window::{
-    check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, tabpage_index, win_close, win_enter,
-    win_split, win_valid,
+    check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, win_close, win_enter, win_split,
+    win_valid,
 };
 use ::libc::{abort, atoi, fclose, fseeko, ftello, strcasecmp};
 

@@ -50,6 +50,7 @@ pub(crate) mod state;
 use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;
+use crate::winlayer::BufId;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -311,9 +312,9 @@ impl BufRef {
 /// has a null address, so removing it changes no answer. That is why the
 /// "NULL is not a valid buffer" case cannot fail — it states the contract
 /// callers rely on rather than covering a branch.
-pub unsafe fn buf_valid(buffer: *mut Buffer) -> bool {
+pub fn buf_valid(buffer: BufId) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
-    !buffer.is_null() && buffers_back().any(|b| b.raw() == buffer)
+    buffers_back().any(|b| b.id() == buffer)
 }
 
 static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
@@ -514,9 +515,8 @@ pub(crate) fn edit_file(
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {
-    let raw = win.raw();
-    // SAFETY: a live window, and the caller's own arguments passed on.
-    unsafe { do_ecmd(fnum, ffname, sfname, args, newlnum, flags, raw) }
+    // SAFETY: the caller's own arguments passed on.
+    unsafe { do_ecmd(fnum, ffname, sfname, args, newlnum, flags, Some(win.id())) }
 }
 
 fn layout_lock() {

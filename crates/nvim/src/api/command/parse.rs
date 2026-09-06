@@ -268,7 +268,7 @@ pub unsafe fn nvim_parse_cmd(
     let args = unsafe { parse_args(&ea, arena) };
     let cmd: *mut UserCmd = match ea.cmdidx {
         CmdIdx::USER => nth(Table::Global),
-        CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current_raw())),
+        CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current())),
         _ => ptr::null_mut(),
     };
     // A user command carries its own default count.

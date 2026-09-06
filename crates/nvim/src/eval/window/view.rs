@@ -50,7 +50,7 @@ unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
     if wp.w_floating {
         return None;
     }
-    if !win_valid(wp.raw()) {
+    if !win_valid(wp.id()) {
         crate::semsg!("E1308: Cannot resize a window in another tab page");
         return None;
     }
@@ -136,10 +136,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         crate::semsg!("E957: Invalid window number");
         return;
     };
-    if wp == targetwin
-        || !win_valid(wp.raw())
-        || !win_valid(targetwin.raw())
-        || targetwin.w_floating
+    if wp == targetwin || !win_valid(wp.id()) || !win_valid(targetwin.id()) || targetwin.w_floating
     {
         crate::semsg!("E957: Invalid window number");
         return;
@@ -152,7 +149,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     } else {
         (0, 0)
     };
-    if is_aucmd_win(wp.raw())
+    if is_aucmd_win(wp)
         || unsafe { text_or_buf_locked() }
         || unsafe { check_split_disallowed(wp) } == FAIL
     {
@@ -161,14 +158,14 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if !targetwin.is_current() {
         unsafe { win_goto(targetwin) };
     }
-    if targetwin.is_current() && win_valid(wp.raw()) {
+    if targetwin.is_current() && win_valid(wp.id()) {
         if unsafe { win_splitmove(wp, size, flags) }.is_ok() {
             result.vval.v_number = 0;
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
     }
-    if !oldwin.is_current() && win_valid(oldwin.raw()) {
+    if !oldwin.is_current() && win_valid(oldwin.id()) {
         unsafe { win_goto(oldwin) };
     }
 }
