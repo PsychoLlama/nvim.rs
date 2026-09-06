@@ -768,7 +768,7 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
 /// must be null or an address that was once a window.
 pub(crate) unsafe fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<Win> {
     let Some(tp) = tabpage else {
-        return valid_window(unsafe { Win::new(prevwin.get()).raw() })
+        return valid_window(prevwin.get())
             .filter(|wp| *wp != win)
             .filter(|wp| wp.w_config.focusable && !wp.w_config.hide)
             .or_else(first_window);

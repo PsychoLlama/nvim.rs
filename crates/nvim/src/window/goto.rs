@@ -212,7 +212,7 @@ fn neighbor(
     count: c_int,
 ) -> Option<Win> {
     if window.w_floating {
-        let prev = valid_win(unsafe { Win::new(prevwin.get()).raw() }).filter(|p| !p.w_floating);
+        let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
         return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 

@@ -232,8 +232,8 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         // configuration without asking whether the window floats, unlike
         // [`focusable`] below.
         Err(NotAKey(LAST_USED | Ctrl_P)) => {
-            let prev = valid_win(unsafe { Win::new(prevwin.get()).raw() })
-                .filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
+            let prev =
+                valid_win(prevwin.get()).filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
             match prev {
                 None => beep(),
                 Some(wp) => goto_win(wp),

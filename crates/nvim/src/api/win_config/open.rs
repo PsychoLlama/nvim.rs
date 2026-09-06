@@ -380,9 +380,7 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
-    if window == unsafe { Win::new(cmdwin_win.get()) }
-        || window == unsafe { Win::new(cmdwin_old_curwin.get()) }
-    {
+    if window.raw() == cmdwin_win.get() || window.raw() == cmdwin_old_curwin.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return false;
