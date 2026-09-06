@@ -100,7 +100,11 @@ unsafe fn win_config_split(
             parent = Some(found);
             parent_tp = win_find_tabpage(found.id());
         }
-        let mut win_tp = win_find_tabpage(win.id());
+        // Both identities, taken while both windows are live: `win_goto`
+        // below fires autocommands that can close either, and every question
+        // after it is about exactly that.
+        let (win_id, mut parent_id) = (win.id(), parent.map(Win::id));
+        let mut win_tp = win_find_tabpage(win_id);
         if let Some(p) = parent {
             if p.w_floating {
                 err_msg(err, kErrorTypeException, c"Cannot split a floating window");
@@ -129,8 +133,7 @@ unsafe fn win_config_split(
                 // SAFETY: `altwin` is the live neighbour just found.
                 unsafe { win_goto(altwin) };
                 if Win::current_raw() == win.raw() {
-                    // SAFETY: the caller's window.
-                    let handle = win.handle;
+                    let handle = win_id.handle();
                     let why = api_error!(
                         kErrorTypeException,
                         "Failed to switch away from window {handle}"
@@ -138,10 +141,10 @@ unsafe fn win_config_split(
                     store(err, why);
                     return false;
                 }
-                win_tp = win_find_tabpage(win.id());
+                win_tp = win_find_tabpage(win_id);
                 // `win_valid_any_tab` is the check for whether `parent` is
                 // still there at all.
-                let live_parent = parent.filter(|p| win_valid_any_tab(p.id()));
+                let live_parent = parent.filter(|_| parent_id.is_some_and(win_valid_any_tab));
                 let (Some(_), Some(p)) = (win_tp, live_parent) else {
                     err_msg(err, kErrorTypeException, c"Windows to split were closed");
                     break '_restore_curwin;
@@ -206,7 +209,10 @@ unsafe fn win_config_split(
                         err_msg(err, kErrorTypeException, msg);
                         break '_restore_curwin;
                     }
+                    // `parent` is replaced here, so the identity it stands
+                    // for is too -- the neighbour is live, just found.
                     parent = neighbor;
+                    parent_id = neighbor.map(Win::id);
                 } else {
                     let win_tp = expect_tab(win_tp);
                     // SAFETY: `dir` and `unflat_altfr` are this frame's own.
@@ -225,9 +231,9 @@ unsafe fn win_config_split(
             }
             let flags = win_split_flags(fconfig.split, parent.is_none())
                 | WSP_NOENTER as ::core::ffi::c_int;
-            parent_tp = match parent {
+            parent_tp = match parent_id {
                 None => Some(TabPage::current()),
-                Some(p) => win_find_tabpage(p.id()),
+                Some(p) => win_find_tabpage(p),
             };
             let mut tstate = TryState::default();
             // SAFETY: `tstate` is this frame's own, live until `try_leave`.
@@ -272,7 +278,7 @@ unsafe fn win_config_split(
             unsafe { try_leave(&raw mut tstate, slot_mut(err)) };
             if to_split_ok {
                 let mut tp = expect_tab(win_tp);
-                if win_tp != parent_tp && tp.tp_curwin == Some(win.id()) {
+                if win_tp != parent_tp && tp.tp_curwin == Some(win_id) {
                     tp.tp_curwin = altwin_0.map(Win::id);
                 }
                 break '_resize;
@@ -283,7 +289,7 @@ unsafe fn win_config_split(
             }
             if !err.is_set() {
                 // SAFETY: the caller's window.
-                let handle = win.handle;
+                let handle = win_id.handle();
                 let why = api_error!(
                     kErrorTypeException,
                     "Failed to move window {handle} into split"
@@ -291,7 +297,7 @@ unsafe fn win_config_split(
                 store(err, why);
             }
         }
-        if curwin_moving_tp && win_valid(win.id()) {
+        if curwin_moving_tp && win_valid(win_id) {
             // SAFETY: the caller's window, still valid -- just checked.
             unsafe { win_goto(w) };
         }
@@ -329,16 +335,19 @@ unsafe fn win_config_float_tp(
 ) -> bool {
     // SAFETY: the caller's window, live for the whole call.
     let w = win;
-    let mut win_tp = win_find_tabpage(win.id());
-    let mut parent = win;
+    // Both identities, taken while both windows are live: `win_goto` below
+    // fires autocommands that can close either.
+    let win_id = win.id();
+    let mut win_tp = win_find_tabpage(win_id);
+    let mut parent_id = win_id;
     let mut parent_tp = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
         let Some(found) = find_window_by_handle(fconfig.window, slot_mut(err)) else {
             return false;
         };
-        parent = found;
-        parent_tp = win_find_tabpage(found.id());
+        parent_id = found.id();
+        parent_tp = win_find_tabpage(parent_id);
     }
     let mut curwin_moving_tp = false;
     let mut altwin: Option<Win> = None;
@@ -356,8 +365,7 @@ unsafe fn win_config_float_tp(
                 // SAFETY: `altwin` is the live neighbour just found.
                 unsafe { win_goto(altwin.expect("altwin")) };
                 if win.is_current() {
-                    // SAFETY: the caller's window.
-                    let handle = win.handle;
+                    let handle = win_id.handle();
                     let why = api_error!(
                         kErrorTypeException,
                         "Failed to switch away from window {handle}"
@@ -365,8 +373,8 @@ unsafe fn win_config_float_tp(
                     store(err, why);
                     return false;
                 }
-                win_tp = win_find_tabpage(win.id());
-                parent_tp = win_find_tabpage(parent.id());
+                win_tp = win_find_tabpage(win_id);
+                parent_tp = win_find_tabpage(parent_id);
                 if win_tp.is_none() || parent_tp.is_none() {
                     err_msg(err, kErrorTypeException, c"Target windows were closed");
                     break '_restore_curwin;
@@ -397,7 +405,7 @@ unsafe fn win_config_float_tp(
             win_remove(w, other_tab(expect_tab(win_tp)));
             win_append(Some(lastwin_nofloating(append_tp)), w, append_tp);
             let mut tp = expect_tab(win_tp);
-            if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
+            if !tp.is_current() && tp.tp_curwin == Some(win_id) {
                 tp.tp_curwin = altwin.map(Win::id);
             }
             // SAFETY: the window's own grid, which is live with it.
@@ -411,7 +419,7 @@ unsafe fn win_config_float_tp(
         win_config_float(w, config);
         return true;
     }
-    if curwin_moving_tp && win_valid(win.id()) {
+    if curwin_moving_tp && win_valid(win_id) {
         // SAFETY: the caller's window, still valid -- just checked.
         unsafe { win_goto(w) };
     }

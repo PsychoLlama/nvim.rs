@@ -156,6 +156,8 @@ pub unsafe fn switch_win_noblock(
     let into = switchwin.cast::<u8>();
     unsafe { into.write_bytes(0, size_of::<SwitchWin>()) };
     let switchwin = unsafe { &mut *switchwin };
+    // Taken while `win` is live: entering the tab page below can free it.
+    let win_id = win.id();
     switchwin.sw_curwin = Win::current_or_none().map(Win::id);
     if win.is_current() {
         switchwin.sw_same_win = true;
@@ -175,7 +177,7 @@ pub unsafe fn switch_win_noblock(
             unsafe { goto_tabpage_tp(tabpage, false, false) };
         }
     }
-    let Some(win) = valid_win(win.id()) else {
+    let Some(win) = valid_win(win_id) else {
         return Err(Failed);
     };
     win.make_current();

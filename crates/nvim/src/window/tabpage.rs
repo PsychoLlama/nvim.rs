@@ -656,9 +656,11 @@ pub(crate) fn goto_tab(
     unsafe { set_keep_msg(ptr::null(), 0) };
 
     skip_win_fix_scroll.set(true);
+    // Taken while it is live: `leave_tab` fires autocommands that can free it.
+    let tabpage_id = tabpage.id();
     let new_curbuf = tabpage.current_window().and_then(Win::buffer_or_none);
     if !tabpage.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
-        let target = valid_tab(tabpage.id()).unwrap_or_else(TabPage::current);
+        let target = valid_tab(tabpage_id).unwrap_or_else(TabPage::current);
         enter_tab(
             target,
             Buf::current(),
@@ -689,9 +691,11 @@ pub unsafe fn goto_tabpage_win(tabpage: TabPage, window: Win) {
 
 /// Enter window `wp` in tab page `tabpage`, updating the GUI tab as well.
 pub(crate) fn goto_tab_win(tabpage: TabPage, window: Win) {
+    // Taken while it is live: `goto_tab` fires autocommands that can free it.
+    let window_id = window.id();
     goto_tab(tabpage, true, true);
     if tabpage.is_current()
-        && let Some(wp) = valid_win(window.id())
+        && let Some(wp) = valid_win(window_id)
     {
         enter(wp, true);
     }

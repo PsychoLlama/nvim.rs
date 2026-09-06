@@ -26,7 +26,7 @@ use crate::window::{
 };
 use crate::winlayer::TabPage;
 use crate::winlayer::graph::switch_to;
-use crate::winlayer::{Buf, Win, tab_windows, windows};
+use crate::winlayer::{Buf, Win, buffer_at, tab_windows, windows};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -71,10 +71,10 @@ pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
 
 /// `buf_valid()`: whether `buffer` is still on the buffer list.
 ///
-/// Takes the identity deliberately — the question is asked about a buffer an
-/// autocommand may already have freed, and only its identity is compared.
+/// Takes the address deliberately — the question is asked about a buffer an
+/// autocommand may already have freed, so it is compared, never read.
 fn buf_is_valid(buffer: Buf) -> bool {
-    buf_valid(buffer.id())
+    buffer_at(buffer.raw()).is_some()
 }
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer

@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::winlayer::{TabPage, Win, windows};
+use crate::winlayer::{TabPage, Win, buffer_at, windows};
 use core::ffi::c_int;
 
 /// `linestatus`: the line is *changed* -- present in every buffer of the
@@ -34,9 +34,9 @@ pub unsafe fn diff_redraw(dofold: bool) {
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: the current tabpage's windows
     // are always the `firstwin` list.
     for mut wp in windows() {
-        // A live window's buffer pointer is a buffer or null, which is what
-        // the `Option` is for. The short circuit is upstream's.
-        if wp.w_onebuf_opt.wo_diff == 0 || !wp.buffer_or_none().is_some_and(|b| buf_valid(b.id())) {
+        // The window is live but its buffer may already have been wiped, so
+        // the pointer is compared, never read. The short circuit is upstream's.
+        if wp.w_onebuf_opt.wo_diff == 0 || buffer_at(wp.w_buffer).is_none() {
             continue;
         }
         wp.redraw_later(UPD_SOME_VALID);

@@ -136,6 +136,9 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         crate::semsg!("E957: Invalid window number");
         return;
     };
+    // The identities, taken while all three are live: `win_goto` and
+    // `win_splitmove` below fire autocommands that can free any of them.
+    let (wp_id, oldwin_id) = (wp.id(), oldwin.id());
     if wp == targetwin || !win_valid(wp.id()) || !win_valid(targetwin.id()) || targetwin.w_floating
     {
         crate::semsg!("E957: Invalid window number");
@@ -158,14 +161,14 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if !targetwin.is_current() {
         unsafe { win_goto(targetwin) };
     }
-    if targetwin.is_current() && win_valid(wp.id()) {
+    if targetwin.is_current() && win_valid(wp_id) {
         if unsafe { win_splitmove(wp, size, flags) }.is_ok() {
             result.vval.v_number = 0;
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
     }
-    if !oldwin.is_current() && win_valid(oldwin.id()) {
+    if !oldwin.is_current() && win_valid(oldwin_id) {
         unsafe { win_goto(oldwin) };
     }
 }

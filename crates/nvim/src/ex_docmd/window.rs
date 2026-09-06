@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::winlayer::WinId;
 use crate::winlayer::last_used_tab;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
@@ -298,6 +299,9 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
 fn open_tabpage(ea: Ex, old_curwin: Win) {
+    // Taken while it is live: `edit` below fires autocommands that can free
+    // the window this came from.
+    let old_curwin_id = old_curwin.id();
     let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
         cmdmod.with(|m| m.cmod_tab)
     } else if ea.addr_count == 0 {
@@ -316,7 +320,7 @@ fn open_tabpage(ea: Ex, old_curwin: Win) {
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
-        && let Some(mut old) = valid_win(old_curwin.id())
+        && let Some(mut old) = valid_win(old_curwin_id)
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
@@ -683,7 +687,7 @@ pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
 pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
-    let curwin_save = Win::current();
+    let curwin_save = Win::current().id();
     prepare_preview_window();
     edit(ea, None);
     back_to_current_window(curwin_save);
@@ -691,7 +695,7 @@ pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
 
 /// `:pbuffer`.
 pub(crate) unsafe fn ex_pbuffer(args: *mut ExArg) {
-    let curwin_save = Win::current();
+    let curwin_save = Win::current().id();
     prepare_preview_window();
     // SAFETY: the caller's promise -- a live command.
     do_exbuffer(unsafe { Ea::new(args) });
@@ -706,9 +710,12 @@ fn prepare_preview_window() {
 }
 
 /// Go back to the window `:pedit` was run from, if it is still there.
-fn back_to_current_window(curwin_save: Win) {
-    if Win::current_raw() != curwin_save.raw()
-        && let Some(saved) = valid_win(curwin_save.id())
+///
+/// Takes the *identity*: the caller saved it before the command that may since
+/// have closed the window.
+fn back_to_current_window(curwin_save: WinId) {
+    if Win::current_or_none().map(Win::id) != Some(curwin_save)
+        && let Some(saved) = valid_win(curwin_save)
     {
         // The preview window is left drawn but not current.
         Win::current().validate_cursor();

@@ -26,7 +26,7 @@ use crate::types::{
 };
 use crate::window::{tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf};
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
-use crate::winlayer::{Win, windows_in_tab};
+use crate::winlayer::{Win, tabpage_at, windows_in_tab};
 use ::libc::abort;
 use core::ffi::CStr;
 use core::ptr;
@@ -224,13 +224,15 @@ pub unsafe fn nvim_open_tabpage(
         }
         return Err(err);
     };
-    if !valid_tabpage(tp.id()) {
+    // `win_new_tabpage` fires `TabNew`, which can close what it just opened,
+    // so both answers come back as addresses to compare and never to read.
+    let Some(tp) = tabpage_at(tp.raw()) else {
         return Err(tabpage_closed(err));
-    }
+    };
+    let tp_id = tp.id();
 
-    // `tabpage_win_valid` reads both lists and nothing else.
     let new_win = wp
-        .filter(|&w| tabpage_win_valid(tp, w.id()))
+        .and_then(|w| windows_in_tab(tp).find(|live| live.raw() == w.raw()))
         .filter(|w| w.w_buffer != b.raw());
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
@@ -238,7 +240,7 @@ pub unsafe fn nvim_open_tabpage(
         let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
         unsafe { win_set_buf(w, b, &mut err) };
         drop(quiet);
-        if !valid_tabpage(tp.id()) {
+        if !valid_tabpage(tp_id) {
             return Err(tabpage_closed(err));
         }
     }

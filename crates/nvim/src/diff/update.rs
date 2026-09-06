@@ -17,7 +17,7 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, NUL};
-use crate::winlayer::{Buf, Live, TabPage, Win};
+use crate::winlayer::{Buf, Live, TabPage, Win, buffer_at};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use std::ffi::CStr;
@@ -364,11 +364,11 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
         let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
-                // SAFETY: a tab page's diff buffers are live or null.
-                let buf = unsafe { Buf::from_raw(tp.tp_diffbuf[idx]) };
-                // `buf_valid` compares against the live buffer list, and a
-                // valid buffer is what `buf_check_timestamp` wants.
-                if let Some(buf) = buf.filter(|b| buf_valid(b.id())) {
+                // A diff buffer may already have been wiped, so the slot is
+                // an address to compare, never one to read: `buffer_at` is
+                // the C's `buf_valid()`, and a valid buffer is what
+                // `buf_check_timestamp` wants.
+                if let Some(buf) = buffer_at(tp.tp_diffbuf[idx]) {
                     unsafe { buf_check_timestamp(buf) };
                 }
             }

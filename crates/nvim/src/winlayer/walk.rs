@@ -56,7 +56,7 @@ use super::graph::{
     prevwin,
 };
 use super::{Buf, BufId, FrameRef, TabId, TabPage, Win, WinId};
-use crate::types::Window;
+use crate::types::{Buffer, Tabpage, Window};
 
 /// `first` and every window after it in its tab page's list.
 pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
@@ -136,6 +136,31 @@ pub(crate) fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
 pub(crate) fn window_at(raw: *const Window) -> Option<Win> {
     (!raw.is_null())
         .then(|| windows().find(|wp| wp.raw().cast_const() == raw))
+        .flatten()
+}
+
+/// The buffer at address `raw`, if it is still on the buffer list -- the C's
+/// `buf_valid()`.
+///
+/// The buffer twin of [`window_at`], and here for the same reason: a caller
+/// holding a `Buffer *` out of a window's `w_buffer`, a tab page's
+/// `tp_diffbuf` or a saved scan state is holding an address an autocommand
+/// may already have freed, so it can only be *compared*. A caller that still
+/// has its buffer live asks [`BufId::get`] instead.
+pub(crate) fn buffer_at(raw: *const Buffer) -> Option<Buf> {
+    (!raw.is_null())
+        .then(|| buffers_back().find(|buf| buf.raw().cast_const() == raw))
+        .flatten()
+}
+
+/// The tab page at address `raw`, if it is still on the tab page list.
+///
+/// The third of the address lookups, and the same rule: a caller holding a
+/// `Tabpage *` an autocommand may already have closed -- `win_new_tabpage`'s
+/// answer, read after its own `TabNew` handlers ran -- can only compare it.
+pub(crate) fn tabpage_at(raw: *const Tabpage) -> Option<TabPage> {
+    (!raw.is_null())
+        .then(|| tabs().find(|tp| tp.raw().cast_const() == raw))
         .flatten()
 }
 

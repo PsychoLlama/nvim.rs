@@ -75,9 +75,7 @@ use crate::ui::{
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 use crate::undo::no_u_sync;
-use crate::window::{
-    goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
-};
+use crate::window::{goto_tabpage_tp, valid_tab, valid_win, win_close, win_enter, win_setheight};
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{Win, windows};

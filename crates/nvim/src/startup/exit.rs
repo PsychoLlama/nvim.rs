@@ -17,7 +17,7 @@ use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
-use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick, buf_valid};
+use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick};
 use crate::eval::garbage_collect;
 use crate::eval::gc::garbage_collect_at_exit;
 use crate::eval::userfunc::invoke_all_defer;
@@ -46,7 +46,7 @@ use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, tcdrain};
 
-use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
+use crate::winlayer::{Buf, WinId, buffer_at, buffers, first_buffer, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -143,10 +143,10 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                 false => tp.tp_firstwin.and_then(WinId::get),
             };
             while let Some(wp) = win {
-                // An autocommand may already have closed the buffer.
+                // An autocommand may already have closed the buffer, so the
+                // address is compared and never read.
                 let buf = wp.w_buffer;
-                // SAFETY: a live window's buffer is live.
-                let live = unsafe { Buf::from_raw(buf) }.filter(|b| buf_valid(b.id()));
+                let live = buffer_at(buf);
                 if live.is_some_and(|b| buf_get_changedtick(b) != -1) {
                     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
                     let fname = unsafe { (*buf).b_fname };

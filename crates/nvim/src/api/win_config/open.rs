@@ -171,8 +171,12 @@ pub unsafe fn nvim_open_win(
             break '_cleanup;
         };
         let wp = window;
+        // The new window's identity, taken now: every `win_find_tabpage`
+        // below asks whether the autocommands before it closed the window,
+        // and `Win::id` reads the window itself.
+        let wp_id = wp.id();
         if cmdline_offset < INT_MAX {
-            cmdline_win.set(Some(wp.id()));
+            cmdline_win.set(Some(wp_id));
         }
         bufref = BufRef::of(b);
         if !noautocmd {
@@ -197,7 +201,7 @@ pub unsafe fn nvim_open_win(
                 )
             };
             if switched {
-                tp = win_find_tabpage(wp.id());
+                tp = win_find_tabpage(wp_id);
             }
             // SAFETY: the matching restore of the switch above.
             unsafe { restore_win_noblock(&raw mut switchwin_0, true) };
@@ -205,7 +209,7 @@ pub unsafe fn nvim_open_win(
         if let (Some(at), true) = (tp, enter) {
             // SAFETY: `at` still holds `wp`, so both are live.
             unsafe { goto_tabpage_win(at, window) };
-            tp = win_find_tabpage(wp.id());
+            tp = win_find_tabpage(wp_id);
         }
         // `wp` is read only once its tab page still holds it, which is what
         // says the autocommands above did not close it.
@@ -215,7 +219,7 @@ pub unsafe fn nvim_open_win(
             // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
             unsafe { win_set_buf(window, b, &mut error) };
             if !noautocmd {
-                tp = win_find_tabpage(wp.id());
+                tp = win_find_tabpage(wp_id);
             }
             drop(quiet);
         }

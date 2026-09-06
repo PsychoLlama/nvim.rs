@@ -958,11 +958,12 @@ T_SUFFIX_DECL = re.compile(
 #
 # The residue inside the home is the floor and is deliberately not zero:
 # `Win::new`/`from_raw`/`raw`/`current_raw` for each of the three handles are
-# where an address becomes an identity and back, `winlayer::window_at` is the
-# one lookup that must still speak in addresses (a layout snapshot's `fr_win`,
-# which an autocommand may have freed), and `win_col_off` is a C ABI the
-# functional suite calls through `ffi.cdef`. Every one of them is the *reason*
-# the rest of the tree has none.
+# where an address becomes an identity and back; `window_at`/`buffer_at`/
+# `tabpage_at` are the lookups that must still speak in addresses (a caller
+# holding a pointer an autocommand may already have freed cannot ask for an
+# identity -- reading one is the use-after-free); and `win_col_off` is a C ABI
+# the functional suite calls through `ffi.cdef`. Every one of them is the
+# *reason* the rest of the tree has none.
 RAW_WIN_BUF = re.compile(r"\*(?:mut|const)\s+(?:Window|Buffer|Tabpage)\b")
 # The graph objects behind an exclusive Rust borrow, same spans. `&mut` is
 # `noalias`, and `curwin`/`curbuf` alias every window and buffer the editor

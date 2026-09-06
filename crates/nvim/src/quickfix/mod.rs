@@ -26,7 +26,7 @@ use crate::autocmd::{
     block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    buf_is_help, buf_is_normal, buf_is_quickfix, buf_valid, buflist_findname_exp, buflist_getfile,
+    buf_is_help, buf_is_normal, buf_is_quickfix, buflist_findname_exp, buflist_getfile,
     buflist_new, close_buffer, current_buf, do_modelines, find_buf, no_write_message, setfname,
     wipe_buffer,
 };

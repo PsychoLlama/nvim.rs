@@ -54,6 +54,9 @@ pub unsafe fn win_goto(window: Win) {
 pub(crate) fn goto_win(window: Win) {
     let mut window = window;
     let owp = Win::current();
+    // Both identities are taken while the windows are live: the autocommands
+    // below can free either, and `Win::id` reads the window it names.
+    let (window_id, owp_id) = (window.id(), owp.id());
     // SAFETY: reads the editor's lock state.
     if unsafe { text_or_buf_locked() } {
         beep();
@@ -68,13 +71,13 @@ pub(crate) fn goto_win(window: Win) {
     }
 
     // autocommand may have made `window` invalid
-    let Some(window) = valid_win(window.id()) else {
+    let Some(window) = valid_win(window_id) else {
         return;
     };
     enter(window, true);
 
     // Conceal cursor line in previous window, unconceal in current window.
-    if let Some(owp) = valid_win(owp.id())
+    if let Some(owp) = valid_win(owp_id)
         && owp.w_onebuf_opt.wo_cole > 0 as OptInt
         && msg_scrolled.get() == 0
     {
@@ -280,6 +283,8 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     if window.is_current() && !curwin_invalid {
         return; // nothing to do
     }
+    // Taken before the autocommands that may free `window`.
+    let window_id = window.id();
     let mut other_buffer = false;
     if !curwin_invalid {
         leave_window(Win::current());
@@ -289,12 +294,12 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         if window.w_buffer != Buf::current_raw() {
             fire(AutoEvent::BufLeave, Buf::current());
             other_buffer = true;
-            if valid_win(window.id()).is_none() {
+            if valid_win(window_id).is_none() {
                 return;
             }
         }
         fire(AutoEvent::WinLeave, Buf::current());
-        if valid_win(window.id()).is_none() {
+        if valid_win(window_id).is_none() {
             return;
         }
         // autocmds may abort script processing

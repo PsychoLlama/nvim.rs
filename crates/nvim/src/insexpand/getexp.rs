@@ -14,7 +14,7 @@ use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
-use crate::winlayer::{Buf, buffers};
+use crate::winlayer::{Buf, buffer_at, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -133,9 +133,9 @@ impl CptScan {
 /// # Safety
 /// `st` must be the live scan state.
 unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
-    // SAFETY: the caller's state; its buffer is live or wiped, which is the
-    // question this asks.
-    unsafe { Buf::from_raw((*st).ins_buf) }.is_some_and(|b| buf_valid(b.id()))
+    // SAFETY: the caller's state. Its buffer is live or wiped, which is the
+    // question this asks, so the address is compared and never read.
+    buffer_at(unsafe { (*st).ins_buf }).is_some()
 }
 
 pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {

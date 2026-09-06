@@ -21,7 +21,7 @@ use core::ptr;
 use super::*;
 
 use crate::autocmd::state::autocmd_busy;
-use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
+use crate::buffer::{BufRef, buf_is_prompt, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
@@ -37,7 +37,7 @@ use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
-use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
+use crate::winlayer::{Win, WinId, buffer_at, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: Win) {
     enter_window(win);
@@ -263,6 +263,9 @@ fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
 ///
 /// `false` when there are other windows and nothing was done.
 pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: TabPage) -> bool {
+    // Taken while both are live: `goto_tab` below fires autocommands that can
+    // free either, and that is what the checks after it ask about.
+    let (win_id, prev_curtab_id) = (win.id(), prev_curtab.id());
     let mut free_buf = free_buf;
     if firstwin.get() != lastwin.get() {
         return false;
@@ -287,8 +290,8 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
     if let Some(prev) =
-        valid_tab(prev_curtab.id()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
-        && prev.tp_firstwin == Some(win.id())
+        valid_tab(prev_curtab_id).filter(|_| TabPage::current_raw() != prev_curtab.raw())
+        && prev.tp_firstwin == Some(win_id)
     {
         close_othertab(win, free_buf, prev, false);
     }
@@ -309,6 +312,8 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
 /// Answers whether `close_buffer()` decremented `b_nwindows`.
 pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> bool {
     let mut win = win;
+    // Taken before `close_buffer`, whose autocommands can free the window.
+    let win_id = win.id();
     let Some(mut buf) = win.buffer_or_none() else {
         return false;
     };
@@ -323,7 +328,7 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     let bufref = BufRef::of(Buf::current());
     win.w_locked = true;
     let retval = close_buffer(Some(win), buf, action, abort_if_last, true);
-    if valid_win_any_tab(win.id()) {
+    if valid_win_any_tab(win_id) {
         win.w_locked = false;
     }
     // Make sure `curbuf` is valid: it can become invalid if 'bufhidden' is
@@ -370,6 +375,9 @@ pub unsafe fn close_others(message: c_int, forceit: c_int) {
 /// 'hidden' is set or `forceit` and the buffer was changed. `:only`, `:bdel`.
 fn close_all_others(message: bool, forceit: bool) {
     let old_curwin = Win::current();
+    // Taken while it is live: the closes below fire autocommands that can free
+    // it, which is what the check inside the loop asks about.
+    let old_curwin_id = old_curwin.id();
     let announce = message && !autocmd_busy.get();
     if old_curwin.w_floating {
         if announce {
@@ -387,10 +395,11 @@ fn close_all_others(message: bool, forceit: bool) {
     // Be very careful here: autocommands may change the window layout.
     let mut next = first_window().map(Win::id);
     while let Some(mut wp) = next.and_then(valid_win) {
+        let wp_id = wp.id();
         let mut nextwp = wp.next().map(Win::id);
         'skip: {
             // autocommands messed this one up
-            if !old_curwin.is_current() && valid_win(old_curwin.id()).is_some() {
+            if !old_curwin.is_current() && valid_win(old_curwin_id).is_some() {
                 old_curwin.make_current();
                 old_curwin.buffer().make_current();
             }
@@ -398,14 +407,14 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip; // don't close the current window
             }
             // autocommands messed this one up
-            if !buf_is_valid(wp.buffer()) && valid_win(wp.id()).is_some() {
+            if !buf_is_valid(wp.buffer()) && valid_win(wp_id).is_some() {
                 wp.w_buffer = ptr::null_mut::<Buffer>();
                 close(wp, false, false);
                 break 'skip;
             }
             // Check whether it is allowed to abandon this window.
             let r = may_abandon(wp.buffer(), forceit);
-            if valid_win(wp.id()).is_none() {
+            if valid_win(wp_id).is_none() {
                 nextwp = first_window().map(Win::id); // messed up
                 break 'skip;
             }
@@ -413,7 +422,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 let confirm = p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM);
                 if message && confirm && p_write.get() != 0 {
                     ask_about_changes(wp.buffer());
-                    if valid_win(wp.id()).is_none() {
+                    if valid_win(wp_id).is_none() {
                         nextwp = first_window().map(Win::id); // messed up
                         break 'skip;
                     }
@@ -434,8 +443,11 @@ fn close_all_others(message: bool, forceit: bool) {
 }
 
 /// Whether `buffer` is still on the buffer list.
+///
+/// Takes the address, not the identity: the caller's `w_buffer` may already
+/// have been freed, and [`buffer_at`] compares without reading it.
 fn buf_is_valid(buffer: Buf) -> bool {
-    buf_valid(buffer.id())
+    buffer_at(buffer.raw()).is_some()
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.

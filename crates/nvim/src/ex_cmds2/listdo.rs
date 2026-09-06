@@ -42,9 +42,9 @@ use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{AcoSave, ExArg, LineNr, size_t};
-use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
+use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
-use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
+use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -180,19 +180,28 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
     // which is why every step re-validates what it is about to touch.
     let mut i: c_int = 0;
     // Start at the eap->line1'th argument/window/tab page.
-    let mut wp = first_window();
-    let mut tp = first_tab();
+    // Identities, not addresses: the command run for each entry can close the
+    // window or tab page the walk is standing on, and the next round asks
+    // whether it is still there.
+    let mut wp = first_window().map(Win::id);
+    let mut tp = first_tab().map(TabPage::id);
     match list {
         ListDo::Windows => {
-            while let Some(cur) = wp.filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 }) {
+            while let Some(cur) = wp
+                .and_then(WinId::get)
+                .filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 })
+            {
                 i += 1;
-                wp = cur.next();
+                wp = cur.next().map(Win::id);
             }
         }
         ListDo::Tabs => {
-            while let Some(cur) = tp.filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 }) {
+            while let Some(cur) = tp
+                .and_then(TabId::get)
+                .filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 })
+            {
                 i += 1;
-                tp = cur.next();
+                tp = cur.next().map(TabPage::id);
             }
         }
         ListDo::Args => i = unsafe { (*args).line1 } as c_int - 1,
@@ -269,7 +278,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Windows => {
                 // Go to window "wp".
-                let Some(cur) = wp.filter(|&wp| win_valid(wp.id())) else {
+                let Some(cur) = wp.and_then(valid_win) else {
                     break;
                 };
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
@@ -280,15 +289,15 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                         break;
                     }
                 }
-                wp = cur.next();
+                wp = cur.next().map(Win::id);
             }
             ListDo::Tabs => {
                 // Go to tab page "tp".
-                let Some(cur) = tp.filter(|&tp| valid_tabpage(tp.id())) else {
+                let Some(cur) = tp.and_then(valid_tab) else {
                     break;
                 };
                 goto_tab(cur, true, true);
-                tp = cur.next();
+                tp = cur.next().map(TabPage::id);
             }
             ListDo::Buffers => {
                 // Remember the number of the next listed buffer, in case

@@ -12,7 +12,7 @@ use core::ptr;
 use crate::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{apply_autocmds, has_event};
-use crate::buffer::{buf_spname, buf_valid};
+use crate::buffer::buf_spname;
 use crate::change::{
     deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,
 };

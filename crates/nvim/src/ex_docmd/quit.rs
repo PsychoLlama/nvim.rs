@@ -94,6 +94,9 @@ pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
 /// `window` must be a live window on entry. It need not survive the call: the
 /// autocommands may close it, which is what `quit_was_cancelled` is for.
 pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
+    // The identity, taken here while the window is provably live: the
+    // autocommands below may free it, and `Win::id` reads the window itself.
+    let window_id = window.id();
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
@@ -108,7 +111,7 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
     );
     // The buffer is read *through* `window`, and only after `win_valid`
     // has said `window` is still there — QuitPre may have closed it.
-    if quit_was_cancelled(window, || window.buffer()) {
+    if quit_was_cancelled(window_id, || window.buffer()) {
         return true;
     }
 
@@ -121,7 +124,7 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
             false,
             Buf::current_or_none(),
         );
-        if quit_was_cancelled(window, Buf::current) {
+        if quit_was_cancelled(window_id, Buf::current) {
             return true;
         }
     }
@@ -137,8 +140,8 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
 /// autocommand may have closed `window` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-fn quit_was_cancelled(window: Win, buf: impl FnOnce() -> Buf) -> bool {
-    if win_valid(window.id()) && !curbuf_locked() {
+fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
+    if win_valid(window) && !curbuf_locked() {
         let buf = buf();
         if !(buf.b_nwindows == 1 && buf.b_locked > 0) {
             return false;
@@ -433,8 +436,10 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     while done < 1000 {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
+                // Taken before the close, which may free the tab page.
+                let tp_id = tp.id();
                 unsafe { tabpage_close_other(tp, args.forceit) };
-                if valid_tabpage(tp.id()) {
+                if valid_tabpage(tp_id) {
                     done = 1000;
                 }
                 break;
@@ -485,6 +490,9 @@ pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
     trigger_tabclosedpre(tabpage);
     tabpage.tp_did_tabclosedpre = true;
 
+    // Taken while it is live: each close below may free the tab page, which is
+    // what the check after it asks about.
+    let tabpage_id = tabpage.id();
     let mut done = 0;
     let mut prev_idx: [c_char; 65] = [0; 65];
     loop {
@@ -506,7 +514,7 @@ pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
         if let Some(last) = wp.and_then(WinId::get) {
             unsafe { ex_win_close(forceit, last, Some(tabpage)) };
         }
-        if !valid_tabpage(tabpage.id()) {
+        if !valid_tabpage(tabpage_id) {
             break;
         }
         if tabpage.tp_lastwin == wp {

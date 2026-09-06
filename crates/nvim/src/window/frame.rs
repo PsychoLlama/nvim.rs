@@ -39,6 +39,9 @@ pub(crate) struct AltWin {
 /// room and along which axis.
 pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_int) {
     let mut win_tp = tabpage.unwrap_or_else(TabPage::current);
+    // Taken before `win_free`: `Win::id` reads the window's own handle, so it
+    // cannot be asked after the memory is gone. The C compares the pointer.
+    let id = win.id();
     let (wp, dir) = if win.w_floating {
         // SAFETY: `win` is only compared, never read.
         (unsafe { win_float_find_altwin(win, tabpage) }, 'h' as c_int)
@@ -49,10 +52,10 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
         (wp, dir)
     };
     win_free(win, tabpage);
-    if win_tp.tp_curwin == Some(win.id()) {
+    if win_tp.tp_curwin == Some(id) {
         win_tp.tp_curwin = wp.map(Win::id);
     }
-    if cmdline_win.get() == Some(win.id()) {
+    if cmdline_win.get() == Some(id) {
         cmdline_win.set(None);
     }
     (wp, dir)

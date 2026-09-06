@@ -18,6 +18,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::option::boolean_optval;
 use crate::types::{NUL, OptionSetFlags};
+use crate::window::valid_tab;
 use crate::winlayer::graph::switch_buffer;
 use crate::winlayer::{Buf, TabPage, Win, WinId, first_window};
 
@@ -429,13 +430,15 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         return;
     }
 
-    let save_curtab = TabPage::current();
+    // The identity, taken while it is live: `set_scoped_var` below can run
+    // autocommands that close this tab page.
+    let save_curtab = TabPage::current().id();
     let save_lu_tp = lastused_tabpage.get();
     unsafe { goto_tabpage_tp(tp.expect("a live handle"), false, false) };
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
-    if valid_tabpage(save_curtab.id()) {
+    if let Some(save_curtab) = valid_tab(save_curtab) {
         unsafe { goto_tabpage_tp(save_curtab, false, false) };
         // Going back must not count as a use of the previous tab page.
         if save_lu_tp.is_some_and(valid_tabpage) {

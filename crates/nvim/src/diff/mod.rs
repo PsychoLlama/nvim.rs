@@ -39,8 +39,7 @@ use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
 };
 use crate::buffer::{
-    buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_valid, buflist_findpat, current_buf,
-    find_buf,
+    buf_get_changedtick, buf_is_empty, buf_is_prompt, buflist_findpat, current_buf, find_buf,
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{change_warning, changed_lines};

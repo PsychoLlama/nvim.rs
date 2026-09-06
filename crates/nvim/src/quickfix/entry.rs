@@ -17,6 +17,7 @@ use crate::buffer::BufRef;
 use crate::cstr;
 use crate::file_search::Name;
 use crate::types::CmdIdx;
+use crate::winlayer::window_at;
 
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -239,7 +240,9 @@ pub(crate) unsafe fn qf_guess_filepath(mut qfl: Qfl, filename: *mut c_char) -> *
 pub(crate) fn qflist_valid(window: Option<Win>, qf_id: c_uint) -> bool {
     let qi = match window {
         None => QfStack::Global.raw(),
-        Some(wp) if win_valid(wp.id()) => win_loclist(wp),
+        // The address, not the identity: `wp` was saved before the
+        // autocommand that may have closed it, so it is compared, never read.
+        Some(wp) if window_at(wp.raw()).is_some() => win_loclist(wp),
         Some(_) => return false,
     };
     // SAFETY: a live stack, tested for null.

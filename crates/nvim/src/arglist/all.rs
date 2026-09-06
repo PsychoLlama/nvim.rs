@@ -286,7 +286,9 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
     // Moving tab pages around in an autocommand may cause an endless loop.
     let _no_move = Lock::tabpage_move();
     loop {
-        let tpnext = TabPage::current().next();
+        // The identity, taken while the tab page is live: the closes below
+        // can free it, and that is what the check after them asks about.
+        let tpnext = TabPage::current().next().map(TabPage::id);
         // SAFETY: as above.
         unsafe { close_unused_windows_in_tab(aall, old_curwin, old_curtab) };
         // Without the ":tab" modifier only do the current tab page.
@@ -294,10 +296,8 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
             break;
         };
         // A tab page that is gone falls back to the first one.
-        let tpnext = match valid_tabpage(tpnext.id()) {
-            true => tpnext,
-            false => first_tab().expect("there is always a first tab page"),
-        };
+        let tpnext = valid_tab(tpnext)
+            .unwrap_or_else(|| first_tab().expect("there is always a first tab page"));
         goto_tab(tpnext, true, true);
     }
 }

@@ -409,7 +409,7 @@ fn close_buffer_inner(
 ) -> bool {
     let mut how = Disposition::of(buffer, action);
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = Win::current();
+    let the_curwin = Win::current().id();
     let the_curtab = TabPage::current();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
     // ABORT_ON_INTERNAL_ERROR builds.
@@ -600,11 +600,14 @@ fn leave_last_window(
 
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
-fn restore_curwin(was_curwin: bool, the_curwin: Win, tabpage: TabPage) {
-    if !was_curwin || Win::current_raw() == the_curwin.raw() {
+///
+/// Takes the *identity*: the caller saved it before the autocommands that may
+/// since have freed the window, and `Win::id` reads the window itself.
+fn restore_curwin(was_curwin: bool, the_curwin: WinId, tabpage: TabPage) {
+    if !was_curwin || Win::current_or_none().map(Win::id) == Some(the_curwin) {
         return;
     }
-    let Some(wp) = valid_win(the_curwin.id()) else {
+    let Some(wp) = valid_win(the_curwin) else {
         return;
     };
     block_autocmds_now();
@@ -685,7 +688,7 @@ pub fn buf_clear() {
 pub fn buf_freeall(buffer: Buf, flags: c_int) {
     let is_curbuf = buffer.raw() == Buf::current_raw();
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = Win::current();
+    let the_curwin = Win::current().id();
     let the_curtab = TabPage::current();
 
     let Some(mut buf) = announce_unload(buffer, flags) else {

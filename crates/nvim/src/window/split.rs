@@ -137,6 +137,8 @@ fn split_ins(
     } else {
         Win::current()
     };
+    // Taken while it is live: the autocommands below can close it.
+    let oldwin_id = oldwin.id();
 
     let vertical = flags & WSP_VERT as c_int != 0;
     let toplevel = flags & (WSP_TOP as c_int | WSP_BOT as c_int) != 0;
@@ -236,9 +238,9 @@ fn split_ins(
         enter_ext(wp, new_flags | enter);
     }
     opt.set(saved as OptInt);
-    // An autocommand may have closed `oldwin`.
-    // SAFETY: only compares the pointer against the window list.
-    if win_valid(oldwin.id()) {
+    // An autocommand may have closed `oldwin`, so the identity was taken
+    // before `enter_ext` fired them.
+    if win_valid(oldwin_id) {
         oldwin.w_pos_changed = true;
     }
     Some(wp)

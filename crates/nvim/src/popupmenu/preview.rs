@@ -21,7 +21,7 @@ use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
-use crate::winlayer::{Buf, TabPage};
+use crate::winlayer::{Buf, TabId, TabPage, WinId};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
@@ -299,8 +299,11 @@ unsafe fn pum_show_info(
     // SAFETY: every window pointer below is re-checked with `win_valid`
     // after anything that can run autocommands.
     let mut resized = false;
-    let curwin_save = Win::current();
-    let curtab_save = TabPage::current();
+    // The identities, taken while both are live: opening the preview window
+    // fires autocommands that can free either, which is what every
+    // re-validation below asks about.
+    let curwin_save = Win::current().id();
+    let curtab_save = TabPage::current().id();
 
     if use_float {
         unsafe { block_autocmds() };
@@ -392,7 +395,7 @@ unsafe fn pum_fill_info(
     use_float: bool,
     prev_selected: c_int,
     mut resized: bool,
-    curwin_save: Win,
+    curwin_save: WinId,
 ) -> bool {
     // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
@@ -419,9 +422,9 @@ unsafe fn pum_fill_info(
 
     if use_float
         && !unsafe { pum_adjust_info_position(Win::current(), max_info_width) }
-        && win_valid(curwin_save.id())
+        && let Some(saved) = valid_win(curwin_save)
     {
-        unsafe { win_enter(curwin_save, false) };
+        unsafe { win_enter(saved, false) };
     }
     resized
 }
@@ -433,15 +436,17 @@ unsafe fn pum_fill_info(
 ///
 /// # Safety
 /// `curwin_save`/`curtab_save` are re-checked before use.
-unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bool) -> bool {
-    // SAFETY: both pointers are validated before they are entered.
-    let left_window = Win::current_raw() != curwin_save.raw() && win_valid(curwin_save.id());
-    let left_tab = TabPage::current_raw() != curtab_save.raw() && valid_tabpage(curtab_save.id());
-    if !left_window && !left_tab {
+unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> bool {
+    // Both identities are resolved to a live object before either is entered.
+    let saved_tab = valid_tab(curtab_save);
+    let left_window = Win::current_or_none().map(Win::id) != Some(curwin_save)
+        && valid_win(curwin_save).is_some();
+    let left_tab = TabPage::current_or_none().map(TabPage::id) != Some(curtab_save);
+    if !left_window && !(left_tab && saved_tab.is_some()) {
         return resized;
     }
-    if left_tab {
-        unsafe { goto_tabpage_tp(curtab_save, false, false) };
+    if let Some(tp) = saved_tab.filter(|_| left_tab) {
+        unsafe { goto_tabpage_tp(tp, false, false) };
     }
 
     // On the first completion, with the preview window not resized, skip
@@ -455,9 +460,9 @@ unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bo
 
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.
-    if resized && win_valid(curwin_save.id()) {
+    if resized && let Some(saved) = valid_win(curwin_save) {
         let no_sync = Suppress::undo_sync();
-        unsafe { win_enter(curwin_save, true) };
+        unsafe { win_enter(saved, true) };
         drop(no_sync);
         update_topline(Win::current());
     }
@@ -470,9 +475,9 @@ unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bo
     let _ = unsafe { update_screen() };
     pum_is_visible.set(true);
 
-    if !resized && win_valid(curwin_save.id()) {
+    if !resized && let Some(saved) = valid_win(curwin_save) {
         let _no_sync = Suppress::undo_sync();
-        unsafe { win_enter(curwin_save, true) };
+        unsafe { win_enter(saved, true) };
     }
 
     // Autocommands may have changed it again.
