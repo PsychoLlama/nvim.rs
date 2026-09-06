@@ -91,15 +91,15 @@ fn leave_cleanup_now(cs: &mut Cleanup) {
 }
 fn close_win(win: Win, free_buf: bool, force: bool) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_close(win.raw(), free_buf, force) }
+    unsafe { win_close(win, free_buf, force) }
 }
 fn window_locked(win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { win_locked(win.raw()) != 0 }
+    unsafe { win_locked(win) != 0 }
 }
 fn is_last_window(win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { last_window(win.raw()) }
+    unsafe { last_window(win) }
 }
 fn is_autocmd_window(win: *mut Window) -> bool {
     // SAFETY: the pointer is only compared against the autocommand windows.
@@ -120,7 +120,7 @@ fn may_change_buffer(forceit: bool) -> bool {
 }
 fn forget_jumps(win: Win, fnum: c_int) {
     // SAFETY: a live window.
-    unsafe { mark_jumplist_forget_file(win.raw(), fnum) };
+    unsafe { mark_jumplist_forget_file(win, fnum) };
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.

@@ -169,7 +169,7 @@ pub(crate) unsafe fn draw_window_lines(
                     let mut zero_spv = SpellVars::default();
                     w.row = unsafe {
                         win_line(
-                            window.raw(),
+                            window,
                             window.w_botline,
                             w.row,
                             window.w_view_height,
@@ -278,7 +278,7 @@ unsafe fn draw_one_line(
     };
 
     // A concealed line with no filler lines takes no rows at all.
-    let concealed = unsafe { decor_conceal_line(window.raw(), w.lnum - 1, false) };
+    let concealed = unsafe { decor_conceal_line(window, w.lnum - 1, false) };
     if concealed && unsafe { win_get_fill(Win::new(window.raw()), w.lnum) } == 0 {
         let step = if foldinfo.fi_lines != 0 {
             foldinfo.fi_lines
@@ -309,7 +309,7 @@ unsafe fn draw_one_line(
         // below take the rest.
         w.row = window.w_view_height + 1;
     } else {
-        unsafe { prepare_search_hl(window.raw(), SearchHl::current().raw(), w.lnum) };
+        unsafe { prepare_search_hl(window, SearchHl::current().raw(), w.lnum) };
         // Let the syntax machinery know lines were skipped.
         if w.syntax_last_parsed != 0
             && w.syntax_last_parsed + 1 < w.lnum
@@ -331,7 +331,7 @@ unsafe fn draw_one_line(
         };
         w.row = unsafe {
             win_line(
-                window.raw(),
+                window,
                 w.lnum,
                 w.srow,
                 window.w_view_height,
@@ -365,7 +365,7 @@ unsafe fn draw_one_line(
         // concealed line is concealed with it.
         let mut virt_below = unsafe {
             decor_virt_lines(
-                window.raw(),
+                window,
                 lastlnum,
                 lastlnum + 1,
                 ::core::ptr::null_mut(),
@@ -375,7 +375,7 @@ unsafe fn draw_one_line(
         } > 0;
         while !virt_below
             && unsafe { (*wl).wl_lastlnum } < unsafe { (*buffer).b_ml.ml_line_count }
-            && unsafe { decor_conceal_line(window.raw(), (*wl).wl_lastlnum, false) }
+            && unsafe { decor_conceal_line(window, (*wl).wl_lastlnum, false) }
         {
             virt_below = false;
             unsafe { (*wl).wl_lastlnum += 1 };
@@ -484,7 +484,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
             new_rows += old_cline_height;
             j += 1;
         } else {
-            let (n, l_last) = unsafe { plines_correct_topline(window.raw(), l, true) };
+            let (n, l_last) = unsafe { plines_correct_topline(window, l, true) };
             (l, new_rows) = (l_last, new_rows + n);
             j += c_int::from(n > 0); // do not count concealed lines
         }
@@ -503,7 +503,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
         if w.row - xtra_rows >= window.w_view_height - 2 {
             rg.mod_bot = MAXLNUM as LineNr;
         } else {
-            unsafe { win_scroll_lines(window.raw(), w.row, xtra_rows) };
+            unsafe { win_scroll_lines(window, w.row, xtra_rows) };
             rg.bot_start = window.w_view_height + xtra_rows;
             rg.bot_scroll_start = rg.bot_start;
         }
@@ -513,7 +513,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
         if w.row + xtra_rows >= window.w_view_height - 2 {
             rg.mod_bot = MAXLNUM as LineNr;
         } else {
-            unsafe { win_scroll_lines(window.raw(), w.row + old_rows, xtra_rows) };
+            unsafe { win_scroll_lines(window, w.row + old_rows, xtra_rows) };
             rg.bot_scroll_start = 0;
             if rg.top_end > w.row + old_rows {
                 // The part of the top area that still needs updating was
@@ -621,7 +621,7 @@ unsafe fn skip_one_line(
         // A non-zero `col_rows` tells `win_line` to draw only the columns.
         unsafe {
             win_line(
-                window.raw(),
+                window,
                 w.lnum,
                 w.srow,
                 window.w_view_height,
@@ -653,7 +653,7 @@ unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
     window.w_valid.clear(WinValid::WCOL);
-    unsafe { decor_redraw_reset(window.raw(), decor) };
+    unsafe { decor_redraw_reset(window, decor) };
     unsafe { decor_providers_invoke_win(window.raw(), decor) };
 }
 
@@ -663,8 +663,7 @@ unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
 /// `window` must be a live window.
 unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
     // SAFETY: the caller's window; the grid batch is opened and flushed here.
-    let at_attr =
-        unsafe { hl_combine_attr(win_bg_attr(window.raw()), win_hl_attr(window.raw(), HLF_AT)) };
+    let at_attr = unsafe { hl_combine_attr(win_bg_attr(window), win_hl_attr(window, HLF_AT)) };
 
     if w.lnum == window.w_topline {
         // A single line that does not fit. Do not overwrite it -- it can
@@ -765,13 +764,12 @@ unsafe fn draw_end_of_buffer(window: Win, buffer: *mut Buffer, rg: &Regions, w: 
 /// Positive `line_count` scrolls down, making room at `row`; negative deletes
 /// rows there. Nothing happens when the area to move would be off the window --
 /// the caller redraws it instead.
-pub unsafe fn win_scroll_lines(window: *mut Window, row: c_int, line_count: c_int) {
+pub unsafe fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
     // SAFETY: a live window; `grid_adjust` maps its rows onto the grid that
     // carries them.
     if !unsafe { redrawing() } || line_count == 0 {
         return;
     }
-    let window = unsafe { Win::new(window) };
 
     let mut col = 0;
     let mut row_off = 0;
@@ -824,7 +822,7 @@ pub unsafe fn win_draw_end(
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.
     let view_width = window.w_view_width;
-    let fdc = unsafe { compute_foldcolumn(window.raw(), 0) };
+    let fdc = unsafe { compute_foldcolumn(window, 0) };
     let scwidth = window.w_scwidth;
 
     // The `win_hl_attr` lookups deliberately stay inside the loop, in
@@ -837,7 +835,7 @@ pub unsafe fn win_draw_end(
         if draw_margin {
             if fdc > 0 {
                 n = grid_line_fill(n, view_width.min(n + fdc), schar_from_ascii(b' '), unsafe {
-                    win_hl_attr(window.raw(), HLF_FC)
+                    win_hl_attr(window, HLF_FC)
                 });
             }
             if scwidth > 0 {
@@ -845,28 +843,28 @@ pub unsafe fn win_draw_end(
                     n,
                     view_width.min(n + scwidth * SIGN_WIDTH as c_int),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(window.raw(), HLF_SC) },
+                    unsafe { win_hl_attr(window, HLF_SC) },
                 );
             }
             if (window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
                 && !cpo_has(CpoFlag::NUMCOL)
             {
-                let width = unsafe { number_width(window.raw()) } + 1;
+                let width = unsafe { number_width(window) } + 1;
                 n = grid_line_fill(
                     n,
                     view_width.min(n + width),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(window.raw(), HLF_N) },
+                    unsafe { win_hl_attr(window, HLF_N) },
                 );
             }
         }
 
-        let attr = unsafe { win_hl_attr(window.raw(), hl) };
+        let attr = unsafe { win_hl_attr(window, hl) };
         if n < view_width {
             grid_line_put_schar(n, c1, attr);
             n += 1;
         }
-        grid_line_clear_end(n, view_width, unsafe { win_bg_attr(window.raw()) }, attr);
+        grid_line_clear_end(n, view_width, unsafe { win_bg_attr(window) }, attr);
 
         if window.w_onebuf_opt.wo_rl != 0 {
             grid_line_mirror(view_width);

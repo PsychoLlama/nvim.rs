@@ -69,7 +69,7 @@ pub unsafe fn win_redr_status(window: *mut Window) {
     if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
         let mut group = HLF_C;
         // SAFETY: a live window's frame chain.
-        let fillchar = if unsafe { stl_connected(window) } {
+        let fillchar = if unsafe { stl_connected(Win::new(window)) } {
             let (g, fillchar) = fillchar_status_of(win);
             group = g;
             fillchar
@@ -92,9 +92,9 @@ pub unsafe fn win_redr_status(window: *mut Window) {
 ///
 /// # Safety
 /// `window` must be a live window.
-pub unsafe fn stl_connected(window: *mut Window) -> bool {
+pub unsafe fn stl_connected(window: Win) -> bool {
     // SAFETY: the caller's promise; a live window has a live frame.
-    let mut fr = unsafe { FrameRef::new(Win::new(window).w_frame) };
+    let mut fr = unsafe { FrameRef::new(window.w_frame) };
     while let Some(parent) = fr.parent() {
         if c_int::from(parent.fr_layout) == FR_COL {
             // A row below this one ends the run.

@@ -154,7 +154,7 @@ impl Cells {
         }
         self.extmark_attr = unsafe {
             decor_redraw_col(
-                window.raw(),
+                window,
                 self.byte_col(),
                 if self.may_have_inline_virt {
                     -3
@@ -194,7 +194,7 @@ impl Cells {
         let at = self.byte_col();
         self.search_attr = unsafe {
             update_search_hl(
-                window.raw(),
+                window,
                 wlv.lnum,
                 at,
                 &raw mut self.line,
@@ -318,12 +318,10 @@ impl Cells {
             && wlv.lnum != window.w_cursor.lnum
         {
             self.attr_before_vcol_hl = wlv.char_attr;
-            wlv.char_attr =
-                unsafe { hl_combine_attr(win_hl_attr(window.raw(), HLF_CUC), wlv.char_attr) };
+            wlv.char_attr = unsafe { hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr) };
         } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
             self.attr_before_vcol_hl = wlv.char_attr;
-            wlv.char_attr =
-                unsafe { hl_combine_attr(win_hl_attr(window.raw(), HLF_MC), wlv.char_attr) };
+            wlv.char_attr = unsafe { hl_combine_attr(win_hl_attr(window, HLF_MC), wlv.char_attr) };
         }
     }
 

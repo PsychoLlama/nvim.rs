@@ -51,9 +51,9 @@ use crate::winlayer::graph::{
 };
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
-pub unsafe fn unuse_tabpage(tabpage: *mut Tabpage) {
+pub unsafe fn unuse_tabpage(tabpage: TabPage) {
     // SAFETY: the caller's promise -- a live tab page.
-    stash_tabpage(unsafe { TabPage::new(tabpage) });
+    stash_tabpage(tabpage);
 }
 
 /// Store the layout the globals currently describe in `tabpage`. To be used before
@@ -66,9 +66,9 @@ pub(crate) fn stash_tabpage(tabpage: TabPage) {
     tabpage.tp_curwin = Win::current_raw();
 }
 
-pub unsafe fn use_tabpage(tabpage: *mut Tabpage) {
+pub unsafe fn use_tabpage(tabpage: TabPage) {
     // SAFETY: the caller's promise -- a live tab page.
-    adopt_tabpage(unsafe { TabPage::new(tabpage) });
+    adopt_tabpage(tabpage);
 }
 
 /// Point the layout globals at `tabpage`. May want to call [`stash_tabpage`] first.
@@ -105,9 +105,9 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     tp
 }
 
-pub unsafe fn free_tabpage(tabpage: *mut Tabpage) {
+pub unsafe fn free_tabpage(tabpage: TabPage) {
     // SAFETY: the caller's promise -- a live tab page.
-    free_tab(unsafe { TabPage::new(tabpage) });
+    free_tab(tabpage);
 }
 
 /// Free `tabpage` and everything hanging off it.
@@ -358,9 +358,9 @@ pub fn valid_tabpage_win(tpc: *mut Tabpage) -> c_int {
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int
 }
 
-pub unsafe fn close_tabpage(tab: *mut Tabpage) {
+pub unsafe fn close_tabpage(tab: TabPage) {
     // SAFETY: the caller's promise -- a live tab page.
-    close_tab(unsafe { TabPage::new(tab) });
+    close_tab(tab);
 }
 
 /// Close tab page `tab`, which must have no windows left in it. There must be
@@ -635,12 +635,11 @@ pub(crate) fn goto_tab_number(n: c_int) {
 }
 
 pub unsafe fn goto_tabpage_tp(
-    tabpage: *mut Tabpage,
+    tabpage: TabPage,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
     // SAFETY: the caller's promise -- a live tab page.
-    let tabpage = unsafe { TabPage::new(tabpage) };
     goto_tab(tabpage, trigger_enter_autocmds, trigger_leave_autocmds);
 }
 
@@ -686,9 +685,9 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe fn goto_tabpage_win(tabpage: *mut Tabpage, window: *mut Window) {
+pub unsafe fn goto_tabpage_win(tabpage: TabPage, window: Win) {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
+    let (tp, wp) = (tabpage, window);
     goto_tab_win(tp, wp);
 }
 

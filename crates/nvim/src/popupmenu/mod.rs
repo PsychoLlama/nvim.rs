@@ -496,7 +496,7 @@ pub unsafe fn pum_check_clear() {
     pum_external.set(false);
 
     if let Some(wp) = win_float_find_preview() {
-        unsafe { win_close(wp.raw(), false, false) };
+        unsafe { win_close(wp, false, false) };
     }
 }
 

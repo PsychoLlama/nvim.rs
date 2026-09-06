@@ -224,7 +224,7 @@ fn alloc_window(after: *mut Window) -> Win {
 }
 fn init_window(win: Win) {
     // SAFETY: two live windows.
-    unsafe { win_init(win.raw(), current_win().raw(), 0) };
+    unsafe { win_init(win, current_win(), 0) };
 }
 
 /// Take `win` out of `tabpage`'s frame tree, handing its space to a neighbour. The
@@ -232,7 +232,7 @@ fn init_window(win: Win) {
 fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
     let mut dir: c_int = 0;
     // SAFETY: a live, non-floating window of `tabpage`; `dir` is a local.
-    unsafe { winframe_remove(win.raw(), &raw mut dir, raw_tab(tabpage), ptr::null_mut()) };
+    unsafe { winframe_remove(win, &raw mut dir, raw_tab(tabpage), ptr::null_mut()) };
 }
 
 /// `XFREE_CLEAR(wp->w_frame)`.
@@ -243,15 +243,15 @@ fn free_frame(win: &mut Win) {
 }
 fn remove_window(win: Win, tabpage: Option<TabPage>) {
     // SAFETY: a live window of `tabpage`.
-    unsafe { win_remove(win.raw(), raw_tab(tabpage)) };
+    unsafe { win_remove(win, raw_tab(tabpage)) };
 }
 fn append_window(after: *mut Window, win: Win, tabpage: Option<TabPage>) {
     // SAFETY: `after` is null or a live window of `tabpage`; `win` is in no list.
-    unsafe { win_append(after, win.raw(), raw_tab(tabpage)) };
+    unsafe { win_append(after, win, raw_tab(tabpage)) };
 }
 fn free_window(win: Win, tabpage: Option<TabPage>) {
     // SAFETY: a live window, unlinked by `remove_window` just before.
-    unsafe { win_free(win.raw(), raw_tab(tabpage)) };
+    unsafe { win_free(win, raw_tab(tabpage)) };
 }
 fn update_last_status(morewin: bool) {
     last_status(morewin);
@@ -261,11 +261,11 @@ fn recompute_positions() {
 }
 fn remove_status_line(win: Win) {
     // SAFETY: a live window.
-    unsafe { win_remove_status_line(win.raw(), false) };
+    unsafe { win_remove_status_line(win, false) };
 }
 fn set_inner_size(win: Win) {
     // SAFETY: a live window.
-    unsafe { win_set_inner_size(win.raw(), true) };
+    unsafe { win_set_inner_size(win, true) };
 }
 fn merge_config(win: &mut Win, fconfig: WinConfig) {
     // SAFETY: a live window's own config.
@@ -292,15 +292,15 @@ fn valid_in_tab(tabpage: TabPage, win: *mut Window) -> Option<Win> {
 /// be borrowed across it.
 fn close_window(win: Win) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_close(win.raw(), false, false) }
+    unsafe { win_close(win, false, false) }
 }
 fn enter_window(win: Win) {
     // SAFETY: a live window.
-    unsafe { win_enter(win.raw(), false) };
+    unsafe { win_enter(win, false) };
 }
 fn set_window_buf(win: Win, buffer: Buf, err: &mut Error) {
     // SAFETY: a live window and buffer, and the caller's error slot.
-    unsafe { win_set_buf(win.raw(), buffer.raw(), err) };
+    unsafe { win_set_buf(win, buffer, err) };
 }
 fn find_window(handle: WindowHandle, err: &mut Error) -> Option<Win> {
     // SAFETY: the caller's error slot; the answer is a live window or null.
@@ -348,7 +348,7 @@ fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
     // SAFETY: a live window, a position in the buffer it shows, and four
     // locals for the answers.
-    unsafe { textpos2screenpos(win.raw(), pos, r, s, c, e, true) };
+    unsafe { textpos2screenpos(win, pos, r, s, c, e, true) };
     (row, scol)
 }
 fn create_scratch_buffer(err: &mut Error) -> BufferHandle {

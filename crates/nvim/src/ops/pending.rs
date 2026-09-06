@@ -800,7 +800,7 @@ fn run_operator(
             VIsual_reselect.set(0);
             let recursive = c_int::from(op.op_type == OpType::Folddelrec);
             let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
-            unsafe { delete_fold(Win::current_raw(), first, last, recursive, visual) };
+            unsafe { delete_fold(Win::current(), first, last, recursive, visual) };
         }
 
         OpType::NrAdd | OpType::NrSub => {

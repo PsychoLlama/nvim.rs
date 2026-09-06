@@ -192,7 +192,7 @@ pub unsafe fn mark_adjust(
     // SAFETY: forwarded from the caller; `curbuf` is live from startup.
     unsafe {
         mark_adjust_buf(
-            Buf::current_raw(),
+            Buf::current(),
             line1,
             line2,
             amount,
@@ -222,7 +222,7 @@ pub unsafe fn mark_adjust_nofold(
     // SAFETY: forwarded from the caller.
     unsafe {
         mark_adjust_buf(
-            Buf::current_raw(),
+            Buf::current(),
             line1,
             line2,
             amount,
@@ -238,7 +238,7 @@ pub unsafe fn mark_adjust_nofold(
 /// `buffer` must be a live buffer, and the editor's window and tab page lists
 /// must be live.
 pub unsafe fn mark_adjust_buf(
-    buffer: *mut Buffer,
+    mut buffer: Buf,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -255,7 +255,6 @@ pub unsafe fn mark_adjust_buf(
     }
 
     // SAFETY: the caller promised a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     let fnum = buffer.handle as c_int;
     let shift = LineShift {
         line1,
@@ -317,7 +316,7 @@ pub unsafe fn mark_adjust_buf(
 
     if op as c_uint != kExtmarkNOOP as c_uint {
         // SAFETY: `buffer` is live.
-        unsafe { extmark_adjust(buffer.raw(), line1, line2, amount, amount_after, op) };
+        unsafe { extmark_adjust(buffer, line1, line2, amount, amount_after, op) };
     }
 
     // The context marks and the saved cursor belong to the current window

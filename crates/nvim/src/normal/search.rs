@@ -47,8 +47,8 @@ fn current_match_is_distinct() -> bool {
     // SAFETY (throughout): `curwin` is the current window.
     p_hls.get() != 0
         && !no_hlsearch.get()
-        && unsafe { win_hl_attr(Win::current_raw(), HLF_LC) }
-            != unsafe { win_hl_attr(Win::current_raw(), HLF_L) }
+        && unsafe { win_hl_attr(Win::current(), HLF_LC) }
+            != unsafe { win_hl_attr(Win::current(), HLF_L) }
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
@@ -258,7 +258,7 @@ pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
     // The record the lookup answers into; it outlives the jump below.
     let mut slot = FileMark::UNSET;
     let (buffer, win) = (Buf::current_raw(), Win::current_raw());
-    let fm = unsafe { mark_get(buffer, win, &raw mut slot, kMarkAll, name) };
+    let fm = unsafe { mark_get(buffer, Win::new(win), &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
@@ -289,10 +289,10 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     }
 
     let fm = if ca.cmdchar == 'g' as c_int {
-        unsafe { get_changelist(Buf::current_raw(), Win::current_raw(), ca.count1) }
+        unsafe { get_changelist(Buf::current(), Win::current_raw(), ca.count1) }
     } else {
         flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
-        unsafe { get_jumplist(Win::current_raw(), ca.count1) }
+        unsafe { get_jumplist(Win::current(), ca.count1) }
     };
 
     if !fm.is_null() {

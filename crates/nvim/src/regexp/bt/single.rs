@@ -249,7 +249,7 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
     // window; `slot` is this frame's and outlives every use of `fm`.
     let buf = rex.reg_buf();
-    let win = Win::current_raw();
+    let win = Win::current();
     let fm = unsafe { mark_get(buf, win, &raw mut slot, kMarkBufLocal, mark) };
     // `mark_get` can move the buffer's line pointers, so re-anchor.
     if rex.multi() {

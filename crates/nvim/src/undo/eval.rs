@@ -194,16 +194,16 @@ pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// # Safety
 ///
 /// `buffer` points at a live buffer, and a live current window.
-pub unsafe fn u_force_get_undo_header(buffer: *mut Buffer) -> *mut UndoHeader {
+pub unsafe fn u_force_get_undo_header(buffer: Buf) -> *mut UndoHeader {
     // SAFETY: a live buffer, by the contract above.
-    let mut b = unsafe { Buf::new(buffer) };
+    let mut b = buffer;
     if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         return uh.raw();
     }
     // Nothing to hang it on: force an undo header, even for an empty change.
     let _ = u_savecommon(b, 0, 1, 1, true);
     // SAFETY: `u_savecommon` may have reloaded the buffer under us.
-    b = unsafe { Buf::new(buffer) };
+    b = buffer;
     match b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         Some(uh) => uh.raw(),
         None => {

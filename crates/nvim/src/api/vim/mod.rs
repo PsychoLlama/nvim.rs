@@ -73,7 +73,7 @@ use crate::message::{
     verbose_stop,
 };
 use crate::message::{e_cmdwin, e_invchan};
-use crate::r#move::{changed_window_setting, update_topline, validate_cursor, win_col_off};
+use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;

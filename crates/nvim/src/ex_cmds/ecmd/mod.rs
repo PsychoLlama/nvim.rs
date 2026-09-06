@@ -564,7 +564,7 @@ unsafe fn resolve_target(
 unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // SAFETY: caller's contract.
     // may set b_last_cursor
-    unsafe { set_last_cursor(Win::current_raw()) };
+    unsafe { set_last_cursor(Win::current()) };
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
         state.newlnum = Win::current().w_cursor.lnum;
         state.solcol = Win::current().w_cursor.col;

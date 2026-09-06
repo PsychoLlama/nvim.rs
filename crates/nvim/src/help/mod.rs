@@ -344,7 +344,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
         .flatten();
     if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows > 0) {
         // SAFETY: a live window. Runs autocommands.
-        unsafe { win_enter(wp.raw(), true) };
+        unsafe { win_enter(wp, true) };
         return Some(opened);
     }
 
@@ -403,7 +403,7 @@ pub(crate) unsafe fn ex_helpclose(args: *mut ExArg) {
         return;
     };
     // SAFETY: caller contract; a live window.
-    unsafe { win_close(win.raw(), false, (*args).forceit != 0) };
+    unsafe { win_close(win, false, (*args).forceit != 0) };
 }
 
 /// `:exusage`.

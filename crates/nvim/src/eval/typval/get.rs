@@ -81,7 +81,7 @@ pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
     if lnum <= 0 && did_emsg_before == did_emsg.get() && unsafe { (*tv).v_type } != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
-        let fp = unsafe { var2fpos(tv, true, &raw mut fnum, false, Win::current_raw()) };
+        let fp = unsafe { var2fpos(tv, true, &raw mut fnum, false, Win::current()) };
         if let Some(fp) = fp.as_ref() {
             lnum = fp.lnum;
         }

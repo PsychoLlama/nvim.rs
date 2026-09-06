@@ -424,9 +424,8 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 ///
 /// # Safety
 /// `window` is a live window; main thread only.
-pub unsafe fn update_window_hl(window: *mut Window, invalid: bool) {
+pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window and the editor's own tables.
     let ns_id = window.w_ns_hl;
     unsafe { update_ns_hl(ns_id) };
@@ -487,7 +486,7 @@ pub unsafe fn update_window_hl(window: *mut Window, invalid: bool) {
     }
 
     // A shadow is itself a reason to blend.
-    unsafe { check_blending(window.raw()) };
+    unsafe { check_blending(window) };
 
     // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
     // to 'winhl' implementation?
@@ -547,9 +546,8 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 ///
 /// # Safety
 /// `window` is a live window; main thread only.
-pub unsafe fn win_bg_attr(window: *mut Window) -> c_int {
+pub unsafe fn win_bg_attr(window: Win) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
@@ -576,9 +574,8 @@ pub unsafe fn win_bg_attr(window: *mut Window) -> c_int {
 /// # Safety
 /// `window` is a live window; main thread only.
 #[inline]
-pub unsafe fn win_hl_attr(window: *mut Window, hlf: c_int) -> c_int {
+pub unsafe fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.
     let table = if !window.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {

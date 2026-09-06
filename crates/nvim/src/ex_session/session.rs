@@ -312,7 +312,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         // aborted we do not end up with a pile of useless windows. This
         // may have side effects (a compressed or network file).
         for wp in windows_in_tab(tab).map(Win::raw) {
-            if unsafe { ses_do_win(wp) }
+            if unsafe { ses_do_win(Win::new(wp)) }
                 && !unsafe { (*(*wp).w_buffer).b_ffname }.is_null()
                 && !buf_is_help(unsafe { Buf::from_raw((*wp).w_buffer) })
                 && !buf_is_nofilename(unsafe { Buf::from_raw((*wp).w_buffer) })
@@ -351,7 +351,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         let mut nr = 0;
         let mut cnr = 1;
         for wp in windows_in_tab(tab).map(Win::raw) {
-            if unsafe { ses_do_win(wp) } {
+            if unsafe { ses_do_win(Win::new(wp)) } {
                 nr += 1;
             } else if !unsafe { (*wp).w_floating } {
                 restore_size = false;
@@ -401,7 +401,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 
         // Each window's view.
         for wp in windows_in_tab(tab).map(Win::raw) {
-            if unsafe { ses_do_win(wp) } {
+            if unsafe { ses_do_win(Win::new(wp)) } {
                 if !unsafe { put_view(out, wp, tab.raw(), wp != edited_win, opts, cur_arg_idx) } {
                     return false;
                 }
@@ -448,7 +448,7 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
     // SAFETY: caller contract; `topframe` is the current tab's frame tree.
     let mut n = 0;
     for wp in windows_in_tab(tab).map(Win::raw) {
-        if unsafe { ses_do_win(wp) } {
+        if unsafe { ses_do_win(Win::new(wp)) } {
             n += 1;
             // Restore the height when the window is not full height.
             if unsafe { (*wp).w_height }
@@ -553,7 +553,7 @@ unsafe fn ses_skipframe(fr: *mut Frame) -> *mut Frame {
 unsafe fn ses_do_frame(fr: *const Frame) -> bool {
     // SAFETY: caller contract.
     if unsafe { (*fr).fr_layout } == FR_LEAF {
-        return unsafe { ses_do_win((*fr).fr_win) };
+        return unsafe { ses_do_win(Win::new((*fr).fr_win)) };
     }
     let mut frc = unsafe { (*fr).fr_child };
     while !frc.is_null() {

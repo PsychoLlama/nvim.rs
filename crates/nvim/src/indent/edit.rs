@@ -474,7 +474,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
     let delta = orig_col as c_int - new_col as c_int;
     unsafe {
         extmark_splice_cols(
-            Buf::current_raw(),
+            Buf::current(),
             (*win).w_cursor.lnum as c_int - 1,
             new_col,
             if delta < 0 { -delta as ColNr } else { 0 },
@@ -813,7 +813,8 @@ impl Retab {
             // `new_line` may have been copied.
             line = unsafe { (*buf).b_ml.cached_text() };
             let lnum = scan.lnum as c_int - 1;
-            unsafe { extmark_splice_cols(buf, lnum, 0, scan.old_len, new_len - 1, kExtmarkUndo) };
+            let (old, new) = (scan.old_len, new_len - 1);
+            unsafe { extmark_splice_cols(Buf::new(buf), lnum, 0, old, new, kExtmarkUndo) };
         }
         if self.first_line == 0 {
             self.first_line = scan.lnum;

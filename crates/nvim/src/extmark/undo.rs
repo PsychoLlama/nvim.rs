@@ -26,8 +26,7 @@ use crate::marktree::key::{
     mt_right,
 };
 use crate::types::{
-    Buffer, ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter,
-    extmark_undo_vec_t,
+    ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, extmark_undo_vec_t,
 };
 
 /// Invalidate the marks inside a range being deleted, and copy the ones the
@@ -35,7 +34,7 @@ use crate::types::{
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
 pub unsafe fn extmark_splice_delete(
-    buffer: *mut Buffer,
+    buffer: Buf,
     l_row: c_int,
     l_col: ColNr,
     u_row: c_int,
@@ -54,7 +53,7 @@ pub unsafe fn extmark_splice_delete(
     };
     // SAFETY: the caller's promise -- a live buffer, and a `uvp` that is NULL
     // or an undo header's own extmark list.
-    splice_delete(unsafe { Buf::new(buffer) }, lo, hi, uvp, only_copy, op);
+    splice_delete(buffer, lo, hi, uvp, only_copy, op);
 }
 
 /// [`extmark_splice_delete`] for the callers that already hold a [`Buf`].

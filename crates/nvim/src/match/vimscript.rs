@@ -91,8 +91,7 @@ unsafe fn matchadd_dict_arg(
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_clearmatches(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(args, 0) };
-    if !win.is_null() {
+    if let Some(win) = unsafe { get_optional_window(args, 0) } {
         unsafe { clear_matches(win) };
     }
 }
@@ -105,11 +104,11 @@ pub(crate) unsafe fn f_getmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     // SAFETY: the evaluator's slots.
     let win = unsafe { get_optional_window(args, 0) };
     let l = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
-    if win.is_null() {
+    let Some(win) = win else {
         return;
-    }
+    };
 
-    let mut cur = unsafe { (*win).w_match_head };
+    let mut cur = win.w_match_head;
     while !cur.is_null() {
         let dict = unsafe { tv_dict_alloc() };
         if unsafe { (*cur).mit_match.regprog }.is_null() {
@@ -169,9 +168,9 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
         emsg(gettext(e_listreq));
         return;
     }
-    if win.is_null() {
+    let Some(win) = win else {
         return;
-    }
+    };
     let l = unsafe { (*args).vval.v_list };
 
     // To some extent make sure this really came from getmatches().
@@ -335,6 +334,8 @@ pub(crate) unsafe fn f_matchadd(args: *mut TypVal, result: *mut TypVal, _fptr: E
         return;
     }
 
+    // SAFETY: `optional_args` answers the current window or one it looked up.
+    let win = unsafe { Win::new(win) };
     unsafe {
         let no_pos = ::core::ptr::null_mut();
         (*result).vval.v_number =
@@ -375,6 +376,8 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
         return;
     }
 
+    // SAFETY: `optional_args` answers the current window or one it looked up.
+    let win = unsafe { Win::new(win) };
     unsafe {
         (*result).vval.v_number =
             match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as VarNumber
@@ -395,7 +398,7 @@ pub(crate) unsafe fn f_matcharg(args: *mut TypVal, result: *mut TypVal, _fptr: E
     if !is_excmd {
         return;
     }
-    let m = unsafe { get_match(Win::current_raw(), id) };
+    let m = unsafe { get_match(Win::current(), id) };
     if m.is_null() {
         unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
         unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
@@ -413,10 +416,9 @@ pub(crate) unsafe fn f_matchdelete(args: *mut TypVal, result: *mut TypVal, _fptr
     // SAFETY: the evaluator's slots.
     let win = unsafe { get_optional_window(args, 1) };
     unsafe {
-        (*result).vval.v_number = if win.is_null() {
-            -1
-        } else {
-            match_delete(win, tv_get_number(args) as c_int, true) as VarNumber
+        (*result).vval.v_number = match win {
+            None => -1,
+            Some(win) => match_delete(win, tv_get_number(args) as c_int, true) as VarNumber,
         };
     }
 }

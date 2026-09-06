@@ -45,7 +45,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     unsafe { *p.offset(pos.col as isize) = c as c_char };
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum as c_int - 1;
-        unsafe { extmark_splice_cols(Buf::current_raw(), row, pos.col, 1, 1, kExtmarkUndo) };
+        unsafe { extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo) };
     }
 }
 
@@ -249,7 +249,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     let op = kExtmarkUndo;
     unsafe {
         extmark_splice(
-            Buf::current_raw(),
+            Buf::current(),
             row,
             col,
             0,

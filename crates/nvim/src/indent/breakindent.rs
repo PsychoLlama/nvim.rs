@@ -12,7 +12,7 @@ use crate::charset::{getdigits, getdigits_int, vim_strsize};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xstrdup};
-use crate::r#move::{win_col_off, win_col_off2};
+use crate::r#move::win_col_off2;
 use crate::option::vars::dy_flags;
 use crate::option::{get_flp_value, get_showbreak_value};
 use crate::plines::win_chartabsize;
@@ -317,7 +317,7 @@ pub unsafe fn get_breakindent_win(window: *mut Window, line: *mut c_char) -> c_i
     // SAFETY: a live window.
     let (col_off2, flp) = (win_col_off2(win), get_flp_value(buf));
     // The window width minus its margins: what is left for text.
-    let eff_wwidth = win.w_view_width - unsafe { win_col_off(window) } + col_off2;
+    let eff_wwidth = win.w_view_width - unsafe { (Win::new(window)).col_off() } + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.

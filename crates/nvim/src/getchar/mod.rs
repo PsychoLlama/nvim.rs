@@ -57,7 +57,7 @@ use crate::message::{e_nesting, e_toocompl};
 use crate::message::{emsg, iemsg, internal_error};
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
-use crate::r#move::{validate_cursor, win_col_off};
+use crate::r#move::validate_cursor;
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::ops::clear_oparg;
 use crate::option::vars::{

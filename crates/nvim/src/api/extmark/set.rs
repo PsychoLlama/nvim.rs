@@ -680,7 +680,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                             unsafe {
                                 extmark_set(
-                                    b.raw(),
+                                    b,
                                     ns_id as uint32_t,
                                     &raw mut id,
                                     line as ::core::ffi::c_int,

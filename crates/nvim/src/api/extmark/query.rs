@@ -12,6 +12,7 @@
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api::private::validate::{err_bad_number, err_expected};
+use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
 pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array {
@@ -124,10 +125,10 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = Error::none();
     let rv: Array = ARRAY_DICT_INIT;
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    // SAFETY: the handle lookup answers a live buffer, or null on error.
+    let Some(b) = (unsafe { Buf::from_raw(find_buffer_by_handle(buf, &mut error)) }) else {
         return rv.reported(error);
-    }
+    };
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
@@ -160,10 +161,10 @@ pub unsafe fn nvim_buf_get_extmarks(
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    // SAFETY: the handle lookup answers a live buffer, or null on error.
+    let Some(b) = (unsafe { Buf::from_raw(find_buffer_by_handle(buf, &mut error)) }) else {
         return rv.reported(error);
-    }
+    };
     if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
@@ -281,7 +282,7 @@ pub unsafe fn nvim_buf_get_extmarks(
 }
 
 unsafe fn extmark_get_index_from_obj(
-    buffer: *mut Buffer,
+    buffer: Buf,
     ns_id: Integer,
     obj: Object,
     row: *mut ::core::ffi::c_int,

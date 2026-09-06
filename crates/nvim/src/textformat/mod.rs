@@ -102,7 +102,7 @@ pub unsafe fn comp_textwidth(ff: bool) -> c_int {
         if Buf::current_raw() == cmdwin_buf.get() {
             textwidth -= 1;
         }
-        textwidth -= unsafe { win_fdccol_count(win) };
+        textwidth -= unsafe { win_fdccol_count(Win::new(win)) };
         textwidth -= unsafe { (*win).w_scwidth };
         if unsafe { (*win).w_onebuf_opt.wo_nu } != 0 || unsafe { (*win).w_onebuf_opt.wo_rnu } != 0 {
             textwidth -= 8;

@@ -316,7 +316,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // is empty; that is not a modification.
             if !(Buf::current().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
                 changed_internal(Buf::current());
-                unsafe { buf_inc_changedtick(Buf::current_raw()) };
+                unsafe { buf_inc_changedtick(Buf::current()) };
             }
         } else {
             for idx in 1..=lnum {
@@ -327,7 +327,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 unsafe { xfree(p.cast()) };
                 if !same {
                     changed_internal(Buf::current());
-                    unsafe { buf_inc_changedtick(Buf::current_raw()) };
+                    unsafe { buf_inc_changedtick(Buf::current()) };
                     break;
                 }
             }
@@ -537,7 +537,7 @@ unsafe fn recover_lines(
                     }
 
                     // One block deeper in the tree.
-                    let top = unsafe { ml_add_stack(buffer) };
+                    let top = unsafe { ml_add_stack(Buf::new(buffer)) };
                     let frame = InfoPtr {
                         ip_bnum: bnum,
                         ip_low: 0,

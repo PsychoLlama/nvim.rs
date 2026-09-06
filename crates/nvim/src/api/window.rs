@@ -66,7 +66,7 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
         return Err(Error::exception(e_cmdwin));
     }
     // SAFETY: both handles named a live object, and `err` is this frame's own.
-    unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
+    unsafe { win_set_buf(w, b, &mut err) };
     ().reported(err)
 }
 
@@ -152,7 +152,7 @@ pub fn nvim_win_set_height(win: WindowHandle, height: Integer) -> Result<(), Err
     };
     // SAFETY: `w` is live; the resize runs Vimscript, which `api_try` catches.
     api_try(&mut err, |_| unsafe {
-        win_setheight_win(number_as_int(height), w.raw());
+        win_setheight_win(number_as_int(height), w);
     });
     ().reported(err)
 }
@@ -174,7 +174,7 @@ pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error
     };
     // SAFETY: as `nvim_win_set_height`.
     api_try(&mut err, |_| unsafe {
-        win_setwidth_win(number_as_int(width), w.raw());
+        win_setwidth_win(number_as_int(width), w);
     });
     ().reported(err)
 }
@@ -289,8 +289,8 @@ pub fn nvim_win_is_valid(win: WindowHandle) -> Boolean {
 pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
     let mut err = Error::none();
     // SAFETY: `w` is live, and `err` is this frame's own.
-    let Some(w) = window_by_handle(win, &mut err)
-        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
+    let Some(w) =
+        window_by_handle(win, &mut err).filter(|w| unsafe { can_close_in_cmdwin(*w, &mut err) })
     else {
         return ().reported(err);
     };
@@ -305,10 +305,10 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
         } else if same_tab {
             // SAFETY: `w` is live; closing runs autocommands, which `api_try`
             // catches.
-            unsafe { win_close(w.raw(), false, false) };
+            unsafe { win_close(w, false, false) };
         } else {
             // SAFETY: as above, in the tab page `w` is in rather than this one.
-            unsafe { win_close_othertab(w.raw(), 0, tabpage, false) };
+            unsafe { win_close_othertab(w.raw(), 0, TabPage::new(tabpage), false) };
         }
     });
     ().reported(err)
@@ -318,8 +318,8 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
 pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
     let mut err = Error::none();
     // SAFETY: `w` is live, and `err` is this frame's own.
-    let Some(w) = window_by_handle(win, &mut err)
-        .filter(|w| unsafe { can_close_in_cmdwin(w.raw(), &mut err) })
+    let Some(w) =
+        window_by_handle(win, &mut err).filter(|w| unsafe { can_close_in_cmdwin(*w, &mut err) })
     else {
         return ().reported(err);
     };

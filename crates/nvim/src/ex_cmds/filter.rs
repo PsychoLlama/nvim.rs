@@ -840,7 +840,7 @@ pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
                 numbuf.as_mut_ptr(),
                 numbuf.len(),
                 c"%*d ".as_ptr(),
-                number_width(Win::current_raw()),
+                number_width(Win::current()),
                 lnum,
             )
         };

@@ -40,7 +40,7 @@ use core::ffi::c_int;
 
 use crate::r#move::{
     WinValid, adjust_skipcol, sms_marker_overlap, update_curswant_force, validate_cheight,
-    validate_virtcol, win_col_off, win_col_off2,
+    validate_virtcol, win_col_off2,
 };
 use crate::pos::MAXCOL;
 
@@ -70,7 +70,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         // A wrapped line's first screen row can be narrower than the rest,
         // so the row the cursor is on decides where its start is.
-        let width1 = win.w_view_width - unsafe { win_col_off(win.raw()) };
+        let width1 = win.w_view_width - win.col_off();
         let width2 = width1 + win_col_off2(win);
         validate_virtcol(win);
         i = 0;
@@ -89,7 +89,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
         i = win.w_leftcol;
     }
     if ca.nchar == 'm' as c_int {
-        i += (win.w_view_width - unsafe { win_col_off(win.raw()) }
+        i += (win.w_view_width - win.col_off()
             + if win.w_onebuf_opt.wo_wrap != 0 && i > 0 {
                 win_col_off2(win)
             } else {
@@ -146,7 +146,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut win = Win::current();
     let mut op = ca.op();
-    let col_off = unsafe { win_col_off(win.raw()) };
+    let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
     let to_last_non_blank = ca.nchar == Key::End.code() || ca.nchar == Key::Kend.code();
     op.motion_type = kMTCharWise;

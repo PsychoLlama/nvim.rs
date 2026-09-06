@@ -88,7 +88,7 @@ pub(crate) unsafe fn syntax_start(window: *mut Window, lnum: LineNr) {
 
     // Still nothing: re-synchronise.
     let first_stored = if !current_state_valid() {
-        unsafe { syn_sync(window, lnum, last_valid) };
+        unsafe { syn_sync(Win::new(window), lnum, last_valid) };
         if current_lnum.get() == 1 {
             1 // the first line is always valid, whatever "minlines" says
         } else {

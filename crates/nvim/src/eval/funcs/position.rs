@@ -125,7 +125,7 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     };
     let bp = unsafe { (*wp).w_buffer };
     let mut fnum = unsafe { (*bp).handle } as c_int;
-    let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, charcol, wp) };
+    let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, charcol, Win::new(wp)) };
     let mut col: ColNr = 0;
     if let Some(mut fp) = fp
         && fnum == unsafe { (*bp).handle }
@@ -140,7 +140,7 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
             };
         } else {
             col = fp.col + 1;
-            col += unsafe { virtualedit_tail(wp, bp, &raw mut fp) };
+            col += unsafe { virtualedit_tail(Win::new(wp), bp, &raw mut fp) };
         }
     }
     result.vval.v_number = col as VarNumber;
@@ -158,9 +158,8 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
 ///
 /// # Safety
 /// `window`, `bp` and `pos` are live, and `pos` is a position in `bp`.
-unsafe fn virtualedit_tail(window: *mut Window, buffer: *mut Buffer, pos: *mut Pos) -> ColNr {
+unsafe fn virtualedit_tail(mut win: Win, buffer: *mut Buffer, pos: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut win = unsafe { Win::new(window) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
     if !virtual_active(win) || pos != &raw mut win.w_cursor {
@@ -203,7 +202,7 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if let Some(wp) = wp {
         let bp = unsafe { (*wp).w_buffer };
         let mut fnum = unsafe { (*bp).handle } as c_int;
-        let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, false, wp) };
+        let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, false, Win::new(wp)) };
         if let Some(mut fp) = fp
             && fp.lnum <= unsafe { (*bp).b_ml.ml_line_count }
             && fnum == unsafe { (*bp).handle }
@@ -242,7 +241,7 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     let out = &raw mut fnum;
     let fp = if !args.has(1) {
         // SAFETY: argument 0 is a live typval and `curwin` a live window.
-        unsafe { var2fpos(args.ptr(0), true, out, false, Win::current_raw()) }
+        unsafe { var2fpos(args.ptr(0), true, out, false, Win::current()) }
     } else {
         match win_and_tab_by_id(arg_number(args.get(1)) as c_int) {
             None => None,
@@ -261,7 +260,7 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
                 }
                 // SAFETY: `wp` is the window the id resolved to.
                 check_cursor(unsafe { Win::new(wp) });
-                let fp = unsafe { var2fpos(args.ptr(0), true, out, false, wp) };
+                let fp = unsafe { var2fpos(args.ptr(0), true, out, false, Win::new(wp)) };
                 skip_update_topline.set(false);
                 fp
             }
@@ -303,15 +302,7 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
     let mut wp = Win::current_raw();
     let mut fnum: c_int = -1;
     let fp = if !getcurpos {
-        unsafe {
-            var2fpos(
-                args.ptr(0),
-                true,
-                &raw mut fnum,
-                charcol,
-                Win::current_raw(),
-            )
-        }
+        unsafe { var2fpos(args.ptr(0), true, &raw mut fnum, charcol, Win::current()) }
     } else {
         let mut fp = if args.has(0) {
             // `wp` is overwritten even when the lookup fails: a

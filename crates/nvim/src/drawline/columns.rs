@@ -24,6 +24,7 @@ use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// The widest a `'statuscolumn'` may grow the number column to.
@@ -136,9 +137,8 @@ impl WinLineVars {
 ///
 /// # Safety
 /// `window` must be a live window.
-pub unsafe fn use_cursor_line_highlight(window: *mut Window, lnum: LineNr) -> bool {
+pub unsafe fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
     // SAFETY: the caller's live window.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     window.w_onebuf_opt.wo_cul != 0
         && lnum == window.w_cursorline
@@ -246,7 +246,7 @@ unsafe fn fold_column_cells(
 /// `window` must be live, `fdc` may not exceed [`MAX_FOLDCOLUMN`], and both arrays
 /// must have `fdc` entries.
 pub unsafe fn fill_foldcolumn(
-    window: *mut Window,
+    window: Win,
     foldinfo: FoldInfo,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
@@ -255,7 +255,6 @@ pub unsafe fn fill_foldcolumn(
     out_buffer: *mut ScreenChar,
 ) {
     // SAFETY: the caller's window and arrays.
-    let window = unsafe { Win::new(window) };
     let cells = unsafe { fold_column_cells(window, foldinfo, lnum, fdc, is_virt) };
     for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
         unsafe { *out_vcol.add(i) = vcol };
@@ -270,14 +269,14 @@ impl WinLineVars {
     /// `window` must be a live window.
     pub(crate) unsafe fn draw_foldcolumn(&mut self, window: Win) {
         // SAFETY: the caller's window.
-        let fdc = unsafe { compute_foldcolumn(window.raw(), 0) };
+        let fdc = unsafe { compute_foldcolumn(window, 0) };
         if fdc <= 0 {
             return;
         }
         let attr = unsafe {
             win_hl_attr(
-                window.raw(),
-                if use_cursor_line_highlight(window.raw(), self.lnum) {
+                window,
+                if use_cursor_line_highlight(window, self.lnum) {
                     HLF_CLF
                 } else {
                     HLF_FC
@@ -317,8 +316,8 @@ impl WinLineVars {
         let sattr = self.sign_attrs[sign_idx as usize];
         let scl_attr = unsafe {
             win_hl_attr(
-                window.raw(),
-                if use_cursor_line_highlight(window.raw(), self.lnum) {
+                window,
+                if use_cursor_line_highlight(window, self.lnum) {
                     HLF_CLS
                 } else {
                     HLF_SC
@@ -344,7 +343,7 @@ impl WinLineVars {
         }
 
         let fill = if nrcol {
-            unsafe { number_width(window.raw()) + 1 }
+            unsafe { number_width(window) + 1 }
         } else {
             SIGN_WIDTH as ::core::ffi::c_int
         };
@@ -405,7 +404,7 @@ unsafe fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_c
             buf.as_mut_ptr(),
             buf.len() as size_t,
             fmt.as_ptr(),
-            number_width(window.raw()),
+            number_width(window),
             num,
         )
     };
@@ -445,8 +444,8 @@ impl WinLineVars {
             if self.prev_num_attr == -1 {
                 unsafe {
                     decor_redraw_signs(
-                        window.raw(),
-                        window.w_buffer,
+                        window,
+                        Buf::new(window.w_buffer),
                         self.lnum - 2,
                         ::core::ptr::null_mut(),
                         ::core::ptr::null_mut(),
@@ -471,7 +470,7 @@ impl WinLineVars {
         } else {
             HLF_N
         };
-        unsafe { hl_combine_attr(win_hl_attr(window.raw(), hlf), numhl_attr) }
+        unsafe { hl_combine_attr(win_hl_attr(window, hlf), numhl_attr) }
     }
 
     /// Draw the number column: the absolute or relative line number on the
@@ -510,7 +509,7 @@ impl WinLineVars {
             return;
         }
 
-        let width = unsafe { number_width(window.raw()) } + 1;
+        let width = unsafe { number_width(window) } + 1;
         let attr = unsafe { self.line_number_attr(window) };
         let both = window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0;
         if !(first_row && (window.w_skipcol == 0 || self.row > 0 || both)) {
@@ -597,7 +596,7 @@ impl WinLineVars {
             unsafe { set_vim_var_nr(Vv::Virtnum, 0) };
             let width = unsafe {
                 build_statuscol_str(
-                    window.raw(),
+                    window,
                     window.w_nrwidth_line_count,
                     window.w_nrwidth_line_count,
                     buf.as_mut_ptr(),
@@ -621,8 +620,7 @@ impl WinLineVars {
         }
 
         unsafe { set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber) };
-        let width =
-            unsafe { build_statuscol_str(window.raw(), lnum, relnum, buf.as_mut_ptr(), stcp) };
+        let width = unsafe { build_statuscol_str(window, lnum, relnum, buf.as_mut_ptr(), stcp) };
         let was_reset = unsafe { *window.w_onebuf_opt.wo_stc } == NUL as ::core::ffi::c_char;
         if was_reset
             || (width > unsafe { (*stcp).width } && unsafe { (*stcp).width } < MAX_STCWIDTH)
@@ -634,7 +632,7 @@ impl WinLineVars {
                     window.w_nrwidth = (window.w_onebuf_opt.wo_nu != 0
                         || window.w_onebuf_opt.wo_rnu != 0)
                         as ::core::ffi::c_int
-                        * number_width(window.raw())
+                        * number_width(window)
                 };
             } else {
                 unsafe {
@@ -652,8 +650,8 @@ impl WinLineVars {
         // out the attribute the next stretch takes.
         let scl_attr = unsafe {
             win_hl_attr(
-                window.raw(),
-                if use_cursor_line_highlight(window.raw(), self.lnum) {
+                window,
+                if use_cursor_line_highlight(window, self.lnum) {
                     HLF_CLS
                 } else {
                     HLF_SC
@@ -755,7 +753,7 @@ impl WinLineVars {
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
             let attr = if self.diff_hlf != HLF_NONE {
-                unsafe { win_hl_attr(window.raw(), self.diff_hlf) }
+                unsafe { win_hl_attr(window, self.diff_hlf) }
             } else {
                 0
             };
@@ -820,7 +818,7 @@ impl WinLineVars {
                 self.draw_col_fill(
                     window.w_p_fcs_chars.diff,
                     remaining,
-                    win_hl_attr(window.raw(), HLF_DED),
+                    win_hl_attr(window, HLF_DED),
                 )
             };
         }
@@ -829,7 +827,7 @@ impl WinLineVars {
         if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
             // 'showbreak' combined with 'cursorline', 'showbreak' winning.
             let attr =
-                unsafe { hl_combine_attr(self.cursorline_attr, win_hl_attr(window.raw(), HLF_AT)) };
+                unsafe { hl_combine_attr(self.cursorline_attr, win_hl_attr(window, HLF_AT)) };
             let vcol_before = self.vcol;
             let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
             unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, ::core::ptr::null(), true) };

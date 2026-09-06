@@ -556,7 +556,7 @@ pub unsafe fn decor_check_invalid_glyphs() {
 /// # Safety
 /// `buffer` must be live and the positions must be inside it.
 pub unsafe fn bufhl_add_hl_pos_offset(
-    buffer: *mut Buffer,
+    buffer: Buf,
     src_id: c_int,
     hl_id: c_int,
     pos_start: LPos,
@@ -693,7 +693,7 @@ pub unsafe fn buf_put_decor(buffer: *mut Buffer, decor: DecorInline, row: c_int,
     let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
     while idx != DECOR_ID_INVALID {
         let sh = decor_item(idx);
-        unsafe { buf_put_decor_sh(buffer, sh, row, row2) };
+        unsafe { buf_put_decor_sh(Buf::new(buffer), sh, row, row2) };
         idx = unsafe { (*sh).next };
     }
 }
@@ -718,7 +718,7 @@ pub unsafe fn buf_decor_remove(
         let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
         while idx != DECOR_ID_INVALID {
             let sh = decor_item(idx);
-            unsafe { buf_remove_decor_sh(buffer, row1, row2, sh) };
+            unsafe { buf_remove_decor_sh(Buf::new(buffer), row1, row2, sh) };
             idx = unsafe { (*sh).next };
         }
     }

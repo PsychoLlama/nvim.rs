@@ -219,7 +219,7 @@ pub unsafe fn prepare_tagpreview(undo_sync: bool) -> bool {
     for wp in windows() {
         if wp.w_onebuf_opt.wo_pvw != 0 {
             // SAFETY: a window of the editor's own list.
-            unsafe { win_enter(wp.raw(), undo_sync) };
+            unsafe { win_enter(wp, undo_sync) };
             return false;
         }
     }

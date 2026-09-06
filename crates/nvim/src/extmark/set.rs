@@ -23,13 +23,13 @@ use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
-use crate::types::{Buffer, ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uint64_t};
+use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uint64_t};
 
 /// Create or update an extmark.
 ///
 /// Must not be used during iteration.
 pub unsafe fn extmark_set(
-    buffer: *mut Buffer,
+    mut buffer: Buf,
     ns_id: uint32_t,
     idp: *mut uint32_t,
     row: c_int,
@@ -45,7 +45,6 @@ pub unsafe fn extmark_set(
 ) {
     // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
     // NULL or points at a mark id.
-    let mut buffer = unsafe { Buf::new(buffer) };
     // Registers the namespace at 0 if it had none, which `extmark_clear`
     // reads as "this buffer has marks in it".
     ns_counter(buffer.extmark_ns(), ns_id);

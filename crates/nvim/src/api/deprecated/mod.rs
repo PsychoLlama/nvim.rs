@@ -28,7 +28,7 @@ use crate::options::kOptInvalid;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::NL;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Buffer, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
+    ApiDict, Arena, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
     DecorInline, DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data, Error, Integer,
     KeyDict_empty, KeyDict_exec_opts, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
     OptScope, OptVal, ScreenChar, String_0, StringBuilder, TabpageHandle, VirtText, WindowHandle,

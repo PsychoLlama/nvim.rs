@@ -52,7 +52,7 @@ pub unsafe fn hl_invalidate_blends() {
     clear_caches();
     // SAFETY: the editor's own globals.
     unsafe { highlight_changed() };
-    unsafe { update_window_hl(Win::current_raw(), true) };
+    unsafe { update_window_hl(Win::current(), true) };
 }
 
 /// The attribute set `front_attr` blended over `back_attr`.

@@ -25,7 +25,7 @@ pub(crate) fn win_may_fill(window: Win) -> bool {
 pub(crate) unsafe fn win_get_fill(window: Win, lnum: LineNr) -> c_int {
     let virt_lines = unsafe {
         decor_virt_lines(
-            window.raw(),
+            window,
             lnum - 1,
             lnum,
             ::core::ptr::null_mut::<c_int>(),
@@ -57,7 +57,7 @@ pub(crate) unsafe fn plines_win(window: Win, lnum: LineNr, limit_winheight: bool
 /// # Safety
 /// `window` must be live and `lnum` a line of its buffer.
 pub(crate) unsafe fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    if unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
+    if unsafe { decor_conceal_line(window, lnum - 1, false) } {
         return 0;
     }
     if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
@@ -100,7 +100,7 @@ pub(crate) unsafe fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
     }
 
     // Column offset for 'number', 'relativenumber' and 'foldcolumn'.
-    let mut width = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let mut width = window.w_view_width - window.col_off();
     if width <= 0 {
         // Bigger than the number of screen lines.
         return 32000;
@@ -168,7 +168,7 @@ pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_lon
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
-    let width = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let width = window.w_view_width - window.col_off();
     if width <= 0 {
         return 9999;
     }
@@ -205,7 +205,7 @@ pub(crate) unsafe fn plines_win_full(
         unsafe { win_get_fill(window, lnum) }
     };
 
-    if unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
+    if unsafe { decor_conceal_line(window, lnum - 1, false) } {
         return filler_lines;
     }
 
@@ -254,7 +254,7 @@ pub(crate) unsafe fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr)
         + 1
         + unsafe {
             decor_virt_lines(
-                window.raw(),
+                window,
                 first - 1,
                 last,
                 ::core::ptr::null_mut::<c_int>(),
@@ -295,7 +295,7 @@ pub(crate) unsafe fn win_text_height(
     fill: *mut int64_t,
     max: int64_t,
 ) -> int64_t {
-    let first_width = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let first_width = window.w_view_width - window.col_off();
     let width1 = first_width.max(0);
     let width2 = (first_width + win_col_off2(window)).max(0);
 

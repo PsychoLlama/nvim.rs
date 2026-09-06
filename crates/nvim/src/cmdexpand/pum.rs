@@ -289,8 +289,8 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
 
     let mut group: Hlf = HLF_NONE;
-    let fillchar = unsafe { fillchar_status(&raw mut group, Win::current_raw()) };
-    let attr = unsafe { win_hl_attr(Win::current_raw(), group as c_int) };
+    let fillchar = unsafe { fillchar_status(&raw mut group, Win::current()) };
+    let attr = unsafe { win_hl_attr(Win::current(), group as c_int) };
 
     let mut len;
     if first_match.get() == 0 {

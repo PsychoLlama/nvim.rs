@@ -399,13 +399,13 @@ pub unsafe fn autocmd_register(
         if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
             && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
         {
-            let save_curtab = TabPage::current_raw();
+            let save_curtab = TabPage::current();
             for tp in tabs() {
-                unsafe { unuse_tabpage(TabPage::current_raw()) };
-                unsafe { use_tabpage(tp.raw()) };
+                unsafe { unuse_tabpage(TabPage::current()) };
+                unsafe { use_tabpage(tp) };
                 snapshot_windows_scroll_size();
             }
-            unsafe { unuse_tabpage(TabPage::current_raw()) };
+            unsafe { unuse_tabpage(TabPage::current()) };
             unsafe { use_tabpage(save_curtab) };
         }
 

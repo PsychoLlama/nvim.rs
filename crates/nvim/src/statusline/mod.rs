@@ -535,7 +535,7 @@ pub(crate) fn hl_attr(hlf: c_int) -> c_int {
 /// unless the window carries a `'winhighlight'` override.
 pub(crate) fn win_hl(win: Win, group: c_int) -> c_int {
     // SAFETY: a live window and an `HLF_*` index.
-    unsafe { win_hl_attr(win.raw(), group) }
+    unsafe { win_hl_attr(win, group) }
 }
 
 /// Two attributes layered, i.e. C's `hl_combine_attr`.
@@ -592,9 +592,9 @@ pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
 ///
 /// # Safety
 /// `window` must be a live window and `group` a writable `Hlf`.
-pub unsafe fn fillchar_status(group: *mut Hlf, window: *mut Window) -> ScreenChar {
+pub unsafe fn fillchar_status(group: *mut Hlf, window: Win) -> ScreenChar {
     // SAFETY: the caller's promise.
-    let (g, fillchar) = fillchar_status_of(unsafe { Win::new(window) });
+    let (g, fillchar) = fillchar_status_of(window);
     // SAFETY: the caller's out-parameter.
     unsafe { *group = g };
     fillchar
@@ -628,14 +628,14 @@ pub unsafe fn redraw_custom_statusline(window: *mut Window) {
 /// `window` must be a live window, `lnum` one of its buffer's lines, `buf` a
 /// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
 pub unsafe fn build_statuscol_str(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     relnum: LineNr,
     buf: *mut ::core::ffi::c_char,
     stcp: *mut StatusCol,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's promise.
-    let (mut win, stcp) = unsafe { (Win::new(window), &mut *stcp) };
+    let (mut win, stcp) = unsafe { (window, &mut *stcp) };
     // Only update the click definitions once per window per redraw, and not
     // at all while the column is empty -- it is redrawn again once it is not.
     let fillclick = relnum >= 0 && stcp.width > 0 && lnum == win.w_topline;

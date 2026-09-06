@@ -452,7 +452,7 @@ impl Jump {
         if opened > 0 {
             drop(redraw_off);
             if postponed_split.get() != 0 {
-                unsafe { win_close(Win::current_raw(), false, false) };
+                unsafe { win_close(Win::current(), false, false) };
                 postponed_split.set(0);
             }
             return Err(Failed);
@@ -493,7 +493,7 @@ impl Jump {
             // Put the cursor back where it was.
             validate_cursor(Win::current());
             unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
-            unsafe { win_enter(saved.raw(), true) };
+            unsafe { win_enter(saved, true) };
         }
         drop(redraw_off);
         retval

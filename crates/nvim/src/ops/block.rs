@@ -171,7 +171,7 @@ pub(crate) unsafe fn block_insert(
         let splice = offset - startcol;
         unsafe {
             extmark_splice_cols(
-                Buf::current_raw(),
+                Buf::current(),
                 lnum as c_int - 1,
                 startcol,
                 skipped,

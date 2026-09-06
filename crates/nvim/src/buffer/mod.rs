@@ -465,7 +465,7 @@ pub(crate) fn end_visual() {
 /// Fires `WinClosed`/`BufWinLeave`; everything held may be stale afterwards.
 pub(crate) fn close_all_windows(buffer: Buf, keep_curwin: bool) {
     // SAFETY: a live buffer.
-    unsafe { close_windows(buffer.raw(), keep_curwin) };
+    unsafe { close_windows(buffer, keep_curwin) };
 }
 
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.

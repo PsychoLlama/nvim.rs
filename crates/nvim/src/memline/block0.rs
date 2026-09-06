@@ -205,7 +205,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
 
     // Upstream passes `curbuf` here, not `buffer`. Preserved: the two are
     // the same for every reachable caller.
-    unsafe { add_b0_fenc(b0p, Buf::current_raw()) };
+    unsafe { add_b0_fenc(b0p, Buf::current()) };
 }
 
 /// Record whether the file and its swap file are in the same directory.
@@ -226,10 +226,9 @@ pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
 /// It goes at the *end* of the name field with a NUL in front of it, so a
 /// reader that does not know about [`B0_HAS_FENC`] still sees a terminated
 /// name and never reaches the encoding.
-pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
+pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, b: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let b = unsafe { Buf::new(buffer) };
     let size = B0_FNAME_SIZE_NOCRYPT as usize;
     let fenc = b.b_p_fenc;
     let n = unsafe { cstr::bytes_at(fenc) }.len();
@@ -574,10 +573,10 @@ pub(crate) fn b0_read_number(src: &[c_char; 4]) -> c_long {
 /// Update the flags block zero carries about the buffer — whether it has
 /// unsaved changes, its `'fileformat'` and its `'fileencoding'` — and push
 /// block zero alone to disk.
-pub unsafe fn ml_setflags(buffer: *mut Buffer) {
+pub unsafe fn ml_setflags(buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let b = unsafe { Buf::new(buffer) };
+    let b = buffer;
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {
         return;

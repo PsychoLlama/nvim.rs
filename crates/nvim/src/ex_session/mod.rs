@@ -76,8 +76,7 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    ArgEntry, Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv,
-    Window, size_t,
+    ArgEntry, Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t,
 };
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
@@ -372,9 +371,8 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullna
 ///
 /// # Safety
 /// `window` is a live window.
-pub(crate) unsafe fn ses_do_win(window: *mut Window) -> bool {
+pub(crate) unsafe fn ses_do_win(win: Win) -> bool {
     // SAFETY: caller contract; a window always has a buffer.
-    let win = unsafe { Win::new(window) };
     if win.w_floating {
         return false;
     }

@@ -65,7 +65,7 @@ use crate::message::{
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, curs_columns,
     invalidate_botline_win, plines_correct_topline, set_empty_rows, update_curswant,
-    update_topline, validate_cursor, validate_virtcol, win_col_off, win_col_off2,
+    update_topline, validate_cursor, validate_virtcol, win_col_off2,
 };
 use crate::normal::{clear_showcmd, do_check_scrollbind};
 use crate::option::vars::{
@@ -216,7 +216,7 @@ pub unsafe fn conceal_check_cursor_line() {
     unsafe { redraw_win_line(wp.raw(), wp.w_cursor.lnum) };
 
     // Whether the line is displayed at all may have changed with it.
-    if unsafe { decor_conceal_line(wp.raw(), wp.w_cursor.lnum - 1, true) } {
+    if unsafe { decor_conceal_line(wp, wp.w_cursor.lnum - 1, true) } {
         changed_window_setting(unsafe { Win::new(wp.raw()) });
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
@@ -315,7 +315,7 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        unsafe { update_window_hl(wp.raw(), redr_type >= UPD_NOT_VALID || hl_changed) };
+        unsafe { update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed) };
 
         let buf = wp.w_buffer;
         if !unsafe { (*buf).b_mod_set } {
@@ -465,7 +465,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
             || wp.w_onebuf_opt.wo_rnu != 0
             || unsafe { *wp.w_onebuf_opt.wo_stc } != 0
         {
-            unsafe { number_width(wp.raw()) }
+            unsafe { number_width(wp) }
         } else {
             0
         };
@@ -480,10 +480,10 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     }
 
     if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
-        unsafe { update_window_hl(Win::current_raw(), redr_type >= UPD_NOT_VALID) };
+        unsafe { update_window_hl(Win::current(), redr_type >= UPD_NOT_VALID) };
         for tp in winlayer::tabs() {
             if !tp.is_current() {
-                unsafe { update_window_hl(tp.tp_curwin, redr_type >= UPD_NOT_VALID) };
+                unsafe { update_window_hl(Win::new(tp.tp_curwin), redr_type >= UPD_NOT_VALID) };
             }
         }
         unsafe { draw_tabline() };
@@ -656,19 +656,18 @@ pub fn end_search_hl() {
 /// Put the terminal cursor where the cursor is in the current window.
 pub unsafe fn setcursor() {
     // SAFETY: `curwin` is the editor's current window.
-    unsafe { setcursor_mayforce(Win::current_raw(), false) }
+    unsafe { setcursor_mayforce(Win::current(), false) }
 }
 
 /// Put the terminal cursor where the cursor is in window `window`.
 ///
 /// `force` positions it even when not redrawing.
-pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
+pub unsafe fn setcursor_mayforce(window: Win, force: bool) {
     // SAFETY: a live window; `grid_adjust` maps its coordinates onto whichever
     // grid actually carries them.
     if !force && !unsafe { redrawing() } {
         return;
     }
-    let window = unsafe { Win::new(window) };
     validate_cursor(window);
 
     let mut row = window.w_wrow;
@@ -701,10 +700,9 @@ pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
 /// `'foldcolumn'` asks for a width; what it gets is bounded by the room left
 /// beside the text, which must be at least one column ('winminwidth' of 0 still
 /// leaves one for the current window).
-pub unsafe fn compute_foldcolumn(window: *mut Window, col: c_int) -> c_int {
+pub unsafe fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
-    let window = unsafe { Win::new(window) };
-    let fdc = unsafe { win_fdccol_count(window.raw()) };
+    let fdc = unsafe { win_fdccol_count(window) };
     let min_width = if window.raw() == Win::current_raw() && p_wmw.get() == 0 {
         1
     } else {
@@ -718,9 +716,8 @@ pub unsafe fn compute_foldcolumn(window: *mut Window, col: c_int) -> c_int {
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
-pub unsafe fn number_width(window: *mut Window) -> c_int {
+pub unsafe fn number_width(mut window: Win) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
-    let mut window = unsafe { Win::new(window) };
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
     let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
@@ -814,9 +811,8 @@ pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-pub unsafe fn win_update_cursorline(window: *mut Window, foldinfo: *mut FoldInfo) {
+pub unsafe fn win_update_cursorline(mut window: Win, foldinfo: *mut FoldInfo) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
-    let mut window = unsafe { Win::new(window) };
     unsafe {
         window.w_cursorline = if win_cursorline_standout(window.raw()) {
             window.w_cursor.lnum

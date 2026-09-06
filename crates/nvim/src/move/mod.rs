@@ -158,12 +158,12 @@ impl Win {
             return 0;
         }
         // SAFETY: a live window.
-        unsafe { number_width(self.raw()) + stc_empty as c_int }
+        unsafe { number_width(self) + stc_empty as c_int }
     }
 
     pub(super) fn fdccol_count(self) -> c_int {
         // SAFETY: a live window.
-        unsafe { win_fdccol_count(self.raw()) }
+        unsafe { win_fdccol_count(self) }
     }
 
     /// Whether 'showbreak' is unset for this window.
@@ -244,14 +244,14 @@ impl Win {
     /// Whether any line of the window is hidden outright by a decoration.
     pub(super) fn lines_concealed(self) -> bool {
         // SAFETY: a live window.
-        unsafe { win_lines_concealed(self.raw()) }
+        unsafe { win_lines_concealed(self) }
     }
 
     /// Whether line `lnum` (zero-based, as the decoration layer counts) is
     /// hidden outright.
     pub(super) fn conceals_line(self, lnum: c_int, include_cursor: bool) -> bool {
         // SAFETY: a live window.
-        unsafe { decor_conceal_line(self.raw(), lnum, include_cursor) }
+        unsafe { decor_conceal_line(self, lnum, include_cursor) }
     }
 
     /// Whether the cursor line is drawn concealed in the current mode.
@@ -340,12 +340,12 @@ impl Win {
 /// # Safety
 /// `window` must be a valid window.
 pub unsafe fn plines_correct_topline(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     limit_winheight: bool,
 ) -> (c_int, LineNr) {
     // SAFETY: the caller's promise.
-    let (n, next, _) = unsafe { Win::new(window) }.corrected_plines(lnum, limit_winheight);
+    let (n, next, _) = window.corrected_plines(lnum, limit_winheight);
     (n, next)
 }
 
@@ -698,7 +698,10 @@ pub fn validate_cursor_col(mut win: Win) {
 /// `window` must be a valid window.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
-    // SAFETY: the caller's promise.
+    // SAFETY: the caller's promise. The parameter stays a raw pointer: the
+    // symbol is in the ABI ledger and `test/functional/lua/ffi_spec.lua`
+    // calls it through an `ffi.cdef` that spells `win_T *`. Rust callers
+    // want `Win::col_off` instead.
     unsafe { Win::new(window) }.col_off()
 }
 

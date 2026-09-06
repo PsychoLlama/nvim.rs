@@ -38,7 +38,7 @@ use core::ffi::{c_char, c_int};
 
 use crate::r#move::{
     changed_window_setting, scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top,
-    validate_botline_win, win_col_off,
+    validate_botline_win,
 };
 use crate::search::{BACKWARD, FORWARD};
 
@@ -212,7 +212,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
             0
         };
     } else {
-        let width = win.w_view_width - unsafe { win_col_off(win.raw()) };
+        let width = win.w_view_width - win.col_off();
         col = if (col as int64_t + siso) < width as int64_t {
             0
         } else if (siso - width as int64_t) < (INT_MAX - col) as int64_t {
@@ -259,7 +259,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
                 } else {
                     let lnum = win.w_cursor.lnum;
                     let deep = (nchar == 'D' as c_int) as c_int;
-                    unsafe { delete_fold(win.raw(), lnum, lnum, deep, false) };
+                    unsafe { delete_fold(win, lnum, lnum, deep, false) };
                 }
             }
         }
@@ -269,7 +269,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
                 clear_folding(win);
                 changed_window_setting(win);
             } else if foldmethod_is_marker(win) {
-                unsafe { delete_fold(win.raw(), 1, Buf::current().b_ml.ml_line_count, 1, false) };
+                unsafe { delete_fold(win, 1, Buf::current().b_ml.ml_line_count, 1, false) };
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
                 emsg(gettext(msg));
@@ -536,7 +536,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
             Place::Bottom => scroll_cursor_bot(win, 0, true),
         }
         unsafe { redraw_later(win.raw(), UPD_VALID) };
-        unsafe { set_fraction(win.raw()) };
+        unsafe { set_fraction(win) };
     }
 
     if old_fen != win.w_onebuf_opt.wo_fen {

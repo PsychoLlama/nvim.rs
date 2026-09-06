@@ -878,6 +878,6 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mu
         wp.w_height_request = height.max(0);
         wp.w_width_request = width.max(0);
         // SAFETY: a live window.
-        unsafe { win_set_inner_size(wp.raw(), true) };
+        unsafe { win_set_inner_size(wp, true) };
     }
 }

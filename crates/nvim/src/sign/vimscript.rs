@@ -225,9 +225,9 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
 ///
 /// # Safety
 /// `buffer` must be live.
-pub(crate) unsafe fn get_buffer_signs(buffer: *mut Buffer) -> *mut List {
+pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> *mut List {
     // SAFETY: the caller's buffer.
-    let signs = placed_signs(unsafe { Buf::new(buffer) }, 0, ALL_GROUPS, |_| Keep::Yes);
+    let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
     let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     for mark in signs {
@@ -513,7 +513,7 @@ pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: 
     }
 
     // SAFETY: a live buffer and a group name the argument owns.
-    result.vval.v_number = VarNumber::from(unsafe { sign_jump(id, group, buf) });
+    result.vval.v_number = VarNumber::from(unsafe { sign_jump(id, group, Buf::new(buf)) });
 }
 
 /// The named key's value, or the positional typval when there is one.
@@ -605,7 +605,7 @@ unsafe fn sign_place_from_dict(
 
     // `sign_place` writes the id back when it was zero (auto-allocate).
     let mut uid = id.cast_unsigned();
-    if unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) }.is_ok() {
+    if unsafe { sign_place(&raw mut uid, group, name, Buf::new(buf), lnum, prio) }.is_ok() {
         uid.cast_signed()
     } else {
         -1

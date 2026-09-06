@@ -139,7 +139,7 @@ unsafe fn pum_compute_text_attrs(
 ) -> Option<Vec<c_int>> {
     // SAFETY: `text` is the caller's NUL-terminated string; `ins_compl_leader`
     // and `cmdline_compl_pattern` answer editor-owned strings.
-    let win = Win::current_raw();
+    let win = Win::current();
     if unsafe { *text } == 0
         || (hlf != HLF_PSI as Hlf && hlf != HLF_PNI as Hlf)
         || (unsafe { win_hl_attr(win, HLF_PMSI) } == unsafe { win_hl_attr(win, HLF_PSI) }
@@ -468,7 +468,7 @@ impl PumRow {
     unsafe fn put_column(&mut self, style: &RowStyle, item_type: c_int, next_isempty: bool) {
         // SAFETY: the caller holds the batch; `p` walks an item string, which
         // is NUL-terminated and stays live for the whole redraw.
-        let win = Win::current_raw();
+        let win = Win::current();
         let hlf = self.hlfs[item_type as usize];
         self.orig_attr =
             unsafe { hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int)) };
@@ -554,7 +554,7 @@ impl PumRow {
 unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
     // SAFETY: the item indices come from `pum_first`/`pum_height`, which
     // `pum_redraw` has already clamped to the array.
-    let win = Win::current_raw();
+    let win = Win::current();
     let idx = i + pum_first.get();
     let selected = idx == pum_selected.get();
     let mut row = PumRow {
@@ -818,8 +818,8 @@ pub unsafe fn pum_redraw() {
         } else {
             unsafe { (*win).w_p_fcs_chars.trunc }
         },
-        attr_scroll: unsafe { win_hl_attr(win, HLF_PSB) },
-        attr_thumb: unsafe { win_hl_attr(win, HLF_PST) },
+        attr_scroll: unsafe { win_hl_attr(Win::new(win), HLF_PSB) },
+        attr_thumb: unsafe { win_hl_attr(Win::new(win), HLF_PST) },
         border_scroll: if border.width > 0 && !config.shadow {
             border.scrollbar
         } else {

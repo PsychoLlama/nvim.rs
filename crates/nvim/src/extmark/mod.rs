@@ -58,7 +58,7 @@ use crate::memline::ml_find_line_or_offset;
 use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
-    BCount, Buffer, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
+    BCount, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
     ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoHeader,
     UndoObjectType, extmark_undo_vec_t, int32_t, size_t, uint16_t, uint32_t, uint64_t,
 };
@@ -292,7 +292,7 @@ fn invalidate_decor_state(buffer: Buf) {
 
 fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
     // SAFETY: a live buffer, whose own marktree this walks.
-    unsafe { buf_signcols_count_range(buffer.raw(), row1, row2, add, half) }
+    unsafe { buf_signcols_count_range(buffer, row1, row2, add, half) }
 }
 
 /// The highest extmark id handed out in namespace `key`, registering the
@@ -336,7 +336,7 @@ fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
 /// the change is not undoable.
 fn undo_marks(buffer: Buf) -> *mut extmark_undo_vec_t {
     // SAFETY: a live buffer.
-    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buffer.raw()) };
+    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buffer) };
     if uhp.is_null() {
         return ptr::null_mut();
     }
@@ -366,15 +366,7 @@ fn send_splice(buffer: Buf, start: Extent, old: Extent, new: Extent) {
     // callbacks, which is why no borrow of the buffer spans the call.
     unsafe {
         buf_updates_send_splice(
-            buffer.raw(),
-            start.row,
-            start.col,
-            start.byte,
-            old.row,
-            old.col,
-            old.byte,
-            new.row,
-            new.col,
+            buffer, start.row, start.col, start.byte, old.row, old.col, old.byte, new.row, new.col,
             new.byte,
         );
     }
@@ -439,7 +431,7 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
 pub unsafe fn extmark_adjust(
-    buffer: *mut Buffer,
+    buffer: Buf,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -447,7 +439,6 @@ pub unsafe fn extmark_adjust(
     undo: ExtmarkOp,
 ) {
     // SAFETY: the caller's promise -- a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     splice::adjust(buffer, line1, line2, amount, amount_after, undo);
 }
 
@@ -457,7 +448,7 @@ pub unsafe fn extmark_adjust(
 /// `old_col` and `new_col` encode an offset from `start_col` when the
 /// matching row extent is 0, and the end column of the region otherwise.
 pub unsafe fn extmark_splice(
-    buffer: *mut Buffer,
+    buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
     old_row: c_int,
@@ -479,14 +470,13 @@ pub unsafe fn extmark_splice(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
 /// The single-line shorthand: the column delta is both the column count and
 /// the byte count.
 pub unsafe fn extmark_splice_cols(
-    buffer: *mut Buffer,
+    buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
     old_col: ColNr,
@@ -504,13 +494,12 @@ pub unsafe fn extmark_splice_cols(
         byte: new_col as BCount,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
 /// Text removed from one place and inserted at another, as `:move` does it.
 pub unsafe fn extmark_move_region(
-    buffer: *mut Buffer,
+    buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
     start_byte: BCount,
@@ -538,6 +527,5 @@ pub unsafe fn extmark_move_region(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     splice::move_region(buffer, start, extent, new, undo);
 }

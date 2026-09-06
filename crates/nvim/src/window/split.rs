@@ -460,7 +460,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         attach_frame(wp);
         // Make the contents of the new window the same as the current one.
         // SAFETY: two live windows.
-        unsafe { win_init(wp.raw(), Win::current_raw(), flags) };
+        unsafe { win_init(wp, Win::current(), flags) };
         return Some(wp);
     };
     append(after, wp, None);
@@ -772,9 +772,9 @@ fn size_horizontal(
 // ---------------------------------------------------------------------------
 // Copying a window
 
-pub unsafe fn win_init(newp: *mut Window, oldp: *mut Window, flags: c_int) {
+pub unsafe fn win_init(newp: Win, oldp: Win, flags: c_int) {
     // SAFETY: the caller's promise -- two live windows.
-    unsafe { init(Win::new(newp), Win::new(oldp), flags) };
+    init(newp, oldp, flags);
 }
 
 /// Make window `newp` a copy of window `oldp`, from `win_init()`.

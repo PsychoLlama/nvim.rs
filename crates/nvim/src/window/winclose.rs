@@ -38,9 +38,9 @@ use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
-pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
+pub unsafe fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    close(unsafe { Win::new(win) }, free_buf, force)
+    close(win, free_buf, force)
 }
 
 /// Close window `win`, which must be on the current tab page, unloading its
@@ -451,11 +451,11 @@ fn tabclosedpre(tabpage: *mut Tabpage) {
 pub unsafe fn win_close_othertab(
     win: *mut Window,
     free_buf: c_int,
-    tabpage: *mut Tabpage,
+    tabpage: TabPage,
     force: bool,
 ) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page.
-    let (win, tp) = unsafe { (Win::new(win), TabPage::new(tabpage)) };
+    let (win, tp) = unsafe { (Win::new(win), tabpage) };
     close_othertab(win, free_buf != 0, tp, force)
 }
 

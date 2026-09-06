@@ -231,7 +231,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
     validate_cursor(unsafe { Win::new(old_curwin) });
-    unsafe { set_fraction(old_curwin) };
+    unsafe { set_fraction(Win::new(old_curwin)) };
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT as c_int } else { 0 };
@@ -259,7 +259,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     }
     let height = Win::current().w_height;
     // SAFETY: the current window is live.
-    unsafe { scroll_to_fraction(Win::current_raw(), height) };
+    unsafe { scroll_to_fraction(Win::current(), height) };
 }
 
 /// `:diffthis`: put the current window in diff mode.

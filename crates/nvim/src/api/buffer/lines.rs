@@ -88,6 +88,8 @@ pub unsafe fn nvim_buf_set_lines(
     if b.is_null() {
         return ().reported(error);
     }
+    // SAFETY: not null, and the guard above is what says so.
+    let buffer = unsafe { Buf::new(b) };
     let mut oob: bool = false;
     start = unsafe { normalize_index(b, start as int64_t, true, &raw mut oob) } as Integer;
     end = unsafe { normalize_index(b, end as int64_t, true, &raw mut oob) } as Integer;
@@ -142,7 +144,7 @@ pub unsafe fn nvim_buf_set_lines(
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    let buf = unsafe { Buf::new(b) };
+    let buf = buffer;
     's_382: {
         if buf.b_p_ma == 0 {
             let why = c"Buffer is not 'modifiable'";
@@ -230,7 +232,7 @@ pub unsafe fn nvim_buf_set_lines(
             };
             unsafe {
                 mark_adjust_buf(
-                    b,
+                    buffer,
                     start as LineNr,
                     (end - 1 as Integer) as LineNr,
                     adjust,
@@ -251,7 +253,7 @@ pub unsafe fn nvim_buf_set_lines(
             }
             unsafe {
                 extmark_splice(
-                    b,
+                    buffer,
                     start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                     0 as ColNr,
                     (end - start) as ::core::ffi::c_int,
@@ -264,7 +266,7 @@ pub unsafe fn nvim_buf_set_lines(
                 )
             };
             changed_lines(
-                unsafe { Buf::new(b) },
+                buffer,
                 start as LineNr,
                 0 as ColNr,
                 end as LineNr,
@@ -275,7 +277,7 @@ pub unsafe fn nvim_buf_set_lines(
                 if win.w_buffer == b {
                     let (lo, hi) = (start as LineNr, end as LineNr);
                     // SAFETY: a live window showing this buffer.
-                    unsafe { fix_cursor(win.raw(), lo, hi, extra as LineNr) };
+                    unsafe { fix_cursor(win, lo, hi, extra as LineNr) };
                 }
             }
         }

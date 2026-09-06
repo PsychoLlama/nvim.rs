@@ -111,7 +111,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 
                 win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;
                 win.w_wcol %= win.w_view_width;
-                win.w_wcol += unsafe { win_col_off(win.raw()) };
+                win.w_wcol += win.col_off();
                 col = 0; // no correction needed
             } else {
                 win.w_wcol -= 1;

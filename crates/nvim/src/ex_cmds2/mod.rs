@@ -584,7 +584,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
                 continue;
             }
             let bufref = BufRef::of_opt(unsafe { Buf::from_raw(culprit) });
-            unsafe { goto_tabpage_win(tp, wp) };
+            unsafe { goto_tabpage_win(TabPage::new(tp), Win::new(wp)) };
             // Paranoia: did autocommands wipe out the changed buffer?
             if !bufref.valid() {
                 return true;
@@ -837,7 +837,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
         if unsafe { (*wp).w_buffer } != buf {
             continue;
         }
-        unsafe { goto_tabpage_win(tp, wp) };
+        unsafe { goto_tabpage_win(TabPage::new(tp), Win::new(wp)) };
         Win::current().w_arg_idx = 0;
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.

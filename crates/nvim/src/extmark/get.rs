@@ -22,14 +22,14 @@ use crate::marktree::key::{
     MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
 };
 use crate::types::{
-    Buffer, ColNr, ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, int64_t, uint32_t,
+    ColNr, ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, int64_t, uint32_t,
 };
 
 /// Every mark between two positions, the ones at either end included.
 ///
 /// `amount` is the caller's limit, `INT64_MAX` for "all of them".
 pub unsafe fn extmark_get(
-    buffer: *mut Buffer,
+    mut buffer: Buf,
     ns_id: uint32_t,
     l_row: c_int,
     l_col: ColNr,
@@ -40,7 +40,6 @@ pub unsafe fn extmark_get(
     overlap: bool,
 ) -> ExtmarkInfoArray {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
     let mut itr = MarkTreeIter::default();
 
@@ -109,9 +108,8 @@ fn push_mark(
 }
 
 /// The extmark `id` of namespace `ns_id`, paired with its end position.
-pub unsafe fn extmark_from_id(buffer: *mut Buffer, ns_id: uint32_t, id: uint32_t) -> MTPair {
+pub unsafe fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     let mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, None);
     if mark.id == 0 {
         // Invalid.
@@ -124,9 +122,8 @@ pub unsafe fn extmark_from_id(buffer: *mut Buffer, ns_id: uint32_t, id: uint32_t
 }
 
 /// Release every mark of a buffer, as it is freed.
-pub unsafe fn extmark_free_all(buffer: *mut Buffer) {
+pub unsafe fn extmark_free_all(mut buffer: Buf) {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     let mut itr = MarkTreeIter::default();
     itr_get(buffer.marktree(), 0, 0, &mut itr);
     loop {

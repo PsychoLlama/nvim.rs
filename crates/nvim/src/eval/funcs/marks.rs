@@ -103,7 +103,7 @@ pub unsafe fn f_getjumplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     if wp.is_null() {
         return;
     }
-    unsafe { cleanup_jumplist(wp, true) };
+    unsafe { cleanup_jumplist(Win::new(wp), true) };
     let l = unsafe { tv_list_alloc((*wp).w_jumplistlen as isize) };
     unsafe { tv_list_append_list(out, l) };
     unsafe { tv_list_append_number(out, (*wp).w_jumplistidx as VarNumber) };

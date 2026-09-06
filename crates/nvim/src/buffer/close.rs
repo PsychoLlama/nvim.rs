@@ -92,7 +92,7 @@ fn valid_win(win: *mut Window) -> Option<Win> {
 }
 
 /// Whether `win` is the only non-floating window of its tab page.
-fn is_only_window(win: *mut Window) -> bool {
+fn is_only_window(win: Win) -> bool {
     // SAFETY: as [`valid_win`], `one_window` only compares the pointer.
     unsafe { one_window(win, ptr::null_mut::<Tabpage>()) }
 }
@@ -100,29 +100,29 @@ fn is_only_window(win: *mut Window) -> bool {
 /// Make `win` in `tabpage` current again, without firing autocommands.
 fn goto_win(tabpage: TabPage, win: Win) {
     // SAFETY: a live tab page and a live window.
-    unsafe { goto_tabpage_win(tabpage.raw(), win.raw()) };
+    unsafe { goto_tabpage_win(tabpage, win) };
 }
 
 /// Remember `win`'s cursor as the buffer's last position.
 fn remember_last_cursor(win: Win) {
     // SAFETY: a live window.
-    unsafe { set_last_cursor(win.raw()) };
+    unsafe { set_last_cursor(win) };
 }
 
 /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
 fn forget_file(win: Win, fnum: c_int) {
     // SAFETY: a live window.
-    unsafe { mark_forget_file(win.raw(), fnum) };
+    unsafe { mark_forget_file(win, fnum) };
 }
 
 fn detach_updates(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `send_closing`.
-    unsafe { buf_updates_unload(buffer.raw(), false) };
+    unsafe { buf_updates_unload(buffer, false) };
 }
 
 fn free_update_callbacks(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { buf_free_callbacks(buffer.raw()) };
+    unsafe { buf_free_callbacks(buffer) };
 }
 
 fn diff_forget(buffer: Buf) {
@@ -137,7 +137,7 @@ fn diff_hidden_off() -> bool {
 
 fn free_extmarks(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { extmark_free_all(buffer.raw()) };
+    unsafe { extmark_free_all(buffer) };
 }
 
 fn free_user_commands(buffer: Buf) {
@@ -180,7 +180,7 @@ fn forget_lines(buffer: Buf, count: LineNr) {
     // SAFETY: a live buffer.
     unsafe {
         mark_adjust_buf(
-            raw,
+            Buf::new(raw),
             1,
             count,
             last,
@@ -414,7 +414,7 @@ fn close_buffer_inner(
     let mut how = Disposition::of(buffer, action);
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
     let the_curwin = Win::current_raw();
-    let the_curtab = TabPage::current_raw();
+    let the_curtab = TabPage::current();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
     // ABORT_ON_INTERNAL_ERROR builds.
 
@@ -590,7 +590,7 @@ fn leave_last_window(
         buffer = bufref.get()?;
         buffer.b_locked -= 1;
         buffer.b_locked_split -= 1;
-        if abort_if_last && !win.is_null() && is_only_window(win) {
+        if abort_if_last && !win.is_null() && is_only_window(unsafe { Win::new(win) }) {
             // Autocommands made this the only window.
             err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
@@ -601,7 +601,7 @@ fn leave_last_window(
 
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
-fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, the_curtab: *mut Tabpage) {
+fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, tabpage: TabPage) {
     if !was_curwin || Win::current_raw() == the_curwin {
         return;
     }
@@ -610,9 +610,8 @@ fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, the_curtab: *mut Ta
     };
     // SAFETY: `the_curtab` was `curtab` when this call began and tab pages
     // outlive the windows in them; `wp` has just been re-validated.
-    let tp = unsafe { TabPage::new(the_curtab) };
     block_autocmds_now();
-    goto_win(tp, wp);
+    goto_win(tabpage, wp);
     unblock_autocmds_now();
 }
 
@@ -690,7 +689,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
     let is_curbuf = buffer.raw() == Buf::current_raw();
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
     let the_curwin = Win::current_raw();
-    let the_curtab = TabPage::current_raw();
+    let the_curtab = TabPage::current();
 
     let Some(mut buf) = announce_unload(buffer, flags) else {
         return;

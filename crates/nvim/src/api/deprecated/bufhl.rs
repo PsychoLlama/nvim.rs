@@ -13,6 +13,7 @@ use crate::api::private::helpers::{Reported, buffer_by_handle};
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::cstr;
 use crate::marktree::key::MtFlags;
+use crate::winlayer::Buf;
 
 pub unsafe fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
@@ -43,7 +44,7 @@ fn src2ns(src_id: &mut Integer) -> uint32_t {
 /// `buffer` must be a live buffer and `decor` must own whatever it points at.
 #[expect(clippy::too_many_arguments, reason = "one per extmark_set parameter")]
 unsafe fn set_decor(
-    buffer: *mut Buffer,
+    buffer: Buf,
     ns: uint32_t,
     line: ::core::ffi::c_int,
     col: ColNr,
@@ -131,7 +132,7 @@ pub unsafe fn nvim_buf_add_highlight(
     // SAFETY: `buf` is live, and an inline highlight owns nothing.
     unsafe {
         set_decor(
-            buf.raw(),
+            buf,
             ns,
             line as ::core::ffi::c_int,
             col_start as ColNr,
@@ -170,7 +171,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
 
     let lnum = line as ::core::ffi::c_int;
     // SAFETY: `buf` is live.
-    let existing = unsafe { decor_find_virttext(buf.raw(), lnum, ns_id as uint64_t) };
+    let existing = unsafe { decor_find_virttext(buf, lnum, ns_id as uint64_t) };
     if !existing.is_null() {
         // Replacing what this namespace already put on the line, rather than
         // stacking a second decoration on it.
@@ -211,7 +212,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     // SAFETY: `buf` is live and `decor` owns `vt`, which it hands over.
     unsafe {
         set_decor(
-            buf.raw(),
+            buf,
             ns_id,
             lnum,
             0 as ColNr,

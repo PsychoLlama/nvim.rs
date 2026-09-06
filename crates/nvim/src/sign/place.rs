@@ -31,7 +31,7 @@ const STAR: c_char = b'*'.cast_signed();
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_set_sign(
-    buffer: *mut Buffer,
+    buffer: Buf,
     id: *mut uint32_t,
     group: *const c_char,
     prio: c_int,
@@ -39,7 +39,6 @@ unsafe fn buf_set_sign(
     def: SignRef,
 ) {
     // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     // The definition is copied out: the store and the extmark below can both
     // move the entry it lives in.
     let def = *def;
@@ -84,7 +83,7 @@ unsafe fn buf_set_sign(
     // SAFETY: a live buffer, and `id` is the caller's writable out-parameter.
     unsafe {
         extmark_set(
-            buffer.raw(),
+            buffer,
             ns,
             id,
             row,
@@ -109,7 +108,7 @@ unsafe fn buf_set_sign(
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_mod_sign(
-    buffer: *mut Buffer,
+    buffer: Buf,
     id: *mut uint32_t,
     group: *const c_char,
     prio: c_int,
@@ -120,7 +119,7 @@ unsafe fn buf_mod_sign(
         return 0;
     };
     // SAFETY: the caller's buffer and out-parameter.
-    let mark = unsafe { lookup_ns(Buf::new(buffer), ns, *id, false) };
+    let mark = unsafe { lookup_ns(buffer, ns, *id, false) };
     if mark.pos.row >= 0 {
         // SAFETY: the caller's buffer, group and out-parameter.
         unsafe { buf_set_sign(buffer, id, group, prio, mark.pos.row + 1, def) };
@@ -152,13 +151,12 @@ unsafe fn placed_ns(group: *const c_char) -> Option<uint32_t> {
 ///
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
-unsafe fn buf_findsign(buffer: *mut Buffer, id: c_int, group: *const c_char) -> c_int {
+unsafe fn buf_findsign(buffer: Buf, id: c_int, group: *const c_char) -> c_int {
     // SAFETY: the caller's group name.
     let Some(ns) = (unsafe { placed_ns(group) }) else {
         return 0;
     };
     // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     lookup_ns(buffer, ns, id.cast_unsigned(), false).pos.row + 1
 }
 
@@ -237,19 +235,13 @@ pub(super) enum Keep {
 ///
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
-unsafe fn buf_delete_signs(
-    buffer: *mut Buffer,
-    group: *const c_char,
-    id: c_int,
-    atlnum: LineNr,
-) -> c_int {
+unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum: LineNr) -> c_int {
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
     if ns < 0 {
         return FAIL;
     }
     // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
 
     let mut itr = MarkTreeIter::default();
     let row = if atlnum > 0 { atlnum - 1 } else { 0 };
@@ -287,7 +279,7 @@ unsafe fn buf_delete_signs(
         if wanted && atlnum <= 0 {
             // `extmark_del` advances the iterator itself.
             // SAFETY: as above, plus a live buffer.
-            unsafe { extmark_del(buffer.raw(), &raw mut itr, mark, true) };
+            unsafe { extmark_del(buffer, &raw mut itr, mark, true) };
             continue;
         }
         if wanted {
@@ -305,7 +297,7 @@ unsafe fn buf_delete_signs(
     // SAFETY: every mark collected above carries a live sign decoration.
     unsafe { sort_signs(&mut signs) };
     // SAFETY: a live buffer.
-    unsafe { extmark_del_id(buffer.raw(), signs[0].ns, signs[0].id) };
+    unsafe { extmark_del_id(buffer, signs[0].ns, signs[0].id) };
     OK
 }
 
@@ -332,7 +324,7 @@ pub(crate) unsafe fn sign_place(
     id: *mut uint32_t,
     group: *const c_char,
     name: *mut c_char,
-    buffer: *mut Buffer,
+    buffer: Buf,
     lnum: LineNr,
     prio: c_int,
 ) -> Result<(), Failed> {
@@ -391,7 +383,7 @@ unsafe fn sign_unplace_inner(
     let all_groups = !group.is_null() && unsafe { *group } == STAR;
     if id == 0 || atlnum > 0 || all_groups {
         // SAFETY: the caller's buffer and group.
-        return unsafe { buf_delete_signs(buffer, group, id, atlnum) };
+        return unsafe { buf_delete_signs(Buf::new(buffer), group, id, atlnum) };
     }
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
@@ -400,7 +392,7 @@ unsafe fn sign_unplace_inner(
     }
     let ns = u32::try_from(ns).expect("a namespace id fits its own handle type");
     // SAFETY: the caller's buffer.
-    if !unsafe { extmark_del_id(buffer, ns, id.cast_unsigned()) } {
+    if !unsafe { extmark_del_id(Buf::new(buffer), ns, id.cast_unsigned()) } {
         return FAIL;
     }
     OK
@@ -437,18 +429,15 @@ pub(crate) unsafe fn sign_unplace(
 ///
 /// # Safety
 /// `buffer` must be live; `group` must be null or NUL-terminated.
-pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: *mut Buffer) -> LineNr {
+pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> LineNr {
     // SAFETY: the caller's buffer and group.
     let lnum = unsafe { buf_findsign(buffer, id, group) };
     if lnum <= 0 {
         semsg!("E157: Invalid sign ID: {}", id);
         return -1;
     }
-    // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
-
     // SAFETY: a live buffer.
-    if !unsafe { buf_jump_open_win(buffer.raw()) }.is_null() {
+    if !unsafe { buf_jump_open_win(buffer) }.is_null() {
         let mut win = Win::current();
         win.w_cursor.lnum = lnum;
         check_cursor_lnum(win);

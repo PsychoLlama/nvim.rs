@@ -327,7 +327,7 @@ unsafe fn pum_show_info(
         resized = unsafe { prepare_tagpreview(false) };
     } else {
         if let Some(wp) = win_float_find_preview() {
-            unsafe { win_enter(wp.raw(), false) };
+            unsafe { win_enter(wp, false) };
         } else if win_float_create_preview(true, true).is_some() {
             resized = true;
         }
@@ -429,7 +429,7 @@ unsafe fn pum_fill_info(
         && !unsafe { pum_adjust_info_position(Win::current_raw(), max_info_width) }
         && win_valid(curwin_save)
     {
-        unsafe { win_enter(curwin_save, false) };
+        unsafe { win_enter(Win::new(curwin_save), false) };
     }
     resized
 }
@@ -453,7 +453,7 @@ unsafe fn pum_restore_window(
         return resized;
     }
     if left_tab {
-        unsafe { goto_tabpage_tp(curtab_save, false, false) };
+        unsafe { goto_tabpage_tp(TabPage::new(curtab_save), false, false) };
     }
 
     // On the first completion, with the preview window not resized, skip
@@ -469,7 +469,7 @@ unsafe fn pum_restore_window(
     // happens in the window itself.
     if resized && win_valid(curwin_save) {
         let no_sync = Suppress::undo_sync();
-        unsafe { win_enter(curwin_save, true) };
+        unsafe { win_enter(Win::new(curwin_save), true) };
         drop(no_sync);
         update_topline(Win::current());
     }
@@ -484,7 +484,7 @@ unsafe fn pum_restore_window(
 
     if !resized && win_valid(curwin_save) {
         let _no_sync = Suppress::undo_sync();
-        unsafe { win_enter(curwin_save, true) };
+        unsafe { win_enter(Win::new(curwin_save), true) };
     }
 
     // Autocommands may have changed it again.

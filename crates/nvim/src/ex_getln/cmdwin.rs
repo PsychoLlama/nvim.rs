@@ -181,12 +181,15 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         if newbuf_status.is_ok() {
             bufref = BufRef::of_opt(current_buf());
         }
-        if cmdwin_valid && !unsafe { last_window(cmdwin_win.get()) } {
-            unsafe { win_close(cmdwin_win.get(), true, false) };
+        if cmdwin_valid && !unsafe { last_window(Win::new(cmdwin_win.get())) } {
+            unsafe { win_close(Win::new(cmdwin_win.get()), true, false) };
         }
         // win_close() autocommands may have already deleted the buffer.
-        if newbuf_status.is_ok() && bufref.valid() && bufref.raw() != Buf::current_raw() {
-            wipe_buffer(bufref.raw());
+        if newbuf_status.is_ok()
+            && let Some(buffer) = bufref.get()
+            && buffer.raw() != Buf::current_raw()
+        {
+            wipe_buffer(buffer);
         }
 
         cmdwin_type.set(0);
@@ -376,18 +379,20 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         let wp = Win::current_raw();
         bufref = BufRef::of_opt(current_buf());
         skip_win_fix_cursor.set(true);
-        unsafe { win_goto(old_curwin) };
+        unsafe { win_goto(Win::new(old_curwin)) };
 
         // win_goto() may trigger an autocommand that already closes the
         // cmdline window.
         if win_valid(wp) && wp != Win::current_raw() {
-            unsafe { win_close(wp, true, false) };
+            unsafe { win_close(Win::new(wp), true, false) };
         }
 
         // win_close() may have already wiped the buffer when 'bh' is set
         // to 'wipe'; autocommands may have closed other windows.
-        if bufref.valid() && bufref.raw() != Buf::current_raw() {
-            wipe_buffer(bufref.raw());
+        if let Some(buffer) = bufref.get()
+            && buffer.raw() != Buf::current_raw()
+        {
+            wipe_buffer(buffer);
         }
 
         // Restore window sizes.
@@ -413,8 +418,8 @@ pub fn is_in_cmdwin() -> bool {
 
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
-fn wipe_buffer(buffer: *mut Buffer) {
+fn wipe_buffer(buffer: Buf) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
     // SAFETY: the callers have just asked `BufRef::valid` about `buffer`.
-    unsafe { close_buffer(None, Buf::new(buffer), wipe, false, false) };
+    close_buffer(None, buffer, wipe, false, false);
 }

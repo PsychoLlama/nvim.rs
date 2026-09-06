@@ -49,7 +49,7 @@ use crate::mbyte::{
 use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::state::did_emsg;
-use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
+use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
 use crate::option::vars::{dy_flags, p_sel};
 use crate::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::options::{
@@ -128,7 +128,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// `window` must be a live window, `lnum` one of its buffer's lines, and `spv` a
 /// live `SpellVars`.
 pub unsafe fn win_line(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     startrow: ::core::ffi::c_int,
     endrow: ::core::ffi::c_int,
@@ -141,7 +141,6 @@ pub unsafe fn win_line(
     debug_assert!(startrow < endrow);
 
     // SAFETY: the caller's live window.
-    let window = unsafe { Win::new(window) };
 
     // Plain construction, so it sits outside the promise below.
     let mut wlv = WinLineVars {
@@ -370,12 +369,12 @@ unsafe fn decor_providers_setup(
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
     let rem_vcols = if window.w_onebuf_opt.wo_wrap != 0 {
-        let width = window.w_view_width - unsafe { win_col_off(window.raw()) };
+        let width = window.w_view_width - window.col_off();
         let width2 = width + win_col_off2(unsafe { Win::new(window.raw()) });
         let first_row_width = if draw_from_line_start { width } else { width2 };
         first_row_width + (rows_to_draw - 1) * width2
     } else {
-        unsafe { window.w_view_width - win_col_off(window.raw()) }
+        window.w_view_width - window.col_off()
     };
 
     // Called here because the line pointer has to be invalidated anyway.

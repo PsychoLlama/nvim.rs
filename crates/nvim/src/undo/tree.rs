@@ -289,7 +289,7 @@ pub unsafe fn u_undoline() {
     let ptr_len = unsafe { cstr::bytes_at(Buf::current().b_u_line_ptr) }.len();
     unsafe {
         extmark_splice_cols(
-            Buf::current_raw(),
+            Buf::current(),
             Buf::current().b_u_line_lnum as c_int - 1,
             0,
             oldp_len as ColNr,

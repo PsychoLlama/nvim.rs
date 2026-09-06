@@ -105,7 +105,7 @@ pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
             reset_visual_and_resel();
         }
         // SAFETY: `w` is the live window just found.
-        unsafe { goto_tabpage_win(win_find_tabpage(w.raw()), w.raw()) };
+        unsafe { goto_tabpage_win(TabPage::new(win_find_tabpage(w.raw())), w) };
     });
     ().reported(err)
 }
@@ -230,7 +230,7 @@ pub unsafe fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Err
     };
     api_try(&mut err, |_| {
         // SAFETY: `tp` is the live tab page just found.
-        unsafe { goto_tabpage_tp(tp.raw(), true, true) };
+        unsafe { goto_tabpage_tp(tp, true, true) };
     });
     ().reported(err)
 }

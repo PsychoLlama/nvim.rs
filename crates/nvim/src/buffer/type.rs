@@ -249,20 +249,14 @@ pub unsafe fn buf_is_empty(buffer: *mut Buffer) -> bool {
     b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buffer, 1 as LineNr) } == 0
 }
 
-pub unsafe fn buf_inc_changedtick(buffer: *mut Buffer) {
+pub unsafe fn buf_inc_changedtick(buffer: Buf) {
     // SAFETY: the caller's promise -- a live buffer.
-    unsafe {
-        buf_set_changedtick(
-            buffer,
-            buf_get_changedtick(Buf::new(buffer)) + 1 as VarNumber,
-        )
-    };
+    unsafe { buf_set_changedtick(buffer, buf_get_changedtick(buffer) + 1 as VarNumber) };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe fn buf_set_changedtick(buffer: *mut Buffer, changedtick: VarNumber) {
+pub unsafe fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut b = unsafe { Buf::new(buffer) };
     let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
     b.changedtick_di.di_tv.vval.v_number = changedtick;

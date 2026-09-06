@@ -259,7 +259,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         // the event loop, so nothing is held across it.
         let c = unsafe {
             pum_redraw();
-            setcursor_mayforce(Win::current_raw(), true);
+            setcursor_mayforce(Win::current(), true);
             vgetc()
         };
         // A callback or <expr> mapping run from `vgetc` may have taken the

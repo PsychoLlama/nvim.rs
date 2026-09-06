@@ -168,7 +168,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_
         {
             // SAFETY: one of the live windows the walk just handed us; the
             // walk stops here, so it may free that window.
-            did_one = unsafe { win_close(wp.raw(), false, false) } == OK;
+            did_one = unsafe { win_close(wp, false, false) } == OK;
         }
         if !did_one {
             // The buffer keeps a window; it can only stop being a dummy.

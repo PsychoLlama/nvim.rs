@@ -53,9 +53,8 @@ impl ShlWalk {
     /// # Safety
     /// `window` and `search_hl` must be live.
     #[inline(always)]
-    unsafe fn new(window: *mut Window, search_hl: *mut MatchState, order: Order) -> Self {
+    unsafe fn new(window: Win, search_hl: *mut MatchState, order: Order) -> Self {
         // SAFETY: the caller's promise -- a live window.
-        let window = unsafe { Win::new(window) };
         Self {
             cur: window.w_match_head,
             search_hl,
@@ -104,9 +103,8 @@ impl ShlWalk {
 ///
 /// # Safety
 /// `window` and `search_hl` must be live.
-pub(crate) unsafe fn init_search_hl(window: *mut Window, search_hl: *mut MatchState) {
+pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     let mut search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
     let mut cur = window.w_match_head;
@@ -131,7 +129,7 @@ pub(crate) unsafe fn init_search_hl(window: *mut Window, search_hl: *mut MatchSt
     search_hl.buf = window.w_buffer;
     search_hl.lnum = 0;
     search_hl.first_lnum = 0;
-    unsafe { search_hl.attr = win_hl_attr(window.raw(), HLF_L) };
+    unsafe { search_hl.attr = win_hl_attr(window, HLF_L) };
     // The time limit is set at the top level, for every window at once.
 }
 
@@ -341,16 +339,11 @@ unsafe fn next_search_hl(
 ///
 /// # Safety
 /// `window` and `search_hl` must be live.
-pub(crate) unsafe fn prepare_search_hl(
-    window: *mut Window,
-    search_hl: *mut MatchState,
-    lnum: LineNr,
-) {
+pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, lnum: LineNr) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
-    let mut walk = unsafe { ShlWalk::new(window.raw(), search_hl.raw(), Order::SearchFirst) };
+    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
         if shl.rm.regprog.is_null() || shl.lnum != 0 || !unsafe { re_multiline(shl.rm.regprog) } {
             continue;
@@ -403,9 +396,8 @@ pub(crate) unsafe fn prepare_search_hl(
 ///
 /// # Safety
 /// `window` and `shl` must be live.
-unsafe fn check_cur_search_hl(window: *mut Window, shl: *mut MatchState) {
+unsafe fn check_cur_search_hl(window: Win, shl: *mut MatchState) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     let mut shl = unsafe { Shl::new(shl) };
     // SAFETY: the caller's window and match state.
     let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
@@ -427,7 +419,7 @@ unsafe fn check_cur_search_hl(window: *mut Window, shl: *mut MatchState) {
 /// Every pointer must be live; `line` is re-read, because a multi-line
 /// regexp can invalidate it.
 pub(crate) unsafe fn prepare_search_hl_line(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     mincol: ColNr,
     line: *mut *mut c_char,
@@ -436,12 +428,11 @@ pub(crate) unsafe fn prepare_search_hl_line(
     search_attr_from_match: *mut bool,
 ) -> bool {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window, line and out-parameters.
     let mut area_highlighting = false;
-    let mut walk = unsafe { ShlWalk::new(window.raw(), search_hl.raw(), Order::SearchFirst) };
+    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
         shl.startcol = MAXCOL;
         shl.endcol = MAXCOL;
@@ -475,7 +466,7 @@ pub(crate) unsafe fn prepare_search_hl_line(
 
         // Before the columns are widened below.
         if shl == search_hl {
-            unsafe { check_cur_search_hl(window.raw(), shl.raw()) };
+            unsafe { check_cur_search_hl(window, shl.raw()) };
         }
 
         // An empty match still highlights one character.
@@ -509,7 +500,7 @@ pub(crate) unsafe fn prepare_search_hl_line(
 /// regexp can invalidate it.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn update_search_hl(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     col: ColNr,
     line: *mut *mut c_char,
@@ -521,11 +512,10 @@ pub(crate) unsafe fn update_search_hl(
     search_attr_from_match: *mut bool,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window, line and out-parameters.
-    let mut walk = unsafe { ShlWalk::new(window.raw(), search_hl.raw(), Order::ByPriority) };
+    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::ByPriority) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
         if !cur.is_null() {
             unsafe { (*cur).mit_pos_cur = 0 };
@@ -540,7 +530,7 @@ pub(crate) unsafe fn update_search_hl(
                 }
                 // The match holding the cursor uses `CurSearch`.
                 if shl == search_hl && shl.has_cursor {
-                    unsafe { shl.attr_cur = win_hl_attr(window.raw(), HLF_LC) };
+                    unsafe { shl.attr_cur = win_hl_attr(window, HLF_LC) };
                     if shl.attr_cur != shl.attr {
                         search_hl_has_cursor_lnum.set(lnum);
                     }
@@ -583,7 +573,7 @@ pub(crate) unsafe fn update_search_hl(
                 MAXCOL
             };
             if shl == search_hl {
-                unsafe { check_cur_search_hl(window.raw(), shl.raw()) };
+                unsafe { check_cur_search_hl(window, shl.raw()) };
             }
             if shl.startcol == shl.endcol {
                 // Highlight the empty match, then try again after it.
@@ -598,7 +588,7 @@ pub(crate) unsafe fn update_search_hl(
     // walking in priority order, the last writer wins.
     unsafe { *search_attr_from_match = false };
     let mut search_attr = search_hl.attr_cur;
-    let mut walk = unsafe { ShlWalk::new(window.raw(), search_hl.raw(), Order::ByPriority) };
+    let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::ByPriority) };
     while let Some((shl, _)) = unsafe { walk.next() } {
         if shl.attr_cur != 0 {
             search_attr = shl.attr_cur;
@@ -627,12 +617,11 @@ pub(crate) unsafe fn update_search_hl(
 /// # Safety
 /// `window` and `search_hl` must be live.
 pub(crate) unsafe fn get_prevcol_hl_flag(
-    window: *mut Window,
+    window: Win,
     search_hl: *mut MatchState,
     curcol: ColNr,
 ) -> bool {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
@@ -668,7 +657,7 @@ pub(crate) unsafe fn get_prevcol_hl_flag(
 /// # Safety
 /// `window`, `search_hl` and `char_attr` must be live.
 pub(crate) unsafe fn get_search_match_hl(
-    window: *mut Window,
+    window: Win,
     search_hl: *mut MatchState,
     col: ColNr,
     char_attr: *mut c_int,

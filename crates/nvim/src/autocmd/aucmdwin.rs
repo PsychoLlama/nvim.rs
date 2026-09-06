@@ -179,7 +179,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         unsafe { (*auc_win).w_buffer = buffer };
         unsafe { (*auc_win).w_s = &raw mut (*buffer).b_s };
         unsafe { (*buffer).b_nwindows += 1 };
-        unsafe { win_init_empty(auc_win) };
+        unsafe { win_init_empty(Win::new(auc_win)) };
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
         // null, or `win_enter_ext` chdir()s.
@@ -198,7 +198,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
             // `aucmd_restbuf` takes it back out, after the `win_remove`.
             register_window(auc);
             let last = last_window().map_or(::core::ptr::null_mut(), Win::raw);
-            unsafe { win_append(last, auc_win, ::core::ptr::null_mut()) };
+            unsafe { win_append(last, Win::new(auc_win), ::core::ptr::null_mut()) };
             unsafe { win_config_float(Win::new(auc_win), (*auc_win).w_config.clone()) };
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
@@ -207,7 +207,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         let save_acd = p_acd.get();
         p_acd.set(0);
         let redraw_off = Suppress::redraw();
-        unsafe { win_enter(auc_win, false) };
+        unsafe { win_enter(Win::new(auc_win), false) };
         drop(redraw_off);
         p_acd.set(save_acd);
         unsafe { unblock_autocmds() };
@@ -241,9 +241,9 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
                 for wp in windows_in_tab(tp) {
                     if wp.raw() == awp {
                         if !tp.is_current() {
-                            unsafe { goto_tabpage_tp(tp.raw(), true, true) };
+                            unsafe { goto_tabpage_tp(tp, true, true) };
                         }
-                        unsafe { win_goto(awp) };
+                        unsafe { win_goto(Win::new(awp)) };
                         // Nothing steps the walk after those two: the
                         // `break` leaves both loops before either iterator
                         // reads a link the tab switch could have moved.
@@ -254,7 +254,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         }
 
         Buf::current().b_nwindows -= 1;
-        unsafe { win_remove(Win::current_raw(), ::core::ptr::null_mut()) };
+        unsafe { win_remove(Win::current(), ::core::ptr::null_mut()) };
         // The autocommand window, held as an address across its own
         // deregistration: it is still current and still perfectly alive, but
         // `Win::current()` answers from the registry and would say there is
@@ -273,7 +273,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         unsafe { (*aucmd_wins().slot(idx)).auc_win_used = false };
 
         if valid_tabpage_win(TabPage::current_raw()) == 0 {
-            unsafe { close_tabpage(TabPage::current_raw()) };
+            unsafe { close_tabpage(TabPage::current()) };
         }
         unsafe { unblock_autocmds() };
 
@@ -287,7 +287,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             landing.make_current();
             landing.buffer().make_current();
         }
-        unsafe { entering_window(Win::current_raw()) };
+        unsafe { entering_window(Win::current()) };
         if buf_is_prompt(current_buf()) {
             Buf::current().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
         }

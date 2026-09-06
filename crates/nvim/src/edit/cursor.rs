@@ -337,14 +337,14 @@ fn virtual_edit(win: Win) -> bool {
 #[inline(always)]
 fn lines_concealed(win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { win_lines_concealed(win.raw()) }
+    unsafe { win_lines_concealed(win) }
 }
 
 /// Is the line *before* `lnum` hidden by a `conceal_lines` decoration?
 #[inline(always)]
 fn line_concealed(win: Win, lnum: LineNr) -> bool {
     // SAFETY: a live window and a line number of its buffer.
-    unsafe { decor_conceal_line(win.raw(), lnum as c_int - 1, true) }
+    unsafe { decor_conceal_line(win, lnum as c_int - 1, true) }
 }
 
 /// Is `lnum` inside a closed fold of `win`?  `first` is left holding that

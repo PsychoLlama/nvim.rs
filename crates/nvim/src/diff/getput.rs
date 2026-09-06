@@ -424,17 +424,10 @@ fn diffgetput(
                     }
                 }
             }
-            let cb = Buf::current_raw();
+            let cb = Buf::current();
             // SAFETY: the current buffer is live, in both calls.
             unsafe { extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo) };
-            changed_lines(
-                unsafe { Buf::new(cb) },
-                lnum,
-                0 as ColNr,
-                lnum + count,
-                amount,
-                true,
-            );
+            changed_lines(cb, lnum, 0 as ColNr, lnum + count, amount, true);
             if let Some((lnum, count)) = &freed {
                 diff_fold_update(lnum, count, idx_to as c_int);
             }

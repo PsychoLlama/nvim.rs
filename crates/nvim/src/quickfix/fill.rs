@@ -386,11 +386,10 @@ fn splice(buffer: Buf, at: &Splice) {
     let (orow, ocol, obytes) = at.old;
     let (nrow, ncol, nbytes) = at.new;
     let undo = kExtmarkNoUndo;
-    let raw = buffer.raw();
     // SAFETY: `buffer` is the quickfix window's buffer, live for the call.
     unsafe {
         extmark_splice(
-            raw, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
+            buffer, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
         )
     };
 }

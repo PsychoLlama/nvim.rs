@@ -177,10 +177,10 @@ pub unsafe fn switch_win_noblock(
     if !tabpage.is_null() {
         switchwin.sw_curtab = TabPage::current_raw();
         if no_display {
-            unsafe { unuse_tabpage(TabPage::current_raw()) };
-            unsafe { use_tabpage(tabpage) };
+            unsafe { unuse_tabpage(TabPage::current()) };
+            unsafe { use_tabpage(TabPage::new(tabpage)) };
         } else {
-            unsafe { goto_tabpage_tp(tabpage, false, false) };
+            unsafe { goto_tabpage_tp(TabPage::new(tabpage), false, false) };
         }
     }
     if !win_valid(win) {
@@ -221,11 +221,11 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
             // the caller only half entered this one.
             let mut leaving = TabPage::current();
             let old_tp_curwin = leaving.tp_curwin;
-            unsafe { unuse_tabpage(leaving.raw()) };
+            unsafe { unuse_tabpage(leaving) };
             leaving.tp_curwin = old_tp_curwin;
-            unsafe { use_tabpage(switchwin.sw_curtab) };
+            unsafe { use_tabpage(TabPage::new(switchwin.sw_curtab)) };
         } else {
-            unsafe { goto_tabpage_tp(switchwin.sw_curtab, false, false) };
+            unsafe { goto_tabpage_tp(TabPage::new(switchwin.sw_curtab), false, false) };
         }
     }
     if !switchwin.sw_same_win {

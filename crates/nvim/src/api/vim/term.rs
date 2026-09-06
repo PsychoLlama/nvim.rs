@@ -26,6 +26,8 @@ pub unsafe fn nvim_open_term(
     if b.is_null() {
         return (0 as Integer).reported(slot);
     }
+    // SAFETY: not null, and the guard above is what says so.
+    let buffer = unsafe { Buf::new(b) };
     if b == cmdwin_buf.get() {
         let msg = e_cmdwin.as_ptr();
         // SAFETY: the message the caller handed over, live for this call.
@@ -43,7 +45,7 @@ pub unsafe fn nvim_open_term(
             );
             return (0 as Integer).reported(slot);
         }
-        buf_close_terminal(unsafe { Buf::new(b) });
+        buf_close_terminal(buffer);
         may_read_buffer = false;
     }
     let mut cb: LuaRef = LUA_NOREF;
@@ -58,13 +60,11 @@ pub unsafe fn nvim_open_term(
     unsafe { (*channel_internal(chan)).cb = cb };
     unsafe { (*channel_internal(chan)).closed = false };
     // SAFETY: `curwin` names a live window for the editor's whole run.
-    let (view_width, view_height, col_off) = unsafe {
-        (
-            Win::current().w_view_width,
-            Win::current().w_view_height,
-            win_col_off(Win::current_raw()),
-        )
-    };
+    let (view_width, view_height, col_off) = (
+        Win::current().w_view_width,
+        Win::current().w_view_height,
+        Win::current().col_off(),
+    );
     let topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
         width: (view_width - col_off).max(0) as uint16_t,
@@ -94,11 +94,11 @@ pub unsafe fn nvim_open_term(
         items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     };
     if may_read_buffer {
-        unsafe { read_buffer_into(Buf::new(b), 1, (*b).b_ml.ml_line_count, &raw mut contents) };
+        unsafe { read_buffer_into(buffer, 1, (*b).b_ml.ml_line_count, &raw mut contents) };
     }
     unsafe { channel_incref(chan) };
-    unsafe { (*chan).term = terminal_alloc(b, topts) };
-    unsafe { terminal_open(&raw mut (*chan).term, b) };
+    unsafe { (*chan).term = terminal_alloc(buffer, topts) };
+    unsafe { terminal_open(&raw mut (*chan).term, buffer) };
     if !unsafe { (*chan).term }.is_null() {
         unsafe { terminal_check_size((*chan).term) };
     }

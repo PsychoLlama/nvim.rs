@@ -38,16 +38,15 @@ use crate::path::pathcmp;
 use crate::state::mode::restart_edit;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
-    Buffer, CdScope, MAXPATHL, NUL, OptInt, Tabpage, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow,
+    CdScope, MAXPATHL, NUL, OptInt, Tabpage, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
 };
 use crate::undo::u_sync;
 use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
-pub unsafe fn win_goto(window: *mut Window) {
+pub unsafe fn win_goto(window: Win) {
     // SAFETY: the caller's promise -- a live window.
-    goto_win(unsafe { Win::new(window) });
+    goto_win(window);
 }
 
 /// Make `window` the current window and redraw what the move uncovers.
@@ -157,13 +156,13 @@ impl Axis {
 }
 
 pub unsafe fn win_vert_neighbor(
-    tabpage: *mut Tabpage,
-    window: *mut Window,
+    tabpage: TabPage,
+    window: Win,
     up: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
+    let (tp, wp) = (tabpage, window);
     raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
 }
 
@@ -181,13 +180,13 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
 }
 
 pub unsafe fn win_horz_neighbor(
-    tabpage: *mut Tabpage,
-    window: *mut Window,
+    tabpage: TabPage,
+    window: Win,
     left: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
+    let (tp, wp) = (tabpage, window);
     raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
 }
 
@@ -265,9 +264,9 @@ fn neighbor(
     foundfr.win()
 }
 
-pub unsafe fn win_enter(window: *mut Window, undo_sync: bool) {
+pub unsafe fn win_enter(window: Win, undo_sync: bool) {
     // SAFETY: the caller's promise -- a live window.
-    enter(unsafe { Win::new(window) }, undo_sync);
+    enter(window, undo_sync);
 }
 
 /// Make `window` the current window.
@@ -482,9 +481,9 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe fn buf_jump_open_win(buffer: *mut Buffer) -> *mut Window {
+pub unsafe fn buf_jump_open_win(buffer: Buf) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
-    raw_win(jump_open_win(unsafe { Buf::new(buffer) }))
+    raw_win(jump_open_win(buffer))
 }
 
 /// Enter the first window of the current tab page showing `buffer`, if there is
@@ -499,9 +498,9 @@ pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
     Some(wp)
 }
 
-pub unsafe fn buf_jump_open_tab(buffer: *mut Buffer) -> *mut Window {
+pub unsafe fn buf_jump_open_tab(buffer: Buf) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
-    raw_win(jump_open_tab(unsafe { Buf::new(buffer) }))
+    raw_win(jump_open_tab(buffer))
 }
 
 /// [`jump_open_win`] over every tab page, the current one first.

@@ -156,7 +156,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
         return false;
     }
     if win_valid(prevwin.get()) && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0 {
-        unsafe { win_goto(prevwin.get()) };
+        unsafe { win_goto(Win::new(prevwin.get())) };
     }
     if Win::current().w_onebuf_opt.wo_wfb != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
@@ -275,7 +275,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 };
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
                 if execute {
-                    unsafe { win_goto(cur.raw()) };
+                    unsafe { win_goto(cur) };
                     if Win::current_raw() != cur.raw() {
                         // Something must be wrong.
                         break;

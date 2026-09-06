@@ -293,7 +293,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
                 let mark = buf.named_mark(c - 'a' as c_int);
                 if mark.is_set() {
                     // SAFETY: `gone` is on this stack and `buf` is live.
-                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, buf.raw()) };
+                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, buf) };
                 }
                 // Only the line and the timestamp are cleared, not the whole
                 // record: `:delmarks a` is not `clear_fmark`, and the shada
@@ -317,7 +317,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
                         find_buf(slot.fmark().fnum()).map_or(buf.raw(), |owner| owner.raw());
                     // SAFETY: `gone` is on this stack and `owner` is a live
                     // buffer.
-                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, owner) };
+                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, Buf::new(owner)) };
                 }
                 slot.fmark().set_lnum(0);
                 slot.fmark().set_fnum(0);
@@ -341,7 +341,7 @@ unsafe fn delmarks_all(buffer: Buf) {
     for i in 0..NMARKS {
         if buffer.named_mark(i).is_set() {
             // SAFETY: `gone` is on this stack and `buffer` is live.
-            unsafe { do_markset_autocmd(mark_name('a' as c_int + i), &raw mut gone, buffer.raw()) };
+            unsafe { do_markset_autocmd(mark_name('a' as c_int + i), &raw mut gone, buffer) };
         }
     }
     for (name, set) in [
@@ -353,11 +353,11 @@ unsafe fn delmarks_all(buffer: Buf) {
     ] {
         if set {
             // SAFETY: as above.
-            unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buffer.raw()) };
+            unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buffer) };
         }
     }
     // SAFETY: `buffer` is live.
-    unsafe { clrallmarks(buffer.raw(), os_time()) };
+    unsafe { clrallmarks(buffer, os_time()) };
 }
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a
@@ -387,7 +387,7 @@ unsafe fn delmarks_one(
     };
     if lnum != 0 {
         // SAFETY: `gone` and `buffer` are the caller's, both live.
-        unsafe { do_markset_autocmd(name, &raw mut *gone, buffer.raw()) };
+        unsafe { do_markset_autocmd(name, &raw mut *gone, *buffer) };
     }
     // The three fmark stores are released; the four positions are only
     // invalidated, because they own nothing.

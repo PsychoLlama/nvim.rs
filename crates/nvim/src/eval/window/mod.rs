@@ -65,7 +65,7 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::memory::{xfree, xmallocz, xstrdup};
 use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
-    validate_cursor, win_col_off,
+    validate_cursor,
 };
 use crate::narrow::number_as_int;
 use crate::normal::end_visual_mode;

@@ -338,6 +338,8 @@ impl Reading {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
         }
+        // SAFETY: not null, and the guard above is what says so.
+        let buffer = unsafe { Buf::new(buf) };
         let fm = FileMark {
             mark: entry.data.filemark().mark,
             fnum: unsafe { (*buf).handle } as c_int,
@@ -346,13 +348,13 @@ impl Reading {
             additional_data: entry.additional_data,
         };
         if let ShadaEntryData::LocalMark(mark) = entry.data {
-            if !unsafe { mark_set_local(mark.name, buf, fm, !self.force) } {
+            if !unsafe { mark_set_local(mark.name, buffer, fm, !self.force) } {
                 unsafe { shada_free_shada_entry(&raw mut entry) };
                 return;
             }
         } else {
             self.cl_bufs.insert(buf);
-            unsafe { insert_change(buf, fm) };
+            unsafe { insert_change(buffer, fm) };
         }
         // The mark took the extra data; only the file name is left.
         unsafe { xfree(entry.data.filemark().fname.cast()) };
@@ -494,9 +496,8 @@ unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry)
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
-unsafe fn insert_change(buffer: *mut Buffer, fm: FileMark) {
+unsafe fn insert_change(mut buffer: Buf, fm: FileMark) {
     // SAFETY: the caller's promise — `buffer` is a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     let mut i = buffer.b_changelistlen;
     while i > 0 {
         let existing = &buffer.b_changelist[i as usize - 1];

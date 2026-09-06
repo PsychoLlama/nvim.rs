@@ -89,7 +89,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
     // dictionary takes over.
     if unsafe { buf_has_signs(buffer.raw()) } {
-        list(c"signs", unsafe { get_buffer_signs(buffer.raw()) });
+        list(c"signs", unsafe { get_buffer_signs(buffer) });
     }
     nr(c"lastused", buffer.b_last_used);
     dict

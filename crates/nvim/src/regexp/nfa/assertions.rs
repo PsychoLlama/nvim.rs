@@ -113,7 +113,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     let fm: *mut FileMark = unsafe {
         mark_get(
             rex.reg_buf(),
-            Win::current_raw(),
+            Win::current(),
             &raw mut slot,
             kMarkBufLocal,
             (*state).val,

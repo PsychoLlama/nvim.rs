@@ -71,7 +71,7 @@ pub unsafe fn nvim_buf_attach(
         cb.utf_sizes = opts.utf_sizes;
         cb.preview = opts.preview;
     }
-    unsafe { buf_updates_register(b, channel_id, cb, send_buffer) }.reported(error)
+    unsafe { buf_updates_register(Buf::new(b), channel_id, cb, send_buffer) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
@@ -80,7 +80,7 @@ pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result
     if b.is_null() {
         return false.reported(error);
     }
-    unsafe { buf_updates_unregister(b, channel_id) };
+    unsafe { buf_updates_unregister(Buf::new(b), channel_id) };
     true.reported(error)
 }
 
@@ -135,6 +135,8 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<Ap
         }
         .reported(error);
     }
+    // SAFETY: not null, and the guard above is what says so.
+    let buffer = unsafe { Buf::new(b) };
     let mut rv: ApiDict = arena_dict(arena, 7 as size_t);
     // SAFETY: a live pointer the code around it already holds.
     let d_flush_count = unsafe { Object::integer((*b).flush_count as Integer) };
@@ -157,12 +159,12 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<Ap
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"dirty_bytes2", d_dirty_bytes2) };
     // SAFETY: a live buffer, as above.
-    let total = unsafe { buf_meta_total(Buf::new(b), kMTMetaLines) };
+    let total = buf_meta_total(buffer, kMTMetaLines);
     let d_virt_blocks = Object::integer(total as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"virt_blocks", d_virt_blocks) };
     // SAFETY: a live buffer, as above.
-    let tip = unsafe { Buf::new(b) };
+    let tip = buffer;
     if let Some(uhp) = tip
         .header(tip.b_u_curhead)
         .or_else(|| tip.header(tip.b_u_newhead))

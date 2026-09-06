@@ -500,7 +500,7 @@ impl Cells {
 
                 self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
                 if self.draw_folded && wlv.extra_todo == 0 {
-                    self.fold_attr = unsafe { win_hl_attr(window.raw(), HLF_FL) };
+                    self.fold_attr = unsafe { win_hl_attr(window, HLF_FL) };
                     wlv.char_attr = self.fold_attr;
                     self.decor_attr = 0;
                 }
@@ -742,7 +742,7 @@ impl Cells {
         if self.is_wrapped && wlv.extra_todo == 0 {
             unsafe {
                 decor_redraw_col(
-                    window.raw(),
+                    window,
                     self.byte_col(),
                     -3,
                     false,
@@ -758,7 +758,7 @@ impl Cells {
             decor_recheck_draw_col(-1, true, wlv.decor);
             unsafe {
                 decor_redraw_col(
-                    window.raw(),
+                    window,
                     MAXCOL as ::core::ffi::c_int,
                     -1,
                     true,

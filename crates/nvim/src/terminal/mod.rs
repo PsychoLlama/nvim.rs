@@ -57,7 +57,6 @@ use crate::highlight::{HlAttrFlags, hl_combine_attr, hl_get_term_attr};
 use crate::highlight_group::name_to_color;
 use crate::memline::MlFlags;
 use crate::memline::ml_delete_buf;
-use crate::r#move::win_col_off;
 use crate::option::set_option_value;
 use crate::options::kOptBuftype;
 use crate::startup::exiting;
@@ -250,9 +249,8 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// The buffer is emptied: its lines are about to become a mirror of the
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
-pub(crate) unsafe fn terminal_alloc(buffer: *mut Buffer, opts: TerminalOptions) -> *mut Terminal {
+pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *mut Terminal {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
-    let mut buffer = unsafe { Buf::new(buffer) };
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
     // owner; every other reference reaches it through `Buffer::terminal`.
     let raw: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, buffer.handle)));
@@ -322,7 +320,7 @@ pub(crate) unsafe fn terminal_alloc(buffer: *mut Buffer, opts: TerminalOptions) 
             let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buffer.raw(), 1 as LineNr, line_count) };
+        unsafe { deleted_lines_buf(buffer, 1 as LineNr, line_count) };
     }
     term.old_height = 1;
     raw
@@ -332,12 +330,11 @@ pub(crate) unsafe fn terminal_alloc(buffer: *mut Buffer, opts: TerminalOptions) 
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
-pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buffer) {
+pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) {
     // SAFETY: the caller hands over the buffer's own terminal slot.
     let mut term = unsafe { Term::new(*termpp) };
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
     // SAFETY: the caller hands over a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
@@ -579,7 +576,7 @@ pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
             continue;
         }
         // SAFETY: as above.
-        let text_width = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
+        let text_width = wp.w_view_width - wp.col_off();
         width = width.max(text_width.max(0));
         height = height.max(wp.w_view_height);
     }

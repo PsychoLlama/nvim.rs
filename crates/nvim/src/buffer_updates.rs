@@ -39,8 +39,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Arena, Array, BCount, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode,
-    Object, int64_t, size_t, uint64_t,
+    Arena, Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
+    int64_t, size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -292,13 +292,13 @@ fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Ar
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_register(
-    buffer: *mut Buffer,
+    buffer: Buf,
     channel_id: uint64_t,
     cb: BufUpdateCallbacks,
     send_buffer: bool,
 ) -> bool {
     // SAFETY: the caller's promise.
-    register(unsafe { Buf::new(buffer) }, channel_id, cb, send_buffer)
+    register(buffer, channel_id, cb, send_buffer)
 }
 
 fn register(
@@ -371,9 +371,9 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_active(buffer: *mut Buffer) -> bool {
+pub unsafe fn buf_updates_active(buffer: Buf) -> bool {
     // SAFETY: the caller's promise.
-    active(unsafe { Buf::new(buffer) })
+    active(buffer)
 }
 
 fn active(mut buffer: Buf) -> bool {
@@ -384,9 +384,9 @@ fn active(mut buffer: Buf) -> bool {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_send_end(buffer: *mut Buffer, channelid: uint64_t) {
+pub unsafe fn buf_updates_send_end(buffer: Buf, channelid: uint64_t) {
     // SAFETY: the caller's promise.
-    send_end(unsafe { Buf::new(buffer) }, channelid);
+    send_end(buffer, channelid);
 }
 
 fn send_end(buffer: Buf, channelid: uint64_t) {
@@ -399,9 +399,9 @@ fn send_end(buffer: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_unregister(buffer: *mut Buffer, channelid: uint64_t) {
+pub unsafe fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
     // SAFETY: the caller's promise.
-    unregister(unsafe { Buf::new(buffer) }, channelid);
+    unregister(buffer, channelid);
 }
 
 fn unregister(mut buffer: Buf, channelid: uint64_t) {
@@ -442,9 +442,9 @@ fn unregister(mut buffer: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_free_callbacks(buffer: *mut Buffer) {
+pub unsafe fn buf_free_callbacks(buffer: Buf) {
     // SAFETY: the caller's promise.
-    free_callbacks(unsafe { Buf::new(buffer) });
+    free_callbacks(buffer);
 }
 
 fn free_callbacks(mut buffer: Buf) {
@@ -463,9 +463,9 @@ fn free_callbacks(mut buffer: Buf) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_unload(buffer: *mut Buffer, can_reload: bool) {
+pub unsafe fn buf_updates_unload(buffer: Buf, can_reload: bool) {
     // SAFETY: the caller's promise.
-    unload(unsafe { Buf::new(buffer) }, can_reload);
+    unload(buffer, can_reload);
 }
 
 fn unload(mut buffer: Buf, can_reload: bool) {
@@ -524,13 +524,12 @@ fn unload(mut buffer: Buf, can_reload: bool) {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_send_changes(
-    buffer: *mut Buffer,
+    buffer: Buf,
     firstline: LineNr,
     num_added: int64_t,
     num_removed: int64_t,
 ) {
     // SAFETY: the caller's promise.
-    let buffer = unsafe { Buf::new(buffer) };
     send_changes(buffer, firstline, num_added, num_removed);
 }
 
@@ -641,7 +640,7 @@ fn tick_obj(buffer: Buf, send_tick: bool) -> Object {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_send_splice(
-    buffer: *mut Buffer,
+    buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
     start_byte: BCount,
@@ -653,7 +652,6 @@ pub unsafe fn buf_updates_send_splice(
     new_byte: BCount,
 ) {
     // SAFETY: the caller's promise.
-    let buffer = unsafe { Buf::new(buffer) };
     let start = Corner::new(start_row, start_col, start_byte);
     let old = Corner::new(old_row, old_col, old_byte);
     let new = Corner::new(new_row, new_col, new_byte);
@@ -721,9 +719,9 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_changedtick(buffer: *mut Buffer) {
+pub unsafe fn buf_updates_changedtick(buffer: Buf) {
     // SAFETY: the caller's promise.
-    changedtick_event(unsafe { Buf::new(buffer) });
+    changedtick_event(buffer);
 }
 
 fn changedtick_event(mut buffer: Buf) {
@@ -764,9 +762,9 @@ fn changedtick_event(mut buffer: Buf) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_changedtick_single(buffer: *mut Buffer, channel_id: uint64_t) {
+pub unsafe fn buf_updates_changedtick_single(buffer: Buf, channel_id: uint64_t) {
     // SAFETY: the caller's promise.
-    changedtick_single(unsafe { Buf::new(buffer) }, channel_id);
+    changedtick_single(buffer, channel_id);
 }
 
 fn changedtick_single(buffer: Buf, channel_id: uint64_t) {

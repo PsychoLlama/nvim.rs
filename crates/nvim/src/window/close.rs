@@ -39,9 +39,9 @@ use crate::winlayer::graph::{
 };
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
-pub unsafe fn entering_window(win: *mut Window) {
+pub unsafe fn entering_window(win: Win) {
     // SAFETY: the caller's promise -- a live window.
-    enter_window(unsafe { Win::new(win) });
+    enter_window(win);
 }
 
 /// Leaving a prompt window stops Insert mode, and remembers to restart it when
@@ -89,9 +89,9 @@ fn is_prompt(win: Win) -> bool {
     buf_is_prompt(win.buffer_or_none())
 }
 
-pub unsafe fn win_init_empty(window: *mut Window) {
+pub unsafe fn win_init_empty(window: Win) {
     // SAFETY: the caller's promise -- a live window.
-    init_empty(unsafe { Win::new(window) });
+    init_empty(window);
 }
 
 /// Point `window` at the top of an empty buffer.
@@ -119,9 +119,9 @@ pub fn curwin_init() {
     init_empty(Win::current());
 }
 
-pub unsafe fn close_windows(buffer: *mut Buffer, keep_curwin: bool) {
+pub unsafe fn close_windows(buffer: Buf, keep_curwin: bool) {
     // SAFETY: the caller's promise -- a live buffer.
-    close_all(unsafe { Buf::new(buffer) }, keep_curwin);
+    close_all(buffer, keep_curwin);
 }
 
 /// Close every window showing `buffer`, on this tab page and every other, unless
@@ -186,9 +186,9 @@ fn locked(window: Win) -> bool {
     window.w_locked || window.buffer().b_locked > 0
 }
 
-pub unsafe fn last_window(win: *mut Window) -> bool {
+pub unsafe fn last_window(win: Win) -> bool {
     // SAFETY: the caller's promise -- a live window.
-    is_last_window(unsafe { Win::new(win) })
+    is_last_window(win)
 }
 
 /// Whether `win` is the last non-floating window that exists at all.
@@ -196,10 +196,10 @@ pub(crate) fn is_last_window(win: Win) -> bool {
     only_window(win, None) && first_tab().next().is_none()
 }
 
-pub unsafe fn one_window(win: *mut Window, tabpage: *mut Tabpage) -> bool {
+pub unsafe fn one_window(win: Win, tabpage: *mut Tabpage) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { only_window(Win::new(win), TabPage::from_raw(tabpage)) }
+    unsafe { only_window(win, TabPage::from_raw(tabpage)) }
 }
 
 /// Whether `win` is the only non-floating window of `tabpage`, or of the current
@@ -244,9 +244,9 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
     true
 }
 
-pub unsafe fn can_close_in_cmdwin(win: *mut Window, err: &mut Error) -> bool {
+pub unsafe fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
     // SAFETY: the caller's promise -- a live window and a writable error slot.
-    unsafe { cmdwin_allows(Win::new(win), &mut *err) }
+    cmdwin_allows(win, &mut *err)
 }
 
 /// Whether, the cmdline window considered, `win` is safe to close. When it is

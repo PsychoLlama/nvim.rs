@@ -65,7 +65,7 @@ use crate::pos::MAXCOL;
 use crate::types::{
     Buffer, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
-    VirtTextPos, Window, uint32_t,
+    VirtTextPos, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -251,9 +251,8 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `window` must be live.
-pub unsafe fn decor_redraw_reset(window: *mut Window, mut state: DecorStateRef) -> bool {
+pub unsafe fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     state.row = -1;
     state.win = window.raw();
 
@@ -300,13 +299,8 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 ///
 /// # Safety
 /// `window` must be live.
-pub unsafe fn decor_redraw_start(
-    window: *mut Window,
-    top_row: c_int,
-    mut state: DecorStateRef,
-) -> bool {
+pub unsafe fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef) -> bool {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     let buf = window.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
@@ -365,14 +359,13 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `window` must be live.
-pub unsafe fn decor_redraw_line(window: *mut Window, row: c_int, mut state: DecorStateRef) {
+pub unsafe fn decor_redraw_line(window: Win, row: c_int, mut state: DecorStateRef) {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     decor_state_pack(state);
 
     if state.row == -1 {
         // SAFETY: as above.
-        unsafe { decor_redraw_start(window.raw(), row, state) };
+        unsafe { decor_redraw_start(window, row, state) };
     } else if !state.itr_valid {
         state.seek(window.buffer(), row);
         state.itr_valid = true;
@@ -682,7 +675,7 @@ pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef
 /// # Safety
 /// `window` must be live.
 pub unsafe fn decor_redraw_col_impl(
-    window: *mut Window,
+    window: Win,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -690,7 +683,6 @@ pub unsafe fn decor_redraw_col_impl(
     max_col_last: c_int,
 ) -> c_int {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     let buf = window.buffer();
     let row = state.row;
     let mut col_last = max_col_last;
@@ -872,7 +864,7 @@ pub unsafe fn decor_redraw_col_impl(
 /// `window` must be live.
 #[inline(always)]
 pub unsafe fn decor_redraw_col(
-    window: *mut Window,
+    window: Win,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -892,7 +884,7 @@ pub unsafe fn decor_redraw_col(
 /// # Safety
 /// `window` must be live and `eol_attr` writable.
 pub unsafe fn decor_redraw_eol(
-    window: *mut Window,
+    window: Win,
     mut state: DecorStateRef,
     eol_attr: *mut c_int,
     eol_col: c_int,

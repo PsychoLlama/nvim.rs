@@ -52,7 +52,7 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
         (wp, dir)
     };
     // SAFETY: a live window and tab page.
-    unsafe { win_free(win.raw(), raw_tab(tabpage)) };
+    unsafe { win_free(win, raw_tab(tabpage)) };
     if win_tp.tp_curwin == win.raw() {
         win_tp.tp_curwin = wp.map_or(ptr::null_mut(), Win::raw);
     }
@@ -63,7 +63,7 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
 }
 
 pub unsafe fn winframe_remove(
-    win: *mut Window,
+    win: Win,
     dirp: *mut c_int,
     tabpage: *mut Tabpage,
     unflat_altfr: *mut *mut Frame,
@@ -73,7 +73,7 @@ pub unsafe fn winframe_remove(
     unsafe {
         // `then_some` would form the reference before testing the pointer.
         let unflat = unflat_altfr.as_mut();
-        let (wp, dir) = remove(Win::new(win), TabPage::from_raw(tabpage), unflat);
+        let (wp, dir) = remove(win, TabPage::from_raw(tabpage), unflat);
         *dirp = dir;
         wp.map_or(ptr::null_mut(), Win::raw)
     }
@@ -132,7 +132,7 @@ fn remove(
 }
 
 pub unsafe fn winframe_find_altwin(
-    win: *mut Window,
+    win: Win,
     dirp: *mut c_int,
     tabpage: *mut Tabpage,
     altfr: *mut *mut Frame,
@@ -140,7 +140,7 @@ pub unsafe fn winframe_find_altwin(
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`altfr` may be null).
     unsafe {
-        let Some(alt) = find_altwin(Win::new(win), TabPage::from_raw(tabpage)) else {
+        let Some(alt) = find_altwin(win, TabPage::from_raw(tabpage)) else {
             return ptr::null_mut();
         };
         *dirp = alt.dir;
@@ -287,10 +287,10 @@ pub(crate) fn flatten(frp: FrameRef) {
     free(parent.raw());
 }
 
-pub unsafe fn winframe_restore(window: *mut Window, dir: c_int, unflat_altfr: *mut Frame) {
+pub unsafe fn winframe_restore(window: Win, dir: c_int, unflat_altfr: *mut Frame) {
     // SAFETY: the caller's promise -- a live window and the live frame
     // `winframe_remove` handed back unflattened.
-    unsafe { restore(Win::new(window), dir, FrameRef::new(unflat_altfr)) };
+    unsafe { restore(window, dir, FrameRef::new(unflat_altfr)) };
 }
 
 /// Undo a [`remove`] that was told to leave the tree unflattened: link `window`'s

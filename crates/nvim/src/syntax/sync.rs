@@ -30,7 +30,7 @@ use crate::winlayer::graph::{switch_buffer, switch_window};
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-pub(crate) unsafe fn syn_sync(window: *mut Window, start_lnum: LineNr, last_valid: *mut SynState) {
+pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut SynState) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -40,7 +40,6 @@ pub(crate) unsafe fn syn_sync(window: *mut Window, start_lnum: LineNr, last_vali
     let flags = syn_block().b_syn_sync_flags;
     if flags & SF_CCOMMENT != 0 {
         // SAFETY: the caller's promise -- a live window.
-        let window = unsafe { Win::new(window) };
         // SAFETY: `syn_sync`'s own contract reaches its callee.
         unsafe { sync_by_ccomment(window, start_lnum) };
     } else if flags & SF_MATCH != 0 {

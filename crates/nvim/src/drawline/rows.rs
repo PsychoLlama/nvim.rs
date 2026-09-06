@@ -44,7 +44,7 @@ impl Cells {
                 wlv.draw_col_fill(
                     schar_from_ascii(cmdwin_type.get() as u8),
                     1,
-                    win_hl_attr(window.raw(), HLF_AT),
+                    win_hl_attr(window, HLF_AT),
                 )
             };
         }
@@ -114,7 +114,7 @@ impl Cells {
             // 'smoothscroll'.
             unsafe {
                 decor_redraw_col(
-                    window.raw(),
+                    window,
                     self.byte_col() - 1,
                     wlv.off,
                     true,
@@ -157,10 +157,10 @@ impl Cells {
         // still filler.
         let more_rows = wlv.row + 1 - wlv.startrow < f.col_rows
             && (unsafe { (*f.statuscol).draw }
-                || unsafe { win_hl_attr(window.raw(), HLF_LNA) }
-                    != unsafe { win_hl_attr(window.raw(), HLF_N) }
-                || unsafe { win_hl_attr(window.raw(), HLF_LNB) }
-                    != unsafe { win_hl_attr(window.raw(), HLF_N) });
+                || unsafe { win_hl_attr(window, HLF_LNA) }
+                    != unsafe { win_hl_attr(window, HLF_N) }
+                || unsafe { win_hl_attr(window, HLF_LNB) }
+                    != unsafe { win_hl_attr(window, HLF_N) });
         if !more_rows && wlv.filler_todo <= 0 {
             return Step::Done;
         }
@@ -359,9 +359,7 @@ impl Cells {
         let mut line = linebuf();
         // SAFETY: the caller's window, buffer and frame.
         // The line may end left of the left margin.
-        wlv.vcol = wlv
-            .vcol
-            .max(self.start_vcol + wlv.col - unsafe { win_col_off(window.raw()) });
+        wlv.vcol = wlv.vcol.max(self.start_vcol + wlv.col - window.col_off());
         // Drop the bogus columns: 'cursorcolumn' wants drawing all the way
         // to the right edge.
         wlv.col -= wlv.boguscols;
@@ -374,7 +372,7 @@ impl Cells {
         if self.has_decor {
             unsafe {
                 decor_redraw_eol(
-                    window.raw(),
+                    window,
                     wlv.decor,
                     &raw mut wlv.line_attr,
                     wlv.col + eol_skip,
@@ -455,15 +453,15 @@ impl Cells {
         let mut line = linebuf();
         // SAFETY: the caller's window and frame.
         let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
-        let cuc_attr = unsafe { win_hl_attr(window.raw(), HLF_CUC) };
-        let mc_attr = unsafe { win_hl_attr(window.raw(), HLF_MC) };
+        let cuc_attr = unsafe { win_hl_attr(window, HLF_CUC) };
+        let mc_attr = unsafe { win_hl_attr(window, HLF_MC) };
 
         if wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA {
             wlv.diff_hlf = HLF_CHD;
             unsafe { wlv.set_line_attr_for_diff(window) };
         }
         let diff_attr = if wlv.diff_hlf != HLF_NONE {
-            unsafe { win_hl_attr(window.raw(), wlv.diff_hlf) }
+            unsafe { win_hl_attr(window, wlv.diff_hlf) }
         } else {
             0
         };

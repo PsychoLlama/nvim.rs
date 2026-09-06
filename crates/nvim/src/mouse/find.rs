@@ -105,11 +105,11 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             return None;
         }
         // SAFETY: as above.
-        let win = unsafe { Win::new(wp) };
-        if win.w_grid_alloc.is_allocated() && !(win.w_floating && !win.w_config.mouse) {
-            pos.row = (pos.row - win.w_grid.row_offset).min(win.w_view_height - 1);
-            pos.col = (pos.col - win.w_grid.col_offset).min(win.w_view_width - 1);
-            return Some(win);
+        let wp = unsafe { Win::new(wp) };
+        if wp.w_grid_alloc.is_allocated() && !(wp.w_floating && !wp.w_config.mouse) {
+            pos.row = (pos.row - wp.w_grid.row_offset).min(wp.w_view_height - 1);
+            pos.col = (pos.col - wp.w_grid.col_offset).min(wp.w_view_width - 1);
+            return Some(wp);
         }
     } else if pos.grid == 0 {
         // SAFETY: the compositor's layer stack is live; the grid it answers is
@@ -125,15 +125,15 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
             // The popup menu doesn't have a window, so answer None.
             return None;
         }
-        for win in windows() {
-            if !ptr::eq(&raw const win.w_grid_alloc, grid) {
+        for wp in windows() {
+            if !ptr::eq(&raw const wp.w_grid_alloc, grid) {
                 continue;
             }
             // SAFETY: the grid a window drew on is live.
             pos.grid = unsafe { (*grid).handle } as c_int;
-            pos.row -= win.w_winrow + win.w_grid.row_offset;
-            pos.col -= win.w_wincol + win.w_grid.col_offset;
-            return Some(win);
+            pos.row -= wp.w_winrow + wp.w_grid.row_offset;
+            pos.col -= wp.w_wincol + wp.w_grid.col_offset;
+            return Some(wp);
         }
 
         // No grid found, return the default grid. With multigrid this happens
@@ -254,13 +254,13 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
 /// `window` must be a live window and `lnum` a line of the buffer it shows;
 /// `coladdp` must be writable or null.
 pub(crate) unsafe fn vcol2col(
-    window: *mut Window,
+    window: Win,
     lnum: LineNr,
     vcol: ColNr,
     coladdp: *mut ColNr,
 ) -> ColNr {
     // SAFETY: the caller's promise.
-    let (col, coladd) = unsafe { vcol_to_col(Win::new(window), lnum, vcol) };
+    let (col, coladd) = vcol_to_col(window, lnum, vcol);
     if !coladdp.is_null() {
         // SAFETY: as above.
         unsafe { *coladdp = coladd };

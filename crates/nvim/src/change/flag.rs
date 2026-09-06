@@ -126,7 +126,7 @@ pub unsafe fn changed(buffer: Buf) {
         changed_internal(buffer);
     }
     // SAFETY: a live buffer.
-    unsafe { buf_inc_changedtick(buffer.raw()) };
+    unsafe { buf_inc_changedtick(buffer) };
     highlight_match.set(false);
 }
 
@@ -138,7 +138,7 @@ pub fn changed_internal(mut buffer: Buf) {
     buffer.b_changed = true as c_int;
     buffer.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
-    unsafe { ml_setflags(buffer.raw()) };
+    unsafe { ml_setflags(buffer) };
     unsafe { redraw_buf_status_later(buffer.raw()) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
@@ -161,7 +161,7 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
         buffer.b_changed = false as c_int;
         buffer.b_changed_invalid = true;
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { ml_setflags(buffer.raw()) };
+        unsafe { ml_setflags(buffer) };
         if ff {
             save_file_ff(buffer);
         }
@@ -170,10 +170,10 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
         redraw_tabline.set(true);
         need_maketitle.set(true);
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buffer.raw()) };
+        unsafe { buf_inc_changedtick(buffer) };
     } else if always_inc_changedtick {
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buffer.raw()) };
+        unsafe { buf_inc_changedtick(buffer) };
     }
 }
 

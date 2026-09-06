@@ -312,7 +312,7 @@ unsafe fn sign_place_cmd(
         return;
     }
     let mut uid = id.cast_unsigned();
-    let _ = unsafe { sign_place(&raw mut uid, group, name, buffer, lnum, prio) };
+    let _ = unsafe { sign_place(&raw mut uid, group, name, Buf::new(buffer), lnum, prio) };
 }
 
 /// `:sign unplace`.
@@ -374,7 +374,7 @@ unsafe fn sign_jump_cmd(
         emsg(gettext(e_invarg));
         return;
     }
-    unsafe { sign_jump(id, group, buffer) };
+    unsafe { sign_jump(id, group, Buf::new(buffer)) };
 }
 
 /// What [`parse_sign_cmd_args`] read off a `:sign place`/`unplace`/`jump`

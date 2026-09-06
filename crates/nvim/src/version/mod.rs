@@ -394,7 +394,7 @@ pub(crate) unsafe fn may_show_intro() -> bool {
         && Buf::current().b_fname.is_null()
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
-        && unsafe { one_window(Win::current_raw(), ptr::null_mut::<Tabpage>()) }
+        && unsafe { one_window(Win::current(), ptr::null_mut::<Tabpage>()) }
         && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
 }
 

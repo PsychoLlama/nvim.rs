@@ -13,6 +13,7 @@ use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::kvec::Kvec;
+use crate::winlayer::Buf;
 
 pub unsafe fn nvim_buf_del_extmark(
     buf: BufferHandle,
@@ -28,7 +29,7 @@ pub unsafe fn nvim_buf_del_extmark(
         error = err_bad_number(c"ns_id", ns_id);
         return false.reported(error);
     }
-    unsafe { extmark_del_id(b, ns_id as uint32_t, id as uint32_t) }.reported(error)
+    unsafe { extmark_del_id(Buf::new(b), ns_id as uint32_t, id as uint32_t) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_clear_namespace(
@@ -58,7 +59,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     let maxcol = MAXCOL as ::core::ffi::c_int;
     // SAFETY: `b` is the live buffer the handle named.
-    unsafe { extmark_clear(b, ns, start, 0 as ColNr, end, maxcol) };
+    unsafe { extmark_clear(Buf::new(b), ns, start, 0 as ColNr, end, maxcol) };
     ().reported(error)
 }
 

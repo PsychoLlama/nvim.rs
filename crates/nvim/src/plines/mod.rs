@@ -27,7 +27,7 @@ use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
 use crate::mbyte::{utf_ptr2char, utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::r#move::{win_col_off, win_col_off2};
+use crate::r#move::win_col_off2;
 use crate::option::get_showbreak_value;
 use crate::option::vars::p_sel;
 use crate::pos::{MAXCOL, lt, ltoreq};
@@ -733,7 +733,7 @@ unsafe fn in_win_border(window: *mut Window, vcol: ColNr) -> bool {
     }
     // Width of the first screen line, after the line number.
     // SAFETY: as above.
-    let width1 = view_width - unsafe { win_col_off(window) };
+    let width1 = view_width - unsafe { (Win::new(window)).col_off() };
     if vcol < width1 - 1 {
         return false;
     }

@@ -384,7 +384,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
         // SAFETY: the current buffer is live and the data describes it.
         unsafe {
             extmark_splice(
-                Buf::current_raw(),
+                Buf::current(),
                 m.lnum_before as c_int - 1 as c_int,
                 m.start_col as ColNr,
                 m.end.lnum as c_int - m.start.lnum as c_int,

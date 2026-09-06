@@ -107,20 +107,20 @@ unsafe fn vreplace_extent(
     let mut oldlen: size_t = 0;
     let mut newlen: size_t = charlen;
     let mut vcol: ColNr = 0;
-    let win = Win::current_raw();
+    let win = Win::current();
     let cursor = Win::current().cursor().raw();
     let novcol = ::core::ptr::null_mut::<ColNr>();
     // SAFETY: the current window and its own cursor; only the middle column
     // is asked for, and it is a local.
-    unsafe { getvcol(Win::new(win), cursor, novcol, &raw mut vcol, novcol) };
+    unsafe { getvcol(win, cursor, novcol, &raw mut vcol, novcol) };
     // SAFETY: the current window is live and `buf` holds the character.
-    let new_vcol = vcol + unsafe { win_chartabsize(Win::new(win), buf, vcol) };
+    let new_vcol = vcol + unsafe { win_chartabsize(win, buf, vcol) };
     // The byte `n` past the insertion point; `oldp` is NUL-terminated and the
     // walk stops at that NUL.
     let at = |n: size_t| oldp.wrapping_add(col).wrapping_add(n);
     // SAFETY: `at(oldlen)` is inside the current line, in all three calls.
     while c_int::from(unsafe { *at(oldlen) }) != NUL && vcol < new_vcol {
-        vcol += unsafe { win_chartabsize(Win::new(win), at(oldlen), vcol) };
+        vcol += unsafe { win_chartabsize(win, at(oldlen), vcol) };
         // A TAB that lands exactly where the new character ends does not
         // need removing.
         if vcol > new_vcol && c_int::from(unsafe { *at(oldlen) }) == TAB {

@@ -172,7 +172,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         // Upstream TODO(bfredl): crude. With 'undoreload' there is enough
         // information to send a buffer-reloading on_lines/on_bytes event.
         // SAFETY: a live buffer.
-        unsafe { buf_updates_unload(buf.raw(), true) };
+        unsafe { buf_updates_unload(buf, true) };
     }
 
     // The cursor goes where the entries decided; check the line exists.
@@ -197,7 +197,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // carrying just its new value.
     if do_buf_event {
         // SAFETY: a live buffer.
-        unsafe { buf_updates_changedtick(buf.raw()) };
+        unsafe { buf_updates_changedtick(buf) };
     }
 
     // SAFETY: a live buffer and a live header.

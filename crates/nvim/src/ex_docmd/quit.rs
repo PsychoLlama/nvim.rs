@@ -214,13 +214,10 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         getout(0);
     }
     not_exiting(save_exiting);
-    unsafe {
-        win_close(
-            wp,
-            !buf_hide((*wp).w_buffer) || args.forceit != 0,
-            args.forceit != 0,
-        )
-    };
+    // SAFETY: `wp` is the window this `:quit` resolved to.
+    let (win, buffer) = unsafe { (Win::new(wp), (*wp).w_buffer) };
+    let free_buf = !buf_hide(buffer) || args.forceit != 0;
+    win_close(win, free_buf, args.forceit != 0);
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
@@ -346,6 +343,8 @@ pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
 /// window in another tab page cannot simply be entered, so it takes the
 /// other close path.
 pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpage) {
+    // SAFETY: the caller's window.
+    let w = unsafe { Win::new(win) };
     if is_aucmd_win(win) {
         emsg(gettext(e_autocmd_close.as_ptr()));
         return;
@@ -375,17 +374,13 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpa
         }
     }
 
+    let hide = !need_hide && !buf_hide(buf);
     if tabpage.is_null() {
-        win_close(win, !need_hide && !buf_hide(buf), forceit != 0);
+        win_close(w, hide, forceit != 0);
     } else {
-        unsafe {
-            win_close_othertab(
-                win,
-                (!need_hide && !buf_hide(buf)) as c_int,
-                tabpage,
-                forceit != 0,
-            )
-        };
+        // SAFETY: the caller's tab page, not null by the test above.
+        let tp = unsafe { TabPage::new(tabpage) };
+        unsafe { win_close_othertab(win, hide as c_int, tp, forceit != 0) };
     }
 }
 
@@ -547,7 +542,7 @@ pub(crate) unsafe fn ex_only(args: *mut ExArg) {
     if args.addr_count > 0 {
         let wp = window_at_stepwise(args.line2);
         if wp != Win::current_raw() {
-            unsafe { win_goto(wp) };
+            unsafe { win_goto(Win::new(wp)) };
         }
     }
     close_others(1, args.forceit);
@@ -584,7 +579,7 @@ pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
     if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::hide) {
         return;
     }
-    win_close(win, false, args.forceit != 0);
+    win_close(unsafe { Win::new(win) }, false, args.forceit != 0);
 }
 
 /// `:stop` and `:suspend`.
@@ -629,7 +624,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     }
     not_exiting(save_exiting);
     win_close(
-        Win::current_raw(),
+        Win::current(),
         !buf_hide(Win::current().w_buffer),
         args.forceit != 0,
     );
@@ -732,7 +727,7 @@ fn text_locked_msg() {
 }
 
 /// `win_close()` as checked code.
-fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
+fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::window::win_close(win, free_buf, force) }
 }

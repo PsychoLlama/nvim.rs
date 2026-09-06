@@ -109,7 +109,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     };
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if subflags.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
-        let numw = unsafe { number_width(Win::current_raw()) } + 1 as c_int;
+        let numw = unsafe { number_width(Win::current()) } + 1 as c_int;
         sc += numw;
         ec += numw;
     }

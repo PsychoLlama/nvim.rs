@@ -40,7 +40,7 @@ use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
     BoolVarValue, Buffer, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL,
-    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Window, int16_t,
+    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -875,9 +875,8 @@ fn keymap_unload() {
 ///
 /// `window` and its buffer must be valid; curwin/curbuf are restored before
 /// returning.
-pub unsafe fn keymap_str(window: *mut Window) -> Option<CString> {
+pub unsafe fn keymap_str(window: Win) -> Option<CString> {
     // SAFETY: caller contract -- a live window whose buffer is valid.
-    let window = unsafe { Win::new(window) };
     let buf = window.buffer();
     if buf.b_p_iminsert != B_IMODE_LMAP {
         return None;

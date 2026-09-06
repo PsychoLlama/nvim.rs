@@ -26,8 +26,8 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    Buffer, DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
-    SignTextAttrs, Window, uint32_t,
+    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
+    SignTextAttrs, uint32_t,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -75,14 +75,9 @@ static SIGN_ADD_ID: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buf` and `sh` must be live.
-pub unsafe fn buf_put_decor_sh(
-    buffer: *mut Buffer,
-    sh: *mut DecorSignHighlight,
-    row1: c_int,
-    row2: c_int,
-) {
+pub unsafe fn buf_put_decor_sh(buffer: Buf, sh: *mut DecorSignHighlight, row1: c_int, row2: c_int) {
     // SAFETY: the caller's buffer and sign.
-    let (buf, mut sh) = unsafe { (Buf::new(buffer), Sh::new(sh)) };
+    let (buf, mut sh) = unsafe { (buffer, Sh::new(sh)) };
     if !sh.is_sign() {
         return;
     }
@@ -101,13 +96,13 @@ pub unsafe fn buf_put_decor_sh(
 /// # Safety
 /// `buf` and `sh` must be live.
 pub unsafe fn buf_remove_decor_sh(
-    buffer: *mut Buffer,
+    buffer: Buf,
     row1: c_int,
     row2: c_int,
     sh: *mut DecorSignHighlight,
 ) {
     // SAFETY: the caller's buffer and sign.
-    let (mut buf, sh) = unsafe { (Buf::new(buffer), Sh::new(sh)) };
+    let (mut buf, sh) = unsafe { (buffer, Sh::new(sh)) };
     if !sh.is_sign() || !sh.has_text() {
         return;
     }
@@ -189,8 +184,8 @@ fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
 /// `wp` and `buf` must be live; `sattrs`, when not null, must have room for
 /// `wp`'s sign column width; the `*_id` pointers must be null or writable.
 pub unsafe fn decor_redraw_signs(
-    window: *mut Window,
-    buffer: *mut Buffer,
+    window: Win,
+    buffer: Buf,
     row: c_int,
     sattrs: *mut SignTextAttrs,
     line_id: *mut c_int,
@@ -198,7 +193,7 @@ pub unsafe fn decor_redraw_signs(
     num_id: *mut c_int,
 ) {
     // SAFETY: the caller's window and buffer.
-    let (wp, buf) = unsafe { (Win::new(window), Buf::new(buffer)) };
+    let (wp, buf) = (window, buffer);
     if !buf.has_signs() {
         return;
     }
@@ -299,14 +294,13 @@ pub enum SignCountHalf {
 /// # Safety
 /// `buffer` must point to a live buffer.
 pub unsafe fn buf_signcols_count_range(
-    buffer: *mut Buffer,
+    buffer: Buf,
     row1: c_int,
     row2: c_int,
     add: c_int,
     half: SignCountHalf,
 ) {
     // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     buf_signcols_count(buffer, row1, row2, add, half);
 }
 

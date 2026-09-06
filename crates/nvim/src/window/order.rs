@@ -25,7 +25,7 @@ use crate::message::e_floatexchange;
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
-use crate::types::{FAIL, Failed, Frame, OptInt, Window};
+use crate::types::{FAIL, Failed, Frame, OptInt};
 use crate::winlayer::graph::lastwin;
 use crate::winlayer::{FrameRef, Win, frames};
 
@@ -163,7 +163,7 @@ pub(crate) fn exchange(prenum: c_int) {
         wp.w_cursor = cur.w_cursor;
     }
     // SAFETY: a live window; nothing derived from it is read afterwards.
-    unsafe { win_enter(wp.raw(), true) };
+    unsafe { win_enter(wp, true) };
     Win::current().redraw_later(UPD_NOT_VALID);
     wp.redraw_later(UPD_NOT_VALID);
 }
@@ -243,9 +243,9 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe fn win_splitmove(window: *mut Window, size: c_int, flags: c_int) -> Result<(), Failed> {
+pub unsafe fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window.
-    splitmove(unsafe { Win::new(window) }, size, flags)
+    splitmove(window, size, flags)
 }
 
 /// Take `window` out of the layout and put it back in as a split given by `flags`,
@@ -269,7 +269,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
         // altframe unflattened so a failure can be undone.
         let (d, alt) = (&raw mut dir, &raw mut unflat_altfr);
         // SAFETY: a live window, and two out-parameters we own.
-        unsafe { winframe_remove(window.raw(), d, ptr::null_mut(), alt) };
+        unsafe { winframe_remove(window, d, ptr::null_mut(), alt) };
         debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
         remove(window, None);
         last_status(false);
@@ -282,7 +282,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
         if !window.w_floating {
             debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
             // SAFETY: as above.
-            unsafe { winframe_restore(window.raw(), dir, unflat_altfr) };
+            unsafe { winframe_restore(window, dir, unflat_altfr) };
         }
         append(window.prev(), window, None);
         return Err(Failed);
@@ -301,9 +301,9 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     Ok(())
 }
 
-pub unsafe fn win_move_after(win1: *mut Window, win2: *mut Window) {
+pub unsafe fn win_move_after(win1: Win, win2: Win) {
     // SAFETY: the caller's promise -- two live windows.
-    unsafe { move_after(Win::new(win1), Win::new(win2)) };
+    move_after(win1, win2);
 }
 
 /// Move window `win1` to just after window `win2`, both in the same frame.
@@ -351,7 +351,7 @@ fn move_after(win1: Win, win2: Win) {
     win1.w_pos_changed = true;
     win2.w_pos_changed = true;
     // SAFETY: a live window; nothing derived from it is read afterwards.
-    unsafe { win_enter(win1.raw(), false) };
+    unsafe { win_enter(win1, false) };
 }
 
 /// How many windows would fit in `height` rows of frame `fr`: each costs

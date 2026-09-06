@@ -790,7 +790,7 @@ unsafe fn goto_match(
         // Return the cursor to where it was.
         validate_cursor(Win::current());
         unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
-        unsafe { win_enter(curwin_save, true) };
+        unsafe { win_enter(Win::new(curwin_save), true) };
     }
     After::Stop
 }

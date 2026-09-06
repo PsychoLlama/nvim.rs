@@ -184,7 +184,7 @@ pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
 pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cursor_valid(Win::current()) != 0 {
-        unsafe { setcursor_mayforce(Win::current_raw(), true) };
+        unsafe { setcursor_mayforce(Win::current(), true) };
     }
     let mut len = args.line2 as int64_t;
     match byte(args.arg) {

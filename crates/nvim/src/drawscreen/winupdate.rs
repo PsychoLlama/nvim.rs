@@ -150,7 +150,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
-    unsafe { decor_redraw_reset(window.raw(), decor) };
+    unsafe { decor_redraw_reset(window, decor) };
     unsafe { decor_providers_invoke_win(window.raw(), decor) };
 
     unsafe { add_suspended_terminal_note(buf, decor) };
@@ -170,7 +170,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     validate_virtcol(win);
     rg.redr_type = win.w_redr_type;
 
-    unsafe { init_search_hl(window.raw(), SearchHl::current().raw()) };
+    unsafe { init_search_hl(window, SearchHl::current().raw()) };
 
     unsafe { clamp_skipcol(window) };
 
@@ -179,7 +179,7 @@ pub(crate) unsafe fn win_update(window: Win) {
         || win.w_onebuf_opt.wo_rnu != 0
         || unsafe { *win.w_onebuf_opt.wo_stc } != 0
     {
-        unsafe { number_width(window.raw()) }
+        unsafe { number_width(window) }
     } else {
         0
     };
@@ -225,7 +225,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     unsafe { remember_visual_area(window, buf) };
 
     let mut cursorline_fi = FoldInfo::default();
-    unsafe { win_update_cursorline(window.raw(), &raw mut cursorline_fi) };
+    unsafe { win_update_cursorline(window, &raw mut cursorline_fi) };
     if window.raw() == Win::current_raw() {
         conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current_raw()) });
     }
@@ -311,10 +311,10 @@ unsafe fn add_suspended_terminal_note(buffer: *mut Buffer, state: DecorStateRef)
 /// `window` must be a live window.
 unsafe fn clamp_skipcol(mut window: Win) {
     // SAFETY: a live window.
-    if window.w_skipcol <= 0 || window.w_view_width <= unsafe { win_col_off(window.raw()) } {
+    if window.w_skipcol <= 0 || window.w_view_width <= window.col_off() {
         return;
     }
-    let width1 = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let width1 = window.w_view_width - window.col_off();
     let width2 = width1 + win_col_off2(unsafe { Win::new(window.raw()) });
 
     // The first screen row of a wrapped line is `width1` wide and every
@@ -400,7 +400,7 @@ unsafe fn find_changed_lines(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
         }
     }
 
-    if rg.mod_top != 0 && unsafe { win_lines_concealed(win.raw()) } {
+    if rg.mod_top != 0 && unsafe { win_lines_concealed(win) } {
         unsafe { widen_over_folds(win, rg) };
     }
 
@@ -443,7 +443,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
             lnumb = unsafe { (*wl).wl_lnum };
             // A fold column may need updating on the next line as well
             // ("J" just above an open fold).
-            if unsafe { compute_foldcolumn(win.raw(), 0) } > 0 {
+            if unsafe { compute_foldcolumn(win, 0) } > 0 {
                 lnumb += 1;
             }
         }
@@ -483,7 +483,7 @@ unsafe fn plan_scroll(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
     while topline_conceal < unsafe { (*buffer).b_ml.ml_line_count }
-        && unsafe { decor_conceal_line(win.raw(), topline_conceal - 1, false) }
+        && unsafe { decor_conceal_line(win, topline_conceal - 1, false) }
     {
         topline_conceal += 1;
         has_folding(
@@ -538,11 +538,11 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
 
     // How many lines the window is off by, counting a run of folded lines
     // as one and skipping concealed ones.
-    let off = if unsafe { win_lines_concealed(win.raw()) } {
+    let off = if unsafe { win_lines_concealed(win) } {
         let mut count = 0;
         let mut ln = win.w_topline;
         while ln < first_lnum {
-            count += c_int::from(!unsafe { decor_conceal_line(win.raw(), ln - 1, false) });
+            count += c_int::from(!unsafe { decor_conceal_line(win, ln - 1, false) });
             if count >= win.w_view_height - 2 {
                 break;
             }
@@ -571,7 +571,7 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
 
     // Insert that many rows; if this is not the last window the rows at the
     // bottom are deleted. May fail if the terminal cannot do it.
-    unsafe { win_scroll_lines(win.raw(), 0, rows) };
+    unsafe { win_scroll_lines(win, 0, rows) };
     rg.bot_scroll_start = 0;
     if win.w_lines_valid == 0 {
         return;
@@ -629,7 +629,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
     rows -= win.w_topfill;
 
     if rows > 0 {
-        unsafe { win_scroll_lines(win.raw(), 0, -rows) };
+        unsafe { win_scroll_lines(win, 0, -rows) };
         rg.bot_start = win.w_view_height - rows;
         rg.bot_scroll_start = rg.bot_start;
     }
@@ -667,8 +667,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
     // going to be drawn below.
     if win_may_fill(win) && rg.bot_start > 0 {
         unsafe {
-            (*win.w_lines).wl_size =
-                plines_correct_topline(win.raw(), win.w_topline, true).0 as uint16_t
+            (*win.w_lines).wl_size = plines_correct_topline(win, win.w_topline, true).0 as uint16_t
         };
     }
 }

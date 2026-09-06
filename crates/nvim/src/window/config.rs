@@ -35,10 +35,10 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, Buffer, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, ScreenGrid, SwitchWin,
-    TryState, WinConfig, WinStyle, Window, WindowHandle, int64_t, kErrorTypeException,
-    kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline,
-    kFloatRelativeWindow, size_t,
+    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, ScreenGrid, SwitchWin, TryState,
+    WinConfig, WinStyle, Window, WindowHandle, int64_t, kErrorTypeException, kFloatAnchorEast,
+    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
+    size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -62,10 +62,10 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub unsafe fn win_set_buf(win: *mut Window, buffer: *mut Buffer, err: &mut Error) {
+pub unsafe fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
     // `Error` to report through.
-    unsafe { set_buf(Win::new(win), Buf::new(buffer), &mut *err) };
+    set_buf(win, buffer, &mut *err);
 }
 
 /// Show `buffer` in `win`: switch to the window, switch its buffer with the
@@ -116,9 +116,9 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
 }
 
-pub unsafe fn win_fdccol_count(window: *mut Window) -> c_int {
+pub unsafe fn win_fdccol_count(window: Win) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    fdccol_count(unsafe { Win::new(window) })
+    fdccol_count(window)
 }
 
 /// The columns `'foldcolumn'` asks for in `window`, `auto[:N]` resolved against how
@@ -183,9 +183,9 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // ---------------------------------------------------------------------------
 // Telling the UI where a window sits
 
-pub unsafe fn ui_ext_win_position(window: *mut Window, validate: bool) {
+pub unsafe fn ui_ext_win_position(window: Win, validate: bool) {
     // SAFETY: the caller's promise -- a live window.
-    ext_win_position(unsafe { Win::new(window) }, validate);
+    ext_win_position(window, validate);
 }
 
 /// Tell the UI where `wp` is: its position on the screen for an ordinary
@@ -366,14 +366,14 @@ fn anchor_to_window(
     let (r, c1, c2, c3) = (&raw mut trow, &raw mut tcol, &raw mut tcolc, &raw mut tcole);
     // SAFETY: a live window and a position in its buffer, plus four
     // out-parameters of ours.
-    unsafe { textpos2screenpos(win, at, r, c1, c2, c3, true) };
+    unsafe { textpos2screenpos(Win::new(win), at, r, c1, c2, c3, true) };
     *row += (trow - 1) as Float;
     *col += (tcol - 1) as Float;
 }
 
-pub unsafe fn ui_ext_win_viewport(window: *mut Window) {
+pub unsafe fn ui_ext_win_viewport(window: Win) {
     // SAFETY: the caller's promise -- a live window.
-    ext_win_viewport(unsafe { Win::new(window) });
+    ext_win_viewport(window);
 }
 
 /// Tell the UI which part of its buffer `window` shows, and how far the text

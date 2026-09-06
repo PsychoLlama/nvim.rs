@@ -62,7 +62,7 @@ pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
         let last = buf.b_ml.ml_line_count - 1;
         // SAFETY: a live buffer, on the main thread.
         unsafe {
-            buf_signcols_count_range(buf.raw(), 0, last, MAXLNUM as c_int, SignCountHalf::Both);
+            buf_signcols_count_range(buf, 0, last, MAXLNUM as c_int, SignCountHalf::Both);
         }
     }
 
@@ -207,7 +207,7 @@ pub(crate) unsafe fn draw_vsep_win(window: Win) {
     if window.w_vsep_width == 0 {
         return;
     }
-    let attr = unsafe { win_hl_attr(window.raw(), HLF_C) };
+    let attr = unsafe { win_hl_attr(window, HLF_C) };
     let col = unsafe { win_endcol(window.raw()) };
     let end_row = unsafe { win_endrow(window.raw()) };
     for row in (window.w_winrow)..end_row {
@@ -228,7 +228,7 @@ pub(crate) unsafe fn draw_hsep_win(window: Win) {
         window.w_wincol,
         unsafe { win_endcol(window.raw()) },
         window.w_p_fcs_chars.horiz,
-        unsafe { win_hl_attr(window.raw(), HLF_C) },
+        unsafe { win_hl_attr(window, HLF_C) },
     );
     unsafe { grid_line_flush() };
 }
@@ -271,7 +271,7 @@ pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
         return;
     }
 
-    let hl = unsafe { win_hl_attr(window.raw(), HLF_C) };
+    let hl = unsafe { win_hl_attr(window, HLF_C) };
 
     // Which edges of the screen the window is on. Left and top are decided
     // by walking out to the root without finding a preceding sibling in the

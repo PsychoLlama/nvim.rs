@@ -24,9 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::option::vars::p_ss;
 use crate::semsg;
-use crate::types::{
-    ColNr, Dict, EvalFuncData, LineNr, Pos, TypVal, VarNumber, Window, int64_t, size_t,
-};
+use crate::types::{ColNr, Dict, EvalFuncData, LineNr, Pos, TypVal, VarNumber, int64_t, size_t};
 use crate::winlayer::{PosRef, Win};
 
 impl Win {
@@ -34,7 +32,7 @@ impl Win {
     /// does not have to redraw everything.
     fn scroll_grid_lines(self, lines: c_int) {
         // SAFETY: a live window with a grid attached.
-        unsafe { win_scroll_lines(self.raw(), 0, lines) };
+        unsafe { win_scroll_lines(self, 0, lines) };
     }
 }
 
@@ -218,7 +216,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
 /// `window` must be a valid window, `pos` a position in its buffer, and the four
 /// out-params must be writable.
 pub unsafe fn textpos2screenpos(
-    window: *mut Window,
+    window: Win,
     pos: *mut Pos,
     rowp: *mut c_int,
     scolp: *mut c_int,
@@ -227,7 +225,7 @@ pub unsafe fn textpos2screenpos(
     local: bool,
 ) {
     // SAFETY: the caller's promise.
-    let (win, pos) = unsafe { (Win::new(window), PosRef::new(pos)) };
+    let (win, pos) = unsafe { (window, PosRef::new(pos)) };
     let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
     let mut coloff: ColNr = 0;
     let mut visible_row = false;
@@ -350,7 +348,7 @@ pub unsafe fn f_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
     let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
     // SAFETY: a live window, and five out-params of this frame.
-    unsafe { textpos2screenpos(wp.raw(), &raw mut pos, r, s, c, e, false) };
+    unsafe { textpos2screenpos(wp, &raw mut pos, r, s, c, e, false) };
     for (name, value) in [
         (c"row", row),
         (c"col", scol),
@@ -405,7 +403,7 @@ unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
 /// `window` must be a valid window and `lnum` a line of its buffer.
 unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     // SAFETY: a live window and a line of its buffer.
-    let offset = unsafe { vcol2col(win.raw(), lnum, vcol - 1, ::core::ptr::null_mut()) };
+    let offset = unsafe { vcol2col(win, lnum, vcol - 1, ::core::ptr::null_mut()) };
     // SAFETY: a live window and a line of its buffer.
     let line = unsafe { win.buffer().line(lnum) };
     // SAFETY: `vcol2col` answers a byte index within the line.

@@ -201,7 +201,7 @@ unsafe fn truncate_old_line(
     let mut cols_spliced = 0;
     if new_len < Win::current().w_cursor.col {
         // Trailing white space went as well as the split.
-        let cb = Buf::current_raw();
+        let cb = Buf::current();
         let row = Win::current().w_cursor.lnum - 1;
         let gone = Win::current().w_cursor.col - new_len;
         // SAFETY: the current buffer is live, and the row is the line just
@@ -214,7 +214,7 @@ unsafe fn truncate_old_line(
         // Move the extmarks of the line the cursor is on; the
         // mark_adjust() in `append_new_line` took care of the lines below.
         let added = mincol - 1 + less_cols_off - less_cols;
-        let cb = Buf::current_raw();
+        let cb = Buf::current();
         let row = lnum - 1;
         let at = mincol - 1 - cols_spliced;
         let off = less_cols_off;
@@ -226,7 +226,7 @@ unsafe fn truncate_old_line(
         // was just split.
         unsafe {
             extmark_splice(cb, row, at, 0, off, old_b, 1, added, new_b, undo);
-            changed_lines(Buf::new(cb), cur_lnum, cur_col, cur_lnum + 1, 1, true);
+            changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
         }
         // Move marks that were after the break onto the new line.
         if flags & OPENLINE_MARKFIX != 0 {
@@ -569,14 +569,14 @@ pub unsafe fn open_line(
             Win::current().w_cursor.lnum = old_cursor.lnum + 1;
         }
         if did_append {
-            let cb = Buf::current_raw();
+            let cb = Buf::current();
             let at = Win::current().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
             let extra = ml_get_len(at) as BCount;
             // SAFETY: as above.
             unsafe {
                 extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
-                changed_lines(Buf::new(cb), at, 0, at, 1, true);
+                changed_lines(cb, at, 0, at, 1, true);
             }
         }
         drop(splice);

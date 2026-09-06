@@ -131,7 +131,7 @@ pub unsafe fn diff_check_with_linestatus(
     //
     // SAFETY: a live window. The short circuit is upstream's: the conceal
     // query runs only for a line that is not folded away.
-    if window.fold_span(lnum).0 || unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
+    if window.fold_span(lnum).0 || unsafe { decor_conceal_line(window, lnum - 1, false) } {
         return 0;
     }
 

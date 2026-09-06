@@ -405,7 +405,7 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
                     let free = !need_hide && !buf_hide(Buf::current_raw());
-                    unsafe { win_close(Win::current_raw(), free, false) };
+                    unsafe { win_close(Win::current(), free, false) };
                     unsafe { leave_cleanup(&raw mut cs) };
                 }
             }

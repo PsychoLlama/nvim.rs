@@ -157,7 +157,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
 
     // Send an update regarding the new lines that were added.
     // SAFETY: `curbuf` is live.
-    unsafe { buf_updates_send_changes(Buf::current_raw(), dest + 1, num_lines as int64_t, 0) };
+    unsafe { buf_updates_send_changes(Buf::current(), dest + 1, num_lines as int64_t, 0) };
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
@@ -176,7 +176,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // move; `line_off`/`byte_off` correct the destination for the deletion.
     unsafe {
         extmark_move_region(
-            Buf::current_raw(),
+            Buf::current(),
             line1 - 1,
             0,
             start_byte,
@@ -203,7 +203,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
         changed_lines(Buf::current(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    unsafe { buf_updates_send_changes(Buf::current_raw(), line1 + extra, 0, num_lines as int64_t) };
+    unsafe { buf_updates_send_changes(Buf::current(), line1 + extra, 0, num_lines as int64_t) };
 
     Ok(())
 }

@@ -296,7 +296,7 @@ fn measure_join(
             let op = kExtmarkUndo;
             unsafe {
                 extmark_splice(
-                    Buf::current_raw(),
+                    Buf::current(),
                     row,
                     plan.sumsize,
                     1,

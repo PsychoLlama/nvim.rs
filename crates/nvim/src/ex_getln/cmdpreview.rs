@@ -74,7 +74,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
 pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Window {
-    let save_curwin = Win::current_raw();
+    let save_curwin = Win::current();
 
     if win_split(
         p_cwh.get() as ::core::ffi::c_int,
@@ -122,7 +122,7 @@ pub(crate) unsafe fn cmdpreview_close_win() {
         ::core::ptr::null_mut::<Buffer>()
     };
     if !buf.is_null() {
-        unsafe { close_windows(buf, false) };
+        unsafe { close_windows(Buf::new(buf), false) };
     }
 }
 
@@ -274,7 +274,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         // SAFETY: clearing the preview namespace's marks in a live buffer.
         unsafe {
             extmark_clear(
-                buf.raw(),
+                buf,
                 cmdpreview_ns.get() as uint32_t,
                 0,
                 0,
@@ -322,7 +322,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         let tick = buf_get_changedtick(buf);
         if cp_bufinfo.save_changedtick != tick {
             // SAFETY: as above.
-            unsafe { buf_set_changedtick(buf.raw(), cp_bufinfo.save_changedtick) };
+            unsafe { buf_set_changedtick(buf, cp_bufinfo.save_changedtick) };
         }
 
         buf.b_p_ul = cp_bufinfo.save_b_p_ul;

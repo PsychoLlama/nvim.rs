@@ -328,7 +328,6 @@ pub(crate) unsafe fn show_sub(
         None
     };
 
-    let orig_raw = orig_buf.raw();
     for &m in &preview_lines.subresults {
         if let Some(pv) = pv.as_mut() {
             // SAFETY: `orig_buf` is the buffer the matches were found in.
@@ -336,7 +335,7 @@ pub(crate) unsafe fn show_sub(
             // SAFETY: the preview buffer and namespace are live.
             unsafe {
                 bufhl_add_hl_pos_offset(
-                    pv.buf.raw(),
+                    pv.buf,
                     cmdpreview_ns,
                     hl_id,
                     p_start,
@@ -346,9 +345,8 @@ pub(crate) unsafe fn show_sub(
             };
         }
         // SAFETY: as above, over the buffer the match came from.
-        unsafe {
-            bufhl_add_hl_pos_offset(orig_raw, cmdpreview_ns, hl_id, m.start, m.end, 0 as ColNr)
-        };
+        let (start, end) = (m.start, m.end);
+        unsafe { bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0) };
     }
 
     // SAFETY: the scratch and the saved option string are both ours.

@@ -28,7 +28,6 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
-use crate::r#move::win_col_off;
 use crate::ops::clear_oparg;
 use crate::option::vars::tpf_flags;
 use crate::options::{
@@ -431,7 +430,7 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
         // and width checks below only apply to the shared one.
         //
         // SAFETY: a live window.
-        let offset = unsafe { win_col_off(mouse_win.raw()) };
+        let offset = mouse_win.col_off();
         let inside = row >= 0
             && (grid > 1 || row + mouse_win.w_winbar_height < mouse_win.w_height)
             && col >= offset

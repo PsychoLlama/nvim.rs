@@ -182,7 +182,7 @@ pub(crate) unsafe fn write_lines(
 
 /// Build and show the message a successful write ends with.
 pub(crate) unsafe fn report_written(
-    buffer: *mut Buffer,
+    buffer: Buf,
     fname: *mut c_char,
     written: &Written,
     notes: &WriteNotes,
@@ -193,7 +193,7 @@ pub(crate) unsafe fn report_written(
     let mut report = [0 as c_char; IOSIZE as usize];
     let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
     let iobuff = report.as_mut_ptr();
-    unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, Buf::new(buffer), fname) };
+    unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, buffer, fname) };
     let note = |text: &'static CStr| {
         unsafe { xstrlcat(iobuff, translate(text).as_ptr(), IOSIZE as size_t) };
     };

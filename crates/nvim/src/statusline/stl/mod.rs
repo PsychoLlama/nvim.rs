@@ -271,7 +271,7 @@ impl Env {
     /// `%k`: the active `'keymap'`, in angle brackets.
     pub(super) fn keymap(&self, text: &mut Vec<u8>) {
         // SAFETY: a live window.
-        let Some(name) = (unsafe { keymap_str(self.win.raw()) }) else {
+        let Some(name) = (unsafe { keymap_str(self.win) }) else {
             return;
         };
         let name = name.as_bytes();
@@ -342,7 +342,7 @@ impl Env {
     /// How wide the fold column is here, which is what `%C` draws.
     pub(super) fn fold_column_width(&self) -> c_int {
         // SAFETY: a live window.
-        unsafe { compute_foldcolumn(self.win.raw(), 0) }
+        unsafe { compute_foldcolumn(self.win, 0) }
     }
 
     /// Draw the fold column's `fdc` glyphs into `text`, answering the
@@ -356,7 +356,7 @@ impl Env {
         // just answered.
         unsafe {
             fill_foldcolumn(
-                self.win.raw(),
+                self.win,
                 (*self.stcp).foldinfo,
                 (*self.stcp).lnum,
                 fdc,
@@ -372,7 +372,7 @@ impl Env {
         }
         text.extend_from_slice(&buf[..len]);
         // SAFETY: a live window and the line the fold describes.
-        let cul = unsafe { use_cursor_line_highlight(self.win.raw(), lnum) };
+        let cul = unsafe { use_cursor_line_highlight(self.win, lnum) };
         -if cul { HLF_CLF } else { HLF_FC }
     }
 

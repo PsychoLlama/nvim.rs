@@ -65,7 +65,7 @@ pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
         return;
     };
-    unsafe { win_drag_vsep_line(wp.raw(), offset) };
+    unsafe { win_drag_vsep_line(wp, offset) };
     result.vval.v_number = 1;
 }
 
@@ -77,7 +77,7 @@ pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fpt
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
         return;
     };
-    unsafe { win_drag_status_line(wp.raw(), offset) };
+    unsafe { win_drag_status_line(wp, offset) };
     result.vval.v_number = 1;
 }
 
@@ -159,17 +159,17 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         return;
     }
     if !targetwin.is_current() {
-        unsafe { win_goto(targetwin.raw()) };
+        unsafe { win_goto(targetwin) };
     }
     if targetwin.is_current() && win_valid(wp.raw()) {
-        if unsafe { win_splitmove(wp.raw(), size, flags) }.is_ok() {
+        if unsafe { win_splitmove(wp, size, flags) }.is_ok() {
             result.vval.v_number = 0;
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
     }
     if !oldwin.is_current() && win_valid(oldwin.raw()) {
-        unsafe { win_goto(oldwin.raw()) };
+        unsafe { win_goto(oldwin) };
     }
 }
 
@@ -280,8 +280,8 @@ pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: Eval
 
     // SAFETY: a live window, and `curbuf` is set.
     check_cursor(win);
-    unsafe { win_new_height(win.raw(), win.w_height) };
-    unsafe { win_new_width(win.raw(), win.w_width) };
+    unsafe { win_new_height(win, win.w_height) };
+    unsafe { win_new_width(win, win.w_width) };
     changed_window_setting(win);
     // SAFETY: `curbuf` is set from startup to exit.
     let line_count = Buf::current().line_count();

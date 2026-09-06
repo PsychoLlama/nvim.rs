@@ -46,8 +46,7 @@ use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{
-    adjust_skipcol, cursor_correct, validate_botline_win, validate_virtcol, win_col_off,
-    win_col_off2,
+    adjust_skipcol, cursor_correct, validate_botline_win, validate_virtcol, win_col_off2,
 };
 
 /// Move `dist` *screen* lines, which is what `gj`/`gk` and `g$` past the first
@@ -79,7 +78,7 @@ pub(crate) unsafe fn nv_screengo(
 
     // The first screen row of a line can be narrower than the rest: only
     // it carries the number column and the signs.
-    let col_off1 = unsafe { win_col_off(wp.raw()) };
+    let col_off1 = wp.col_off();
     let col_off2 = col_off1 - win_col_off2(wp);
     let width1 = win.w_view_width - col_off1;
     let mut width2 = win.w_view_width - col_off2;
@@ -212,15 +211,14 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
         win.w_cursor.lnum = win.w_botline - 1;
         if count1 as LineNr > win.w_cursor.lnum {
             win.w_cursor.lnum = 1;
-        } else if unsafe { win_lines_concealed(wp.raw()) } {
+        } else if unsafe { win_lines_concealed(wp) } {
             // A concealed line takes no screen row, so the count has to be
             // walked rather than subtracted.
             let mut n = count1 - 1;
             while n > 0 && win.w_cursor.lnum > win.w_topline {
                 let lnum = win.w_cursor.lnum;
                 has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
-                n += unsafe { decor_conceal_line(wp.raw(), win.w_cursor.lnum as c_int, true) }
-                    as c_int;
+                n += unsafe { decor_conceal_line(wp, win.w_cursor.lnum as c_int, true) } as c_int;
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
                 }
@@ -262,11 +260,11 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
             }
         } else {
             n = count1 - 1;
-            if unsafe { win_lines_concealed(wp.raw()) } {
+            if unsafe { win_lines_concealed(wp) } {
                 let mut lnum = win.w_topline;
                 // The decrement is inside the condition, so a concealed
                 // line is stepped over without spending any of the count.
-                while (unsafe { decor_conceal_line(wp.raw(), lnum as c_int - 1, true) } || {
+                while (unsafe { decor_conceal_line(wp, lnum as c_int - 1, true) } || {
                     let before = n;
                     n -= 1;
                     before > 0

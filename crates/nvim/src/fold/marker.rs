@@ -53,7 +53,7 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     };
     unsafe { fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get()) };
     changed_lines(unsafe { Buf::new(buf) }, start.lnum, 0, end.lnum, 0, false);
-    unsafe { buf_updates_send_changes(buf, start.lnum, num_changed, num_changed) };
+    unsafe { buf_updates_send_changes(Buf::new(buf), start.lnum, num_changed, num_changed) };
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
@@ -125,7 +125,7 @@ pub(super) unsafe fn fold_add_marker(
     if added != 0 {
         unsafe {
             extmark_splice_cols(
-                buffer,
+                Buf::new(buffer),
                 lnum as c_int - 1,
                 line_len as ColNr,
                 0,
@@ -237,7 +237,7 @@ pub(super) unsafe fn fold_del_marker(
             let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
             unsafe {
                 extmark_splice_cols(
-                    buffer,
+                    Buf::new(buffer),
                     lnum as c_int - 1,
                     p.offset_from(line) as ColNr,
                     len as ColNr,

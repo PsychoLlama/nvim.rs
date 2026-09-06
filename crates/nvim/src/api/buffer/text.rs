@@ -47,6 +47,8 @@ pub unsafe fn nvim_buf_set_text(
     if b.is_null() {
         return ().reported(error);
     }
+    // SAFETY: not null, and the guard above is what says so.
+    let buffer = unsafe { Buf::new(b) };
     let mut oob: bool = false;
     start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
@@ -209,7 +211,7 @@ pub unsafe fn nvim_buf_set_text(
             let why = c"Buffer is not 'modifiable'";
             error = Error::exception(why);
         } else if u_save_buf(
-            unsafe { Buf::new(b) },
+            buffer,
             start_row as LineNr - 1 as LineNr,
             end_row as LineNr + 1 as LineNr,
         )
@@ -291,7 +293,7 @@ pub unsafe fn nvim_buf_set_text(
             };
             unsafe {
                 mark_adjust_buf(
-                    b,
+                    buffer,
                     start_row as LineNr,
                     end_row as LineNr - 1 as LineNr,
                     adjust,
@@ -321,7 +323,7 @@ pub unsafe fn nvim_buf_set_text(
             }
             unsafe {
                 extmark_splice(
-                    b,
+                    buffer,
                     start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
                     start_col as ColNr,
                     (end_row - start_row) as ::core::ffi::c_int,
@@ -334,7 +336,7 @@ pub unsafe fn nvim_buf_set_text(
                 )
             };
             changed_lines(
-                unsafe { Buf::new(b) },
+                buffer,
                 start_row as LineNr,
                 start_col as ColNr,
                 end_row as LineNr + 1 as LineNr,
@@ -360,7 +362,7 @@ pub unsafe fn nvim_buf_set_text(
                     } else {
                         let (lo, hi) = (start_row as LineNr, end_row as LineNr);
                         // SAFETY: a live window showing this buffer.
-                        unsafe { fix_cursor(win, lo, hi, extra as LineNr) };
+                        unsafe { fix_cursor(Win::new(win), lo, hi, extra as LineNr) };
                     }
                 }
             }
@@ -370,9 +372,8 @@ pub unsafe fn nvim_buf_set_text(
     ().reported(error)
 }
 
-pub(crate) unsafe fn fix_cursor(win: *mut Window, lo: LineNr, hi: LineNr, extra: LineNr) {
+pub(crate) unsafe fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
     // SAFETY: the caller's promise -- `win` is a live window.
-    let mut win = unsafe { Win::new(win) };
     if win.w_cursor.lnum >= lo {
         if win.w_cursor.lnum >= hi {
             win.w_cursor.lnum += extra;

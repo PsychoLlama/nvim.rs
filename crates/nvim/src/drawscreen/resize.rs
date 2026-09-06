@@ -154,14 +154,14 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     if !ui_has(kUIMessages) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
-        let max_p_ch = Rows.get() - unsafe { min_rows(TabPage::current_raw()) } + 1;
+        let max_p_ch = Rows.get() - unsafe { min_rows(TabPage::current()) } + 1;
         if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
             p_ch.set(max_p_ch.max(1) as OptInt);
             TabPage::current().tp_ch_used = p_ch.get();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
-                let max_tp_ch = Rows.get() - unsafe { min_rows(tp.raw()) } + 1;
+                let max_tp_ch = Rows.get() - unsafe { min_rows(tp) } + 1;
                 if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
                     tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
                 }

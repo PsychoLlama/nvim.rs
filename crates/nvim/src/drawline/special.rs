@@ -57,12 +57,12 @@ impl Cells {
                 wlv.n_attr = 2;
             }
             wlv.extra_todo = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
+            wlv.extra_attr = unsafe { win_hl_attr(window, HLF_AT) };
         }
         self.cell_char = window.w_p_lcs_chars.prec;
         self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         self.attr_before_prec = wlv.char_attr;
-        wlv.char_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
+        wlv.char_attr = unsafe { win_hl_attr(window, HLF_AT) };
         self.prec_attr_todo = 1;
     }
 
@@ -90,7 +90,7 @@ impl Cells {
             // character.
             unsafe {
                 decor_redraw_col(
-                    window.raw(),
+                    window,
                     self.byte_col(),
                     -1,
                     false,
@@ -108,7 +108,7 @@ impl Cells {
                 && unsafe { wlv.has_more_inline_virt(self.ptr.offset_from(self.line)) })
         {
             self.cell_char = lcs_ext;
-            wlv.char_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
+            wlv.char_attr = unsafe { win_hl_attr(window, HLF_AT) };
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }
     }
@@ -186,9 +186,8 @@ impl Cells {
             return;
         }
         // Does the previous column start a search match?
-        let prevcol_hl_flag = unsafe {
-            get_prevcol_hl_flag(window.raw(), SearchHl::current().raw(), self.byte_col() - 1)
-        };
+        let prevcol_hl_flag =
+            unsafe { get_prevcol_hl_flag(window, SearchHl::current().raw(), self.byte_col() - 1) };
         let want = self.lcs_eol_todo
             && ((self.area_attr != 0
                 && wlv.vcol == wlv.fromcol
@@ -212,7 +211,7 @@ impl Cells {
             // Use the attributes of the highest-priority match.
             unsafe {
                 get_search_match_hl(
-                    window.raw(),
+                    window,
                     SearchHl::current().raw(),
                     self.byte_col(),
                     &raw mut wlv.char_attr,
@@ -393,7 +392,7 @@ impl Cells {
             }
             wlv.extra_last = lcs_tab3;
             wlv.n_attr = tab_len + 1;
-            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_0) };
+            wlv.extra_attr = unsafe { win_hl_attr(window, HLF_0) };
             self.attr_before_run = wlv.char_attr;
         } else {
             wlv.extra_last = NUL as ScreenChar;
@@ -437,7 +436,7 @@ impl Cells {
             wlv.extra_text = unsafe { wlv.extra_text.offset(1) };
         }
         wlv.n_attr = wlv.extra_todo + 1;
-        wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_8) };
+        wlv.extra_attr = unsafe { win_hl_attr(window, HLF_8) };
         self.attr_before_run = wlv.char_attr;
         self.cell_char = schar_from_ascii(self.char_code as u8);
     }
@@ -491,7 +490,7 @@ impl Cells {
         self.lcs_eol_todo = false;
         // Put the pointer back at the NUL.
         self.ptr = unsafe { self.ptr.offset(-1) };
-        wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
+        wlv.extra_attr = unsafe { win_hl_attr(window, HLF_AT) };
         wlv.n_attr = 1;
         self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
     }

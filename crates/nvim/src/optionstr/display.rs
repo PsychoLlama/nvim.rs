@@ -214,9 +214,9 @@ pub unsafe fn did_set_cursorlineopt(args: &mut OptSet) -> Option<&CStr> {
     // all.
     // SAFETY: the option's C string value, and the frame's window, which
     // `OptSet` names for exactly this call.
-    let win = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     if unsafe { c_int::from(**varp) } == NUL
-        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), win) }.is_err()
+        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), wp) }.is_err()
     {
         return invalid();
     }

@@ -733,7 +733,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
         if flags & SIN_NOMARK as c_int == 0 {
             unsafe {
                 extmark_splice_cols(
-                    buf,
+                    Buf::new(buf),
                     Win::current().w_cursor.lnum as c_int - 1,
                     skipcols,
                     old_offset - skipcols,

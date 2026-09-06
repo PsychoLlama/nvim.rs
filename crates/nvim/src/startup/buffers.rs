@@ -352,7 +352,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
     if Win::current().w_arg_idx == -1 {
-        unsafe { win_close(Win::current_raw(), true, false) };
+        unsafe { win_close(Win::current(), true, false) };
         advance = false;
     }
 
@@ -364,7 +364,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     for i in 1..parm.window_count {
         if Win::current().w_arg_idx == -1 {
             arg_idx += 1;
-            unsafe { win_close(Win::current_raw(), true, false) };
+            unsafe { win_close(Win::current(), true, false) };
             advance = false;
             continue;
         }
@@ -386,7 +386,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 let Some(next) = Win::current().next() else {
                     break;
                 };
-                unsafe { win_enter(next.raw(), false) };
+                unsafe { win_enter(next, false) };
             }
         }
         advance = true;
@@ -411,7 +411,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 if got_int.get() || unsafe { only_one_window() } {
                     quit_on_swap_exists(true);
                 }
-                unsafe { win_close(Win::current_raw(), true, false) };
+                unsafe { win_close(Win::current(), true, false) };
                 advance = false;
             }
             if arg_idx == unsafe { (*alist).al_ga.len() as c_int } - 1 {
@@ -448,7 +448,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
         };
         win = next;
     }
-    unsafe { win_enter(win.raw(), false) };
+    unsafe { win_enter(win, false) };
     drop(no_leave);
 
     time_msg_at(c"editing files in windows");

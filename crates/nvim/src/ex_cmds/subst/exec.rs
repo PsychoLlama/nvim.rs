@@ -591,7 +591,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         );
         let num_added = (st.last_line - st.first_line) as int64_t;
         let num_removed = num_added - added as int64_t;
-        let buffer = Buf::current_raw();
+        let buffer = Buf::current();
         unsafe { buf_updates_send_changes(buffer, st.first_line, num_added, num_removed) };
     }
 

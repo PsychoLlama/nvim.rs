@@ -717,7 +717,7 @@ pub unsafe fn buf_write(
                         newfile: target.newfile,
                         fileformat,
                     };
-                    unsafe { report_written(buf, fname, &written, &notes, req.append) };
+                    unsafe { report_written(Buf::new(buf), fname, &written, &notes, req.append) };
                 }
 
                 // Everything went out correctly: reset 'modified'. Unless

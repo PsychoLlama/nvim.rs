@@ -241,7 +241,7 @@ pub(crate) unsafe fn did_set_buflisted(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest reads globals.
     let old_value = unsafe { Frame::read(args) }.old_number();
-    let room = (Rows.get() - unsafe { min_rows(TabPage::current_raw()) } + 1) as OptInt;
+    let room = (Rows.get() - unsafe { min_rows(TabPage::current()) } + 1) as OptInt;
     if p_ch.get() > room {
         p_ch.set(room);
     }
@@ -688,7 +688,7 @@ pub(crate) unsafe fn did_set_winblend(args: &mut OptSet) -> Option<&CStr> {
         let mut win = f.win;
         win.w_onebuf_opt.wo_winbl = win.w_onebuf_opt.wo_winbl.clamp(0, 100);
         win.w_hl_needs_update = true;
-        unsafe { check_blending(win.raw()) };
+        unsafe { check_blending(win) };
     }
     None
 }

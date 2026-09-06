@@ -153,7 +153,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                     let event = AutoEvent::BufWinLeave;
                     unsafe { apply_autocmds(event, fname, fname, false, buf) };
                     if bufref.valid() {
-                        unsafe { buf_set_changedtick(buf, -1) };
+                        unsafe { buf_set_changedtick(Buf::new(buf), -1) };
                     }
                     // The autocommands may have rearranged both lists;
                     // start the whole walk again.

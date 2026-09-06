@@ -545,8 +545,8 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     if ptr.is_null() {
         return;
     }
-    let oldtab = TabPage::current_raw();
-    let oldwin = Win::current_raw();
+    let oldtab = TabPage::current();
+    let oldwin = Win::current();
     set_pcmark();
 
     // If 'switchbuf' has "useopen" or "usetab" and the file is already open in
@@ -565,7 +565,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
             close(Win::current(), false, false);
             // SAFETY: upstream assumes both survive the failed edit, which only
             // closed the window the split just above had made.
-            unsafe { goto_tab_win(TabPage::new(oldtab), Win::new(oldwin)) };
+            goto_tab_win(oldtab, oldwin);
         } else {
             wp = Some(Win::current());
         }

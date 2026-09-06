@@ -81,24 +81,24 @@ fn goto_tab(tabpage: TabPage) {
 }
 
 /// The last non-floating window of the current tab page.
-fn last_nofloat() -> *mut Window {
-    // SAFETY: null asks for the current tab page.
-    unsafe { lastwin_nofloating(ptr::null_mut()) }
+fn last_nofloat() -> Win {
+    // SAFETY: null asks for the current tab page, which always has a window.
+    unsafe { Win::new(lastwin_nofloating(ptr::null_mut())) }
 }
 
-fn enter_win(win: *mut Window) {
+fn enter_win(win: Win) {
     // SAFETY: a live window.
     unsafe { win_enter(win, false) };
 }
 
 fn close_win(win: Win, free_buf: bool) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_close(win.raw(), free_buf, false) }
+    unsafe { win_close(win, free_buf, false) }
 }
 
 fn move_win_after(win: Win, after: Win) {
     // SAFETY: two live windows.
-    unsafe { win_move_after(win.raw(), after.raw()) };
+    unsafe { win_move_after(win, after) };
 }
 
 fn split_below_room() -> Result<(), Failed> {
@@ -107,7 +107,7 @@ fn split_below_room() -> Result<(), Failed> {
 
 fn is_locked(win: Win) -> bool {
     // SAFETY: a live window.
-    unsafe { win_locked(win.raw()) != 0 }
+    unsafe { win_locked(win) != 0 }
 }
 
 /// Whether `win` is still in the window list -- asked about a pointer
@@ -235,7 +235,7 @@ pub unsafe fn ex_buffer_all(args: *mut ExArg) {
     // `WinEnter`/`BufEnter` but still no `WinLeave`/`BufLeave`.
     drop(no_enter);
     // Back to the first window.
-    enter_win(first_win().raw());
+    enter_win(first_win());
     drop(no_leave);
 
     close_extra_windows(count, &mut open_wins);

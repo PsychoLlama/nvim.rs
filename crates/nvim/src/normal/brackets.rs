@@ -248,7 +248,7 @@ unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = FileMark::UNSET;
-    let mut fm = unsafe { pos_to_mark(Buf::current_raw(), &raw mut here, Win::current().w_cursor) };
+    let mut fm = unsafe { pos_to_mark(Buf::current(), &raw mut here, Win::current().w_cursor) };
     debug_assert!(!fm.is_null());
     let linewise = ca.nchar == '\'' as c_int;
     let mut prev_fm = ptr::null_mut();

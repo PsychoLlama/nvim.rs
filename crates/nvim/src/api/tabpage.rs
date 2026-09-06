@@ -154,7 +154,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
     }
     if tp.is_current() {
         // SAFETY: `wp` is live, and `err` is this frame's own.
-        api_try(&mut err, |_| unsafe { win_goto(wp.raw()) });
+        api_try(&mut err, |_| unsafe { win_goto(wp) });
     } else if tp.tp_curwin != wp.raw() {
         let mut tp = tp;
         tp.tp_prevwin = tp.tp_curwin;
@@ -239,7 +239,7 @@ pub unsafe fn nvim_open_tabpage(
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.
         let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
-        unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
+        unsafe { win_set_buf(w, b, &mut err) };
         drop(quiet);
         if !valid_tabpage(tp.raw()) {
             return Err(tabpage_closed(err));

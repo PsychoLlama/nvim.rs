@@ -224,14 +224,8 @@ pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool
 /// # Safety
 /// `buffer` must be a live buffer, and `fm`'s allocations must be handed over to
 /// the store.
-pub unsafe fn mark_set_local(
-    name: c_char,
-    buffer: *mut Buffer,
-    fm: FileMark,
-    update: bool,
-) -> bool {
+pub unsafe fn mark_set_local(name: c_char, bufh: Buf, fm: FileMark, update: bool) -> bool {
     // SAFETY: the caller promised a live buffer.
-    let bufh = unsafe { Buf::new(buffer) };
     let name = c_int::from(name);
     let tgt: Fmark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int)

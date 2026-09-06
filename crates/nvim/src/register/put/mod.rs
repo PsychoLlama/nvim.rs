@@ -276,7 +276,7 @@ impl Put {
 
         let lnum = Win::current().w_cursor.lnum;
         // SAFETY: a live buffer, in which one line just became two.
-        unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
+        unsafe { buf_updates_send_changes(Buf::current(), lnum, 1, 1) };
         true
     }
 

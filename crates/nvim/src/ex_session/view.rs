@@ -119,7 +119,7 @@ pub(crate) unsafe fn put_view(
         return false;
     }
 
-    if !unsafe { put_local_options(out, window, opts) } {
+    if !unsafe { put_local_options(out, Win::new(window), opts) } {
         return false;
     }
 
@@ -246,10 +246,10 @@ unsafe fn put_alternate(out: SessionFile, window: *mut Window, opts: SessionOpts
 ///
 /// # Safety
 /// `window` is live.
-unsafe fn put_local_options(out: SessionFile, window: *mut Window, opts: SessionOpts) -> bool {
+unsafe fn put_local_options(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
-    let saved = switch_to(unsafe { Win::new(window) });
+    let saved = switch_to(window);
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
         // Store only the local values for a view, and for a session
         // whose 'sessionoptions' has no "options".

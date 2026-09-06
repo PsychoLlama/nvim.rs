@@ -31,7 +31,7 @@ use crate::message::state::{msg_row, msg_scrolled};
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::r#move::{
     WinValid, changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,
-    validate_botline_win, win_col_off, win_col_off2,
+    validate_botline_win, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
 use crate::option::vars::{p_ch, p_ls, p_spk, p_stal, p_wbr};
@@ -43,8 +43,8 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, Tabpage, Window,
-    WindowHandle, size_t,
+    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, WindowHandle,
+    size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
@@ -76,7 +76,7 @@ fn plines_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
 /// Columns of `window` the text does not start in: `'number'`, signs and folds.
 fn col_off(window: Win) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_col_off(window.raw()) }
+    window.col_off()
 }
 
 /// The extra indent a wrapped line gets from `'cpoptions'`'s `n` flag.
@@ -125,9 +125,9 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // ---------------------------------------------------------------------------
 // The cursor's place in the window
 
-pub unsafe fn set_fraction(window: *mut Window) {
+pub unsafe fn set_fraction(window: Win) {
     // SAFETY: the caller's promise -- a live window.
-    save_fraction(unsafe { Win::new(window) });
+    save_fraction(window);
 }
 
 /// Remember where the cursor is as a fraction of the window's height, so a
@@ -234,9 +234,9 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
 }
 
-pub unsafe fn win_new_height(window: *mut Window, height: c_int) {
+pub unsafe fn win_new_height(window: Win, height: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    new_win_height(unsafe { Win::new(window) }, height);
+    new_win_height(window, height);
 }
 
 /// Give window `window` height `height`.
@@ -253,9 +253,9 @@ pub(crate) fn new_win_height(window: Win, height: c_int) {
     set_inner_size(window, true);
 }
 
-pub unsafe fn scroll_to_fraction(window: *mut Window, prev_height: c_int) {
+pub unsafe fn scroll_to_fraction(window: Win, prev_height: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    to_fraction(unsafe { Win::new(window) }, prev_height);
+    to_fraction(window, prev_height);
 }
 
 /// Put the cursor back at the [`save_fraction`] of the window it was at before
@@ -307,7 +307,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 if lnum == 1 {
                     // The first line in the buffer is folded.
                     // SAFETY: a live window; row 0 is the line above line 1.
-                    line_size = !unsafe { decor_conceal_line(window.raw(), 0, false) } as c_int;
+                    line_size = !unsafe { decor_conceal_line(window, 0, false) } as c_int;
                     sline -= 1;
                     break;
                 }
@@ -345,9 +345,9 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
     invalidate_botline(window);
 }
 
-pub unsafe fn win_set_inner_size(window: *mut Window, valid_cursor: bool) {
+pub unsafe fn win_set_inner_size(window: Win, valid_cursor: bool) {
     // SAFETY: the caller's promise -- a live window.
-    set_inner_size(unsafe { Win::new(window) }, valid_cursor);
+    set_inner_size(window, valid_cursor);
 }
 
 /// Give the window's *text area* the size its frame now implies, and tell the
@@ -433,9 +433,9 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     window.w_redr_status = true;
 }
 
-pub unsafe fn win_new_width(window: *mut Window, width: c_int) {
+pub unsafe fn win_new_width(window: Win, width: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    new_win_width(unsafe { Win::new(window) }, width);
+    new_win_width(window, width);
 }
 
 /// Give window `window` width `width`.
@@ -446,9 +446,9 @@ pub(crate) fn new_win_width(window: Win, width: c_int) {
     set_inner_size(window, true);
 }
 
-pub unsafe fn win_default_scroll(window: *mut Window) -> OptInt {
+pub unsafe fn win_default_scroll(window: Win) -> OptInt {
     // SAFETY: the caller's promise -- a live window.
-    default_scroll(unsafe { Win::new(window) })
+    default_scroll(window)
 }
 
 /// The `'scroll'` a window gets when the option is not set by hand: half its
@@ -457,9 +457,9 @@ pub(crate) fn default_scroll(window: Win) -> OptInt {
     (window.w_view_height / 2).max(1) as OptInt
 }
 
-pub unsafe fn win_comp_scroll(window: *mut Window) {
+pub unsafe fn win_comp_scroll(window: Win) {
     // SAFETY: the caller's promise -- a live window.
-    comp_scroll(unsafe { Win::new(window) });
+    comp_scroll(window);
 }
 
 /// Recompute `'scroll'` after a resize, marking it as set by the layout rather
@@ -563,9 +563,9 @@ pub(crate) fn update_last_status(morewin: bool) {
     win_float_anchor_laststatus();
 }
 
-pub unsafe fn win_remove_status_line(window: *mut Window, add_hsep: bool) {
+pub unsafe fn win_remove_status_line(window: Win, add_hsep: bool) {
     // SAFETY: the caller's promise -- a live window.
-    remove_status_line(unsafe { Win::new(window) }, add_hsep);
+    remove_status_line(window, add_hsep);
 }
 
 /// Take `window`'s status line away, giving its row either to a horizontal
@@ -674,9 +674,9 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub unsafe fn set_winbar_win(window: *mut Window, make_room: bool, valid_cursor: bool) -> c_int {
+pub unsafe fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    winbar_win(unsafe { Win::new(window) }, make_room, valid_cursor)
+    winbar_win(window, make_room, valid_cursor)
 }
 
 /// Give `window` the window bar `'winbar'` asks for, or take it away.
@@ -779,9 +779,9 @@ fn first_window() -> Win {
     windows().next().expect("a tab page has a window")
 }
 
-pub unsafe fn min_rows(tabpage: *mut Tabpage) -> c_int {
+pub unsafe fn min_rows(tabpage: TabPage) -> c_int {
     // SAFETY: the caller's promise -- a live tab page.
-    min_rows_of(unsafe { TabPage::new(tabpage) })
+    min_rows_of(tabpage)
 }
 
 /// The fewest rows tab page `tabpage` can be drawn in.

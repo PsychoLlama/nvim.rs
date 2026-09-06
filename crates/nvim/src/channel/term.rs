@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_void};
 
 use crate::event::r#loop::one_arg_event;
@@ -41,7 +42,7 @@ pub unsafe fn channel_terminal_alloc(buffer: *mut Buffer, chan: *mut Channel) {
     };
     unsafe { (*buffer).b_p_channel = (*chan).id as OptInt };
     unsafe { channel_incref(chan) };
-    unsafe { (*chan).term = terminal_alloc(buffer, topts) };
+    unsafe { (*chan).term = terminal_alloc(Buf::new(buffer), topts) };
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.

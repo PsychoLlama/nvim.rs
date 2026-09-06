@@ -285,7 +285,7 @@ pub(crate) unsafe fn shada_init_jumps(
     let mut jumps_size: size_t = 0;
     let mut jump_iter = core::ptr::null::<c_void>();
     setpcmark();
-    unsafe { cleanup_jumplist(Win::current_raw(), false) };
+    unsafe { cleanup_jumplist(Win::current(), false) };
     loop {
         let mut fm: XFileMark = unsafe { core::mem::zeroed() };
         jump_iter = unsafe { mark_jumplist_iter(jump_iter, Win::current_raw(), &raw mut fm) };

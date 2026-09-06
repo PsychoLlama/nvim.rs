@@ -24,8 +24,7 @@ use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::xrealloc;
 use crate::types::{
-    Buffer, DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, Window, size_t,
-    uint64_t, virt_line,
+    DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, size_t, uint64_t, virt_line,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -100,13 +99,8 @@ pub unsafe fn next_virt_text_chunk(
 ///
 /// # Safety
 /// `buffer` must point to a live buffer.
-pub unsafe fn decor_find_virttext(
-    buffer: *mut Buffer,
-    row: c_int,
-    ns_id: uint64_t,
-) -> *mut DecorVirtText {
+pub unsafe fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *mut DecorVirtText {
     // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     let mut itr = MarkTreeIter::default();
     let mut walk = Cursor::in_buffer(buffer, &mut itr);
     walk.seek(row, 0);
@@ -137,9 +131,8 @@ pub unsafe fn decor_find_virttext(
 ///
 /// # Safety
 /// `window` must point to a live window; runs Lua through the providers.
-pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: bool) -> bool {
+pub unsafe fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     if row < 0
         || window.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
@@ -186,9 +179,8 @@ pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: 
 ///
 /// # Safety
 /// `window` must point to a live window.
-pub unsafe fn win_lines_concealed(window: *mut Window) -> bool {
+pub unsafe fn win_lines_concealed(window: Win) -> bool {
     // SAFETY: the caller's window.
-    let window = unsafe { Win::new(window) };
     window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
@@ -204,7 +196,7 @@ pub unsafe fn win_lines_concealed(window: *mut Window) -> bool {
 /// `wp` must be live; `lines` must be null or a live `VirtLines` this may
 /// grow; `num_below` null or writable.
 pub unsafe fn decor_virt_lines(
-    window: *mut Window,
+    window: Win,
     start_row: c_int,
     end_row: c_int,
     num_below: *mut c_int,
@@ -212,8 +204,7 @@ pub unsafe fn decor_virt_lines(
     apply_folds: bool,
 ) -> c_int {
     // SAFETY: the caller's window and out-parameters, null or writable.
-    let (wp, mut lines, mut num_below) =
-        unsafe { (Win::new(window), lines.as_mut(), num_below.as_mut()) };
+    let (wp, mut lines, mut num_below) = unsafe { (window, lines.as_mut(), num_below.as_mut()) };
     let buf = wp.buffer();
     // Only pay for what you use: in a buffer with no virt_lines the layout
     // code does not reach the marktree at all.
@@ -269,7 +260,7 @@ impl Win {
     /// [`decor_conceal_line`] for a window already promised live.
     fn conceal_line(self, row: c_int, check_cursor: bool) -> bool {
         // SAFETY: a live window. Runs Lua through the providers.
-        unsafe { decor_conceal_line(self.raw(), row, check_cursor) }
+        unsafe { decor_conceal_line(self, row, check_cursor) }
     }
 }
 

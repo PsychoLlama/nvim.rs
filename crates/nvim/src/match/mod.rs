@@ -86,7 +86,7 @@ const DEFAULT_PRIORITY: c_int = 10;
 /// be null or NUL-terminated; `pos_list` must be null or a live list.
 #[allow(clippy::too_many_arguments)]
 unsafe fn match_add(
-    window: *mut Window,
+    mut window: Win,
     grp: *const c_char,
     pat: *const c_char,
     prio: c_int,
@@ -95,7 +95,6 @@ unsafe fn match_add(
     conceal_char: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
@@ -326,9 +325,8 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
 ///
 /// # Safety
 /// `window` must be live.
-unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
+unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     let mut rtype = UPD_SOME_VALID;
 
@@ -376,9 +374,8 @@ unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
 ///
 /// # Safety
 /// `window` must be live.
-pub(crate) unsafe fn clear_matches(window: *mut Window) {
+pub(crate) unsafe fn clear_matches(mut window: Win) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     while !window.w_match_head.is_null() {
         // SAFETY: the window owns every entry of its list until it is
@@ -397,9 +394,8 @@ pub(crate) unsafe fn clear_matches(window: *mut Window) {
 ///
 /// # Safety
 /// `window` must be live.
-unsafe fn get_match(window: *mut Window, id: c_int) -> *mut MatchItem {
+unsafe fn get_match(window: Win, id: c_int) -> *mut MatchItem {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     let mut cur = window.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
@@ -428,7 +424,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {
-        unsafe { match_delete(Win::current_raw(), id, false) };
+        unsafe { match_delete(Win::current(), id, false) };
     }
 
     let arg = unsafe { (*args).arg };
@@ -482,7 +478,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
             unsafe { *end = 0 };
             // SAFETY: the pattern is NUL-terminated in place just above.
             let pat = unsafe { p.offset(1) };
-            let win = Win::current_raw();
+            let win = Win::current();
             let no_pos = ::core::ptr::null_mut();
             let no_conceal = ::core::ptr::null();
             // SAFETY: the editor's own window and the group checked above.

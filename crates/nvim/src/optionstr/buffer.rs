@@ -335,7 +335,7 @@ pub unsafe fn did_set_encoding(args: &mut OptSet) -> Option<&CStr> {
             return invalid();
         }
         redraw_titles();
-        unsafe { ml_setflags(buf) };
+        unsafe { ml_setflags(Buf::new(buf)) };
     }
 
     // SAFETY: the option's own variable; `enc_canonize` allocates the
@@ -378,7 +378,7 @@ pub unsafe fn did_set_fileformat(args: &mut OptSet) -> Option<&CStr> {
     }
     // SAFETY: the frame's buffer and old value.
     redraw_titles();
-    unsafe { ml_setflags(buf) };
+    unsafe { ml_setflags(Buf::new(buf)) };
     // Only "mac" is drawn differently, so a redraw is needed when
     // entering or leaving it.
     if get_fileformat(b) == EOL_MAC || unsafe { *old_value(args) } == b'm' as c_char {

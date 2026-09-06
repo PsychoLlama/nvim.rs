@@ -23,6 +23,7 @@ use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 
 /// Work out everything about `wlv.lnum` that does not depend on which cell is
 /// being drawn, and leave `wlv` ready for the character loop.
@@ -76,7 +77,7 @@ pub(crate) unsafe fn prepare_line(
         }
     }
 
-    s.bg_attr = unsafe { win_bg_attr(window.raw()) };
+    s.bg_attr = unsafe { win_bg_attr(window) };
     unsafe { s.diff_state(wlv, Win::new(window.raw())) };
     unsafe { s.filler_lines(wlv, window) };
     unsafe { s.cursorline(wlv, window) };
@@ -127,7 +128,7 @@ pub(crate) unsafe fn prepare_line(
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
-    unsafe { decor_redraw_line(window.raw(), lnum - 1, wlv.decor) };
+    unsafe { decor_redraw_line(window, lnum - 1, wlv.decor) };
     if !s.has_decor && decor_has_more_decorations(wlv.decor, lnum - 1) {
         s.has_decor = true;
         s.extra_check = true;
@@ -140,7 +141,7 @@ pub(crate) unsafe fn prepare_line(
         // `|=`, not `||`: `prepare_search_hl_line` runs either way.
         s.area_highlighting |= unsafe {
             prepare_search_hl_line(
-                window.raw(),
+                window,
                 lnum,
                 at,
                 &raw mut s.line,
@@ -188,7 +189,7 @@ impl LineSetup {
         LineSetup {
             // First, because `win_hl_attr` hands out attribute ids in the
             // order it is asked for them.
-            conceal_attr: unsafe { win_hl_attr(window.raw(), HLF_CONCEAL) },
+            conceal_attr: unsafe { win_hl_attr(window, HLF_CONCEAL) },
             view_width: window.w_view_width,
             view_height: window.w_view_height,
             in_curline: window.raw() == Win::current_raw()
@@ -378,7 +379,7 @@ impl LineSetup {
 
         if wlv.fromcol >= 0 {
             self.area_highlighting = true;
-            self.vi_attr = unsafe { win_hl_attr(window.raw(), HLF_V) };
+            self.vi_attr = unsafe { win_hl_attr(window, HLF_V) };
         }
     }
 
@@ -423,7 +424,7 @@ impl LineSetup {
             wlv.tocol = wlv.fromcol + 1;
         }
         self.area_highlighting = true;
-        self.vi_attr = unsafe { win_hl_attr(window.raw(), HLF_I) };
+        self.vi_attr = unsafe { win_hl_attr(window, HLF_I) };
     }
 
     /// Diff-mode state for this line: how many filler lines it needs above it
@@ -477,7 +478,7 @@ impl LineSetup {
         // SAFETY: the caller's window.
         wlv.n_virt_lines = unsafe {
             decor_virt_lines(
-                window.raw(),
+                window,
                 wlv.lnum - 1,
                 wlv.lnum,
                 &raw mut wlv.n_virt_below,
@@ -536,8 +537,8 @@ impl LineSetup {
         // decoration.
         unsafe {
             decor_redraw_signs(
-                window.raw(),
-                window.w_buffer,
+                window,
+                Buf::new(window.w_buffer),
                 wlv.lnum - 1,
                 &raw mut wlv.sign_attrs as *mut SignTextAttrs,
                 &raw mut sign_line_attr,
@@ -552,16 +553,15 @@ impl LineSetup {
             self.statuscol.draw = true;
             self.statuscol.lnum = wlv.lnum;
             self.statuscol.foldinfo = wlv.foldinfo;
-            self.statuscol.width = unsafe { win_col_off(window.raw()) }
-                - (window.raw() == cmdwin_win.get()) as ::core::ffi::c_int;
-            self.statuscol.sign_cul_id =
-                if unsafe { use_cursor_line_highlight(window.raw(), wlv.lnum) } {
-                    wlv.sign_cul_attr
-                } else {
-                    0
-                };
+            self.statuscol.width =
+                window.col_off() - (window.raw() == cmdwin_win.get()) as ::core::ffi::c_int;
+            self.statuscol.sign_cul_id = if unsafe { use_cursor_line_highlight(window, wlv.lnum) } {
+                wlv.sign_cul_attr
+            } else {
+                0
+            };
         } else if wlv.sign_cul_attr > 0 {
-            wlv.sign_cul_attr = if unsafe { use_cursor_line_highlight(window.raw(), wlv.lnum) } {
+            wlv.sign_cul_attr = if unsafe { use_cursor_line_highlight(window, wlv.lnum) } {
                 unsafe { syn_id2attr(wlv.sign_cul_attr) }
             } else {
                 0
@@ -578,7 +578,7 @@ impl LineSetup {
         if is_qf_buffer(unsafe { Win::new(window.raw()) })
             && qf_current_entry(unsafe { Win::new(window.raw()) }) == wlv.lnum
         {
-            wlv.line_attr = unsafe { win_hl_attr(window.raw(), HLF_QFL) };
+            wlv.line_attr = unsafe { win_hl_attr(window, HLF_QFL) };
         }
         if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
             self.area_highlighting = true;

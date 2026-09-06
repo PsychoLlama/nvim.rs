@@ -30,7 +30,6 @@ use crate::memory::{xcalloc, xfree};
 use crate::message::{e_channotpty, e_invarg};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
-use crate::r#move::win_col_off;
 use crate::option::vars::p_tgc;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::{home_replace, os_getenv};
@@ -530,8 +529,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         detach = false;
         stdin_mode = kChannelStdinPipe;
         if width == 0 {
-            width = (Win::current().w_view_width - unsafe { win_col_off(Win::current_raw()) })
-                .max(0) as uint16_t;
+            width = (Win::current().w_view_width - Win::current().col_off()).max(0) as uint16_t;
         }
         if height == 0 {
             height = Win::current().w_view_height as uint16_t;
@@ -640,7 +638,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
             unsafe { (*buf).b_locked -= 1 };
 
             if unsafe { terminal_live(chan) } {
-                unsafe { terminal_open(&raw mut (*chan).term, buf) };
+                unsafe { terminal_open(&raw mut (*chan).term, Buf::new(buf)) };
             }
         }
     }

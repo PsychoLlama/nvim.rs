@@ -48,8 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr,
-    MarkGet, MarkMove, NUL, OK, Pos, size_t,
+    CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
+    MarkMove, NUL, OK, Pos, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -320,13 +320,13 @@ pub unsafe fn parse_cmd_address(
                 }
                 ea.cmd = unsafe { ea.cmd.add(1) };
                 if ea.skip == 0 {
-                    let fm = mark_get_visual(Buf::current_raw(), &raw mut first, '<' as c_int);
+                    let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
                     debug_assert!(!fm.is_null());
                     ea.line1 = unsafe { (*fm).mark.lnum };
-                    let fm = mark_get_visual(Buf::current_raw(), &raw mut last, '>' as c_int);
+                    let fm = mark_get_visual(Buf::current(), &raw mut last, '>' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
@@ -559,7 +559,7 @@ pub unsafe fn get_address(
                     let fm = unsafe {
                         mark_get(
                             Buf::current_raw(),
-                            Win::current_raw(),
+                            Win::current(),
                             &raw mut slot,
                             flag,
                             *cmd as c_int,
@@ -938,7 +938,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 }
 
 /// `mark_get_visual()` as checked code.
-fn mark_get_visual(buffer: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
+fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mark::mark_get_visual(buffer, fmp, name) }
 }

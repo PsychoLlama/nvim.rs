@@ -236,7 +236,7 @@ impl Context {
             opts.maxwidth as c_int
         } else if statuscol_lnum != 0 {
             // SAFETY: a live window.
-            unsafe { win_col_off(win.raw()) }
+            win.col_off()
         } else if opts.use_tabline || (!opts.use_winbar && stl_is_global()) {
             Columns.get()
         } else {
@@ -273,17 +273,17 @@ unsafe fn statuscol_state(
     let lnum = lnum as LineNr;
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
     let mut cursorline_fi = FoldInfo::default();
-    let (wp, buf, signs) = (win.raw(), win.buffer().raw(), sattrs.as_mut_ptr());
+    let (buf, signs) = (win.buffer(), sattrs.as_mut_ptr());
     let ids = (&raw mut line_id, &raw mut cul_id, &raw mut num_id);
     // SAFETY: the caller's promise; the three ids `ids` names and the sign
     // array are out-parameters of this frame.
-    unsafe { decor_redraw_signs(wp, buf, lnum - 1, signs, ids.0, ids.1, ids.2) };
+    unsafe { decor_redraw_signs(win, buf, lnum - 1, signs, ids.0, ids.1, ids.2) };
     statuscol.sattrs = sattrs.as_mut_ptr();
     // SAFETY: as above.
     let (foldinfo, on_cursorline) = unsafe {
         let foldinfo = fold_info(win, lnum);
-        win_update_cursorline(win.raw(), &raw mut cursorline_fi);
-        (foldinfo, use_cursor_line_highlight(win.raw(), lnum))
+        win_update_cursorline(win, &raw mut cursorline_fi);
+        (foldinfo, use_cursor_line_highlight(win, lnum))
     };
     statuscol.foldinfo = foldinfo;
     statuscol.sign_cul_id = if on_cursorline { cul_id } else { 0 };

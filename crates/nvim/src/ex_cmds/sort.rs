@@ -737,7 +737,7 @@ unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Plac
         // SAFETY: as above.
         unsafe {
             extmark_splice(
-                Buf::current_raw(),
+                Buf::current(),
                 line1 - 1,
                 0,
                 count as c_int,

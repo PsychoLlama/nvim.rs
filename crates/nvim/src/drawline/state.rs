@@ -427,7 +427,7 @@ pub(crate) unsafe fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::c
     static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     // SAFETY: the caller's window.
-    let width1 = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let width1 = window.w_view_width - window.col_off();
     let width2 = width1 + win_col_off2(unsafe { Win::new(window.raw()) });
     if SAVED_W_VIRTCOL.get() == window.w_virtcol
         && PREV_WP.get() == window.raw()
@@ -543,7 +543,7 @@ impl WinLineVars {
         // SAFETY: the caller's window and array.
         unsafe { self.advance_color_col(self.vcol) };
         if !self.color_cols.is_null() && self.vcol == unsafe { *self.color_cols } {
-            unsafe { hl_combine_attr(win_hl_attr(window.raw(), HLF_MC), attr) }
+            unsafe { hl_combine_attr(win_hl_attr(window, HLF_MC), attr) }
         } else {
             attr
         }
@@ -559,7 +559,7 @@ impl WinLineVars {
     /// `window` must be a live window.
     pub(crate) unsafe fn apply_cursorline_highlight(&mut self, window: Win) {
         // SAFETY: the caller's window.
-        self.cursorline_attr = unsafe { win_hl_attr(window.raw(), HLF_CUL) };
+        self.cursorline_attr = unsafe { win_hl_attr(window, HLF_CUL) };
         let ae = syn_attr2entry(self.cursorline_attr);
         if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
             self.line_attr_lowprio = self.cursorline_attr;
@@ -581,7 +581,7 @@ impl WinLineVars {
     /// `window` must be a live window.
     pub(crate) unsafe fn set_line_attr_for_diff(&mut self, window: Win) {
         // SAFETY: the caller's window.
-        self.line_attr = unsafe { win_hl_attr(window.raw(), self.diff_hlf) };
+        self.line_attr = unsafe { win_hl_attr(window, self.diff_hlf) };
         if self.cursorline_attr != 0 {
             self.line_attr = if self.line_attr_lowprio != 0 {
                 unsafe {

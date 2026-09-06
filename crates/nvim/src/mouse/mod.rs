@@ -216,13 +216,13 @@ impl Win {
     /// that its last cell is not a vertical separator.
     fn status_line_connected(self) -> bool {
         // SAFETY: a live window.
-        unsafe { stl_connected(self.raw()) }
+        unsafe { stl_connected(self) }
     }
 
     /// Make this the current window.  Can make the pointer invalid!
     fn enter(self) {
         // SAFETY: a live window.
-        unsafe { win_enter(self.raw(), true) };
+        unsafe { win_enter(self, true) };
     }
 
     /// Whether the window is still in a tab page's list.
@@ -234,13 +234,13 @@ impl Win {
     /// Move this window's status line down by `count` rows.
     fn drag_status_line(self, count: c_int) {
         // SAFETY: a live window.
-        unsafe { win_drag_status_line(self.raw(), count) };
+        unsafe { win_drag_status_line(self, count) };
     }
 
     /// Move this window's vertical separator right by `count` columns.
     fn drag_sep_line(self, count: c_int) {
         // SAFETY: a live window.
-        unsafe { win_drag_vsep_line(self.raw(), count) };
+        unsafe { win_drag_vsep_line(self, count) };
     }
 
     /// The click definitions drawn for this window's status line, winbar and

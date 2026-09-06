@@ -189,7 +189,7 @@ unsafe fn escape_winfixbuf(
         && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0
         && !buf_is_quickfix(unsafe { Buf::from_raw((*prevwin.get()).w_buffer) })
     {
-        unsafe { win_goto(prevwin.get()) };
+        unsafe { win_goto(Win::new(prevwin.get())) };
     }
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return Some(true);
@@ -516,7 +516,7 @@ pub(crate) unsafe fn qf_jump_newwin(
                 };
                 if jumped != Jumped::Done {
                     if opened_window {
-                        unsafe { win_close(Win::current_raw(), true, false) };
+                        unsafe { win_close(Win::current(), true, false) };
                     }
                     if jumped == Jumped::Aborted {
                         settle = None;

@@ -40,8 +40,7 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Blob, Buffer, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr,
     List, MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Window, kBoolVarTrue, ptrdiff_t,
-    typval_vval_union,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, ptrdiff_t, typval_vval_union,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -576,14 +575,14 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut Buffer {
 ///
 /// # Safety
 /// `args` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> *mut Window {
+pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> Option<Win> {
     // SAFETY: the caller's obligation.
     if unsafe { (*args.add(idx as usize)).v_type } == VAR_UNKNOWN {
-        return Win::current_raw();
+        return Win::current_or_none();
     }
     let win = unsafe { find_win_by_nr_or_id(args.add(idx as usize)) };
     if win.is_none() {
         emsg(gettext(e_invalwindow));
     }
-    win.map_or(ptr::null_mut(), Win::raw)
+    win
 }

@@ -354,7 +354,7 @@ pub unsafe fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
 /// # Safety
 /// `window` must be a live window with a live buffer.
 pub unsafe fn delete_fold(
-    window: *mut Window,
+    window: Win,
     start: LineNr,
     end: LineNr,
     recursive: c_int,
@@ -367,7 +367,7 @@ pub unsafe fn delete_fold(
     let mut first_lnum = MAXLNUM as LineNr;
     let mut last_lnum: LineNr = 0;
     // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(window) };
+    let win = window;
     checkupdate(win);
     while lnum <= end {
         let mut folds = window_folds(win);
@@ -422,14 +422,14 @@ pub unsafe fn delete_fold(
         }
     } else {
         // SAFETY: the caller's promise.
-        check_cursor_col(unsafe { Win::new(window) });
+        check_cursor_col(window);
     }
     if last_lnum > 0 {
         let num_changed = (last_lnum - first_lnum) as int64_t;
         // SAFETY: the caller's promise; the range is inside the buffer.
         let buf = win.w_buffer;
         unsafe { changed_lines(Buf::new(buf), first_lnum, 0, last_lnum, 0, false) };
-        unsafe { buf_updates_send_changes(buf, first_lnum, num_changed, num_changed) };
+        unsafe { buf_updates_send_changes(Buf::new(buf), first_lnum, num_changed, num_changed) };
     }
 }
 

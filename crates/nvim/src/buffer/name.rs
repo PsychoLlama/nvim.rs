@@ -241,7 +241,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
     unsafe { status_redraw_all() };
     // SAFETY: a live buffer, whose named file marks and timestamp follow its
     // name.
-    unsafe { fmarks_check_names(b.raw()) };
+    unsafe { fmarks_check_names(b) };
     // SAFETY: as above.
     unsafe { ml_timestamp(b.raw()) };
 }

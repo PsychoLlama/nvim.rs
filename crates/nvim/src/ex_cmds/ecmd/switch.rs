@@ -140,10 +140,11 @@ pub(super) unsafe fn switch_to_other_buffer(
     if buf.is_null() {
         return Switch::Abandon;
     }
+    // SAFETY: not null, and the guard above is what says so.
+    let buffer = unsafe { Buf::new(buf) };
     // Autocommands try to edit a closing buffer, which -- like splitting --
     // can result in more windows displaying it; abort.
-    // SAFETY: `buf` and `curwin` are live.
-    if unsafe { (*buf).b_locked_split } != 0 {
+    if buffer.b_locked_split != 0 {
         // SAFETY: as above.
         // The window was split, but is not editing the new buffer; reset
         // b_nwindows again.
@@ -157,22 +158,19 @@ pub(super) unsafe fn switch_to_other_buffer(
         return Switch::Abandon;
     }
 
-    // SAFETY: `buf` and `curwin` are live.
-    if Win::current().w_alt_fnum == unsafe { (*buf).handle } && prev_alt_fnum != 0 {
+    if Win::current().w_alt_fnum == buffer.handle && prev_alt_fnum != 0 {
         // reusing the buffer, keep the old alternate file
         Win::current().w_alt_fnum = prev_alt_fnum;
     }
 
-    // SAFETY: `buf` is live.
-    if unsafe { (*buf).b_ml.ml_mfp.is_null() } {
+    if buffer.b_ml.ml_mfp.is_null() {
         // No memfile yet.
         state.oldbuf = false;
     } else {
         // Existing memfile.
         state.oldbuf = true;
-        // SAFETY: as above.
-        let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-        unsafe { buf_check_timestamp(Buf::new(buf)) };
+        let bufref = BufRef::of(buffer);
+        unsafe { buf_check_timestamp(buffer) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
         if !bufref.valid() || Buf::current_raw() != old_curbuf.raw() || aborting() {
@@ -185,8 +183,8 @@ pub(super) unsafe fn switch_to_other_buffer(
     if (state.oldbuf && state.newlnum == newlnum::LASTL as LineNr)
         || state.newlnum == newlnum::LAST as LineNr
     {
-        // SAFETY: `buf` is live.
-        let pos = unsafe { &raw mut (*buflist_findfmark(Buf::new(buf))).mark };
+        // SAFETY: the mark list of a live buffer.
+        let pos = unsafe { &raw mut (*buflist_findfmark(buffer)).mark };
         state.newlnum = unsafe { (*pos).lnum };
         state.solcol = unsafe { (*pos).col };
     }
@@ -195,9 +193,9 @@ pub(super) unsafe fn switch_to_other_buffer(
     // buffer becomes unused, free it if EcmdFlags::HIDE is false.  If the current
     // buffer was empty and has no file name, curbuf is returned by
     // buflist_new(), and there is nothing to do here.
-    if buf != Buf::current_raw() {
+    if buffer.raw() != Buf::current_raw() {
         // SAFETY: the editor's own state.
-        match unsafe { leave_for_buffer(Buf::new(buf), args, *oldwin, old_curbuf, state) } {
+        match unsafe { leave_for_buffer(buffer, args, *oldwin, old_curbuf, state) } {
             Switch::Abandon => return Switch::Abandon,
             Switch::Ready => {}
         }

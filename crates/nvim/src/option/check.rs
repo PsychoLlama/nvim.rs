@@ -308,10 +308,9 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 /// # Safety
 ///
 /// `window` must be live.
-pub(crate) unsafe fn check_blending(window: *mut Window) {
+pub(crate) unsafe fn check_blending(mut window: Win) {
     // SAFETY: the caller's window is live.
     // SAFETY: the caller's window.
-    let mut window = unsafe { Win::new(window) };
     window.w_grid_alloc.blending =
         window.w_onebuf_opt.wo_winbl > 0 as OptInt || (window.w_floating && window.w_config.shadow);
 }

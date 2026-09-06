@@ -204,7 +204,7 @@ pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
 ///
 /// # Safety
 /// `pos` must point at a live position and `buffer` at a live buffer.
-unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: *mut Buffer) {
+unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
     if !has_event(AutoEvent::MarkSet) {
         return;
@@ -240,7 +240,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: *mut Buffer) {
             mark_str.as_mut_ptr(),
             ptr::null_mut(),
             AUGROUP_ALL,
-            Buf::new(buffer),
+            buffer,
             ptr::null_mut(),
             &raw mut payload,
         )
@@ -320,7 +320,7 @@ pub unsafe fn setmark_pos(
         return Err(Failed);
     }
     // SAFETY: `pos` and `buf` are the caller's, both live.
-    unsafe { do_markset_autocmd(mark_name(c), pos, buf.raw()) };
+    unsafe { do_markset_autocmd(mark_name(c), pos, buf) };
     Ok(())
 }
 
@@ -329,10 +329,9 @@ pub unsafe fn setmark_pos(
 ///
 /// # Safety
 /// `window` must be a live window.
-pub unsafe fn mark_forget_file(window: *mut Window, fnum: c_int) {
+pub unsafe fn mark_forget_file(mut window: Win, fnum: c_int) {
     // SAFETY: the caller promised a live window.
-    let mut window = unsafe { Win::new(window) };
-    unsafe { mark_jumplist_forget_file(window.raw(), fnum) };
+    unsafe { mark_jumplist_forget_file(window, fnum) };
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_tagstacklen).rev() {
         if window.tag_mark(i).fnum() != fnum {
@@ -378,12 +377,12 @@ pub unsafe fn mark_forget_file(window: *mut Window, fnum: c_int) {
 /// # Safety
 /// `buffer` must be a live buffer and `fmp` must point at a live, writable
 /// `FileMark` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buffer: *mut Buffer, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
+pub unsafe fn pos_to_mark(buffer: Buf, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
     // SAFETY: the caller promised a live buffer.
-    fm.set_fnum(unsafe { Buf::new(buffer) }.handle as c_int);
+    fm.set_fnum(buffer.handle as c_int);
     fm.set_pos(pos);
     fm.raw()
 }
@@ -494,9 +493,8 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer, and the editor's window list must be live.
-pub unsafe fn fmarks_check_names(buffer: *mut Buffer) {
+pub unsafe fn fmarks_check_names(buffer: Buf) {
     // SAFETY: the caller promised a live buffer.
-    let buffer = unsafe { Buf::new(buffer) };
     let name = buffer.b_ffname;
     if name.is_null() {
         return;
@@ -602,9 +600,8 @@ pub(crate) unsafe fn mark_check_line_bounds(
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn clrallmarks(buffer: *mut Buffer, timestamp: Timestamp) {
+pub unsafe fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
     // SAFETY: the caller promised a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
     for mark in buffer.named_marks() {
         mark.clear(timestamp);
     }
@@ -625,9 +622,8 @@ pub unsafe fn clrallmarks(buffer: *mut Buffer, timestamp: Timestamp) {
 
 /// # Safety
 /// `win` must be a live window.
-pub unsafe fn set_last_cursor(win: *mut Window) {
+pub unsafe fn set_last_cursor(win: Win) {
     // SAFETY: the caller promised a live window.
-    let win = unsafe { Win::new(win) };
     let Some(buf) = win.buffer_or_none() else {
         return;
     };

@@ -204,10 +204,18 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
     let (tpr, twr) = (tabpage.raw(), twin.raw());
     let direction = match rest.map(CStr::to_bytes) {
         // SAFETY: a live tab page and window.
-        Some(b"j") => Some(unsafe { win_vert_neighbor(tpr, twr, false, count) }),
-        Some(b"k") => Some(unsafe { win_vert_neighbor(tpr, twr, true, count) }),
-        Some(b"h") => Some(unsafe { win_horz_neighbor(tpr, twr, true, count) }),
-        Some(b"l") => Some(unsafe { win_horz_neighbor(tpr, twr, false, count) }),
+        Some(b"j") => {
+            Some(unsafe { win_vert_neighbor(TabPage::new(tpr), Win::new(twr), false, count) })
+        }
+        Some(b"k") => {
+            Some(unsafe { win_vert_neighbor(TabPage::new(tpr), Win::new(twr), true, count) })
+        }
+        Some(b"h") => {
+            Some(unsafe { win_horz_neighbor(TabPage::new(tpr), Win::new(twr), true, count) })
+        }
+        Some(b"l") => {
+            Some(unsafe { win_horz_neighbor(TabPage::new(tpr), Win::new(twr), false, count) })
+        }
         _ => None,
     };
     match direction {
@@ -335,7 +343,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     if visual_active() && wp.buffer().raw() != Buf::current_raw() {
         end_visual_mode();
     }
-    unsafe { goto_tabpage_win(tp.raw(), wp.raw()) };
+    unsafe { goto_tabpage_win(tp, wp) };
     result.vval.v_number = 1;
 }
 

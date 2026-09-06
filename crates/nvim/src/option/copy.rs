@@ -361,8 +361,8 @@ pub(crate) unsafe fn didset_window_options(window: *mut Window, valid_cursor: bo
     unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
     unsafe { parse_winhl_opt(ptr::null(), window) };
-    unsafe { check_blending(window) };
-    unsafe { set_winbar_win(window, false, valid_cursor) };
+    unsafe { check_blending(Win::new(window)) };
+    unsafe { set_winbar_win(Win::new(window), false, valid_cursor) };
     let _ = unsafe { check_signcolumn(ptr::null_mut(), window) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }

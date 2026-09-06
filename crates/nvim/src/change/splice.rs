@@ -378,7 +378,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
 
     // Notify any channels that are watching.
     // SAFETY: the current buffer is live.
-    unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
+    unsafe { buf_updates_send_changes(Buf::current(), lnum, 1, 1) };
 
     // Diff highlighting in the other diff windows may need updating too.
     if Win::current().w_onebuf_opt.wo_diff != 0 {
@@ -400,7 +400,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
-        let cb = Buf::current_raw();
+        let cb = Buf::current();
         // SAFETY: the current buffer is live and `lnum` is a line of it.
         unsafe { extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo) };
     }
@@ -414,9 +414,9 @@ pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn appended_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr) {
+pub unsafe fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(Buf::new(buffer), lnum + 1, 0, lnum + 1, count, true) };
+    changed_lines(buffer, lnum + 1, 0, lnum + 1, count, true);
 }
 
 /// [`appended_lines_buf`] for the current buffer.
@@ -425,7 +425,7 @@ pub unsafe fn appended_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineN
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
-    unsafe { appended_lines_buf(Buf::current_raw(), lnum, count) };
+    unsafe { appended_lines_buf(Buf::current(), lnum, count) };
 }
 
 /// [`appended_lines`], adjusting the marks first.
@@ -434,10 +434,10 @@ pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM as LineNr;
-    let cb = Buf::current_raw();
+    let cb = Buf::current();
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
-    changed_lines(unsafe { Buf::new(cb) }, lnum + 1, 0, lnum + 1, count, true);
+    changed_lines(cb, lnum + 1, 0, lnum + 1, count, true);
 }
 
 /// `count` lines were deleted at line `lnum` of `buffer`.
@@ -446,9 +446,9 @@ pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-pub unsafe fn deleted_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr) {
+pub unsafe fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(Buf::new(buffer), lnum, 0, lnum + count, -count, true) };
+    changed_lines(buffer, lnum, 0, lnum + count, -count, true);
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
@@ -457,7 +457,7 @@ pub unsafe fn deleted_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
-    unsafe { deleted_lines_buf(Buf::current_raw(), lnum, count) };
+    unsafe { deleted_lines_buf(Buf::current(), lnum, count) };
 }
 
 /// [`deleted_lines`], adjusting the marks first.
@@ -469,7 +469,7 @@ pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let made_empty = count > 0 && Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
-    let cb = Buf::current_raw();
+    let cb = Buf::current();
     let last = lnum + count - 1;
     let max = MAXLNUM as LineNr;
     // Deleting the whole buffer implicitly adds one empty line back.
@@ -477,7 +477,7 @@ pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum, last, max, -count, kExtmarkNOOP) };
     unsafe { extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo) };
-    changed_lines(unsafe { Buf::new(cb) }, lnum, 0, lnum + count, -count, true);
+    changed_lines(cb, lnum, 0, lnum + count, -count, true);
 }
 
 /// Widen `buffer`'s pending redraw area (`b_mod_*`) to cover a change.
@@ -565,6 +565,6 @@ pub fn changed_lines(
         let num_removed = int64_t::from(lnume - lnum);
         // SAFETY: a live buffer, and the two counts describe the splice just
         // made to it.
-        unsafe { buf_updates_send_changes(buffer.raw(), lnum, num_added, num_removed) };
+        unsafe { buf_updates_send_changes(buffer, lnum, num_added, num_removed) };
     }
 }

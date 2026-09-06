@@ -423,12 +423,12 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
 
     let save_curtab = TabPage::current_raw();
     let save_lu_tp = lastused_tabpage.get();
-    unsafe { goto_tabpage_tp(tp, false, false) };
+    unsafe { goto_tabpage_tp(TabPage::new(tp), false, false) };
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
     if valid_tabpage(save_curtab) {
-        unsafe { goto_tabpage_tp(save_curtab, false, false) };
+        unsafe { goto_tabpage_tp(TabPage::new(save_curtab), false, false) };
         // Going back must not count as a use of the previous tab page.
         if valid_tabpage(save_lu_tp) {
             lastused_tabpage.set(save_lu_tp);

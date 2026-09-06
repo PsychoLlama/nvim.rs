@@ -25,7 +25,7 @@ unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
     // "botline" is one past the last displayed line, hence the -1; the row
     // and column counts are zero-based inside and one-based to vimscript.
     validate_botline_win(window);
-    let (dict, textoff) = unsafe { (tv_dict_alloc(), win_col_off(window.raw())) };
+    let (dict, textoff) = unsafe { (tv_dict_alloc(), window.col_off()) };
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.

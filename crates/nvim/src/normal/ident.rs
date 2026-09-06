@@ -122,11 +122,10 @@ pub(crate) unsafe fn find_ident_under_cursor(
     } else {
         &raw mut textcol
     };
-    let win = Win::current_raw();
+    let win = Win::current();
     let pos = Win::current().w_cursor;
     // SAFETY: `win` is live; `text`/`textcolp` have room for one value each.
-    let len =
-        unsafe { find_ident_at_pos(Win::new(win), pos.lnum, pos.col, text, textcolp, find_type) };
+    let len = unsafe { find_ident_at_pos(win, pos.lnum, pos.col, text, textcolp, find_type) };
     if !offset.is_null() {
         // SAFETY: `offset` is the caller's own out-parameter.
         unsafe { *offset = Win::current().w_cursor.col - textcol };

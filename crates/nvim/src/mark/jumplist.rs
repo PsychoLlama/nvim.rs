@@ -127,11 +127,10 @@ pub unsafe fn checkpcmark() {
 ///
 /// # Safety
 /// `win` must be a live window and the editor's globals must be live.
-pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut FileMark {
+pub unsafe fn get_jumplist(mut win: Win, mut count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live window.
-    let mut win = unsafe { Win::new(win) };
     // SAFETY: as above.
-    unsafe { cleanup_jumplist(win.raw(), true) };
+    unsafe { cleanup_jumplist(win, true) };
     if win.w_jumplistlen == 0 {
         return ptr::null_mut();
     }
@@ -175,9 +174,9 @@ pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut FileMark 
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buffer: *mut Buffer, win: *mut Window, count: c_int) -> *mut FileMark {
+pub unsafe fn get_changelist(buffer: Buf, win: *mut Window, count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
-    let (buf, mut win) = unsafe { (Buf::new(buffer), Win::new(win)) };
+    let (buf, mut win) = unsafe { (buffer, Win::new(win)) };
     if buf.b_changelistlen == 0 {
         return ptr::null_mut();
     }
@@ -211,9 +210,8 @@ pub unsafe fn get_changelist(buffer: *mut Buffer, win: *mut Window, count: c_int
 ///
 /// # Safety
 /// `window` must be a live window.
-pub unsafe fn mark_jumplist_forget_file(window: *mut Window, fnum: c_int) {
+pub unsafe fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
     // SAFETY: the caller promised a live window.
-    let mut window = unsafe { Win::new(window) };
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_jumplistlen).rev() {
         if window.jump(i).fmark().fnum() != fnum {
@@ -247,9 +245,8 @@ pub unsafe fn mark_jumplist_forget_file(window: *mut Window, fnum: c_int) {
 ///
 /// # Safety
 /// `window` must be a live window and the editor's globals must be live.
-pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
+pub unsafe fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
     // SAFETY: the caller promised a live window.
-    let mut window = unsafe { Win::new(window) };
     if loadfiles {
         // Every entry that still names its file by name gets its buffer
         // loaded, so that the duplicate test below can compare buffers.
@@ -349,9 +346,8 @@ pub unsafe fn copy_jumplist(from: *mut Window, to: *mut Window) {
 ///
 /// # Safety
 /// `window` must be a live window whose jump list entries own their allocations.
-pub unsafe fn free_jumplist(window: *mut Window) {
+pub unsafe fn free_jumplist(mut window: Win) {
     // SAFETY: the caller promised a live window.
-    let mut window = unsafe { Win::new(window) };
     for jump in window.jumps() {
         // SAFETY: the entry is live and its allocations are the list's.
         unsafe { free_xfmark(jump.read()) };
@@ -367,7 +363,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     let win = Win::current();
     // SAFETY: as above.
-    unsafe { cleanup_jumplist(win.raw(), true) };
+    unsafe { cleanup_jumplist(win, true) };
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     unsafe { msg_puts_title(gettext(c"\n jump line  col file/text").as_ptr()) };
     let mut i: c_int = 0;
@@ -434,7 +430,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
 pub unsafe fn ex_clearjumps(_args: *mut ExArg) {
     let mut win = Win::current();
     // SAFETY: as above.
-    unsafe { free_jumplist(win.raw()) };
+    unsafe { free_jumplist(win) };
     win.w_jumplistlen = 0;
     win.w_jumplistidx = 0;
 }

@@ -95,7 +95,7 @@ pub unsafe fn win_alloc_first() {
     first_tabpage.set(Some(first.id()));
     first.make_current();
     // SAFETY: the tab page just allocated.
-    unsafe { unuse_tabpage(first.raw()) };
+    unsafe { unuse_tabpage(first) };
 }
 
 pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
@@ -150,7 +150,7 @@ fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
         Some(oldwin) => {
             // Make the new window a copy of the old one.
             // SAFETY: two live windows.
-            unsafe { win_init(win.raw(), oldwin.raw(), 0) };
+            unsafe { win_init(win, oldwin, 0) };
             win.w_onebuf_opt.wo_scb = 0;
             win.w_onebuf_opt.wo_crb = 0;
         }
@@ -270,10 +270,10 @@ pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     free(wip);
 }
 
-pub unsafe fn win_free(window: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_free(window: Win, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { free_win(Win::new(window), TabPage::from_raw(tabpage)) };
+    unsafe { free_win(window, TabPage::from_raw(tabpage)) };
 }
 
 /// Take `window` off the window list and free everything hanging off it.
@@ -336,9 +336,9 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
     unsafe { clear_virttext(&raw mut window.w_config.footer_chunks) };
     // SAFETY: a live window, whose matches, jump list and quickfix stacks
     // these are.
-    unsafe { clear_matches(window.raw()) };
+    unsafe { clear_matches(window) };
     // SAFETY: as above.
-    unsafe { free_jumplist(window.raw()) };
+    unsafe { free_jumplist(window) };
     qf_free_all(Some(window));
     free(window.w_p_cc_cols);
     free_grid(window, false);
@@ -397,9 +397,9 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     }
 }
 
-pub unsafe fn win_free_grid(window: *mut Window, reinit: bool) {
+pub unsafe fn win_free_grid(window: Win, reinit: bool) {
     // SAFETY: the caller's promise -- a live window.
-    free_grid(unsafe { Win::new(window) }, reinit);
+    free_grid(window, reinit);
 }
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
@@ -417,16 +417,10 @@ pub(crate) fn free_grid(window: Win, reinit: bool) {
 // ---------------------------------------------------------------------------
 // The lists
 
-pub unsafe fn win_append(after: *mut Window, window: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_append(after: *mut Window, window: Win, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- live windows (`after` may be null) and a
     // live tab page or null.
-    unsafe {
-        append(
-            Win::from_raw(after),
-            Win::new(window),
-            TabPage::from_raw(tabpage),
-        )
-    };
+    unsafe { append(Win::from_raw(after), window, TabPage::from_raw(tabpage)) };
 }
 
 /// Put `window` in the window list of `tabpage` (or of the current tab page) after
@@ -455,10 +449,10 @@ pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) 
     }
 }
 
-pub unsafe fn win_remove(window: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_remove(window: Win, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { remove(Win::new(window), TabPage::from_raw(tabpage)) };
+    unsafe { remove(window, TabPage::from_raw(tabpage)) };
 }
 
 /// Take `window` out of the window list of `tabpage` (or of the current tab page).

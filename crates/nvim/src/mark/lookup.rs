@@ -50,7 +50,7 @@ use crate::search::{BACKWARD, FORWARD};
 /// live, writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get(
     buffer: *mut Buffer,
-    win: *mut Window,
+    win: Win,
     fmp: *mut FileMark,
     flag: MarkGet,
     name: c_int,
@@ -70,13 +70,13 @@ pub unsafe fn mark_get(
         // position the caller would then apply to the wrong file.
         if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark().fnum() != handle {
             // SAFETY: `buffer` is live and `fmp` is the caller's record.
-            return unsafe { pos_to_mark(buffer, fmp, UNSET_POS) };
+            return unsafe { pos_to_mark(Buf::new(buffer), fmp, UNSET_POS) };
         }
         fm = xfm.fmark().raw();
     } else if name > 0 && name < NMARK_LOCAL_MAX {
         // SAFETY: the caller promised a live buffer and window, and `fmp` is
         // the caller's record.
-        fm = unsafe { mark_get_local(buffer, win, fmp, name) };
+        fm = unsafe { mark_get_local(Buf::new(buffer), win, fmp, name) };
     }
     if fm.is_null() {
         return fm;
@@ -153,13 +153,13 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
 /// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_local(
-    buffer: *mut Buffer,
-    win: *mut Window,
+    buffer: Buf,
+    win: Win,
     fmp: *mut FileMark,
     name: c_int,
 ) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
-    let (bufh, winh) = unsafe { (Buf::new(buffer), Win::new(win)) };
+    let (bufh, winh) = (buffer, win);
     let mark: *mut FileMark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int).raw()
     } else if name == '[' as c_int {
@@ -177,7 +177,7 @@ pub unsafe fn mark_get_local(
         // here and `nvim_buf_get_mark` relies on it.
         // SAFETY: `curbuf` is live from startup to exit and `fmp` is the
         // caller's record.
-        unsafe { pos_to_mark(Buf::current_raw(), fmp, winh.w_pcmark) }
+        unsafe { pos_to_mark(Buf::current(), fmp, winh.w_pcmark) }
     } else if name == '"' as c_int {
         bufh.last_cursor().raw()
     } else if name == '^' as c_int {
@@ -213,13 +213,13 @@ pub unsafe fn mark_get_local(
 /// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_motion(
-    buffer: *mut Buffer,
-    win: *mut Window,
+    buffer: Buf,
+    win: Win,
     fmp: *mut FileMark,
     name: c_int,
 ) -> *mut FileMark {
     // SAFETY: the caller promised a live window; `curwin` is live too.
-    let (winh, mut cur) = unsafe { (Win::new(win), Win::current()) };
+    let (winh, mut cur) = (win, Win::current());
     // The motion is computed by *moving the cursor* and reading where it
     // landed, so the cursor is put back before answering. `listcmd_busy`
     // suppresses the jumplist entry the move would otherwise push.
@@ -299,16 +299,12 @@ const OPARG_EMPTY: OpArg = OpArg {
 /// # Safety
 /// `buffer` must be a live buffer and `fmp` a live, writable `FileMark` that
 /// outlives every use of the answer.
-pub unsafe fn mark_get_visual(
-    buffer: *mut Buffer,
-    fmp: *mut FileMark,
-    name: c_int,
-) -> *mut FileMark {
+pub unsafe fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     if name != '<' as c_int && name != '>' as c_int {
         return ptr::null_mut();
     }
     // SAFETY: the caller promised a live buffer.
-    let bufh = unsafe { Buf::new(buffer) };
+    let bufh = buffer;
     let (start, end) = (bufh.b_visual.vi_start, bufh.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.

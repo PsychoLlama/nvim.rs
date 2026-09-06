@@ -136,7 +136,7 @@ impl Put {
                 let inserted = totlen as c_int;
                 // SAFETY: a live buffer; nothing was removed, so the splice
                 // is `inserted` bytes going in at `col`.
-                let buffer = Buf::current_raw();
+                let buffer = Buf::current();
                 unsafe { extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo) };
                 if visual_active() {
                     lnum += 1;
@@ -413,7 +413,7 @@ impl Put {
                     let lastsize = unsafe { (*self.y_array.add(last)).len() } as c_int;
                     totsize += lastsize as BCount;
 
-                    let buf = Buf::current_raw();
+                    let buf = Buf::current();
                     let at = new_cursor.lnum - 1;
                     let (start, rows, cols, bytes) = if self.y_type == kMTCharWise {
                         (col, self.y_size as c_int - 1, lastsize, totsize)

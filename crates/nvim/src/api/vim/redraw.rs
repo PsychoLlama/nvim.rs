@@ -195,7 +195,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     }
     if opts.cursor {
         // SAFETY: `cwin` is a live window.
-        unsafe { setcursor_mayforce(cwin, true) };
+        unsafe { setcursor_mayforce(Win::new(cwin), true) };
         flush_ui = true;
     }
     if flush_ui {

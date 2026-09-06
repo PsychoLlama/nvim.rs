@@ -386,7 +386,7 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
     // is what carries that into block zero, and `ml_preserve` writes it.
     unsafe {
         (*swapped.buf).b_changed = 1;
-        neovim::memline::ml_setflags(swapped.buf);
+        neovim::memline::ml_setflags(Buf::new(swapped.buf));
         ml_preserve(swapped.buf, false, true);
     }
     assert_ne!(

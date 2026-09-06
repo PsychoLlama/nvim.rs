@@ -640,7 +640,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // Mark all undo states as changed.
                 u_unchanged(Buf::current());
             }
-            unsafe { buf_updates_unload(Buf::current_raw(), true) };
+            unsafe { buf_updates_unload(Buf::current(), true) };
             Buf::current().b_mod_set = true;
         }
     }
