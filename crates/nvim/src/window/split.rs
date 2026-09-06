@@ -137,7 +137,8 @@ fn split_ins(
     } else {
         Win::current()
     };
-    // Taken while it is live: the autocommands below can close it.
+    // Taken now because `oldwin` is reassigned below: the checks want the
+    // window the split started from, not the one it ends up naming.
     let oldwin_id = oldwin.id();
 
     let vertical = flags & WSP_VERT as c_int != 0;

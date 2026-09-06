@@ -229,7 +229,6 @@ pub unsafe fn nvim_open_tabpage(
     let Some(tp) = tabpage_at(tp.raw()) else {
         return Err(tabpage_closed(err));
     };
-    let tp_id = tp.id();
 
     let new_win = wp
         .and_then(|w| windows_in_tab(tp).find(|live| live.raw() == w.raw()))
@@ -240,7 +239,7 @@ pub unsafe fn nvim_open_tabpage(
         let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
         unsafe { win_set_buf(w, b, &mut err) };
         drop(quiet);
-        if !valid_tabpage(tp_id) {
+        if !valid_tabpage(tp.id()) {
             return Err(tabpage_closed(err));
         }
     }

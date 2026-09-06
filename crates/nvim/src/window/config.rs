@@ -69,10 +69,6 @@ pub unsafe fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
 /// Show `buffer` in `win`: switch to the window, switch its buffer with the
 /// autocommands that implies, and switch back.
 fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
-    // `do_buffer` below fires `BufLeave`/`BufEnter`, which can close this
-    // window, so its identity is taken now, while it is provably live: the
-    // error message below may have to name a window that is already gone.
-    let win_id = win.id();
     let tab = win_find_tabpage(win.id());
     let _redraw_off = Suppress::redraw();
 
@@ -106,7 +102,7 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     // SAFETY: `tstate` is the state `try_enter` saved, and `err` is live.
     unsafe { try_leave(&raw mut tstate, err) };
     if win_result.is_err() && !err.is_set() {
-        let handle = win_id.handle();
+        let handle = win.id().handle();
         *err = api_error!(kErrorTypeException, "Failed to switch to window {handle}");
     }
     Win::current().validate_cursor();

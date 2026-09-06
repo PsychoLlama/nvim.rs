@@ -251,9 +251,6 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let prevbufref = BufRef::of(prevbuf);
     let newbufref = BufRef::of(buffer);
     let prev_nwindows = prevbuf.b_nwindows;
-    // The re-entry rule: `buffer` is about to be held across two calls that can
-    // wipe it, so its identity is taken now, while it is provably live.
-    let buf_id = buffer.id();
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
@@ -270,7 +267,7 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     // above, not the buffer list by `buffer`'s address. Stricter, too — a buffer
     // wiped and a new one allocated at the same address would pass an address
     // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
-    let valid = buf_id.valid();
+    let valid = buffer.id().valid();
     if valid && buffer.raw() != Buf::current_raw() && !aborting_now()
         || Win::current().w_buffer.is_null()
     {

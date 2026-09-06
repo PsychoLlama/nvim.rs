@@ -250,8 +250,6 @@ pub unsafe fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<()
 /// Take `window` out of the layout and put it back in as a split given by `flags`,
 /// from `win_splitmove()`. Restores the old layout on failure.
 pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
-    // Taken while it is live: `win_split_ins` below fires autocommands.
-    let window_id = window.id();
     let height = window.w_height;
     if is_only_window(window, None) {
         return Ok(());
@@ -291,7 +289,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
 
     // Keep the window's height when it was moved horizontally. The identity
     // was taken before `win_split_ins` fired its autocommands.
-    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window_id) && !window.w_floating {
+    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.id()) && !window.w_floating {
         setheight_win(height, window);
         if p_ea.get() != 0 {
             let cur = Win::current();

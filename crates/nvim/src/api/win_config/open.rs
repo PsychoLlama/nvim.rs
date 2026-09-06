@@ -171,9 +171,9 @@ pub unsafe fn nvim_open_win(
             break '_cleanup;
         };
         let wp = window;
-        // The new window's identity, taken now: every `win_find_tabpage`
-        // below asks whether the autocommands before it closed the window,
-        // and `Win::id` reads the window itself.
+        // The new window's identity, taken now: `wp` is reassigned further
+        // down, and every `win_find_tabpage` below is asking about *this*
+        // window rather than whichever one `wp` names by then.
         let wp_id = wp.id();
         if cmdline_offset < INT_MAX {
             cmdline_win.set(Some(wp_id));

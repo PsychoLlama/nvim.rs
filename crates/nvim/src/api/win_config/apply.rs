@@ -335,11 +335,8 @@ unsafe fn win_config_float_tp(
 ) -> bool {
     // SAFETY: the caller's window, live for the whole call.
     let w = win;
-    // Both identities, taken while both windows are live: `win_goto` below
-    // fires autocommands that can close either.
-    let win_id = win.id();
-    let mut win_tp = win_find_tabpage(win_id);
-    let mut parent_id = win_id;
+    let mut win_tp = win_find_tabpage(win.id());
+    let mut parent_id = win.id();
     let mut parent_tp = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
@@ -365,7 +362,7 @@ unsafe fn win_config_float_tp(
                 // SAFETY: `altwin` is the live neighbour just found.
                 unsafe { win_goto(altwin.expect("altwin")) };
                 if win.is_current() {
-                    let handle = win_id.handle();
+                    let handle = win.id().handle();
                     let why = api_error!(
                         kErrorTypeException,
                         "Failed to switch away from window {handle}"
@@ -373,7 +370,7 @@ unsafe fn win_config_float_tp(
                     store(err, why);
                     return false;
                 }
-                win_tp = win_find_tabpage(win_id);
+                win_tp = win_find_tabpage(win.id());
                 parent_tp = win_find_tabpage(parent_id);
                 if win_tp.is_none() || parent_tp.is_none() {
                     err_msg(err, kErrorTypeException, c"Target windows were closed");
@@ -405,7 +402,7 @@ unsafe fn win_config_float_tp(
             win_remove(w, other_tab(expect_tab(win_tp)));
             win_append(Some(lastwin_nofloating(append_tp)), w, append_tp);
             let mut tp = expect_tab(win_tp);
-            if !tp.is_current() && tp.tp_curwin == Some(win_id) {
+            if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
                 tp.tp_curwin = altwin.map(Win::id);
             }
             // SAFETY: the window's own grid, which is live with it.
@@ -419,7 +416,7 @@ unsafe fn win_config_float_tp(
         win_config_float(w, config);
         return true;
     }
-    if curwin_moving_tp && win_valid(win_id) {
+    if curwin_moving_tp && win_valid(win.id()) {
         // SAFETY: the caller's window, still valid -- just checked.
         unsafe { win_goto(w) };
     }

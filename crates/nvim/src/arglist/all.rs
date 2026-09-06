@@ -201,11 +201,10 @@ unsafe fn close_unused_window(
         // `buffer` is live until the autowrite -- which is exactly what the
         // re-check afterwards is for.
         let bufref = BufRef::of(buffer);
-        let window_id = window.id();
         // SAFETY: as above; this may fire autocommands.
         let _ = unsafe { autowrite(buffer, false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
-        let survived = win_valid(window_id) && bufref.valid();
+        let survived = win_valid(window.id()) && bufref.valid();
         if !survived {
             // Autocommands removed the window; start all over.
             return first_window_to_walk();

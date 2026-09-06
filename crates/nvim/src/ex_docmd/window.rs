@@ -299,9 +299,6 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
 fn open_tabpage(ea: Ex, old_curwin: Win) {
-    // Taken while it is live: `edit` below fires autocommands that can free
-    // the window this came from.
-    let old_curwin_id = old_curwin.id();
     let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
         cmdmod.with(|m| m.cmod_tab)
     } else if ea.addr_count == 0 {
@@ -320,7 +317,7 @@ fn open_tabpage(ea: Ex, old_curwin: Win) {
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
-        && let Some(mut old) = valid_win(old_curwin_id)
+        && let Some(mut old) = valid_win(old_curwin.id())
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {

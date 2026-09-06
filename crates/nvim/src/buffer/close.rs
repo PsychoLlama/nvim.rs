@@ -601,8 +601,9 @@ fn leave_last_window(
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
 ///
-/// Takes the *identity*: the caller saved it before the autocommands that may
-/// since have freed the window, and `Win::id` reads the window itself.
+/// Takes the *identity* rather than the window: the caller means "the window
+/// I was in, if it is still there", and an id cannot be mistaken for a value
+/// that may be dereferenced.
 fn restore_curwin(was_curwin: bool, the_curwin: WinId, tabpage: TabPage) {
     if !was_curwin || Win::current_or_none().map(Win::id) == Some(the_curwin) {
         return;
