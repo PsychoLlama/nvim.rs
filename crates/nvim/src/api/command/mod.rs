@@ -28,11 +28,11 @@ use crate::os::cshim::snprintf;
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::types::{
-    ApiDict, Arena, Array, Buffer, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo,
-    Direction, Error, ExArg, Expand, GArray, Integer, KeyDict_cmd, KeyDict_cmd_magic,
-    KeyDict_cmd_mods, KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty,
-    KeyDict_get_commands, KeyDict_user_command, LineNr, LuaRef, Object, String_0, TryState,
-    UserCmd, int64_t, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeLuaRef,
+    ApiDict, Arena, Array, BufferHandle, CmdAddr, CmdMod, CmdModFlags, CmdParseInfo, Direction,
+    Error, ExArg, Expand, GArray, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
+    KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
+    KeyDict_user_command, LineNr, LuaRef, Object, String_0, TryState, UserCmd, int64_t,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeLuaRef,
     kObjectTypeString, size_t, uint8_t, uint64_t,
 };
 use crate::usercmd::{

@@ -72,11 +72,10 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
         unsafe { (*opts).is_set__get_ns_ },
         KEYSET_OPTIDX_get_ns__winid,
     ) {
-        let win: *mut Window = unsafe { find_window_by_handle((*opts).winid, &mut error) };
-        if win.is_null() {
+        let Some(win) = find_window_by_handle(unsafe { (*opts).winid }, &mut error) else {
             return (0 as Integer).reported(error);
-        }
-        (unsafe { (*win).w_ns_hl } as Integer).reported(error)
+        };
+        (win.w_ns_hl as Integer).reported(error)
     } else {
         (ns_hl_global.get() as Integer).reported(error)
     }

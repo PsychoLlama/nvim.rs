@@ -9,7 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, buffer_by_handle};
+use crate::api::private::helpers::{Reported, find_buffer_by_handle};
 use crate::api::private::validate::{Bad, err_invalid};
 use crate::cstr;
 use crate::marktree::key::MtFlags;
@@ -17,7 +17,7 @@ use crate::winlayer::Buf;
 
 pub unsafe fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
     (buf.handle as Integer).reported(error)
@@ -93,7 +93,7 @@ pub unsafe fn nvim_buf_add_highlight(
     mut col_end: Integer,
 ) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
     let out_of_range = c"out of range".as_ptr();
@@ -153,7 +153,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     _opts: *mut KeyDict_empty,
 ) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
     if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {

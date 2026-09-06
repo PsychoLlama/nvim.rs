@@ -37,9 +37,9 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, FileMarkView, Handle, HlMessage,
-    Integer, LineNr, MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState,
-    Window, WindowHandle, int64_t, kErrorTypeException, uint64_t,
+    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, FileMarkView, HlMessage, Integer,
+    LineNr, MsgList, NUL, Pos, ScriptId, String_0, TabpageHandle, TryState, Window, WindowHandle,
+    int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -94,91 +94,50 @@ use crate::api_error;
 use crate::message_fmt::{c_str, msg_bytes};
 // -- Handles ---------------------------------------------------------------
 
-/// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
-/// no "0 means current" rule and reports nothing: it is upstream's
-/// `handle_get_buffer()`, the registry lookup.
-pub(crate) fn handle_get_buffer(handle: Handle) -> *mut Buffer {
-    winlayer::buffer(handle).map_or(ptr::null_mut(), Buf::raw)
-}
+// The handle off the wire is an integer, so nothing about the lookup is
+// unsafe: the registry only hands back what is live, and the answer is a
+// `winlayer` wrapper whose construction discharged the liveness promise
+// once. `err` is `&mut` rather than a pointer for the same reason — a safe
+// signature that does not trip `clippy::not_unsafe_ptr_arg_deref`.
 
-/// [`handle_get_buffer`] for a window.
-pub(crate) fn handle_get_window(handle: Handle) -> *mut Window {
-    winlayer::window(handle).map_or(ptr::null_mut(), Win::raw)
-}
-
-/// The buffer `buffer` names, or the current one for 0. Null — with `err`
+/// The buffer `buffer` names, or the current one for 0. `None` — with `err`
 /// set — when it names nothing.
-pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
+pub(crate) fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> Option<Buf> {
     if buffer == 0 {
-        return Buf::current_raw();
+        return Buf::current_or_none();
     }
-    let rv = handle_get_buffer(buffer);
-    if rv.is_null() {
+    let rv = winlayer::buffer(buffer);
+    if rv.is_none() {
         let id = buffer as int64_t;
-        // SAFETY: the names and values are NUL-terminated strings.
         *err = err_bad_number(c"buffer id", id);
     }
     rv
 }
 
 /// [`find_buffer_by_handle`] for a window.
-pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *mut Window {
+pub(crate) fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> Option<Win> {
     if window == 0 {
-        return Win::current_raw();
+        return Win::current_or_none();
     }
-    let rv = handle_get_window(window);
-    if rv.is_null() {
+    let rv = winlayer::window(window);
+    if rv.is_none() {
         let id = window as int64_t;
-        // SAFETY: the names and values are NUL-terminated strings.
         *err = err_bad_number(c"window id", id);
     }
     rv
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
-pub(crate) unsafe fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> *mut Tabpage {
+pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> Option<TabPage> {
     if tabpage == 0 {
-        return TabPage::current_raw();
+        return TabPage::current_or_none();
     }
-    let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
-    if rv.is_null() {
+    let rv = winlayer::tabpage(tabpage);
+    if rv.is_none() {
         let id = tabpage as int64_t;
-        // SAFETY: the names and values are NUL-terminated strings.
         *err = err_bad_number(c"tabpage id", id);
     }
     rv
-}
-
-// -- Handles, as the entry points take them --------------------------------
-//
-// The three `find_*_by_handle` functions above answer a raw pointer and are
-// what the FFI edge still calls. An `nvim_*` entry point wants the same
-// lookup as a value it can then use without an `unsafe` block per field, and
-// that is what these three give it: the handle is an integer off the wire, so
-// nothing about the *call* is unsafe, and the answer is a `winlayer` wrapper
-// whose construction discharged the liveness promise once.
-//
-// `err` is `&mut` rather than a pointer so that the wrappers are safe to call
-// and do not trip `clippy::not_unsafe_ptr_arg_deref`.
-
-/// The window `handle` names, or the current one for 0. `None` -- with `err`
-/// set, unless there is no current window -- when it names nothing.
-pub(crate) fn window_by_handle(handle: WindowHandle, err: &mut Error) -> Option<Win> {
-    // SAFETY: `err` is the caller's own slot, and the lookup answers a live
-    // window or null.
-    unsafe { Win::from_raw(find_window_by_handle(handle, err)) }
-}
-
-/// [`window_by_handle`] for a buffer.
-pub(crate) fn buffer_by_handle(handle: BufferHandle, err: &mut Error) -> Option<Buf> {
-    // SAFETY: as [`window_by_handle`].
-    unsafe { Buf::from_raw(find_buffer_by_handle(handle, err)) }
-}
-
-/// [`window_by_handle`] for a tab page.
-pub(crate) fn tabpage_by_handle(handle: TabpageHandle, err: &mut Error) -> Option<TabPage> {
-    // SAFETY: as [`window_by_handle`].
-    unsafe { TabPage::from_raw(find_tab_by_handle(handle, err)) }
 }
 
 // -- Errors and the try/catch bracket --------------------------------------

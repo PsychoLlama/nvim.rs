@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, set_key, window_by_handle};
+use crate::api::private::helpers::{Reported, array_add, find_window_by_handle, set_key};
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -131,7 +131,7 @@ pub unsafe fn nvim_win_get_config(
 ) -> Result<KeyDict_win_config, Error> {
     let mut error = Error::none();
     let mut rv: KeyDict_win_config = KEYDICT_INIT;
-    let Some(wp) = window_by_handle(win, &mut error) else {
+    let Some(wp) = find_window_by_handle(win, &mut error) else {
         return rv.reported(error);
     };
     // SAFETY: `wp` names a live window, so its own config field is live with

@@ -194,13 +194,13 @@ pub unsafe fn nvim_get_autocmds(
             }
             's_659: {
                 if let Object::Integer(handle) | Object::Buffer(handle) = buf {
-                    let b: *mut Buffer =
-                        unsafe { find_buffer_by_handle(handle as BufferHandle, &mut error) };
+                    let b = find_buffer_by_handle(handle as BufferHandle, &mut error);
                     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_cleanup;
                     }
-                    let pat: String_0 =
-                        unsafe { arena_printf(arena, c"<buffer=%d>".as_ptr(), (*b).handle) };
+                    let pat: String_0 = unsafe {
+                        arena_printf(arena, c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
+                    };
                     buffers = arena_array(arena, 1 as size_t);
                     unsafe { array_add(&mut buffers, Object::string(pat)) };
                 } else if let Object::Array(bufnrs) = buf {
@@ -223,8 +223,7 @@ pub unsafe fn nvim_get_autocmds(
                             error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
                         };
-                        let b_0: *mut Buffer =
-                            unsafe { find_buffer_by_handle(handle as BufferHandle, &mut error) };
+                        let b_0 = find_buffer_by_handle(handle as BufferHandle, &mut error);
                         if error.kind() as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
                         {
@@ -235,7 +234,7 @@ pub unsafe fn nvim_get_autocmds(
                             Object::string(arena_printf(
                                 arena,
                                 c"<buffer=%d>".as_ptr(),
-                                (*b_0).handle,
+                                b_0.map_or(0, |b| b.handle),
                             ))
                         };
                         // SAFETY: the collection is this call's own.

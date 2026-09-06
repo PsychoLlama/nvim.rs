@@ -94,7 +94,7 @@ pub unsafe fn nvim_exec_autocmds(
             error = err_conflict(c"pattern", c"buf");
             return ().reported(error);
         }
-        b = unsafe { find_buffer_by_handle(buf, &mut error) };
+        b = find_buffer_by_handle(buf, &mut error).map_or(::core::ptr::null_mut(), Buf::raw);
         if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return ().reported(error);
         }

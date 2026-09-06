@@ -15,7 +15,6 @@ use super::{
     nlua_str_utf_end, nlua_str_utf_pos, nlua_str_utf_start, nlua_str_utfindex, nlua_stricmp,
     nlua_with,
 };
-use crate::api::private::helpers::handle_get_window;
 use crate::cjson::lua_cjson::lua_cjson_new;
 use crate::fold::fold_update;
 use crate::lua::base64::luaopen_base64;
@@ -28,7 +27,7 @@ use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
 use crate::types::{Handle, LineNr, lua_State};
-use crate::winlayer::Win;
+use crate::winlayer::{self, Win};
 
 unsafe extern "C-unwind" {
     /// lpeg's own `luaopen_*`, linked in from the vendored library.
@@ -44,10 +43,9 @@ unsafe extern "C-unwind" {
 unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
     unsafe {
         let window = luaL_checkinteger(lstate, 1) as Handle;
-        let win = handle_get_window(window);
-        if win.is_null() {
+        let Some(win) = winlayer::window(window) else {
             return luaL_error(lstate, c"invalid window".as_ptr());
-        }
+        };
         let top = luaL_checkinteger(lstate, 2) as LineNr + 1;
         if top < 1 {
             return luaL_error(lstate, c"invalid top".as_ptr());
@@ -57,7 +55,7 @@ unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"invalid bot".as_ptr());
         }
 
-        fold_update(Win::new(win), top, bot);
+        fold_update(Win::new(win.raw()), top, bot);
         0
     }
 }

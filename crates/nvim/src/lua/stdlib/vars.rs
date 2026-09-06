@@ -47,30 +47,12 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
         let dict = match scope.to_bytes() {
             b"g" => get_globvar_dict(),
             b"v" => get_vimvar_dict(),
-            b"b" => {
-                let buf = find_buffer_by_handle(handle as BufferHandle, &mut err);
-                if buf.is_null() {
-                    ptr::null_mut()
-                } else {
-                    (*buf).b_vars
-                }
-            }
-            b"w" => {
-                let win = find_window_by_handle(handle as WindowHandle, &mut err);
-                if win.is_null() {
-                    ptr::null_mut()
-                } else {
-                    (*win).w_vars
-                }
-            }
-            b"t" => {
-                let tabpage = find_tab_by_handle(handle as TabpageHandle, &mut err);
-                if tabpage.is_null() {
-                    ptr::null_mut()
-                } else {
-                    (*tabpage).tp_vars
-                }
-            }
+            b"b" => find_buffer_by_handle(handle as BufferHandle, &mut err)
+                .map_or(ptr::null_mut(), |buf| buf.b_vars),
+            b"w" => find_window_by_handle(handle as WindowHandle, &mut err)
+                .map_or(ptr::null_mut(), |win| win.w_vars),
+            b"t" => find_tab_by_handle(handle as TabpageHandle, &mut err)
+                .map_or(ptr::null_mut(), |tabpage| tabpage.tp_vars),
             _ => {
                 luaL_error(lstate, c"invalid scope".as_ptr());
                 return ptr::null_mut();

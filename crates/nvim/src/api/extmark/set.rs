@@ -16,7 +16,7 @@ use crate::api::private::validate::{
 };
 use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::Live;
 
 /// The keyset this call was handed, with checked field access: the pointer the
 /// dispatcher passes stays live for the whole call, so one promise at the head
@@ -74,12 +74,9 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut has_hl: bool = false;
     let mut has_hl_multiple: bool = false;
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b = find_buffer_by_handle(buf, &mut error);
     '_error: {
-        if !b.is_null() {
-            // SAFETY: non-null, so the handle named a live buffer; nothing
-            // below frees it.
-            let b = unsafe { Buf::new(b) };
+        if let Some(b) = b {
             if !ns_initialized(ns_id as uint32_t) {
                 error = err_bad_number(c"ns_id", ns_id);
             } else {

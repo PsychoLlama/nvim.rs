@@ -173,17 +173,11 @@ impl Context {
         }
 
         let mut use_bools = c_int::from(opts.use_winbar) + c_int::from(opts.use_tabline);
-        // SAFETY: `curwin` is live, and the handle lookup answers a live
-        // window or null.
-        let wp = unsafe {
-            if opts.use_tabline {
-                Win::current_raw()
-            } else {
-                find_window_by_handle(opts.winid, err)
-            }
+        let win = if opts.use_tabline {
+            Win::current_or_none()
+        } else {
+            find_window_by_handle(opts.winid, err)
         };
-        // SAFETY: null or a live window.
-        let win = unsafe { win_opt(wp) };
         let Some(win) = win else {
             // The lookup may already have set an error, which upstream
             // overwrites with this.

@@ -64,28 +64,26 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut opts = unsafe { Redraw::new(opts) };
     let keys = opts.is_set__redraw_;
     let set = |key| has_key(keys, key);
-    let mut win: *mut Window = ::core::ptr::null_mut::<Window>();
-    let mut buf: *mut Buffer = ::core::ptr::null_mut::<Buffer>();
+    let mut win: Option<Win> = None;
+    let mut buf: Option<Buf> = None;
     if set(KEYSET_OPTIDX_redraw__win) {
-        // SAFETY: `error` is this frame's own slot.
-        win = unsafe { find_window_by_handle(opts.win, &mut error) };
+        win = find_window_by_handle(opts.win, &mut error);
         if error.is_set() {
             return ().reported(error);
         }
     }
     if set(KEYSET_OPTIDX_redraw__buf) {
-        if !win.is_null() {
+        if win.is_some() {
             report(&mut error, c"cannot use both 'buf' and 'win'");
             return ().reported(error);
         }
-        // SAFETY: `error` is this frame's own slot.
-        buf = unsafe { find_buffer_by_handle(opts.buf, &mut error) };
+        buf = find_buffer_by_handle(opts.buf, &mut error);
         if error.is_set() {
             return ().reported(error);
         }
     }
     // `win` and `buf` say *where*; at least one other key has to say *what*.
-    let named = u32::from(!win.is_null()) + u32::from(!buf.is_null());
+    let named = u32::from(win.is_some()) + u32::from(buf.is_some());
     if keys.count_ones() <= named {
         report(&mut error, c"at least one action required");
         return ().reported(error);
@@ -94,10 +92,10 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         let type_0 = if opts.valid { UPD_VALID } else { UPD_NOT_VALID };
         // SAFETY: `win` and `buf` are the live objects the lookups answered.
         unsafe {
-            if !win.is_null() {
-                redraw_later(win, type_0);
-            } else if !buf.is_null() {
-                redraw_buf_later(buf, type_0);
+            if let Some(win) = win {
+                redraw_later(win.raw(), type_0);
+            } else if let Some(buf) = buf {
+                redraw_buf_later(buf.raw(), type_0);
             } else {
                 redraw_all_later(type_0);
             }
@@ -116,16 +114,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             report(&mut error, c"Invalid 'range': Expected 2-tuple of Integers");
             return ().reported(error);
         };
-        let rbuf: *mut Buffer = if !win.is_null() {
-            // SAFETY: `win` is the live window the lookup answered.
-            unsafe { (*win).w_buffer }
-        } else if !buf.is_null() {
-            buf
-        } else {
-            Buf::current_raw()
-        };
-        // SAFETY: `rbuf` is a live buffer.
-        let line_count = int64_t::from(unsafe { (*rbuf).b_ml.ml_line_count });
+        let rbuf = win.map(Win::buffer).or(buf).unwrap_or_else(Buf::current);
+        let line_count = int64_t::from(rbuf.b_ml.ml_line_count);
         // The range is clamped to the buffer, and `-1` means "to the end".
         let begin = begin_raw.min(line_count);
         let end = if end_raw == -1 {
@@ -135,8 +125,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         };
         if begin < end {
             let (first, last) = (1 + begin as LineNr, end as LineNr);
-            // SAFETY: as above.
-            unsafe { redraw_buf_range_later(rbuf, first, last) };
+            // SAFETY: a live buffer.
+            unsafe { redraw_buf_range_later(rbuf.raw(), first, last) };
         }
     }
     // Marking lines stale flushes by default; every other key does not.
@@ -159,28 +149,21 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let redraw = Allow::redraw();
     p_lz.set(0);
     if opts.statuscolumn || opts.statusline || opts.winbar {
-        if win.is_null() {
+        if let Some(wp) = win {
+            opts.flush = redraw_status(wp, opts, opts.flush);
+        } else {
             for wp in windows() {
-                if buf.is_null() || wp.w_buffer == buf {
+                if buf.is_none_or(|b| wp.w_buffer == b.raw()) {
                     opts.flush = redraw_status(wp, opts, opts.flush);
                 }
             }
-        } else {
-            // SAFETY: `win` is the live window the lookup answered.
-            let wp = unsafe { Win::new(win) };
-            opts.flush = redraw_status(wp, opts, opts.flush);
         }
         flush_ui = true;
     }
-    let cwin: *mut Window = if win.is_null() {
-        Win::current_raw()
-    } else {
-        win
-    };
-    // SAFETY: `cwin` is a live window, and its grid's target is a live grid
-    // or null.
+    let cwin = win.unwrap_or_else(Win::current);
+    // SAFETY: the grid's target is a live grid or null.
     let stale_grid = unsafe {
-        let target = (*cwin).w_grid.target;
+        let target = cwin.w_grid.target;
         target.is_null() || !(*target).valid
     };
     if opts.cursor && stale_grid {
@@ -194,8 +177,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         let _ = unsafe { update_screen() };
     }
     if opts.cursor {
-        // SAFETY: `cwin` is a live window.
-        unsafe { setcursor_mayforce(Win::new(cwin), true) };
+        // SAFETY: a live window.
+        unsafe { setcursor_mayforce(cwin, true) };
         flush_ui = true;
     }
     if flush_ui {

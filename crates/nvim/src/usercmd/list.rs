@@ -35,10 +35,9 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
-use crate::types::{
-    ApiDict, Arena, Buffer, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t,
-};
+use crate::types::{ApiDict, Arena, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
 use crate::ui::state::Columns;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
 use core::ptr;
@@ -274,14 +273,9 @@ fn dict_of<const N: usize>(
 /// when `buffer` is null, as a map from name to description.
 ///
 /// # Safety
-/// Module contract; `buffer` must be null or a live buffer, and `arena` the
-/// dispatcher's.
-pub(crate) unsafe fn commands_array(buffer: *mut Buffer, arena: *mut Arena) -> ApiDict {
-    let table = if buffer.is_null() {
-        Table::Global
-    } else {
-        Table::Buffer(buffer)
-    };
+/// Module contract; `arena` must be the dispatcher's.
+pub(crate) unsafe fn commands_array(buffer: Option<Buf>, arena: *mut Arena) -> ApiDict {
+    let table = buffer.map_or(Table::Global, |b| Table::Buffer(b.raw()));
     // SAFETY: caller contract; nothing below adds or removes a command.
     let cmds = unsafe { table.list() };
     let mut rv = arena_dict(arena, cmds.len());

@@ -16,10 +16,9 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
     let mut res: bool = false;
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (res as Boolean).reported(error);
-    }
+    };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
@@ -29,7 +28,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     }
     let fm: *mut FileMark = unsafe {
         mark_get(
-            b,
+            b.raw(),
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,
@@ -40,9 +39,8 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         error = err_bad_value(c"mark name", unsafe { name.as_cstr() });
         return (res as Boolean).reported(error);
     }
-    if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == unsafe { (*b).handle }
-    {
-        res = unsafe { set_mark(b, name, 0 as Integer, 0 as Integer, &mut error) };
+    if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == b.handle {
+        res = unsafe { set_mark(b.raw(), name, 0 as Integer, 0 as Integer, &mut error) };
     }
     (res as Boolean).reported(error)
 }
@@ -84,10 +82,9 @@ pub unsafe fn nvim_buf_get_mark(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return rv.reported(error);
-    }
+    };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
@@ -103,7 +100,7 @@ pub unsafe fn nvim_buf_get_mark(
     let mark: ::core::ffi::c_char = unsafe { *name.data() };
     let fm: *mut FileMark = unsafe {
         mark_get(
-            b,
+            b.raw(),
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,
@@ -114,7 +111,7 @@ pub unsafe fn nvim_buf_get_mark(
         error = err_bad_value(c"mark name", unsafe { name.as_cstr() });
         return rv.reported(error);
     }
-    if unsafe { (*fm).fnum } != unsafe { (*b).handle } {
+    if unsafe { (*fm).fnum } != b.handle {
         pos.lnum = 0 as ::core::ffi::c_int as LineNr;
         pos.col = 0 as ::core::ffi::c_int as ColNr;
     } else {

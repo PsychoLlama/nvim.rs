@@ -10,18 +10,17 @@
 
 use super::*;
 use crate::api::private::helpers::{Reported, dict_put, has_key};
-use crate::winlayer::{Buf, Live};
+use crate::winlayer::Live;
 
 pub unsafe fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buffer, err) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buffer, err) else {
         return ::core::ptr::null_mut::<Buffer>();
-    }
-    if unsafe { (*b).b_ml.ml_mfp }.is_null() && !buf_ensure_loaded(unsafe { Buf::new(b) }) {
+    };
+    if b.b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
         *err = Error::exception(c"Failed to load buffer");
         return ::core::ptr::null_mut::<Buffer>();
     }
-    b
+    b.raw()
 }
 
 pub unsafe fn nvim_buf_attach(
@@ -33,10 +32,9 @@ pub unsafe fn nvim_buf_attach(
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Live::<KeyDict_buf_attach>::new(opts) };
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return false.reported(error);
-    }
+    };
     let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
     if channel_id == LUA_INTERNAL_CALL {
         if has_key(opts.is_set__buf_attach_, KEYSET_OPTIDX_buf_attach__on_lines) {
@@ -71,25 +69,23 @@ pub unsafe fn nvim_buf_attach(
         cb.utf_sizes = opts.utf_sizes;
         cb.preview = opts.preview;
     }
-    unsafe { buf_updates_register(Buf::new(b), channel_id, cb, send_buffer) }.reported(error)
+    unsafe { buf_updates_register(b, channel_id, cb, send_buffer) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return false.reported(error);
-    }
-    unsafe { buf_updates_unregister(Buf::new(b), channel_id) };
+    };
+    unsafe { buf_updates_unregister(b, channel_id) };
     true.reported(error)
 }
 
 pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return Object::Nil.reported(error);
-    }
+    };
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
         private_msg_list: ::core::ptr::null_mut::<MsgList>(),
@@ -101,7 +97,7 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
     };
     unsafe { try_enter(&raw mut tstate) };
     let mut aco: AcoSave = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, b) };
+    unsafe { aucmd_prepbuf(&raw mut aco, b.raw()) };
     let args: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -126,36 +122,34 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
 #[allow(non_snake_case)]
 pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return ApiDict {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<KeyValuePair>(),
         }
         .reported(error);
-    }
-    // SAFETY: not null, and the guard above is what says so.
-    let buffer = unsafe { Buf::new(b) };
+    };
+    let buffer = b;
     let mut rv: ApiDict = arena_dict(arena, 7 as size_t);
     // SAFETY: a live pointer the code around it already holds.
-    let d_flush_count = unsafe { Object::integer((*b).flush_count as Integer) };
+    let d_flush_count = Object::integer(b.flush_count as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"flush_count", d_flush_count) };
     // SAFETY: a live pointer the code around it already holds.
-    let d_current_lnum = unsafe { Object::integer((*b).b_ml.cached_lnum() as Integer) };
+    let d_current_lnum = Object::integer(b.b_ml.cached_lnum() as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"current_lnum", d_current_lnum) };
     // SAFETY: a live pointer the code around it already holds.
-    let d_line_dirty = unsafe { Object::boolean((*b).b_ml.line_is_dirty()) };
+    let d_line_dirty = Object::boolean(b.b_ml.line_is_dirty());
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"line_dirty", d_line_dirty) };
     // SAFETY: a live pointer the code around it already holds.
-    let d_dirty_bytes = unsafe { Object::integer((*b).deleted_bytes as Integer) };
+    let d_dirty_bytes = Object::integer(b.deleted_bytes as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"dirty_bytes", d_dirty_bytes) };
     // SAFETY: a live pointer the code around it already holds.
-    let d_dirty_bytes2 = unsafe { Object::integer((*b).deleted_bytes2 as Integer) };
+    let d_dirty_bytes2 = Object::integer(b.deleted_bytes2 as Integer);
     // SAFETY: the collection is this call's own.
     unsafe { dict_put(&mut rv, c"dirty_bytes2", d_dirty_bytes2) };
     let total = buf_meta_total(buffer, kMTMetaLines);

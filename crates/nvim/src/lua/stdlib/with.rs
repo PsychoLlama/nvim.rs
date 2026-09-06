@@ -12,7 +12,7 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use super::{TRY_STATE_INIT, nlua_push_errstr};
-use crate::api::private::helpers::{handle_get_buffer, handle_get_window, try_enter, try_leave};
+use crate::api::private::helpers::{try_enter, try_leave};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
@@ -23,10 +23,10 @@ use crate::lua::ffi::{
     luaL_checkinteger,
 };
 use crate::types::{
-    AcoSave, Buffer, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, Window,
-    lua_State,
+    AcoSave, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, lua_State,
 };
 use crate::window::win_find_tabpage;
+use crate::winlayer::{self, Buf, Win};
 
 /// The context keys that are plain `:command` modifiers: a truthy value ors
 /// the flag in, anything else is ignored.
@@ -72,8 +72,8 @@ const WIN_EXECUTE_INIT: WinExecute = WinExecute {
 pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_int {
     unsafe {
         let mut flags = CmdModFlags::NONE;
-        let mut buf: *mut Buffer = ptr::null_mut();
-        let mut win: *mut Window = ptr::null_mut();
+        let mut buf: Option<Buf> = None;
+        let mut win: Option<Win> = None;
         let mut log_level: c_int = -1;
 
         luaL_argcheck(
@@ -88,9 +88,9 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             if lua_type(lstate, -2) == LUA_TSTRING {
                 let k = CStr::from_ptr(lua_tostring(lstate, -2));
                 if k == c"buf" {
-                    buf = handle_get_buffer(luaL_checkinteger(lstate, -1) as c_int);
+                    buf = winlayer::buffer(luaL_checkinteger(lstate, -1) as c_int);
                 } else if k == c"win" {
-                    win = handle_get_window(luaL_checkinteger(lstate, -1) as c_int);
+                    win = winlayer::window(luaL_checkinteger(lstate, -1) as c_int);
                 } else if k == c"log_level" {
                     log_level = luaL_checkinteger(lstate, -1) as c_int;
                 } else if lua_toboolean(lstate, -1) != 0 {
@@ -131,12 +131,12 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
 
             // A window that cannot be entered leaves everything below
             // untouched: no call, no results, and nothing to restore.
-            let entered = if !win.is_null() {
-                let tabpage = win_find_tabpage(win);
-                win_execute_before(&raw mut win_execute_args, win, tabpage)
+            let entered = if let Some(win) = win {
+                let tabpage = win_find_tabpage(win.raw());
+                win_execute_before(&raw mut win_execute_args, win.raw(), tabpage)
             } else {
-                if !buf.is_null() {
-                    aucmd_prepbuf(&raw mut aco, buf);
+                if let Some(buf) = buf {
+                    aucmd_prepbuf(&raw mut aco, buf.raw());
                 }
                 true
             };
@@ -147,9 +147,9 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
                 status = lua_pcall(lstate, 0, LUA_MULTRET, 0);
                 rets = lua_gettop(lstate) - s;
 
-                if !win.is_null() {
+                if win.is_some() {
                     win_execute_after(&raw mut win_execute_args);
-                } else if !buf.is_null() {
+                } else if buf.is_some() {
                     aucmd_restbuf(&raw mut aco);
                 }
             }

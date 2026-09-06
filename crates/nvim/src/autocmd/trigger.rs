@@ -241,9 +241,9 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     let mut err = Error::none();
     // The buffer may well have gone since the event was queued, which is
     // why the *handle* was stored and is resolved here.
-    // SAFETY: `err` is this frame's own.
-    let buf = unsafe { find_buffer_by_handle((*e).buf, &mut err) };
-    if !buf.is_null() {
+    // SAFETY: `e` is the caller's event record.
+    let buf = find_buffer_by_handle(unsafe { (*e).buf }, &mut err);
+    if let Some(buf) = buf {
         let mut save_v_event = SaveVEvent::default();
         // SAFETY: `save_v_event` is this frame's own storage, and the
         // dictionary is `v:event`, live until `restore_v_event` below.
@@ -276,8 +276,8 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         let mut aco = AcoSave::default();
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
         // the `prepbuf`/`restbuf` pair brackets the firing.
-        unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, buf, eap, data) };
+        unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, buf.raw(), eap, data) };
         unsafe { aucmd_restbuf(&raw mut aco) };
         // SAFETY: the pair `get_v_event` above opened.
         unsafe { restore_v_event(v_event, &raw mut save_v_event) };

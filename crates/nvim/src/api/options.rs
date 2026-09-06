@@ -18,7 +18,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    Reported, api_set_sctx, api_try, api_typename, buffer_by_handle, has_key, window_by_handle,
+    Reported, api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
+    has_key,
 };
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
@@ -113,7 +114,7 @@ unsafe fn option_target(
     if set(OPTIDX_WIN) {
         scope = kOptScopeWin;
         // SAFETY: `err` is the caller's, and the handle is an integer.
-        let win = unsafe { window_by_handle((*opts).win, &mut *err) };
+        let win = unsafe { find_window_by_handle((*opts).win, &mut *err) };
         from = win.map_or(ptr::null_mut(), |w| w.raw().cast());
         if err.kind() != kErrorTypeNone {
             return None;
@@ -127,7 +128,7 @@ unsafe fn option_target(
         opt_flags = OptionSetFlags::LOCAL;
         scope = kOptScopeBuf;
         // SAFETY: as the window lookup above.
-        let buf = unsafe { buffer_by_handle((*opts).buf, &mut *err) };
+        let buf = unsafe { find_buffer_by_handle((*opts).buf, &mut *err) };
         from = buf.map_or(ptr::null_mut(), |b| b.raw().cast());
         if err.kind() != kErrorTypeNone {
             return None;

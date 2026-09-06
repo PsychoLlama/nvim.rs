@@ -144,7 +144,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             };
         }
     } else if has_buf {
-        let b: *mut Buffer = unsafe { find_buffer_by_handle(buffer, err) };
+        let b = find_buffer_by_handle(buffer, err);
         if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,
@@ -160,7 +160,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             &mut patterns.init_array,
         )
         .push(Object::string(unsafe {
-            arena_printf(arena, c"<buffer=%d>".as_ptr(), (*b).handle)
+            arena_printf(arena, c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
         }));
     }
     if patterns.size == 0 as size_t && !fallback.is_null() {

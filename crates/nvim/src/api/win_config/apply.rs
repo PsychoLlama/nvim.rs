@@ -91,7 +91,8 @@ unsafe fn win_config_split(
             parent_tp = TabPage::current_raw();
         } else if config.win > 0 {
             // SAFETY: `err` names the caller's error slot.
-            parent = unsafe { find_window_by_handle(fconfig.window, slot_mut(err)) };
+            parent = find_window_by_handle(fconfig.window, slot_mut(err))
+                .map_or(::core::ptr::null_mut(), Win::raw);
             if parent.is_null() {
                 return false;
             }
@@ -337,7 +338,8 @@ unsafe fn win_config_float_tp(
     let mut parent_tp: *mut Tabpage = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
-        parent = unsafe { find_window_by_handle(fconfig.window, slot_mut(err)) };
+        parent = find_window_by_handle(fconfig.window, slot_mut(err))
+            .map_or(::core::ptr::null_mut(), Win::raw);
         if parent.is_null() {
             return false;
         }
@@ -440,12 +442,11 @@ pub unsafe fn nvim_win_set_config(
     let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
     // SAFETY: `error` is this frame's slot; the lookup answers a live window or
     // a null.
-    let w = unsafe { find_window_by_handle(win, &mut error) };
-    if w.is_null() {
+    let Some(w) = find_window_by_handle(win, &mut error) else {
         return ().reported(error);
-    }
+    };
     // SAFETY: `w` is the live window the lookup answered.
-    let live = unsafe { Win::new(w) };
+    let live = unsafe { Win::new(w.raw()) };
     let was_split = !live.w_floating;
     let key_set = keys.is_set__win_config_;
     let has_split = has_key(key_set, KEYSET_OPTIDX_win_config__split);
@@ -473,9 +474,9 @@ pub unsafe fn nvim_win_set_config(
     let applied = unsafe {
         let fc = WinCfg::new(&raw mut fconfig);
         if to_split {
-            win_config_split(w, keys, fc, report)
+            win_config_split(w.raw(), keys, fc, report)
         } else {
-            win_config_float_tp(w, keys, fc, report)
+            win_config_float_tp(w.raw(), keys, fc, report)
         }
     };
     if !applied {
@@ -483,15 +484,15 @@ pub unsafe fn nvim_win_set_config(
     }
     if fconfig.style == kWinStyleMinimal && old_style != fconfig.style {
         // SAFETY: `w` is live.
-        win_set_minimal_style(unsafe { Win::new(w) });
+        win_set_minimal_style(unsafe { Win::new(w.raw()) });
         // SAFETY: as above.
-        unsafe { didset_window_options(w, true) };
+        unsafe { didset_window_options(w.raw(), true) };
         // SAFETY: as above.
-        changed_window_setting(unsafe { Win::new(w) });
+        changed_window_setting(unsafe { Win::new(w.raw()) });
     }
     if fconfig._cmdline_offset < INT_MAX {
-        cmdline_win.set(w);
-    } else if w == cmdline_win.get() && fconfig._cmdline_offset == INT_MAX {
+        cmdline_win.set(w.raw());
+    } else if w == unsafe { Win::new(cmdline_win.get()) } && fconfig._cmdline_offset == INT_MAX {
         cmdline_win.set(::core::ptr::null_mut::<Window>());
     }
     ().reported(error)

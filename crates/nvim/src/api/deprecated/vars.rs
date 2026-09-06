@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    Reported, buffer_by_handle, tabpage_by_handle, window_by_handle,
+    Reported, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 
 pub unsafe fn buffer_set_var(
@@ -18,7 +18,7 @@ pub unsafe fn buffer_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = buf.b_vars;
@@ -33,7 +33,7 @@ pub unsafe fn buffer_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = buf.b_vars;
@@ -48,7 +48,7 @@ pub unsafe fn window_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(win) = window_by_handle(window, &mut error) else {
+    let Some(win) = find_window_by_handle(window, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = win.w_vars;
@@ -62,7 +62,7 @@ pub unsafe fn window_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(win) = window_by_handle(window, &mut error) else {
+    let Some(win) = find_window_by_handle(window, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = win.w_vars;
@@ -77,7 +77,7 @@ pub unsafe fn tabpage_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
+    let Some(tab) = find_tab_by_handle(tabpage, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = tab.tp_vars;
@@ -91,7 +91,7 @@ pub unsafe fn tabpage_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(tab) = tabpage_by_handle(tabpage, &mut error) else {
+    let Some(tab) = find_tab_by_handle(tabpage, &mut error) else {
         return Object::Nil.reported(error);
     };
     let vars = tab.tp_vars;

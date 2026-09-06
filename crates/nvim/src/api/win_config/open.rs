@@ -36,11 +36,10 @@ pub unsafe fn nvim_open_win(
     let bufref;
     // SAFETY: `error` is this frame's slot; the lookup answers a live buffer or
     // a null.
-    let b = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as WindowHandle).reported(error);
-    }
-    if cmdwin_type.get() != 0 && enter || b == cmdwin_buf.get() {
+    };
+    if cmdwin_type.get() != 0 && enter || b == unsafe { Buf::new(cmdwin_buf.get()) } {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return (0 as WindowHandle).reported(error);
@@ -76,7 +75,8 @@ pub unsafe fn nvim_open_win(
     '_cleanup: {
         if keys.win > 0 {
             // SAFETY: `error` is this frame's slot.
-            parent = unsafe { find_window_by_handle(fconfig.window, &mut error) };
+            parent = find_window_by_handle(fconfig.window, &mut error)
+                .map_or(::core::ptr::null_mut(), Win::raw);
             if parent.is_null() {
                 break '_cleanup;
             }
@@ -192,7 +192,7 @@ pub unsafe fn nvim_open_win(
             cmdline_win.set(wp);
         }
         // SAFETY: `b` is the live buffer found above.
-        bufref = BufRef::of_opt(unsafe { Buf::from_raw(b) });
+        bufref = BufRef::of_opt(unsafe { Buf::from_raw(b.raw()) });
         if !noautocmd {
             let mut switchwin_0 = SwitchWin {
                 sw_curwin: ::core::ptr::null_mut::<Window>(),
@@ -227,12 +227,12 @@ pub unsafe fn nvim_open_win(
         }
         // SAFETY: `wp` is read only once its tab page still holds it, which
         // is what says the autocommands above did not close it.
-        let other_buf = !tp.is_null() && bufref.valid() && b != unsafe { (*wp).w_buffer };
+        let other_buf = !tp.is_null() && bufref.valid() && b != unsafe { Buf::new((*wp).w_buffer) };
         if other_buf {
             let quiet =
                 (Win::current_raw() != wp && !noautocmd).then(Suppress::win_enter_leave_autocmds);
             // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
-            unsafe { win_set_buf(window, Buf::new(b), &mut error) };
+            unsafe { win_set_buf(window, Buf::new(b.raw()), &mut error) };
             if !noautocmd {
                 tp = win_find_tabpage(wp);
             }

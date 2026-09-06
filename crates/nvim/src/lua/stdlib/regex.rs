@@ -7,12 +7,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::Buf;
+use crate::winlayer::{self, Buf};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::{TRY_STATE_INIT, nlua_push_errstr};
-use crate::api::private::helpers::{handle_get_buffer, try_enter, try_leave};
+use crate::api::private::helpers::{try_enter, try_leave};
 use crate::global_cell::ConstTable;
 use crate::lua::ffi::{
     LUA_REGISTRYINDEX, lua_error, lua_getfield, lua_gettop, lua_newuserdata, lua_pushinteger,
@@ -123,7 +123,7 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
         }
 
         let buf: *mut Buffer = if bufnr != 0 {
-            handle_get_buffer(bufnr)
+            winlayer::buffer(bufnr).map_or(ptr::null_mut(), Buf::raw)
         } else {
             Buf::current_raw()
         };

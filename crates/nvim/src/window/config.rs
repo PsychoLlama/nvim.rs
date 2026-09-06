@@ -316,12 +316,9 @@ fn ext_win_position(window: Win, validate: bool) {
 /// The window a `relative='win'` float is anchored to, if it is still there.
 fn parent_window(handle: WindowHandle) -> Option<Win> {
     let mut dummy = Error::none();
-    // SAFETY: a live `Error` of ours; the answer is a live window or null.
-    unsafe {
-        let win = find_window_by_handle(handle, &mut dummy);
-        dummy.clear();
-        Win::from_raw(win)
-    }
+    let win = find_window_by_handle(handle, &mut dummy);
+    dummy.clear();
+    win
 }
 
 /// Move `row`/`col` from the parent window's grid onto the screen, resolving

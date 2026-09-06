@@ -18,12 +18,11 @@ use crate::winlayer::{Buf, tab_windows};
 
 pub unsafe fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as Integer).reported(error);
-    }
+    };
     // SAFETY: non-null, so the handle named a live buffer.
-    let b = unsafe { Buf::new(b) };
+    let b = unsafe { Buf::new(b.raw()) };
     if b.b_ml.ml_mfp.is_null() {
         return (0 as Integer).reported(error);
     }
@@ -45,17 +44,16 @@ pub unsafe fn nvim_buf_get_lines(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return rv.reported(error);
-    }
+    };
     // SAFETY: non-null, so the handle named a live buffer.
-    if unsafe { Buf::new(b) }.b_ml.ml_mfp.is_null() {
+    if unsafe { Buf::new(b.raw()) }.b_ml.ml_mfp.is_null() {
         return rv.reported(error);
     }
     let mut oob: bool = false;
-    start = unsafe { normalize_index(b, start as int64_t, true, &raw mut oob) } as Integer;
-    end = unsafe { normalize_index(b, end as int64_t, true, &raw mut oob) } as Integer;
+    start = unsafe { normalize_index(b.raw(), start as int64_t, true, &raw mut oob) } as Integer;
+    end = unsafe { normalize_index(b.raw(), end as int64_t, true, &raw mut oob) } as Integer;
     if !(!strict_indexing || !oob) {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -70,7 +68,7 @@ pub unsafe fn nvim_buf_get_lines(
     let nl = channel_id != VIML_INTERNAL_CALL;
     let rvp = &raw mut rv;
     // SAFETY: `b` is the live buffer and `rvp` this call's own array.
-    unsafe { buf_collect_lines(b, size, at, 0, nl, rvp, lstate, arena) };
+    unsafe { buf_collect_lines(b.raw(), size, at, 0, nl, rvp, lstate, arena) };
     rv.reported(error)
 }
 
@@ -304,17 +302,18 @@ pub unsafe fn nvim_buf_get_text(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return rv.reported(error);
-    }
+    };
     // SAFETY: non-null, so the handle named a live buffer.
-    if unsafe { Buf::new(b) }.b_ml.ml_mfp.is_null() {
+    if unsafe { Buf::new(b.raw()) }.b_ml.ml_mfp.is_null() {
         return rv.reported(error);
     }
     let mut oob: bool = false;
-    start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
-    end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
+    start_row =
+        unsafe { normalize_index(b.raw(), start_row as int64_t, false, &raw mut oob) } as Integer;
+    end_row =
+        unsafe { normalize_index(b.raw(), end_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
         let why = c"Index out of bounds";
         error = Error::validation(why);
@@ -333,7 +332,7 @@ pub unsafe fn nvim_buf_get_text(
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
         // SAFETY: `b` is the live buffer and `error` this call's error slot.
-        let line: String_0 = unsafe { buf_get_text(b, first, from, to, &mut error) };
+        let line: String_0 = unsafe { buf_get_text(b.raw(), first, from, to, &mut error) };
         if !error.is_set() {
             let (data, len) = (line.data(), line.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -344,7 +343,7 @@ pub unsafe fn nvim_buf_get_text(
         let from = start_col as int64_t;
         let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
         // SAFETY: `b` is the live buffer and `error` this call's error slot.
-        str = unsafe { buf_get_text(b, first, from, to, &mut error) };
+        str = unsafe { buf_get_text(b.raw(), first, from, to, &mut error) };
         if !error.is_set() {
             let (data, len) = (str.data(), str.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -353,12 +352,12 @@ pub unsafe fn nvim_buf_get_text(
                 let n = size.wrapping_sub(2 as size_t);
                 let at = start_row as LineNr + 1 as LineNr;
                 // SAFETY: `b` is the live buffer and `rvp` this call's array.
-                unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate, arena) };
+                unsafe { buf_collect_lines(b.raw(), n, at, 1, replace_nl, rvp, lstate, arena) };
             }
             let last = end_row as int64_t;
             let to = end_col as int64_t;
             // SAFETY: `b` is the live buffer and `error` this call's error slot.
-            str = unsafe { buf_get_text(b, last, 0 as int64_t, to, &mut error) };
+            str = unsafe { buf_get_text(b.raw(), last, 0 as int64_t, to, &mut error) };
             if !error.is_set() {
                 let (data, len) = (str.data(), str.len());
                 let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
@@ -375,12 +374,11 @@ pub unsafe fn nvim_buf_get_text(
 
 pub unsafe fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as Integer).reported(error);
-    }
+    };
     // SAFETY: non-null, so the handle named a live buffer.
-    let b = unsafe { Buf::new(b) };
+    let b = unsafe { Buf::new(b.raw()) };
     if b.b_ml.ml_mfp.is_null() {
         return (-1 as Integer).reported(error);
     }

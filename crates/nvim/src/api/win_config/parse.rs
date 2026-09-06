@@ -537,7 +537,7 @@ pub(crate) unsafe fn parse_win_config(
         if relative_is_win || win_is_target {
             // SAFETY: `err` names a live error slot, and the lookup answers a
             // live window or null.
-            let target = unsafe { Win::from_raw(find_window_by_handle(config.win, slot_mut(err))) };
+            let target = find_window_by_handle(config.win, slot_mut(err));
             let Some(target) = target else {
                 break '_fail;
             };

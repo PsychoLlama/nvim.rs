@@ -21,15 +21,14 @@ pub unsafe fn nvim_buf_del_extmark(
     id: Integer,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return false.reported(error);
-    }
+    };
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return false.reported(error);
     }
-    unsafe { extmark_del_id(Buf::new(b), ns_id as uint32_t, id as uint32_t) }.reported(error)
+    unsafe { extmark_del_id(Buf::new(b.raw()), ns_id as uint32_t, id as uint32_t) }.reported(error)
 }
 
 pub unsafe fn nvim_buf_clear_namespace(
@@ -39,10 +38,9 @@ pub unsafe fn nvim_buf_clear_namespace(
     mut line_end: Integer,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if b.is_null() {
+    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return ().reported(error);
-    }
+    };
     if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
         error = err_out_of_range(c"line number");
         return ().reported(error);
@@ -59,7 +57,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     let maxcol = MAXCOL as ::core::ffi::c_int;
     // SAFETY: `b` is the live buffer the handle named.
-    unsafe { extmark_clear(Buf::new(b), ns, start, 0 as ColNr, end, maxcol) };
+    unsafe { extmark_clear(Buf::new(b.raw()), ns, start, 0 as ColNr, end, maxcol) };
     ().reported(error)
 }
 

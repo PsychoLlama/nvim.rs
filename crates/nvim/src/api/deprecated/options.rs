@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, buffer_by_handle, window_by_handle};
+use crate::api::private::helpers::{Reported, find_buffer_by_handle, find_window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::types::OptionSetFlags;
@@ -44,7 +44,7 @@ pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
 
 pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return Object::Nil.reported(error);
     };
     let from = buf.raw().cast::<c_void>();
@@ -60,7 +60,7 @@ pub unsafe fn nvim_buf_set_option(
     value: Object,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(buf) = buffer_by_handle(buffer, &mut error) else {
+    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return ().reported(error);
     };
     let to = buf.raw().cast::<c_void>();
@@ -71,7 +71,7 @@ pub unsafe fn nvim_buf_set_option(
 
 pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(win) = window_by_handle(window, &mut error) else {
+    let Some(win) = find_window_by_handle(window, &mut error) else {
         return Object::Nil.reported(error);
     };
     let from = win.raw().cast::<c_void>();
@@ -87,7 +87,7 @@ pub unsafe fn nvim_win_set_option(
     value: Object,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(win) = window_by_handle(window, &mut error) else {
+    let Some(win) = find_window_by_handle(window, &mut error) else {
         return ().reported(error);
     };
     let to = win.raw().cast::<c_void>();

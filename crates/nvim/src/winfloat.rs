@@ -25,7 +25,7 @@
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr::{self};
 
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
@@ -302,14 +302,6 @@ fn set_window_buf(win: Win, buffer: Buf, err: &mut Error) {
     // SAFETY: a live window and buffer, and the caller's error slot.
     unsafe { win_set_buf(win, buffer, err) };
 }
-fn find_window(handle: WindowHandle, err: &mut Error) -> Option<Win> {
-    // SAFETY: the caller's error slot; the answer is a live window or null.
-    unsafe { NonNull::new(find_window_by_handle(handle, err)).map(|w| Win::new(w.as_ptr())) }
-}
-fn find_buffer(handle: BufferHandle, err: &mut Error) -> Option<Buf> {
-    // SAFETY: the caller's error slot; the answer is a live buffer or null.
-    unsafe { NonNull::new(find_buffer_by_handle(handle, err)).map(|b| Buf::new(b.as_ptr())) }
-}
 fn set_error(err: &mut Error, msg: &'static CStr) {
     *err = Error::from_message(kErrorTypeException, msg);
 }
@@ -410,7 +402,7 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig, err: &mut Error) -> Option<W
     };
     if fconfig.window != 0 {
         debug_assert!(!last, "!last");
-        let parent = find_window(fconfig.window, err)?;
+        let parent = find_window_by_handle(fconfig.window, err)?;
         tp_last = last_nofloat(tabpage_of(parent)?.into_other());
     }
     let mut win = alloc_window(tp_last);
@@ -663,7 +655,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
     let mut row = win.w_config.row as c_int;
     let mut col = win.w_config.col as c_int;
     let mut dummy = NO_ERROR;
-    if let Some(parent) = find_window(win.w_config.window, &mut dummy) {
+    if let Some(parent) = find_window_by_handle(win.w_config.window, &mut dummy) {
         let mut parent = parent;
         row += parent.w_winrow;
         col += parent.w_wincol;
@@ -845,7 +837,7 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
         if b == 0 {
             return handle_error_and_cleanup(Some(win), &mut err);
         }
-        let Some(mut buf) = find_buffer(b, &mut err) else {
+        let Some(mut buf) = find_buffer_by_handle(b, &mut err) else {
             return handle_error_and_cleanup(Some(win), &mut err);
         };
         buf.b_p_bl = 0; // unlist

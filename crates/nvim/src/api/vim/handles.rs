@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    Reported, api_try, array_add, buffer_by_handle, tabpage_by_handle, window_by_handle,
+    Reported, api_try, array_add, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
@@ -52,7 +52,7 @@ pub unsafe fn nvim_get_current_buf() -> BufferHandle {
 /// The editor must be running.
 pub unsafe fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(b) = buffer_by_handle(buf, &mut err) else {
+    let Some(b) = find_buffer_by_handle(buf, &mut err) else {
         return ().reported(err);
     };
     let handle = b.handle;
@@ -97,7 +97,7 @@ pub unsafe fn nvim_get_current_win() -> WindowHandle {
 /// The editor must be running.
 pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(w) = window_by_handle(win, &mut err) else {
+    let Some(w) = find_window_by_handle(win, &mut err) else {
         return ().reported(err);
     };
     api_try(&mut err, |_| {
@@ -225,7 +225,7 @@ pub unsafe fn nvim_get_current_tabpage() -> TabpageHandle {
 /// The editor must be running.
 pub unsafe fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(tp) = tabpage_by_handle(tabpage, &mut err) else {
+    let Some(tp) = find_tab_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };
     api_try(&mut err, |_| {

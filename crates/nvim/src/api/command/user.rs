@@ -18,8 +18,8 @@ use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::types::{ExArgt, ExpandContext};
+use crate::winlayer::Live;
 use crate::winlayer::graph::switch_buffer;
-use crate::winlayer::{Buf, Live};
 
 /// The options keyset this family decodes, with checked field access.
 ///
@@ -53,16 +53,12 @@ pub unsafe fn nvim_buf_create_user_command(
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    // SAFETY: `error` is this frame's slot.
-    let target_buf = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if error.is_set() {
+    let Some(target_buf) = find_buffer_by_handle(buf, &mut error) else {
         return ().reported(error);
-    }
+    };
     // The command is added to whichever buffer is current, so the lookup's
     // answer stands in for the caller's for the length of the call.
-    // SAFETY: `find_buffer_by_handle` answers a live buffer when it leaves
-    // the error unset, which the guard above checked.
-    let saved = switch_buffer(unsafe { Buf::new(target_buf) });
+    let saved = switch_buffer(target_buf);
     let flags = UC_BUFFER as ::core::ffi::c_int;
     // SAFETY: `opts` is the caller's keydict and `error` this frame's slot.
     unsafe { create_user_command(channel_id, name, cmd, opts, flags, &mut error) };
@@ -75,12 +71,10 @@ pub unsafe fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Re
     let table = if buf == -1 {
         Table::Global
     } else {
-        // SAFETY: `error` is this frame's slot.
-        let b = unsafe { find_buffer_by_handle(buf, &mut error) };
-        if error.is_set() {
+        let Some(b) = find_buffer_by_handle(buf, &mut error) else {
             return ().reported(error);
-        }
-        Table::Buffer(b)
+        };
+        Table::Buffer(b.raw())
     };
     // SAFETY: `table` names the global table or a live buffer's, the borrow
     // does not outlive the search, and `name` is the caller's C string.
@@ -389,16 +383,13 @@ pub unsafe fn nvim_buf_get_commands(
             error = Error::validation(c"builtin=true not implemented");
             return ApiDict::EMPTY.reported(error);
         }
-        // SAFETY: a null buffer names the global table, and `arena` is the
-        // caller's.
-        let global = ::core::ptr::null_mut::<Buffer>();
-        return unsafe { commands_array(global, arena) }.reported(error);
+        // SAFETY: `arena` is the caller's.
+        return unsafe { commands_array(None, arena) }.reported(error);
     }
-    // SAFETY: `error` is this frame's slot.
-    let b = unsafe { find_buffer_by_handle(buf, &mut error) };
-    if builtin || b.is_null() {
+    let b = find_buffer_by_handle(buf, &mut error);
+    let (false, Some(b)) = (builtin, b) else {
         return ApiDict::EMPTY.reported(error);
-    }
-    // SAFETY: `b` is a live buffer and `arena` is the caller's.
-    unsafe { commands_array(b, arena) }.reported(error)
+    };
+    // SAFETY: `arena` is the caller's.
+    unsafe { commands_array(Some(b), arena) }.reported(error)
 }
