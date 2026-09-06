@@ -203,7 +203,7 @@ unsafe fn close_unused_window(
         let bufref = BufRef::of(buffer);
         let window_id = window.id();
         // SAFETY: as above; this may fire autocommands.
-        let _ = unsafe { autowrite(buffer.raw(), false) };
+        let _ = unsafe { autowrite(buffer, false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
         let survived = win_valid(window_id) && bufref.valid();
         if !survived {

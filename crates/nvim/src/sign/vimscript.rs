@@ -20,6 +20,7 @@ use crate::eval::funcs::args::{Args, frame};
 use crate::eval::typval::NumBuf;
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
+use core::ptr;
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -264,7 +265,7 @@ unsafe fn sign_get_placed_in_buf(
 
     // SAFETY: the caller's buffer and group name.
     let ns = unsafe { group_get_ns(group) };
-    if !unsafe { buf_has_signs(buffer.raw()) } || ns < 0 {
+    if !buf_has_signs(buffer) || ns < 0 {
         return;
     }
 
@@ -299,21 +300,21 @@ unsafe fn sign_get_placed_in_buf(
 /// # Safety
 /// `buffer` must be null or live; `retlist` must be live.
 unsafe fn sign_get_placed(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     lnum: LineNr,
     id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut List,
 ) {
-    if !buffer.is_null() {
+    if let Some(buffer) = buffer {
         // SAFETY: the caller's buffer and list.
-        unsafe { sign_get_placed_in_buf(Buf::new(buffer), lnum, id, group, retlist) };
+        unsafe { sign_get_placed_in_buf(buffer, lnum, id, group, retlist) };
         return;
     }
     for cbuf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and the caller's
         // list.
-        if unsafe { buf_has_signs(cbuf.raw()) } {
+        if buf_has_signs(cbuf) {
             // `lnum` is deliberately dropped: an all-buffers query
             // reports every line whatever line was asked for.
             unsafe { sign_get_placed_in_buf(cbuf, 0, id, group, retlist) };
@@ -433,7 +434,7 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's return slot and argument slots.
     unsafe {
-        let mut buf = null();
+        let mut buf = None;
         let mut lnum: LineNr = 0;
         let mut sign_id = 0;
         let mut group: *const ::core::ffi::c_char = ::core::ptr::null();
@@ -442,7 +443,7 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
 
         if args.has(0) {
             buf = get_buf_arg(args.ptr(0));
-            if buf.is_null() {
+            if buf.is_none() {
                 return;
             }
             if args.has(1) {
@@ -507,12 +508,13 @@ pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: 
     };
     // SAFETY: as above.
     let buf = unsafe { get_buf_arg(args.ptr(2)) };
-    if buf.is_null() {
+    if buf.is_none() {
         return;
     }
 
     // SAFETY: a live buffer and a group name the argument owns.
-    result.vval.v_number = VarNumber::from(unsafe { sign_jump(id, group, Buf::new(buf)) });
+    result.vval.v_number =
+        VarNumber::from(unsafe { sign_jump(id, group, buf.expect("a live handle")) });
 }
 
 /// The named key's value, or the positional typval when there is one.
@@ -581,7 +583,7 @@ unsafe fn sign_place_from_dict(
         return -1;
     };
     let buf = unsafe { get_buf_arg(buf_tv) };
-    if buf.is_null() {
+    if buf.is_none() {
         return -1;
     }
 
@@ -604,7 +606,18 @@ unsafe fn sign_place_from_dict(
 
     // `sign_place` writes the id back when it was zero (auto-allocate).
     let mut uid = id.cast_unsigned();
-    if unsafe { sign_place(&raw mut uid, group, name, Buf::new(buf), lnum, prio) }.is_ok() {
+    if unsafe {
+        sign_place(
+            &raw mut uid,
+            group,
+            name,
+            buf.expect("a live handle"),
+            lnum,
+            prio,
+        )
+    }
+    .is_ok()
+    {
         uid.cast_signed()
     } else {
         -1
@@ -706,7 +719,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::co
 
     if !dict.is_null() {
         if let Some(tv) = unsafe { key(dict, "buffer") } {
-            buf = unsafe { get_buf_arg(tv) };
+            buf = unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) };
             if buf.is_null() {
                 return -1;
             }
@@ -720,7 +733,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::co
         }
     }
 
-    unsafe { sign_unplace(buf, id, group, 0) - 1 }
+    unsafe { sign_unplace(Buf::from_raw(buf), id, group, 0) - 1 }
 }
 
 /// `sign_unplace()`.

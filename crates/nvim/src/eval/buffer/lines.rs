@@ -25,7 +25,7 @@ use core::mem::offset_of;
 /// # Safety
 /// `buffer` must be a live buffer or NULL, and `lines`/`result` live typvals.
 pub(crate) unsafe fn set_buffer_lines(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     lnum_arg: LineNr,
     append: bool,
     lines: *mut TypVal,
@@ -36,17 +36,18 @@ pub(crate) unsafe fn set_buffer_lines(
     // and once at the end.
     let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
-    let is_curbuf: bool = buffer == Buf::current_raw();
+    let is_curbuf: bool = buffer == Buf::current_or_none();
     // SAFETY: the caller's obligation -- live typvals, and a live buffer or
     // NULL, which the test below tells apart.
     let mut ret = unsafe { Tv::new(result) };
-    if buffer.is_null() || !is_curbuf && unsafe { (*buffer).b_ml.ml_mfp }.is_null() || lnum < 1 {
+    let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_null();
+    if buffer.is_none_or(unloaded) || lnum < 1 {
         ret.vval.v_number = 1;
         return;
     }
     let mut cob = SavedBufferState::new();
-    if !is_curbuf {
-        unsafe { cob.prepare(Buf::new(buffer)) };
+    if let (false, Some(buffer)) = (is_curbuf, buffer) {
+        unsafe { cob.prepare(buffer) };
     }
     let append_lnum: LineNr = if append {
         lnum - 1
@@ -115,7 +116,7 @@ pub(crate) unsafe fn set_buffer_lines(
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buffer
+                if wp.w_buffer == buffer.map_or(ptr::null_mut(), Buf::raw)
                     && (wp.w_buffer != Buf::current_raw() || wp.is_current())
                     && wp.w_cursor.lnum > append_lnum
                 {
@@ -138,16 +139,15 @@ pub(crate) unsafe fn set_buffer_lines(
 unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
-    let buf = arg_buf(args, 0, 0);
-    if buf.is_null() {
+    let Some(buf) = arg_buf(args, 0, 0) else {
         result.vval.v_number = 1;
         return;
-    }
+    };
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
-    let lnum = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
+    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(buf, lnum, append, args.ptr(2), result) };
+        unsafe { set_buffer_lines(Some(buf), lnum, append, args.ptr(2), result) };
     }
 }
 
@@ -156,7 +156,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool)
 /// # Safety
 /// `buffer` must be a live buffer or NULL, and `result` a live typval.
 unsafe fn get_buffer_lines(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,
@@ -167,13 +167,13 @@ unsafe fn get_buffer_lines(
     let mut ret = unsafe { Tv::new(result) };
     ret.v_type = if retlist { VAR_LIST } else { VAR_STRING };
     ret.vval.v_string = ptr::null_mut();
-    if buffer.is_null() || unsafe { (*buffer).b_ml.ml_mfp }.is_null() || start < 0 || end < start {
+    if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
         if retlist {
             unsafe { tv_list_alloc_ret(result, 0) };
         }
         return;
     }
-    let buffer = unsafe { Buf::new(buffer) };
+    let buffer = buffer.expect("the early return covers an absent buffer");
     if !retlist {
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
         let line = (start >= 1 && start <= buffer.line_count())
@@ -197,17 +197,19 @@ unsafe fn get_buffer_lines(
 unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
-    let buf = arg_buf_chk(args, 0);
-    let lnum = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
+    let Some(buf) = arg_buf_chk(args, 0) else {
+        return;
+    };
+    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let end = if args.has(2) {
-        unsafe { arg_lnum_buf(args, 2, Buf::new(buf)) }
+        unsafe { arg_lnum_buf(args, 2, buf) }
     } else {
         lnum
     };
-    unsafe { get_buffer_lines(buf, lnum, end, retlist, result) };
+    unsafe { get_buffer_lines(Some(buf), lnum, end, retlist, result) };
 }
 
 /// `append({lnum}, {string/list})`.
@@ -217,7 +219,7 @@ pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_raw(), lnum, true, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, true, args.ptr(1), result) };
     }
 }
 
@@ -242,7 +244,7 @@ pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_raw(), lnum, false, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, false, args.ptr(1), result) };
     }
 }
 
@@ -257,7 +259,7 @@ pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     } else {
         (lnum, false)
     };
-    unsafe { get_buffer_lines(Buf::current_raw(), lnum, end, retlist, result) };
+    unsafe { get_buffer_lines(Buf::current_or_none(), lnum, end, retlist, result) };
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
@@ -281,29 +283,26 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     // SAFETY: the arguments and `result` are live typvals; `cob` is a live
     // local, restored on every path out of the change.
     let did_emsg_before = did_emsg.get();
-    let buf = arg_buf(args, 0, 0);
-    if buf.is_null() {
+    let Some(buf) = arg_buf(args, 0, 0) else {
         return;
-    }
-    let first = unsafe { arg_lnum_buf(args, 1, Buf::new(buf)) };
+    };
+    let first = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let mut last = if args.has(2) {
-        unsafe { arg_lnum_buf(args, 2, Buf::new(buf)) }
+        unsafe { arg_lnum_buf(args, 2, buf) }
     } else {
         first
     };
-    // SAFETY: `tv_get_buf` answers a live buffer or NULL, and the null was
-    // returned above.
-    let (mfp, count) = unsafe { ((*buf).b_ml.ml_mfp, (*buf).b_ml.ml_line_count) };
+    let (mfp, count) = (buf.b_ml.ml_mfp, buf.b_ml.ml_line_count);
     if mfp.is_null() || first < 1 || first > count || last < first {
         return;
     }
-    let is_curbuf = buf == Buf::current_raw();
+    let is_curbuf = Some(buf) == Buf::current_or_none();
     let mut cob = SavedBufferState::new();
     if !is_curbuf {
-        unsafe { cob.prepare(Buf::new(buf)) };
+        unsafe { cob.prepare(buf) };
     }
     last = last.min(Buf::current().line_count());
     let count = last - first + 1;
@@ -319,7 +318,7 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         }
         // Pull every cursor that was inside or after the deleted range
         // back onto a line that still exists.
-        for mut wp in tab_windows().filter(|wp| wp.w_buffer == buf) {
+        for mut wp in tab_windows().filter(|wp| wp.w_buffer == buf.raw()) {
             if wp.w_cursor.lnum > last {
                 wp.w_cursor.lnum -= count;
             } else if wp.w_cursor.lnum > first {

@@ -182,7 +182,7 @@ pub enum Loaded {
 fn autocmd_for_curbuf(event: AutoEvent) {
     let (nofile, cb) = (ptr::null_mut(), Buf::current_raw());
     // SAFETY: the current buffer is live, and the event takes no file name.
-    unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
+    unsafe { apply_autocmds(event, nofile, nofile, false, Buf::from_raw(cb)) };
 }
 static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E812: Autocommands changed buffer or buffer name".as_ptr());
@@ -318,7 +318,7 @@ pub unsafe fn add_quoted_fname(
         fname
     };
     unsafe { *ret_buf = b'"' as c_char };
-    unsafe { home_replace(buffer.raw(), fname, ret_buf.add(1), buf_len - 4, true) };
+    unsafe { home_replace(Some(buffer), fname, ret_buf.add(1), buf_len - 4, true) };
     unsafe { xstrlcat(ret_buf, c"\" ".as_ptr(), buf_len) };
 }
 

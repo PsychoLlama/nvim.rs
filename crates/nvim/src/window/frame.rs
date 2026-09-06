@@ -48,8 +48,7 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
         free(frp.raw());
         (wp, dir)
     };
-    // SAFETY: a live window and tab page.
-    win_free(win, unsafe { TabPage::from_raw(raw_tab(tabpage)) });
+    win_free(win, tabpage);
     if win_tp.tp_curwin == Some(win.id()) {
         win_tp.tp_curwin = wp.map(Win::id);
     }

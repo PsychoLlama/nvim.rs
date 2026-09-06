@@ -20,29 +20,26 @@ use crate::types::{VAR_NUMBER, VAR_STRING};
 ///
 /// # Safety
 /// `avar` must point at a live typval.
-pub unsafe fn find_buffer(avar: *mut TypVal) -> *mut Buffer {
+pub unsafe fn find_buffer(avar: *mut TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation; under `VAR_STRING` the union's live arm
     // is `v_string`, a NUL-terminated string or NULL.
     match unsafe { (*avar).v_type } {
-        VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).number_or_zero() }))
-            .map_or(ptr::null_mut(), |b| b.raw()),
+        VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).number_or_zero() })),
         VAR_STRING if !unsafe { (*avar).string_or_null() }.is_null() => {
             let name = unsafe { (*avar).string_or_null() };
             if let Some(found) = unsafe { buflist_findname_exp(name) } {
-                return found.raw();
+                return Some(found);
             }
             // A buffer with no file of its own — a URL, or a scratch
             // buffer — is not in the name index, so it is matched
             // literally instead.
-            buffers()
-                .find(|b| {
-                    !b.b_fname.is_null()
-                        && (unsafe { path_with_url(b.b_fname) } != 0 || buf_is_nofilename(Some(*b)))
-                        && unsafe { cstr::eq(b.b_fname, name) }
-                })
-                .map_or(ptr::null_mut(), Buf::raw)
+            buffers().find(|b| {
+                !b.b_fname.is_null()
+                    && (unsafe { path_with_url(b.b_fname) } != 0 || buf_is_nofilename(Some(*b)))
+                    && unsafe { cstr::eq(b.b_fname, name) }
+            })
         }
-        _ => ptr::null_mut(),
+        _ => None,
     }
 }
 
@@ -67,7 +64,7 @@ pub unsafe fn f_bufexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let buf = unsafe { find_buffer(args.ptr(0)) };
-    result.vval.v_number = VarNumber::from(!buf.is_null());
+    result.vval.v_number = VarNumber::from(buf.is_some());
 }
 
 /// `buflisted({buf})`.
@@ -75,7 +72,7 @@ pub unsafe fn f_buflisted(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
-    let listed = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }.is_some_and(|b| b.b_p_bl != 0);
+    let listed = unsafe { find_buffer(args.ptr(0)) }.is_some_and(|b| b.b_p_bl != 0);
     result.vval.v_number = VarNumber::from(listed);
 }
 
@@ -85,7 +82,7 @@ pub unsafe fn f_bufload(args: *mut TypVal, unused: *mut TypVal, _fptr: EvalFuncD
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let buf = unsafe { get_buf_arg(args.ptr(0)) };
-    if buf.is_null() {
+    if buf.is_none() {
         return;
     }
     // A swap file found while loading must not leave the standing
@@ -93,7 +90,7 @@ pub unsafe fn f_bufload(args: *mut TypVal, unused: *mut TypVal, _fptr: EvalFuncD
     if swap_exists_action.get() != SEA_READONLY {
         swap_exists_action.set(SEA_NONE);
     }
-    buf_ensure_loaded(unsafe { Buf::new(buf) });
+    buf_ensure_loaded(buf.expect("a live handle"));
 }
 
 /// `bufloaded({buf})`.
@@ -101,8 +98,7 @@ pub unsafe fn f_bufloaded(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
-    let loaded = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }
-        .is_some_and(|b| !b.b_ml.ml_mfp.is_null());
+    let loaded = unsafe { find_buffer(args.ptr(0)) }.is_some_and(|b| !b.b_ml.ml_mfp.is_null());
     result.vval.v_number = VarNumber::from(loaded);
 }
 
@@ -114,7 +110,7 @@ pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY: the arguments are live typvals; `curbuf` is set and the resolver
     // answers a live buffer or NULL.
     let buf = if args.has(0) {
-        unsafe { Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) }
+        unsafe { tv_get_buf_from_arg(args.ptr(0)) }
     } else {
         Some(Buf::current())
     };
@@ -141,7 +137,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         // The lookup itself must not report "no such buffer": a second
         // argument asks for the buffer to be created instead.
         let _no_emsg = Suppress::emsg();
-        arg_buf(args, 0, 0)
+        arg_buf(args, 0, 0).map_or(ptr::null_mut(), Buf::raw)
     };
     let mut error = false;
     if buf.is_null()
@@ -151,7 +147,10 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     {
         let name = unsafe { numbuf.string_chk(args.ptr(0)) };
         if !name.is_null() {
-            buf = unsafe { buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0) };
+            buf = unsafe {
+                buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0)
+                    .map_or(ptr::null_mut(), Buf::raw)
+            };
         }
     }
     if let Some(buf) = unsafe { Buf::from_raw(buf) } {
@@ -167,7 +166,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
     // SAFETY: the caller's obligation.
     let buf = arg_buf_chk(args, 0);
-    if buf.is_null() {
+    if buf.is_none() {
         result.vval.v_number = -1;
         return;
     }
@@ -177,7 +176,7 @@ unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
     let mut winnr = 0;
     let found = windows_in_tab(tp).find(|wp| {
         winnr += c_int::from(wp.has_winnr(tp));
-        ptr::eq(wp.w_buffer, buf) && (!get_nr || wp.has_winnr(tp))
+        Some(wp.buffer()) == buf && (!get_nr || wp.has_winnr(tp))
     });
     result.vval.v_number = match found {
         Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle }),

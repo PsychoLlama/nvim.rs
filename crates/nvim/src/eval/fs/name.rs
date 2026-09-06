@@ -41,7 +41,7 @@ use crate::path::{
     vim_is_abs_name,
 };
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
-use crate::types::{Buffer, EvalFuncData, MAXPATHL, TypVal, size_t};
+use crate::types::{EvalFuncData, MAXPATHL, TypVal, size_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::replace;
 use core::ptr;
@@ -279,7 +279,7 @@ fn home_rel(src: &CStr, buf: &mut PathBuf) {
     let (from, into, room) = (src.as_ptr(), buf.as_mut_ptr(), MAXPATHL as size_t);
     // SAFETY: `src` is NUL-terminated and `buf` is `MAXPATHL` writable bytes;
     // a NULL buffer means no 'path'-relative shortening.
-    unsafe { home_replace(ptr::null::<Buffer>(), from, into, room, true) };
+    unsafe { home_replace(None, from, into, room, true) };
 }
 
 /// What a scratch holds, which both fillers above NUL-terminate.

@@ -255,7 +255,7 @@ fn handle_signal(signum: c_int) {
                     signal_name(signum).as_ptr() as *mut c_char,
                     Buf::current().b_fname,
                     true,
-                    Buf::current_raw(),
+                    Buf::current_or_none(),
                 );
             }
             _ => {

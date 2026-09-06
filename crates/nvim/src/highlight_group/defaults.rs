@@ -575,7 +575,8 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     let buf = Buf::current_raw();
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
-    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, buf) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
+    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, __hoisted_0) };
     let mut pattern = [
         b"colors/",
         unsafe { CStr::from_ptr(name) }.to_bytes(),
@@ -589,7 +590,8 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
         let buf = Buf::current_raw();
         // SAFETY: the editor's current buffer.
         let fname = unsafe { (*buf).b_fname };
-        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, buf) };
+        let __hoisted_1 = unsafe { Buf::from_raw(buf) };
+        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, __hoisted_1) };
     }
 
     RECURSIVE.set(false);

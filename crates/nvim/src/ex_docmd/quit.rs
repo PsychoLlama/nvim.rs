@@ -44,9 +44,7 @@ use crate::message::msg_ptr;
 
 use crate::os::cshim::snprintf;
 
-use crate::types::{
-    Buffer, CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, Window, ptrdiff_t,
-};
+use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, ptrdiff_t};
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 
@@ -106,11 +104,11 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
         ptr::null_mut(),
         ptr::null_mut(),
         false,
-        window.w_buffer,
+        unsafe { Buf::from_raw(window.w_buffer) },
     );
     // The buffer is read *through* `window`, and only after `win_valid`
     // has said `window` is still there — QuitPre may have closed it.
-    if quit_was_cancelled(window, || window.w_buffer) {
+    if quit_was_cancelled(window, || window.buffer()) {
         return true;
     }
 
@@ -121,9 +119,9 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
             ptr::null_mut(),
             ptr::null_mut(),
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         );
-        if quit_was_cancelled(window, Buf::current_raw) {
+        if quit_was_cancelled(window, Buf::current) {
             return true;
         }
     }
@@ -139,10 +137,10 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
 /// autocommand may have closed `window` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-fn quit_was_cancelled(window: Win, buf: impl FnOnce() -> *mut Buffer) -> bool {
+fn quit_was_cancelled(window: Win, buf: impl FnOnce() -> Buf) -> bool {
     if win_valid(window.id()) && !curbuf_locked() {
         let buf = buf();
-        if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
+        if !(buf.b_nwindows == 1 && buf.b_locked > 0) {
             return false;
         }
     }
@@ -165,13 +163,14 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     let wp = if args.addr_count > 0 {
         window_at(args.line2)
     } else {
-        Win::current_raw()
+        Win::current_or_none()
     };
     if curbuf_locked() {
         return;
     }
+    let wp = wp.expect("`:quit` resolves to a window");
     // SAFETY: `wp` is the window this `:quit` resolved to.
-    if unsafe { before_quit_autocmds(Win::new(wp), false, args.forceit != 0) } {
+    if unsafe { before_quit_autocmds(wp, false, args.forceit != 0) } {
         return;
     }
 
@@ -181,10 +180,10 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     }
     // The three refusals: unsaved changes in this buffer, files left in
     // the argument list, unsaved changes anywhere else.
-    if !buf_hide(unsafe { Buf::new((*wp).w_buffer) })
+    if !buf_hide(wp.buffer())
         && unsafe {
             check_changed(
-                (*wp).w_buffer,
+                wp.buffer(),
                 (if p_awa.get() != 0 {
                     CCGD_AW as c_int
                 } else {
@@ -208,14 +207,12 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         getout(0);
     }
     not_exiting(save_exiting);
-    // SAFETY: `wp` is the window this `:quit` resolved to.
-    let (win, buffer) = unsafe { (Win::new(wp), (*wp).w_buffer) };
-    let free_buf = !buf_hide(unsafe { Buf::new(buffer) }) || args.forceit != 0;
-    win_close(win, free_buf, args.forceit != 0);
+    let free_buf = !buf_hide(wp.buffer()) || args.forceit != 0;
+    win_close(wp, free_buf, args.forceit != 0);
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
-fn window_at(nr: LineNr) -> *mut Window {
+fn window_at(nr: LineNr) -> Option<Win> {
     let mut wp = first_win();
     let mut n = nr;
     while let Some(next) = wp.next() {
@@ -225,7 +222,7 @@ fn window_at(nr: LineNr) -> *mut Window {
         }
         wp = next;
     }
-    wp.raw()
+    Some(wp)
 }
 
 /// The head of the current tab page's window list, which exists from
@@ -397,12 +394,12 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
         return;
     }
     let tp = find_tabpage(tab_number);
-    if tp.is_null() {
+    if tp.is_none() {
         beep_flush();
         return;
     }
-    if tp != TabPage::current_raw() {
-        unsafe { tabpage_close_other(TabPage::new(tp), args.forceit) };
+    if tp != TabPage::current_or_none() {
+        unsafe { tabpage_close_other(tp.expect("a live handle"), args.forceit) };
     } else if !text_locked() && !curbuf_locked() {
         unsafe { tabpage_close(args.forceit) };
     }
@@ -531,8 +528,8 @@ pub(crate) unsafe fn ex_only(args: *mut ExArg) {
     }
     if args.addr_count > 0 {
         let wp = window_at_stepwise(args.line2);
-        if wp != Win::current_raw() {
-            unsafe { win_goto(Win::new(wp)) };
+        if wp != Win::current_or_none() {
+            unsafe { win_goto(wp.expect("a live handle")) };
         }
     }
     close_others(1, args.forceit);
@@ -542,7 +539,7 @@ pub(crate) unsafe fn ex_only(args: *mut ExArg) {
 ///
 /// `:1only` is the *current* window: the count is spent before the walk
 /// starts, unlike `window_at`, which always steps at least once.
-fn window_at_stepwise(nr: LineNr) -> *mut Window {
+fn window_at_stepwise(nr: LineNr) -> Option<Win> {
     let mut wp = first_win();
     let mut n = nr;
     loop {
@@ -552,7 +549,7 @@ fn window_at_stepwise(nr: LineNr) -> *mut Window {
         };
         wp = next;
     }
-    wp.raw()
+    Some(wp)
 }
 
 /// `:hide` used as a command rather than as a modifier.
@@ -632,7 +629,7 @@ fn apply_autocmds(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
 ) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::autocmd::apply_autocmds(event, fname, fname_io, force, buffer) }

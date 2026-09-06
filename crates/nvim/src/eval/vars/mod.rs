@@ -86,13 +86,13 @@ use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
-    AcoSave, BoolVarValue, Buffer, Dict, DictItem, EvalArg, EvalFuncData, ExArg, Expand, Failed,
-    GRegFlags, HashTab, LVal, List, ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount,
-    ScopeDictDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, SwitchWin, Tabpage, TypVal,
+    AcoSave, BoolVarValue, Dict, DictItem, EvalArg, EvalFuncData, ExArg, Expand, Failed, GRegFlags,
+    HashTab, LVal, List, ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount,
+    ScopeDictDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, SwitchWin, TypVal,
     VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
     VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
     VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv, Window, int64_t, kBoolVarFalse,
+    VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv, int64_t, kBoolVarFalse,
     kBoolVarTrue, kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union,
     uint8_t, uint32_t,
 };

@@ -257,8 +257,7 @@ pub unsafe fn decor_redraw_signs(
 impl Buf {
     /// Whether the buffer holds any sign at all — text or highlight.
     fn has_signs(self) -> bool {
-        // SAFETY: a live buffer.
-        unsafe { buf_has_signs(self.raw()) }
+        buf_has_signs(self)
     }
 }
 

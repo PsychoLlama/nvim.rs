@@ -33,7 +33,7 @@ use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
     AdditionalData, Buffer, ColNr, FileMark, FileMarkView, GArray, LineNr, OptInt, Pos, Timestamp,
-    WinInfo, WinOpt, Window, size_t,
+    WinInfo, WinOpt, size_t,
 };
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
@@ -77,8 +77,8 @@ impl Entry {
     }
 
     /// The window this entry belongs to, null for the entry `:badd` leaves.
-    pub(crate) fn window(self) -> *mut Window {
-        self.wi_win
+    pub(crate) fn window(self) -> Option<Win> {
+        unsafe { Win::from_raw(self.wi_win) }
     }
 
     pub(crate) fn opt(&mut self) -> *mut WinOpt {
@@ -245,7 +245,10 @@ pub unsafe fn buflist_setfpos(
     let raw_win = win.map_or(ptr::null_mut(), Win::raw);
     let mut list = WinInfos::of(&mut buffer);
 
-    let found = list.entries().iter().position(|e| e.window() == raw_win);
+    let found = list
+        .entries()
+        .iter()
+        .position(|e| e.window() == unsafe { Win::from_raw(raw_win) });
     let mut entry = match found {
         None => {
             let mut entry = Entry::new();
@@ -302,7 +305,7 @@ fn wininfo_other_tab_diff(entry: Entry) -> bool {
     }
     // A window of the current tab page means the buffer was in diff mode
     // here.
-    !windows().any(|wp| entry.window() == wp.raw())
+    !windows().any(|wp| entry.window() == Some(wp))
 }
 
 /// The entry for the current window in `buffer`, or failing that the most
@@ -315,7 +318,7 @@ fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) ->
     let raw_buf = buffer.raw();
     let list = WinInfos::of(buffer);
     let found = list.entries().iter().find(|e| {
-        e.window() == cur
+        e.window() == unsafe { Win::from_raw(cur) }
             && (!skip_diff_buffer || !wininfo_other_tab_diff(**e))
             && (!need_options || e.wi_optset)
     });
@@ -335,9 +338,8 @@ fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) ->
                 !wininfo_other_tab_diff(**e)
                     && (!need_options
                         || e.wi_optset
-                        || !e.window().is_null()
-                            // SAFETY: a live window.
-                            && unsafe { Win::new(e.window()) }.w_buffer == raw_buf)
+                        || !e.window().is_none()
+                            && e.window().is_some_and(|w| w.w_buffer == raw_buf))
             })
             .copied();
     }
@@ -353,10 +355,7 @@ pub unsafe fn get_winopts(mut buffer: Buf) {
     clear_window_folds(cur);
 
     let entry = find_wininfo(&mut buffer, true, true);
-    // SAFETY: a live window, or null, which `Option` keeps out of the
-    // closure.
-    let entry_win =
-        entry.and_then(|e| (!e.window().is_null()).then(|| unsafe { Win::new(e.window()) }));
+    let entry_win = entry.and_then(Entry::window);
 
     match (entry, entry_win) {
         // The entry names another window still showing this buffer: copy

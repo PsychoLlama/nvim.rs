@@ -20,6 +20,7 @@
 use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
 use crate::types::AutoEvent;
+use crate::winlayer::WinId;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -49,7 +50,7 @@ use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
     Callback, ColNr, DictItem, FileMark, FileMarkView, GArray, Handle, HashTab, LineNr, MemFile,
-    Pos, Refcount, SynBlock, Tabpage, Timestamp, WinInfo, Window,
+    Pos, Refcount, SynBlock, Timestamp, WinInfo,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -86,14 +87,13 @@ const ZERO_FMARK: FileMark = FileMark {
 /// `win_valid_any_tab` walks the window lists comparing pointers and never
 /// dereferences its argument, so asking about a possibly-freed window is a
 /// safe operation -- and a hit means it is live.
-fn valid_win(win: *mut Window) -> Option<Win> {
-    tab_windows().find(|wp| wp.raw() == win)
+fn valid_win(win: WinId) -> Option<Win> {
+    tab_windows().find(|wp| wp.id() == win)
 }
 
 /// Whether `win` is the only non-floating window of its tab page.
 fn is_only_window(win: Win) -> bool {
-    // SAFETY: as [`valid_win`], `one_window` only compares the pointer.
-    unsafe { one_window(win, ptr::null_mut::<Tabpage>()) }
+    one_window(win, None)
 }
 
 /// Make `win` in `tabpage` current again, without firing autocommands.
@@ -397,17 +397,11 @@ pub fn close_buffer(
     abort_if_last: bool,
     ignore_abort: bool,
 ) -> bool {
-    close_buffer_inner(
-        win.map_or(ptr::null_mut(), Win::raw),
-        buffer,
-        action,
-        abort_if_last,
-        ignore_abort,
-    )
+    close_buffer_inner(win, buffer, action, abort_if_last, ignore_abort)
 }
 
 fn close_buffer_inner(
-    win: *mut Window,
+    win: Option<Win>,
     mut buffer: Buf,
     action: c_int,
     abort_if_last: bool,
@@ -427,7 +421,7 @@ fn close_buffer_inner(
     }
 
     // check no autocommands closed the window
-    if let Some(wp) = valid_win(win) {
+    if let Some(wp) = win.map(Win::id).and_then(valid_win) {
         // Set b_last_cursor when closing the last window for the buffer.
         // Remember the last cursor position and window options of the buffer.
         // This used to be only for the current window, but then options like
@@ -518,7 +512,10 @@ fn close_buffer_inner(
     // Defer clearing w_buffer until after operations that may invoke dict
     // watchers (e.g., buf_clear_file()), so callers like tabpagebuflist()
     // never see a window in the winlist with a NULL buffer.
-    let clear_w_buf = valid_win(win).filter(|wp| wp.w_buffer == buf.raw());
+    let clear_w_buf = win
+        .map(Win::id)
+        .and_then(valid_win)
+        .filter(|wp| wp.w_buffer == buf.raw());
 
     // Autocommands may have opened or closed windows for this buffer.
     // Decrement the count for the close we do here.  Don't decrement
@@ -570,7 +567,7 @@ fn close_buffer_inner(
 fn leave_last_window(
     mut buffer: Buf,
     bufref: BufRef,
-    win: *mut Window,
+    win: Option<Win>,
     how: &Disposition,
     abort_if_last: bool,
 ) -> Option<Buf> {
@@ -592,7 +589,7 @@ fn leave_last_window(
         buffer = bufref.get()?;
         buffer.b_locked -= 1;
         buffer.b_locked_split -= 1;
-        if abort_if_last && !win.is_null() && is_only_window(unsafe { Win::new(win) }) {
+        if abort_if_last && win.is_some_and(is_only_window) {
             // Autocommands made this the only window.
             err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
@@ -607,7 +604,7 @@ fn restore_curwin(was_curwin: bool, the_curwin: Win, tabpage: TabPage) {
     if !was_curwin || Win::current_raw() == the_curwin.raw() {
         return;
     }
-    let Some(wp) = valid_win(the_curwin.raw()) else {
+    let Some(wp) = valid_win(the_curwin.id()) else {
         return;
     };
     block_autocmds_now();

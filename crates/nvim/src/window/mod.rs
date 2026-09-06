@@ -64,9 +64,8 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, BlnFlags, Buffer, CdCause, Direction, DoBufAction, DoBufStart, Error,
-    GetFileFlags, Handle, MotionType, OptInt, Tabpage, WinSplit, WinStyle, Window,
-    kErrorTypeException, size_t,
+    AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
+    Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin, topframe};
@@ -270,9 +269,8 @@ pub(crate) fn prevwin_curwin() -> Win {
     }
 }
 
-pub unsafe fn swbuf_goto_win_with_buf(buffer: *mut Buffer) -> *mut Window {
-    // SAFETY: the caller's promise -- a live buffer or null.
-    raw_win(unsafe { Buf::from_raw(buffer) }.and_then(swbuf_goto_win))
+pub unsafe fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
+    buffer.and_then(swbuf_goto_win)
 }
 
 /// The window `'switchbuf'` says to jump to for `buffer`, having jumped to it.
@@ -401,16 +399,6 @@ fn free<T>(raw: *mut T) {
     unsafe { xfree(raw as *mut ::core::ffi::c_void) };
 }
 
-/// A tab page as the family's entry points take it: null for "the current one".
-fn raw_tab(tabpage: Option<TabPage>) -> *mut Tabpage {
-    tabpage.map_or(ptr::null_mut(), TabPage::raw)
-}
-
-/// A window argument that may be absent, as the entry points take it.
-fn raw_win(win: Option<Win>) -> *mut Window {
-    win.map_or(ptr::null_mut(), Win::raw)
-}
-
 /// The root of the current tab page's layout tree.
 fn current_topframe() -> FrameRef {
     // SAFETY: `topframe` is set from startup to exit.
@@ -448,7 +436,7 @@ fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
 fn fire(event: AutoEvent, buffer: Buf) -> bool {
     let (none, raw) = (ptr::null_mut(), buffer.raw());
     // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, none, none, false, raw) }
+    unsafe { apply_autocmds(event, none, none, false, Buf::from_raw(raw)) }
 }
 
 /// [`fire`] with a name, which the event reports as `<afile>` and matches
@@ -457,7 +445,7 @@ fn fire(event: AutoEvent, buffer: Buf) -> bool {
 fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buffer: Option<Buf>) -> bool {
     let buffer = buffer.map_or(ptr::null_mut(), Buf::raw);
     // SAFETY: a live buffer or null, and a NUL-terminated name or null.
-    unsafe { apply_autocmds(event, name, name, false, buffer) }
+    unsafe { apply_autocmds(event, name, name, false, Buf::from_raw(buffer)) }
 }
 
 /// Ring the bell and drop the typeahead, the family's answer to a move that

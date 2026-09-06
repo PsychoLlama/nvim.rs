@@ -30,7 +30,7 @@ pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) 
 pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: *mut ::core::ffi::c_char) -> bool {
     // SAFETY: `fname` is a live NUL-terminated string of the caller's frame,
     // and `curbuf` is a live buffer.
-    unsafe { apply_autocmds(evt, fname, fname, false, Buf::current_raw()) }
+    unsafe { apply_autocmds(evt, fname, fname, false, Buf::current_or_none()) }
 }
 
 /// Record everything about `window`'s view that an incremental search may scroll.

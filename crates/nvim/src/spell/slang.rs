@@ -34,9 +34,7 @@ use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
-use crate::types::{
-    Buffer, HashValue, NUL, OK, RegProg, SpellLang, WordCount, size_t, uint8_t, uint16_t,
-};
+use crate::types::{HashValue, NUL, OK, RegProg, SpellLang, WordCount, size_t, uint8_t, uint16_t};
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WC_KEY_OFF, WordTree};
 
@@ -152,7 +150,7 @@ pub unsafe fn slang_clear(slang: *mut SpellLang) {
 pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe { (*slang).sl_sound_tree = WordTree::default() };
-    unsafe { close_spellbuf((*slang).sl_sugbuf) };
+    unsafe { close_spellbuf(Buf::from_raw((*slang).sl_sugbuf)) };
     unsafe { (*slang).sl_sugbuf = core::ptr::null_mut() };
     unsafe { (*slang).sl_sugloaded = false };
     unsafe { (*slang).sl_sugtime = 0 };
@@ -303,7 +301,7 @@ pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char)
 ///
 /// Most of its fields are invalid: string options are null and there is no
 /// undo information.
-pub unsafe fn open_spellbuf() -> *mut Buffer {
+pub unsafe fn open_spellbuf() -> Option<Buf> {
     // Never registered and never on the buffer list -- see
     // `alloc_unregistered_buffer`.
     // The allocation travels as a bare address: it is stored in a
@@ -322,18 +320,18 @@ pub unsafe fn open_spellbuf() -> *mut Buffer {
     }
     unsafe { ml_open_file(Buf::new(buf)) }; // create the swap file now
 
-    buf
+    unsafe { Buf::from_raw(buf) }
 }
 
 /// Close a buffer from [`open_spellbuf`].
-pub unsafe fn close_spellbuf(buffer: *mut Buffer) {
-    if buffer.is_null() {
+pub unsafe fn close_spellbuf(buffer: Option<Buf>) {
+    let Some(buffer) = buffer else {
         return;
-    }
-    unsafe { ml_close(Buf::new(buffer), 1) };
+    };
+    unsafe { ml_close(buffer, 1) };
     // The free: `Buffer`'s destructor runs and the memory goes back.
     // SAFETY: `open_spellbuf` gave up this address and nothing else
     // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after
     // this call.
-    drop(unsafe { Owned::from_raw(buffer) });
+    drop(unsafe { Owned::from_raw(buffer.raw()) });
 }

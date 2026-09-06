@@ -25,7 +25,6 @@ use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
     Fmt, HlDest, HlRuns, SIGN_SHOW_MAX, StlJob, fillchar_status_of, push, put, stl_is_global,
-    win_opt,
 };
 use crate::types::{MAXPATHL, OptionSetFlags, StlOpt};
 use crate::winlayer::Win;
@@ -320,7 +319,11 @@ fn highlight_dicts(
     } else {
         ctx.win.raw()
     };
-    let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id);
+    let dfltname = get_default_stl_hl(
+        unsafe { Win::from_raw(ctxwin) },
+        opts.use_winbar,
+        ctx.stc_hl_id,
+    );
 
     // If the first character has no highlight of its own, the default one
     // opens the list.
@@ -346,7 +349,11 @@ fn highlight_dicts(
     let mut user_group = [0 as c_char; 15]; // "User" + "2147483647" + NUL
     for run in runs.iter() {
         let grpname = if run.userhl == 0 {
-            get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id)
+            get_default_stl_hl(
+                unsafe { Win::from_raw(ctxwin) },
+                opts.use_winbar,
+                ctx.stc_hl_id,
+            )
         } else if run.userhl < 0 {
             syn_id2name(-run.userhl)
         } else {
@@ -407,8 +414,8 @@ pub unsafe fn nvim__complete_set(
         return rv.reported(error);
     }
     if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {
-        // SAFETY: a checked API string; the answer is null or a live window.
-        let win = unsafe { win_opt(pum_set_info(index as c_int, opts.info.data())) };
+        // SAFETY: a checked API string.
+        let win = unsafe { pum_set_info(index as c_int, opts.info.data()) };
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));

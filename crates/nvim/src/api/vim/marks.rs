@@ -11,6 +11,7 @@ use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -59,7 +60,7 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     }
     let no_buf = ptr::null_mut::<Buffer>();
     // SAFETY: a global mark takes no buffer, and `error` is this frame's own.
-    let res = unsafe { set_mark(no_buf, name, 0, 0, &mut error) };
+    let res = unsafe { set_mark(Buf::from_raw(no_buf), name, 0, 0, &mut error) };
     res.reported(error)
 }
 

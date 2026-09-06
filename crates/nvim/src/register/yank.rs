@@ -489,7 +489,8 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     let locked = Lock::text();
     let none = ::core::ptr::null_mut();
     let buffer = Buf::current_raw();
-    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, buffer) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, __hoisted_0) };
     drop(locked);
 
     // SAFETY: `save_v_event` is the one `get_v_event` was given.

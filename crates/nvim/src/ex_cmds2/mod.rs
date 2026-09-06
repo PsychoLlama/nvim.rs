@@ -271,23 +271,22 @@ unsafe fn script_host_do_range(name: &CStr, args: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn autowrite(buffer: *mut Buffer, forceit: bool) -> Result<(), Failed> {
-    // SAFETY: module contract.
+pub(crate) unsafe fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
         // never autowrite a "nofile" or "nowrite" buffer
-        || buf_is_dontwrite(unsafe { Buf::from_raw(buffer) })
-        || (!forceit && unsafe { (*buffer) .b_p_ro } != 0)
-        || unsafe { (*buffer) .b_ffname }.is_null()
+        || buf_is_dontwrite(Some(buffer))
+        || (!forceit && buffer.b_p_ro != 0)
+        || buffer.b_ffname.is_null()
     {
         return Err(Failed);
     }
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
-    let r = unsafe { buf_write_all(Buf::new(buffer), forceit) };
+    let bufref = BufRef::of(buffer);
+    let r = unsafe { buf_write_all(buffer, forceit) };
 
     // The write can succeed and still leave the buffer changed, e.g. on
     // a conversion error. That is a failure.
-    if bufref.valid() && buf_is_changed(unsafe { Buf::new(buffer) }) {
+    if bufref.valid() && buf_is_changed(buffer) {
         return Err(Failed);
     }
     r
@@ -322,15 +321,15 @@ pub(crate) unsafe fn autowrite_all() {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
+pub(crate) unsafe fn check_changed(buffer: Buf, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
     // SAFETY: module contract, here and at every `unsafe` below.
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
+    let bufref = BufRef::of(buffer);
 
     let blocked = unsafe {
         !forceit
-            && buf_is_changed(Buf::new(buffer))
-            && (flags & CCGD_MULTWIN != 0 || (*buffer).b_nwindows <= 1)
+            && buf_is_changed(buffer)
+            && (flags & CCGD_MULTWIN != 0 || buffer.b_nwindows <= 1)
             && (flags & CCGD_AW == 0 || autowrite(buffer, forceit).is_err())
     };
     if !blocked {
@@ -361,11 +360,11 @@ pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
     if !bufref.valid() {
         return false;
     }
-    unsafe { dialog_changed(Buf::new(buffer), count > 1) };
+    unsafe { dialog_changed(buffer, count > 1) };
     if !bufref.valid() {
         return false;
     }
-    buf_is_changed(unsafe { Buf::new(buffer) })
+    buf_is_changed(buffer)
 }
 
 /// Ask what to do about abandoning the changed buffer `buffer`. The caller must
@@ -491,7 +490,7 @@ pub(crate) unsafe fn can_abandon(buffer: Buf, forceit: bool) -> bool {
     hidden
         || !buf_is_changed(buffer)
         || buffer.b_nwindows > 1
-        || unsafe { autowrite(buffer.raw(), forceit) }.is_ok()
+        || unsafe { autowrite(buffer, forceit) }.is_ok()
         || forceit
 }
 
@@ -553,7 +552,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
         // Try auto-writing the buffer. If that fails but the buffer no
         // longer exists it is not changed, and that is fine.
         let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
-        if unsafe { check_changed(buf, flags) } && bufref.valid() {
+        if unsafe { check_changed(Buf::new(buf), flags) } && bufref.valid() {
             // Didn't save -- still changed.
             culprit = buf;
             break;
@@ -862,7 +861,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     let mut split = false;
     if !unsafe { buf_hide(Buf::current()) } {
         let _no_emsg = Suppress::emsg();
-        split = unsafe { check_changed(Buf::current_raw(), CCGD_AW | CCGD_EXCMD) };
+        split = unsafe { check_changed(Buf::current(), CCGD_AW | CCGD_EXCMD) };
     }
 
     // Fake a ":sfirst" or ":first" to edit the first argument.

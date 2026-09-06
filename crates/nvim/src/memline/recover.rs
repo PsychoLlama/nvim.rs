@@ -213,8 +213,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
         msg_ext_skip_flush.set(true);
         let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
-        let none = core::ptr::null();
-        unsafe { home_replace(none, mf_fname(mfp), out, room, true) };
+        unsafe { home_replace(None, mf_fname(mfp), out, room, true) };
         // SAFETY: `home_replace` NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Using swap file \"{shown}\"");
@@ -228,8 +227,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             };
         } else {
             let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
-            let none = core::ptr::null();
-            unsafe { home_replace(none, Buf::current().b_ffname, out, room, true) };
+            unsafe { home_replace(None, Buf::current().b_ffname, out, room, true) };
         }
         unsafe { msg_putchar('\n' as c_int) };
         // SAFETY: the copy above NUL-terminated `path`.
@@ -366,8 +364,10 @@ pub unsafe fn ml_recover(checkext: bool) {
     } else {
         let (name, buf) = (Buf::current().b_fname, Buf::current_raw());
         let none = core::ptr::null_mut();
-        unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, buf) };
-        unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, buf) };
+        let __hoisted_0 = unsafe { Buf::from_raw(buf) };
+        unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, __hoisted_0) };
+        let __hoisted_1 = unsafe { Buf::from_raw(buf) };
+        unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, __hoisted_1) };
     }
 }
 

@@ -161,7 +161,8 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let _ = unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict) };
     unsafe { tv_dict_set_keys_readonly(dict) };
     let buffer = Buf::current_raw();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, buffer) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, __hoisted_0) };
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { channel_decref(chan) };

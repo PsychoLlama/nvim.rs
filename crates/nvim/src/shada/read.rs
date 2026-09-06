@@ -275,18 +275,14 @@ impl Reading {
     /// refers to it by number and the file name is dropped.
     unsafe fn apply_file_mark(&mut self, mut entry: ShadaEntry) {
         let buf = unsafe { buffer_for_fname(&mut self.fname_bufs, entry.data.filemark().fname) };
-        if !buf.is_null() {
+        if buf.is_some() {
             unsafe { xfree(entry.data.filemark().fname.cast()) };
             entry.data.filemark_mut().fname = core::ptr::null_mut();
         }
         let fm = XFileMark {
             fmark: FileMark {
                 mark: entry.data.filemark().mark,
-                fnum: if buf.is_null() {
-                    0
-                } else {
-                    (unsafe { (*buf).handle }) as c_int
-                },
+                fnum: buf.map_or(0, |b| b.handle) as c_int,
                 timestamp: entry.timestamp,
                 view: INIT_FMARKV,
                 additional_data: entry.additional_data,
@@ -334,15 +330,13 @@ impl Reading {
 
         // A mark on a file no buffer is holding has nowhere to go.
         let buf = unsafe { buffer_for_fname(&mut self.fname_bufs, entry.data.filemark().fname) };
-        if buf.is_null() {
+        let Some(buffer) = buf else {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
-        }
-        // SAFETY: not null, and the guard above is what says so.
-        let buffer = unsafe { Buf::new(buf) };
+        };
         let fm = FileMark {
             mark: entry.data.filemark().mark,
-            fnum: unsafe { (*buf).handle } as c_int,
+            fnum: buffer.handle as c_int,
             timestamp: entry.timestamp,
             view: INIT_FMARKV,
             additional_data: entry.additional_data,
@@ -353,7 +347,7 @@ impl Reading {
                 return;
             }
         } else {
-            self.cl_bufs.insert(buf);
+            self.cl_bufs.insert(buffer.raw());
             unsafe { insert_change(buffer, fm) };
         }
         // The mark took the extra data; only the file name is left.
@@ -402,10 +396,10 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
         let item = unsafe { list.buffers.add(i) };
         let sfname = unsafe { path_try_shorten_fname((*item).fname) };
         let buf = unsafe { buflist_new((*item).fname, sfname, 0, BLN_LISTED as c_int) };
-        if buf.is_null() {
+        let Some(mut buf) = buf else {
             continue;
-        }
-        unsafe { free_fmark((*buf).b_last_cursor.clone()) };
+        };
+        unsafe { free_fmark(buf.b_last_cursor.clone()) };
         let cursor = FileMark {
             mark: unsafe { (*item).pos },
             fnum: 0,
@@ -413,13 +407,11 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
             view: INIT_FMARKV,
             additional_data: core::ptr::null_mut(),
         };
-        unsafe { (*buf).b_last_cursor = cursor };
-        let (lnum, col) = (unsafe { (*buf).b_last_cursor.mark.lnum }, unsafe {
-            (*buf).b_last_cursor.mark.col
-        });
-        unsafe { buflist_setfpos(Buf::new(buf), Some(Win::current()), lnum, col, false) };
-        unsafe { xfree((*buf).additional_data.cast()) };
-        unsafe { (*buf).additional_data = (*item).additional_data };
+        buf.b_last_cursor = cursor;
+        let (lnum, col) = (buf.b_last_cursor.mark.lnum, buf.b_last_cursor.mark.col);
+        unsafe { buflist_setfpos(buf, Some(Win::current()), lnum, col, false) };
+        unsafe { xfree(buf.additional_data.cast()) };
+        buf.additional_data = unsafe { (*item).additional_data };
         unsafe { (*item).additional_data = core::ptr::null_mut() };
     }
     unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -429,11 +421,11 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
 ///
 /// Answers are memoised in `fname_bufs`, whose keys are copies this makes
 /// and the caller frees.
-unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> *mut Buffer {
+unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> Option<Buf> {
     // SAFETY: the caller's file name, null or NUL-terminated.
     let key = unsafe { shada_key(fname) };
     if let Some(&memoised) = fname_bufs.get(key) {
-        return memoised;
+        return unsafe { Buf::from_raw(memoised) };
     }
     let mut found = core::ptr::null_mut();
     for buf in buffers() {
@@ -444,7 +436,7 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
         }
     }
     fname_bufs.insert(key.into(), found);
-    found
+    unsafe { Buf::from_raw(found) }
 }
 
 /// Put a jump into `curwin`'s jump list, which is kept oldest first.
@@ -452,13 +444,13 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// A jump the list already holds — same position, same file — is dropped
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
-unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry) {
+unsafe fn insert_jump(fm: XFileMark, buffer: Option<Buf>, mut entry: ShadaEntry) {
     let mut win = Win::current();
     let mut i = win.w_jumplistlen;
     while i > 0 {
         let existing = &win.w_jumplist[i as usize - 1];
         if existing.fmark.timestamp <= fm.fmark.timestamp {
-            let same_file = if buffer.is_null() {
+            let same_file = if buffer.is_none() {
                 // SAFETY: both names are NUL-terminated: the list's own, and
                 // the caller's, which it promised.
                 !existing.fname.is_null() && unsafe { cstr::eq(fm.fname, existing.fname) }

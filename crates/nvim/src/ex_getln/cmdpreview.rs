@@ -12,6 +12,7 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
+use core::ptr;
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> Handle {
@@ -26,7 +27,7 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Set up the command preview buffer, creating it if it does not exist.
 ///
 /// Answers NULL if the buffer could not be made ready.
-pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
+pub(crate) unsafe fn cmdpreview_open_buf() -> Option<Buf> {
     let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
         find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
@@ -38,14 +39,14 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
         // SAFETY: creating a scratch buffer needs only a live editor.
         let created = unsafe { nvim_create_buf(false, true) };
         let Ok(bufnr) = created else {
-            return ::core::ptr::null_mut::<Buffer>();
+            return None;
         };
         cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |b| b.raw());
     }
 
     // The preview buffer cannot preview itself.
     if cmdpreview_buf == Buf::current_raw() {
-        return ::core::ptr::null_mut::<Buffer>();
+        return None;
     }
 
     // Rename the preview buffer.
@@ -55,7 +56,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     unsafe { aucmd_restbuf(&raw mut aco) };
 
     if retv.is_err() {
-        return ::core::ptr::null_mut::<Buffer>();
+        return None;
     }
 
     // Temporarily switch to the preview buffer to set it up.
@@ -68,12 +69,12 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     unsafe { aucmd_restbuf(&raw mut aco) };
     cmdpreview_bufnr.set(unsafe { (*cmdpreview_buf).handle });
 
-    cmdpreview_buf
+    unsafe { Buf::from_raw(cmdpreview_buf) }
 }
 
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
-pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> *mut Window {
+pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let save_curwin = Win::current();
 
     if win_split(
@@ -82,7 +83,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> *mut Window {
     )
     .is_err()
     {
-        return ::core::ptr::null_mut::<Window>();
+        return None;
     }
 
     let preview_win = Win::current_raw();
@@ -102,7 +103,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> *mut Window {
 
     if err.is_set() || result.is_err() {
         err.clear();
-        return ::core::ptr::null_mut::<Window>();
+        return None;
     }
 
     Win::current().w_onebuf_opt.wo_cul = 0;
@@ -111,7 +112,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> *mut Window {
     Win::current().w_onebuf_opt.wo_fen = 0;
 
     unsafe { win_enter(save_curwin, false) };
-    preview_win
+    unsafe { Win::from_raw(preview_win) }
 }
 
 /// Close any open command preview windows.
@@ -428,7 +429,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         // Open the preview buffer if 'inccommand' is "split".
         if icm_split && {
-            cmdpreview_buf = unsafe { cmdpreview_open_buf() };
+            cmdpreview_buf = unsafe { cmdpreview_open_buf().map_or(ptr::null_mut(), Buf::raw) };
             cmdpreview_buf.is_null()
         } {
             // Failed to create the preview buffer, so disable the preview.
@@ -464,7 +465,9 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // With 'inccommand' = "split" and a callback answering 2, open the
         // preview window.
         if icm_split && cmdpreview_type == 2 && {
-            cmdpreview_win = unsafe { cmdpreview_open_win(Buf::new(cmdpreview_buf)) };
+            cmdpreview_win = unsafe {
+                cmdpreview_open_win(Buf::new(cmdpreview_buf)).map_or(ptr::null_mut(), Win::raw)
+            };
             cmdpreview_win.is_null()
         } {
             // Not enough room for the preview window: preview without it.

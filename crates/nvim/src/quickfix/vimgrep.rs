@@ -567,13 +567,14 @@ unsafe fn keep_or_drop_dummy(
     let raw = buffer.raw();
     // SAFETY: a live buffer, entered and left again around the events.
     unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
+    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
     unsafe {
         apply_autocmds(
             AutoEvent::FileType,
             buffer.b_p_ft,
             buffer.b_fname,
             true,
-            raw,
+            __hoisted_0,
         )
     };
     do_modelines(OptionSetFlags::NOWIN);

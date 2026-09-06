@@ -18,7 +18,8 @@ use crate::os::fs::os_isdir;
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
 use crate::strings::vim_strchr;
-use crate::types::{Buffer, MAXPATHL, Vv};
+use crate::types::{MAXPATHL, Vv};
+use crate::winlayer::Buf;
 
 /// The directory a runtime lives in, under `$VIM`.
 const RUNTIME_DIRNAME: &CStr = c"runtime";
@@ -286,7 +287,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
 /// `dst` must be writable for `dstlen` bytes; `src` NUL-terminated or NULL;
 /// `buffer` a live buffer or NULL.
 pub unsafe fn home_replace(
-    buffer: *const Buffer,
+    buffer: Option<Buf>,
     src: *const c_char,
     dst: *mut c_char,
     dstlen: size_t,
@@ -299,7 +300,7 @@ pub unsafe fn home_replace(
             *dst = 0;
             return 0;
         }
-        if !buffer.is_null() && (*buffer).b_help {
+        if buffer.is_some_and(|b| b.b_help) {
             let dlen = xstrlcpy(dst, path_tail(src), dstlen);
             return dlen.min(dstlen - 1);
         }
@@ -421,7 +422,7 @@ pub unsafe fn home_replace(
 ///
 /// # Safety
 /// `src` must be NUL-terminated or NULL, `buffer` live or NULL.
-pub unsafe fn home_replace_save(buffer: *mut Buffer, src: *const c_char) -> *mut c_char {
+pub unsafe fn home_replace_save(buffer: Option<Buf>, src: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; the buffer is sized for the source plus
     // "~/" and the NUL.
     unsafe {

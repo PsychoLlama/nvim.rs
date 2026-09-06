@@ -60,7 +60,7 @@ use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
     OptionSetFlags, ScreenChar, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
-    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle, Window, size_t, stl_hlrec_t,
+    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle, size_t, stl_hlrec_t,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -548,15 +548,6 @@ pub(crate) fn combine_attr(under: c_int, over: c_int) -> c_int {
 /// instead of one per window.
 pub(crate) fn stl_is_global() -> bool {
     global_stl_height() > 0
-}
-
-/// The window a drawing entry point was handed, or `None` for the tab line.
-///
-/// # Safety
-/// `window` must be null or a live window.
-pub(crate) unsafe fn win_opt(window: *mut Window) -> Option<Win> {
-    // SAFETY: the caller's promise, minus the null case.
-    (!window.is_null()).then(|| unsafe { Win::new(window) })
 }
 
 /// C's `PUT_C`: put `key` in a dictionary that was sized up front.

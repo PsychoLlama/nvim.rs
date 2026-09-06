@@ -120,16 +120,14 @@ fn tab_localdir(tabpage: TabPage) -> *mut c_char {
 }
 
 /// Tabpage number `n`, or NULL when there is none.
-fn find_tab(n: c_int) -> *mut Tabpage {
+fn find_tab(n: c_int) -> Option<TabPage> {
     find_tabpage(n)
 }
 
 /// The window argument 0 names within `tabpage`, or NULL when there is none.
-fn find_win(args: Args<'_>, tabpage: *mut Tabpage) -> *mut Window {
-    // SAFETY: a live typval, and a live tab page or NULL -- which the
-    // resolver reads as the current one.
-    unsafe { find_win_by_nr(args.ptr(0), TabPage::from_raw(tabpage)) }
-        .map_or(ptr::null_mut(), Win::raw)
+fn find_win(args: Args<'_>, tabpage: Option<TabPage>) -> Option<Win> {
+    // SAFETY: a live typval; an absent tab page reads as the current one.
+    unsafe { find_win_by_nr(args.ptr(0), tabpage) }
 }
 
 /// Change to `dir` in `scope`; false -- having reported -- when it fails.
@@ -233,7 +231,7 @@ impl Scope {
 
         // Find the tabpage by number.
         if s.number[tab_i] > 0 {
-            s.tp = find_tab(s.number[tab_i]);
+            s.tp = find_tab(s.number[tab_i]).map_or(ptr::null_mut(), TabPage::raw);
             if s.tp.is_null() {
                 err0(c"E5000: Cannot find tab number.".as_ptr());
                 return None;
@@ -247,7 +245,8 @@ impl Scope {
                 return None;
             }
             if s.number[win_i] > 0 {
-                s.win = find_win(args, s.tp);
+                s.win = find_win(args, unsafe { TabPage::from_raw(s.tp) })
+                    .map_or(ptr::null_mut(), Win::raw);
                 if s.win.is_null() {
                     err0(c"E5002: Cannot find window number.".as_ptr());
                     return None;

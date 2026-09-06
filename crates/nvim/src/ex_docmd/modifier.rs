@@ -334,7 +334,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                         if tabnr == MAXLNUM as c_int {
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
-                            if tabnr < 0 || tabnr > current_tab_nr(ptr::null_mut()) {
+                            if tabnr < 0 || tabnr > current_tab_nr(None) {
                                 *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
                                 return Err(Failed);
                             }

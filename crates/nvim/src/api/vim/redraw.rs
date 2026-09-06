@@ -38,14 +38,14 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
         // SAFETY: `window` is a live window, and the last call puts back the
         // namespace the first one set.
         unsafe {
-            win_check_ns_hl(window.raw());
+            win_check_ns_hl(Some(window));
             if opts.winbar {
                 win_redr_winbar(window);
             }
             if opts.statusline {
                 win_redr_status(window);
             }
-            win_check_ns_hl(::core::ptr::null_mut::<Window>());
+            win_check_ns_hl(None);
         }
     }
     flush

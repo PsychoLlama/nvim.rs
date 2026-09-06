@@ -236,7 +236,7 @@ unsafe fn resolve_command(
         // SAFETY: as above.
         unsafe {
             p = arena_string(arena, cmd.cmd).data();
-            let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, ptr::null_mut());
+            let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, None);
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(ea, ptr::null_mut())
             } else {

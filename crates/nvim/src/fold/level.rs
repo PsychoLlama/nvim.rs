@@ -699,7 +699,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
     let save_keytyped = KeyTyped.get();
     let mut verdict: c_int = 0;
     // SAFETY: a live window, and `verdict` is ours.
-    let n = unsafe { eval_foldexpr(line.win().raw(), &raw mut verdict) };
+    let n = unsafe { eval_foldexpr(line.win(), &raw mut verdict) };
     KeyTyped.set(save_keytyped);
     // `eval_foldexpr` writes one byte of the expression's answer, so the
     // truncation below is exact.
@@ -761,13 +761,13 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
 pub(super) unsafe fn foldlevel_syntax(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window, and a line inside its buffer.
-    line.set_lvl(unsafe { syn_get_foldlevel(Win::new(line.win().raw()), lnum) });
+    line.set_lvl(unsafe { syn_get_foldlevel(line.win(), lnum) });
     line.set_start(0);
     if lnum < line.win().buffer().b_ml.ml_line_count {
         // A fold that starts on the next line starts here as far as the
         // tree is concerned, so the syntax item's first line is inside.
         // SAFETY: a live window, and the line after one inside its buffer.
-        let n = unsafe { syn_get_foldlevel(Win::new(line.win().raw()), lnum + 1) };
+        let n = unsafe { syn_get_foldlevel(line.win(), lnum + 1) };
         if n > line.lvl() {
             line.set_start(n - line.lvl());
             line.set_lvl(n);

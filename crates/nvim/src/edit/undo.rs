@@ -273,7 +273,7 @@ pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     let tick = buf_get_changedtick(Buf::current());
     let none = ::core::ptr::null_mut();
-    let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) } as c_int;
+    let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) } as c_int;
 
     if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(Buf::current()) {
         let _ = u_save(

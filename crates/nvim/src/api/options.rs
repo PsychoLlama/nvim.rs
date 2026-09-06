@@ -209,26 +209,26 @@ unsafe fn do_ft_buf(
     aco: *mut AcoSave,
     aco_used: *mut bool,
     err: &mut Error,
-) -> *mut Buffer {
+) -> Option<Buf> {
     // SAFETY: `aco_used` is the caller's out-parameter.
     unsafe { *aco_used = false };
     if filetype.is_null() {
-        return ptr::null_mut::<Buffer>();
+        return None;
     }
     // SAFETY: a dummy buffer of no name, which owns everything it holds.
-    let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as LineNr, BLN_DUMMY) };
-    if ftbuf.is_null() {
+    let made = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as LineNr, BLN_DUMMY) };
+    let Some(mut ftbuf) = made else {
         *err = Error::exception(c"Could not create internal buffer");
-        return ptr::null_mut::<Buffer>();
-    }
+        return None;
+    };
     // SAFETY: `ftbuf` is the buffer just created.
-    if unsafe { ml_open(Buf::new(ftbuf)) }.is_err() {
+    if unsafe { ml_open(ftbuf) }.is_err() {
         *err = Error::exception(c"Could not load internal buffer");
-        return ftbuf;
+        return Some(ftbuf);
     }
     // SAFETY: `aco` is the caller's and `ftbuf` is live until it is wiped.
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(ftbuf) });
-    unsafe { aucmd_prepbuf(aco, Buf::new(ftbuf)) };
+    let bufref = BufRef::of(ftbuf);
+    unsafe { aucmd_prepbuf(aco, ftbuf) };
     unsafe { *aco_used = true };
     // 'bufhidden' and 'buftype' keep the scratch buffer out of everything the
     // user can see; both are set without autocommands, as `:setlocal` would.
@@ -246,31 +246,28 @@ unsafe fn do_ft_buf(
     );
     // SAFETY: `ftbuf` is the live scratch buffer; `ml_open` gave it a memfile.
     debug_assert!(
-        unsafe { (*(*ftbuf).b_ml.ml_mfp).mf_fd } < 0,
+        unsafe { (*ftbuf.b_ml.ml_mfp).mf_fd } < 0,
         "ftbuf->b_ml.ml_mfp->mf_fd < 0"
     );
-    unsafe { (*ftbuf).b_p_swf = 0 };
-    unsafe { (*ftbuf).b_p_ml = 0 };
-    unsafe { (*ftbuf).b_p_ft = xstrdup(filetype) };
+    ftbuf.b_p_swf = 0;
+    ftbuf.b_p_ml = 0;
+    unsafe { ftbuf.b_p_ft = xstrdup(filetype) };
     // SAFETY: the autocommand tables are the editor's own.
     if !has_event(AutoEvent::FileType) {
-        return ftbuf;
+        return Some(ftbuf);
     }
-    // SAFETY: `ftbuf` is live; the autocommands may delete it, which the
-    // `bufref` below re-checks.
-    let did_au_ft = api_try(&mut *err, |_| {
-        do_filetype_autocmd(unsafe { Buf::new(ftbuf) }, true)
-    });
+    // The autocommands may delete `ftbuf`, which the `bufref` re-checks.
+    let did_au_ft = api_try(&mut *err, |_| do_filetype_autocmd(ftbuf, true));
     if !bufref.valid() {
         if err.kind() == kErrorTypeNone {
             *err = Error::exception(c"Internal buffer was deleted");
         }
-        return ptr::null_mut::<Buffer>();
+        return None;
     }
     if !did_au_ft && err.kind() == kErrorTypeNone {
         *err = Error::exception(c"Could not execute FileType autocommands");
     }
-    ftbuf
+    Some(ftbuf)
 }
 
 /// An `OptVal` borrowing the static string `text`, for the two option writes
@@ -283,13 +280,11 @@ fn static_option(text: &'static CStr) -> OptVal {
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-unsafe fn wipe_ft_buf(buffer: *mut Buffer) {
-    // SAFETY: a live buffer.
-    let mut buffer = unsafe { Buf::new(buffer) };
+unsafe fn wipe_ft_buf(mut buffer: Buf) {
     // SAFETY: `buffer` is the caller's live buffer; the `bufref` re-checks it
     // after each step that can delete it.
     unsafe { block_autocmds() };
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer.raw()) });
+    let bufref = BufRef::of(buffer);
     unsafe { close_windows(buffer, false) };
     if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows == 0 {
         wipe_buffer(buffer, false);
@@ -323,11 +318,11 @@ pub unsafe fn nvim_get_option_value(
     // borrows `opts`, which outlives the call.
     let ftbuf = unsafe { do_ft_buf(target.filetype, paco, pused, &mut err) };
     // SAFETY: `aco` is this frame's own and `ftbuf` is the scratch buffer.
-    let mut leave_ft_buf = |ftbuf: *mut Buffer| unsafe {
+    let mut leave_ft_buf = |ftbuf: Option<Buf>| unsafe {
         if aco_used {
             aucmd_restbuf(&raw mut aco);
         }
-        if !ftbuf.is_null() {
+        if let Some(ftbuf) = ftbuf {
             wipe_ft_buf(ftbuf);
         }
     };
@@ -338,17 +333,18 @@ pub unsafe fn nvim_get_option_value(
 
     // A filetype cannot be combined with `buf` or `win`, so `from` is null
     // wherever the scratch buffer exists.
-    let from = if ftbuf.is_null() {
-        target.from
-    } else {
-        debug_assert!(target.from.is_null(), "!from");
-        ftbuf.cast::<c_void>()
+    let from = match ftbuf {
+        None => target.from,
+        Some(ftbuf) => {
+            debug_assert!(target.from.is_null(), "!from");
+            ftbuf.raw().cast::<c_void>()
+        }
     };
     let (idx, flags, scope) = (target.opt_idx, target.opt_flags, target.scope);
     // SAFETY: `from` is null or the live object `scope` names, and `err` is
     // this frame's own.
     let value = unsafe { get_option_value_for(idx, flags, scope, from, &mut err) };
-    if !ftbuf.is_null() {
+    if ftbuf.is_some() {
         leave_ft_buf(ftbuf);
     }
     if !err.is_set() {

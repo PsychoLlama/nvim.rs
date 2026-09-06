@@ -114,32 +114,27 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
 /// # Safety
 /// `briopt` must be null or a NUL-terminated string, and `window` null or a
 /// window.
-pub unsafe fn briopt_check(briopt: *mut c_char, window: *mut Window) -> bool {
-    // SAFETY: the caller's option string, or the window's own copy of it.
-    let value = unsafe {
-        if !briopt.is_null() {
-            briopt.cast_const()
-        } else if !window.is_null() {
-            (*window).w_onebuf_opt.wo_briopt.cast_const()
-        } else {
-            // Upstream reads `empty_string_option` here, which is only ever
-            // the empty string and is never written through.
-            c"".as_ptr()
-        }
+pub unsafe fn briopt_check(briopt: *mut c_char, window: Option<Win>) -> bool {
+    // The caller's option string, or the window's own copy of it.
+    let value = match (briopt.is_null(), window) {
+        (false, _) => briopt.cast_const(),
+        (true, Some(w)) => w.w_onebuf_opt.wo_briopt.cast_const(),
+        // Upstream reads `empty_string_option` here, which is only ever
+        // the empty string and is never written through.
+        (true, None) => c"".as_ptr(),
     };
     // SAFETY: `value` is one of three NUL-terminated strings.
     let Some(opt) = (unsafe { parse_briopt(value) }) else {
         return false;
     };
-    if window.is_null() {
+    let Some(mut window) = window else {
         return true; // Only the check was asked for.
-    }
-    // SAFETY: the caller's window.
-    unsafe { (*window).w_briopt_shift = opt.shift };
-    unsafe { (*window).w_briopt_min = opt.min };
-    unsafe { (*window).w_briopt_sbr = opt.sbr };
-    unsafe { (*window).w_briopt_list = opt.list };
-    unsafe { (*window).w_briopt_vcol = opt.vcol };
+    };
+    window.w_briopt_shift = opt.shift;
+    window.w_briopt_min = opt.min;
+    window.w_briopt_sbr = opt.sbr;
+    window.w_briopt_list = opt.list;
+    window.w_briopt_vcol = opt.vcol;
     true
 }
 

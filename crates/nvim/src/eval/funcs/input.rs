@@ -255,7 +255,7 @@ pub unsafe fn f_interrupt(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalF
 unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation -- `tv_get_buf_from_arg` answers a live
     // buffer or null.
-    let buf = unsafe { Buf::from_raw(tv_get_buf_from_arg(arg)) };
+    let buf = unsafe { tv_get_buf_from_arg(arg) };
     buf.filter(|b| buf_is_prompt(Some(*b)))
 }
 
@@ -279,6 +279,6 @@ pub unsafe fn f_prompt_getinput(args: *mut TypVal, result: *mut TypVal, _fptr: E
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `result` then owns.
     if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
-        result.vval.v_string = unsafe { prompt_get_input(buf.raw()) };
+        result.vval.v_string = unsafe { prompt_get_input(Some(buf)) };
     }
 }

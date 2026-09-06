@@ -186,7 +186,7 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
     recoverymode.set(true);
     let unsaved = unsafe {
         check_changed(
-            Buf::current_raw(),
+            Buf::current(),
             (if p_awa.get() != 0 {
                 CCGD_AW as c_int
             } else {

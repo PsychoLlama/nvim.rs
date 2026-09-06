@@ -276,7 +276,8 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         let nul = ::core::ptr::null_mut::<c_char>();
         // SAFETY: the editor exists; `DiffUpdated` takes no file name.
         unsafe { diff_redraw(false) };
-        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, Buf::current_raw()) };
+        let here = Buf::current_or_none();
+        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, here) };
     }
 }
 

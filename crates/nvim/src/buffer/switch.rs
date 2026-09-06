@@ -112,7 +112,7 @@ fn split_window() -> Result<(), Failed> {
 /// says to; the answer is whether one was found.
 fn window_showing(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    !unsafe { swbuf_goto_win_with_buf(buffer.raw()) }.is_null()
+    !unsafe { swbuf_goto_win_with_buf(Some(buffer)) }.is_none()
 }
 fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(forceit as c_int)
@@ -286,8 +286,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
                 // SAFETY: two null names ask for a nameless buffer.
                 let buf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, flags) };
                 unblock_autocmds_now();
-                // SAFETY: `buflist_new` answers a live buffer or null.
-                (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+                buf
             }
         };
         if let Some(buf) = buf {

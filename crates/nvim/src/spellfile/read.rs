@@ -480,7 +480,7 @@ unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_sound_tree, false, 0)?;
 
     // SAFETY: the scratch buffer the suggestion search indexes by line.
-    slang.sl_sugbuf = unsafe { open_spellbuf() };
+    slang.sl_sugbuf = unsafe { open_spellbuf() }.map_or(core::ptr::null_mut(), Buf::raw);
     let wcount = spl.get4c()?;
     if wcount < 0 {
         return Err(SpellReadError::Format);

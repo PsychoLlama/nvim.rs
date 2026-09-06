@@ -171,8 +171,10 @@ fn current_last() -> Option<Buf> {
 
 fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
     let raw = buffer.raw();
-    // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) }
+
+    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
+
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) }
 }
 
 fn copy_options_into(buffer: Buf, flags: c_int) {
@@ -202,7 +204,7 @@ pub unsafe fn buflist_new(
     sfname_arg: *mut c_char,
     lnum: LineNr,
     flags: c_int,
-) -> *mut Buffer {
+) -> Option<Buf> {
     let mut ffname = ffname_arg;
     let mut sfname = sfname_arg;
 
@@ -239,7 +241,7 @@ pub unsafe fn buflist_new(
         if aborting() {
             // Autocommands may abort script processing.
             free(ffname);
-            return ptr::null_mut();
+            return None;
         }
         // When the buffer was deleted, allocate a new one instead.
         reusable = bufref.get();
@@ -320,7 +322,7 @@ pub unsafe fn buflist_new(
     reset_update_subscribers(&mut buf);
 
     if flags & BLN_DUMMY as c_int == 0 && !announce_new_buffer(buf, flags) {
-        return ptr::null_mut();
+        return None;
     }
 
     buf.b_prompt_callback = Callback::None;
@@ -331,12 +333,12 @@ pub unsafe fn buflist_new(
     buf.b_prompt_start.mark.col = 2 as ColNr;
     buf.b_prompt_append_new_line = true;
 
-    buf.raw()
+    Some(buf)
 }
 
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
-fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> *mut Buffer {
+fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
     if lnum != 0 as LineNr {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
         // SAFETY: records a position in the buffer's own entry list.
@@ -354,10 +356,10 @@ fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> *mut Buffer {
             && fire_buf_event(AutoEvent::BufAdd, buffer)
             && !bufref.valid()
         {
-            return ptr::null_mut();
+            return None;
         }
     }
-    buffer.raw()
+    Some(buffer)
 }
 
 /// A zeroed `Buffer` with its `b:` dictionary and `b:changedtick` in place.
@@ -674,12 +676,12 @@ pub unsafe fn buflist_getfile(
 /// showing `buffer`, or make one. Answers false when the split failed.
 fn goto_existing_window(buffer: Buf) -> bool {
     // SAFETY: a live buffer; the answer is a live window or null.
-    let wp = unsafe { swbuf_goto_win_with_buf(buffer.raw()) };
+    let wp = unsafe { swbuf_goto_win_with_buf(Some(buffer)) };
     let splits = (kOptSwbFlagVsplit as c_int
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;
     // SAFETY: the current buffer.
-    if !wp.is_null() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current()) } {
+    if wp.is_some() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current()) } {
         return true;
     }
     if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {

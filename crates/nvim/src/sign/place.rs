@@ -303,9 +303,7 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
 ///
 /// # Safety
 /// `buffer` must be live.
-pub(crate) unsafe fn buf_has_signs(buffer: *const Buffer) -> bool {
-    // SAFETY: the caller's buffer.
-    let buffer = unsafe { Buf::new(buffer.cast_mut()) };
+pub(crate) fn buf_has_signs(buffer: Buf) -> bool {
     buffer.meta_total(kMTMetaSignHL) + buffer.meta_total(kMTMetaSignText) != 0
 }
 
@@ -374,7 +372,7 @@ unsafe fn sign_unplace_inner(
     atlnum: LineNr,
 ) -> c_int {
     // SAFETY: the caller's buffer.
-    if !unsafe { buf_has_signs(buffer.raw()) } {
+    if !buf_has_signs(buffer) {
         return FAIL;
     }
     // SAFETY: the caller's group name, null or NUL-terminated.
@@ -401,14 +399,14 @@ unsafe fn sign_unplace_inner(
 /// # Safety
 /// `buffer` must be null or live; `group` must be null or NUL-terminated.
 pub(crate) unsafe fn sign_unplace(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     id: c_int,
     group: *const c_char,
     atlnum: LineNr,
 ) -> c_int {
-    if !buffer.is_null() {
+    if let Some(buffer) = buffer {
         // SAFETY: the caller's buffer and group.
-        return unsafe { sign_unplace_inner(Buf::new(buffer), id, group, atlnum) };
+        return unsafe { sign_unplace_inner(buffer, id, group, atlnum) };
     }
     let mut retval = OK;
     for cbuf in buffers() {
@@ -435,7 +433,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
         return -1;
     }
     // SAFETY: a live buffer.
-    if !unsafe { buf_jump_open_win(buffer) }.is_null() {
+    if !unsafe { buf_jump_open_win(buffer) }.is_none() {
         let mut win = Win::current();
         win.w_cursor.lnum = lnum;
         check_cursor_lnum(win);

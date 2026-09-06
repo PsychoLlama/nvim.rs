@@ -207,14 +207,16 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
 
     recursive.set(true);
     let locked = Lock::text();
-    // SAFETY: as above -- `CompleteChanged` takes no file name pattern.
+
+    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
+
     unsafe {
         apply_autocmds(
             AutoEvent::CompleteChanged,
             ptr::null_mut(),
             ptr::null_mut(),
             false,
-            buf,
+            __hoisted_0,
         );
     }
     drop(locked);

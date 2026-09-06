@@ -129,9 +129,7 @@ pub unsafe fn find_tabwin(wvp: *mut TypVal, tvp: *mut TypVal) -> Option<Win> {
         let n = number_as_int(unsafe { tv_get_number(tvp) });
         // A negative tab page number is refused outright; zero reaches
         // `find_tabpage`, which reads it as the current tab page.
-        (n >= 0)
-            .then(|| unsafe { TabPage::from_raw(find_tabpage(n)) })
-            .flatten()
+        (n >= 0).then(|| find_tabpage(n)).flatten()
     };
     unsafe { find_win_by_nr(wvp, Some(tp?)) }
 }
@@ -222,7 +220,7 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
     match direction {
         // The neighbour walks always answer a window, `twin` itself when
         // there is nothing that way.
-        Some(wp) => Some(unsafe { Win::new(wp) }),
+        Some(wp) => Some(wp.expect("a live handle")),
         None => {
             // SAFETY: the caller's obligation -- a NUL-terminated argument.
             let text = unsafe { CStr::from_ptr(arg) }.to_string_lossy();
@@ -391,7 +389,7 @@ pub unsafe fn f_tabpagewinnr(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // SAFETY: the arguments are live typvals.
     // SAFETY: the arguments are live typvals.
     let n = number_as_int(arg_number(args, 0));
-    let nr = match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+    let nr = match find_tabpage(n) {
         Some(tp) => unsafe { get_winnr(tp, args.ptr(1)) },
         None => 0,
     };

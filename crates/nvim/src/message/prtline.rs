@@ -172,7 +172,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
             } else if c != NUL && unsafe { byte2cells(c) } > 1 {
                 // An unprintable byte, shown as `<xx>`.
                 extra_left = unsafe { byte2cells(c) } - 1;
-                escaped = unsafe { transchar_byte_buf(ptr::null(), c) };
+                escaped = unsafe { transchar_byte_buf(None, c) };
                 sc = escaped[0] as ScreenChar;
                 extra_text = unsafe { escaped.as_ptr().add(1) };
                 // Its own highlight, so `<ff>` can be told apart from the

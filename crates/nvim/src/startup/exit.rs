@@ -151,7 +151,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
                     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
                     let fname = unsafe { (*buf).b_fname };
                     let event = AutoEvent::BufWinLeave;
-                    unsafe { apply_autocmds(event, fname, fname, false, buf) };
+                    unsafe { apply_autocmds(event, fname, fname, false, Buf::from_raw(buf)) };
                     if bufref.valid() {
                         unsafe { buf_set_changedtick(Buf::new(buf), -1) };
                     }
@@ -171,7 +171,8 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
                 let (name, raw) = (buf.b_fname, buf.raw());
-                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, raw) };
+                let __hoisted_0 = unsafe { Buf::from_raw(raw) };
+                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, __hoisted_0) };
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing
                     // on, so the `b_next` link is gone with it.
@@ -226,7 +227,8 @@ unsafe fn with_autocmds_unblocked(event: AutoEvent) {
         unsafe { unblock_autocmds() };
     }
     let buffer = Buf::current_raw();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer) };
+    let __hoisted_1 = unsafe { Buf::from_raw(buffer) };
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_1) };
     if blocked {
         unsafe { block_autocmds() };
     }

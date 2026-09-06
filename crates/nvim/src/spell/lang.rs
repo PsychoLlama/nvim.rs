@@ -139,7 +139,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
                 let buf = Buf::current_raw();
                 let fname = unsafe { (*buf).b_fname };
                 let event = AutoEvent::SpellFileMissing;
-                unsafe { apply_autocmds(event, lang, fname, false, buf) }
+                unsafe { apply_autocmds(event, lang, fname, false, Buf::from_raw(buf)) }
             } {
                 continue;
             }

@@ -19,6 +19,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -39,7 +40,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
-use crate::types::{Failed, NUL, StlOpt, Window, size_t, uint32_t};
+use crate::types::{Failed, NUL, StlOpt, size_t, uint32_t};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -269,14 +270,11 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 ///
 /// # Safety
 /// `scl` is null or a C string; `window` is null or a live window.
-pub unsafe fn check_signcolumn(scl: *mut c_char, window: *mut Window) -> Result<(), Failed> {
-    let val = if !scl.is_null() {
-        scl.cast_const()
-    } else if !window.is_null() {
-        // SAFETY: the caller's window.
-        unsafe { (*window).w_onebuf_opt.wo_scl }
-    } else {
-        empty_option()
+pub unsafe fn check_signcolumn(scl: *mut c_char, window: Option<Win>) -> Result<(), Failed> {
+    let val = match (scl.is_null(), window) {
+        (false, _) => scl.cast_const(),
+        (true, Some(w)) => w.w_onebuf_opt.wo_scl,
+        (true, None) => empty_option(),
     };
     // SAFETY: an option value is a C string.
     let val = unsafe { CStr::from_ptr(val) }.to_bytes();
@@ -288,13 +286,11 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, window: *mut Window) -> Result<
     let listed = unsafe { opt_strings_ok(val.as_ptr().cast::<c_char>(), &opt_scl_values, false) };
 
     let (min, max) = if listed {
-        if window.is_null() {
+        let Some(w) = window else {
             return Ok(());
-        }
-        // SAFETY: the caller's window; 'number' only wins when the window
-        // is actually showing numbers.
-        let numbered =
-            unsafe { (*window).w_onebuf_opt.wo_nu != 0 || (*window).w_onebuf_opt.wo_rnu != 0 };
+        };
+        // 'number' only wins when the window is actually showing numbers.
+        let numbered = w.w_onebuf_opt.wo_nu != 0 || w.w_onebuf_opt.wo_rnu != 0;
         match val {
             [b'n', b'o', ..] => (SCL_NO, SCL_NO),
             [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
@@ -315,23 +311,24 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, window: *mut Window) -> Result<
         if min < 1 || max < 2 || min > 8 || min >= max {
             return Err(Failed);
         }
-        if window.is_null() {
+        if window.is_none() {
             return Ok(());
         }
         (min, max)
     };
 
-    // SAFETY: the caller's window, which the null tests above ruled out.
-    unsafe { (*window).w_minscwidth = min };
-    unsafe { (*window).w_maxscwidth = max };
+    // The two `return`s above rule out an absent window.
+    let mut window = window.expect("a window to set 'signcolumn' on");
+    window.w_minscwidth = min;
+    window.w_maxscwidth = max;
     // Keep the width the window is currently drawing inside the new
     // range, without widening it on its own.
     let held = if min <= 0 {
         0
     } else {
-        max.min(unsafe { (*window).w_scwidth })
+        max.min(window.w_scwidth)
     };
-    unsafe { (*window).w_scwidth = min.max(held) };
+    window.w_scwidth = min.max(held);
     Ok(())
 }
 

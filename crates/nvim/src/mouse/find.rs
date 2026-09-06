@@ -99,13 +99,8 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         pos.row += msg_grid_pos.get();
         pos.grid = DEFAULT_GRID_HANDLE;
     } else if pos.grid > 1 {
-        // SAFETY: the handle table answers a live window or null.
-        let wp = unsafe { get_win_by_grid_handle(pos.grid as Handle) };
-        if wp.is_null() {
-            return None;
-        }
-        // SAFETY: as above.
-        let wp = unsafe { Win::new(wp) };
+        // SAFETY: the handle table answers a live window or none.
+        let wp = unsafe { get_win_by_grid_handle(pos.grid as Handle) }?;
         if wp.w_grid_alloc.is_allocated() && !(wp.w_floating && !wp.w_config.mouse) {
             pos.row = (pos.row - wp.w_grid.row_offset).min(wp.w_view_height - 1);
             pos.col = (pos.col - wp.w_grid.col_offset).min(wp.w_view_width - 1);

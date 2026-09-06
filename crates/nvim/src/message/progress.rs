@@ -194,7 +194,7 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
     let payload = &raw mut event_data;
     let group = AUGROUP_ALL as c_int;
     let no_fname = ptr::null_mut();
-    let no_buf = ptr::null_mut();
+    let no_buf = None;
     let no_eap = ptr::null_mut();
     let fired = AutoEvent::Progress;
     unsafe {

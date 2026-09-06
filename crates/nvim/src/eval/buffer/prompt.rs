@@ -63,7 +63,7 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
     // reached below belongs to the argument's own list, and `concat_str`
     // hands back an owned string the typval takes over.
     let did_emsg_before = did_emsg.get();
-    let Some(buf) = (unsafe { Buf::from_raw(tv_get_buf_from_arg(args.ptr(0))) }) else {
+    let Some(buf) = (unsafe { tv_get_buf_from_arg(args.ptr(0)) }) else {
         return;
     };
     if !buf_is_prompt(Some(buf)) {
@@ -108,14 +108,14 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
             let l = tv.list_or_null();
             let li = unsafe { (*l).lv_first };
             let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(ListItem, li_tv));
-            unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, result) };
+            unsafe { set_buffer_lines(Some(buf), lnum, false, itv, result) };
             if result.number_or_zero() == 0 {
                 unsafe { tv_list_item_remove(l, li) };
-                unsafe { set_buffer_lines(buf.raw(), lnum, true, lines, result) };
+                unsafe { set_buffer_lines(Some(buf), lnum, true, lines, result) };
             }
         } else {
             let fresh = buf.b_prompt_append_new_line;
-            unsafe { set_buffer_lines(buf.raw(), lnum, fresh, lines, result) };
+            unsafe { set_buffer_lines(Some(buf), lnum, fresh, lines, result) };
         }
     }
     if result.number_or_zero() == 0 {
@@ -159,7 +159,7 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { Buf::from_raw(tv_get_buf(args.ptr(0), 0)) }) else {
+    let Some(mut buf) = (unsafe { tv_get_buf(args.ptr(0), 0) }) else {
         return;
     };
     if !unsafe { callback_from_typval(&raw mut callback, args.ptr(1)) } {
@@ -185,7 +185,7 @@ pub unsafe fn f_prompt_setprompt(args: *mut TypVal, _result: *mut TypVal, _fptr:
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { Buf::from_raw(tv_get_buf(args.ptr(0), 0)) }) else {
+    let Some(mut buf) = (unsafe { tv_get_buf(args.ptr(0), 0) }) else {
         return;
     };
     let new_prompt = unsafe { numbuf.string(args.ptr(1)) };

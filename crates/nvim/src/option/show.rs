@@ -18,7 +18,6 @@ use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
@@ -45,7 +44,7 @@ use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
+    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
@@ -502,7 +501,7 @@ unsafe fn put_string_value(
 
     let size = unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1);
     let buf = unsafe { xmalloc(size) }.cast::<c_char>();
-    unsafe { home_replace(ptr::null::<Buffer>(), value_str, buf, size, false) };
+    unsafe { home_replace(None, value_str, buf, size, false) };
 
     if !unsafe { needs_splitting(value_str, flags) } {
         let failed = unsafe { put_escstr(fd, buf, EscTarget::SetValue) }.is_err();
@@ -573,7 +572,7 @@ pub(crate) unsafe fn option_value2string(
 
     let value = unsafe { *varp.string_var() };
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
-        unsafe { home_replace(ptr::null::<Buffer>(), value, buf, MAXPATHL as size_t, false) };
+        unsafe { home_replace(None, value, buf, MAXPATHL as size_t, false) };
     } else {
         unsafe { xstrlcpy(buf, value, MAXPATHL as size_t) };
     }

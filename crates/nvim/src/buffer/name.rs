@@ -254,7 +254,7 @@ pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: LineNr
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null; the
     // answer is a live buffer or null.
-    let buf = unsafe { Buf::from_raw(buflist_new(ffname, sfname, lnum, 0)) };
+    let buf = unsafe { buflist_new(ffname, sfname, lnum, 0) };
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
@@ -282,11 +282,11 @@ pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
 pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: a name to hand over, which may be null.
     let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as LineNr, flags) };
-    if buf.is_null() {
+    if buf.is_none() {
         return 0;
     }
     // SAFETY: non-null, hence live.
-    unsafe { Buf::new(buf) }.handle as c_int
+    buf.expect("a live handle").handle as c_int
 }
 
 /// Record the alternate cursor position for the current buffer in `win`,

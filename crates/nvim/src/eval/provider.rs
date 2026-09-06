@@ -41,10 +41,9 @@ use crate::runtime::script_autoload;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
-    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL,
-    FuncCallEntry, FuncExe, List, NUL, ScriptCtx, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union,
-    uint64_t,
+    Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncCallEntry,
+    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -419,9 +418,8 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 ///
 /// # Safety
 /// `buf` must be valid.
-pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
-    // SAFETY: the caller's promise -- a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
+pub unsafe fn prompt_get_input(buffer: Option<Buf>) -> *mut c_char {
+    let Some(buf) = buffer else {
         return null_mut();
     };
     if !buf_is_prompt(Some(buf)) {
@@ -465,7 +463,7 @@ pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
 pub unsafe fn prompt_invoke_callback() {
     let lnum = Buf::current().line_count();
     // SAFETY: the current buffer is live.
-    let user_input = unsafe { prompt_get_input(Buf::current_raw()) };
+    let user_input = unsafe { prompt_get_input(Buf::current_or_none()) };
     if user_input.is_null() {
         return;
     }

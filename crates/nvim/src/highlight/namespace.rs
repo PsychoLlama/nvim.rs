@@ -50,7 +50,7 @@ use crate::popupmenu::state::must_redraw_pum;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object, Window,
+    LuaRetMode, NS, Object,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -338,9 +338,7 @@ pub unsafe fn hl_check_ns() -> bool {
 ///
 /// # Safety
 /// `window` is null or a live window; main thread only.
-pub unsafe fn win_check_ns_hl(window: *mut Window) -> bool {
-    // SAFETY: the caller's promise -- null, or a live window.
-    let window = unsafe { Win::from_raw(window) };
+pub unsafe fn win_check_ns_hl(window: Option<Win>) -> bool {
     ns_hl_win.set(window.map_or(-1, |window| window.w_ns_hl));
     unsafe { hl_check_ns() }
 }

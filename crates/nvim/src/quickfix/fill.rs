@@ -355,11 +355,11 @@ unsafe fn finish_qf_buffer() {
     Buf::current().b_keep_filetype = true; // don't detect 'filetype'
     let start_row = c"quickfix".as_ptr().cast_mut();
     let start_col = ptr::null_mut();
-    let old_col = Buf::current_raw();
+    let old_col = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::BufReadPost, start_row, start_col, false, old_col) };
     let lnum2 = c"quickfix".as_ptr().cast_mut();
     let col = ptr::null_mut();
-    let old_col2 = Buf::current_raw();
+    let old_col2 = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::BufWinEnter, lnum2, col, false, old_col2) };
     Buf::current().b_keep_filetype = false;
     Buf::current().b_ro_locked -= 1;

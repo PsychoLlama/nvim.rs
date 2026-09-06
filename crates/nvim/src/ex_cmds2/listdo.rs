@@ -122,7 +122,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
         !list.changes_buffer()
             || buf_hide(Buf::current())
             || !check_changed(
-                Buf::current_raw(),
+                Buf::current(),
                 CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
             )
     };
@@ -397,13 +397,13 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
                         Buf::current().b_p_syn,
                         Buf::current().b_fname,
                         true,
-                        Buf::current_raw(),
+                        Buf::current_or_none(),
                     )
                 };
             } else {
                 let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
                 unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
-                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, raw) };
+                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, Buf::from_raw(raw)) };
                 unsafe { aucmd_restbuf(&raw mut aco) };
             }
             // Start over, in case autocommands messed things up.

@@ -498,11 +498,10 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
 
     // SAFETY: two null names ask for a nameless buffer.
     let newbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
-    if newbuf.is_null() {
+    if newbuf.is_none() {
         return true;
     }
-    // SAFETY: `buflist_new` has just answered a live buffer.
-    let newbuf = unsafe { Buf::new(newbuf) };
+    let newbuf = newbuf.expect("`buflist_new` has just answered a buffer");
 
     let mut ea = ExArg::default();
     prepare_exarg(&mut ea, buffer);

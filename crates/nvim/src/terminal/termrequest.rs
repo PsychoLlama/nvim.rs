@@ -138,7 +138,8 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermRequest;
-    unsafe { apply_autocmds_group(event, none, none, true, group, buffer, exarg, data) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+    unsafe { apply_autocmds_group(event, none, none, true, group, __hoisted_0, exarg, data) };
     term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or

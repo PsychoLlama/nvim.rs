@@ -428,21 +428,21 @@ unsafe fn source_name(
 /// # Safety
 /// `fname_exp` is the resolved name.
 unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
-    let buf = Buf::current_raw();
+    let sourced = Buf::current_or_none();
     // SAFETY: the caller's contract; the handlers may run arbitrary script,
     // which is why nothing is borrowed across them.
     if unsafe { has_autocmd(AutoEvent::SourceCmd, fname_exp, None) }
-        && unsafe { apply_autocmds(AutoEvent::SourceCmd, fname_exp, fname_exp, false, buf) }
+        && unsafe { apply_autocmds(AutoEvent::SourceCmd, fname_exp, fname_exp, false, sourced) }
     {
         let retval = if aborting() { FAIL } else { OK };
         if retval == OK {
             let event = AutoEvent::SourcePost;
-            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_raw()) };
+            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_or_none()) };
         }
         return Some(retval);
     }
     let event = AutoEvent::SourcePre;
-    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_raw()) };
+    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_or_none()) };
     None
 }
 
@@ -572,12 +572,11 @@ unsafe fn profile_script_stop(wait_start: ProfTime) {
 /// # Safety
 /// There is a current buffer.
 unsafe fn curbuf_is_lua() -> bool {
-    let buf = Buf::current_raw();
+    let buf = Buf::current();
     // SAFETY: the caller's contract.
-    let ft_is_lua = unsafe { strequal((*buf).b_p_ft, c"lua".as_ptr()) };
+    let ft_is_lua = unsafe { strequal(buf.b_p_ft, c"lua".as_ptr()) };
     ft_is_lua
-        || (!unsafe { (*buf).b_fname }.is_null()
-            && unsafe { path_with_extension((*buf).b_fname, c"lua".as_ptr()) })
+        || (!buf.b_fname.is_null() && unsafe { path_with_extension(buf.b_fname, c"lua".as_ptr()) })
 }
 
 /// Whether treesitter parses `args`'s range of the current buffer as Lua --
@@ -861,7 +860,7 @@ unsafe fn source_bracket(
     }
     unsafe { finish_source(cookie, firstline) };
     if !req.is(Origin::Str) && trigger_source_post {
-        let (name, buf) = (*fname_exp, Buf::current_raw());
+        let (name, buf) = (*fname_exp, Buf::current_or_none());
         // SAFETY: the resolved name, still owned by this frame.
         unsafe { apply_autocmds(AutoEvent::SourcePost, name, name, false, buf) };
     }

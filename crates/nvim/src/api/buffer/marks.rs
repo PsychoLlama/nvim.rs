@@ -40,7 +40,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         return (res as Boolean).reported(error);
     }
     if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == b.handle {
-        res = unsafe { set_mark(b.raw(), name, 0 as Integer, 0 as Integer, &mut error) };
+        res = unsafe { set_mark(Some(b), name, 0 as Integer, 0 as Integer, &mut error) };
     }
     (res as Boolean).reported(error)
 }
@@ -64,7 +64,7 @@ pub unsafe fn nvim_buf_set_mark(
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    res = unsafe { set_mark(b.raw(), name, line, col, &mut error) };
+    res = unsafe { set_mark(Some(b), name, line, col, &mut error) };
     (res as Boolean).reported(error)
 }
 

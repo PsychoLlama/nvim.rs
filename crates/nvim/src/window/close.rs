@@ -192,10 +192,8 @@ pub(crate) fn is_last_window(win: Win) -> bool {
     only_window(win, None) && first_tab().next().is_none()
 }
 
-pub unsafe fn one_window(win: Win, tabpage: *mut Tabpage) -> bool {
-    // SAFETY: the caller's promise -- a live window and a live tab page or
-    // null.
-    unsafe { only_window(win, TabPage::from_raw(tabpage)) }
+pub(crate) fn one_window(win: Win, tabpage: Option<TabPage>) -> bool {
+    only_window(win, tabpage)
 }
 
 /// Whether `win` is the only non-floating window of `tabpage`, or of the current
@@ -357,7 +355,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
         init_empty(win);
         return;
     };
-    if did_decrement && buf.raw() == bufref.raw() && bufref.valid() {
+    if did_decrement && bufref.is(Some(buf)) && bufref.valid() {
         // `close_buffer()` decremented the window count but the window is being
         // kept; as it still shows the buffer, put the count back.
         buf.b_nwindows += 1;

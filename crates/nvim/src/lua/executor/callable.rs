@@ -31,9 +31,7 @@ use crate::os::env::home_replace_save;
 use crate::strings::{arena_printf, vim_snprintf};
 use crate::types::Error;
 use crate::types::builders::static_cstring;
-use crate::types::{
-    Arena, Array, Buffer, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t,
-};
+use crate::types::{Arena, Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
 const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
@@ -186,7 +184,7 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char 
                     && *ar.source == b'@' as c_char
                     && ar.linedefined >= 0
                 {
-                    let src = home_replace_save(ptr::null_mut::<Buffer>(), ar.source.add(1));
+                    let src = home_replace_save(None, ar.source.add(1));
                     let str: String_0 = arena_printf(
                         arena,
                         c"<Lua %d: %s:%d>".as_ptr(),

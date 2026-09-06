@@ -79,7 +79,7 @@ impl Buffers {
                 BLN_LISTED as c_int,
             )
         };
-        assert!(!buf.is_null(), "buflist_new({name:?})");
+        let buf = buf.expect("buflist_new answers a buffer").raw();
         self.opened.borrow_mut().push(buf);
         buf
     }

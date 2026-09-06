@@ -187,7 +187,7 @@ pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 /// file names it also wants are null here.
 pub(super) fn buf_autocmd(event: AutoEvent, buffer: Buf) -> bool {
     // SAFETY: a live buffer and no file names.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer.raw()) }
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, Some(buffer)) }
 }
 /// Refuse anything that reaches outside the editor while 'secure' is on or a
 /// sandbox is open -- shell commands, `:write`, `:cd` and friends.

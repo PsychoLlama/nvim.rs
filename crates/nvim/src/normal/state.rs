@@ -640,5 +640,5 @@ pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
 fn fire_on_curbuf(event: AutoEvent) {
     let (fname, fname_io) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: `curbuf` is the live buffer the event is about.
-    unsafe { apply_autocmds(event, fname, fname_io, false, Buf::current_raw()) };
+    unsafe { apply_autocmds(event, fname, fname_io, false, Buf::current_or_none()) };
 }

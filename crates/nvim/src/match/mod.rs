@@ -49,7 +49,7 @@ use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_r
 use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
     ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
-    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, size_t, uint8_t,
+    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 use crate::winlayer::{Live, Win};
 

@@ -49,8 +49,8 @@ use crate::runtime::state::current_sctx;
 use crate::types::{
     Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL,
     Object, OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window,
-    ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
+    size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -677,14 +677,11 @@ pub unsafe fn call_func_retlist(
 ///
 /// # Safety
 /// `window` and `marker` must be valid.
-pub unsafe fn eval_foldexpr(window: *mut Window, marker: *mut c_int) -> c_int {
+pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
     // SAFETY: the caller's promise -- a live window.
-    let use_sandbox =
-        unsafe { was_set_insecurely(Win::new(window), kOptFoldexpr, OptionSetFlags::LOCAL) };
-    // SAFETY: as above; the window outlives this call.
-    let window = unsafe { Win::new(window) };
+    let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL) };
     // SAFETY: an option string is NUL-terminated.
     let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde) };
     current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);

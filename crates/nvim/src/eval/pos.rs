@@ -18,8 +18,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    Buffer, ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST,
-    VAR_STRING, uint8_t,
+    ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST, VAR_STRING,
+    uint8_t,
 };
 use crate::winlayer::Win;
 
@@ -28,12 +28,11 @@ use crate::winlayer::Win;
 /// # Safety
 /// `buf` must be null or valid.
 pub unsafe fn buf_byteidx_to_charidx(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     mut lnum: LineNr,
     byteidx: c_int,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `buf` is null or a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
+    let Some(buf) = buffer else {
         return -1;
     };
     if buf.b_ml.ml_mfp.is_null() {
@@ -75,12 +74,11 @@ pub unsafe fn buf_byteidx_to_charidx(
 /// # Safety
 /// `buf` must be null or valid.
 pub unsafe fn buf_charidx_to_byteidx(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     mut lnum: LineNr,
     mut charidx: c_int,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `buf` is null or a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
+    let Some(buf) = buffer else {
         return -1;
     };
     if buf.b_ml.ml_mfp.is_null() {
@@ -225,7 +223,7 @@ pub unsafe fn var2fpos(
     if pos.lnum != 0 {
         if charcol {
             // SAFETY: the buffer is live.
-            pos.col = unsafe { buf_byteidx_to_charidx(bp.raw(), pos.lnum, pos.col) } as ColNr;
+            pos.col = unsafe { buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col) } as ColNr;
         }
         return Some(pos);
     }
@@ -348,7 +346,7 @@ pub unsafe fn list2fpos(
             posp.lnum
         };
         // SAFETY: `buf` is a live buffer with a memline.
-        n = unsafe { buf_charidx_to_byteidx(buf.raw(), lnum, n) } + 1;
+        n = unsafe { buf_charidx_to_byteidx(Some(buf), lnum, n) } + 1;
     }
     posp.col = n as ColNr;
 

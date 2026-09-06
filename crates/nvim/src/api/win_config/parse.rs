@@ -698,5 +698,5 @@ pub(crate) unsafe fn parse_win_config(
 fn generate_error(window: Option<Win>, attribute: &CStr, err: ErrSlot) {
     let window = window.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: `window` is null or a live window, and `err` names a live slot.
-    unsafe { generate_api_error(window, attribute, slot_mut(err)) };
+    unsafe { generate_api_error(Win::from_raw(window), attribute, slot_mut(err)) };
 }

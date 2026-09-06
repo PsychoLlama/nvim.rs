@@ -66,7 +66,7 @@ use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
+    Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
     TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
 };
 use crate::ui::state::Rows;
@@ -625,15 +625,7 @@ pub unsafe fn ex_breaklist(_args: *mut ExArg) {
         let bp = unsafe { list.entry(i) };
         let kind = unsafe { (*bp).dbg_type };
         if kind == DBG_FILE {
-            unsafe {
-                home_replace(
-                    ptr::null::<Buffer>(),
-                    (*bp).dbg_name,
-                    namebuff,
-                    MAXPATHL as size_t,
-                    true,
-                )
-            };
+            unsafe { home_replace(None, (*bp).dbg_name, namebuff, MAXPATHL as size_t, true) };
         }
         if kind == DBG_EXPR {
             // SAFETY: `bp` is a live breakpoint of the editor's own.

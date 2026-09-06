@@ -118,7 +118,7 @@ pub(crate) unsafe fn run_read_autocmds(
         let (ft, fname) = (Buf::current().b_p_ft, Buf::current().b_fname);
         // SAFETY: the buffer's own option and file name; `curbuf` is re-read
         // because `BufReadPost` may have moved us.
-        unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, Buf::current_raw()) };
+        unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, Buf::current_or_none()) };
     }
     if msg_scrolled.get() == n {
         msg_scroll.set(m);

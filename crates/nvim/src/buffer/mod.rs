@@ -283,10 +283,12 @@ impl BufRef {
         (!buf.is_null() && self.valid()).then(|| unsafe { Buf::new(buf) })
     }
 
-    /// The remembered pointer, valid or not -- for the two comparisons the C
-    /// makes without dereferencing it.
-    pub(crate) fn raw(self) -> *mut Buffer {
-        self.0.br_buf
+    /// Whether this record was taken from `buffer` -- the comparison the C
+    /// spells `bufref.br_buf == buf`, and makes without dereferencing either
+    /// side. A record whose buffer has been wiped names no live buffer, so
+    /// it answers `false` for every argument.
+    pub(crate) fn is(self, buffer: Option<Buf>) -> bool {
+        !self.0.br_buf.is_null() && self.0.br_buf == buffer.map_or(ptr::null_mut(), Buf::raw)
     }
 
     /// The record itself, for the two places it has to live in a C struct:
@@ -394,7 +396,7 @@ pub(crate) fn last_buf() -> Option<Buf> {
 /// [`BufRef`] first.
 pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
     // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer.raw()) }
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, Some(buffer)) }
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
@@ -402,7 +404,7 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
     let (name, raw) = (buffer.b_fname, buffer.raw());
     // SAFETY: a live buffer and its own file name.
-    unsafe { apply_autocmds(event, name, name, false, raw) }
+    unsafe { apply_autocmds(event, name, name, false, Buf::from_raw(raw)) }
 }
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
@@ -472,7 +474,7 @@ pub(crate) fn close_all_windows(buffer: Buf, keep_curwin: bool) {
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
 pub(crate) fn recheck_colorcolumn(win: Win) {
     // SAFETY: a live window; a null pattern means "the option's own value".
-    unsafe { check_colorcolumn(ptr::null_mut(), win.raw()) };
+    unsafe { check_colorcolumn(ptr::null_mut(), Some(win)) };
 }
 
 pub(crate) fn clear_window_folds(win: Win) {

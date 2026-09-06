@@ -112,8 +112,8 @@ pub(super) unsafe fn switch_to_other_buffer(
                 BLN_LISTED as c_int | BLN_NOCURWIN as c_int,
             )
         };
-        if !newbuf.is_null() && flags.has(EcmdFlags::ALTBUF) {
-            Win::current().w_alt_fnum = unsafe { (*newbuf).handle };
+        if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
+            Win::current().w_alt_fnum = newbuf.handle;
         }
         return Switch::Abandon;
     } else {
@@ -130,6 +130,7 @@ pub(super) unsafe fn switch_to_other_buffer(
                         BLN_LISTED as c_int
                     }),
             )
+            .map_or(ptr::null_mut(), Buf::raw)
         };
         // Autocmds may change curwin and curbuf.
         if oldwin.is_some() {
@@ -174,7 +175,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         unsafe { buf_check_timestamp(buffer) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
-        if !bufref.valid() || Buf::current_raw() != old_curbuf.raw() || aborting() {
+        if !bufref.valid() || !old_curbuf.is(Buf::current_or_none()) || aborting() {
             return Switch::Abandon;
         }
     }
@@ -284,7 +285,7 @@ unsafe fn leave_for_buffer(
     Win::current().w_locked = true;
     buffer.b_locked += 1;
 
-    if Buf::current_raw() == old_curbuf.raw() {
+    if old_curbuf.is(Buf::current_or_none()) {
         // SAFETY: a live buffer.
         unsafe { buf_copy_options(buffer, BCO_ENTER as c_int) };
     }

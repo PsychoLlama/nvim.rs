@@ -67,25 +67,22 @@ pub(crate) unsafe fn load_dummy_buffer(
     // SAFETY: forwarded from the caller.
     // Allocate a buffer without putting it in the buffer list.
     let mut newbuf =
-        unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
-    if newbuf.is_null() {
-        return None;
-    }
+        unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) }?;
 
     let mut failed = true;
     // SAFETY: `buflist_new` answered this buffer a moment ago.
-    let newbufref = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
+    let newbufref = BufRef::of(newbuf);
 
     // Init the options.
-    unsafe { buf_copy_options(Buf::new(newbuf), (BCO_ENTER | BCO_NOHELP) as c_int) };
+    unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP) as c_int) };
 
     // Need to open the memfile before putting the buffer in a window.
-    if unsafe { ml_open(Buf::new(newbuf)) }.is_ok() {
+    if unsafe { ml_open(newbuf) }.is_ok() {
         // Make sure this buffer isn't wiped out by autocommands.
-        unsafe { (*newbuf).b_locked += 1 };
+        newbuf.b_locked += 1;
         // Set curwin/curbuf to buf and save a few things.
         let mut aco = AcoSave::default();
-        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(newbuf)) };
+        unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.
         let _ = unsafe { setfname(Buf::current(), fname, ptr::null_mut(), false) };
@@ -104,14 +101,14 @@ pub(crate) unsafe fn load_dummy_buffer(
         let flags = (READ_NEW | READ_DUMMY) as c_int;
         let readfile_result =
             unsafe { readfile(fname, sfname, 0, 0, lines_to_read, eap, flags, false) };
-        unsafe { (*newbuf).b_locked -= 1 };
+        newbuf.b_locked -= 1;
         if readfile_result.is_ok() && !got_int.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
             failed = false;
-            if !ptr::eq(Buf::current_raw(), newbuf) {
+            if Buf::current_or_none() != Some(newbuf) {
                 // Bloody autocommands changed the buffer! Restore
                 // the original buffer and wipe the new one later.
-                newbuf_to_wipe = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
-                newbuf = Buf::current_raw();
+                newbuf_to_wipe = BufRef::of(newbuf);
+                newbuf = Buf::current();
             }
         }
 
@@ -127,7 +124,7 @@ pub(crate) unsafe fn load_dummy_buffer(
 
         // Add back the "dummy" flag, otherwise buflist_findname_file_id()
         // won't skip it.
-        unsafe { (*newbuf).b_flags |= BufFlags::DUMMY };
+        newbuf.b_flags |= BufFlags::DUMMY;
     }
 
     // When autocommands/'autochdir' option changed directory: go back.
@@ -139,7 +136,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         return None;
     }
     // SAFETY: `BufRef::valid` just established the buffer.
-    let newbuf = unsafe { Buf::new(newbuf) };
+    let newbuf = newbuf;
     if failed {
         // SAFETY: `dirname_start` is the caller's NUL-terminated string.
         unsafe { wipe_dummy_buffer(newbuf, dirname_start) };

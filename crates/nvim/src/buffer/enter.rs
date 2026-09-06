@@ -20,6 +20,7 @@
 
 use crate::semsg;
 use crate::types::AutoEvent;
+use crate::winlayer::WinId;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -73,8 +74,8 @@ fn last_winid() -> c_int {
 /// `win_valid` walks the window list comparing pointers and never
 /// dereferences its argument, so asking about a possibly-closed window is a
 /// safe operation.
-fn valid_win(win: *mut Window) -> Option<Win> {
-    windows().find(|wp| wp.raw() == win)
+fn valid_win(win: WinId) -> Option<Win> {
+    windows().find(|wp| wp.id() == win)
 }
 
 /// Whether `buffer` may stay loaded when it is no longer shown -- `'hidden'`,
@@ -304,14 +305,14 @@ fn leave_prevbuf(
     prev_nwindows: c_int,
     winid_before: c_int,
 ) {
-    let prevraw = prevbufref.raw();
-    if prevraw == Win::current().w_buffer {
+    // The caller's guard has just said `prevbuf` is still the buffer it was
+    // -- either `BufLeave` ran nothing, or `bufref_valid` answered yes.
+    let prevbuf = prevbufref
+        .get()
+        .expect("the caller has just revalidated the buffer");
+    if prevbuf.raw() == Win::current().w_buffer {
         reset_syntax(Win::current());
     }
-    // autocommands may have opened a new window with prevbuf, grr
-    // SAFETY: the caller's guard has just said `prevbuf` is still the buffer
-    // it was -- either `BufLeave` ran nothing, or `bufref_valid` answered yes.
-    let prevbuf = unsafe { Buf::new(prevraw) };
     if unload
         || prev_nwindows <= 1
             && winid_before != last_winid()
@@ -328,12 +329,12 @@ fn leave_prevbuf(
 
     // Do not sync when in Insert mode and the buffer is open in another
     // window, might be a timer doing something in another window.
-    if prevraw == Buf::current_raw()
+    if prevbuf.raw() == Buf::current_raw()
         && (State.get() & MODE_INSERT == 0 || Buf::current().b_nwindows <= 1)
     {
         sync_undo();
     }
-    let win = if prevraw == Win::current().w_buffer {
+    let win = if prevbuf.raw() == Win::current().w_buffer {
         Win::current_raw()
     } else {
         ptr::null_mut::<Window>()
@@ -345,10 +346,12 @@ fn leave_prevbuf(
     } else {
         0
     };
-    // SAFETY: `prevbuf` is still live, the guard above having said so.
-    unsafe { close_buffer(Win::from_raw(win), Buf::new(prevraw), how, false, false) };
+
+    let __hoisted_0 = unsafe { Win::from_raw(win) };
+
+    unsafe { close_buffer(__hoisted_0, Buf::new(prevbuf.raw()), how, false, false) };
     if Win::current_raw() != previouswin
-        && let Some(previous) = valid_win(unsafe { Win::new(previouswin).raw() })
+        && let Some(previous) = valid_win(unsafe { Win::new(previouswin) }.id())
     {
         // autocommands changed curwin, Grr!
         previous.make_current();

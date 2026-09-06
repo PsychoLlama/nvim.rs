@@ -324,7 +324,7 @@ pub(crate) unsafe fn do_ecmd(
             ccgd |= CCGD_EXCMD as c_int;
         }
         // SAFETY: as above.
-        if must_ask && unsafe { check_changed(Buf::current_raw(), ccgd) } {
+        if must_ask && unsafe { check_changed(Buf::current(), ccgd) } {
             if fnum == 0 && other_file && !ffname.is_null() {
                 let lnum = state.newlnum.max(0);
                 // SAFETY: the names are live.
@@ -481,7 +481,7 @@ pub(crate) unsafe fn do_ecmd(
     {
         unsafe { terminal_check_size(old.terminal) };
     }
-    if (!old_curbuf.valid() || Buf::current_raw() != old_curbuf.raw())
+    if (!old_curbuf.valid() || !old_curbuf.is(Buf::current_or_none()))
         && !Buf::current().terminal.is_null()
     {
         unsafe { terminal_check_size(Buf::current().terminal) };

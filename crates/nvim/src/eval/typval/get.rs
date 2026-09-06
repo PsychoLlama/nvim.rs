@@ -13,6 +13,7 @@ use crate::charset::Str2NrBases;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
@@ -90,16 +91,16 @@ pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: *const Buffer) -> LineNr {
+pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: Option<Buf>) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let s = val.string_or_null();
-    if !s.is_null()
+    if let Some(buffer) = buffer
+        && !s.is_null()
         && unsafe { *s } as ::core::ffi::c_int == '$' as ::core::ffi::c_int
         && unsafe { *s.add(1) } as ::core::ffi::c_int == NUL
-        && !buffer.is_null()
     {
-        return unsafe { (*buffer).b_ml.ml_line_count };
+        return buffer.b_ml.ml_line_count;
     }
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) as LineNr }
 }

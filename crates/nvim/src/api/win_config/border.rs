@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -337,11 +338,9 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
 
 /// # Safety
 /// `window` must be null or a live window.
-pub(crate) unsafe fn generate_api_error(window: *mut Window, attribute: &CStr, err: &mut Error) {
-    // SAFETY: the caller's window.
-    if !window.is_null() && unsafe { (*window).w_floating } {
-        // SAFETY: the caller's window.
-        let handle = unsafe { (*window).handle };
+pub(crate) unsafe fn generate_api_error(window: Option<Win>, attribute: &CStr, err: &mut Error) {
+    if let Some(window) = window.filter(|w| w.w_floating) {
+        let handle = window.handle;
         let e = api_error!(
             kErrorTypeValidation,
             "Required: 'relative' when reconfiguring floating window {handle}"

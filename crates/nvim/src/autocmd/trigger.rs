@@ -82,7 +82,7 @@ pub unsafe fn do_doautocmd(
                 ::core::ptr::null_mut(),
                 true,
                 group,
-                Buf::current_raw(),
+                Buf::current_or_none(),
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
             )
@@ -277,7 +277,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
         // the `prepbuf`/`restbuf` pair brackets the firing.
         unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, buf.raw(), eap, data) };
+        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, Some(buf), eap, data) };
         unsafe { aucmd_restbuf(&raw mut aco) };
         // SAFETY: the pair `get_v_event` above opened.
         unsafe { restore_v_event(v_event, &raw mut save_v_event) };
@@ -306,7 +306,7 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
             ::core::ptr::null_mut(),
             true,
             AUGROUP_ALL,
-            ::core::ptr::null_mut(),
+            None,
             ::core::ptr::null_mut(),
             &raw mut event_data,
         )
@@ -325,7 +325,7 @@ unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            ::core::ptr::null_mut(),
+            None,
         )
     };
     pending_vimresume.set(SuspendLatch::Idle);
@@ -345,7 +345,7 @@ pub fn may_trigger_vim_suspend_resume(suspend: bool) {
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
-                ::core::ptr::null_mut(),
+                None,
             )
         };
         pending_vimresume.set(SuspendLatch::ResumeOwed);
@@ -396,7 +396,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         )
     };
     // SAFETY: the pair `get_v_event` above opened.
@@ -427,7 +427,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         )
     };
     if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
@@ -465,7 +465,7 @@ pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
             buffer.b_p_ft,
             buffer.b_fname,
             force || ft_recursive.get() == 1,
-            buffer.raw(),
+            Some(buffer),
         )
     };
 

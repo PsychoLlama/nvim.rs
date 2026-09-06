@@ -328,7 +328,7 @@ pub(crate) unsafe fn emsg_ptr(s: *const c_char) -> bool {
 pub unsafe fn emsg_invreg(name: c_int) {
     // SAFETY: a character code, rendered into this frame's own buffer, and
     // a one-string format.
-    let display = unsafe { transchar_buf(ptr::null(), name) };
+    let display = unsafe { transchar_buf(None, name) };
     unsafe { crate::semsg!("E354: Invalid register name: '{}'", c_str(display.as_ptr())) };
 }
 

@@ -441,7 +441,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::BufEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_raw()) };
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };
     time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
@@ -475,7 +475,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber) };
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::VimEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_raw()) };
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };
     time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
         unsafe { do_autocmd_uienter_all() };

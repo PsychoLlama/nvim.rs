@@ -192,16 +192,11 @@ impl Env {
                 } else {
                     self.buf.b_fname
                 };
-                // SAFETY: `nb` is `MAXPATHL` bytes, which is the size both
-                // of these are told about.
+
+                let __hoisted_0 = Some(self.buf);
+
                 unsafe {
-                    home_replace(
-                        self.buf.raw(),
-                        path,
-                        nb.as_mut_ptr(),
-                        MAXPATHL as size_t,
-                        true,
-                    )
+                    home_replace(__hoisted_0, path, nb.as_mut_ptr(), MAXPATHL as size_t, true)
                 };
             } else {
                 // SAFETY: as above; `name` is NUL-terminated.

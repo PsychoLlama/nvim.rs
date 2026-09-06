@@ -18,14 +18,12 @@ use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::cmdline_row;
 use crate::option::vars::{p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};
-use crate::types::{OptInt, Window};
+use crate::types::OptInt;
 use crate::ui::state::Columns;
 use crate::winlayer::{FrameRef, Win};
 
-pub unsafe fn win_equal(next_curwin: *mut Window, current: bool, dir: c_int) {
-    // SAFETY: the caller's promise -- a live window, or null for "the current
-    // one".
-    equal(unsafe { Win::from_raw(next_curwin) }, current, dir);
+pub unsafe fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
+    equal(next_curwin, current, dir);
 }
 
 /// Make all windows the same size, from `win_equal()`.
@@ -156,7 +154,7 @@ fn equal_row(
             let n = minwidth(fr, NextCurwin::NoWin);
             let sep = if fr.next().is_none() { sh.extra_sep } else { 0 };
             wincount = (n + sep) / (p_wmw.get() as c_int + 1);
-            let m = minwidth(fr, NextCurwin::Win(next_curwin.raw()));
+            let m = minwidth(fr, NextCurwin::of(next_curwin));
             let hnc = sh.has_next_curwin && frame_has_win(fr, Some(next_curwin));
             if hnc {
                 wincount -= 1; // don't count next_curwin
@@ -204,7 +202,7 @@ fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Sha
     let has_next_curwin = frame_has_win(topfr, Some(next_curwin));
 
     // "m" is the minimal width when counting 'winwidth' for "next_curwin".
-    let m = minwidth(topfr, NextCurwin::Win(next_curwin.raw()));
+    let m = minwidth(topfr, NextCurwin::of(next_curwin));
     let mut room = width - m;
     let mut next_curwin_size;
     if room < 0 {
@@ -301,7 +299,7 @@ fn equal_col(
             let n = minheight(fr, NextCurwin::NoWin);
             let sep = if fr.next().is_none() { sh.extra_sep } else { 0 };
             wincount = max_wincount(fr, n + sep);
-            let m = minheight(fr, NextCurwin::Win(next_curwin.raw()));
+            let m = minheight(fr, NextCurwin::of(next_curwin));
             let hnc = sh.has_next_curwin && frame_has_win(fr, Some(next_curwin));
             if hnc {
                 wincount -= 1;
@@ -351,7 +349,7 @@ fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Sh
     let mut totwincount = max_wincount(topfr, n + extra_sep);
     let has_next_curwin = frame_has_win(topfr, Some(next_curwin));
 
-    let m = minheight(topfr, NextCurwin::Win(next_curwin.raw()));
+    let m = minheight(topfr, NextCurwin::of(next_curwin));
     let mut room = height - m;
     let mut next_curwin_size;
     if room < 0 {

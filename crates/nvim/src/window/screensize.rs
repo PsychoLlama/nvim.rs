@@ -36,8 +36,8 @@ use crate::option::vars::{p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Buffer, Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock,
-    VarNumber, ptrdiff_t, size_t, typval_vval_union,
+    Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock, VarNumber,
+    ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
@@ -339,12 +339,8 @@ impl Subject {
 
     /// The buffer to fire the event for: the window's own if it is still
     /// there, the current one otherwise.
-    fn buffer(&mut self) -> *mut Buffer {
-        if self.bufref.valid() {
-            self.bufref.raw()
-        } else {
-            Buf::current_raw()
-        }
+    fn buffer(&mut self) -> Buf {
+        self.bufref.get().unwrap_or_else(Buf::current)
     }
 }
 
@@ -412,8 +408,10 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
         let (name, buf) = (resize.name(), resize.buffer());
         // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
         unsafe { tv_dict_set_keys_readonly(v_event) };
-        // SAFETY: as above; this fires user autocommands.
-        unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, buf) };
+
+        let __hoisted_0 = unsafe { Buf::from_raw(buf.raw()) };
+
+        unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, __hoisted_0) };
     }
     // SAFETY: the dictionary `get_v_event` saved into `save`.
     unsafe { restore_v_event(v_event, &raw mut save) };
@@ -431,8 +429,10 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut Dict) {
     unsafe { tv_dict_set_keys_readonly(v_event) };
     unref_dict(scroll_dict);
     let (name, buf) = (scroll.name(), scroll.buffer());
-    // SAFETY: a NUL-terminated name and a live buffer; fires autocommands.
-    unsafe { apply_autocmds(AutoEvent::WinScrolled, name, name, false, buf) };
+
+    let __hoisted_0 = Some(buf);
+
+    unsafe { apply_autocmds(AutoEvent::WinScrolled, name, name, false, __hoisted_0) };
     // SAFETY: the dictionary `get_v_event` saved into `save`.
     unsafe { restore_v_event(v_event, &raw mut save) };
 }

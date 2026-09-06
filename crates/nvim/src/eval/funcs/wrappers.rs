@@ -38,9 +38,9 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Blob, Buffer, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr,
-    List, MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, ptrdiff_t, typval_vval_union,
+    Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
+    MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, ptrdiff_t, typval_vval_union,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -497,23 +497,22 @@ pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFunc
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut Buffer {
+pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     if unsafe { (*tv).v_type } == VAR_NUMBER {
-        return find_buf(unsafe { (*tv).number_or_zero() } as c_int)
-            .map_or(ptr::null_mut(), |b| b.raw());
+        return find_buf(unsafe { (*tv).number_or_zero() } as c_int);
     }
     if unsafe { (*tv).v_type } != VAR_STRING {
-        return ptr::null_mut();
+        return None;
     }
     let name = unsafe { (*tv).string_or_null() };
     // The empty string is the current buffer, `$` the last one.
     if name.is_null() || unsafe { *name } as c_int == NUL {
-        return Buf::current_raw();
+        return Buf::current_or_none();
     }
     if unsafe { *name } as u8 == b'$' && unsafe { *name.add(1) } as c_int == NUL {
-        return last_buffer().map_or(ptr::null_mut(), Buf::raw);
+        return last_buffer();
     }
 
     // The pattern is matched with 'magic' on and 'cpoptions' empty, so
@@ -531,7 +530,7 @@ pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut Buffer {
 
     // A name no buffer matches may still be a *file* name we know.
     match found {
-        Some(buf) => buf.raw(),
+        Some(buf) => Some(buf),
         None => unsafe { find_buffer(tv) },
     }
 }
@@ -541,10 +540,10 @@ pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut Buffer {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut Buffer {
+pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation.
     if !unsafe { tv_check_str_or_nr(tv) } {
-        return ptr::null_mut();
+        return None;
     }
     let _no_emsg = Suppress::emsg();
     unsafe { tv_get_buf(tv, 0) }
@@ -554,14 +553,14 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut Buffer {
 ///
 /// # Safety
 /// `arg` is a live typval.
-pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut Buffer {
+pub unsafe fn get_buf_arg(arg: *mut TypVal) -> Option<Buf> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
     let no_emsg = Suppress::emsg();
     let buf = unsafe { tv_get_buf(arg, 0) };
     drop(no_emsg);
-    if buf.is_null() {
+    if buf.is_none() {
         let what = unsafe { numbuf.string(arg) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };

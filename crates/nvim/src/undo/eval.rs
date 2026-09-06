@@ -167,7 +167,7 @@ pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         Buf::current_raw()
     } else {
         // SAFETY: as above.
-        unsafe { get_buf_arg(tv) }
+        unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) }
     };
     // SAFETY: the return value the contract gives us.
     let dict = unsafe { (*result).vval.v_dict };

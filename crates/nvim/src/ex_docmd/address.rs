@@ -166,7 +166,7 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
                 .lnum
                 .min(Buf::current().b_ml.ml_line_count)
         }
-        CmdAddr::Windows => current_win_nr(Win::current_raw()) as LineNr,
+        CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
         CmdAddr::Arguments => {
             let len = arglist_len();
             if Win::current().w_arg_idx + 1 < len {
@@ -176,7 +176,7 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
             }
         }
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(TabPage::current_raw()) as LineNr,
+        CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
         CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
         CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
@@ -202,10 +202,10 @@ pub unsafe fn set_cmd_dflall_range(args: *mut ExArg) {
             ea.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows => {
-            ea.line2 = current_win_nr(ptr::null()) as LineNr;
+            ea.line2 = current_win_nr(None) as LineNr;
         }
         CmdAddr::Tabs => {
-            ea.line2 = current_tab_nr(ptr::null_mut()) as LineNr;
+            ea.line2 = current_tab_nr(None) as LineNr;
         }
         CmdAddr::TabsRelative => ea.line2 = 1,
         CmdAddr::Arguments => {
@@ -397,9 +397,9 @@ fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
             }
             args.line1 = 1;
             args.line2 = if args.addr_type == CmdAddr::Windows {
-                current_win_nr(ptr::null()) as LineNr
+                current_win_nr(None) as LineNr
             } else {
-                current_tab_nr(ptr::null_mut()) as LineNr
+                current_tab_nr(None) as LineNr
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
@@ -788,10 +788,10 @@ enum Addr {
 fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
-        CmdAddr::Windows => current_win_nr(Win::current_raw()) as LineNr,
+        CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
         CmdAddr::Arguments => (Win::current().w_arg_idx + 1) as LineNr,
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(TabPage::current_raw()) as LineNr,
+        CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
         CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
@@ -805,11 +805,11 @@ fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
 fn last_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Buf::current().b_ml.ml_line_count,
-        CmdAddr::Windows => current_win_nr(ptr::null()) as LineNr,
+        CmdAddr::Windows => current_win_nr(None) as LineNr,
         CmdAddr::Arguments => arglist_len() as LineNr,
         CmdAddr::LoadedBuffers => loaded_buffer_range().1,
         CmdAddr::Buffers => tail().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as LineNr,
+        CmdAddr::Tabs => current_tab_nr(None) as LineNr,
         // An empty quickfix list still has a last entry, numbered 1.
         CmdAddr::Quickfix => (unsafe { qf_get_size(args.raw()) } as LineNr).max(1),
         CmdAddr::QuickfixValid => (qf_get_valid_size(args.raw()) as LineNr).max(1),
@@ -886,12 +886,12 @@ pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
             }
         }
         CmdAddr::Windows => {
-            if ea.line2 > current_win_nr(ptr::null()) as LineNr {
+            if ea.line2 > current_win_nr(None) as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Tabs => {
-            if ea.line2 > current_tab_nr(ptr::null_mut()) as LineNr {
+            if ea.line2 > current_tab_nr(None) as LineNr {
                 return invrange();
             }
         }

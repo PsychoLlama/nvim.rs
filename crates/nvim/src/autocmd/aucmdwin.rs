@@ -317,7 +317,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
             let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
             if Win::current().handle == unsafe { (*aco).new_curwin_handle }
-                && Buf::current_raw() != new_curbuf.raw()
+                && !new_curbuf.is(Buf::current_or_none())
                 && let Some(mut new_curbuf) = new_curbuf.get()
                 && !new_curbuf.b_ml.ml_mfp.is_null()
             {

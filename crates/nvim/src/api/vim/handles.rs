@@ -140,14 +140,13 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: a new buffer with neither a file name nor a short name.
     let buf = unsafe { buflist_new(no_name, no_name, 0 as LineNr, flags) };
     // SAFETY: `buf` is the buffer just made, or null.
-    let opened = !buf.is_null() && unsafe { ml_open(Buf::new(buf)) }.is_ok();
+    let opened = buf.is_some() && unsafe { ml_open(buf.expect("a live handle")) }.is_ok();
     if !opened {
         // SAFETY: paired with the `block_autocmds` above.
         unsafe { unblock_autocmds() };
         return 0;
     }
-    // SAFETY: `buf` is the live buffer just made.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = buf.expect("`buflist_new` answered a buffer");
     let tick = buf_get_changedtick(b);
     b.b_last_changedtick = tick;
     b.b_last_changedtick_i = tick;
@@ -155,7 +154,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: as above.
     unsafe {
         buf_copy_options(
-            Buf::new(buf),
+            buf.expect("a live handle"),
             BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
         );
     }
@@ -193,8 +192,8 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     if wiped {
         return 0;
     }
-    // SAFETY: the autocommands above left the buffer alive.
-    unsafe { (*buf).handle }
+    // The autocommands above left the buffer alive.
+    buf.map_or(0, |b| b.handle)
 }
 
 /// Every tab page's handle, in order.

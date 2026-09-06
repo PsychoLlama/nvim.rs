@@ -33,7 +33,7 @@
 use crate::winlayer::Win;
 use core::ffi::c_int;
 
-use super::{FR_COL, FR_ROW, FRACTION_MULT, NOWIN};
+use super::{FR_COL, FR_ROW, FRACTION_MULT};
 use crate::types::Window;
 use crate::winlayer::FrameRef;
 
@@ -58,24 +58,9 @@ pub enum NextCurwin {
 }
 
 impl NextCurwin {
-    /// The `Window *` the C passes, read back as the three cases.
-    pub fn of(win: *mut Window) -> Self {
-        if win.is_null() {
-            Self::Unset
-        } else if win == NOWIN {
-            Self::NoWin
-        } else {
-            Self::Win(win)
-        }
-    }
-
-    /// The `Window *` back again, for the entry points that still hand one on.
-    pub fn raw(self) -> *mut Window {
-        match self {
-            Self::Unset => core::ptr::null_mut(),
-            Self::NoWin => NOWIN,
-            Self::Win(win) => win,
-        }
+    /// The window about to become current, as the C's third case.
+    pub fn of(win: Win) -> Self {
+        Self::Win(win.raw())
     }
 
     /// Whether this asks about `win` in particular — the C's

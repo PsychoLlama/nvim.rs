@@ -509,7 +509,7 @@ pub unsafe fn f_tabpagebuflist(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
     // SAFETY throughout: the frame is live; the window chain walked below belongs to a
     // tab page that is live for the whole call.
     let tab = if args.has(0) {
-        unsafe { TabPage::from_raw(find_tabpage(arg_number(args.get(0)) as c_int)) }
+        find_tabpage(arg_number(args.get(0)) as c_int)
     } else {
         Some(TabPage::current())
     };

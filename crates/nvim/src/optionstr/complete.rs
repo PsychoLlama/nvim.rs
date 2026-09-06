@@ -271,7 +271,7 @@ pub unsafe fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_spellcapcheck(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's window and its syntax block.
-    unsafe { compile_cap_prog((*win(args)).w_s) }
+    unsafe { compile_cap_prog(win(args).w_s) }
 }
 
 /// # Safety
@@ -304,7 +304,7 @@ pub unsafe fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
-    let (wp, opt_flags, new) = (win(args), args.os_flags, args.os_newval);
+    let (mut wp, opt_flags, new) = (win(args), args.os_flags, args.os_newval);
     let value = new
         .as_string()
         .expect("the table installs this callback on a string option only")
@@ -321,7 +321,7 @@ pub unsafe fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
         }
         if local {
             // SAFETY: the frame's window and its syntax block.
-            unsafe { (*(*wp).w_s).b_p_spo_flags = mask };
+            unsafe { (*wp.w_s).b_p_spo_flags = mask };
         }
     }
     None

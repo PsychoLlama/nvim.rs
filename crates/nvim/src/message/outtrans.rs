@@ -75,7 +75,7 @@ pub unsafe fn msg_home_replace(fname: *const c_char) {
 }
 
 pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
-    let name = unsafe { home_replace_save(ptr::null_mut(), fname) };
+    let name = unsafe { home_replace_save(None, fname) };
     unsafe { msg_outtrans(name, hl_id, false) };
     unsafe { xfree(name.cast()) };
 }
@@ -94,7 +94,7 @@ pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *c
         unsafe { msg_outtrans_len(p, len, hl_id, hist) };
         return unsafe { p.add(len as usize) };
     }
-    let display = unsafe { transchar_byte_buf(ptr::null(), *p as u8 as c_int) };
+    let display = unsafe { transchar_byte_buf(None, *p as u8 as c_int) };
     unsafe { msg_puts_hl(display.as_ptr(), hl_id, hist) };
     unsafe { p.add(1) }
 }
@@ -158,14 +158,14 @@ pub unsafe fn msg_outtrans_len(
             } else {
                 flush_plain(str, plain_start);
                 plain_start = unsafe { str.add(mb_len as usize) };
-                let display = unsafe { transchar_buf(ptr::null(), c) };
+                let display = unsafe { transchar_buf(None, c) };
                 unsafe { msg_puts_hl(display.as_ptr(), special_hl(hl_id), false) };
                 cells += unsafe { char2cells(c) };
             }
             left -= mb_len - 1;
             str = unsafe { str.add(mb_len as usize) };
         } else {
-            let rendered = unsafe { transchar_byte_buf(ptr::null(), *str as u8 as c_int) };
+            let rendered = unsafe { transchar_byte_buf(None, *str as u8 as c_int) };
             if rendered[1] != 0 {
                 // Unprintable: emit the printable run so far, then it.
                 flush_plain(str, plain_start);
@@ -246,7 +246,7 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
         };
         if unsafe { *text } != 0 && unsafe { *text.add(1) } == 0 {
             // Single-byte character, or an illegal byte.
-            display = unsafe { transchar_byte_buf(ptr::null(), *text as u8 as c_int) };
+            display = unsafe { transchar_byte_buf(None, *text as u8 as c_int) };
             text = display.as_ptr();
         }
         let len = unsafe { vim_strsize(text) };

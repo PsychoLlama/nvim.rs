@@ -19,7 +19,7 @@ use crate::semsg;
 use crate::startup::vim_ignored;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    Buffer, Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
+    Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -53,8 +53,8 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     // SAFETY throughout: the arguments and `result` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
     let out = list_alloc_ret(result, 2);
-    let buf: *const Buffer = if !args.has(0) {
-        Buf::current_raw()
+    let buf = if !args.has(0) {
+        Buf::current_or_none()
     } else {
         // The value is coerced to a Number purely so that a bad type
         // reports; the result is thrown away and the argument is
@@ -63,30 +63,30 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         let _no_emsg = Suppress::emsg();
         unsafe { tv_get_buf(args.ptr(0), 0) }
     };
-    if buf.is_null() {
+    let Some(buf) = buf else {
         return;
-    }
-    let l = unsafe { tv_list_alloc((*buf).b_changelistlen as isize) };
+    };
+    let l = unsafe { tv_list_alloc(buf.b_changelistlen as isize) };
     unsafe { tv_list_append_list(out, l) };
 
     // The index is this window's if it is showing the buffer, and
     // otherwise the one remembered for this window in the buffer's
     // window-info list. A buffer this window has never shown reports
     // the end of the list.
-    let index = if ptr::eq(buf, Win::current().w_buffer) {
+    let index = if buf == Win::current().buffer() {
         Win::current().w_changelistidx
     } else {
-        (0..unsafe { (*buf).b_wininfo.size })
-            .map(|i| unsafe { *(*buf).b_wininfo.items.add(i) })
+        (0..buf.b_wininfo.size)
+            .map(|i| unsafe { *buf.b_wininfo.items.add(i) })
             .find(|wip| unsafe { (**wip).wi_win } == Win::current_raw())
-            .map_or(unsafe { (*buf).b_changelistlen }, |wip| unsafe {
+            .map_or(buf.b_changelistlen, |wip| unsafe {
                 (*wip).wi_changelistidx
             })
     };
     unsafe { tv_list_append_number(out, index as VarNumber) };
 
-    for i in 0..unsafe { (*buf).b_changelistlen } {
-        let mark = unsafe { (*buf).b_changelist[i as usize].mark };
+    for i in 0..buf.b_changelistlen {
+        let mark = buf.b_changelist[i as usize].mark;
         if mark.lnum != 0 {
             unsafe { append_mark(l, mark) };
         }
@@ -131,10 +131,10 @@ pub unsafe fn f_getmarklist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         return;
     }
     let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
-    if buf.is_null() {
+    if buf.is_none() {
         return;
     }
-    unsafe { get_buf_local_marks(Buf::new(buf), out) };
+    unsafe { get_buf_local_marks(buf.expect("a live handle"), out) };
 }
 
 /// `gettagstack([{winnr}])`.

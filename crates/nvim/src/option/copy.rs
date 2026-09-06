@@ -349,8 +349,8 @@ pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
     let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
     // null out-parameters say "report nothing", which each accepts.
-    unsafe { check_colorcolumn(ptr::null_mut(), window.raw()) };
-    unsafe { briopt_check(ptr::null_mut(), window.raw()) };
+    unsafe { check_colorcolumn(ptr::null_mut(), Some(window)) };
+    unsafe { briopt_check(ptr::null_mut(), Some(window)) };
     let _ = unsafe { fill_culopt_flags(None, w) };
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
@@ -360,10 +360,10 @@ pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
     let lcs = w.w_onebuf_opt.wo_lcs;
     unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
-    unsafe { parse_winhl_opt(ptr::null(), window.raw()) };
+    unsafe { parse_winhl_opt(ptr::null(), Some(window)) };
     unsafe { check_blending(window) };
     unsafe { set_winbar_win(window, false, valid_cursor) };
-    let _ = unsafe { check_signcolumn(ptr::null_mut(), window.raw()) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), Some(window)) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 

@@ -94,7 +94,7 @@ pub(crate) unsafe fn showmatches_oneline(
             } else {
                 unsafe {
                     home_replace(
-                        ptr::null(),
+                        None,
                         *matches.offset(j as isize),
                         shown.as_mut_ptr(),
                         MAXPATHL as size_t,
@@ -224,7 +224,7 @@ pub unsafe fn showmatches(
             {
                 unsafe {
                     home_replace(
-                        ptr::null(),
+                        None,
                         *matches.offset(i as isize),
                         shown.as_mut_ptr(),
                         MAXPATHL as size_t,

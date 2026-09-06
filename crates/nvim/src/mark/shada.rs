@@ -92,13 +92,8 @@ fn set_global_at_or_after(from: c_int) -> Option<c_int> {
 /// `buffer` must be a live buffer and `mark_name` must point at live, writable
 /// storage holding one of the names above.
 #[inline]
-pub(super) unsafe fn next_buffer_mark(
-    buffer: *const Buffer,
-    mark_name: *mut c_char,
-) -> *const FileMark {
-    // SAFETY: the caller promised a live buffer and a live cursor.
-    let buffer = unsafe { Buf::new(buffer.cast_mut()) };
-    // SAFETY: as above.
+pub(super) unsafe fn next_buffer_mark(buffer: Buf, mark_name: *mut c_char) -> *const FileMark {
+    // SAFETY: the caller promised a live cursor.
     let here = unsafe { *mark_name };
     let (next, mark): (c_char, Fmark) = match c_int::from(here) {
         NUL => ('"' as c_char, buffer.last_cursor()),
@@ -160,14 +155,14 @@ pub unsafe fn mark_buffer_iter(
         mark_name(c_int::try_from(idx).unwrap_or(0) + 'a' as c_int)
     };
     // SAFETY: `buffer` is live and `mark_name` is on this stack.
-    let mut iter_mark = unsafe { next_buffer_mark(buffer.raw(), &raw mut at) };
+    let mut iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
     while !iter_mark.is_null() {
         // SAFETY: every non-null answer names a live record of `buffer`.
         if unsafe { Fmark::new(iter_mark.cast_mut()) }.is_set() {
             break;
         }
         // SAFETY: as above.
-        iter_mark = unsafe { next_buffer_mark(buffer.raw(), &raw mut at) };
+        iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
     }
     if iter_mark.is_null() {
         return ptr::null();

@@ -54,8 +54,8 @@ use crate::sha256::Sha256;
 use crate::startup::exiting;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    AcoSave, Buffer, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE,
-    LineNr, MAXPATHL, Pos, ShmFlag, VimAcl, iconv_t, int64_t, size_t, uint64_t, uv_gid_t, uv_uid_t,
+    AcoSave, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
+    MAXPATHL, Pos, ShmFlag, VimAcl, iconv_t, int64_t, size_t, uint64_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
@@ -322,7 +322,7 @@ pub unsafe fn buf_write(
         && req.reset_changed
         && whole
         && buf == Buf::current()
-        && !buf_is_nofilename(unsafe { Buf::from_raw(buf.raw()) })
+        && !buf_is_nofilename(Some(buf))
         && !req.filtering
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
@@ -364,8 +364,7 @@ pub unsafe fn buf_write(
         sfname,
         ffname,
     };
-    let pre =
-        unsafe { buf_write_do_autocmds(buf.raw(), &mut names, start, &mut end, args, mode, orig) };
+    let pre = unsafe { buf_write_do_autocmds(buf, &mut names, start, &mut end, args, mode, orig) };
     // The autocommands may have renamed the buffer out from under them.
     let WriteNames {
         fname,

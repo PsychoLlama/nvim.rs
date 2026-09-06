@@ -530,7 +530,7 @@ impl Jump {
         {
             let existing = unsafe { buflist_findname_exp(self.fname()) };
             if let Some(existing) = existing
-                && !unsafe { swbuf_goto_win_with_buf(existing.raw()) }.is_null()
+                && !unsafe { swbuf_goto_win_with_buf(Some(existing)) }.is_none()
             {
                 self.reused_window = true;
             }

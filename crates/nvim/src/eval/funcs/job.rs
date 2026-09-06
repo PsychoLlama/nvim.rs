@@ -603,7 +603,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     unsafe { channel_incref(chan) };
     unsafe { channel_terminal_alloc(buf, chan) };
     let noname = ptr::null_mut::<c_char>();
-    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, buf.raw()) };
+    unsafe { apply_autocmds(AutoEvent::BufFilePre, noname, noname, false, Some(buf)) };
 
     // The autocommand may have closed the terminal out from under us,
     // which is what each of these three re-tests is for.
@@ -611,7 +611,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         // Name the buffer `term://{cwd}//{pid}:{cmd}`.
         let _ = unsafe { vim_full_name(cwd, name.as_mut_ptr(), MAXPATHL as usize, false) };
         let (src, dst) = (name.as_mut_ptr(), shortened.as_mut_ptr());
-        let len = unsafe { home_replace(ptr::null(), src, dst, IOSIZE as usize, true) };
+        let len = unsafe { home_replace(None, src, dst, IOSIZE as usize, true) };
         // Drop a trailing separator, but keep `/` itself meaningful by
         // spelling it `/.`.
         if len != 1 && matches!(shortened[len - 1] as u8, b'\\' | b'/') {
@@ -626,7 +626,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let dir = shortened.as_ptr();
         unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
         let _ = unsafe { setfname(buf, name.as_mut_ptr(), ptr::null_mut(), true) };
-        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, buf.raw()) };
+        unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, Some(buf)) };
 
         if unsafe { terminal_live(chan) } {
             let mut err = Error::none();

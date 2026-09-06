@@ -88,7 +88,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
     // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
     // dictionary takes over.
-    if unsafe { buf_has_signs(buffer.raw()) } {
+    if buf_has_signs(buffer) {
         list(c"signs", unsafe { get_buffer_signs(buffer) });
     }
     nr(c"lastused", buffer.b_last_used);
@@ -121,7 +121,7 @@ pub unsafe fn f_getbufinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
             };
         }
     } else if args.ty(0) != VAR_UNKNOWN {
-        argbuf = arg_buf_chk(args, 0);
+        argbuf = arg_buf_chk(args, 0).map_or(ptr::null_mut(), Buf::raw);
         if argbuf.is_null() {
             return;
         }

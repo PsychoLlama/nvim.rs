@@ -223,13 +223,14 @@ pub(crate) unsafe fn did_set_buflisted(args: &mut OptSet) -> Option<&CStr> {
         } else {
             AutoEvent::BufDelete
         };
+        let __hoisted_0 = Some(f.buf);
         unsafe {
             apply_autocmds(
                 event as AutoEvent,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 true,
-                f.buf.raw(),
+                __hoisted_0,
             )
         };
     }
@@ -278,7 +279,7 @@ pub(crate) unsafe fn did_set_equalalways(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let f = unsafe { Frame::read(args) };
     if p_ea.get() != 0 && f.old_boolean() == Some(false) {
-        unsafe { win_equal(f.win.raw(), false, 0) };
+        unsafe { win_equal(Some(f.win), false, 0) };
     }
     None
 }
@@ -452,7 +453,7 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: &mut OptSet) -> Option<
     if (unsafe { *win.w_onebuf_opt.wo_stc }) != NUL as c_char {
         win.w_nrwidth_line_count = 0 as LineNr;
     }
-    let _ = unsafe { check_signcolumn(ptr::null_mut(), win.raw()) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), Some(win)) };
     None
 }
 
@@ -586,7 +587,7 @@ pub(crate) unsafe fn did_set_swapfile(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_textwidth(_args: &mut OptSet) -> Option<&CStr> {
     for wp in winlayer::tab_windows() {
         // SAFETY: `wp` is a live window of the editor's own list.
-        unsafe { check_colorcolumn(ptr::null_mut(), wp.raw()) };
+        unsafe { check_colorcolumn(ptr::null_mut(), Some(wp)) };
     }
     None
 }
@@ -765,7 +766,7 @@ pub(crate) unsafe fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
             buffer.b_p_syn,
             buffer.b_fname,
             value_changed || syn_recursive.get() == 1,
-            buffer.raw(),
+            Some(buffer),
         )
     };
 }

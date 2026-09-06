@@ -126,8 +126,8 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     Buf::current().b_flags |= BufFlags::NOTEDITED;
     if !xfname.is_null() && unsafe { *xfname } as c_int != NUL {
         let alt = unsafe { buflist_new(fname, xfname, Win::current().w_cursor.lnum, 0) };
-        if !alt.is_null() && !cmdmod_has(CmdModFlags::KEEPALT) {
-            Win::current().w_alt_fnum = unsafe { (*alt).handle } as c_int;
+        if let Some(alt) = alt.filter(|_| !cmdmod_has(CmdModFlags::KEEPALT)) {
+            Win::current().w_alt_fnum = alt.handle as c_int;
         }
     }
     unsafe { xfree(fname.cast()) };
@@ -533,8 +533,14 @@ pub unsafe fn check_overwrite(
     // write, so it is worth a question of its own.
     let mut dir = swap_dir();
     // SAFETY: the names are live and `dir` is this call's own buffer.
-    let swapname =
-        Owned(unsafe { makeswapname(fname, ffname, Buf::current_raw(), dir.as_mut_ptr().cast()) });
+    let swapname = Owned(unsafe {
+        makeswapname(
+            fname,
+            ffname,
+            Buf::current_or_none(),
+            dir.as_mut_ptr().cast(),
+        )
+    });
     // SAFETY: `swapname` is a live file name.
     if !unsafe { os_path_exists(swapname.0) } {
         return Ok(());
@@ -842,7 +848,7 @@ pub unsafe fn getfile(
         && Buf::current().b_nwindows == 1
         && !unsafe { buf_hide(Buf::current()) }
         && curbuf_is_changed()
-        && unsafe { autowrite(Buf::current_raw(), forceit) }.is_err()
+        && unsafe { autowrite(Buf::current(), forceit) }.is_err()
     {
         if p_confirm.get() != 0 && p_write.get() != 0 {
             // SAFETY: as above.

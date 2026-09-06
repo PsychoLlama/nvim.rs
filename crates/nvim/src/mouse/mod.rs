@@ -431,7 +431,7 @@ fn mouse_tab_close(c1: c_int) {
     let tp: *mut Tabpage = if c1 == 999 {
         TabPage::current_raw()
     } else {
-        find_tabpage(c1)
+        find_tabpage(c1).map_or(ptr::null_mut(), TabPage::raw)
     };
     if tp == TabPage::current_raw() {
         if first_tab().is_some_and(|tp| tp.next().is_some()) {

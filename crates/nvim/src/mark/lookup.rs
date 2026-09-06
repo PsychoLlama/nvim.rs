@@ -423,7 +423,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
         // The mark's line was checked against the OLD buffer above; now that
         // the file is loaded, ask again against the real one.
         // SAFETY: `curbuf` is live and the record is the static.
-        if !unsafe { mark_check_line_bounds(Buf::current_raw(), fm, &mut errormsg) } {
+        if !unsafe { mark_check_line_bounds(Buf::current_or_none(), fm, &mut errormsg) } {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }

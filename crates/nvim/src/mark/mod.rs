@@ -555,7 +555,7 @@ pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString
     }
     let buf = Buf::current();
     // SAFETY: as above; the record and the out-parameter are the caller's.
-    fm.fnum() != buf.handle || unsafe { mark_check_line_bounds(buf.raw(), fm.raw(), errormsg) }
+    fm.fnum() != buf.handle || unsafe { mark_check_line_bounds(Some(buf), fm.raw(), errormsg) }
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
@@ -570,12 +570,12 @@ pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString
 /// `buf` must be null or a live buffer, and `fm` must point at a live
 /// `FileMark`.
 pub(crate) unsafe fn mark_check_line_bounds(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     fm: *mut FileMark,
     errormsg: &mut Option<CString>,
 ) -> bool {
     // SAFETY: the caller promised a live buffer or null.
-    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
+    let Some(buf) = buffer else {
         return true;
     };
     // SAFETY: the caller promised a live record.

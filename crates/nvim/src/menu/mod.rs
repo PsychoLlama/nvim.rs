@@ -731,7 +731,7 @@ pub(crate) unsafe fn show_popupmenu() {
             mode.as_ptr().cast_mut(),
             ptr::null_mut(),
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         )
     };
 

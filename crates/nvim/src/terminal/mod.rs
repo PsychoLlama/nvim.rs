@@ -68,7 +68,7 @@ use crate::types::{
     AcoSave, Arena, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle, HlAttrs,
     LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
     SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell,
-    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, Window, int16_t, size_t, uint8_t,
+    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, int16_t, size_t, uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -379,7 +379,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and
     // nothing of either is borrowed across it.
-    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, buffer.raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, Some(buffer)) };
     // SAFETY: paired with the `aucmd_prepbuf` above.
     unsafe { aucmd_restbuf(&raw mut aco) };
     // SAFETY: the caller's slot, which TermOpen may have emptied. The
@@ -509,7 +509,8 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: TermClose against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermClose;
-    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, exarg, data) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
+    unsafe { apply_autocmds_group(event, none, none, exited, group, __hoisted_0, exarg, data) };
     // SAFETY: paired with the `get_v_event` above.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 }
@@ -752,7 +753,7 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// and lines below the screen are left alone.
 pub(crate) unsafe fn terminal_get_line_attributes(
     term: *mut Terminal,
-    _window: *mut Window,
+    _window: Win,
     linenr: c_int,
     term_attrs: *mut c_int,
 ) {

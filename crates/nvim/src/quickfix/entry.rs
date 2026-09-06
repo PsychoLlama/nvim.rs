@@ -45,12 +45,11 @@ unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
         None => false,
     });
     if cached && LAST_BUFREF.get().valid() {
-        return unsafe { Buf::from_raw(LAST_BUFREF.get().raw()) };
+        return LAST_BUFREF.get().get();
     }
     let buf = unsafe { buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int) };
     let name = unsafe { Name::from_ptr(bufname) };
     LAST_BUFNAME.with_mut(|slot| *slot = Some(name));
-    let buf = unsafe { Buf::from_raw(buf) };
     LAST_BUFREF.set(BufRef::of_opt(buf));
     buf
 }

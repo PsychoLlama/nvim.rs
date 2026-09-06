@@ -108,10 +108,10 @@ use crate::syntax::{
 use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    Arena, Array, Buffer, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, Error,
-    EvalFuncData, ExArg, Expand, FuzMatchStr, GArray, HashTab, Hlf, List, ListItem, LuaRetMode,
-    Object, OptInt, Pos, PumItem, RegMatch, TypVal, VarNumber, XpPrefix, ptrdiff_t, size_t,
-    ssize_t, typval_vval_union,
+    Arena, Array, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, Error, EvalFuncData,
+    ExArg, Expand, FuzMatchStr, GArray, HashTab, Hlf, List, ListItem, LuaRetMode, Object, OptInt,
+    Pos, PumItem, RegMatch, TypVal, VarNumber, XpPrefix, ptrdiff_t, size_t, ssize_t,
+    typval_vval_union,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_flush, ui_has, vim_beep};

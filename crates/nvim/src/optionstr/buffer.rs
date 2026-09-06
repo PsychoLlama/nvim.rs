@@ -58,7 +58,7 @@ use super::{
     opt_strings_ok, valid_filetype,
 };
 use crate::pos::MAXLNUM;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::Buf;
 
 /// 'backspace' is a word list, except that the number 2 is also accepted
 /// and means everything but "nostop".
@@ -162,7 +162,7 @@ pub unsafe fn did_set_bufhidden(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
-    let (buf, wp) = (args.os_buf.cast::<Buffer>(), win(args));
+    let (buf, mut wp) = (args.os_buf.cast::<Buffer>(), win(args));
     // SAFETY: the buffer's own C string value; only the first letter is
     // ever distinguishing.
     let first = unsafe { *(*buf).b_p_bt };
@@ -204,10 +204,9 @@ pub unsafe fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
         unsafe { (*prompt).additional_data = ptr::null_mut::<AdditionalData>() };
     }
 
-    // SAFETY: the frame's window and buffer.
-    if unsafe { (*wp).w_status_height } != 0 || global_stl_height() != 0 {
-        unsafe { (*wp).w_redr_status = true };
-        redraw_later(unsafe { Win::new(wp) }, UPD_VALID);
+    if wp.w_status_height != 0 || global_stl_height() != 0 {
+        wp.w_redr_status = true;
+        redraw_later(wp, UPD_VALID);
     }
     unsafe { (*buf).b_help = first == b'h' as c_char };
     redraw_titles();
@@ -409,8 +408,8 @@ pub unsafe fn did_set_foldexpr(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's frame and window.
     unsafe { did_set_optexpr(args) };
     let wp = win(args);
-    if foldmethod_is_expr(unsafe { Win::new(wp) }) {
-        fold_update_all(unsafe { Win::new(wp) });
+    if foldmethod_is_expr(wp) {
+        fold_update_all(wp);
     }
     None
 }
@@ -418,10 +417,9 @@ pub unsafe fn did_set_foldexpr(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_foldignore(args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the frame's window.
     let wp = win(args);
-    if foldmethod_is_indent(unsafe { Win::new(wp) }) {
-        fold_update_all(unsafe { Win::new(wp) });
+    if foldmethod_is_indent(wp) {
+        fold_update_all(wp);
     }
     None
 }
@@ -440,8 +438,8 @@ pub unsafe fn did_set_foldmarker(args: &mut OptSet) -> Option<&CStr> {
         return invalid();
     }
     let wp = win(args);
-    if foldmethod_is_marker(unsafe { Win::new(wp) }) {
-        fold_update_all(unsafe { Win::new(wp) });
+    if foldmethod_is_marker(wp) {
+        fold_update_all(wp);
     }
     None
 }
@@ -455,10 +453,10 @@ pub unsafe fn did_set_foldmethod(args: &mut OptSet) -> Option<&CStr> {
     }
     // SAFETY: the frame's window.
     let wp = win(args);
-    fold_update_all(unsafe { Win::new(wp) });
+    fold_update_all(wp);
     // Diff folds are closed to whatever 'foldlevel' says as soon as
     // they exist.
-    if foldmethod_is_diff(unsafe { Win::new(wp) }) {
+    if foldmethod_is_diff(wp) {
         unsafe { new_fold_level() };
     }
     None
@@ -619,8 +617,8 @@ pub unsafe fn did_set_vartabstop(args: &mut OptSet) -> Option<&CStr> {
     if errmsg.is_none() {
         // Indent folds are computed from the tab stops.
         let wp = win(args);
-        if foldmethod_is_indent(unsafe { Win::new(wp) }) {
-            fold_update_all(unsafe { Win::new(wp) });
+        if foldmethod_is_indent(wp) {
+            fold_update_all(wp);
         }
     }
     errmsg

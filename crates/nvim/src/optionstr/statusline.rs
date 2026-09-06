@@ -129,12 +129,11 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     rulerformat: bool,
     statuscolumn: bool,
 ) -> Option<CString> {
-    let (wp, varp) = (win(args), varp(args));
+    let (mut wp, varp) = (win(args), varp(args));
     if rulerformat {
         ru_wid.set(0);
     } else if statuscolumn {
-        // SAFETY: the frame's window.
-        unsafe { (*wp).w_nrwidth_line_count = 0 as LineNr };
+        wp.w_nrwidth_line_count = 0 as LineNr;
     }
 
     // SAFETY: the frame and its C string value.
@@ -153,9 +152,8 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         s = unsafe { *varp };
     }
     // A floating window's status line is part of its frame.
-    if is_stl && !wp.is_null() && unsafe { (*wp).w_floating } {
-        // SAFETY: the frame's window and its own configuration.
-        unsafe { win_config_float(crate::winlayer::Win::new(wp), (*wp).w_config.clone()) };
+    if is_stl && wp.w_floating {
+        win_config_float(wp, wp.w_config.clone());
     }
 
     let mut errmsg = None;

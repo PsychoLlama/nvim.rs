@@ -46,8 +46,8 @@ use crate::os::env::home_replace_save;
 use crate::os::state::globaldir;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    Buffer, DictItem, Frame, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VarType, Window, int64_t,
+    DictItem, Frame, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType,
+    Window, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;
@@ -222,7 +222,7 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
     } else {
         globaldir.get()
     };
-    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), dir) };
+    let sname = unsafe { home_replace_save(None, dir) };
     let fname_esc = unsafe { ses_escape_fname(sname) };
     let ok = out.puts(c"cd ") && unsafe { out.bytes(fname_esc) } && out.eol();
     unsafe { xfree(fname_esc.cast::<c_void>()) };

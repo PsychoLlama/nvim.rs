@@ -271,7 +271,7 @@ pub unsafe fn expand_argopt(
 pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
     let mut tab_number: c_int = 0;
     let unaccept_arg0 = if ea.cmdidx == CmdIdx::tabmove { 0 } else { 1 };
-    let last_tab = || current_tab_nr(ptr::null_mut());
+    let last_tab = || current_tab_nr(None);
     let invarg2 = |mut ea: Ea| {
         ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
     };

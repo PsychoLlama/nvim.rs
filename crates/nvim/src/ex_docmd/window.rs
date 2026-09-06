@@ -53,7 +53,7 @@ use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
-use crate::types::{CmdModFlags, ExArg, IOSIZE, NUL, Tabpage, Window, intmax_t, size_t, uint8_t};
+use crate::types::{CmdModFlags, ExArg, IOSIZE, NUL, intmax_t, size_t, uint8_t};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -175,11 +175,11 @@ fn skip_white(p: *mut c_char) -> *mut c_char {
 ///
 /// A window not in the list answers the number of windows, which is what
 /// `winnr()` reports for one that has just been closed.
-pub(crate) fn current_win_nr(win: *const Window) -> c_int {
+pub(crate) fn current_win_nr(win: Option<Win>) -> c_int {
     let mut nr = 0;
     for wp in windows() {
         nr += 1;
-        if ptr::eq(wp.raw(), win) {
+        if Some(wp) == win {
             break;
         }
     }
@@ -187,11 +187,11 @@ pub(crate) fn current_win_nr(win: *const Window) -> c_int {
 }
 
 /// The same for tab pages. `current_tab_nr(NULL)` is the count.
-pub(crate) fn current_tab_nr(tab: *mut Tabpage) -> c_int {
+pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
     let mut nr = 0;
     for tp in tabs() {
         nr += 1;
-        if tp.raw() == tab {
+        if tp.raw() == tab.map_or(ptr::null_mut(), TabPage::raw) {
             break;
         }
     }
@@ -312,7 +312,7 @@ fn open_tabpage(ea: Ex, old_curwin: Win) {
     let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_raw());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
-    unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };
+    unsafe { apply_autocmds(ev, no_fname, no_file, false, Buf::from_raw(buf)) };
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
@@ -487,7 +487,7 @@ fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
         // SAFETY: a live buffer and its own file name, into the buffer.
-        unsafe { home_replace(raw, fname, out, size, true) };
+        unsafe { home_replace(Buf::from_raw(raw), fname, out, size, true) };
     } else {
         // SAFETY: a NUL-terminated name, into the buffer.
         unsafe { xstrlcpy(out, special, size) };

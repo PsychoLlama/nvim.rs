@@ -22,11 +22,11 @@ use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
     Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
-    Tabpage, TabpageHandle, Window, WindowHandle, kErrorTypeException, size_t,
+    TabpageHandle, WindowHandle, kErrorTypeException, size_t,
 };
 use crate::window::{tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf};
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
-use crate::winlayer::{TabPage, Win, windows_in_tab};
+use crate::winlayer::{Win, windows_in_tab};
 use ::libc::abort;
 use core::ffi::CStr;
 use core::ptr;
@@ -211,26 +211,25 @@ pub unsafe fn nvim_open_tabpage(
         }
     };
 
-    let mut wp: *mut Window = ptr::null_mut();
+    let mut wp: Option<Win> = None;
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
-    let tp: *mut Tabpage = api_try(&mut err, |_| {
+    let tp = api_try(&mut err, |_| {
         let filename = ptr::null_mut::<::core::ffi::c_char>();
         // SAFETY: `wp` is this frame's own out-parameter.
-        unsafe { win_new_tabpage(after + 1, filename, enter, &raw mut wp) }
+        unsafe { win_new_tabpage(after + 1, filename, enter, Some(&mut wp)) }
     });
-    if tp.is_null() {
+    let Some(tp) = tp else {
         if !err.is_set() {
             set_msg(&mut err, c"Failed to create new tabpage");
         }
         return Err(err);
-    }
-    // SAFETY: `win_new_tabpage` answers a live tab page or a null.
-    let Some(tp) = unsafe { TabPage::from_raw(tp) }.filter(|t| valid_tabpage(t.id())) else {
-        return Err(tabpage_closed(err));
     };
+    if !valid_tabpage(tp.id()) {
+        return Err(tabpage_closed(err));
+    }
 
-    // SAFETY: as above; `tabpage_win_valid` reads both lists and nothing else.
-    let new_win = unsafe { Win::from_raw(wp) }
+    // `tabpage_win_valid` reads both lists and nothing else.
+    let new_win = wp
         .filter(|&w| tabpage_win_valid(tp, w.id()))
         .filter(|w| w.w_buffer != b.raw());
     if let Some(w) = new_win {

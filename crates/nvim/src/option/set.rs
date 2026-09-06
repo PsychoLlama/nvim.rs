@@ -185,7 +185,7 @@ fn apply_optionset_autocmd(
             get_option(opt_idx).fullname,
             ptr::null_mut(),
             false,
-            ptr::null_mut(),
+            None,
         )
     };
     unsafe { reset_v_option_vars() };
@@ -513,9 +513,9 @@ pub(crate) unsafe fn did_set_option(
     // Anything set from a modeline, from the sandbox or in secure mode
     // is insecure unless the callback vetted it; replacing a value
     // outright clears the mark again.
-    let flagsp = unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) };
+    let flagsp = unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) };
     let flagsp_local = scope_both
-        .then(|| unsafe { insecure_flag(Win::current_raw(), opt_idx, OptionSetFlags::LOCAL) });
+        .then(|| unsafe { insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL) });
     if !value_checked
         && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
     {
@@ -609,7 +609,7 @@ pub(crate) unsafe fn set_option(
     let saved_old_local_value = optval_copy(old_local_value);
     let saved_new_value = optval_copy(value);
 
-    let insecure = unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) }.is_set();
+    let insecure = unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) }.is_set();
     let secure_saved = secure.get();
     // Deal with the side effects of a modeline, of the sandbox, or of a
     // value amended rather than replaced, in secure mode.

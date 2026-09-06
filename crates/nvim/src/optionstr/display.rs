@@ -172,17 +172,16 @@ pub(crate) unsafe fn derive_breakat_flags() {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
-    let (wp, varp) = (win(args), varp(args));
-    // SAFETY: the frame's window.
-    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_briopt };
-    let for_window = unsafe { local_window(varp, Win::new(wp), local) };
+    let (mut wp, varp) = (win(args), varp(args));
+    let local = &raw mut wp.w_onebuf_opt.wo_briopt;
+    let for_window = unsafe { local_window(varp, wp, local) };
     // SAFETY: the option's value is a C string.
     if unsafe { briopt_check(*varp, for_window) } as c_int == FAIL {
         return invalid();
     }
     // A window whose 'breakindentopt' asks for list indenting affects how
     // every other window's shared buffer wraps.
-    if !for_window.is_null() && unsafe { (*wp).w_briopt_list } != 0 {
+    if for_window.is_some() && wp.w_briopt_list != 0 {
         // SAFETY: marks the editor's own windows.
         unsafe { redraw_all_later(UPD_NOT_VALID) };
     }
@@ -192,10 +191,9 @@ pub unsafe fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_colorcolumn(args: &mut OptSet) -> Option<&CStr> {
-    let (wp, varp) = (win(args), varp(args));
-    // SAFETY: the frame's window, and the option's C string value.
-    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_cc };
-    unsafe { check_colorcolumn(*varp, local_window(varp, Win::new(wp), local)) }
+    let (mut wp, varp) = (win(args), varp(args));
+    let local = &raw mut wp.w_onebuf_opt.wo_cc;
+    unsafe { check_colorcolumn(*varp, local_window(varp, wp, local)) }
 }
 
 /// # Safety
@@ -214,7 +212,6 @@ pub unsafe fn did_set_cursorlineopt(args: &mut OptSet) -> Option<&CStr> {
     // all.
     // SAFETY: the option's C string value, and the frame's window, which
     // `OptSet` names for exactly this call.
-    let wp = unsafe { Win::new(wp) };
     if unsafe { c_int::from(**varp) } == NUL
         || unsafe { fill_culopt_flags(Some(CStr::from_ptr(*varp)), wp) }.is_err()
     {
@@ -408,19 +405,18 @@ pub unsafe fn did_set_showcmdloc(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
-    let (wp, varp) = (win(args), varp(args));
-    // SAFETY: the frame's window and value.
-    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_scl };
-    if unsafe { check_signcolumn(*varp, local_window(varp, Win::new(wp), local)) }.is_err() {
+    let (mut wp, varp) = (win(args), varp(args));
+    let local = &raw mut wp.w_onebuf_opt.wo_scl;
+    if unsafe { check_signcolumn(*varp, local_window(varp, wp, local)) }.is_err() {
         return invalid();
     }
     // "number" shares the sign column with the number column, so
     // leaving or entering it invalidates the cached number width.
     let old = old_value(args);
     if (unsafe { *old } == b'n' as c_char && unsafe { *old.add(1) } == b'u' as c_char)
-        || unsafe { (*wp).w_minscwidth } == SCL_NUM
+        || wp.w_minscwidth == SCL_NUM
     {
-        unsafe { (*wp).w_nrwidth_line_count = 0 as LineNr };
+        wp.w_nrwidth_line_count = 0 as LineNr;
     }
     None
 }
@@ -431,20 +427,18 @@ pub unsafe fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
-    let wp = win(args);
-    // SAFETY: the caller's frame and window.
+    let mut wp = win(args);
     let local = args.os_flags.has(OptionSetFlags::LOCAL);
-    let value = unsafe {
+    let value = {
         if local {
-            (*wp).w_onebuf_opt.wo_ve
+            wp.w_onebuf_opt.wo_ve
         } else {
             p_ve.get()
         }
     };
-    let store = |mask: c_uint| {
+    let mut store = |mask: c_uint| {
         if local {
-            // SAFETY: the frame's window.
-            unsafe { (*wp).w_onebuf_opt.wo_ve_flags = mask };
+            wp.w_onebuf_opt.wo_ve_flags = mask;
         } else {
             ve_flags.set(mask);
         }
@@ -463,8 +457,8 @@ pub unsafe fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's old value and window.
     if !unsafe { cstr::eq(value, old_value(args)) } {
         // What column the cursor may sit in just changed.
-        validate_virtcol(unsafe { Win::new(wp) });
-        coladvance(unsafe { Win::new(wp) }, unsafe { (*wp).w_virtcol });
+        validate_virtcol(wp);
+        coladvance(wp, wp.w_virtcol);
     }
     None
 }
@@ -580,10 +574,9 @@ pub unsafe fn did_set_pumborder(_args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_winhighlight(args: &mut OptSet) -> Option<&CStr> {
-    let (wp, varp) = (win(args), varp(args));
-    // SAFETY: the frame's window and C string value.
-    let local = unsafe { &raw mut (*wp).w_onebuf_opt.wo_winhl };
-    if !unsafe { parse_winhl_opt(*varp, local_window(varp, Win::new(wp), local)) } {
+    let (mut wp, varp) = (win(args), varp(args));
+    let local = &raw mut wp.w_onebuf_opt.wo_winhl;
+    if !unsafe { parse_winhl_opt(*varp, local_window(varp, wp, local)) } {
         return invalid();
     }
     None

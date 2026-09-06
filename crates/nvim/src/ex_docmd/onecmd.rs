@@ -305,7 +305,8 @@ pub(crate) unsafe fn do_one_cmd(
                     as *mut c_char;
             let event = AutoEvent::CmdUndefined;
             let no_buf = ptr::null_mut();
-            let ret = unsafe { apply_autocmds(event, cmdname, cmdname, true, no_buf) };
+            let ret =
+                unsafe { apply_autocmds(event, cmdname, cmdname, true, Buf::from_raw(no_buf)) };
             xfree(cmdname as *mut c_void);
             // Look again only if the autocommands did something and did
             // not fail.

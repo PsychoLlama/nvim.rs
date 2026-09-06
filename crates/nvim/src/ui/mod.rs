@@ -860,13 +860,11 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mu
         return;
     }
     let wp = unsafe { get_win_by_grid_handle(grid_handle) };
-    if wp.is_null() {
+    if wp.is_none() {
         *err = err_bad_number(c"window handle", grid_handle as i64);
         return;
     }
-    // SAFETY: `wp` is the window the grid handle names, checked non-null
-    // above.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = wp.expect("the grid handle names a window");
     if wp.w_floating {
         if width != wp.w_width || height != wp.w_height {
             wp.w_config.width = width.max(1);

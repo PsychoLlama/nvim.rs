@@ -36,11 +36,11 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    __compar_fn_t, Arena, Blob, BoolVarValue, Buffer, Callback, Dict, DictItem, DictWatcher,
-    EvalFuncData, Float, FuncExe, GArray, HashTab, LineNr, List, ListItem, ListWatch, LuaRef,
-    Partial, QUEUE, SpecialVarValue, StaticList10, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
+    __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
+    Float, FuncExe, GArray, HashTab, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE,
+    SpecialVarValue, StaticList10, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
     kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::Live;

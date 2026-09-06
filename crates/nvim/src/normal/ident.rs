@@ -967,7 +967,7 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
         && Buf::current().b_nwindows <= 1
         && !unsafe { buf_hide(Buf::current()) };
     if must_write {
-        let _ = unsafe { autowrite(Buf::current_raw(), false) };
+        let _ = unsafe { autowrite(Buf::current(), false) };
     }
     setpcmark();
     let hidden = unsafe { buf_hide(Buf::current()) };

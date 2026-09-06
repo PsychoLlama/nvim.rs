@@ -76,7 +76,7 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    ArgEntry, Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t,
+    ArgEntry, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t,
 };
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
@@ -301,7 +301,7 @@ unsafe fn ses_escape_fname(name: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract; `home_replace_save` answers an owned,
     // NUL-terminated copy, and `utfc_ptr2len` advances by a whole character
     // so the scan never lands inside one.
-    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), name) };
+    let sname = unsafe { home_replace_save(None, name) };
     let mut p = sname;
     while unsafe { *p } != NUL as c_char {
         if unsafe { *p } == b'\\' as c_char {
@@ -424,7 +424,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         emsg(gettext(e_noname));
         return ptr::null_mut();
     }
-    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), Buf::current().b_ffname) };
+    let sname = unsafe { home_replace_save(None, Buf::current().b_ffname) };
 
     // One extra byte for each character that doubles.
     let mut extra = 0usize;
@@ -540,7 +540,7 @@ pub(crate) unsafe fn ex_mkrc(args: *mut ExArg) {
     unsafe { xfree(view_file.cast::<c_void>()) };
     let buffer = Buf::current_raw();
     let (none, post) = (ptr::null_mut(), AutoEvent::SessionWritePost);
-    unsafe { apply_autocmds(post, none, none, false, buffer) };
+    unsafe { apply_autocmds(post, none, none, false, Buf::from_raw(buffer)) };
 }
 
 /// The body of [`ex_mkrc`] once the file is open: answers whether anything

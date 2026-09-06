@@ -28,7 +28,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Window};
+use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -267,10 +267,9 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
-pub unsafe fn check_colorcolumn(cc: *mut c_char, window: *mut Window) -> Option<&'static CStr> {
-    // SAFETY: the caller's promise -- a live window or null, and a
-    // NUL-terminated string or null.
-    let win = unsafe { Win::from_raw(window) };
+pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<&'static CStr> {
+    // The caller's promise: a NUL-terminated string or null.
+    let win = window;
     if win.is_some_and(|w| w.w_buffer.is_null()) {
         return None; // buffer was closed
     }

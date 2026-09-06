@@ -487,7 +487,7 @@ fn writable_by_us(info: &FileInfo) -> bool {
 pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
     let mut folded = [0 as c_char; MAXPATHL as usize];
     let mut part = [0 as c_char; MAXPATHL as usize + 1];
-    let new_name = unsafe { home_replace_save(core::ptr::null_mut(), name) };
+    let new_name = unsafe { home_replace_save(None, name) };
     let mut retval = false;
     let mut p = p_shada.get();
     while unsafe { *p } != 0 {
@@ -498,7 +498,7 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
         }
         let tail = unsafe { part.as_ptr().add(1) };
         let out = folded.as_mut_ptr();
-        unsafe { home_replace(core::ptr::null(), tail, out, MAXPATHL as size_t, true) };
+        unsafe { home_replace(None, tail, out, MAXPATHL as size_t, true) };
         let n = unsafe { cstr::bytes_at(folded.as_ptr()) }.len();
         if unsafe { mb_strnicmp(folded.as_ptr(), new_name, n) } == 0 {
             retval = true;

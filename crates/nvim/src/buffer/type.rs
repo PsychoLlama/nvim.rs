@@ -237,8 +237,10 @@ pub unsafe fn set_buflisted(on: c_int) {
         AutoEvent::BufDelete
     };
     let raw = Buf::current_raw();
-    // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
+
+    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
+
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
 }
 
 pub unsafe fn buf_is_empty(buffer: Buf) -> bool {

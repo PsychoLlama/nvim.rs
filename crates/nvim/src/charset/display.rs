@@ -22,7 +22,7 @@ use crate::mbyte::{
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
-use crate::types::{Buffer, GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
+use crate::types::{GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
 
 use super::{
@@ -145,7 +145,7 @@ pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
             len -= step;
         } else {
             // SAFETY: the current buffer is valid.
-            let trs = unsafe { render_byte(Buf::current_raw(), bytes[at] as c_int) };
+            let trs = unsafe { render_byte(Buf::current_or_none(), bytes[at] as c_int) };
             step = trs.len;
             if step > 1 {
                 room -= step as isize - 1;
@@ -260,7 +260,7 @@ pub unsafe fn transstr_buf(
             read += 1;
         } else {
             // SAFETY: the current buffer is valid.
-            let tb = unsafe { render_byte(Buf::current_raw(), cursor.byte() as c_int) };
+            let tb = unsafe { render_byte(Buf::current_or_none(), cursor.byte() as c_int) };
             cursor.advance(1);
             read += 1;
             if written + tb.len > limit {
@@ -477,7 +477,7 @@ fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
 /// # Safety
 /// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
+unsafe fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
     let (prefix, c) = if c < 0 {
@@ -493,8 +493,7 @@ unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
     {
         render::Rendered::literal(c as uint8_t)
     } else if c <= 0xff {
-        // SAFETY: forwarded to this function's contract.
-        render_nonprint(unsafe { Buf::from_raw(buffer.cast_mut()) }, c)
+        render_nonprint(buffer, c)
     } else {
         render::hex_form(c)
     };
@@ -510,10 +509,10 @@ unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
 /// # Safety
 /// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_byte(buffer: *const Buffer, c: c_int) -> render::Rendered {
+unsafe fn render_byte(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     if c >= 0x80 {
         // SAFETY: forwarded to this function's contract.
-        return render_nonprint(unsafe { Buf::from_raw(buffer.cast_mut()) }, c);
+        return render_nonprint(buffer, c);
     }
     // SAFETY: as above.
     unsafe { render_char(buffer, c) }
@@ -525,7 +524,7 @@ unsafe fn render_byte(buffer: *const Buffer, c: c_int) -> render::Rendered {
 /// The current buffer must be valid.
 pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_buf(Buf::current_raw(), c) }
+    unsafe { transchar_buf(Buf::current_or_none(), c) }
 }
 
 /// The display form of `c` as it would appear in `buffer` (which decides how a
@@ -533,7 +532,7 @@ pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
 ///
 /// # Safety
 /// `buffer` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_buf(buffer: *const Buffer, c: c_int) -> CharDisplay {
+pub(crate) unsafe fn transchar_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     owned(&unsafe { render_char(buffer, c) })
 }
@@ -543,7 +542,7 @@ pub(crate) unsafe fn transchar_buf(buffer: *const Buffer, c: c_int) -> CharDispl
 ///
 /// # Safety
 /// `buffer` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_byte_buf(buffer: *const Buffer, c: c_int) -> CharDisplay {
+pub(crate) unsafe fn transchar_byte_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     owned(&unsafe { render_byte(buffer, c) })
 }
@@ -554,7 +553,7 @@ pub(crate) unsafe fn transchar_byte_buf(buffer: *const Buffer, c: c_int) -> Char
 /// The current buffer must be valid.
 pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_byte_buf(Buf::current_raw(), c) }
+    unsafe { transchar_byte_buf(Buf::current_or_none(), c) }
 }
 
 /// Write the display form of the unprintable byte `c` into `charbuf`.

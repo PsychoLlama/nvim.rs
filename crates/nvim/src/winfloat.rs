@@ -47,8 +47,8 @@ use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
-    OptionSetFlags, Pos, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit, WinStyle,
-    Window, WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
+    OptionSetFlags, Pos, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window,
+    WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
     kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};
@@ -120,11 +120,6 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
 
 // ---------------------------------------------------------------------------
 // The tab page
-
-/// `NULL` for "the current tab page", as window.rs spells it.
-fn raw_tab(tabpage: Option<TabPage>) -> *mut Tabpage {
-    tabpage.map_or(ptr::null_mut(), TabPage::raw)
-}
 
 fn current_tab() -> TabPage {
     TabPage::current()
@@ -229,15 +224,8 @@ fn init_window(win: Win) {
 /// direction it answers is unused here, as it is upstream.
 fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
     let mut dir: c_int = 0;
-    // SAFETY: a live, non-floating window of `tabpage`; `dir` is a local.
-    unsafe {
-        winframe_remove(
-            win,
-            &raw mut dir,
-            TabPage::from_raw(raw_tab(tabpage)),
-            ptr::null_mut(),
-        )
-    };
+
+    unsafe { winframe_remove(win, &raw mut dir, tabpage, ptr::null_mut()) };
 }
 
 /// `XFREE_CLEAR(wp->w_frame)`.
@@ -325,7 +313,7 @@ fn resume_autocmds() {
 }
 fn parse_winhl(win: Win) {
     // SAFETY: a live window; a null pattern means "use the window's option".
-    unsafe { parse_winhl_opt(ptr::null(), win.raw()) };
+    unsafe { parse_winhl_opt(ptr::null(), Some(win)) };
 }
 fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
     // SAFETY: a live window's own grid view, and two locals.

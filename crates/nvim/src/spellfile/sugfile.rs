@@ -127,7 +127,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut SpellInfo, wfname: *mut c_cha
         unsafe { slang_free(slang) };
     }
     spin.si_arena.clear();
-    unsafe { close_spellbuf(spin.si_spellbuf) };
+    unsafe { close_spellbuf(Buf::from_raw(spin.si_spellbuf)) };
 }
 
 /// Walk the loaded `.spl`'s case-folded tree and add every word's
@@ -228,7 +228,7 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 /// Collect each word end's word numbers into one line of a scratch buffer.
 unsafe fn sug_maketable(spin: &mut SpellInfo) -> c_int {
     // SAFETY: the sound-fold tree is built and compressed by now.
-    spin.si_spellbuf = unsafe { open_spellbuf() };
+    spin.si_spellbuf = unsafe { open_spellbuf() }.map_or(core::ptr::null_mut(), Buf::raw);
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, 1, 100) };

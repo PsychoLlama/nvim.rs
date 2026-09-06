@@ -11,7 +11,6 @@
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char};
-use core::ptr;
 
 use crate::message::e_invarg;
 use crate::types::{OptSet, Window};
@@ -30,8 +29,9 @@ pub(crate) fn varp(args: &OptSet) -> *mut *mut c_char {
 
 /// The window the set is happening in. Not necessarily the window whose
 /// value is being set — see [`local_window`].
-pub(crate) fn win(args: &OptSet) -> *mut Window {
-    args.os_win.cast::<Window>()
+pub(crate) fn win(args: &OptSet) -> Win {
+    // SAFETY: the option-set frame's own window, live for the call.
+    unsafe { Win::new(args.os_win.cast::<Window>()) }
 }
 
 /// The window whose own copy of the option is being set, or null when the
@@ -49,12 +49,8 @@ pub(crate) unsafe fn local_window(
     varp: *mut *mut c_char,
     window: Win,
     local: *mut *mut c_char,
-) -> *mut Window {
-    if varp == local {
-        window.raw()
-    } else {
-        ptr::null_mut()
-    }
+) -> Option<Win> {
+    if varp == local { Some(window) } else { None }
 }
 
 /// The value the option held before this set, as a C string.

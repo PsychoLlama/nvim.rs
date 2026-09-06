@@ -365,7 +365,7 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     let none = ::core::ptr::null_mut();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
-    unsafe { apply_autocmds(AutoEvent::TermEnter, none, none, false, buf.raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermEnter, none, none, false, Some(buf)) };
     // SAFETY: reports the mode change, which can run autocommands too.
     unsafe { may_trigger_modechanged() };
     s.term.refcount.release();
@@ -410,8 +410,10 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     if s.close {
         s.term.refcount.retain();
     }
-    // SAFETY: TermLeave against a live buffer, as above.
-    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, current_buf().raw()) };
+
+    let __hoisted_0 = unsafe { Buf::from_raw(current_buf().raw()) };
+
+    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, __hoisted_0) };
     if s.close {
         s.term.refcount.release();
         let buf_handle = s.term.buf_handle;
@@ -531,7 +533,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
         let none = ::core::ptr::null_mut();
         // SAFETY: TextChangedT against a live buffer; nothing of the
         // terminal or the session is borrowed across it.
-        unsafe { apply_autocmds(AutoEvent::TextChangedT, none, none, false, buf.raw()) };
+        unsafe { apply_autocmds(AutoEvent::TextChangedT, none, none, false, Some(buf)) };
         let mut buf = current_buf();
         // SAFETY: as above.
         buf.b_last_changedtick_i = buf_get_changedtick(buf);

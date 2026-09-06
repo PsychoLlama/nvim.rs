@@ -98,7 +98,7 @@ pub unsafe fn f_gettabinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let list = unsafe { tv_list_alloc_ret(result, hint) };
     let wanted = if one {
         let n = number_as_int(arg_number_chk(args, 0));
-        match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+        match find_tabpage(n) {
             Some(tp) => Some(tp),
             None => return,
         }
@@ -213,7 +213,7 @@ pub unsafe fn f_winlayout(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         TabPage::current()
     } else {
         let n = number_as_int(arg_number(args, 0));
-        match unsafe { TabPage::from_raw(find_tabpage(n)) } {
+        match find_tabpage(n) {
             Some(tp) => tp,
             None => return,
         }

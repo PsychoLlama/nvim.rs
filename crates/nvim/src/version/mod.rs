@@ -34,7 +34,7 @@ use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag, Tabpage};
+use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
@@ -394,7 +394,7 @@ pub(crate) unsafe fn may_show_intro() -> bool {
         && Buf::current().b_fname.is_null()
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
-        && unsafe { one_window(Win::current(), ptr::null_mut::<Tabpage>()) }
+        && one_window(Win::current(), None)
         && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
 }
 

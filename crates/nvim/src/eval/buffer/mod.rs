@@ -106,18 +106,18 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
 /// `buffer` is a live buffer or NULL.
 pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: Buf) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(args.ptr(i), buffer.raw()) }
+    unsafe { tv_get_lnum_buf(args.ptr(i), Some(buffer)) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
 /// which takes a number, a name or a pattern.
-pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> *mut Buffer {
+pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_buf(args.ptr(i), curtab_only) }
 }
 
 /// The buffer argument `i` names, reporting for a type that names none.
-pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut Buffer {
+pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> Option<Buf> {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_buf_from_arg(args.ptr(i)) }
 }

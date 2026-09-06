@@ -132,14 +132,14 @@ impl Swapped {
                 BLN_LISTED as c_int,
             )
         };
-        assert!(!buf.is_null(), "a buffer for {name}");
+        let mut buf = buf.expect("a buffer for {name}");
         // SAFETY: a buffer just created, with no memline yet. `b_p_swf` is
         // what `ml_open_file` refuses on, and a buffer made outside the
         // usual `:edit` path has not been given the option's value.
+        buf.b_p_swf = 1;
         unsafe {
-            (*buf).b_p_swf = 1;
-            ml_open(Buf::new(buf)).expect("a memline");
-            ml_open_file(Buf::new(buf));
+            ml_open(buf).expect("a memline");
+            ml_open_file(buf);
         }
         // SAFETY: the memline was just opened; appending after line `n`
         // puts each line at the end in turn.
@@ -147,7 +147,7 @@ impl Swapped {
             let text = cstr(*line);
             let appended = unsafe {
                 ml_append_buf(
-                    Buf::new(buf),
+                    buf,
                     n as LineNr,
                     text.as_ptr().cast_mut(),
                     line.len() as ColNr + 1,
@@ -159,11 +159,11 @@ impl Swapped {
         // The buffer starts with one empty line, which the appends pushed
         // to the end; drop it so the line set is exactly `LINES`.
         // SAFETY: the memline holds `LINES.len() + 1` lines.
-        unsafe { neovim::memline::ml_delete_buf(Buf::new(buf), LINES.len() as LineNr + 1, false) }
+        unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false) }
             .expect("the empty line goes");
 
         // SAFETY: as above; a swap file was opened, so this writes it.
-        unsafe { ml_preserve(Buf::new(buf), false, true) };
+        unsafe { ml_preserve(buf, false, true) };
 
         let swap = std::fs::read_dir(sandbox.root())
             .expect("the sandbox")
@@ -174,7 +174,7 @@ impl Swapped {
 
         Swapped {
             sandbox,
-            buf,
+            buf: buf.raw(),
             saved_dir,
             _dir: dir,
             swap,

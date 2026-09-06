@@ -16,6 +16,8 @@ use crate::cstr;
 use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
+use crate::winlayer::Win;
+use core::ptr;
 
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
@@ -198,7 +200,8 @@ pub unsafe fn nvim__inspect_cell(
     if grid == pum_grid_ref().handle as Integer {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let wp: *mut Window = unsafe { get_win_by_grid_handle(grid as Handle) };
+        let wp: *mut Window =
+            unsafe { get_win_by_grid_handle(grid as Handle).map_or(ptr::null_mut(), Win::raw) };
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
             // SAFETY: `error` is this frame's own slot and `name` a literal.

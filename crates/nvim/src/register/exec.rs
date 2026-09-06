@@ -124,7 +124,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
             no_fname,
             no_fname,
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         )
     };
     // SAFETY: `dict` and `save_v_event` are the pair `get_v_event` made.
@@ -166,7 +166,7 @@ pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
                 no_fname,
                 no_fname,
                 false,
-                Buf::current_raw(),
+                Buf::current_or_none(),
             )
         };
         return Ok(());

@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -283,7 +284,7 @@ pub unsafe fn call_func(
                 let event = AutoEvent::FuncUndefined;
                 let no_buf = ptr::null_mut();
                 if fp.is_null()
-                    && unsafe { apply_autocmds(event, rfname, rfname, true, no_buf) }
+                    && unsafe { apply_autocmds(event, rfname, rfname, true, Buf::from_raw(no_buf)) }
                     && !aborting()
                 {
                     fp = unsafe { find_func(rfname) };

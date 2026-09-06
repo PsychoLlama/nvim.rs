@@ -193,7 +193,7 @@ pub unsafe fn nvim_open_win(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     false,
-                    Buf::current_raw(),
+                    Buf::current_or_none(),
                 )
             };
             if switched {
@@ -331,7 +331,7 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
         tabpage.raw()
     };
     // SAFETY: the caller's window and tab page.
-    if unsafe { one_window(w, other_tab) } {
+    if unsafe { one_window(w, TabPage::from_raw(other_tab)) } {
         let msg = c"Cannot move last non-floating window";
         err_msg(report, kErrorTypeException, msg);
         return false;

@@ -52,14 +52,13 @@ macro_rules! msg_buf {
 ///
 /// # Safety
 /// `rbuf` must be null or live; `group` must be null or NUL-terminated.
-pub(crate) unsafe fn sign_list_placed(rbuf: *mut Buffer, group: *const c_char) {
+pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
     // SAFETY: a static title.
     unsafe { msg_puts_title(gettext(c"\n--- Signs ---").as_ptr()) };
 
-    // SAFETY: the caller's promise -- `rbuf` is null or live.
-    let mut cur = match unsafe { Buf::from_raw(rbuf) } {
+    let mut cur = match rbuf {
         Some(buf) => Some(buf),
         None => first_buffer(),
     };
@@ -68,7 +67,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut Buffer, group: *const c_char) {
             break;
         }
         // SAFETY: a live buffer, either the caller's or one off the list.
-        if unsafe { buf_has_signs(cbuf.raw()) } {
+        if buf_has_signs(cbuf) {
             // SAFETY: a static newline.
             unsafe { msg_putchar('\n' as c_int) };
             // A live buffer's name is a NUL-terminated string, and the
@@ -90,7 +89,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: *mut Buffer, group: *const c_char) {
             }
         }
 
-        if !rbuf.is_null() {
+        if rbuf.is_some() {
             return;
         }
         cur = cbuf.next();
@@ -288,7 +287,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
 /// `buffer` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_place_cmd(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     lnum: LineNr,
     name: *mut c_char,
     id: c_int,
@@ -307,12 +306,12 @@ unsafe fn sign_place_cmd(
         }
         return;
     }
-    if name.is_null() || buffer.is_null() || empty_group {
+    let (false, Some(buffer), false) = (name.is_null(), buffer, empty_group) else {
         emsg(gettext(e_invarg));
         return;
-    }
+    };
     let mut uid = id.cast_unsigned();
-    let _ = unsafe { sign_place(&raw mut uid, group, name, Buf::new(buffer), lnum, prio) };
+    let _ = unsafe { sign_place(&raw mut uid, group, name, buffer, lnum, prio) };
 }
 
 /// `:sign unplace`.
@@ -343,7 +342,7 @@ unsafe fn sign_unplace_cmd(
         (buffer, lnum)
     };
 
-    if unsafe { sign_unplace(buf.raw(), id.max(0), group, lnum) } == FAIL && lnum > 0 {
+    if unsafe { sign_unplace(Some(buf), id.max(0), group, lnum) } == FAIL && lnum > 0 {
         emsg(gettext(c"E159: Missing sign number"));
     }
 }
@@ -354,7 +353,7 @@ unsafe fn sign_unplace_cmd(
 /// `buffer` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_jump_cmd(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -366,15 +365,12 @@ unsafe fn sign_jump_cmd(
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
-    if buffer.is_null()
-        || (!group.is_null() && unsafe { *group } == 0)
-        || lnum >= 0
-        || !name.is_null()
-    {
+    let bad = (!group.is_null() && unsafe { *group } == 0) || lnum >= 0 || !name.is_null();
+    let (Some(buffer), false) = (buffer, bad) else {
         emsg(gettext(e_invarg));
         return;
-    }
-    unsafe { sign_jump(id, group, Buf::new(buffer)) };
+    };
+    unsafe { sign_jump(id, group, buffer) };
 }
 
 /// What [`parse_sign_cmd_args`] read off a `:sign place`/`unplace`/`jump`
@@ -543,12 +539,14 @@ pub(crate) unsafe fn ex_sign(args: *mut ExArg) {
         };
         match idx {
             SIGNCMD_PLACE => unsafe {
-                sign_place_cmd(a.buf, a.lnum, a.name, a.id, a.group, a.prio)
+                sign_place_cmd(Buf::from_raw(a.buf), a.lnum, a.name, a.id, a.group, a.prio)
             },
             SIGNCMD_UNPLACE => unsafe {
                 sign_unplace_cmd(Buf::new(a.buf), a.lnum, a.name, a.id, a.group)
             },
-            SIGNCMD_JUMP => unsafe { sign_jump_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
+            SIGNCMD_JUMP => unsafe {
+                sign_jump_cmd(Buf::from_raw(a.buf), a.lnum, a.name, a.id, a.group)
+            },
             _ => {}
         }
         return;

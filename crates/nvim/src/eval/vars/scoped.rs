@@ -44,12 +44,12 @@ unsafe fn get_var_from(
     result: *mut TypVal,
     deftv: *mut TypVal,
     htname: c_int,
-    tabpage: *mut Tabpage,
-    win: *mut Window,
-    buffer: *mut Buffer,
+    tabpage: Option<TabPage>,
+    win: Option<Win>,
+    buffer: Option<Buf>,
 ) {
     let mut done = false;
-    let do_change_curbuf = !buffer.is_null() && htname == b'b' as c_int;
+    let do_change_curbuf = buffer.is_some() && htname == b'b' as c_int;
 
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
@@ -57,22 +57,19 @@ unsafe fn get_var_from(
     ret.v_type = VAR_STRING;
     ret.vval.v_string = ptr::null_mut();
 
-    if !varname.is_null()
-        && !tabpage.is_null()
-        && !win.is_null()
-        && (htname != b'b' as c_int || !buffer.is_null())
+    if let (false, Some(mut tp), Some(mut w)) = (varname.is_null(), tabpage, win)
+        && (htname != b'b' as c_int || buffer.is_some())
     {
         // Make `win` current, and its tab page with it, or the window is
         // not valid. Only when needed, since it blocks autocommands --
         // and not at all with a buffer in hand, where `curbuf` is saved
         // and restored directly instead.
-        let need_switch_win =
-            !(tabpage == TabPage::current_raw() && win == Win::current_raw()) && !do_change_curbuf;
+        let need_switch_win = !(tabpage == TabPage::current_or_none()
+            && win == Win::current_or_none())
+            && !do_change_curbuf;
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
         // SAFETY: `varname` is NUL-terminated and the handles are live.
         let lead = unsafe { *varname } as u8;
-        // SAFETY: a live window and its tab page -- both were null-checked.
-        let (w, tp) = unsafe { (Win::new(win), TabPage::new(tabpage)) };
         if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, Some(tp), true) }.is_ok()
         {
             if lead == b'&' && htname != b't' as c_int {
@@ -80,7 +77,7 @@ unsafe fn get_var_from(
                 let scoped = do_change_curbuf.then(|| {
                     // SAFETY: `do_change_curbuf` is exactly "the caller
                     // handed a buffer", and the caller's are live.
-                    switch_buffer(unsafe { Buf::new(buffer) })
+                    switch_buffer(buffer.expect("`do_change_curbuf` means there is one"))
                 });
                 if unsafe { *varname.add(1) } == NUL as c_char {
                     // A bare "&": every window- or buffer-local option.
@@ -97,18 +94,22 @@ unsafe fn get_var_from(
                 }
             } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
+                let scope = buffer.map(|b| b.raw());
                 let v: *const ScopeDictDictItem = match htname as u8 {
-                    b'b' => unsafe { &raw mut (*buffer).b_bufvar },
-                    b'w' => unsafe { &raw mut (*win).w_winvar },
-                    _ => unsafe { &raw mut (*tabpage).tp_winvar },
+                    b'b' => &raw mut unsafe { Buf::new(scope.expect("a `b:` scope")) }.b_bufvar,
+                    b'w' => &raw mut w.w_winvar,
+                    _ => &raw mut tp.tp_winvar,
                 };
                 unsafe { tv_copy(&raw const (*v).di_tv, result) };
                 done = true;
             } else {
-                let ht = match htname as u8 {
-                    b'b' => unsafe { &raw mut (*(*buffer).b_vars).dv_hashtab },
-                    b'w' => unsafe { &raw mut (*(*win).w_vars).dv_hashtab },
-                    _ => unsafe { &raw mut (*(*tabpage).tp_vars).dv_hashtab },
+                // SAFETY: each scope's own variable dictionary is live.
+                let ht = unsafe {
+                    match htname as u8 {
+                        b'b' => &raw mut (*buffer.expect("a `b:` scope").b_vars).dv_hashtab,
+                        b'w' => &raw mut (*w.w_vars).dv_hashtab,
+                        _ => &raw mut (*tp.tp_vars).dv_hashtab,
+                    }
                 };
                 let varname_len = unsafe { cstr::bytes_at(varname) }.len();
                 let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };
@@ -139,13 +140,12 @@ unsafe fn getwinvar(args: *mut TypVal, result: *mut TypVal, off: c_int) {
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int)
     } else {
-        TabPage::current_raw()
+        TabPage::current_or_none()
     };
-    let win = unsafe { find_win_by_nr(args.offset(off as isize), TabPage::from_raw(tp)) }
-        .map_or(ptr::null_mut(), Win::raw);
+    let win = unsafe { find_win_by_nr(args.offset(off as isize), tp) };
     let varname = unsafe { numbuf.string_chk(args.offset((off + 1) as isize)) };
     let deftv = unsafe { args.offset((off + 2) as isize) };
-    let nil = ptr::null_mut();
+    let nil = None;
     // SAFETY: the caller's obligation -- `off + 3` live values -- and the
     // window and tab page the resolver answered.
     unsafe { get_var_from(varname, result, deftv, b'w' as c_int, tp, win, nil) };
@@ -318,20 +318,25 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int)
     } else {
-        TabPage::current_raw()
+        TabPage::current_or_none()
     };
-    let win = unsafe { find_win_by_nr(args.offset(off as isize), TabPage::from_raw(tp)) }
-        .map_or(ptr::null_mut(), Win::raw);
+    let win =
+        unsafe { find_win_by_nr(args.offset(off as isize), tp) }.map_or(ptr::null_mut(), Win::raw);
     let varname = unsafe { numbuf.string_chk(args.offset((off + 1) as isize)) };
     let varp = unsafe { args.offset((off + 2) as isize) };
     if win.is_null() || varname.is_null() {
         return;
     }
 
-    let need_switch_win = !(tp == TabPage::current_raw() && win == Win::current_raw());
+    let need_switch_win = !(tp == TabPage::current_or_none() && win == Win::current_raw());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
     // SAFETY: a live window and its tab page.
-    let (w, t) = unsafe { (Win::new(win), TabPage::new(tp)) };
+    let (w, t) = unsafe {
+        (
+            Win::new(win),
+            TabPage::new(tp.map_or(ptr::null_mut(), TabPage::raw)),
+        )
+    };
     if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, Some(t), true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };
@@ -372,10 +377,12 @@ pub unsafe fn f_gettabvar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let varname = unsafe { numbuf.string_chk(args.add(1)) };
     let tp = find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int);
     // Any window of that tab page will do: only its `t:` scope is read.
-    let win = any_window_of(unsafe { TabPage::from_raw(tp) });
-    let (deftv, nil) = (unsafe { args.add(2) }, ptr::null_mut());
-    // SAFETY: as a `VimLFunc` -- three live values -- and a live tab page.
-    unsafe { get_var_from(varname, result, deftv, b't' as c_int, tp, win, nil) };
+    let win = any_window_of(tp);
+    let (deftv, nil) = (unsafe { args.add(2) }, None);
+
+    let __hoisted_1 = win;
+
+    unsafe { get_var_from(varname, result, deftv, b't' as c_int, tp, __hoisted_1, nil) };
 }
 
 /// `gettabwinvar()`.
@@ -403,10 +410,11 @@ pub unsafe fn f_getbufvar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let varname = unsafe { numbuf.string_chk(args.add(1)) };
     let buf = unsafe { tv_get_buf_from_arg(args) };
     let deftv = unsafe { args.add(2) };
-    let (tp, win) = (TabPage::current_raw(), Win::current_raw());
-    // SAFETY: as a `VimLFunc`, and the two globals are set from startup to
-    // exit.
-    unsafe { get_var_from(varname, result, deftv, b'b' as c_int, tp, win, buf) };
+    let (tp, win) = (TabPage::current_or_none(), Win::current_or_none());
+
+    let __hoisted_2 = buf;
+
+    unsafe { get_var_from(varname, result, deftv, b'b' as c_int, tp, win, __hoisted_2) };
 }
 
 /// `settabvar()`.
@@ -421,13 +429,13 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
     let tp = find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int);
     let varname = unsafe { numbuf.string_chk(args.add(1)) };
     let varp = unsafe { args.add(2) };
-    if varname.is_null() || tp.is_null() {
+    if varname.is_null() || tp.is_none() {
         return;
     }
 
     let save_curtab = TabPage::current();
     let save_lu_tp = lastused_tabpage.get();
-    unsafe { goto_tabpage_tp(TabPage::new(tp), false, false) };
+    unsafe { goto_tabpage_tp(tp.expect("a live handle"), false, false) };
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
@@ -468,7 +476,7 @@ pub unsafe fn f_setbufvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
     let varname = unsafe { numbuf.string_chk(args.add(1)) };
     let buf = unsafe { tv_get_buf(args, 0) };
     let varp = unsafe { args.add(2) };
-    if buf.is_null() || varname.is_null() {
+    if buf.is_none() || varname.is_null() {
         return;
     }
 
@@ -476,13 +484,13 @@ pub unsafe fn f_setbufvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         // An option: the buffer has to be current for the autocommands
         // the change fires, which `aucmd_prepbuf` arranges.
         let mut aco = AcoSave::default();
-        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(buf)) };
+        unsafe { aucmd_prepbuf(&raw mut aco, buf.expect("a live handle")) };
         unsafe { set_option_from_tv(varname.add(1), varp) };
         unsafe { aucmd_restbuf(&raw mut aco) };
     } else {
         // SAFETY: `tv_get_buf` answers a live buffer or null, and the null
         // was ruled out above.
-        let saved = switch_buffer(unsafe { Buf::new(buf) });
+        let saved = switch_buffer(buf.expect("a live handle"));
         unsafe { set_scoped_var(c"b:", varname, varp) };
         saved.restore();
     }
@@ -491,14 +499,10 @@ pub unsafe fn f_setbufvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
 /// Any window of `tab`, for the sake of its `t:` scope; a null when there is
 /// no such tab page. The current tab page's list hangs off `firstwin`, which
 /// upstream spells out here rather than reaching for the macro.
-fn any_window_of(tab: Option<TabPage>) -> *mut Window {
-    let tab = match tab {
-        Some(tab) => tab,
-        None => return ptr::null_mut(),
-    };
+fn any_window_of(tab: Option<TabPage>) -> Option<Win> {
+    let tab = tab?;
     match tab.is_current() || tab.tp_firstwin.is_none() {
         true => first_window(),
         false => tab.tp_firstwin.and_then(WinId::get),
     }
-    .map_or(ptr::null_mut(), Win::raw)
 }

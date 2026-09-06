@@ -205,7 +205,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
-                Buf::current_raw(),
+                Buf::current_or_none(),
             )
         };
     }

@@ -374,7 +374,7 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
     let arg = args.arg;
-    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, buf) };
+    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Buf::from_raw(buf)) };
 
     // Move the value of b:current_syntax to w:current_syntax.
     let new_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };

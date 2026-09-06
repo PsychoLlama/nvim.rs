@@ -104,7 +104,7 @@ pub unsafe fn apply_autocmds(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
     // `apply_autocmds_group` asks of them exactly what this does.
@@ -142,7 +142,7 @@ pub unsafe fn apply_autocmds_exarg(
             fname_io,
             force,
             AUGROUP_ALL,
-            buffer.raw(),
+            Some(buffer),
             args,
             ::core::ptr::null_mut(),
         )
@@ -170,7 +170,7 @@ pub unsafe fn apply_autocmds_retval(
             fname_io,
             force,
             AUGROUP_ALL,
-            buffer.raw(),
+            Some(buffer),
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
         )
@@ -195,7 +195,7 @@ pub unsafe fn apply_autocmds_group(
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
     group: ::core::ffi::c_int,
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     args: *mut ExArg,
     data: *mut Object,
 ) -> bool {
@@ -237,12 +237,13 @@ pub unsafe fn apply_autocmds_group(
         // window-local events can be listed there.
         let win_local = event_row(event).win_local;
         let mut win_ignore = false;
-        if buffer == Buf::current_raw() && win_local {
+        if buffer == Buf::current_or_none() && win_local {
             win_ignore = unsafe { event_ignored(event, Win::current().w_onebuf_opt.wo_eiw) };
-        } else if !buffer.is_null() && win_local && unsafe { (*buffer).b_nwindows } > 0 {
+        } else if buffer.is_some_and(|b| win_local && b.b_nwindows > 0) {
             win_ignore = true;
             for wp in tab_windows() {
-                if wp.w_buffer == buffer && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw) }
+                if Some(wp.buffer()) == buffer
+                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw) }
                 {
                     win_ignore = false;
                     break;
@@ -287,10 +288,8 @@ pub unsafe fn apply_autocmds_group(
             ::core::ptr::null_mut()
         } else if !fname.is_null() && ends_excmd(unsafe { *fname } as ::core::ffi::c_int) == 0 {
             fname
-        } else if !buffer.is_null() {
-            unsafe { (*buffer).b_ffname }
         } else {
-            ::core::ptr::null_mut()
+            buffer.map_or(::core::ptr::null_mut(), |b| b.b_ffname)
         });
         // The unexpanded `<afile>`, kept for the API's `file` field.
         let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
@@ -303,26 +302,21 @@ pub unsafe fn apply_autocmds_group(
         autocmd_fname_full.set(false);
 
         // `<abuf>`.
-        autocmd_bufnr.set(if buffer.is_null() {
-            0
-        } else {
-            unsafe { (*buffer).handle }
-        });
+        autocmd_bufnr.set(buffer.map_or(0, |b| b.handle));
 
         // The name to match the patterns against.  Always a full path,
         // in case a pattern has `allow_dirs` set.
         if fname.is_null() || unsafe { *fname } == 0 {
-            if buffer.is_null() {
-                fname = ::core::ptr::null_mut();
-            } else if event == AutoEvent::Syntax {
-                fname = unsafe { (*buffer).b_p_syn };
-            } else if event == AutoEvent::FileType {
-                fname = unsafe { (*buffer).b_p_ft };
-            } else {
-                if !unsafe { (*buffer).b_sfname.is_null() } {
-                    sfname = unsafe { xstrdup((*buffer).b_sfname) };
+            match (buffer, event) {
+                (None, _) => fname = ::core::ptr::null_mut(),
+                (Some(b), AutoEvent::Syntax) => fname = b.b_p_syn,
+                (Some(b), AutoEvent::FileType) => fname = b.b_p_ft,
+                (Some(b), _) => {
+                    if !b.b_sfname.is_null() {
+                        sfname = unsafe { xstrdup(b.b_sfname) };
+                    }
+                    fname = b.b_ffname;
                 }
-                fname = unsafe { (*buffer).b_ffname };
             }
             if fname.is_null() {
                 fname = c"".as_ptr().cast_mut();
@@ -532,9 +526,9 @@ pub unsafe fn apply_autocmds_group(
 
     // Wiping a buffer takes its buffer-local autocommands with it,
     // whether or not anything fired.
-    if event == AutoEvent::BufWipeout && !buffer.is_null() {
-        // SAFETY: non-null and live, by this function's own contract.
-        unsafe { aubuflocal_remove(Buf::new(buffer)) };
+    if let (AutoEvent::BufWipeout, Some(buffer)) = (event, buffer) {
+        // SAFETY: live, by this function's own contract.
+        unsafe { aubuflocal_remove(buffer) };
     }
     if retval as ::core::ffi::c_int == OK && event == AutoEvent::FileType {
         Buf::current().b_au_did_filetype = true;

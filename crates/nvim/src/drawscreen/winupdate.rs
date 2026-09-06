@@ -230,7 +230,7 @@ pub(crate) unsafe fn win_update(window: Win) {
         conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current()) });
     }
 
-    unsafe { win_check_ns_hl(window.raw()) };
+    unsafe { win_check_ns_hl(Some(window)) };
 
     let mut spv = SpellVars::default();
     // SAFETY: a live buffer.

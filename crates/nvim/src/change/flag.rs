@@ -46,7 +46,7 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            buffer.raw(),
+            Some(buffer),
         )
     };
     buffer.b_ro_locked -= 1;

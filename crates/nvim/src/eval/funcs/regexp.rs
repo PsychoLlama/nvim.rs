@@ -419,7 +419,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         return;
     }
     let prev_did_emsg = did_emsg.get();
-    let buf: *mut Buffer = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf: *mut Buffer = unsafe { tv_get_buf(args.ptr(0), 0).map_or(ptr::null_mut(), Buf::raw) };
     if buf.is_null() {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
@@ -438,7 +438,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let pat = arg_string(&mut patbuf, args.get(1));
 
     let did_emsg_before = did_emsg.get();
-    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), buf) };
+    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), Buf::from_raw(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -447,7 +447,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), buf) };
+    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), Buf::from_raw(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }

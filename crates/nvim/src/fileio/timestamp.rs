@@ -252,7 +252,7 @@ unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs
             fname,
             fname,
             false,
-            buffer.raw(),
+            Some(buffer),
         )
     };
     drop(locked);
@@ -284,7 +284,7 @@ unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs
 ///
 /// Safe: [`Buf`] carries the whole of the promise this needs.
 fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
-    let path = unsafe { home_replace_save(buffer.raw(), buffer.b_fname) };
+    let path = unsafe { home_replace_save(Some(buffer), buffer.b_fname) };
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = unsafe { cstr::bytes_at(path) }.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
     let mut tbuf = vec![0 as c_char; size];
@@ -516,7 +516,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     if bufref.valid() && retval != 0 {
         let (post, fname) = (AutoEvent::FileChangedShellPost, buffer.b_fname);
         // SAFETY: a live buffer and its own file name.
-        unsafe { apply_autocmds(post, fname, fname, false, buffer.raw()) };
+        unsafe { apply_autocmds(post, fname, fname, false, Some(buffer)) };
     }
     retval
 }
@@ -578,7 +578,10 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let mut bufref = BufRef::NONE;
     if !(unsafe { buf_is_empty(Buf::current()) } || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
-        savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
+        savebuf = unsafe {
+            buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int)
+                .map_or(ptr::null_mut(), Buf::raw)
+        };
         // SAFETY: `buflist_new` answers a live buffer or null.
         let scratch = unsafe { Buf::from_raw(savebuf) };
         bufref = BufRef::of_opt(scratch);

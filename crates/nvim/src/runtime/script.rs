@@ -131,7 +131,7 @@ pub unsafe fn ex_scriptnames(args: *mut ExArg) {
         // SAFETY: both buffers are sized as the calls below are told, and
         // outlive every one of them.
         let namebuff = shortname.as_mut_ptr();
-        unsafe { home_replace(ptr::null(), name, namebuff, MAXPATHL as size_t, true) };
+        unsafe { home_replace(None, name, namebuff, MAXPATHL as size_t, true) };
         let iobuff = row.as_mut_ptr();
         unsafe {
             vim_snprintf(
@@ -228,7 +228,7 @@ pub(crate) unsafe fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> C
             }
             // SAFETY: the registry's name, folded into a fresh allocation.
             return unsafe {
-                let folded = home_replace_save(ptr::null_mut(), sname);
+                let folded = home_replace_save(None, sname);
                 let owned = CStr::from_ptr(folded).to_owned();
                 xfree(folded.cast::<c_void>());
                 owned

@@ -26,7 +26,6 @@
 use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{
@@ -38,7 +37,7 @@ use crate::option::skip_to_option_part;
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::path::path_has_wildcard;
-use crate::types::{Buffer, Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
+use crate::types::{Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
 use ::libc::abort;
 
 pub mod display;
@@ -279,7 +278,7 @@ pub unsafe fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     for &option in &options[if global { 0 } else { 3 }..] {
         // SAFETY: an option value is a NUL-terminated string, and `buffer` is
         // valid.
-        if unsafe { parse_isopt(option, buffer.raw(), false) }.is_err() {
+        if unsafe { parse_isopt(option, Some(buffer), false) }.is_err() {
             return false;
         }
     }
@@ -293,7 +292,7 @@ pub unsafe fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
 /// `var` must be a NUL-terminated string.
 pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
     // SAFETY: forwarded; a check pass never touches the (null) buffer.
-    unsafe { parse_isopt(var, ptr::null_mut(), true) }
+    unsafe { parse_isopt(var, None, true) }
 }
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
@@ -438,7 +437,7 @@ unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) 
 /// `only_check`.
 unsafe fn parse_isopt(
     var: *const c_char,
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     only_check: bool,
 ) -> Result<(), Failed> {
     let table = if var == p_isi.get().cast_const() {
@@ -457,9 +456,9 @@ unsafe fn parse_isopt(
         let Some(entry) = (unsafe { next_isopt_entry(&mut cursor) }) else {
             return Err(Failed);
         };
-        if !only_check {
+        if let (false, Some(buffer)) = (only_check, buffer) {
             // SAFETY: `buffer` is valid whenever an entry is applied.
-            unsafe { apply_isopt_entry(table, &entry, Buf::new(buffer)) };
+            unsafe { apply_isopt_entry(table, &entry, buffer) };
         }
     }
     Ok(())

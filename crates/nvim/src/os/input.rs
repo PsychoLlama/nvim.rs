@@ -137,7 +137,8 @@ unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
         AutoEvent::CursorHold
     } as AutoEvent;
     let buffer = Buf::current_raw();
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer) };
+    let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
     did_cursorhold.set(true);
 }
 

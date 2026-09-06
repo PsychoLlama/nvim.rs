@@ -51,8 +51,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
-    int64_t, size_t, time_t,
+    ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, int64_t,
+    size_t, time_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
@@ -160,15 +160,16 @@ pub unsafe fn buflist_list(args: *mut ExArg) {
 /// `qsort` and `buf_time_compare` stay upstream's: two buffers entered in
 /// the same second tie, and a stable Rust sort would order the tie
 /// differently.
-fn sorted_by_last_used() -> Vec<*mut Buffer> {
-    let mut list: Vec<*mut Buffer> = buffers().map(|buf| buf.raw()).collect();
+fn sorted_by_last_used() -> Vec<Buf> {
+    let mut list: Vec<Buf> = buffers().collect();
     let (base, n, width) = (
         list.as_mut_ptr().cast::<c_void>(),
         list.len(),
-        size_of::<*mut Buffer>(),
+        size_of::<Buf>(),
     );
     // SAFETY: `n` initialised elements of this function's own vector, and a
-    // comparison function over two of them.
+    // comparison function over two of them. A `Buf` is one `Buffer *` wide,
+    // which is what `buf_time_compare` reads through the two addresses.
     unsafe { qsort(base, n, width, Some(buf_time_compare)) };
     list
 }
@@ -177,13 +178,13 @@ fn sorted_by_last_used() -> Vec<*mut Buffer> {
 /// down the buffer list itself. Upstream reads `b_next` after each line is
 /// printed, which is what the second arm does.
 struct Walk<'a> {
-    sorted: Option<&'a [*mut Buffer]>,
+    sorted: Option<&'a [Buf]>,
     at: usize,
     next: Option<Buf>,
 }
 
 impl<'a> Walk<'a> {
-    fn new(sorted: Option<&'a [*mut Buffer]>) -> Self {
+    fn new(sorted: Option<&'a [Buf]>) -> Self {
         let next = match sorted {
             Some(list) => nth(list, 0),
             None => first_buffer(),
@@ -214,9 +215,8 @@ impl<'a> Walk<'a> {
 }
 
 /// Entry `at` of the sorted array, which holds live buffers.
-fn nth(list: &[*mut Buffer], at: usize) -> Option<Buf> {
-    // SAFETY: every entry of the sorted array is a live buffer.
-    list.get(at).map(|&buf| unsafe { Buf::new(buf) })
+fn nth(list: &[Buf], at: usize) -> Option<Buf> {
+    list.get(at).copied()
 }
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
@@ -250,7 +250,7 @@ fn fill_name(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
     }
     let (raw, fname, dst) = (buffer.raw(), buffer.b_fname, name.as_mut_ptr());
     // SAFETY: a live buffer, its name, and `MAXPATHL` writable bytes.
-    unsafe { home_replace(raw, fname, dst, MAXPATHL as size_t, true) };
+    unsafe { home_replace(Buf::from_raw(raw), fname, dst, MAXPATHL as size_t, true) };
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
@@ -581,7 +581,7 @@ impl Msg {
         let (dst, room) = self.tail();
         // SAFETY: a live buffer or null, a NUL-terminated name, and the
         // buffer's own tail.
-        unsafe { home_replace(buffer.raw(), name, dst, room, true) };
+        unsafe { home_replace(Some(buffer), name, dst, room, true) };
         // SAFETY: what `home_replace` just NUL-terminated.
         self.len += unsafe { cstr::bytes_at(dst) }.len();
     }

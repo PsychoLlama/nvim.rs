@@ -83,7 +83,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // them.
         unsafe { aucmd_prepbuf(&raw mut aco, Buf::current()) };
         let none = ::core::ptr::null_mut();
-        unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) };
+        unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) };
         unsafe { aucmd_restbuf(&raw mut aco) };
 
         unsafe { *tick = buf_get_changedtick(Buf::current()) };
@@ -123,7 +123,8 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     {
         let none = ::core::ptr::null_mut();
         let buffer = Buf::current_raw();
-        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, buffer) };
+        let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, __hoisted_0) };
         Buf::current().b_changed_invalid = false;
     }
 

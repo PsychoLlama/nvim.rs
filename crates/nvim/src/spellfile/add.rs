@@ -185,8 +185,8 @@ pub unsafe fn spell_add_word(
             unsafe { fprintf(fd, format, len, word) };
             unsafe { fclose(fd) };
 
-            let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
-            unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
+            let out = shown.as_mut_ptr();
+            unsafe { home_replace(None, fname, out, MAXPATHL as size_t, true) };
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (word, shown) = unsafe { (c_str_len(word, len as usize), c_str(shown.as_ptr())) };
             smsg!(0, "Word '{word}' added to {shown}");
@@ -251,8 +251,8 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
         if unsafe { fseek(fd, fpos as c_long, SEEK_SET) } == 0 {
             unsafe { fputc('#' as c_int, fd) };
             if undo {
-                let (none, out) = (core::ptr::null(), shown.as_mut_ptr());
-                unsafe { home_replace(none, fname, out, MAXPATHL as size_t, true) };
+                let out = shown.as_mut_ptr();
+                unsafe { home_replace(None, fname, out, MAXPATHL as size_t, true) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (word, shown) =
                     unsafe { (c_str_len(word, len as usize), c_str(shown.as_ptr())) };

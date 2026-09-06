@@ -25,7 +25,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Buffer, ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
+use crate::types::{ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -90,7 +90,7 @@ fn regexec(rmp: &mut RegMatch, name: *mut c_char) -> bool {
 
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly
 /// allocated. `buffer` decides whether a help file keeps only its tail.
-fn home_replaced(buffer: *mut Buffer, name: *const c_char) -> *mut c_char {
+fn home_replaced(buffer: Option<Buf>, name: *const c_char) -> *mut c_char {
     // SAFETY: a live buffer or null, and a NUL-terminated name.
     unsafe { home_replace_save(buffer, name) }
 }
@@ -214,7 +214,7 @@ pub unsafe fn expand_buf_names(
             }
 
             p = if options.has(WildOpts::HOME_REPLACE) {
-                home_replaced(buf.raw(), p)
+                home_replaced(Some(buf), p)
             } else {
                 dup(p)
             };
@@ -340,7 +340,7 @@ fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut
         return ptr::null_mut();
     }
     // Replace $(HOME) with '~' and try matching again.
-    let p = home_replaced(ptr::null_mut(), name);
+    let p = home_replaced(None, name);
     let matched = if regexec(rmp, p) {
         name
     } else {
@@ -383,5 +383,5 @@ pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_cha
     } else {
         ptr::null_mut()
     };
-    home_replaced(tail_only, name)
+    home_replaced(unsafe { Buf::from_raw(tail_only) }, name)
 }

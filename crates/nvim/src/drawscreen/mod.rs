@@ -422,7 +422,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     // The "start" callback may have changed highlights used by the global
     // elements.
-    if unsafe { win_check_ns_hl(::core::ptr::null_mut()) } {
+    if unsafe { win_check_ns_hl(None) } {
         redraw_cmdline.set(true);
         redraw_tabline.set(true);
     }
@@ -482,7 +482,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
             wp.w_redr_type = UPD_NOT_VALID;
         }
 
-        unsafe { win_check_ns_hl(wp.raw()) };
+        unsafe { win_check_ns_hl(Some(wp)) };
         unsafe { win_grid_alloc(wp) };
 
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
@@ -524,13 +524,13 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     end_search_hl();
 
     if pum_drawn() && must_redraw_pum.get() {
-        unsafe { win_check_ns_hl(Win::current_raw()) };
+        unsafe { win_check_ns_hl(Win::current_or_none()) };
         unsafe { pum_redraw() };
     } else if State.get() & MODE_CMDLINE != 0 {
         unsafe { pum_check_clear() };
     }
 
-    unsafe { win_check_ns_hl(::core::ptr::null_mut()) };
+    unsafe { win_check_ns_hl(None) };
 
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.

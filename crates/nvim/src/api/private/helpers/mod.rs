@@ -37,9 +37,9 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, FileMarkView, HlMessage, Integer,
-    LineNr, MsgList, NUL, Pos, ScriptId, String_0, TabpageHandle, TryState, Window, WindowHandle,
-    int64_t, kErrorTypeException, uint64_t,
+    ApiDict, BufferHandle, ColNr, Error, ExceptType, FileMarkView, HlMessage, Integer, LineNr,
+    MsgList, NUL, Pos, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t,
+    kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -303,17 +303,13 @@ impl<T> Reported for T {
 /// 0. False, with `err` set, when the position is out of range or the mark
 /// name is not one that can be set.
 pub(crate) unsafe fn set_mark(
-    buffer: *mut Buffer,
+    buffer: Option<Buf>,
     name: String_0,
     line: Integer,
     col: Integer,
     err: &mut Error,
 ) -> bool {
-    let buffer = if buffer.is_null() {
-        Buf::current_raw()
-    } else {
-        buffer
-    };
+    let buffer = buffer.unwrap_or_else(Buf::current).raw();
     let mut col = col;
     let mut deleting = false;
     let out_of_range = c"out of range".as_ptr();
@@ -364,22 +360,22 @@ pub(crate) unsafe fn set_mark(
 /// The highlight group a status line, window bar or status column defaults
 /// to when its 'statusline' text names none. A null window is the tab line.
 pub(crate) fn get_default_stl_hl(
-    window: *mut Window,
+    window: Option<Win>,
     use_winbar: bool,
     stc_hl_id: c_int,
 ) -> *const c_char {
     // `window` is only compared, never followed.
-    if window.is_null() {
+    if window.is_none() {
         c"TabLineFill".as_ptr()
     } else if use_winbar {
-        if window == Win::current_raw() {
+        if window == Win::current_or_none() {
             c"WinBar".as_ptr()
         } else {
             c"WinBarNC".as_ptr()
         }
     } else if stc_hl_id > 0 {
         syn_id2name(stc_hl_id)
-    } else if window == Win::current_raw() {
+    } else if window == Win::current_or_none() {
         c"StatusLine".as_ptr()
     } else {
         c"StatusLineNC".as_ptr()

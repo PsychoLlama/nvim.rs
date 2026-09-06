@@ -172,18 +172,18 @@ pub(crate) unsafe fn read_stdin() {
     if !Buf::current().b_ffname.is_null() {
         let stdin_buf =
             unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
-        if stdin_buf.is_null() {
+        if stdin_buf.is_none() {
             semsg!("Failed to create buffer for stdin");
             return;
         }
         let initial_buf_handle: Handle = Buf::current().handle;
-        unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
+        unsafe { set_curbuf(stdin_buf.expect("a live handle"), 0, false) };
         let last = MAXLNUM as c_int as LineNr;
         let null_ea = ptr::null_mut::<ExArg>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
-        let stdin_buf_handle: Handle = unsafe { (*stdin_buf).handle };
+        let stdin_buf_handle: Handle = stdin_buf.map_or(0, |b| b.handle);
         let stdin_buf_empty = unsafe { buf_is_empty(Buf::current()) };
 
         // Done as commands rather than calls so the autocommands and the
@@ -453,7 +453,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
     time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
-        unsafe { win_equal(Win::current_raw(), false, 'b' as c_int) };
+        unsafe { win_equal(Win::current_or_none(), false, 'b' as c_int) };
     }
 }
 

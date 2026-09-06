@@ -704,12 +704,12 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
     unsafe {
         for_each_window(|wp| {
             let opt = if listchars {
-                (*wp).w_onebuf_opt.wo_lcs
+                wp.w_onebuf_opt.wo_lcs
             } else {
-                (*wp).w_onebuf_opt.wo_fcs
+                wp.w_onebuf_opt.wo_fcs
             };
             if c_int::from(*opt) == NUL {
-                set_chars_option(Win::new(wp), opt, what, true, errbuf, errbuflen);
+                set_chars_option(wp, opt, what, true, errbuf, errbuflen);
             }
             None
         })
@@ -801,22 +801,11 @@ pub unsafe fn check_chars_options() -> Option<&'static CStr> {
     if let Some(global) = check(Win::current(), p_fcs.get(), kFillchars, false) {
         return Some(global);
     }
-    // SAFETY: `for_each_window` only visits live windows.
     for_each_window(|wp| {
-        if let Some(errmsg) = check(
-            unsafe { Win::new(wp) },
-            unsafe { (*wp).w_onebuf_opt.wo_lcs },
-            kListchars,
-            true,
-        ) {
+        if let Some(errmsg) = check(wp, wp.w_onebuf_opt.wo_lcs, kListchars, true) {
             return Some(errmsg);
         }
-        check(
-            unsafe { Win::new(wp) },
-            unsafe { (*wp).w_onebuf_opt.wo_fcs },
-            kFillchars,
-            true,
-        )
+        check(wp, wp.w_onebuf_opt.wo_fcs, kFillchars, true)
     })
 }
 
@@ -826,11 +815,9 @@ pub unsafe fn check_chars_options() -> Option<&'static CStr> {
 /// `FOR_ALL_TAB_WINDOWS`, i.e. [`winlayer::tab_windows`] -- which already
 /// knows that the current tab page's windows hang off `firstwin` rather than
 /// off its own stale list.
-fn for_each_window(
-    mut visit: impl FnMut(*mut Window) -> Option<&'static CStr>,
-) -> Option<&'static CStr> {
+fn for_each_window(mut visit: impl FnMut(Win) -> Option<&'static CStr>) -> Option<&'static CStr> {
     for wp in winlayer::tab_windows() {
-        if let Some(errmsg) = visit(wp.raw()) {
+        if let Some(errmsg) = visit(wp) {
             return Some(errmsg);
         }
     }

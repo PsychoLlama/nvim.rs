@@ -403,9 +403,9 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     if opt_idx == kOptScroll {
         unsafe { win_comp_scroll(Win::current()) };
     }
-    unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) }.set(false);
+    unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) }.set(false);
     if both {
-        unsafe { insecure_flag(Win::current_raw(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
+        unsafe { insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
     }
 }
 

@@ -148,7 +148,7 @@ fn buf_hidden(buffer: Buf) -> bool {
 
 fn auto_write(buffer: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer; `false` is upstream's `forceit`.
-    unsafe { autowrite(buffer.raw(), false) }
+    unsafe { autowrite(buffer, false) }
 }
 
 fn get_key() {

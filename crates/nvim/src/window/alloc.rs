@@ -68,13 +68,16 @@ fn zeroed<T>() -> *mut T {
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, so both are written before anything can
 /// read or drop them.
-fn zeroed_window() -> *mut Window {
+fn zeroed_window() -> Win {
     let wp = zeroed::<Window>();
     // SAFETY: a fresh allocation this thread alone holds; the zeroed grid
-    // and set are overwritten, never read.
-    unsafe { (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty()) };
-    unsafe { (&raw mut (*wp).w_ns_set).write(id_set()) };
-    wp
+    // and set are overwritten, never read. The window is live from here on,
+    // which is what `Win::new` asks -- `alloc` registers it a few lines down.
+    unsafe {
+        (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
+        (&raw mut (*wp).w_ns_set).write(id_set());
+        Win::new(wp)
+    }
 }
 
 /// Free a window's option block and the folds saved with it.
@@ -125,8 +128,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
             // SAFETY: a new unnamed listed buffer.
             let buf =
                 unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_LISTED as c_int) };
-            // SAFETY: `buflist_new` answers a live buffer or null.
-            let Some(mut buf) = (unsafe { Buf::from_raw(buf) }) else {
+            let Some(mut buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);
             };
@@ -192,8 +194,7 @@ fn first_win() -> Win {
 // One window's memory
 
 pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
-    // SAFETY: a fresh window, which is live from here on.
-    let mut new_wp = unsafe { Win::new(zeroed_window()) };
+    let mut new_wp = zeroed_window();
     last_win_id.set(last_win_id.get() + 1);
     new_wp.handle = last_win_id.get() as Handle;
     register_window(new_wp);
@@ -346,9 +347,9 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     let mut pos_wip = len;
     let mut pos_null = len;
     for (i, entry) in infos.entries_mut().iter().enumerate() {
-        if entry.window() == window.raw() {
+        if entry.window() == Some(window) {
             pos_wip = i;
-        } else if entry.window().is_null() {
+        } else if entry.window().is_none() {
             pos_null = i;
         }
     }

@@ -149,7 +149,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
     let live = valid_win(old_curwin);
-    if live.is_none_or(|w| w.is_current() || w.w_buffer != old_curbuf.raw()) || !old_curbuf.valid()
+    if live.is_none_or(|w| w.is_current() || !old_curbuf.is(w.buffer_or_none()))
+        || !old_curbuf.valid()
     {
         beep_flush();
         return Ctrl_C;
@@ -176,7 +177,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         || !old_curbuf.valid()
         || old_curwin
             .get()
-            .is_none_or(|w| w.w_buffer != old_curbuf.raw())
+            .is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
     {
         if newbuf_status.is_ok() {
             bufref = BufRef::of_opt(current_buf());
@@ -313,7 +314,9 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Safety check: the old window or buffer was changed or deleted.
     // It is a bug when this happens.
-    if valid_win(old_curwin).is_none_or(|w| w.w_buffer != old_curbuf.raw()) || !old_curbuf.valid() {
+    if valid_win(old_curwin).is_none_or(|w| !old_curbuf.is(w.buffer_or_none()))
+        || !old_curbuf.valid()
+    {
         cmdwin_result.set(Ctrl_C);
         emsg(gettext(e_active_window_or_buffer_changed_or_deleted));
     } else {

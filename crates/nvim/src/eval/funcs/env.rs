@@ -354,12 +354,9 @@ pub unsafe fn f_swapname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // SAFETY: the buffer comes from the buffer list; the memfile and its
     // name are checked before either is read.
     let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
-    result.vval.v_string = if buf.is_null()
-        || unsafe { (*buf).b_ml.ml_mfp }.is_null()
-        || unsafe { mf_fname((*buf).b_ml.ml_mfp) }.is_null()
-    {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(mf_fname((*buf).b_ml.ml_mfp)) }
-    };
+    let memfile = buf.map(|b| b.b_ml.ml_mfp).filter(|mfp| !mfp.is_null());
+    let name = memfile
+        .map(|mfp| unsafe { mf_fname(mfp) })
+        .filter(|name| !name.is_null());
+    result.vval.v_string = name.map_or(ptr::null_mut(), |name| unsafe { xstrdup(name) });
 }

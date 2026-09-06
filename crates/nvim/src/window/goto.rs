@@ -155,9 +155,9 @@ pub unsafe fn win_vert_neighbor(
     window: Win,
     up: bool,
     count: c_int,
-) -> *mut Window {
+) -> Option<Win> {
     let (tp, wp) = (tabpage, window);
-    raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
+    neighbor(tp, wp, Axis::Vertical, up, count)
 }
 
 /// Move to the window above or below, `count` times.
@@ -178,9 +178,9 @@ pub unsafe fn win_horz_neighbor(
     window: Win,
     left: bool,
     count: c_int,
-) -> *mut Window {
+) -> Option<Win> {
     let (tp, wp) = (tabpage, window);
-    raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
+    neighbor(tp, wp, Axis::Horizontal, left, count)
 }
 
 /// Move to the window left or right, `count` times.
@@ -472,8 +472,8 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe fn buf_jump_open_win(buffer: Buf) -> *mut Window {
-    raw_win(jump_open_win(buffer))
+pub unsafe fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
+    jump_open_win(buffer)
 }
 
 /// Enter the first window of the current tab page showing `buffer`, if there is
@@ -488,8 +488,8 @@ pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
     Some(wp)
 }
 
-pub unsafe fn buf_jump_open_tab(buffer: Buf) -> *mut Window {
-    raw_win(jump_open_tab(buffer))
+pub unsafe fn buf_jump_open_tab(buffer: Buf) -> Option<Win> {
+    jump_open_tab(buffer)
 }
 
 /// [`jump_open_win`] over every tab page, the current one first.

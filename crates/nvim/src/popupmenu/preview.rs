@@ -198,25 +198,25 @@ unsafe fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
 ///
 /// # Safety
 /// `info` must be a writable NUL-terminated string owned by the caller.
-pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut Window {
+pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
     // SAFETY: the preview helpers answer live windows or null.
     if !pum_is_visible.get() || !unsafe { compl_match_curr_select(selected) } {
-        return ::core::ptr::null_mut();
+        return None;
     }
     unsafe { block_autocmds() };
     RedrawingDisabled.set(RedrawingDisabled.get() + 1);
     no_u_sync.set(no_u_sync.get() + 1);
 
-    let wp = if let Some(wp) = win_float_find_preview() {
-        wp
-    } else if let Some(mut fresh) = win_float_create_preview(false, true) {
-        fresh.w_topline = 1;
-        fresh.w_onebuf_opt.wo_wfb = 1;
-        fresh
-    } else {
-        // NOTE: leaves autocmds blocked and the two counters raised, as
-        // upstream does.
-        return ::core::ptr::null_mut();
+    let wp = match win_float_find_preview() {
+        Some(wp) => wp,
+        None => {
+            // NOTE: a failure here leaves autocmds blocked and the two
+            // counters raised, as upstream does.
+            let mut fresh = win_float_create_preview(false, true)?;
+            fresh.w_topline = 1;
+            fresh.w_onebuf_opt.wo_wfb = 1;
+            fresh
+        }
     };
 
     let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp, info) };
@@ -228,7 +228,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut Window {
     // the answer is settled before it rather than after.
     let placed = unsafe { pum_adjust_info_position(wp, max_info_width) }.then(|| wp.raw());
     unsafe { unblock_autocmds() };
-    placed.unwrap_or(::core::ptr::null_mut())
+    unsafe { Win::from_raw(placed.unwrap_or(::core::ptr::null_mut())) }
 }
 
 /// Scroll the menu so that `pum_selected` is visible, with context around it.

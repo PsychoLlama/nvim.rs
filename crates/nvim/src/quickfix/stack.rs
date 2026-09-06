@@ -139,7 +139,7 @@ pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> 
     };
     // SAFETY: a static event name, the current buffer's own file name, and
     // the current buffer — all live across the call.
-    unsafe { apply_autocmds(event, pat, fname, on_fname, Buf::current_raw()) }
+    unsafe { apply_autocmds(event, pat, fname, on_fname, Buf::current_or_none()) }
 }
 
 /// The quickfix stack, as a [`Qi`]. It is a static, so it is always live.

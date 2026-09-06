@@ -467,7 +467,7 @@ pub unsafe fn may_trigger_modechanged() {
     let _ = unsafe { tv_dict_add_str(v_event, key, len, old_mode.as_mut_ptr()) };
     unsafe { tv_dict_set_keys_readonly(v_event) };
     let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
-    let buf = Buf::current_raw();
+    let buf = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::ModeChanged, fname, fname_io, false, buf) };
     last_mode.set(curr_mode);
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
@@ -508,7 +508,7 @@ pub unsafe fn may_trigger_safestate(safe: bool) {
     if is_safe {
         // SAFETY: the editor is initialized, so `curbuf` is live.
         let (fname, fname_io) = (ptr::null_mut::<c_char>(), ptr::null_mut::<c_char>());
-        let buf = Buf::current_raw();
+        let buf = Buf::current_or_none();
         unsafe { apply_autocmds(AutoEvent::SafeState, fname, fname_io, false, buf) };
     }
     was_safe.set(is_safe);

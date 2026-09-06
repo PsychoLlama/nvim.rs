@@ -222,7 +222,7 @@ pub unsafe fn win_line(
         unsafe {
             terminal_get_line_attributes(
                 (*window.w_buffer).terminal,
-                window.raw(),
+                window,
                 lnum,
                 term_attrs.as_mut_ptr(),
             )

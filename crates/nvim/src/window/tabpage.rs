@@ -43,7 +43,7 @@ use crate::options::kOptCmdheight;
 use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
 use crate::types::{
-    Buffer, Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,
+    Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
@@ -143,17 +143,13 @@ pub unsafe fn win_new_tabpage(
     after: c_int,
     filename: *mut c_char,
     enter: bool,
-    first: *mut *mut Window,
-) -> *mut Tabpage {
-    let newtp = new_tabpage(after, filename, enter);
-    if let Some((newtp, opened)) = newtp {
-        if !first.is_null() {
-            // SAFETY: the caller's promise -- a writable slot for the window.
-            unsafe { *first = opened.raw() };
-        }
-        return newtp.raw();
+    first: Option<&mut Option<Win>>,
+) -> Option<TabPage> {
+    let (newtp, opened) = new_tabpage(after, filename, enter)?;
+    if let Some(first) = first {
+        *first = Some(opened);
     }
-    ptr::null_mut()
+    Some(newtp)
 }
 
 /// Create a tab page with one window in it, showing the current buffer as
@@ -384,8 +380,8 @@ fn close_tab(tab: TabPage) {
     free_tab(tab);
 }
 
-pub fn find_tabpage(n: c_int) -> *mut Tabpage {
-    raw_tab(nth_tab(n))
+pub fn find_tabpage(n: c_int) -> Option<TabPage> {
+    nth_tab(n)
 }
 
 /// Tab page `n`, the first being 1; the current one for zero. `None` when
@@ -427,7 +423,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     leave_window(Win::current());
     reset_visual_and_resel(); // stop Visual mode
     if trigger_leave_autocmds {
-        if raw_buf(new_curbuf) != Buf::current_raw() {
+        if new_curbuf != Buf::current_or_none() {
             fire(AutoEvent::BufLeave, Buf::current());
             if !tp.is_current() {
                 return Err(Failed);
@@ -740,9 +736,4 @@ pub fn tabpage_move(nr: c_int) {
     }
     // The tabline needs redrawing; the tab page contents do not change.
     redraw_tabline.set(true);
-}
-
-/// A buffer argument that may be absent, as `leave_tab` takes it.
-fn raw_buf(buffer: Option<Buf>) -> *mut Buffer {
-    buffer.map_or(ptr::null_mut(), Buf::raw)
 }

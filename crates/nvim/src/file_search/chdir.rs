@@ -88,7 +88,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
             pattern.as_ptr().cast_mut(),
             new_dir,
             false,
-            Buf::current_raw(),
+            Buf::current_or_none(),
         )
     };
 

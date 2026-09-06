@@ -34,7 +34,7 @@ use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
     ColNr, Direction, EvalFuncData, List, NUL, Pos, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, Window,
+    VarNumber,
 };
 use crate::window::state::skip_update_topline;
 use crate::winlayer::Buf;
@@ -101,13 +101,13 @@ pub unsafe fn f_charcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// current window unless a window id names another, in which case its
 /// cursor is validated first. `None` means the id named no window, which
 /// every caller treats as "no answer".
-fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut Window> {
+fn window_arg(args: Args<'_>, idx: usize) -> Option<Option<Win>> {
     if !args.has(idx) {
-        return Some(Win::current_raw());
+        return Some(Win::current_or_none());
     }
     let (wp, _) = win_and_tab_by_id(arg_number(args.get(idx)) as c_int)?;
     check_cursor(wp);
-    Some(wp.raw())
+    Some(Some(wp))
 }
 
 fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
@@ -121,24 +121,25 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     let Some(wp) = window_arg(args, 1) else {
         return;
     };
-    let bp = unsafe { (*wp).w_buffer };
-    let mut fnum = unsafe { (*bp).handle } as c_int;
-    let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, charcol, Win::new(wp)) };
+    let wp = wp.expect("a window for the column lookup");
+    let bp = wp.buffer();
+    let mut fnum = bp.handle as c_int;
+    let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, charcol, wp) };
     let mut col: ColNr = 0;
     if let Some(mut fp) = fp
-        && fnum == unsafe { (*bp).handle }
+        && fnum == bp.handle
     {
         if fp.col == END_OF_LINE {
             // MAXCOL means "end of line"; past the last line there is
             // no line to measure, so it stays MAXCOL.
-            col = if fp.lnum <= unsafe { (*bp).b_ml.ml_line_count } {
-                (unsafe { ml_get_buf_len(Buf::new(bp), fp.lnum) }) + 1
+            col = if fp.lnum <= bp.b_ml.ml_line_count {
+                (unsafe { ml_get_buf_len(bp, fp.lnum) }) + 1
             } else {
                 END_OF_LINE
             };
         } else {
             col = fp.col + 1;
-            col += unsafe { virtualedit_tail(Win::new(wp), Buf::new(bp), &raw mut fp) };
+            col += unsafe { virtualedit_tail(wp, bp, &raw mut fp) };
         }
     }
     result.vval.v_number = col as VarNumber;
@@ -195,22 +196,22 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let wp = if args.has(1) && args.has(2) {
         window_arg(args, 2)
     } else {
-        Some(Win::current_raw())
+        Some(Win::current_or_none())
     };
-    if let Some(wp) = wp {
-        let bp = unsafe { (*wp).w_buffer };
-        let mut fnum = unsafe { (*bp).handle } as c_int;
-        let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, false, Win::new(wp)) };
+    if let Some(Some(wp)) = wp {
+        let bp = wp.buffer();
+        let mut fnum = bp.handle as c_int;
+        let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, false, wp) };
         if let Some(mut fp) = fp
-            && fp.lnum <= unsafe { (*bp).b_ml.ml_line_count }
-            && fnum == unsafe { (*bp).handle }
+            && fp.lnum <= bp.b_ml.ml_line_count
+            && fnum == bp.handle
         {
             // Clamped before it is measured, as upstream clamps the
             // shared position it answered out of.
             if fp.col < 0 {
                 fp.col = 0;
             } else {
-                let len = unsafe { ml_get_buf_len(Buf::new(bp), fp.lnum) };
+                let len = unsafe { ml_get_buf_len(bp, fp.lnum) };
                 if fp.col > len {
                     fp.col = len;
                 }
@@ -218,7 +219,7 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
             let (pos, start, end) = (&raw mut fp, &raw mut vcol_start, &raw mut vcol_end);
             // SAFETY: `wp` is the window resolved above and the three
             // out-parameters are locals.
-            unsafe { getvvcol(Win::new(wp), pos, start, ptr::null_mut(), end) };
+            unsafe { getvvcol(wp, pos, start, ptr::null_mut(), end) };
             vcol_start += 1;
             vcol_end += 1;
         }
@@ -314,7 +315,9 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
         if let Some(pos) = &mut fp
             && charcol
         {
-            pos.col = unsafe { buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col) } as ColNr;
+            pos.col =
+                unsafe { buf_byteidx_to_charidx(Buf::from_raw((*wp).w_buffer), pos.lnum, pos.col) }
+                    as ColNr;
         }
         fp
     };
@@ -338,7 +341,7 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
     unsafe { tv_list_append_number(l, col) };
     unsafe { tv_list_append_number(l, coladd) };
     if getcurpos {
-        unsafe { append_curswant(l, wp) };
+        unsafe { append_curswant(l, Win::from_raw(wp)) };
     }
 }
 
@@ -349,28 +352,26 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
 ///
 /// # Safety
 /// `l` is a live list and `window` is a window pointer or null.
-unsafe fn append_curswant(l: *mut List, window: *mut Window) {
+unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
     // SAFETY throughout: the caller's obligation.
     let cur = Win::current_raw();
     let saved_set_curswant = unsafe { (*cur).w_set_curswant };
     let saved_curswant = unsafe { (*cur).w_curswant };
     let saved_virtcol = unsafe { (*cur).w_virtcol };
-    if window == cur {
+    if window == unsafe { Win::from_raw(cur) } {
         unsafe { update_curswant() };
     }
     // SAFETY throughout: `window` is null or the window resolved above, and `l` the list
     // being filled in.
-    let curswant = if window.is_null() {
-        0
-    } else if unsafe { (*window).w_curswant } == END_OF_LINE {
-        MAXCOL as VarNumber
-    } else {
-        (unsafe { (*window).w_curswant }) as VarNumber + 1
+    let curswant = match window.map(|w| w.w_curswant) {
+        None => 0,
+        Some(END_OF_LINE) => MAXCOL as VarNumber,
+        Some(want) => want as VarNumber + 1,
     };
     unsafe { tv_list_append_number(l, curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
-    if window == cur && saved_set_curswant {
+    if window == unsafe { Win::from_raw(cur) } && saved_set_curswant {
         unsafe { (*cur).w_set_curswant = saved_set_curswant };
         unsafe { (*cur).w_curswant = saved_curswant };
         unsafe { (*cur).w_virtcol = saved_virtcol };
@@ -428,7 +429,7 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
         }
         let mut col = arg_number_chk(args.get(1), None) as ColNr;
         if charcol {
-            col = unsafe { buf_charidx_to_byteidx(Buf::current_raw(), lnum, col) } + 1;
+            col = unsafe { buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col) } + 1;
         }
         let coladd = if args.has(2) {
             arg_number_chk(args.get(2), None) as ColNr

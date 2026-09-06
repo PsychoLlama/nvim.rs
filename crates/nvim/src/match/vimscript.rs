@@ -58,7 +58,7 @@ unsafe fn find(d: *const Dict, key: &str) -> *mut DictItem {
 unsafe fn matchadd_dict_arg(
     tv: *mut TypVal,
     conceal_char: *mut *const c_char,
-    win: *mut *mut Window,
+    win: &mut Win,
     numbuf: &mut NumBuf,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's typval and out-parameters.
@@ -81,7 +81,7 @@ unsafe fn matchadd_dict_arg(
         emsg(gettext(e_invalwindow));
         return Err(Failed);
     };
-    unsafe { *win = found.raw() };
+    *win = found;
     Ok(())
 }
 
@@ -276,12 +276,12 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
 unsafe fn optional_args(
     args: *mut TypVal,
     numbuf: &mut NumBuf,
-) -> Option<(c_int, c_int, *const c_char, *mut Window)> {
+) -> Option<(c_int, c_int, *const c_char, Win)> {
     // SAFETY: the evaluator's slots.
     let mut prio = DEFAULT_PRIORITY;
     let mut id = -1;
     let mut conceal_char: *const c_char = ::core::ptr::null();
-    let mut win = Win::current_raw();
+    let mut win = Win::current();
     let mut error = false;
 
     // Nested, not sequential: an `id` is only read when a `priority` was
@@ -292,7 +292,7 @@ unsafe fn optional_args(
             id = unsafe { tv_get_number_chk(args.offset(3), &raw mut error) } as c_int;
             if unsafe { (*args.offset(4)).v_type } != VAR_UNKNOWN
                 && unsafe {
-                    matchadd_dict_arg(args.offset(4), &raw mut conceal_char, &raw mut win, numbuf)
+                    matchadd_dict_arg(args.offset(4), &raw mut conceal_char, &mut win, numbuf)
                 }
                 .is_err()
             {
@@ -334,8 +334,6 @@ pub(crate) unsafe fn f_matchadd(args: *mut TypVal, result: *mut TypVal, _fptr: E
         return;
     }
 
-    // SAFETY: `optional_args` answers the current window or one it looked up.
-    let win = unsafe { Win::new(win) };
     unsafe {
         let no_pos = ::core::ptr::null_mut();
         (*result).vval.v_number =
@@ -376,8 +374,6 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
         return;
     }
 
-    // SAFETY: `optional_args` answers the current window or one it looked up.
-    let win = unsafe { Win::new(win) };
     unsafe {
         (*result).vval.v_number =
             match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as VarNumber

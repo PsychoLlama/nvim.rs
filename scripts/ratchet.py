@@ -414,7 +414,11 @@ plus these whole-tree metrics, which are not per-file:
                         *signature* — the span from the `fn` keyword through
                         the return type, so a parameter rustfmt wrapped onto
                         its own line still counts and a local variable of that
-                        type does not.
+                        type does not. Counted **outside `winlayer/`** only,
+                        the way `curwin_raw` is: the handles' own
+                        constructors and accessors are where an address
+                        becomes an identity, and a number that counted them
+                        could never reach zero.
                       mut_win_buf_refs  `&mut Window`/`&mut Buffer`/
                         `&mut Tabpage` over the same spans. The retype away
                         from the raw pointers above has exactly one wrong
@@ -946,10 +950,19 @@ PUB_CONST_DECL = re.compile(
 T_SUFFIX_DECL = re.compile(
     r"\b(?:struct|enum|union|type)\s+([A-Za-z_][A-Za-z0-9_]*_T)\b"
 )
-# The raw graph pointers, counted inside `fn` signature spans only. `const`
-# as well as `mut`: a `*const Window` parameter is the same C vocabulary and
-# the same retype, and counting only the `mut` half would have let 37 of them
-# sit outside the number the exit clause is written against.
+# The raw graph pointers, counted inside `fn` signature spans only, and only
+# *outside* `winlayer/` -- the way `curwin_raw` is counted. `const` as well as
+# `mut`: a `*const Window` parameter is the same C vocabulary and the same
+# retype, and counting only the `mut` half would have let 37 of them sit
+# outside the number the exit clause is written against.
+#
+# The residue inside the home is the floor and is deliberately not zero:
+# `Win::new`/`from_raw`/`raw`/`current_raw` for each of the three handles are
+# where an address becomes an identity and back, `winlayer::window_at` is the
+# one lookup that must still speak in addresses (a layout snapshot's `fr_win`,
+# which an autocommand may have freed), and `win_col_off` is a C ABI the
+# functional suite calls through `ffi.cdef`. Every one of them is the *reason*
+# the rest of the tree has none.
 RAW_WIN_BUF = re.compile(r"\*(?:mut|const)\s+(?:Window|Buffer|Tabpage)\b")
 # The graph objects behind an exclusive Rust borrow, same spans. `&mut` is
 # `noalias`, and `curwin`/`curbuf` alias every window and buffer the editor
@@ -1832,7 +1845,8 @@ def vocabulary(tree):
         constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
         declarations = list(fn_signatures(masked))
         spans = [sig for _, sig, _ in declarations]
-        signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
+        if not in_home(file, WINLAYER):
+            signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
         mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             frozen = exported if file.startswith(API_DIR) else ()
