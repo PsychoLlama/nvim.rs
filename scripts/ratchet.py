@@ -419,6 +419,15 @@ plus these whole-tree metrics, which are not per-file:
                         constructors and accessors are where an address
                         becomes an identity, and a number that counted them
                         could never reach zero.
+                      raw_frame_sigs  a raw `Frame` pointer over the same
+                        spans, with the same `winlayer/` carve-out. The layout
+                        tree's nodes are freed under their holders --
+                        `winframe_remove` frees one and `close_windows` frees
+                        the window it named -- so an address in a signature is
+                        a caller that cannot ask whether what it holds is
+                        still there. `FrameId` is what can. A `*mut *mut
+                        Frame` out-parameter counts once, as the one frame it
+                        names.
                       mut_win_buf_refs  `&mut Window`/`&mut Buffer`/
                         `&mut Tabpage` over the same spans. The retype away
                         from the raw pointers above has exactly one wrong
@@ -972,6 +981,13 @@ RAW_WIN_BUF = re.compile(r"\*(?:mut|const)\s+(?:Window|Buffer|Tabpage)\b")
 # moment the argument *is* the current window. The handle (`Win`/`Buf`/
 # `TabPage`) is the parameter type -- it is `Copy` and borrows per access --
 # and this number keeps the retype from landing on `&mut` by accident.
+# The layout tree's node pointer, same spans and the same carve-out. A frame
+# is reached from `w_frame`, `tp_topframe`, `tp_snapshot` and its own four
+# links, all of which an autocommand can free under a caller; the identity
+# (`FrameId`) is what survives such a call, and a `*mut Frame` in a signature
+# is a caller that was handed an address instead. A `*mut *mut Frame`
+# out-parameter counts once: the inner `*mut Frame` is the frame it names.
+RAW_FRAME = re.compile(r"\*(?:mut|const)\s+Frame\b")
 MUT_WIN_BUF_REF = re.compile(r"&\s*mut\s+(?:Window|Buffer|Tabpage)\b")
 # The transpiler's parameter abbreviations, also inside `fn` signature spans
 # only: the leading `\b` plus the optional `_` catches both `buf:` and the
@@ -1834,6 +1850,7 @@ def vocabulary(tree):
                 counts[name] += len(needle.findall(masked))
     names = set()
     signatures = 0
+    frames = 0
     mut_refs = 0
     aliases = {}
     constants = []
@@ -1848,6 +1865,7 @@ def vocabulary(tree):
         spans = [sig for _, sig, _ in declarations]
         if not in_home(file, WINLAYER):
             signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
+            frames += sum(len(RAW_FRAME.findall(sig)) for sig in spans)
         mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             frozen = exported if file.startswith(API_DIR) else ()
@@ -1869,6 +1887,7 @@ def vocabulary(tree):
         "const_int_alias": sum(type_ in integral for type_ in constants),
         "t_suffix_types": len(names),
         "raw_win_buf_sigs": signatures,
+        "raw_frame_sigs": frames,
         "mut_win_buf_refs": mut_refs,
         "abbrev_params": abbrevs,
     }
@@ -2065,6 +2084,7 @@ WHOLE_TREE_LABEL = {
     "ptr_arith": "pointer-arithmetic method calls",
     "t_suffix_types": "distinct `_T` type declarations",
     "raw_win_buf_sigs": "raw win/buf/tabpage pointers in fn signatures",
+    "raw_frame_sigs": "raw frame pointers in fn signatures",
     "mut_win_buf_refs": "&mut win/buf/tabpage borrows in fn signatures",
     "abbrev_params": "transpiler parameter abbreviations in fn signatures",
     "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
@@ -2077,6 +2097,7 @@ VOCABULARY_KEYS = (
     "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
+    "raw_frame_sigs",
     "mut_win_buf_refs",
     "abbrev_params",
 )
@@ -2737,8 +2758,9 @@ SELF_TEST_VOCABULARY = [
             "    let x: *mut Window = q;\n}\n"
             "type Cb = fn(*mut Window);\n"
             "fn g(wp: &mut Window, other: &Window, tp: &mut Tabpage) {\n}\n"
+            "fn h(fr: *mut Frame, out: *mut *mut Frame) -> *const Frame {\n}\n"
         },
-        {"raw_win_buf_sigs": 3, "mut_win_buf_refs": 2},
+        {"raw_win_buf_sigs": 3, "raw_frame_sigs": 3, "mut_win_buf_refs": 2},
     ),
     (
         # `_eap` counts, `old_buf` and the local `ptr` do not, and the two

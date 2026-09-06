@@ -24,6 +24,7 @@
   "ptr_arith": 5905,
   "t_suffix_types": 0,
   "raw_win_buf_sigs": 0,
+  "raw_frame_sigs": 15,
   "mut_win_buf_refs": 10,
   "abbrev_params": 0,
   "curwin_raw": 0,
