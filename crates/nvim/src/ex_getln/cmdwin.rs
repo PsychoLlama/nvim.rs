@@ -269,7 +269,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     unsafe { changed_line_abv_curs() };
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
-    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+    redraw_later(Win::current(), UPD_SOME_VALID);
 
     // No Ex mode here.
     exmode_active.set(false);

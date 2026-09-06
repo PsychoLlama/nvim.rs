@@ -490,7 +490,7 @@ pub unsafe fn buf_write(
             if req.forceit && overwriting && !cpo_has(CpoFlag::KEEPRO) {
                 b.b_p_ro = 0;
                 need_maketitle.set(true); // set the window title later
-                unsafe { status_redraw_all() }; // redraw status lines later
+                status_redraw_all(); // redraw status lines later
             }
 
             end = end.min(b.b_ml.ml_line_count);

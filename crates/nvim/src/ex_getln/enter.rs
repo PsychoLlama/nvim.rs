@@ -12,7 +12,6 @@
 
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
-use crate::drawscreen::windows_in_curtab;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
@@ -21,6 +20,7 @@ use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
 };
 use crate::winlayer::Live;
+use crate::winlayer::windows as windows_in_curtab;
 use crate::winlayer::{Buf, Win};
 
 // ---------------------------------------------------------------------------
@@ -353,13 +353,13 @@ pub(crate) unsafe fn command_line_enter(
         // the mode() function.
         if !cmd_silent.get() && !exmode_active.get() {
             let mut found_one = false;
-            for wp in windows_in_curtab() {
+            for mut wp in windows_in_curtab() {
                 if unsafe { *p_stl.get() } as ::core::ffi::c_int != NUL
-                    || unsafe { *(*wp).w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
+                    || unsafe { *wp.w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
                     || unsafe { *p_wbr.get() } as ::core::ffi::c_int != NUL
-                    || unsafe { *(*wp).w_onebuf_opt.wo_wbr } as ::core::ffi::c_int != NUL
+                    || unsafe { *wp.w_onebuf_opt.wo_wbr } as ::core::ffi::c_int != NUL
                 {
-                    unsafe { (*wp).w_redr_status = true };
+                    wp.w_redr_status = true;
                     found_one = true;
                 }
             }
@@ -527,7 +527,7 @@ pub(crate) unsafe fn command_line_enter(
     }
     if !cmd_silent.get() {
         unsafe { redraw_custom_title_later() };
-        unsafe { status_redraw_all() }; // redraw to show the mode change
+        status_redraw_all(); // redraw to show the mode change
     }
 
     drop(level);

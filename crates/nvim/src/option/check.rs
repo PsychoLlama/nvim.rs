@@ -416,16 +416,15 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: *mut Window) 
 pub(crate) unsafe fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
-    // SAFETY: the caller's buffer and window are live.
     if flags & kOptFlagRedrStat != 0 || all {
-        unsafe { status_redraw_all() };
+        status_redraw_all();
     }
     if flags & kOptFlagRedrTabl != 0 || all {
         redraw_tabline.set(true);
     }
     if flags & (kOptFlagRedrBuf | kOptFlagRedrWin) != 0 || all {
         if flags & kOptFlagHLOnly != 0 {
-            unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
+            redraw_later(win, UPD_NOT_VALID);
         } else {
             changed_window_setting(win);
         }

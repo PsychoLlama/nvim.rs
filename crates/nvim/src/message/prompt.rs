@@ -275,7 +275,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         // got resize event while in vgetc()
         unsafe { ui_refresh() };
     } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
-        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+        redraw_later(Win::current(), UPD_VALID);
     }
 }
 

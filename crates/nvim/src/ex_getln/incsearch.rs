@@ -461,7 +461,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         Win::current().w_redr_status = true;
     }
 
-    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+    redraw_later(Win::current(), UPD_SOME_VALID);
     let _ = unsafe { update_screen() };
     highlight_match.set(false);
     restore_last_search_pattern();
@@ -583,7 +583,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 
     // Needed for TAB.
     validate_curwin_cursor();
-    unsafe { status_redraw_all() };
+    status_redraw_all();
     unsafe { redraw_all_later(UPD_SOME_VALID) };
     if call_update_screen {
         let _ = unsafe { update_screen() };
@@ -716,7 +716,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         validate_curwin_cursor();
         highlight_match.set(true);
         s.old_viewstate = save_viewstate(Win::current());
-        unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
+        redraw_later(Win::current(), UPD_NOT_VALID);
         let _ = unsafe { update_screen() };
         highlight_match.set(false);
         unsafe { redrawcmdline() };

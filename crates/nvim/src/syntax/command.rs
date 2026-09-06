@@ -152,7 +152,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
     }
 
     // Assume spell checking changed, force a redraw.
-    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
+    redraw_later(Win::current(), UPD_NOT_VALID);
 }
 
 /// `:syntax iskeyword [clear|{isk-value}]`.
@@ -191,7 +191,7 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         cur_syn_block().b_syn_isk = Buf::current().b_p_isk;
         Buf::current().b_p_isk = save_isk;
     }
-    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
+    redraw_later(Win::current(), UPD_NOT_VALID);
 }
 
 /// The current buffer's character table, as the 32 bytes a syntax block

@@ -171,7 +171,7 @@ pub(crate) unsafe fn nv_clear(cmd_arg: *mut CmdArg) {
         // SAFETY: a live window's syntax block.
         unsafe { (*block).b_syn_slow = false };
     }
-    unsafe { redraw_later(Win::current_raw(), UPD_CLEAR) };
+    redraw_later(Win::current(), UPD_CLEAR);
 }
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one

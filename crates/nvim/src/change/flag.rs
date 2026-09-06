@@ -139,7 +139,7 @@ pub fn changed_internal(mut buffer: Buf) {
     buffer.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
     unsafe { ml_setflags(buffer) };
-    unsafe { redraw_buf_status_later(buffer) };
+    redraw_buf_status_later(buffer);
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }
@@ -166,7 +166,7 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
             save_file_ff(buffer);
         }
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { redraw_buf_status_later(buffer) };
+        redraw_buf_status_later(buffer);
         redraw_tabline.set(true);
         need_maketitle.set(true);
         // SAFETY: a live buffer, which is all it asks.

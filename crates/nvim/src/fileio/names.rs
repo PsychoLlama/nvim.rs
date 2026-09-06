@@ -71,8 +71,7 @@ pub unsafe fn shorten_fnames(force: c_int) {
         // SAFETY: the buffer's own memfile, or null.
         unsafe { mf_fullname(buf.b_ml.ml_mfp) };
     }
-    // SAFETY: on the main thread, as every caller of this is.
-    unsafe { status_redraw_all() };
+    status_redraw_all();
     redraw_tabline.set(true);
 }
 

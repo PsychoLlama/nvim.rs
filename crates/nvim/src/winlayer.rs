@@ -573,7 +573,7 @@ impl Win {
     #[inline(always)]
     pub fn redraw_later(self, redraw_type: ::core::ffi::c_int) {
         // SAFETY: a live window.
-        unsafe { redraw_later(self.0, redraw_type) };
+        redraw_later(unsafe { Win::new(self.0) }, redraw_type);
     }
 }
 

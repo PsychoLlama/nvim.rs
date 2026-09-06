@@ -193,9 +193,9 @@ pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
         return;
     }
     if args.forceit != 0 {
-        unsafe { status_redraw_all() };
+        status_redraw_all();
     } else {
-        unsafe { status_redraw_curbuf() };
+        status_redraw_curbuf();
     }
     let lazyredraw_off = suspend_lazyredraw();
     if State.get() & MODE_CMDLINE != 0 {

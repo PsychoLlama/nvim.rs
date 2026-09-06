@@ -253,7 +253,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
             coladvance_to(unsafe { getvcol_nolist(&mut Insstart.get()) });
         }
         if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
-            unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+            redraw_later(Win::current(), UPD_VALID);
         }
         start_arrow_at(&mut tpos);
         can_cindent.set(true);

@@ -82,15 +82,13 @@ use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, Tabpage, VarNumber, Vv, Window,
-    ptrdiff_t, size_t, ssize_t, uint64_t,
+    Buffer, CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, ptrdiff_t, size_t,
+    ssize_t, uint64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
 use crate::winlayer::TabPage;
-use crate::winlayer::{
-    Buf, Win, buffers as all_buffers, first_buffer, tabs, windows, windows_in_tab,
-};
+use crate::winlayer::{Buf, Win, buffers, first_buffer, tabs, windows, windows_in_tab};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -133,16 +131,10 @@ mod flag {
 // the tree wants the tab page back. Use them only for walks nothing inside
 // can invalidate; see the module docs.
 
-/// Every buffer, oldest first -- `FOR_ALL_BUFFERS`, as raw pointers, which is
-/// what the walks here hand straight to a still-transpiled neighbour.
-fn buffers() -> impl Iterator<Item = *mut Buffer> {
-    all_buffers().map(Buf::raw)
-}
-
 /// Every window of every tab page, paired with the tab page holding it --
 /// `FOR_ALL_TAB_WINDOWS`, which is `tabs()` followed by `windows_in_tab()`.
-fn tab_windows() -> impl Iterator<Item = (*mut Tabpage, *mut Window)> {
-    tabs().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp.raw(), wp.raw())))
+fn tab_windows() -> impl Iterator<Item = (TabPage, Win)> {
+    tabs().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp, wp)))
 }
 
 // -- The script-host commands ----------------------------------------------
@@ -360,7 +352,7 @@ pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
     let mut count = 0;
     if flags & CCGD_ALLBUF != 0 {
         for buf2 in buffers() {
-            if unsafe { buf_is_changed(Buf::new(buf2)) && !(*buf2).b_ffname.is_null() } {
+            if buf_is_changed(buf2) && !buf2.b_ffname.is_null() {
                 count += 1;
             }
         }
@@ -427,7 +419,7 @@ pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
     } else if ret == VIM_ALL as c_int {
         unsafe { write_all_writable() };
     } else if ret == VIM_DISCARDALL as c_int {
-        for buf2 in all_buffers() {
+        for buf2 in buffers() {
             unchanged(buf2, true, false);
         }
     }
@@ -525,12 +517,12 @@ unsafe fn changed_check_order() -> Vec<c_int> {
         }
     }
     for (tp, wp) in tab_windows() {
-        if tp != TabPage::current_raw() {
-            push_unique(&mut nrs, unsafe { (*(*wp).w_buffer).handle } as c_int);
+        if !tp.is_current() {
+            push_unique(&mut nrs, wp.buffer().handle as c_int);
         }
     }
     for buf in buffers() {
-        push_unique(&mut nrs, unsafe { (*buf).handle } as c_int);
+        push_unique(&mut nrs, buf.handle as c_int);
     }
     nrs
 }
@@ -580,11 +572,11 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     // Try to find a window that already shows the buffer.
     if culprit != Buf::current_raw() {
         for (tp, wp) in tab_windows() {
-            if unsafe { (*wp).w_buffer } != culprit {
+            if wp.buffer().raw() != culprit {
                 continue;
             }
             let bufref = BufRef::of_opt(unsafe { Buf::from_raw(culprit) });
-            unsafe { goto_tabpage_win(TabPage::new(tp), Win::new(wp)) };
+            unsafe { goto_tabpage_win(tp, wp) };
             // Paranoia: did autocommands wipe out the changed buffer?
             if !bufref.valid() {
                 return true;
@@ -836,10 +828,10 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     let buf = find_buf(unsafe { *((*Win::current().w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
         .map_or(ptr::null_mut(), |b| b.raw());
     for (tp, wp) in tab_windows() {
-        if unsafe { (*wp).w_buffer } != buf {
+        if wp.buffer().raw() != buf {
             continue;
         }
-        unsafe { goto_tabpage_win(TabPage::new(tp), Win::new(wp)) };
+        unsafe { goto_tabpage_win(tp, wp) };
         Win::current().w_arg_idx = 0;
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.

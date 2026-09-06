@@ -94,14 +94,10 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 ///
 /// `must_redraw` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
-pub unsafe fn redraw_later(window: *mut Window, redr_type: c_int) {
-    debug_assert!(!window.is_null() || exiting.get(), "wp != NULL || exiting");
+pub fn redraw_later(mut window: Win, redr_type: c_int) {
     if exiting.get() || redraw_not_allowed.get() {
         return;
     }
-    // SAFETY: a live window -- the guard above has ruled out the one caller
-    // that may pass a null, which is the editor on its way out.
-    let mut window = unsafe { Win::new(window) };
     if window.w_redr_type < redr_type {
         window.w_redr_type = redr_type;
         if redr_type >= UPD_NOT_VALID {
@@ -115,7 +111,7 @@ pub unsafe fn redraw_later(window: *mut Window, redr_type: c_int) {
 pub unsafe fn redraw_all_later(redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        unsafe { redraw_later(wp.raw(), redr_type) };
+        redraw_later(wp, redr_type);
     }
     // Needed as well when switching tab pages: the windows marked above are
     // not the ones that will be drawn.
@@ -140,7 +136,7 @@ fn set_must_redraw_unchecked(redr_type: c_int) {
 pub unsafe fn screen_invalidate_highlights() {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
-        unsafe { redraw_later(wp.raw(), UPD_NOT_VALID) };
+        redraw_later(wp, UPD_NOT_VALID);
         wp.w_grid_alloc.valid = false;
     }
 }
@@ -159,7 +155,7 @@ pub unsafe fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw() {
-            unsafe { redraw_later(wp.raw(), redr_type) };
+            redraw_later(wp, redr_type);
         }
     }
 }
@@ -193,7 +189,7 @@ pub unsafe fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
         if win.w_redraw_bot == 0 || win.w_redraw_bot < last {
             win.w_redraw_bot = last;
         }
-        unsafe { redraw_later(window.raw(), UPD_VALID) };
+        redraw_later(window, UPD_VALID);
     }
 }
 
@@ -217,12 +213,11 @@ pub unsafe fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
 }
 
 /// Mark the status lines and window bars of every window showing `buffer`.
-pub unsafe fn redraw_buf_status_later(buffer: Buf) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn redraw_buf_status_later(buffer: Buf) {
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw()
             && (wp.w_status_height != 0
-                || (wp.raw() == Win::current_raw() && global_stl_height() != 0)
+                || (wp.is_current() && global_stl_height() != 0)
                 || wp.w_winbar_height != 0)
         {
             wp.w_redr_status = true;
@@ -232,38 +227,33 @@ pub unsafe fn redraw_buf_status_later(buffer: Buf) {
 }
 
 /// Mark every status line and window bar; used after the first `:cd`.
-pub unsafe fn status_redraw_all() {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn status_redraw_all() {
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
-        if (!is_stl_global && wp.w_status_height != 0)
-            || wp.raw() == Win::current_raw()
-            || wp.w_winbar_height != 0
+        if (!is_stl_global && wp.w_status_height != 0) || wp.is_current() || wp.w_winbar_height != 0
         {
             wp.w_redr_status = true;
-            unsafe { redraw_later(wp.raw(), UPD_VALID) };
+            redraw_later(wp, UPD_VALID);
         }
     }
 }
 
 /// Mark the status lines and window bars of the current buffer.
-pub unsafe fn status_redraw_curbuf() {
-    // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { status_redraw_buf(Buf::current()) }
+pub fn status_redraw_curbuf() {
+    status_redraw_buf(Buf::current())
 }
 
 /// Mark the status lines and window bars of `buffer`.
-pub unsafe fn status_redraw_buf(buffer: Buf) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn status_redraw_buf(buffer: Buf) {
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw()
             && ((!is_stl_global && wp.w_status_height != 0)
-                || (is_stl_global && wp.raw() == Win::current_raw())
+                || (is_stl_global && wp.is_current())
                 || wp.w_winbar_height != 0)
         {
             wp.w_redr_status = true;
-            unsafe { redraw_later(wp.raw(), UPD_VALID) };
+            redraw_later(wp, UPD_VALID);
         }
     }
     // With no status line at all the ruler lives on the command line, so it
@@ -272,7 +262,7 @@ pub unsafe fn status_redraw_buf(buffer: Buf) {
     let wp = Win::current();
     if p_ru.get() != 0 && wp.w_status_height == 0 && !wp.w_redr_status {
         redraw_cmdline.set(true);
-        unsafe { redraw_later(wp.raw(), UPD_VALID) };
+        redraw_later(wp, UPD_VALID);
     }
 }
 

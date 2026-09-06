@@ -492,7 +492,7 @@ impl Jump {
         {
             // Put the cursor back where it was.
             validate_cursor(Win::current());
-            unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+            redraw_later(Win::current(), UPD_VALID);
             unsafe { win_enter(saved, true) };
         }
         drop(redraw_off);

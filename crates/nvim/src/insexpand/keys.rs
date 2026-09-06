@@ -93,7 +93,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
 
     if p_acl.get() > 0 {
         unsafe { pum_undisplay(true) };
-        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+        redraw_later(Win::current(), UPD_VALID);
         let _ = unsafe { update_screen() }; // Show char (deletion) immediately
         unsafe { ui_flush() };
     }

@@ -374,7 +374,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
         } else {
             unsafe { scrollup_clamp() };
         }
-        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+        redraw_later(Win::current(), UPD_VALID);
         return c;
     }
 

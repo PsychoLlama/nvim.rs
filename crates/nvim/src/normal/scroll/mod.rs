@@ -134,7 +134,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
                         scrolldown(win, -(y as LineNr), false);
                     }
                 }
-                unsafe { redraw_later(win.raw(), UPD_VALID) };
+                redraw_later(win, UPD_VALID);
                 cursor_correct(win);
                 win.w_redr_status = true;
             }

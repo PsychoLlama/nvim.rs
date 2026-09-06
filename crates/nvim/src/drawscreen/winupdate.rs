@@ -160,7 +160,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     for win in winlayer::windows() {
         if win.w_buffer == buf && unsafe { win_redraw_signcols(win) } {
             changed_line_abv_curs_win(win);
-            unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
+            redraw_later(win, UPD_NOT_VALID);
         }
     }
     unsafe { (*buf).b_signcols.last_max = (*buf).b_signcols.max };

@@ -116,7 +116,7 @@ pub(crate) unsafe fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
         p_sm.set(0);
         p_sta.set(0);
         if p_ru.get() != 0 {
-            unsafe { status_redraw_all() };
+            status_redraw_all();
         }
         p_ru.set(0);
         p_ri.set(0);
@@ -153,7 +153,7 @@ pub(crate) unsafe fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
         p_sm.set(save_sm.get());
         p_sta.set(save_sta.get());
         if p_ru.get() != save_ru.get() {
-            unsafe { status_redraw_all() };
+            status_redraw_all();
         }
         p_ru.set(save_ru.get());
         p_ri.set(save_ri.get());

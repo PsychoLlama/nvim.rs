@@ -212,7 +212,7 @@ unsafe fn match_add(
     }
     m.mit_next = cur;
 
-    unsafe { redraw_later(window.raw(), rtype) };
+    redraw_later(window, rtype);
     id
 }
 
@@ -366,7 +366,7 @@ unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     }
     unsafe { xfree((*cur).mit_pos_array.cast()) };
     unsafe { xfree(cur.cast()) };
-    unsafe { redraw_later(window.raw(), rtype) };
+    redraw_later(window, rtype);
     0
 }
 
@@ -387,7 +387,7 @@ pub(crate) unsafe fn clear_matches(mut window: Win) {
         unsafe { xfree(m.mit_pos_array.cast()) };
         unsafe { xfree(m.raw().cast()) };
     }
-    unsafe { redraw_later(window.raw(), UPD_SOME_VALID) };
+    redraw_later(window, UPD_SOME_VALID);
 }
 
 /// The match `id` in `window`'s list, or null.

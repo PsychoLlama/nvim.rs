@@ -101,7 +101,7 @@ pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
         ca.count1 -= 1;
     }
     if i > 0 && current_match_is_distinct() {
-        unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+        redraw_later(Win::current(), UPD_SOME_VALID);
     }
 }
 
@@ -154,7 +154,7 @@ pub(crate) unsafe fn normal_search(
         }
     }
     if !equalpos(Win::current().w_cursor, prev_cursor) && current_match_is_distinct() {
-        unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+        redraw_later(Win::current(), UPD_SOME_VALID);
     }
     check_cursor(Win::current());
     i

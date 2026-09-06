@@ -223,7 +223,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
     }
     if win.w_leftcol != col {
         win.w_leftcol = col;
-        unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
+        redraw_later(win, UPD_NOT_VALID);
     }
 }
 
@@ -535,7 +535,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
             Place::Middle => scroll_cursor_halfway(win, true, false),
             Place::Bottom => scroll_cursor_bot(win, 0, true),
         }
-        unsafe { redraw_later(win.raw(), UPD_VALID) };
+        redraw_later(win, UPD_VALID);
         unsafe { set_fraction(win) };
     }
 

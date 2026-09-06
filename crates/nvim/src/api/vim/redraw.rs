@@ -93,7 +93,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         // SAFETY: `win` and `buf` are the live objects the lookups answered.
         unsafe {
             if let Some(win) = win {
-                redraw_later(win.raw(), type_0);
+                redraw_later(win, type_0);
             } else if let Some(buf) = buf {
                 redraw_buf_later(buf, type_0);
             } else {

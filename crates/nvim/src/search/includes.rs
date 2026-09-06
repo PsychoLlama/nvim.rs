@@ -789,7 +789,7 @@ unsafe fn goto_match(
     if tagpreview != 0 && Win::current_raw() != curwin_save && win_valid(curwin_save) {
         // Return the cursor to where it was.
         validate_cursor(Win::current());
-        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+        redraw_later(Win::current(), UPD_VALID);
         unsafe { win_enter(Win::new(curwin_save), true) };
     }
     After::Stop

@@ -204,10 +204,10 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // SAFETY: the current window is live.
     update_topline(Win::current());
     validate_cursor(Win::current());
-    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+    redraw_later(Win::current(), UPD_SOME_VALID);
     unsafe { show_cursor_info_later(true) };
     let _ = unsafe { update_screen() };
-    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+    redraw_later(Win::current(), UPD_SOME_VALID);
     Win::current().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];

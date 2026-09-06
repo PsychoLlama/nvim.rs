@@ -223,7 +223,7 @@ pub(crate) fn ins_ctrl_hat() {
     unsafe { set_iminsert_global(Buf::current()) };
     show_mode();
     // Show or unshow the value of 'keymap' in status lines.
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
 }
 
 /// Handle `<Esc>` in Insert mode.

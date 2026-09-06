@@ -222,7 +222,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut Window {
     let (_lnum, max_info_width) = unsafe { pum_preview_set_text(wp, info) };
     no_u_sync.set(no_u_sync.get() - 1);
     RedrawingDisabled.set(RedrawingDisabled.get() - 1);
-    unsafe { redraw_later(wp.raw(), UPD_NOT_VALID) };
+    redraw_later(wp, UPD_NOT_VALID);
 
     // `unblock_autocmds` has to run whichever way the placement went, so
     // the answer is settled before it rather than after.
@@ -451,7 +451,7 @@ unsafe fn pum_restore_window(curwin_save: Win, curtab_save: TabPage, resized: bo
     }
 
     validate_cursor(Win::current());
-    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
+    redraw_later(Win::current(), UPD_SOME_VALID);
 
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.

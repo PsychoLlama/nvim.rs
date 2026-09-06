@@ -746,7 +746,7 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     p_cpo.set(save_cpo);
     // SAFETY: curbuf is still valid.
     unsafe { (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t };
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
 }
 
 /// Read `{from} {to}` pairs from the file being sourced into `buffer`'s keymap
@@ -861,7 +861,7 @@ fn keymap_unload() {
     // SAFETY: curbuf is valid; the entries own their two strings.
     unsafe { (*buf).b_kmap_ga = Vec::new() };
     unsafe { (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t) };
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
 }
 
 /// The keymap name to show in the status line ('statusline' `%k`/`%K` and

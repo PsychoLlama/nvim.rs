@@ -408,7 +408,7 @@ unsafe fn win_config_float_tp(
                 break '_restore_curwin;
             }
             // SAFETY: as above.
-            unsafe { redraw_later(win.raw(), UPD_NOT_VALID) };
+            redraw_later(win, UPD_NOT_VALID);
         }
         if win_tp != parent_tp {
             let append_tp = other_tab(unsafe { TabPage::new(parent_tp) });
@@ -428,7 +428,7 @@ unsafe fn win_config_float_tp(
             // SAFETY: the window's own grid, which is live with it.
             unsafe {
                 ui_comp_remove_grid(&raw mut win.w_grid_alloc);
-                redraw_later(win.raw(), UPD_NOT_VALID);
+                redraw_later(win, UPD_NOT_VALID);
             }
             set_must_redraw(UPD_NOT_VALID);
         }

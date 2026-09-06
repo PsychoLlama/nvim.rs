@@ -112,9 +112,8 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
     if list.changes_buffer() {
         // SAFETY: module contract.
         save_ei = unsafe { au_event_disable(c",Syntax".as_ptr().cast_mut()) };
-        for buf in buffers() {
-            // SAFETY: the buffer is live.
-            unsafe { (*buf).b_flags.clear(BufFlags::SYN_SET) };
+        for mut buf in buffers() {
+            buf.b_flags.clear(BufFlags::SYN_SET);
         }
     }
 
@@ -326,7 +325,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                     break;
                 }
                 // Does the buffer still exist?
-                if !buffers().any(|bp| unsafe { (*bp).handle } == next_fnum) {
+                if !buffers().any(|bp| bp.handle == next_fnum) {
                     break;
                 }
                 unsafe { goto_buffer(args, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum) };

@@ -238,7 +238,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
     // SAFETY: the window title and the status lines are drawn from globals.
     unsafe { maketitle() };
     // SAFETY: as above.
-    unsafe { status_redraw_all() };
+    status_redraw_all();
     // SAFETY: a live buffer, whose named file marks and timestamp follow its
     // name.
     unsafe { fmarks_check_names(b) };

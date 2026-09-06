@@ -134,7 +134,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
     if Buf::current().b_ml.ml_line_count > 1 {
         let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
     }
-    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
+    redraw_later(Win::current(), UPD_NOT_VALID);
 }
 
 /// Walk every word of every loaded language.

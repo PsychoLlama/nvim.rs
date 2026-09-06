@@ -109,7 +109,7 @@ use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame, Handle, Hlf,
     Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg, ScreenChar, SpellVars,
-    VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t, size_t, uint16_t,
+    VarNumber, VirtText, VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -157,25 +157,6 @@ pub const FR_LEAF: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
-/// The windows of the current tab page, in layout order.
-///
-/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, i.e. [`winlayer::windows`] handing
-/// back the raw pointer its callers still take.
-///
-/// Safe: handing out an address reads nothing, and [`winlayer::windows`] is
-/// itself safe — it walks the registry, so the walk has the C's
-/// `FOR_ALL_WINDOWS_IN_TAB` timing (the next link is read before the body).
-/// What the *caller* does with the pointer is the unsafe part, and stays so.
-pub(crate) fn windows_in_curtab() -> impl Iterator<Item = *mut Window> {
-    winlayer::windows().map(Win::raw)
-}
-
-/// The head of the current tab page's window list as the raw pointer the
-/// transpiled redraw entry points still take, or a null before there is one.
-fn first_win_raw() -> *mut Window {
-    winlayer::first_window().map_or(core::ptr::null_mut(), Win::raw)
-}
-
 static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
@@ -343,7 +324,9 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     // SAFETY: the whole screen pipeline, on the main thread.
     if STILL_MAY_INTRO.get() && !unsafe { may_show_intro() } {
-        unsafe { redraw_later(first_win_raw(), UPD_NOT_VALID) };
+        if let Some(win) = winlayer::first_window() {
+            win.redraw_later(UPD_NOT_VALID);
+        }
         STILL_MAY_INTRO.set(false);
     }
 

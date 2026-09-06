@@ -537,7 +537,7 @@ pub unsafe fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
                 }
             }
         }
-        unsafe { redraw_later(window.raw(), UPD_NOT_VALID) };
+        redraw_later(window, UPD_NOT_VALID);
     }
 
     unsafe { xfree(spl_copy as *mut c_void) };

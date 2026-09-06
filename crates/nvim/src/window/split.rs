@@ -192,8 +192,7 @@ fn split_ins(
     }
     wp.redraw_later(UPD_NOT_VALID);
     oldwin.redraw_later(UPD_NOT_VALID);
-    // SAFETY: marks every status line for redrawing.
-    unsafe { status_redraw_all() };
+    status_redraw_all();
     if need_status != 0 {
         // The message area is one line shorter now.
         msg_row.set(Rows.get() - 1);

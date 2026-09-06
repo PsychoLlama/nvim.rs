@@ -36,8 +36,7 @@ pub fn diff_buf_delete(buffer: Buf) {
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
                 need_diff_redraw.set(true);
-                // SAFETY: `curwin` is set from startup to exit.
-                unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+                redraw_later(Win::current(), UPD_VALID);
             }
         }
     }

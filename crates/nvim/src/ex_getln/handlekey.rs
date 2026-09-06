@@ -121,7 +121,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
     }
     unsafe { ui_cursor_shape() }; // may show a different cursor shape
     // Show/unshow the value of 'keymap' in status lines later.
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
 }
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
@@ -231,7 +231,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             cc.overstrike = (cc.overstrike == 0) as ::core::ffi::c_int;
             unsafe { ui_cursor_shape() }; // may show a different cursor shape
             unsafe { may_trigger_modechanged() };
-            unsafe { status_redraw_curbuf() };
+            status_redraw_curbuf();
             unsafe { redraw_statuslines() };
             Some(unsafe { command_line_not_changed(s) })
         }

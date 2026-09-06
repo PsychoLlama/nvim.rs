@@ -207,7 +207,7 @@ pub unsafe fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's window and buffer.
     if unsafe { (*wp).w_status_height } != 0 || global_stl_height() != 0 {
         unsafe { (*wp).w_redr_status = true };
-        unsafe { redraw_later(wp, UPD_VALID) };
+        redraw_later(unsafe { Win::new(wp) }, UPD_VALID);
     }
     unsafe { (*buf).b_help = first == b'h' as c_char };
     redraw_titles();

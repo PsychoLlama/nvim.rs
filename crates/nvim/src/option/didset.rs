@@ -341,7 +341,7 @@ pub(crate) unsafe fn did_set_ignorecase(_args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_iminsert(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the screen is the editor's own.
     unsafe { showmode() };
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
     None
 }
 
@@ -374,7 +374,7 @@ pub(crate) unsafe fn did_set_laststatus(args: &mut OptSet) -> Option<&CStr> {
         unsafe { frame_new_height(topframe.get(), height, false, false, false) };
         win_comp_pos();
     }
-    unsafe { status_redraw_curbuf() };
+    status_redraw_curbuf();
     last_status(false);
     win_float_update_statusline();
     None

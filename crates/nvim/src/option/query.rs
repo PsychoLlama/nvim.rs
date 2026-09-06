@@ -345,7 +345,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
             0 as ScriptId,
         );
     }
-    unsafe { redraw_buf_status_later(Buf::current()) };
+    redraw_buf_status_later(Buf::current());
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }

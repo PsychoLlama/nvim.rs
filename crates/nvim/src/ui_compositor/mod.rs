@@ -32,7 +32,6 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
-use crate::drawscreen::windows_in_curtab;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
@@ -53,6 +52,7 @@ use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
+use crate::winlayer::windows as windows_in_curtab;
 use scratch::{Bufs, blend, clear_invalid_attrs};
 
 /// The screen every other layer is composed onto.
@@ -398,8 +398,8 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
         // window list.
         for wp in windows_in_curtab() {
             // SAFETY: `wp` came from the live window list.
-            let (grid, winrow, wincol) =
-                unsafe { (win_layer(Win::new(wp)), (*wp).w_winrow, (*wp).w_wincol) };
+            let grid = unsafe { win_layer(wp) };
+            let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
             if grid.mouse_enabled
                 && row >= winrow
                 && row < winrow + grid.rows
@@ -424,7 +424,8 @@ pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGr
     // SAFETY: the caller's obligation.
     for wp in windows_in_curtab() {
         // SAFETY: `wp` came from the live window list.
-        let (grid, hidden) = unsafe { (win_layer(Win::new(wp)), (*wp).w_config.hide) };
+        let grid = unsafe { win_layer(wp) };
+        let hidden = wp.w_config.hide;
         if grid.covers(row, col) && !hidden {
             return grid.raw();
         }

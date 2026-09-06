@@ -145,7 +145,7 @@ pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
                 scrolldown(wp, -(y as LineNr), true);
             }
             wp.w_scbind_pos = vtopline as c_int;
-            unsafe { redraw_later(wp.raw(), UPD_VALID) };
+            redraw_later(wp, UPD_VALID);
             cursor_correct(wp);
             wp.w_redr_status = true;
         }

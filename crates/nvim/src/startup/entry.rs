@@ -426,7 +426,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     setmouse();
-    unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
+    redraw_later(Win::current(), UPD_VALID);
     no_wait_return.set(1);
 
     unsafe { create_windows(&raw mut params) };
