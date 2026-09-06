@@ -144,19 +144,20 @@
 //! pointer after each write. Converting a `*mut Window` parameter to `Win` is
 //! not by itself enough — check what else in the body still points inside.
 //!
-//! The walks at the bottom — [`windows`], [`windows_in_tab`], [`tab_windows`],
-//! [`buffers`] and [`frames`], plus [`tabs`] and [`frames_back`] under them —
-//! are the C's `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`,
-//! `FOR_ALL_BUFFERS` and `FOR_ALL_FRAMES`. The lists they walk are the
-//! editor's own and live from startup to exit, so the walks are safe
-//! functions. **They are not the plain macro's timing**: see "when the link is
-//! read" below.
+//! The walks — [`windows`], [`windows_in_tab`], [`tab_windows`], [`buffers`]
+//! and [`frames`], plus [`tabs`] and [`frames_back`] under them — are the C's
+//! `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_TAB_WINDOWS`, `FOR_ALL_BUFFERS` and
+//! `FOR_ALL_FRAMES`. They are re-exported from the child [`walk`], which is
+//! `forbid(unsafe_code)` because a step is one of the accessors below and
+//! needs no promise of its own. **They are not the plain macro's timing**:
+//! see that module's "when the link is read".
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod graph;
 mod handles;
 mod live;
+mod walk;
 
 pub(crate) use live::{Cc, Ea, Live};
 
@@ -166,11 +167,16 @@ pub(crate) use handles::{
     register_window, tabpage, window,
 };
 
+pub(crate) use walk::{
+    buffers, buffers_back, first_buffer, first_tab, first_window, frames, frames_back, last_buffer,
+    last_window, tab_windows, tabs, windows, windows_back, windows_in_tab,
+};
+
 use core::ffi::c_char;
 use core::mem::offset_of;
 use core::num::NonZero;
 use core::ops::{Deref, DerefMut};
-use core::{iter, ptr};
+use core::ptr;
 
 use crate::drawscreen::redraw_later;
 use crate::fold::{has_any_folding, has_folding};
@@ -179,9 +185,7 @@ use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
-use crate::winlayer::graph::{
-    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, lastbuf, lastwin,
-};
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -858,141 +862,4 @@ impl Line {
     pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
         ci.ptr.addr().wrapping_sub(self.0.addr()) as ::core::ffi::c_int
     }
-}
-
-// ---------------------------------------------------------------------------
-// The lists, walked
-//
-// Each of these is one of the C's `FOR_ALL_*` macros. The lists are the
-// editor's own: they are built before the first window is drawn and torn down
-// only at exit, and every chain ends — at a `None` link for the buffer list,
-// at a null pointer for the window and frame ones — so producing the head and
-// stepping the chain needs no promise from the caller, which is what makes
-// these safe functions rather than `unsafe fn`s. A walk that its own body can
-// invalidate is a different matter and stays the caller's problem: none of
-// these re-reads the head, exactly as the macros do not.
-//
-// # When the link is read
-//
-// **Every walk here reads the next link *before* the body runs, not after.**
-// `iter::successors` calls its closure at yield time — `let item =
-// self.next.take()?; self.next = (self.succ)(&item); Some(item)` — so these
-// are the C's `FOR_ALL_*_SAFE` shape, not `FOR_ALL_*`'s. The macro's
-// `buf = buf->b_next` increment runs *after* its body.
-//
-// The difference is only visible to a body that touches the element it is
-// standing on, and it cuts one way each: freeing that element is safe here
-// and a use-after-free in the macro, while *relinking* it is followed by the
-// macro and ignored here, because the neighbour was read already. Neither
-// showed in the suites, but a caller that relinks under itself must not use
-// these — `buffer::info`'s `:ls` walk is the one in the tree that needs the
-// macro's timing and spells its own `step` out to get it.
-//
-// # The links are handles
-//
-// `b_next`/`b_prev` are `Option<BufId>`, and `firstbuf`/`lastbuf` with them:
-// a step is a registry lookup, not a load. That is what makes the object
-// graph index-shaped rather than pointer-shaped — a buffer can move, and a
-// link can never name one that has been freed, because the free path takes
-// the handle out of the registry (after the unlink — see `registry`). The
-// cost is one `HandleMap` probe per step, a subtract and a load, which is
-// why that type exists at all.
-
-/// `first` and every window after it in its tab page's list.
-pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
-    iter::successors(first, |wp| wp.next())
-}
-
-/// The head of the current tab page's window list, `None` only before the
-/// first window exists and while the editor is tearing the last one down.
-#[inline]
-pub(crate) fn first_window() -> Option<Win> {
-    firstwin.get().and_then(WinId::get)
-}
-
-/// The tail of the current tab page's window list. [`first_window`].
-#[inline]
-pub(crate) fn last_window() -> Option<Win> {
-    lastwin.get().and_then(WinId::get)
-}
-
-/// Every window of the current tab page, in list order: the C's
-/// `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`, whose `curtab == curtab` test always
-/// picks `firstwin`.
-pub fn windows() -> impl Iterator<Item = Win> {
-    windows_from(first_window())
-}
-
-/// Every window of tab page `tabpage`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
-///
-/// The current tab page's windows hang off the `firstwin` global rather than
-/// off its own `tp_firstwin`, which is stale while it is current — that is
-/// what the macro's first arm reads.
-pub fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
-    windows_from(if tabpage.is_current() {
-        first_window()
-    } else {
-        tabpage.tp_firstwin.and_then(WinId::get)
-    })
-}
-
-/// Every tab page, in list order: the C's `FOR_ALL_TABS`.
-pub fn tabs() -> impl Iterator<Item = TabPage> {
-    iter::successors(first_tab(), |tp| tp.next())
-}
-
-/// The head of the editor's tab page list, `None` only before the first one
-/// is made. [`first_buffer`].
-#[inline]
-pub(crate) fn first_tab() -> Option<TabPage> {
-    first_tabpage.get().and_then(TabId::get)
-}
-
-/// Every window of every tab page: `FOR_ALL_TAB_WINDOWS`, which is exactly
-/// [`tabs`] with [`windows_in_tab`] inside it. `tp_next` is read after the tab
-/// page's own windows are exhausted, as the macro's outer `for` reads it.
-pub fn tab_windows() -> impl Iterator<Item = Win> {
-    tabs().flat_map(windows_in_tab)
-}
-
-/// `first` and every frame after it in its row or column: the C's
-/// `FOR_ALL_FRAMES(frp, first)`, whose head is usually a `fr_child`.
-pub fn frames(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
-    iter::successors(first, |fr| fr.next())
-}
-
-/// [`frames`] the other way, following `fr_prev`. The C spells this out as a
-/// `while` loop each time it needs it (`frame_setheight`'s second run, say).
-pub fn frames_back(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
-    iter::successors(first, |fr| fr.prev())
-}
-
-/// Every buffer, in list order: the C's `FOR_ALL_BUFFERS`.
-pub fn buffers() -> impl Iterator<Item = Buf> {
-    iter::successors(first_buffer(), |buf| buf.next())
-}
-
-/// The head of the editor's buffer list, `None` before the first buffer is
-/// created and again once the last one is gone.
-#[inline]
-pub(crate) fn first_buffer() -> Option<Buf> {
-    firstbuf.get().and_then(BufId::get)
-}
-
-/// The tail of the editor's buffer list. [`first_buffer`].
-#[inline]
-pub(crate) fn last_buffer() -> Option<Buf> {
-    lastbuf.get().and_then(BufId::get)
-}
-
-/// Every buffer, last to first: the C's `FOR_ALL_BUFFERS_BACKWARDS`.
-pub(crate) fn buffers_back() -> impl Iterator<Item = Buf> {
-    iter::successors(last_buffer(), |buf| buf.prev())
-}
-
-/// Every window of the current tab page, last to first. The C spells this
-/// out as a `while` loop each time it needs it — the float walks in
-/// `winfloat` and `window::size` are the two.
-pub(crate) fn windows_back() -> impl Iterator<Item = Win> {
-    iter::successors(last_window(), |wp| wp.prev())
 }
