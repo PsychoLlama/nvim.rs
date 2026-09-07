@@ -62,7 +62,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
     // Output a space for an empty line, or it would not overwrite what is
     // already on the row.
     if unsafe { *s } == 0 && !(list && lcs.eol != 0) {
-        unsafe { msg_putchar(b' ' as c_int) };
+        msg_putchar(b' ' as c_int);
     }
 
     let mut col = 0;
@@ -121,7 +121,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
             if c >= 0x80 {
                 // Illegal byte.
                 col += unsafe { utf_char2cells(c) };
-                unsafe { msg_putchar(c) };
+                msg_putchar(c);
                 continue;
             }
             extra_fill = 0;
@@ -207,13 +207,13 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
         if sc == 0 {
             break;
         }
-        unsafe { emit(sc, hl_id, &mut col) };
+        emit(sc, hl_id, &mut col);
     }
     unsafe { msg_clr_eos() };
 }
 
 /// Put one cell on the message area.
-unsafe fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
+fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
     // TODO(bfredl): this is such baloney. need msg_put_schar
     let mut buf = [0 as c_char; MAX_SCHAR_SIZE];
     unsafe { schar_get(buf.as_mut_ptr(), sc) };
@@ -222,6 +222,10 @@ unsafe fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
 }
 
 /// One character of a cycling `'listchars'` sequence, wrapping at its end.
+///
+/// # Safety
+///
+/// `seq` must point at a live `ScreenChar`.
 unsafe fn cycle(seq: *const ScreenChar, at: &mut c_int) -> ScreenChar {
     let sc = unsafe { *seq.offset(*at as isize) };
     *at += 1;

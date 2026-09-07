@@ -22,8 +22,8 @@ use core::ptr;
 const SPECIAL_HL: c_int = HLF_8;
 
 /// Show one character.
-pub unsafe fn msg_putchar(c: c_int) {
-    unsafe { msg_putchar_hl(c, 0) }
+pub fn msg_putchar(c: c_int) {
+    msg_putchar_hl(c, 0)
 }
 
 /// Show one character with a highlight id.
@@ -31,7 +31,7 @@ pub unsafe fn msg_putchar(c: c_int) {
 /// A special key is put back into the three-byte `K_SPECIAL` form it arrived
 /// as, because that is what [`msg_outtrans_len`] and `str2special` downstream
 /// know how to read.
-pub unsafe fn msg_putchar_hl(c: c_int, hl_id: c_int) {
+pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
     let mut buf = [0 as c_char; MB_MAXCHAR + 1];
     if c < 0 {
         // `K_SECOND`/`K_THIRD`, less their `c == K_SPECIAL`/`c == NUL`
@@ -49,7 +49,7 @@ pub unsafe fn msg_putchar_hl(c: c_int, hl_id: c_int) {
 }
 
 /// Show a number in decimal.
-pub unsafe fn msg_outnum(n: c_int) {
+pub fn msg_outnum(n: c_int) {
     // Filled from the right so the digits come out in order; the last byte
     // stays zero and terminates it.
     let mut buf = [0u8; 16];
@@ -71,10 +71,17 @@ pub unsafe fn msg_outnum(n: c_int) {
 }
 
 /// Show a file name with `$HOME` folded back to `~`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub unsafe fn msg_home_replace(fname: *const c_char) {
     unsafe { msg_home_replace_hl(fname, 0) }
 }
 
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
     let name = unsafe { home_replace_save(None, fname) };
     unsafe { msg_outtrans(name, hl_id, false) };
@@ -84,11 +91,19 @@ pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
 /// Show a NUL-terminated string, translating what cannot be displayed.
 ///
 /// Answers how many screen cells it took.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
 pub unsafe fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int {
     unsafe { msg_outtrans_len(str, cstr::bytes_at(str).len() as c_int, hl_id, hist) }
 }
 
 /// Show the one character at `p`, answering a pointer to the next one.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *const c_char {
     let len = unsafe { utfc_ptr2len(p) };
     if len > 1 {
@@ -197,6 +212,10 @@ fn special_hl(hl_id: c_int) -> c_int {
 }
 
 /// `:smile`.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 pub unsafe fn msg_make(arg: *const c_char) {
     // The command name backwards, and the answer with every byte shifted up
     // by three -- both so that neither reads as itself in the binary.
@@ -214,9 +233,9 @@ pub unsafe fn msg_make(arg: *const c_char) {
         at -= 1;
     }
     if at < 0 {
-        unsafe { msg_putchar(NL) };
+        msg_putchar(NL);
         for &byte in SHIFTED {
-            unsafe { msg_putchar((byte - 3) as c_int) };
+            msg_putchar((byte - 3) as c_int);
         }
     }
 }
@@ -228,6 +247,10 @@ pub unsafe fn msg_make(arg: *const c_char) {
 /// Stops before exceeding `maxlen` screen columns; 0 means unlimited.
 ///
 /// @param from  true for the left-hand side of a mapping
+///
+/// # Safety
+///
+/// `strstart` must point at a NUL-terminated string.
 pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: c_int) -> c_int {
     if strstart.is_null() {
         return 0;
@@ -269,6 +292,10 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
 /// [`str2special`] over a whole string, into a freshly allocated one.
 ///
 /// The caller owns the result and frees it with `xfree`.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
 pub unsafe fn str2special_save(
     str: *const c_char,
     replace_spaces: bool,
@@ -289,6 +316,11 @@ pub unsafe fn str2special_save(
 ///
 /// Measures first and copies second, so that the arena is asked for the
 /// exact size once.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string. `arena` must point at a live
+/// arena, which the memory this answers with is taken from and must outlive.
 pub unsafe fn str2special_arena(
     str: *const c_char,
     replace_spaces: bool,
@@ -403,6 +435,10 @@ fn to_special(second: u8, third: u8) -> c_int {
 /// rest of the line.
 ///
 /// Does not handle multi-byte characters.
+///
+/// # Safety
+///
+/// `longstr` must point at a NUL-terminated string.
 pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
     let len = unsafe { cstr::bytes_at(longstr).len() as c_int };
     let mut tail = len;

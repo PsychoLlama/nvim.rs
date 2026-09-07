@@ -72,7 +72,7 @@ pub(crate) unsafe fn print_tag_list(
         msg_didout.set(false);
     }
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
-    unsafe { msg_start() };
+    msg_start();
     unsafe { msg_puts_hl(gettext(c"  # pri kind tag").as_ptr(), HLF_T, false) };
     unsafe { msg_clr_eos() };
     unsafe { advance_to_files(taglen) };
@@ -88,12 +88,12 @@ pub(crate) unsafe fn print_tag_list(
         let current = !new_tag && unsafe { is_current(i, use_tagstack) };
         unsafe { print_entry_head(i, entry, &tagp, current, taglen) };
         if msg_col.get() > 0 {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         if got_int.get() {
             break;
         }
-        unsafe { msg_advance(INFO_COLUMN) };
+        msg_advance(INFO_COLUMN);
 
         // Where the command stops and the extra fields begin.
         let command_end = if tagp.command_end.is_null() {
@@ -109,7 +109,7 @@ pub(crate) unsafe fn print_tag_list(
         // The last entry needs no line ending of its own when the UI
         // draws the messages itself.
         if msg_col.get() != 0 && (!ui_has(kUIMessages) || i < num_matches - 1) {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         os_breakcheck();
     }
@@ -168,10 +168,10 @@ unsafe fn print_entry_head(
         let len = unsafe { tagp.tagkind_end.offset_from(tagp.tagkind) } as c_int;
         unsafe { msg_outtrans_len(tagp.tagkind, len, 0, false) };
     }
-    unsafe { msg_advance(13) };
+    msg_advance(13);
     let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
     unsafe { msg_outtrans_len(tagp.tagname, len, HLF_T, false) };
-    unsafe { msg_putchar(' ' as c_int) };
+    msg_putchar(' ' as c_int);
     unsafe { advance_to_files(taglen) };
 
     let fname = unsafe { tag_full_fname(tagp) };
@@ -218,11 +218,11 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
         let mut hl_id = HLF_CM;
         while !matches!(unsafe { *p } as u8, 0 | b'\r' | b'\n') {
             if msg_col.get() + unsafe { ptr2cells(p) } >= Columns.get() {
-                unsafe { msg_putchar('\n' as c_int) };
+                msg_putchar('\n' as c_int);
                 if got_int.get() {
                     break;
                 }
-                unsafe { msg_advance(INFO_COLUMN) };
+                msg_advance(INFO_COLUMN);
             }
             p = unsafe { msg_outtrans_one(p, hl_id, false) };
             if unsafe { *p } == TAB as c_char {
@@ -235,11 +235,11 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
         }
     }
     if msg_col.get() > INFO_COLUMN {
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         if got_int.get() {
             return false;
         }
-        unsafe { msg_advance(INFO_COLUMN) };
+        msg_advance(INFO_COLUMN);
     }
     true
 }
@@ -274,12 +274,12 @@ unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
             unsafe { ptr2cells(p) }
         };
         if msg_col.get() + width > Columns.get() {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         if got_int.get() {
             break;
         }
-        unsafe { msg_advance(INFO_COLUMN) };
+        msg_advance(INFO_COLUMN);
 
         // A backslash escaping the delimiter or another backslash is
         // punctuation too.
@@ -289,7 +289,7 @@ unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
             p = unsafe { p.add(1) };
         }
         if unsafe { *p } == TAB as c_char {
-            unsafe { msg_putchar(' ' as c_int) };
+            msg_putchar(' ' as c_int);
             p = unsafe { p.add(1) };
         } else {
             p = unsafe { msg_outtrans_one(p, 0, false) };
@@ -332,12 +332,11 @@ unsafe fn command_text_end(command: *const c_char) -> *const c_char {
 /// # Safety
 /// Message output must be in progress.
 unsafe fn advance_to_files(taglen: c_int) {
-    // SAFETY: the caller's promise.
     if taglen == MAXCOL as c_int {
-        unsafe { msg_putchar('\n' as c_int) };
-        unsafe { msg_advance(24) };
+        msg_putchar('\n' as c_int);
+        msg_advance(24);
     } else {
-        unsafe { msg_advance(13 + taglen) };
+        msg_advance(13 + taglen);
     }
 }
 

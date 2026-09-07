@@ -219,7 +219,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     }
 
     if starting.get() != NO_SCREEN {
-        unsafe { maketitle() };
+        maketitle();
 
         changed_line_abv_curs();
         invalidate_botline_win(Win::current());

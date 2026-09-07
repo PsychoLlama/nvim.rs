@@ -137,7 +137,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, p_ef.get()) };
     let (ef, efm, enc) = (p_ef.get(), p_efm.get(), p_menc.get());
     if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         os_exit(3);
     }
     time_msg_at(c"reading errorfile");
@@ -192,7 +192,7 @@ pub(crate) fn read_stdin() {
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
         let stdin_buf_handle: Handle = stdin_buf.map_or(0, |b| b.handle);
-        let stdin_buf_empty = unsafe { buf_is_empty(Buf::current()) };
+        let stdin_buf_empty = buf_is_empty(Buf::current());
 
         // Done as commands rather than calls so the autocommands and the
         // window bookkeeping happen as they would for the user.
@@ -208,9 +208,9 @@ pub(crate) fn read_stdin() {
             let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
         }
     } else {
-        unsafe { set_buflisted(1) };
+        set_buflisted(1);
         let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
-        if unsafe { buf_is_empty(Buf::current()) } && Buf::current().b_next.is_some() {
+        if buf_is_empty(Buf::current()) && Buf::current().b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
         }
@@ -270,7 +270,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
 
     if recoverymode.get() {
         msg_scroll.set(1);
-        unsafe { ml_recover(true) };
+        ml_recover(true);
         if Buf::current().b_ml.ml_mfp.is_null() {
             // Recovery failed; there is nothing to edit.
             getout(1);
@@ -314,7 +314,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             }
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
-            unsafe { set_buflisted(1) };
+            set_buflisted(1);
             let _ = unsafe { open_buffer(false, ptr::null_mut::<ExArg>(), 0) };
 
             if swap_exists_action.get() == SEA_QUIT {

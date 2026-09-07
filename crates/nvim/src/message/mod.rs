@@ -426,7 +426,7 @@ pub unsafe fn msg_multihl(
     }
 
     let no_prompt = Suppress::wait_return();
-    unsafe { msg_start() };
+    msg_start();
     unsafe { msg_clr_eos() };
     let mut need_clear = false;
     let mut hl_msg_updated = false;
@@ -465,7 +465,7 @@ pub unsafe fn msg_multihl(
     msg_ext_skip_flush.set(false);
     is_multihl.set(0);
     drop(no_prompt);
-    unsafe { msg_end() };
+    msg_end();
 
     // The reformatted message is ours to free unless the history took it.
     if hl_msg_updated && !kept {
@@ -522,7 +522,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     }
 
     if is_multihl.get() == 0 {
-        unsafe { msg_start() };
+        msg_start();
     }
 
     // Truncate the message if needed.
@@ -541,7 +541,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 
     let mut retval = true;
     if is_multihl.get() == 0 {
-        retval = unsafe { msg_end() };
+        retval = msg_end();
     }
 
     if keep

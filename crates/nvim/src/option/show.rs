@@ -146,14 +146,14 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         // is `r + i * rows`.
         let mut row = 0;
         while row < rows && !got_int.get() {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
             if got_int.get() {
                 break;
             }
             let mut col = 0;
             let mut i = row as usize;
             while i < items.len() {
-                unsafe { msg_advance(col) };
+                msg_advance(col);
                 unsafe { showoneopt(items[i], opt_flags) };
                 col += INC;
                 i += rows as usize;
@@ -223,7 +223,7 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     unsafe { msg_puts(opt.fullname) };
 
     if !boolean {
-        unsafe { msg_putchar('=' as c_int) };
+        msg_putchar('=' as c_int);
         unsafe { option_value2string(opt_idx, opt_flags, &mut rendered) };
         if rendered[0] != NUL as c_char {
             unsafe { msg_outtrans(rendered.as_mut_ptr(), 0, false) };

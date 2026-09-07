@@ -260,9 +260,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
         // SAFETY: `arg` is the caller's string.
         current_augroup.set(unsafe { augroup_add(arg) });
     } else {
-        // SAFETY: the message routines write to the editor's own message
-        // buffers, which are live for as long as it is.
-        unsafe { msg_start() };
+        msg_start();
         // SAFETY: a static literal names the message kind.
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         // The listing is the table's own order, which is creation order.
@@ -287,7 +285,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
         });
         // SAFETY: the message buffers again.
         unsafe { msg_clr_eos() };
-        unsafe { msg_end() };
+        msg_end();
     }
 }
 

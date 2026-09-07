@@ -193,7 +193,7 @@ pub(crate) unsafe fn open_source(
         // here.
         if fnamelen >= MAXPATHL as size_t {
             filemess_note(fname, c"Illegal file name");
-            unsafe { msg_end() };
+            msg_end();
             msg_scroll.set(msg_save);
             return Err(retval);
         }
@@ -204,7 +204,7 @@ pub(crate) unsafe fn open_source(
             if !silent {
                 filemess_note(fname, msg_is_a_directory);
             }
-            unsafe { msg_end() };
+            msg_end();
             msg_scroll.set(msg_save);
             retval = Ok(Loaded::Skipped);
             return Err(retval);
@@ -228,7 +228,7 @@ pub(crate) unsafe fn open_source(
             } else {
                 filemess_note(fname, c"is not a file");
             }
-            unsafe { msg_end() };
+            msg_end();
             msg_scroll.set(msg_save);
             return Err(retval);
         }

@@ -486,8 +486,7 @@ pub(crate) unsafe fn dialog_close_terminal(buffer: Buf) -> bool {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn can_abandon(buffer: Buf, forceit: bool) -> bool {
-    // SAFETY: module contract.
-    let hidden = unsafe { buf_hide(buffer) };
+    let hidden = buf_hide(buffer);
     hidden
         || !buf_is_changed(buffer)
         || buffer.b_nwindows > 1
@@ -854,7 +853,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // split or data could be lost. 'hidden' makes that unnecessary,
     // since then the buffer is not lost.
     let mut split = false;
-    if !unsafe { buf_hide(Buf::current()) } {
+    if !buf_hide(Buf::current()) {
         let _no_emsg = Suppress::emsg();
         split = unsafe { check_changed(Buf::current(), CCGD_AW | CCGD_EXCMD) };
     }

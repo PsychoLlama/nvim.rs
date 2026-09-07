@@ -160,7 +160,7 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
             let saved_shm = p_shm.get();
             p_shm.set(c"".as_ptr() as *mut c_char);
             if p_ch.get() < 1 {
-                unsafe { msg_start() };
+                msg_start();
                 msg_scroll.set(1);
             }
             unsafe { msg_ptr(report.as_mut_ptr(), 0) };

@@ -64,9 +64,7 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
     }
 
     // What msg() does, but with a column offset.
-    // SAFETY: every string here is this file's own static message or the
-    // catalogue's translation of it.
-    unsafe { msg_start() };
+    msg_start();
     if msg_row.get() == Rows.get() - 1 {
         msg_col.set(col);
     }
@@ -75,7 +73,7 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
     unsafe { msg_puts_hl(gettext_ptr(W_READONLY).as_ptr(), HLF_W, true) };
     unsafe { set_vim_var_string(Vv::Warningmsg, gettext_ptr(W_READONLY).as_ptr(), -1) };
     unsafe { msg_clr_eos() };
-    unsafe { msg_end() };
+    msg_end();
     if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
         // Give the user time to think about it.
         unsafe { msg_delay(1002, true) };
@@ -133,8 +131,7 @@ pub unsafe fn changed(buffer: Buf) {
         }
         changed_internal(buffer);
     }
-    // SAFETY: a live buffer.
-    unsafe { buf_inc_changedtick(buffer) };
+    buf_inc_changedtick(buffer);
     highlight_match.set(false);
 }
 
@@ -145,8 +142,7 @@ pub unsafe fn changed(buffer: Buf) {
 pub fn changed_internal(mut buffer: Buf) {
     buffer.b_changed = c_int::from(true);
     buffer.b_changed_invalid = true;
-    // SAFETY: a live buffer, which is all either asks.
-    unsafe { ml_setflags(buffer) };
+    ml_setflags(buffer);
     redraw_buf_status_later(buffer);
     redraw_tabline.set(true);
     need_maketitle.set(true);
@@ -168,20 +164,16 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
     if buffer.b_changed != 0 || (ff && file_ff_differs(buffer, false)) {
         buffer.b_changed = c_int::from(false);
         buffer.b_changed_invalid = true;
-        // SAFETY: a live buffer, which is all it asks.
-        unsafe { ml_setflags(buffer) };
+        ml_setflags(buffer);
         if ff {
             save_file_ff(buffer);
         }
-        // SAFETY: a live buffer, which is all it asks.
         redraw_buf_status_later(buffer);
         redraw_tabline.set(true);
         need_maketitle.set(true);
-        // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buffer) };
+        buf_inc_changedtick(buffer);
     } else if always_inc_changedtick {
-        // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buffer) };
+        buf_inc_changedtick(buffer);
     }
 }
 

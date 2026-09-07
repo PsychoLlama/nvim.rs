@@ -155,8 +155,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     macro_rules! print_errmsg {
         ($($arg:tt)*) => {{
             msg_scroll.set(1);
-            // SAFETY: a message call on the main thread.
-            unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+msg_putchar('\n' as ::core::ffi::c_int);
             let _: bool = $crate::smsg!(HLF_E, $($arg)*);
             printed_errmsg = true;
         }};

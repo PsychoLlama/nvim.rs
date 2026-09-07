@@ -28,6 +28,10 @@ use std::ffi::CStr;
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.
+///
+/// # Safety
+///
+/// `diffio` must point at a live `DiffIo`, unaliased for the call.
 pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Failed> {
     let orig = unsafe { (*diffio).dio_orig.din_fname };
     let new = unsafe { (*diffio).dio_new.din_fname };
@@ -99,6 +103,10 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
 
 /// Diff the two memory images with `xdl_diff`, collecting hunks into
 /// `dio_diff.dout_ga`.
+///
+/// # Safety
+///
+/// `diffio` must point at a live `DiffIo`, unaliased for the call.
 pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Failed> {
     let flags = diff_flags.get();
     let mut param = xpparam_t {
@@ -164,6 +172,10 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Faile
 }
 
 /// Diff whichever way `'diffopt'` and `'diffexpr'` say.
+///
+/// # Safety
+///
+/// `dio` must point at a live `DiffIo`, unaliased for the call.
 pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
@@ -223,6 +235,11 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
 
 /// `xdl_diff`'s hunk callback: append one hunk to the `DiffOut` behind
 /// `priv_0`, converting xdiff's zero-based starts to line numbers.
+///
+/// # Safety
+///
+/// `priv_0` must be the payload this callback was registered with, live for
+/// the call.
 unsafe extern "C" fn xdiff_out(
     start_a: c_int,
     count_a: c_int,

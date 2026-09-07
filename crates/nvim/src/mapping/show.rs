@@ -48,8 +48,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     }
 
     if msg_col.get() > 0 || msg_silent.get() != 0 {
-        // SAFETY: a message primitive that reads nothing of ours.
-        unsafe { msg_putchar(c_int::from(b'\n')) };
+        msg_putchar(c_int::from(b'\n'));
         if got_int.get() {
             return; // 'q' typed at the MORE prompt
         }
@@ -64,8 +63,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     };
     len += 1;
     while len <= 3 {
-        // SAFETY: as above.
-        unsafe { msg_putchar(c_int::from(b' ')) };
+        msg_putchar(c_int::from(b' '));
         len += 1;
     }
 
@@ -73,8 +71,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS.
     len = unsafe { msg_outtrans_special(mp.m_keys.as_ptr(), true, 0) } as size_t;
     loop {
-        // SAFETY: as above.
-        unsafe { msg_putchar(c_int::from(b' ')) };
+        msg_putchar(c_int::from(b' '));
         len += 1;
         if len >= 12 {
             break;

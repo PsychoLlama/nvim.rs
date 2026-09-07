@@ -447,7 +447,7 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     attached.set(attached.get() + 1);
 
     ui_refresh_options();
-    unsafe { resettitle() };
+    resettitle();
 
     // Tell it where the server is, so that a UI on another machine can
     // resolve the paths the server sends.

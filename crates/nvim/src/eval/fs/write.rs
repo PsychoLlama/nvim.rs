@@ -318,8 +318,7 @@ fn can_defer() -> bool {
 /// Whether the running script is Lua, which is what makes a String argument
 /// mean blob data rather than a mistake.
 fn in_lua_script() -> bool {
-    // SAFETY: a script id, which the callee only looks up.
-    unsafe { script_is_lua(current_sctx.get().sc_sid) }
+    script_is_lua(current_sctx.get().sc_sid)
 }
 
 /// Register `delete({fname})` to run when the calling function returns --

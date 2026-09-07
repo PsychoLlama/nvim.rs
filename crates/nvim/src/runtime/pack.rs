@@ -597,7 +597,7 @@ unsafe fn add_opt_pack_plugins(
 }
 
 /// Add all packages in the `start` directories to 'runtimepath'.
-pub unsafe fn add_pack_start_dirs() {
+pub fn add_pack_start_dirs() {
     // SAFETY: `add_pack_start_dir` ignores its cookie.
     unsafe {
         do_in_path(
@@ -675,7 +675,7 @@ unsafe fn add_pack_start_dir(
 }
 
 /// Load the plugins of every package in the `start` directories.
-pub unsafe fn load_start_packages() {
+pub fn load_start_packages() {
     did_source_packages.set(true);
     // SAFETY: `add_start_pack_plugins` takes a `PackWork` cookie.
     for name in [c"pack/*/start/*", c"start/*"] {
@@ -690,10 +690,14 @@ pub unsafe fn load_start_packages() {
             )
         };
     }
-    unsafe { update_runtime_search_path_thread(false) };
+    update_runtime_search_path_thread(false);
 }
 
 /// `:packloadall[!]`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_packloadall(args: *mut ExArg) {
     // SAFETY: `args` is the live command.
     if did_source_packages.get() && unsafe { (*args).forceit } == 0 {
@@ -702,13 +706,12 @@ pub unsafe fn ex_packloadall(args: *mut ExArg) {
     // One round to add every directory to 'runtimepath', then a second to
     // load the plugins, so a plugin may use another plugin's autoload
     // directory.
-    // SAFETY: neither reads the command.
-    unsafe { add_pack_start_dirs() };
-    unsafe { load_start_packages() };
+    add_pack_start_dirs();
+    load_start_packages();
 }
 
 /// Read all the plugin files at startup.
-pub unsafe fn load_plugins() {
+pub fn load_plugins() {
     if p_lpl.get() == 0 {
         return;
     }
@@ -718,7 +721,7 @@ pub unsafe fn load_plugins() {
     let mut rtp_copy = p_rtp.get();
     if !did_source_packages.get() {
         rtp_copy = unsafe { xstrdup(p_rtp.get()) };
-        unsafe { add_pack_start_dirs() };
+        add_pack_start_dirs();
     }
 
     // Not `source_runtime_vim_lua` yet, so `:packloadall` can be checked
@@ -736,7 +739,7 @@ pub unsafe fn load_plugins() {
     // Only source "start" packages when a `:packloadall` has not already.
     if !did_source_packages.get() {
         unsafe { xfree(rtp_copy.cast()) };
-        unsafe { load_start_packages() };
+        load_start_packages();
     }
     unsafe { time_msg_now(c"loading packages") };
 
@@ -761,6 +764,10 @@ unsafe fn time_msg_now(msg: &CStr) {
 const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 
 /// `:packadd[!] {name}`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_packadd(args: *mut ExArg) {
     // SAFETY: `args` is the live command; `pat` is owned and freed below.
     let arg = unsafe { (*args).arg };
@@ -802,6 +809,6 @@ pub unsafe fn ex_packadd(args: *mut ExArg) {
         )
     };
 
-    unsafe { update_runtime_search_path_thread(false) };
+    update_runtime_search_path_thread(false);
     unsafe { xfree(pat.cast()) };
 }

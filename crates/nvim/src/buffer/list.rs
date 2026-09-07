@@ -199,6 +199,12 @@ fn check_cursor_line(win: Win) {
 ///
 /// `lnum` is the line to remember for it and `flags` the `BLN_*` set. The
 /// answer is null when an autocommand deleted the buffer under us.
+///
+/// # Safety
+///
+/// `ffname_arg` must point at a NUL-terminated string, unaliased for the
+/// call. `sfname_arg` must point at a NUL-terminated string, unaliased for
+/// the call.
 pub unsafe fn buflist_new(
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
@@ -230,8 +236,7 @@ pub unsafe fn buflist_new(
     // The current buffer, when it has no name and no contents, otherwise a
     // fresh one. This is the ONLY place a buffer structure is allocated.
     let mut reusable = None;
-    // SAFETY: reads the current buffer's own state.
-    if flags & BLN_CURBUF as c_int != 0 && unsafe { curbuf_reusable() } {
+    if flags & BLN_CURBUF as c_int != 0 && curbuf_reusable() {
         let cur = current_buf().expect("curbuf != NULL");
         let bufref = BufRef::of(cur);
         trigger_undo_ftplugin(cur, current_win());
@@ -339,8 +344,7 @@ pub unsafe fn buflist_new(
 fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
     if lnum != 0 as LineNr {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
-        // SAFETY: records a position in the buffer's own entry list.
-        unsafe { buflist_setfpos(buffer, win, lnum, 0 as ColNr, false) };
+        buflist_setfpos(buffer, win, lnum, 0 as ColNr, false);
     }
     if flags & BLN_NOOPT as c_int == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
@@ -506,12 +510,11 @@ fn announce_new_buffer(buffer: Buf, flags: c_int) -> bool {
 
 /// Whether the current buffer is empty, unnamed, unmodified and shown in
 /// only one window -- which means it can be reused.
-pub unsafe fn curbuf_reusable() -> bool {
+pub fn curbuf_reusable() -> bool {
     let Some(buf) = current_buf() else {
         return false;
     };
-    // SAFETY: a live buffer, in each of the three.
-    let empty = buf.b_ml.ml_mfp.is_null() || unsafe { buf_is_empty(buf) };
+    let empty = buf.b_ml.ml_mfp.is_null() || buf_is_empty(buf);
     buf.b_ffname.is_null()
         && buf.b_nwindows <= 1
         && buf.terminal.is_null()
@@ -608,7 +611,7 @@ pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
 // Switching to one
 
 /// Go to buffer `n`, putting the cursor where it was left.
-pub unsafe fn buflist_getfile(
+pub fn buflist_getfile(
     n: c_int,
     mut lnum: LineNr,
     options: c_int,
@@ -637,8 +640,7 @@ pub unsafe fn buflist_getfile(
     let mut restore_view = false;
     if lnum == 0 as LineNr {
         // Default line number: where the cursor was left last time.
-        // SAFETY: a live buffer; the answer is a live mark.
-        fm = unsafe { buflist_findfmark(buf) };
+        fm = buflist_findfmark(buf);
         // SAFETY: as above.
         (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
         restore_view = true;
@@ -682,8 +684,7 @@ fn goto_existing_window(buffer: Buf) -> bool {
     let splits = (kOptSwbFlagVsplit as c_int
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;
-    // SAFETY: the current buffer.
-    if wp.is_some() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current()) } {
+    if wp.is_some() || swb_flags.get() & splits == 0 || buf_is_empty(Buf::current()) {
         return true;
     }
     if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {
@@ -702,9 +703,8 @@ fn goto_existing_window(buffer: Buf) -> bool {
 }
 
 /// Put the cursor where it was left in the current buffer.
-pub(crate) unsafe fn buflist_getfpos() {
-    // SAFETY: the current buffer; the answer is a live mark.
-    let fm = unsafe { buflist_findfmark(Buf::current()) };
+pub(crate) fn buflist_getfpos() {
+    let fm = buflist_findfmark(Buf::current());
     // SAFETY: a live mark.
     let (lnum, col) = unsafe { ((*fm).mark.lnum, (*fm).mark.col) };
 
@@ -729,6 +729,10 @@ pub(crate) unsafe fn buflist_getfpos() {
 // Finding one by name
 
 /// The buffer for `fname`, resolved to a full path first.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
     // SAFETY: a NUL-terminated name; the answer is an allocation or null.
     let ffname = unsafe { full_name_save(fname, true) };
@@ -742,6 +746,10 @@ pub unsafe fn buflist_findname_exp(fname: *mut c_char) -> Option<Buf> {
 }
 
 /// The buffer whose full name is `ffname`, or whose file id matches it.
+///
+/// # Safety
+///
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn buflist_findname(ffname: *mut c_char) -> Option<Buf> {
     let mut file_id = NO_FILE_ID;
     // SAFETY: the caller's promise -- a NUL-terminated name -- and a local.
@@ -772,6 +780,11 @@ pub(crate) fn buflist_findname_file_id(
 ///
 /// `unlisted` searches the unlisted buffers too, when no listed one matched;
 /// `curtab_only` ignores buffers not open in the current tab page.
+///
+/// # Safety
+///
+/// `pattern` must point at a NUL-terminated string. `pattern_end` must point
+/// at a NUL-terminated string.
 pub unsafe fn buflist_findpat(
     pattern: *const c_char,
     pattern_end: *const c_char,
@@ -912,6 +925,12 @@ fn match_pattern(
 /// `qsort`'s comparison over two `Buffer *`, most recently used first. Two
 /// buffers entered in the same second tie, and the order of a tie is
 /// whatever `qsort` lands on -- which is why the sort stays `qsort`.
+///
+/// # Safety
+///
+/// As `qsort`'s comparator: `s1` and `s2` must each point at an element of
+/// the array being sorted, and the elements must be of the type this reads
+/// them at.
 pub(crate) unsafe extern "C" fn buf_time_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: `qsort` hands back two elements of the array it was given,
     // each holding a live buffer pointer.

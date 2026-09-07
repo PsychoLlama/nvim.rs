@@ -381,8 +381,7 @@ unsafe fn list_oldfiles(list: *mut List) {
         let value = &raw mut unsafe { &mut *item }.li_tv;
         // SAFETY: `value` is that item's own.
         if !unsafe { message_filtered(number.string(value)) } {
-            // SAFETY: main thread, message state; the text is the item's.
-            unsafe { msg_outnum(nr) };
+            msg_outnum(nr);
             say::puts(c": ");
             unsafe { msg_outtrans(text.string(value), 0, false) };
             say::clear_eos();
@@ -473,8 +472,7 @@ pub(crate) mod say {
 
     /// [`msg_start`]: begin a message.
     pub(crate) fn start() {
-        // SAFETY: the module's promise.
-        unsafe { msg_start() }
+        msg_start()
     }
 
     /// [`msg_starthere`]: put the next message where the cursor is.
@@ -485,14 +483,12 @@ pub(crate) mod say {
     /// [`msg_end`]: finish a message, prompting if it did not fit.  False
     /// when `wait_return` was called.
     pub(crate) fn end() -> bool {
-        // SAFETY: as above.
-        unsafe { msg_end() }
+        msg_end()
     }
 
     /// [`msg_putchar`]: show one character.
     pub(crate) fn putchar(c: c_int) {
-        // SAFETY: as above.
-        unsafe { msg_putchar(c) }
+        msg_putchar(c)
     }
 
     /// [`msg_puts`]: show a string that carries its own NUL.

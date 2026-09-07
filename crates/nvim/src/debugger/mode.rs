@@ -137,9 +137,7 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
         cell.set(ptr::null_mut());
     }
 
-    // SAFETY: `estack_sfile` hands back an owned NUL-terminated name or null,
-    // and `msg` copies what it keeps.
-    let sname = unsafe { estack_sfile(ESTACK_NONE) };
+    let sname = estack_sfile(ESTACK_NONE);
     if !sname.is_null() {
         unsafe { msg_ptr(sname, 0) };
     }
@@ -470,8 +468,7 @@ fn do_checkbacktracelevel() {
 /// # Safety
 /// As [`do_debug`].
 unsafe fn do_showbacktrace(cmd: *mut c_char) {
-    // SAFETY: `estack_sfile` hands back an owned NUL-terminated name or null.
-    let sname = unsafe { estack_sfile(ESTACK_NONE) };
+    let sname = estack_sfile(ESTACK_NONE);
     let max = unsafe { get_maxbacktrace_level(sname) };
     if !sname.is_null() {
         // The frames are one string joined by "..", split in place: each

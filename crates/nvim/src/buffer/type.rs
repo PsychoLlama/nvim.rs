@@ -169,7 +169,7 @@ pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
 
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
-pub unsafe fn buf_hide(buffer: Buf) -> bool {
+pub fn buf_hide(buffer: Buf) -> bool {
     // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
     // this one without a null test.
     let bufhidden = unsafe { *buffer.b_p_bh };
@@ -224,7 +224,7 @@ pub fn buf_get_fname(buffer: Buf) -> *mut c_char {
 
 /// Set `'buflisted'` for the current buffer, firing `BufAdd`/`BufDelete` if
 /// it changed.
-pub unsafe fn set_buflisted(on: c_int) {
+pub fn set_buflisted(on: c_int) {
     let mut buf = Buf::current();
     if on == buf.b_p_bl {
         return;
@@ -242,20 +242,19 @@ pub unsafe fn set_buflisted(on: c_int) {
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
 }
 
-pub unsafe fn buf_is_empty(buffer: Buf) -> bool {
+pub fn buf_is_empty(buffer: Buf) -> bool {
     let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
     b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buffer, 1 as LineNr) } == 0
 }
 
-pub unsafe fn buf_inc_changedtick(buffer: Buf) {
-    // SAFETY: the caller's promise -- a live buffer.
-    unsafe { buf_set_changedtick(buffer, buf_get_changedtick(buffer) + 1 as VarNumber) };
+pub fn buf_inc_changedtick(buffer: Buf) {
+    buf_set_changedtick(buffer, buf_get_changedtick(buffer) + 1 as VarNumber);
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
+pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
     b.changedtick_di.di_tv.vval.v_number = changedtick;

@@ -466,7 +466,7 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
         };
         buf.b_last_cursor = cursor;
         let (lnum, col) = (buf.b_last_cursor.mark.lnum, buf.b_last_cursor.mark.col);
-        unsafe { buflist_setfpos(buf, Some(Win::current()), lnum, col, false) };
+        buflist_setfpos(buf, Some(Win::current()), lnum, col, false);
         unsafe { xfree(buf.additional_data.cast()) };
         buf.additional_data = unsafe { (*item).additional_data };
         unsafe { (*item).additional_data = core::ptr::null_mut() };

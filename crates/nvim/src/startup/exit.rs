@@ -298,7 +298,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
             }
             // One sync writes every swap file, so stop at the first
             // buffer that has one.
-            unsafe { ml_sync_all(0, 0, true) };
+            ml_sync_all(0, 0, true);
             break;
         }
     }

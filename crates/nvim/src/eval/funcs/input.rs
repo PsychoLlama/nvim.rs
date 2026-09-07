@@ -223,7 +223,7 @@ pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     }
     // Start at the bottom of the screen so the whole list is visible.
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
-    unsafe { msg_start() };
+    msg_start();
     msg_row.set(Rows.get() - 1);
     lines_left.set(Rows.get());
     msg_scroll.set(1);
@@ -237,7 +237,7 @@ pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
             // A UI that owns the message area keeps the items in one
             // message, bar the last separator.
             if !ui_has(kUIMessages) || !unsafe { (*li).li_next }.is_null() {
-                unsafe { msg_putchar('\n' as c_int) };
+                msg_putchar('\n' as c_int);
             }
             li = unsafe { (*li).li_next };
         }

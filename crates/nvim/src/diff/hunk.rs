@@ -41,6 +41,11 @@ struct Walk {
 }
 
 /// Take the next hunk the internal engine produced.  Answers end of input.
+///
+/// # Safety
+///
+/// `dout` must point at a live `DiffOut`, unaliased for the call. `hunk` must
+/// point at a live `DiffHunk`, unaliased for the call.
 unsafe fn extract_hunk_internal(
     dout: *mut DiffOut,
     hunk: *mut DiffHunk,
@@ -58,6 +63,11 @@ unsafe fn extract_hunk_internal(
 
 /// Read lines from `fd` until one parses as a hunk header.  Answers end of
 /// input.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call. `hunk` must
+/// point at a live `DiffHunk`, unaliased for the call.
 unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut DiffHunk, diffstyle: &mut DiffStyle) -> bool {
     loop {
         let mut line = [0 as c_char; LBUFLEN as usize];
@@ -104,6 +114,10 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut DiffHunk, diffstyle: &mut DiffS
 /// walk has reached (they are copied forward and skipped), it overlaps one or
 /// more existing blocks (they are widened to cover it and the extra ones
 /// freed), or it touches none (a new block).
+///
+/// # Safety
+///
+/// `hunk` must point at a live `DiffHunk`, unaliased for the call.
 unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut DiffHunk) {
     let tp = TabPage::current();
     let end_orig = unsafe { (*hunk).lnum_orig } + unsafe { (*hunk).count_orig };
@@ -214,6 +228,10 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
 }
 
 /// Read a whole diff's worth of hunks into the current tabpage's block list.
+///
+/// # Safety
+///
+/// `dio` must point at a live `DiffIo`, unaliased for the call.
 pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo) {
     let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
     let dout = unsafe { &raw mut (*dio).dio_diff };
@@ -270,6 +288,11 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo
 ///
 /// An `a` hunk adds after `f1`, so its original range is empty and starts on
 /// the *next* line; a `d` hunk is the mirror image.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string. `hunk` must point at a live
+/// `DiffHunk`, unaliased for the call.
 unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut DiffHunk) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     let f1 = unsafe { getdigits_int32(&raw mut p, true, 0) };
@@ -310,6 +333,11 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut DiffHunk) -> Result<(), 
 /// An omitted count is 1, and a count of *zero* means the hunk adds or
 /// deletes at that point rather than covering it, which shifts the line
 /// number by one.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string. `hunk` must point at a live
+/// `DiffHunk`, unaliased for the call.
 unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut DiffHunk) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     if !unsafe { cstr::starts_with(p, b"@@ -") } {

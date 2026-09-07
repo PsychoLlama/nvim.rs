@@ -29,6 +29,10 @@ use core::ffi::c_int;
 use std::ffi::CStr;
 
 /// Free one block, its cached inline changes included.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn clear_diffblock(dp: *mut DiffBlock) {
     // SAFETY: the caller's block, which nothing else points at; its cached
     // changes go with it.
@@ -138,9 +142,7 @@ pub fn diff_mark_adjust(
     for tp in tabs() {
         let idx = diff_buf_idx(buffer, tp);
         if idx != DB_COUNT {
-            // SAFETY: `idx` is a slot the tab page holds, and the block list
-            // walked below is that tab page's own.
-            unsafe { diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after) };
+            diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
         }
     }
 }
@@ -164,7 +166,7 @@ fn inserted_deleted(line2: LineNr, amount: LineNr, amount_after: LineNr) -> (Lin
 /// edit below every block only shifts line numbers.  Upstream numbers the six
 /// cases in a diagram; the numbers are kept in the comments below because the
 /// arms are otherwise indistinguishable.
-unsafe fn diff_mark_adjust_tp(
+fn diff_mark_adjust_tp(
     mut tabpage: TabPage,
     idx: c_int,
     line1: LineNr,
@@ -369,6 +371,11 @@ unsafe fn diff_mark_adjust_tp(
 }
 
 /// Insert a fresh, empty block between `dprev` and `dp`.
+///
+/// # Safety
+///
+/// `dprev` must point at a live diff block, unaliased for the call. `dp` must
+/// point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_alloc_new(
     mut tabpage: TabPage,
     dprev: *mut DiffBlock,
@@ -384,6 +391,11 @@ pub(crate) unsafe fn diff_alloc_new(
 }
 
 /// Unlink and free `dp`, answering the block that follows it.
+///
+/// # Safety
+///
+/// `dprev` must point at a live diff block, unaliased for the call. `dp` must
+/// point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_free(
     mut tabpage: TabPage,
     dprev: *mut DiffBlock,
@@ -404,6 +416,10 @@ pub(crate) unsafe fn diff_free(
 ///
 /// An edit can leave a block claiming lines that did not actually change; the
 /// diff is not recomputed for that, so the block is trimmed instead.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
     let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tabpage.tp_diffbuf[i].is_null()) else {
         return;
@@ -469,6 +485,10 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
 ///
 /// An edit can leave a block naming lines that no longer exist, and every
 /// reader of a block has to check first.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_check_sanity(tabpage: TabPage, dp: *mut DiffBlock) -> Result<(), Failed> {
     for i in 0..DB_COUNT as usize {
         let buf = tabpage.tp_diffbuf[i];
@@ -484,6 +504,11 @@ pub(crate) unsafe fn diff_check_sanity(tabpage: TabPage, dp: *mut DiffBlock) -> 
 
 /// Give buffer `idx_new` the same range as `idx_orig`, corrected for the
 /// drift the previous block left behind.
+///
+/// # Safety
+///
+/// `dprev` must point at a live diff block, unaliased for the call. `dp` must
+/// point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_copy_entry(
     dprev: *mut DiffBlock,
     dp: *mut DiffBlock,
@@ -518,6 +543,10 @@ pub fn diff_clear(mut tabpage: TabPage) {
 
 /// The longest of `dp`'s ranges, which is how many screen rows it occupies in
 /// every window: the shorter buffers are padded with filler.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block.
 pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
     (0..DB_COUNT as usize)
         .filter(|&k| !TabPage::current().tp_diffbuf[k].is_null())
@@ -530,6 +559,10 @@ pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
 ///
 /// `:diffget`/`:diffput` run autocommands between reading a block and using
 /// it, and those can rebuild the list underneath.
+///
+/// # Safety
+///
+/// `diff` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
     let mut dp = TabPage::current().tp_first_diff;
     while !dp.is_null() {

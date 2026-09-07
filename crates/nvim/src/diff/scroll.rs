@@ -189,7 +189,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 
 /// `]c` / `[c`: move the cursor to the start of the `count`th next or
 /// previous change.
-pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
+pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = TabPage::current();
     let mut lnum = Win::current().w_cursor.lnum;
     let idx = diff_slot(Buf::current(), tp);

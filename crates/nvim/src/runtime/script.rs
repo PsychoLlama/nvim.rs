@@ -70,7 +70,7 @@ pub(crate) fn script_id_valid(sid: c_int) -> bool {
 }
 
 /// Was script `sid` written in Lua?
-pub unsafe fn script_is_lua(sid: ScriptId) -> bool {
+pub fn script_is_lua(sid: ScriptId) -> bool {
     if sid == SID_LUA {
         return true;
     }
@@ -87,6 +87,10 @@ pub unsafe fn script_is_lua(sid: ScriptId) -> bool {
 /// does not work: a script that is edited and written may get a different inode
 /// even though to the user it is the same script, and a deleted script's inode
 /// may be re-used by a differently named one.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
     // Nothing in the closure sources a script, so holding the borrow over the
     // walk is sound.
@@ -104,6 +108,10 @@ pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
 // `:scriptnames`.
 
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_scriptnames(args: *mut ExArg) {
     // SAFETY: `args` is the command's own argument block.
     let (by_number, has_arg) = unsafe { ((*args).addr_count > 0, *(*args).arg != NUL as c_char) };
@@ -145,7 +153,7 @@ pub unsafe fn ex_scriptnames(args: *mut ExArg) {
         };
         if !unsafe { message_filtered(iobuff) } {
             if msg_col.get() > 0 {
-                unsafe { msg_putchar('\n' as c_int) };
+                msg_putchar('\n' as c_int);
             }
             unsafe { msg_outtrans(iobuff, 0, false) };
             line_breakcheck();
@@ -185,7 +193,7 @@ unsafe fn edit_script(args: *mut ExArg, by_number: bool) {
 /// The answer is owned. Upstream answers a pointer into the shared `IObuff`
 /// for the two contexts it has to format, and a caller holding one of those
 /// across anything that shows a message loses it.
-pub(crate) unsafe fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString {
+pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString {
     let mut named = [0 as c_char; IOSIZE as usize];
     let fixed = match script_ctx.sc_sid {
         SID_MODELINE => c"modeline",
@@ -244,6 +252,12 @@ pub(crate) unsafe fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> C
 ///
 /// A sourced script tracks its own read position, because the execution stack's
 /// number lags behind by the one line `getsourceline` reads ahead.
+///
+/// # Safety
+///
+/// `fgetline` must be an initialized `LineGetter` whose pointer fields point
+/// at live data for the call. `cookie` must be the payload `fgetline` was
+/// registered with, live for the call.
 pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> LineNr {
     if !getline_is_source(fgetline) {
         return sourcing_lnum();
@@ -303,6 +317,12 @@ enum ScriptQuery {
 }
 
 /// `"getscriptinfo()"` function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_getscriptinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the caller's return slot, `args` its arguments.
     unsafe { tv_list_alloc_ret(result, script_count() as ptrdiff_t) };
@@ -447,14 +467,25 @@ fn empty_regmatch() -> RegMatch {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
+///
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call. `val` must
+/// point at a NUL-terminated string.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
     let _ = unsafe { tv_dict_add_bool(d, key.as_ptr(), key.count_bytes(), val) };
 }
@@ -466,6 +497,11 @@ unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
 /// `do_source()`.
 ///
 /// Returns the line in allocated memory, or null at end of file or on error.
+///
+/// # Safety
+///
+/// `cookie` must be the payload this callback was registered with, live for
+/// the call.
 pub unsafe fn getsourceline(
     _c: c_int,
     cookie: *mut c_void,
@@ -735,6 +771,10 @@ fn escaped_newline(line: &[u8]) -> bool {
 // Leaving a script.
 
 /// Are we sourcing a script, from a file or a buffer or a string?
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn sourcing_a_script(args: *mut ExArg) -> c_int {
     // SAFETY: `args` is the running command's block.
     let same = unsafe {
@@ -748,6 +788,10 @@ pub unsafe fn sourcing_a_script(args: *mut ExArg) -> c_int {
 }
 
 /// `":scriptencoding"`: set encoding conversion for a sourced script.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_scriptencoding(args: *mut ExArg) {
     // SAFETY: `args` is the running command's block.
     if unsafe { sourcing_a_script(args) } == 0 {
@@ -770,6 +814,10 @@ pub unsafe fn ex_scriptencoding(args: *mut ExArg) {
 }
 
 /// `":finish"`: mark a sourced file as finished.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_finish(args: *mut ExArg) {
     // SAFETY: `args` is the running command's block.
     if unsafe { sourcing_a_script(args) } != 0 {
@@ -783,6 +831,10 @@ pub unsafe fn ex_finish(args: *mut ExArg) {
 ///
 /// Also called for a pending finish at the `":endtry"` or after returning from
 /// an extra `do_cmdline()`; `reanimate` says which.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn do_finish(args: *mut ExArg, reanimate: bool) {
     // SAFETY: `args` is the running command's block, and its cookie is a
     // `SourceCookie` because `ex_finish` checked before calling.
@@ -813,6 +865,12 @@ unsafe fn source_cookie(args: *mut ExArg) -> *mut SourceCookie {
 
 /// Did a sourced file have the `":finish"` command?  If so, don't give an error
 /// message for a missing `":endif"`.  False when not sourcing a file.
+///
+/// # Safety
+///
+/// `fgetline` must be an initialized `LineGetter` whose pointer fields point
+/// at live data for the call. `cookie` must be the payload `fgetline` was
+/// registered with, live for the call.
 pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: `getline_equal` reads the reader's own bookkeeping; the cookie is
     // only dereferenced once that says it is a sourced script's.
@@ -828,6 +886,10 @@ pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool
 ///
 /// `foo#bar#baz` becomes `autoload/foo/bar.vim`.  The caller must make sure
 /// `name` contains `AUTOLOAD_CHAR`; the result is `xmalloc`ed.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_char {
     // SAFETY: the caller's `name` is `name_len` readable bytes.
     let name = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };
@@ -860,6 +922,10 @@ pub unsafe fn autoload_name(name: *const c_char, name_len: size_t) -> *mut c_cha
 ///
 /// Returns true if a package was loaded.  `reload` loads the script again even
 /// when it is already known.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn script_autoload(name: *const c_char, name_len: size_t, reload: bool) -> bool {
     // SAFETY: the caller's `name` is `name_len` readable bytes.
     let bytes = unsafe { slice::from_raw_parts(name.cast::<u8>(), name_len) };

@@ -415,8 +415,7 @@ pub(crate) fn api_set_sctx(channel_id: uint64_t) -> SavedSctx {
     let mut sctx = caller.with_lnum(0);
     if channel_id == LUA_INTERNAL_CALL {
         // Unless the caller is a Lua script, which keeps its own id.
-        // SAFETY: `script_is_lua` takes a script id, not a pointer.
-        if !unsafe { script_is_lua(sctx.sc_sid) } {
+        if !script_is_lua(sctx.sc_sid) {
             sctx.sc_sid = SID_LUA;
         }
     } else {

@@ -162,8 +162,7 @@ impl Swapped {
         unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false) }
             .expect("the empty line goes");
 
-        // SAFETY: as above; a swap file was opened, so this writes it.
-        unsafe { ml_preserve(buf, false, true) };
+        ml_preserve(buf, false, true);
 
         let swap = std::fs::read_dir(sandbox.root())
             .expect("the sandbox")

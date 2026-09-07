@@ -75,7 +75,7 @@ unsafe fn get_emsg_source() -> *mut c_char {
     if !exestack_has_name() || !unsafe { other_sourcing_name() } {
         return ptr::null_mut();
     }
-    let tofree = unsafe { estack_sfile(ESTACK_NONE) };
+    let tofree = estack_sfile(ESTACK_NONE);
     let sname = if tofree.is_null() {
         sourcing_top().es_name
     } else {
@@ -143,7 +143,7 @@ pub unsafe fn msg_source(hl_id: c_int) {
         if !sourcing_top().es_name.is_null() {
             last_sourcing_name.set(unsafe { xstrdup(sourcing_top().es_name) });
             if !unsafe { redirecting() } {
-                unsafe { msg_putchar_hl(b'\n' as c_int, hl_id) };
+                msg_putchar_hl(b'\n' as c_int, hl_id);
             }
         }
     }
@@ -215,7 +215,7 @@ pub unsafe fn emsg_multiline(
         // do write it to the redirection and the log.
         if emsg_silent.get() != 0 {
             if !emsg_noredir.get() {
-                unsafe { msg_start() };
+                msg_start();
                 // Each source line is redirected with a newline appended.
                 // Both helpers size their buffer for one byte more than
                 // the text, so the terminator's slot takes it.

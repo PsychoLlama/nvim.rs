@@ -410,14 +410,12 @@ impl DoTag {
         if mark.fnum != Buf::current().handle {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
-            if unsafe {
-                buflist_getfile(
-                    mark.fnum,
-                    mark.mark.lnum,
-                    GETF_SETMARK as c_int,
-                    self.forceit,
-                )
-            }
+            if buflist_getfile(
+                mark.fnum,
+                mark.mark.lnum,
+                GETF_SETMARK as c_int,
+                self.forceit,
+            )
             .is_err()
             {
                 self.idx = self.old_idx;

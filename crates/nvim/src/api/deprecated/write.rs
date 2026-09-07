@@ -132,8 +132,7 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
         flush();
     }
     drop(no_prompt);
-    // SAFETY: nothing here holds a borrow of the line buffer.
-    unsafe { msg_end() };
+    msg_end();
 }
 
 /// # Safety

@@ -124,7 +124,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
 
     if !how.stdin && !how.buffer {
         if msg_col.get() > 0 {
-            unsafe { msg_putchar(b'\r' as c_int) }; // overwrite previous message
+            msg_putchar(b'\r' as c_int); // overwrite previous message
         }
         shown = unsafe { msg_trunc(io, false, 0) };
     }

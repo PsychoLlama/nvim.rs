@@ -45,7 +45,7 @@ pub(crate) unsafe fn list_func_head(
     let f = unsafe { Uf::new(func) };
     let prev_ht_changed = func_table().changed();
 
-    unsafe { msg_start() };
+    msg_start();
 
     // Check no function was added or removed from a callback, as
     // `msg_start` may have invoked a redraw.
@@ -63,7 +63,7 @@ pub(crate) unsafe fn list_func_head(
     };
     unsafe { msg_puts(intro) };
     unsafe { msg_puts(printable_func_name(func)) };
-    unsafe { msg_putchar(b'(' as c_int) };
+    msg_putchar(b'(' as c_int);
 
     let args = ga_strings(&f.uf_args);
     let defaults = ga_strings(&f.uf_def_args);
@@ -88,7 +88,7 @@ pub(crate) unsafe fn list_func_head(
         }
         unsafe { msg_puts(c"...".as_ptr()) };
     }
-    unsafe { msg_putchar(b')' as c_int) };
+    msg_putchar(b')' as c_int);
 
     for (flag, text) in [
         (FuncFlags::ABORT, c" abort"),
@@ -325,7 +325,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                         }
                         if !ui_has(kUICmdline) {
                             // Don't overwrite the function name.
-                            unsafe { msg_putchar(b'\n' as c_int) };
+                            msg_putchar(b'\n' as c_int);
                         }
                         cmdline_row.set(msg_row.get());
                     }

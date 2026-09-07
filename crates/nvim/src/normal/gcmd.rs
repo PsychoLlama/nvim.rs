@@ -442,7 +442,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             }
         }
         // `g<`: show the previous message screen again.
-        Ok(b'<') => unsafe { show_sb_text() },
+        Ok(b'<') => show_sb_text(),
         // `gg`: to the first line, or the count'th.
         Ok(b'g') => {
             ca.arg = 0;

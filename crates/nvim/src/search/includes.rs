@@ -412,7 +412,7 @@ unsafe fn handle_include(
         && let Some(matched) = unsafe { walk.files.already_searched(name.as_ptr()) }
     {
         if kind != CHECK_PATH && action == ACTION_SHOW_ALL && matched {
-            unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
+            msg_putchar('\n' as c_int); // cursor below the last one
             if !got_int.get() {
                 // Don't display if 'q' was typed at the
                 // "--more--" message.
@@ -478,7 +478,7 @@ unsafe fn show_include_name(
     already_searched: bool,
 ) {
     if walk.did_show {
-        unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
+        msg_putchar('\n' as c_int); // cursor below the last one
     } else {
         gotocmdline(true); // cursor at the status line
         unsafe { msg_puts_title(gettext(c"--- Included files ").as_ptr()) };
@@ -692,7 +692,7 @@ unsafe fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     }
     if walk.curr_fname != walk.prev_fname {
         if walk.did_show {
-            unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
+            msg_putchar('\n' as c_int); // cursor below the last one
         }
         if !got_int.get() {
             // Don't display if 'q' was typed at the "--more--"
@@ -945,6 +945,6 @@ pub unsafe fn find_pattern_in_path(
         }
     }
     if action == ACTION_SHOW || action == ACTION_SHOW_ALL {
-        unsafe { msg_end() };
+        msg_end();
     }
 }

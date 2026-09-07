@@ -148,7 +148,7 @@ impl WriteError {
     }
 
     /// Report the error, against the already-quoted file name in `fname`.
-    pub(crate) unsafe fn emit(&self, fname: &[::core::ffi::c_char; IOSIZE as usize]) {
+    pub(crate) fn emit(&self, fname: &[::core::ffi::c_char; IOSIZE as usize]) {
         let msg = self.msg.as_ptr();
         let iobuff = fname.as_ptr().cast_mut();
         match (self.num, self.arg) {
@@ -183,7 +183,7 @@ impl WriteError {
 ///
 /// Upstream allocates 300 bytes for this; a stack buffer plus an owned copy
 /// of what actually landed in it does the same job.
-pub(crate) unsafe fn conversion_failed(lnum: LineNr) -> WriteError {
+pub(crate) fn conversion_failed(lnum: LineNr) -> WriteError {
     if lnum == 0 {
         return WriteError::plain(
             c"E513: Write error, conversion failed (make 'fenc' empty to override)",
@@ -275,6 +275,13 @@ impl WriteRequest {
 /// This function must NOT use `NameBuff`: `autowrite()` calls it.
 ///
 /// `args` may be null; it carries a forced `'ff'`/`'fenc'`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
+/// `args` must point at the command's `ExArg`. `req` must be an initialized
+/// `WriteRequest` whose pointer fields point at live data for the call.
 pub unsafe fn buf_write(
     buffer: Buf,
     fname: *mut ::core::ffi::c_char,
@@ -511,7 +518,7 @@ pub unsafe fn buf_write(
                     && !(exiting.get() && !backup.path.is_null())
                 {
                     let fsync = if b.b_p_fs >= 0 { b.b_p_fs } else { p_fs.get() };
-                    unsafe { ml_preserve(buf, false, fsync != 0) };
+                    ml_preserve(buf, false, fsync != 0);
                     if got_int.get() {
                         err = Some(unsafe { WriteError::shared(e_interr.as_ptr(), 0) });
                         break 'restore_backup;
@@ -544,7 +551,7 @@ pub unsafe fn buf_write(
                         } else {
                             4 // FIO_UCS4
                         };
-                        if !unsafe { writer.reserve_conv_buf(mult) } {
+                        if !writer.reserve_conv_buf(mult) {
                             end = 0;
                         }
                     }
@@ -553,7 +560,7 @@ pub unsafe fn buf_write(
                     // Not one of ours: iconv, or failing that a
                     // 'charconvert' pass over a temp file afterwards.
                     if unsafe { writer.open_iconv(fenc) } {
-                        if !unsafe { writer.reserve_conv_buf(ICONV_MULT as usize) } {
+                        if !writer.reserve_conv_buf(ICONV_MULT as usize) {
                             end = 0;
                         }
                     } else if unsafe { *p_ccv.get() } != 0 {
@@ -623,7 +630,7 @@ pub unsafe fn buf_write(
                         && unsafe { writer.stage_bom(fenc) } > 0
                     {
                         writer.flags = FIO_NOCONVERT | wb_flags; // don't convert
-                        if !unsafe { writer.flush() } {
+                        if !writer.flush() {
                             end = 0;
                         } else {
                             // Upstream reads the staged length back
@@ -649,9 +656,7 @@ pub unsafe fn buf_write(
                     fileformat = unsafe { get_fileformat_force(b, args) };
                     let hash = write_undo_file.then_some(&mut sha_ctx);
                     let lines = (start, end);
-                    written = unsafe {
-                        write_lines(buf, lines, &mut writer, fileformat, write_bin, hash)
-                    };
+                    written = write_lines(buf, lines, &mut writer, fileformat, write_bin, hash);
                     written.nchars += bom_chars;
                     if written.failed {
                         end = 0;
@@ -693,7 +698,7 @@ pub unsafe fn buf_write(
                 if end == 0 {
                     if err.is_none() {
                         err = Some(if writer.conv_error {
-                            unsafe { conversion_failed(writer.conv_error_lnum) }
+                            conversion_failed(writer.conv_error_lnum)
                         } else if got_int.get() {
                             unsafe { WriteError::shared(e_interr.as_ptr(), 0) }
                         } else {
@@ -746,7 +751,7 @@ pub unsafe fn buf_write(
                 // timestamp (which also sets b_mtime) and reset the
                 // BufFlags::WRITE_MASK flags.
                 if overwriting {
-                    unsafe { ml_timestamp(buf) };
+                    ml_timestamp(buf);
                     if req.append {
                         b.b_flags.clear(BufFlags::NEW);
                     } else {
@@ -795,7 +800,7 @@ pub unsafe fn buf_write(
     if let Some(err) = &err {
         // -100 to save some space for a further error message.
         unsafe { add_quoted_fname(quoted.as_mut_ptr(), (IOSIZE - 100) as size_t, b, fname) };
-        unsafe { err.emit(&quoted) };
+        err.emit(&quoted);
         retval = Err(Failed);
         if end == 0 {
             let hl_id = HLF_E;

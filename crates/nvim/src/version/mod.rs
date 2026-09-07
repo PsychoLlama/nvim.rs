@@ -189,7 +189,7 @@ pub(crate) unsafe fn ex_version(args: *mut ExArg) {
     // Start the banner below the ":version" the user typed. The message
     // UI lays its own messages out, so it needs no help.
     if !ui_has(kUIMessages) {
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
     }
     unsafe { list_version() };
 }
@@ -207,7 +207,7 @@ unsafe fn version_msg_wrap(s: &CStr, wrap: bool) {
         && msg_col.get() + len >= Columns.get()
         && !s.to_bytes().starts_with(b"\n")
     {
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
     }
     if got_int.get() {
         return;
@@ -252,7 +252,7 @@ pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
         for (i, item) in items.iter().enumerate() {
             unsafe { version_msg_wrap(item, i as c_int == current) };
             if msg_col.get() > 0 && (i as c_int) < count - 1 {
-                unsafe { msg_putchar(b'\n' as c_int) };
+                msg_putchar(b'\n' as c_int);
             }
         }
         return;
@@ -273,27 +273,27 @@ pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
             // A hole in the last column: only the row break is owed.
             if msg_col.get() > 0 {
                 if cur_row < nrow {
-                    unsafe { msg_putchar(b'\n' as c_int) };
+                    msg_putchar(b'\n' as c_int);
                 }
                 cur_row += 1;
             }
             continue;
         };
         if idx == current {
-            unsafe { msg_putchar(b'[' as c_int) };
+            msg_putchar(b'[' as c_int);
         }
         unsafe { msg_puts(item.as_ptr()) };
         if idx == current {
-            unsafe { msg_putchar(b']' as c_int) };
+            msg_putchar(b']' as c_int);
         }
         if last_col {
             if msg_col.get() > 0 && cur_row < nrow {
-                unsafe { msg_putchar(b'\n' as c_int) };
+                msg_putchar(b'\n' as c_int);
             }
             cur_row += 1;
         } else {
             while msg_col.get() % width != 0 {
-                unsafe { msg_putchar(b' ' as c_int) };
+                msg_putchar(b' ' as c_int);
             }
         }
     }
@@ -332,7 +332,7 @@ pub(crate) unsafe fn list_version() {
     // SAFETY: the caller's obligation.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     unsafe { msg_puts(LONG_VERSION.as_ptr()) };
-    unsafe { msg_putchar(b'\n' as c_int) };
+    msg_putchar(b'\n' as c_int);
     // The Nvim release this port tracks -- the version every
     // compatibility surface (`has('nvim-…')`, `v:version`, the API
     // metadata) answers with.
@@ -341,13 +341,13 @@ pub(crate) unsafe fn list_version() {
     ))
     .expect("version numbers hold no NUL");
     unsafe { msg_puts(compat.as_ptr()) };
-    unsafe { msg_putchar(b'\n' as c_int) };
+    msg_putchar(b'\n' as c_int);
     unsafe { list_lua_version() };
 
     if p_verbose.get() > 0 as OptInt {
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
         unsafe { msg_puts(BUILD_LINE.as_ptr()) };
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
         unsafe { msg_puts(c"Vim versions: ".as_ptr()) };
         for (i, baseline) in VIM_BASELINES.iter().enumerate() {
             if i != 0 {
@@ -388,9 +388,7 @@ pub(crate) unsafe fn list_version() {
 /// # Safety
 /// The editor's globals must be live.
 pub(crate) unsafe fn may_show_intro() -> bool {
-    // SAFETY: the caller's obligation -- the globals are live, so each of
-    // these reads a live buffer or window.
-    let empty = unsafe { buf_is_empty(Buf::current()) };
+    let empty = buf_is_empty(Buf::current());
     empty
         && Buf::current().b_fname.is_null()
         && Buf::current().handle == 1

@@ -247,7 +247,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     // With 'rightleft' the list is drawn right to left.
     cmdmsg_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
 
-    unsafe { msg_start() };
+    msg_start();
     msg_row.set(Rows.get() - 1); // for when 'cmdheight' > 1
     lines_left.set(Rows.get()); // avoid the more-prompt
 
@@ -261,7 +261,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     unsafe { vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr) };
     unsafe { msg_puts(out) };
     unsafe { msg_clr_eos() };
-    unsafe { msg_putchar('\n' as c_int) };
+    msg_putchar('\n' as c_int);
 
     msg_scroll.set(1);
     let last = sug.su_ga.len() as c_int - 1;
@@ -270,7 +270,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     for (i, stp) in sug.su_ga.iter().enumerate() {
         unsafe { show_suggestion(i as c_int, stp, badlen, badptr) };
         if !ui_has(kUIMessages) || (i as c_int) < last {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
     }
 
@@ -368,7 +368,7 @@ unsafe fn show_score(stp: &Suggest) {
         // Mirror the numbers, but keep the leading space.
         unsafe { rl_mirror_ascii(out.add(1), ptr::null_mut()) };
     }
-    unsafe { msg_advance(30) };
+    msg_advance(30);
     unsafe { msg_puts(out) };
 }
 

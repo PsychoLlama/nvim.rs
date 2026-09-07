@@ -311,8 +311,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         // SAFETY: the changed-tick lives in `buf`'s own variable dictionary.
         let tick = buf_get_changedtick(buf);
         if cp_bufinfo.save_changedtick != tick {
-            // SAFETY: as above.
-            unsafe { buf_set_changedtick(buf, cp_bufinfo.save_changedtick) };
+            buf_set_changedtick(buf, cp_bufinfo.save_changedtick);
         }
 
         buf.b_p_ul = cp_bufinfo.save_b_p_ul;

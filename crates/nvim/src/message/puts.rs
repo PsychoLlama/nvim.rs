@@ -38,7 +38,7 @@ const EMPTY_ARRAY: Array = Array {
 ///
 /// Decides *where* the message goes: over the last one, or on a fresh line
 /// below it, scrolling if there is no room.
-pub unsafe fn msg_start() {
+pub fn msg_start() {
     let mut did_return = false;
     msg_row.set(msg_row.get().max(cmdline_row.get()));
 
@@ -76,7 +76,7 @@ pub unsafe fn msg_start() {
         if p_ch.get() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
             unsafe { msg_puts_display(c"\n".as_ptr(), 1, 0, false) };
         } else {
-            unsafe { msg_putchar(NL) };
+            msg_putchar(NL);
         }
         did_return = true;
         cmdline_row.set(msg_row.get());
@@ -104,11 +104,19 @@ pub fn msg_starthere() {
 }
 
 /// Show a string at `msg_row`/`msg_col`, advancing them past it.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string.
 pub unsafe fn msg_puts(s: *const c_char) {
     unsafe { msg_puts_hl(s, 0, false) }
 }
 
 /// [`msg_puts`] in the title highlight.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string.
 pub unsafe fn msg_puts_title(s: *const c_char) {
     // An `ext_messages` UI lays messages out itself, so a leading newline
     // is noise there.
@@ -117,6 +125,10 @@ pub unsafe fn msg_puts_title(s: *const c_char) {
 }
 
 /// [`msg_puts_len`] over a NUL-terminated string.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string.
 pub unsafe fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool) {
     unsafe { msg_puts_len(s, -1, hl_id, hist) }
 }
@@ -413,6 +425,10 @@ pub fn msg_use_printf() -> c_int {
 ///
 /// Also keeps `msg_col`/`msg_didout` roughly in step, so that the code that
 /// decides whether a newline is needed still works with no grid to measure.
+///
+/// # Safety
+///
+/// `str` must point at `maxlen` readable bytes.
 pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
     // `vim.on_print` takes the whole message instead, if it is set.
     if unsafe { &*on_print_cb() }.is_set() {
@@ -472,7 +488,7 @@ pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
 /// Finish putting a message on the screen, prompting if it did not fit.
 ///
 /// Answers false when [`wait_return`] was called.
-pub unsafe fn msg_end() -> bool {
+pub fn msg_end() -> bool {
     // A message larger than the window, or one that ran into the ruler,
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
@@ -501,7 +517,7 @@ pub fn msg_check() {
 }
 
 /// Pad with spaces up to column `col`.
-pub unsafe fn msg_advance(col: c_int) {
+pub fn msg_advance(col: c_int) {
     if msg_silent.get() != 0 {
         // Nothing to advance to; keep the column for redirection, which
         // may fill it up later.
@@ -510,6 +526,6 @@ pub unsafe fn msg_advance(col: c_int) {
     }
     let col = col.min(Columns.get() - 1); // not enough room
     while msg_col.get() < col {
-        unsafe { msg_putchar(b' ' as c_int) };
+        msg_putchar(b' ' as c_int);
     }
 }

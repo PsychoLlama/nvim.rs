@@ -556,7 +556,7 @@ unsafe fn show_one(
     // SAFETY: `curwin`/`curbuf` are live and the option table is a plain
     // array.
     if *did_show {
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
     } else {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         gotocmdline(true);
@@ -646,7 +646,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
     if silent_mode.get() && did_show {
         silent_mode.set(false);
         info_message.set(true);
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         silent_mode.set(true);
         info_message.set(false);
     }

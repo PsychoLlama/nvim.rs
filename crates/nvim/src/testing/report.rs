@@ -66,8 +66,7 @@ pub(super) fn sourcing_lnum() -> LineNr {
 pub(super) unsafe fn prepare_assert_error() -> Vec<u8> {
     let mut ga = Vec::<u8>::new();
     let gap = &mut ga;
-    // SAFETY: the `estack_sfile` allocation, freed here.
-    let sname = unsafe { estack_sfile(ESTACK_NONE) };
+    let sname = estack_sfile(ESTACK_NONE);
     let lnum = sourcing_lnum();
     if !sname.is_null() {
         // SAFETY: `estack_sfile` answers a NUL-terminated name.

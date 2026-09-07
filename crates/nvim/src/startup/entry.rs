@@ -167,7 +167,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
         c"nvim".as_ptr()
     };
     unsafe { init_path(exename) };
-    unsafe { runtime_init() };
+    runtime_init();
     highlight_init();
     time_msg_at(c"early init");
 
@@ -397,7 +397,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber);
-    unsafe { load_plugins() };
+    load_plugins();
     unsafe { set_window_layout(&raw mut params) };
 
     if recoverymode.get() && fname.is_null() {
@@ -520,7 +520,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let lua_ok = unsafe { nlua_exec_file(params.luaf) };
         time_msg_at(c"executing Lua -l script");
         if msg_didout.get() {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
             msg_didout.set(false);
         }
         getout(if lua_ok { 0 } else { 1 });

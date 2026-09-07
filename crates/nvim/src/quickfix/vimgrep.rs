@@ -188,8 +188,7 @@ unsafe fn compile_pattern(spat: *mut c_char) -> *mut RegProg {
 ///
 /// `fname` must be NUL-terminated.
 unsafe fn display_fname(fname: *mut c_char) {
-    // SAFETY: forwarded from the caller.
-    unsafe { msg_start() };
+    msg_start();
     let truncated = unsafe { msg_strtrunc(fname, 1) };
     if truncated.is_null() {
         unsafe { msg_outtrans(fname, 0, false) };
@@ -268,7 +267,6 @@ unsafe fn match_buflines(
     search: &mut Search,
     duplicate_name: bool,
 ) -> bool {
-    // SAFETY: forwarded from the caller.
     let bufnum = if duplicate_name {
         0
     } else {
@@ -403,7 +401,6 @@ struct Outcome {
 ///
 /// `buffer` must be a live buffer.
 unsafe fn existing_swapfile(buffer: Buf) -> bool {
-    // SAFETY: forwarded from the caller.
     if buffer.b_ml.ml_mfp.is_null() {
         return false;
     }
@@ -589,7 +586,6 @@ unsafe fn keep_or_drop_dummy(
 ///
 /// `qi` must be a live stack.
 unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
-    // SAFETY: forwarded from the caller.
     let buf = Buf::current_raw();
     unsafe { qf_jump(qi, 0, 0, forceit) };
     if !ptr::eq(buf, Buf::current_raw()) {
@@ -621,7 +617,6 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
 pub unsafe fn ex_vimgrep(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
-    // SAFETY: forwarded from the caller.
     if !check_can_set_curbuf_forceit(args.forceit) {
         return;
     }

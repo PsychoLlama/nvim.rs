@@ -143,7 +143,7 @@ pub(crate) fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int
     cc.cmdpos = 0;
 
     cc.last_colors = ColoredCmdline::NONE;
-    unsafe { sb_text_start_cmdline() };
+    sb_text_start_cmdline();
 
     // Autoindent for :insert and :append.
     if firstc <= 0 {
@@ -332,7 +332,7 @@ pub(crate) fn command_line_enter(
 
             if err.is_set() {
                 if !ui_has(kUIMessages) {
-                    unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                    msg_putchar('\n' as ::core::ffi::c_int);
                 }
                 msg_scroll.set(1);
                 unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
@@ -489,7 +489,7 @@ pub(crate) fn command_line_enter(
 
         if err.is_set() {
             if !ui_has(kUIMessages) {
-                unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                msg_putchar('\n' as ::core::ffi::c_int);
             }
             unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
             did_emsg.set(0);

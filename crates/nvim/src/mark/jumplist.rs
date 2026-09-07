@@ -374,7 +374,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
             if name.is_null() || unsafe { message_filtered(name) } {
                 unsafe { xfree(name.cast()) };
             } else {
-                unsafe { msg_putchar('\n' as c_int) };
+                msg_putchar('\n' as c_int);
                 if got_int.get() {
                     unsafe { xfree(name.cast()) };
                     break;
@@ -440,8 +440,7 @@ pub unsafe fn ex_changes(_args: *mut ExArg) {
     while i < buf.b_changelistlen && !got_int.get() {
         let change = buf.change(i);
         if change.lnum() != 0 {
-            // SAFETY: the editor's globals are live.
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
             if got_int.get() {
                 break;
             }

@@ -71,6 +71,10 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
 }
 
 /// `:runtime[!] [where] {name}`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_runtime(args: *mut ExArg) {
     // SAFETY: `args` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
@@ -92,6 +96,11 @@ pub unsafe fn ex_runtime(args: *mut ExArg) {
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub unsafe fn set_context_in_runtime_cmd(expand: *mut Expand, arg: *const c_char) {
     // SAFETY: `arg` is the NUL-terminated command line tail and `expand` is the
     // live expansion context.
@@ -709,7 +718,6 @@ pub unsafe fn do_in_path_and_pp(
 
     if wants_more(done) && flags.has(RuntimeOpts::OPT) {
         for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-            // SAFETY: as above.
             done |=
                 unsafe { do_in_path(p_pp.get(), prefix.as_ptr(), name, flags, callback, cookie) };
             if !wants_more(done) {

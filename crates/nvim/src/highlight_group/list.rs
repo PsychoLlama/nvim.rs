@@ -188,7 +188,6 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
         (ListValue::Number(entry.blend + 1), c"blend"),
     ];
 
-    // SAFETY: main-thread message calls.
     let mut didh = false;
     for (value, name) in pairs {
         didh = unsafe { list_arg(id, didh, value, name) };
@@ -198,7 +197,7 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
         unsafe { syn_list_header(didh, 0, id, true) };
         didh = true;
         unsafe { msg_puts_hl(c"links to".as_ptr(), HLF_D, false) };
-        unsafe { msg_putchar(' ' as c_int) };
+        msg_putchar(' ' as c_int);
         unsafe { msg_outtrans(group(entry.link).name.as_ptr(), 0, false) };
     }
 
@@ -232,7 +231,7 @@ pub(crate) unsafe fn syn_list_header(
     // SAFETY: main-thread message calls.
     if !did_header {
         if !ui_has(kUIMessages) || msg_col.get() > 0 {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         if got_int.get() {
             return true;
@@ -241,10 +240,10 @@ pub(crate) unsafe fn syn_list_header(
         msg_col.set(name_col);
         endcol = 15;
     } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
-        unsafe { msg_putchar(' ' as c_int) };
+        msg_putchar(' ' as c_int);
         adjust = false;
     } else if msg_col.get() + outlen + 1 >= Columns.get() || force_newline {
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         if got_int.get() {
             return true;
         }
@@ -258,15 +257,15 @@ pub(crate) unsafe fn syn_list_header(
             // Output at least one space.
             endcol = msg_col.get() + 1;
         }
-        unsafe { msg_advance(endcol) };
+        msg_advance(endcol);
     }
 
     if !did_header {
         if endcol == Columns.get() - 1 && endcol <= name_col {
-            unsafe { msg_putchar(' ' as c_int) };
+            msg_putchar(' ' as c_int);
         }
         unsafe { msg_puts_hl(c"xxx".as_ptr(), id, false) };
-        unsafe { msg_putchar(' ' as c_int) };
+        msg_putchar(' ' as c_int);
     }
 
     newline

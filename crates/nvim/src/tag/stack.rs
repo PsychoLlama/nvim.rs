@@ -239,7 +239,7 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
             // The file the jump came from is gone.
             continue;
         }
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         // Formatted rather than built up: a tag name longer than the
         // buffer is truncated, as upstream truncates it.
         let str_m = IOSIZE as size_t;

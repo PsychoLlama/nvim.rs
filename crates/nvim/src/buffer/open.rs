@@ -112,8 +112,7 @@ fn collect_local_additions() {
 }
 
 fn empty_buffer(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { buf_is_empty(buffer) }
+    buf_is_empty(buffer)
 }
 
 /// `b:changedtick`.

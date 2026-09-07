@@ -300,7 +300,7 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
         p_more.set(0);
     }
     if msg_didout.get() {
-        unsafe { msg_putchar(c_int::from(b'\n')) }; // start on a new line
+        msg_putchar(c_int::from(b'\n')); // start on a new line
     }
     p_more.set(0); // don't want to see this message when scrolling back
     if got_int.get() {

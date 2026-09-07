@@ -64,6 +64,11 @@ pub(crate) struct Backup {
 ///
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
+///
+/// # Safety
+///
+/// `file_info` must point at an initialized `FileInfo`, unaliased for the
+/// call.
 unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
     if buffer.b_mtime_read == 0
         || !time_differs(
@@ -89,6 +94,12 @@ unsafe fn check_mtime(buffer: Buf, file_info: *mut FileInfo) -> bool {
 }
 
 /// The Unix half of the pre-flight: stat the target and classify it.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call.
 unsafe fn get_fileinfo_os(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
@@ -124,6 +135,12 @@ unsafe fn get_fileinfo_os(
 ///
 /// `Err(None)` is the user declining the "file has changed since reading it"
 /// prompt — a failure with nothing left to report.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call.
 pub(crate) unsafe fn get_fileinfo(
     buffer: Buf,
     fname: *mut c_char,
@@ -157,6 +174,12 @@ pub(crate) unsafe fn get_fileinfo(
 ///
 /// `dirp` is advanced past the entry used, so a caller walks the option by
 /// calling this until `**dirp` is NUL. The result is allocated.
+///
+/// # Safety
+///
+/// `fname` and `backup_ext` must point at NUL-terminated strings, and `dirp`
+/// at a cursor standing inside a NUL-terminated 'backupdir' list — it is read
+/// through and left past the entry used.
 pub(crate) unsafe fn buf_get_backup_name(
     fname: *mut c_char,
     dirp: &mut *mut c_char,
@@ -213,6 +236,12 @@ pub(crate) unsafe fn buf_get_backup_name(
 ///
 /// A rename is cheaper, but it changes the original's inode, so it is wrong
 /// for a file that is a link or that we could not recreate in place.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call.
 unsafe fn want_backup_copy(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
@@ -278,6 +307,12 @@ unsafe fn want_backup_copy(
 ///
 /// Renaming the original out of the way is exactly how that happens, so this
 /// overrides the choice [`want_backup_copy`] made.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call.
 unsafe fn breaks_link(fname: *mut c_char, file_info_old: *mut FileInfo, bkc: c_uint) -> bool {
     let mut file_info = FileInfo::default();
     let link_ok = unsafe { os_fileinfo_link(fname, &raw mut file_info) };
@@ -298,6 +333,12 @@ unsafe fn breaks_link(fname: *mut c_char, file_info_old: *mut FileInfo, bkc: c_u
 ///
 /// `stat` receives the stat of the last name tried, because the copy path
 /// reads it afterwards; `None` tests existence only.
+///
+/// # Safety
+///
+/// `backup` must point at a NUL-terminated string, unaliased for the call.
+/// `backup_ext` must point at a NUL-terminated string, unaliased for the
+/// call.
 unsafe fn step_backup_name(
     backup: *mut c_char,
     backup_ext: *mut c_char,
@@ -326,6 +367,13 @@ unsafe fn step_backup_name(
 ///
 /// The backup may come back empty: with `!` a failure to make one is not
 /// worth stopping the write for.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call. `acl` must be an initialized `VimAcl` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn buf_write_make_backup(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
@@ -364,6 +412,14 @@ pub(crate) unsafe fn buf_write_make_backup(
 /// plain `open(..., O_CREAT)`: the directory may not be writable, the file
 /// may be a symbolic link, it may belong to another user. So the existing
 /// file is truncated and reused, and the backup is a copy.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call. `acl` must be an initialized `VimAcl` whose pointer fields point at
+/// live data for the call. `backup_ext` must point at a NUL-terminated
+/// string, unaliased for the call.
 unsafe fn backup_by_copy(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
@@ -451,6 +507,12 @@ unsafe fn backup_by_copy(
 ///
 /// For safety the backup is not removed until the write has finished
 /// successfully — and if 'backup' is set, not even then.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `backup_ext` must point at a NUL-terminated string, unaliased for the
+/// call.
 unsafe fn backup_by_rename(
     fname: *mut c_char,
     target: &TargetFile,
@@ -499,6 +561,11 @@ unsafe fn backup_by_rename(
 /// The backup is not needed then, so it is thrown away — but if the original
 /// was moved or removed to make it, it goes back first. Returns false when
 /// the original is gone anyway, which makes the write a total loss.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `wfname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn restore_backup(
     backup: &Backup,
     fname: *mut c_char,
@@ -529,6 +596,10 @@ pub(crate) unsafe fn restore_backup(
 /// The new file is probably corrupt, and writing again would otherwise make
 /// a backup *of the corrupt file* and lose the original for good. True when
 /// the original is back, which spares the user the extra warning.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) -> bool {
     if backup.path.is_null() {
         return false;
@@ -550,6 +621,10 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
 ///
 /// The backup already *is* the original, so it only has to be renamed. With
 /// no backup — the file did not exist — an empty file records that.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn apply_patchmode(
     fname: *mut c_char,
     backup: &mut Backup,
@@ -600,6 +675,14 @@ pub(crate) unsafe fn apply_patchmode(
 /// given.
 ///
 /// `None` means giving up, with the reason in `err`.
+///
+/// # Safety
+///
+/// `wfname` must point at a NUL-terminated string, unaliased for the call.
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_info_old` must point at an initialized `FileInfo`, unaliased for the
+/// call. `req` must be an initialized `WriteRequest` whose pointer fields
+/// point at live data for the call.
 pub(crate) unsafe fn open_write_file(
     wfname: *mut c_char,
     fname: *mut c_char,
@@ -673,6 +756,13 @@ pub(crate) unsafe fn open_write_file(
 
 /// Sync and close the file just written, and give it the original's
 /// ownership, permissions and ACL.
+///
+/// # Safety
+///
+/// `wfname` must point at a NUL-terminated string, unaliased for the call.
+/// `acl` must be an initialized `VimAcl` whose pointer fields point at live
+/// data for the call. `file_info_old` must point at an initialized
+/// `FileInfo`, unaliased for the call.
 pub(crate) unsafe fn finish_write(
     buffer: Buf,
     fd: c_int,

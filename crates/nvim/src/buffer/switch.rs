@@ -140,8 +140,7 @@ fn is_quickfix(buffer: Buf) -> bool {
     buf_is_quickfix(Some(buffer))
 }
 fn recover_swapfile() {
-    // SAFETY: reads the current buffer; `false` is upstream's `checkext`.
-    unsafe { ml_recover(false) };
+    ml_recover(false);
 }
 fn put_message(msg: &CStr) {
     // SAFETY: a NUL-terminated literal.

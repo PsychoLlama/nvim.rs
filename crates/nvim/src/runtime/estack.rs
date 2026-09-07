@@ -67,6 +67,10 @@ pub fn estack_push(es_type: EStackType, name: *mut c_char, lnum: LineNr) {
 }
 
 /// Add a user function to the execution stack.
+///
+/// # Safety
+///
+/// `ufunc` must point at a live `UserFunc`, unaliased for the call.
 pub unsafe fn estack_push_ufunc(ufunc: *mut UserFunc, lnum: LineNr) {
     // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
     // `<SNR>`-expanded name when one was built; otherwise the name is the
@@ -166,7 +170,7 @@ pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
 ///
 /// `which` is `ESTACK_SFILE` for `<sfile>`, `ESTACK_STACK` for `<stack>` or
 /// `ESTACK_SCRIPT` for `<script>`.
-pub unsafe fn estack_sfile(which: EStackArg) -> *mut c_char {
+pub fn estack_sfile(which: EStackArg) -> *mut c_char {
     // Nothing reached from inside the borrow pushes onto the stack, which is
     // what makes holding it across these calls sound -- and `with` is now the
     // thing that would catch it if that ever stopped being true.
@@ -285,10 +289,18 @@ unsafe fn render_stack(stack: &[EStack], which: EStackArg) -> *mut c_char {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
+///
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call. `val` must
+/// point at a NUL-terminated string.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
@@ -297,6 +309,13 @@ unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 ///
 /// Exactly one of `func` (a user function) and `event` (an autocommand event
 /// name) is set; a script frame has neither.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `func` must point
+/// at a live `UserFunc`, unaliased for the call. `event` must point at a NUL-
+/// terminated string. `filepath` must point at a NUL-terminated string,
+/// unaliased for the call.
 unsafe fn stacktrace_push_item(
     l: *mut List,
     func: *mut UserFunc,
@@ -326,7 +345,7 @@ unsafe fn stacktrace_push_item(
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
 /// outermost first.
-pub unsafe fn stacktrace_create() -> *mut List {
+pub fn stacktrace_create() -> *mut List {
     // A copy of the stack, because building the dicts below runs arbitrary
     // allocation and it is not worth holding the cell's borrow across it.
     let stack = exestack.with(|stack| stack.clone());
@@ -395,12 +414,15 @@ unsafe fn script_path(sctx: ScriptCtx) -> CString {
     if sctx.sc_sid <= 0 {
         return c"".to_owned();
     }
-    // SAFETY: a positive `sc_sid` indexes `script_items`; `false` asks for
-    // the registry's own spelling, unfolded.
-    unsafe { get_scriptname(sctx, false) }
+    get_scriptname(sctx, false)
 }
 
 /// `getstacktrace()` function
+///
+/// # Safety
+///
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_getstacktrace(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the caller's return slot.
     unsafe { tv_list_set_ret(result, stacktrace_create()) };

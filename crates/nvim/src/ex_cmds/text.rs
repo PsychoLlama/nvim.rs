@@ -60,8 +60,7 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
     // The line being described. Upstream assembles it in `IObuff`, which
     // `msg_multiline` reads again as it re-enters the message machinery.
     let mut line = [0 as c_char; IOSIZE as usize];
-    // SAFETY: message state, main thread.
-    unsafe { msg_sb_eol() };
+    msg_sb_eol();
     say::start();
 
     // SAFETY: `data` is a live, NUL-terminated line position.

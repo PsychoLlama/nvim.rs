@@ -60,14 +60,14 @@ pub(crate) unsafe fn showmatches_oneline(
             // SAFETY: the tag file name follows the tag's own NUL, which is
             // how `ExpandContext::TagsListFiles` packs the two.
             let p = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
-            unsafe { msg_advance(maxlen + 1) };
+            msg_advance(maxlen + 1);
             unsafe { msg_puts(p) };
-            unsafe { msg_advance(maxlen + 3) };
+            msg_advance(maxlen + 3);
             unsafe { msg_outtrans_long(p.add(2), HLF_D) };
             break;
         }
         for _ in 0..(maxlen - lastlen).max(0) {
-            unsafe { msg_putchar(' ' as c_int) };
+            msg_putchar(' ' as c_int);
         }
         let isdir;
         let p;
@@ -120,7 +120,7 @@ pub(crate) unsafe fn showmatches_oneline(
     if msg_col.get() > 0 {
         // When not wrapped around.
         unsafe { msg_clr_eos() };
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
     }
 }
 
@@ -190,15 +190,15 @@ pub unsafe fn showmatches(
 
     if display_list {
         msg_didany.set(false); // lines_left will be set
-        unsafe { msg_start() }; // prepare for paging
+        msg_start(); // prepare for paging
         if !ui_has(kUIMessages) {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         unsafe { ui_flush() };
         cmdline_row.set(msg_row.get());
         msg_didany.set(false); // lines_left will be set again
         unsafe { msg_ext_set_kind(c"wildlist".as_ptr()) };
-        unsafe { msg_start() }; // prepare for paging
+        msg_start(); // prepare for paging
     }
 
     if got_int.get() {
@@ -261,7 +261,7 @@ pub unsafe fn showmatches(
         if expand.xp_context == ExpandContext::TagsListFiles {
             unsafe { msg_puts_hl(gettext(c"tagname").as_ptr(), HLF_T, false) };
             unsafe { msg_clr_eos() };
-            unsafe { msg_advance(maxlen - 3) };
+            msg_advance(maxlen - 3);
             unsafe { msg_puts_hl(gettext(c" kind file\n").as_ptr(), HLF_T, false) };
         }
 

@@ -115,14 +115,17 @@ fn special_name(buffer: Buf) -> *mut c_char {
 }
 
 fn remembered_lnum(buffer: Buf) -> LineNr {
-    // SAFETY: the answer is a live mark.
-    unsafe { buflist_findlnum(buffer) }
+    buflist_findlnum(buffer)
 }
 
 // ---------------------------------------------------------------------------
 // :ls / :buffers
 
 /// List the buffers, one line each, as `:ls` and `:files` do.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn buflist_list(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
     let arg = unsafe { (*args).arg };
@@ -274,8 +277,7 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     }
 
     if !ui_has(kUIMessages) || msg_col.get() > 0 {
-        // SAFETY: writes one character to the message area.
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
     }
 
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
@@ -371,7 +373,7 @@ fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: LineNr) {
 
 /// The message CTRL-G and `:file` print: the name, the flags, where the
 /// cursor is and how far through the file that is.
-pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
+pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let mut out = Msg::new();
     let buf = current_buf();
 
@@ -460,8 +462,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     if dont_truncate {
         // Temporarily set msg_scroll to keep the message from being
         // truncated; msg_start() first, to get it in the right place.
-        // SAFETY: starts a message.
-        unsafe { msg_start() };
+        msg_start();
         let n = msg_scroll.get();
         msg_scroll.set(1);
         msg(out.as_cstr(), 0);
@@ -584,6 +585,10 @@ impl Msg {
 
 /// The column indicator: `col` alone when the virtual column agrees with it,
 /// `col-vcol` when it does not.
+///
+/// # Safety
+///
+/// `buf` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_int) -> c_int {
     if col == vcol {
         // SAFETY: the caller's buffer, and a format taking one number.
@@ -598,7 +603,7 @@ pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_in
 // 'title' and 'icon'
 
 /// Build `'title'` and `'icon'` and, when either changed, tell the UI.
-pub unsafe fn maketitle() {
+pub fn maketitle() {
     let mut scratch: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
 
     if !redrawing() {
@@ -655,8 +660,7 @@ pub unsafe fn maketitle() {
     mustset |= value_change(icon_str, &lasticon);
 
     if mustset {
-        // SAFETY: sends the two titles to the UI.
-        unsafe { resettitle() };
+        resettitle();
     }
 }
 
@@ -720,8 +724,7 @@ fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
     unsafe { xfree(old.cast::<c_void>()) };
     if str.is_null() {
         last.set(ptr::null_mut());
-        // SAFETY: sends the two titles to the UI.
-        unsafe { resettitle() };
+        resettitle();
         return false;
     }
     // SAFETY: a NUL-terminated title.
@@ -730,7 +733,7 @@ fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
 }
 
 /// Send the current window title and icon text to the UI.
-pub unsafe fn resettitle() {
+pub fn resettitle() {
     // SAFETY: two NUL-terminated titles, or null, which `cstr_as_string`
     // answers the empty string for.
     unsafe { ui_call_set_icon(cstr_as_string(lasticon.get())) };
@@ -743,6 +746,10 @@ pub unsafe fn resettitle() {
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
 /// into `buf`.
+///
+/// # Safety
+///
+/// `buf` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int {
     // At least three characters are needed to write anything.
     if buflen < 3 {
@@ -787,6 +794,10 @@ pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int
 
 /// Append "(2 of 8)" to `buf`, when more than one file is being edited.
 /// Answers how many characters that took.
+///
+/// # Safety
+///
+/// `buf` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn append_arg_number(window: Win, buf: *mut c_char, buflen: size_t) -> c_int {
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.

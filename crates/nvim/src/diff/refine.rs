@@ -56,6 +56,10 @@ enum Gap {
 /// alone.  `entry_back` is how far back from the *next* block's first line the
 /// mode's first line-map entry sits: `inline:char` compares the last token of
 /// the left block, `inline:word` the one before it.
+///
+/// # Safety
+///
+/// `dp_orig` must point at a live diff block, unaliased for the call.
 unsafe fn merge_gaps(
     dp_orig: *mut DiffBlock,
     linemap: &LineMap,
@@ -121,6 +125,10 @@ unsafe fn merge_gaps(
 /// Repeated until nothing more merges, because merging two blocks can make
 /// the next gap worth swallowing too -- but at most four passes, and only
 /// while the last pass both merged something and left something alone.
+///
+/// # Safety
+///
+/// `dp_orig` must point at a live diff block, unaliased for the call.
 unsafe fn refine_inline_char(dp_orig: *mut DiffBlock, linemap: &LineMap, idx1: usize) {
     for _ in 0..4 {
         let (merged, unmerged) = unsafe {
@@ -153,6 +161,10 @@ unsafe fn refine_inline_char(dp_orig: *mut DiffBlock, linemap: &LineMap, idx1: u
 ///
 /// Always four passes: unlike `inline:char` there is no cheap test for
 /// "nothing left to do", and merging can expose a new short gap.
+///
+/// # Safety
+///
+/// `dp_orig` must point at a live diff block, unaliased for the call.
 unsafe fn refine_inline_word(
     dp_orig: *mut DiffBlock,
     linemap: &LineMap,
@@ -225,6 +237,11 @@ unsafe fn refine_inline_word(
 /// The tokens are NL-separated because that is what xdiff reads; a real NL in
 /// the text (which cannot occur in a line, but `ml_get_buf` can answer one for
 /// a NUL byte) is written as the NUL it stands for.
+///
+/// # Safety
+///
+/// `chartab` must point at the buffer's `b_chartab`, the 256-bit word table
+/// `buf_init_chartab` filled in — it is indexed by every byte of `line`.
 unsafe fn tokenize_line(
     line: &CStr,
     off: c_int,
@@ -393,6 +410,10 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 /// diff is built by pointing `tp_first_diff` at a fresh list and calling the
 /// ordinary `diff_file_internal`/`diff_read` pair, so the real block list and
 /// buffer table are saved and put back at the end.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     let save_diff_algorithm = diff_algorithm.get();
     let mut dio = DiffIo {

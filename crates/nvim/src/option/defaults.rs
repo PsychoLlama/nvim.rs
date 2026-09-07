@@ -565,7 +565,7 @@ pub(crate) fn set_init_3() {
     // An empty buffer has no line endings to have detected a format
     // from, so it takes the first of 'fileformats' — but only if the
     // user gave that option a value; otherwise its own default stands.
-    if unsafe { buf_is_empty(Buf::current()) } && option_was_set(kOptFileformats) {
+    if buf_is_empty(Buf::current()) && option_was_set(kOptFileformats) {
         set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
     }
     set_title_defaults();

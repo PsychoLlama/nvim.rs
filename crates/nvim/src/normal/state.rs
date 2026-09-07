@@ -556,13 +556,13 @@ fn normal_redraw() {
         unsafe { xfree(copy.cast::<c_void>()) };
     }
     if need_fileinfo.get() && !shortmess(ShmFlag::FILEINFO) {
-        unsafe { fileinfo(0, 1, false) };
+        fileinfo(0, 1, false);
         need_fileinfo.set(false);
     }
     emsg_on_display.set(false);
     did_emsg.set(0);
     msg_didany.set(false);
-    unsafe { may_clear_sb_text() };
+    may_clear_sb_text();
     unsafe { setcursor() };
 }
 

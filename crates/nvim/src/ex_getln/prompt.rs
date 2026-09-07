@@ -232,7 +232,7 @@ pub unsafe fn get_user_input(
         let lastnl = unsafe { strrchr(prompt, '\n' as ::core::ffi::c_int) };
         if !lastnl.is_null() {
             p = unsafe { lastnl.offset(1) };
-            unsafe { msg_start() };
+            msg_start();
             unsafe { msg_clr_eos() };
             unsafe { msg_puts_len(prompt, p.offset_from(prompt), get_echo_hl_id(), false) };
             msg_didout.set(false);

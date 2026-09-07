@@ -211,7 +211,7 @@ pub(crate) unsafe fn updatescript(c: c_int) {
         })
     {
         // Always fsync at idle (CursorHold).
-        unsafe { ml_sync_all(c_int::from(idle), 1, p_fs.get() != 0 || idle) };
+        ml_sync_all(c_int::from(idle), 1, p_fs.get() != 0 || idle);
         count.set(0);
     }
 }

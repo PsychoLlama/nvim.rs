@@ -613,7 +613,7 @@ pub unsafe fn eval_vars(
                         e_no_script_file_name_to_substitute_for_script.as_ptr(),
                     ),
                 };
-                result = unsafe { estack_sfile(which) };
+                result = estack_sfile(which);
                 if result.is_null() {
                     unsafe { *errormsg = gettext(msg as *const c_char) };
                     return ptr::null_mut();

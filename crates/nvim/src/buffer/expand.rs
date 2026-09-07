@@ -128,6 +128,12 @@ fn current_win() -> Win {
 
 /// Every buffer name matching `pat`, for command-line completion of
 /// `:buffer` and `:sbuffer`.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `num_file` must point at a writable `int` the caller owns. `file` must
+/// point at a writable `*mut *mut c_char` slot the caller owns for the call.
 pub unsafe fn expand_buf_names(
     pat: *mut c_char,
     num_file: *mut c_int,

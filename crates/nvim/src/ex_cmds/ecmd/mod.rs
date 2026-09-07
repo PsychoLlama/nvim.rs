@@ -292,12 +292,11 @@ pub(crate) unsafe fn do_ecmd(
         };
 
         // Re-editing a terminal buffer: skip most buffer re-initialization.
-        // SAFETY: `curbuf`/`curwin` are live.
         if !other_file && !Buf::current().terminal.is_null() {
             // Needed when called from do_argfile(); the title may show the
             // arg index, e.g. "(2 of 5)".
             check_arg_idx(Win::current());
-            unsafe { maketitle() };
+            maketitle();
             retval = Ok(());
             break 'theend;
         }
@@ -374,7 +373,7 @@ pub(crate) unsafe fn do_ecmd(
         } else if !Buf::current().b_help {
             // Don't make a buffer listed if it's a help buffer.  Useful when
             // using CTRL-O to go back to a help file.
-            unsafe { set_buflisted(1) };
+            set_buflisted(1);
         }
 
         // If autocommands change buffers under our fingers, forget about
@@ -701,7 +700,7 @@ unsafe fn enter_new_buffer(
 
     // Even when the cursor didn't move we need to recompute topline.
     changed_line_abv_curs();
-    unsafe { maketitle() };
+    maketitle();
 }
 
 /// Put the cursor where the caller, the autocommands or the buffer's last
@@ -759,8 +758,7 @@ unsafe fn report_file_info() {
     msg_scrolled_ign.set(true);
 
     if !shortmess(ShmFlag::FILEINFO) {
-        // SAFETY: as above.
-        unsafe { fileinfo(0, 1, false) };
+        fileinfo(0, 1, false);
     }
 
     msg_scrolled_ign.set(false);

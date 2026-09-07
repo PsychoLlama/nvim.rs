@@ -171,7 +171,7 @@ pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
         unsafe { may_trigger_modechanged() };
         unsafe { showmode() };
     } else if !check_clear_op(ca.op()) {
-        unsafe { fileinfo(ca.count0, 0, true) };
+        fileinfo(ca.count0, 0, true);
     }
 }
 
@@ -247,7 +247,7 @@ pub(crate) unsafe fn nv_hat(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op_quit(ca.op()) {
         let flags = GETF_SETMARK.cast_signed() | GETF_ALT.cast_signed();
-        let _ = unsafe { buflist_getfile(ca.count0, 0 as LineNr, flags, 0) };
+        let _ = buflist_getfile(ca.count0, 0 as LineNr, flags, 0);
     }
 }
 

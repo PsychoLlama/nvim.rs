@@ -52,8 +52,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
         // SAFETY: `curwin` is set from startup to exit.
         Win::current().w_cursor.lnum
     } else {
-        // SAFETY: the answer is a live mark.
-        unsafe { buflist_findlnum(buffer) }
+        buflist_findlnum(buffer)
     };
     nr(c"lnum", VarNumber::from(lnum));
     nr(c"linecount", VarNumber::from(buffer.line_count()));

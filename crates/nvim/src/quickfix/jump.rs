@@ -118,15 +118,13 @@ unsafe fn qf_jump_edit_buffer(
         match unsafe { escape_winfixbuf(qi.raw(), fnum, forceit, opened_window) } {
             None => return Jumped::Restore,
             Some(false) => false,
-            Some(true) => unsafe {
-                buflist_getfile(
-                    fnum,
-                    1,
-                    GETF_SETMARK as c_int | GETF_SWITCH as c_int,
-                    forceit,
-                )
-                .is_ok()
-            },
+            Some(true) => buflist_getfile(
+                fnum,
+                1,
+                GETF_SETMARK as c_int | GETF_SWITCH as c_int,
+                forceit,
+            )
+            .is_ok(),
         }
     };
 

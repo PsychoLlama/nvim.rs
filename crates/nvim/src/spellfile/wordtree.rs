@@ -489,7 +489,7 @@ pub(super) unsafe fn tree_add_word(
         spin.si_arena.block_count -= compress_inc.get();
         spin.si_compress_cnt = compress_added.get();
         if spin.si_verbose != 0 {
-            unsafe { msg_start() };
+            msg_start();
             unsafe { msg_puts(gettext(MSG_COMPRESSING).as_ptr()) };
             unsafe { msg_clr_eos() };
             msg_didout.set(false);

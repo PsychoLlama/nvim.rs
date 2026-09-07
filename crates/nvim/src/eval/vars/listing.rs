@@ -281,9 +281,9 @@ unsafe fn list_one_var_a(
     let is_first = unsafe { *first } != 0;
     if is_first {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        unsafe { msg_start() };
+        msg_start();
     } else {
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
     }
     // Not `msg()`, which would overwrite "v:statusmsg".
     if unsafe { *prefix } != NUL as c_char {
@@ -292,8 +292,8 @@ unsafe fn list_one_var_a(
     if !name.is_null() {
         unsafe { msg_puts_len(name, name_len, 0, false) };
     }
-    unsafe { msg_putchar(b' ' as c_int) };
-    unsafe { msg_advance(22) };
+    msg_putchar(b' ' as c_int);
+    msg_advance(22);
 
     // The sigil, and the bracket it stands in for.
     let sigil: u8 = match type_0 {
@@ -303,7 +303,7 @@ unsafe fn list_one_var_a(
         VAR_DICT => b'{',
         _ => b' ',
     };
-    unsafe { msg_putchar(sigil as c_int) };
+    msg_putchar(sigil as c_int);
     if (type_0 == VAR_LIST || type_0 == VAR_DICT) && unsafe { *string } == sigil as c_char {
         string = unsafe { string.add(1) };
     }

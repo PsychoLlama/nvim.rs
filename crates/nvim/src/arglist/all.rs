@@ -180,8 +180,7 @@ unsafe fn close_unused_window(
     buffer: Buf,
     wpnext: Option<Win>,
 ) -> Option<Win> {
-    // SAFETY: `buffer` is the window's own buffer.
-    let hide = unsafe { buf_hide(buffer) };
+    let hide = buf_hide(buffer);
     // SAFETY: as above.
     let changed = buf_is_changed(buffer);
     let nwindows = buffer.b_nwindows;
@@ -213,13 +212,7 @@ unsafe fn close_unused_window(
             return wpnext;
         }
     }
-    // SAFETY: `window` is live, and `wpnext` is re-validated because closing a
-    // window runs autocommands. Whether the buffer goes with the window is
-    // asked again here rather than reused from above: a successful
-    // `autowrite` leaves it unchanged, and then it is the close's to free.
-    // SAFETY: `buffer` is `window`'s buffer; a hidden or changed one is kept.
-    // SAFETY: `buffer` is `window`'s buffer; a hidden or changed one is kept.
-    let free_buf = unsafe { !buf_hide(buffer) } && !buf_is_changed(buffer);
+    let free_buf = !buf_hide(buffer) && !buf_is_changed(buffer);
     let wpnext_id = wpnext.map(Win::id);
     win_close(window, free_buf, false);
     if let Some(next) = wpnext_id.and_then(valid_win) {
@@ -367,7 +360,7 @@ unsafe fn open_window_for_arg(
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
     let buf = Win::current().buffer();
-    let hide = unsafe { buf_hide(buf) } || buf_is_changed(buf);
+    let hide = buf_hide(buf) || buf_is_changed(buf);
     let flags = EcmdFlags::HIDE.when(hide) | EcmdFlags::OLDBUF;
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
     let sfname = ptr::null_mut();
@@ -387,14 +380,11 @@ unsafe fn open_window_for_arg(
 unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     // ":tab drop file" should re-use an empty window, so that "--remote-tab"
     // does not leave an empty tab page when it runs locally.
-    // SAFETY: caller contract; curbuf is valid.
-    let tab_drop_empty_window = unsafe {
-        aall.keep_tabs
-            && buf_is_empty(Buf::current())
-            && Buf::current().b_nwindows == 1
-            && Buf::current().b_ffname.is_null()
-            && Buf::current().b_changed == 0
-    };
+    let tab_drop_empty_window = aall.keep_tabs
+        && buf_is_empty(Buf::current())
+        && Buf::current().b_nwindows == 1
+        && Buf::current().b_ffname.is_null()
+        && Buf::current().b_changed == 0;
     if tab_drop_empty_window {
         aall.use_firstwin = true;
     }

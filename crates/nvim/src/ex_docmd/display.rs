@@ -192,7 +192,7 @@ pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
     }
     let _ = update_screen();
     if need_maketitle.get() {
-        unsafe { maketitle() };
+        maketitle();
     }
     drop(lazyredraw_off);
     // The command line is clean again after a full redraw.

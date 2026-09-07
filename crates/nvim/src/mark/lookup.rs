@@ -431,7 +431,6 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
             return res | kMarkMoveFailed;
         }
     } else if flags as c_uint & kMarkContext as c_uint != 0 {
-        // SAFETY: the editor's globals are live.
         setpcmark();
     }
 
@@ -441,7 +440,6 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
     let prev_pos = win.w_cursor;
     win.w_cursor = pos;
     if flags as c_uint & kMarkBeginLine as c_uint != 0 {
-        // SAFETY: the editor's globals are live.
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
     if prev_pos.lnum != pos.lnum {
@@ -455,7 +453,6 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
         unsafe { mark_view_restore(fm) };
     }
     if res & (kMarkSwitchedBuf | kMarkChangedCursor) != 0 {
-        // SAFETY: as above.
         check_cursor(win);
     }
     res
@@ -477,8 +474,7 @@ pub(super) unsafe fn switch_to_mark_buf(fm: *mut FileMark, pcmark_on_switch: boo
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
     // SAFETY: the editor's globals are live; `buflist_getfile` loads the file.
-    let ok =
-        unsafe { buflist_getfile(fm.fnum(), fm.lnum(), getfile_flag.cast_signed(), 0) }.is_ok();
+    let ok = buflist_getfile(fm.fnum(), fm.lnum(), getfile_flag.cast_signed(), 0).is_ok();
     if ok {
         kMarkSwitchedBuf
     } else {

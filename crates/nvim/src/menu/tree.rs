@@ -453,13 +453,11 @@ fn put_hl(s: &CStr, hl_id: c_int) {
 }
 
 fn put_char(byte: u8) {
-    // SAFETY: no pointers involved.
-    unsafe { msg_putchar(c_int::from(byte)) };
+    msg_putchar(c_int::from(byte));
 }
 
 fn put_num(n: c_int) {
-    // SAFETY: no pointers involved.
-    unsafe { msg_outnum(n) };
+    msg_outnum(n);
 }
 
 fn put_trans(s: &CStr, hl_id: c_int) {

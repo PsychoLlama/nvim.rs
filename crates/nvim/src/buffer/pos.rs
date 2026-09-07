@@ -241,7 +241,7 @@ fn current_win() -> Win {
 ///
 /// `win` is `None` for `:badd`, which records a position for no window at
 /// all.
-pub unsafe fn buflist_setfpos(
+pub fn buflist_setfpos(
     mut buffer: Buf,
     win: Option<Win>,
     mut lnum: LineNr,
@@ -407,7 +407,7 @@ pub fn get_winopts(mut buffer: Buf) {
 
 /// The mark for `buffer` in the current window, or a pointer to `no_position`
 /// when there is none.
-pub unsafe fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
+pub fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
     static no_position: GlobalCell<FileMark> = GlobalCell::new(FileMark {
         mark: Pos {
             lnum: 1 as LineNr,
@@ -431,7 +431,7 @@ pub unsafe fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
     }
 }
 
-pub unsafe fn buflist_findlnum(buffer: Buf) -> LineNr {
+pub fn buflist_findlnum(buffer: Buf) -> LineNr {
     // SAFETY: the answer is a live mark -- an entry's own, or the shared
     // "no position".
     unsafe { (*buflist_findfmark(buffer)).mark.lnum }

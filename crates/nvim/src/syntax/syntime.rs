@@ -157,8 +157,8 @@ fn syntime_report() {
     if !got_int.get() {
         unsafe { msg_puts(c"\n".as_ptr()) };
         unsafe { msg_puts(profile_msg(total_total).as_ptr()) };
-        unsafe { msg_advance(13) };
-        unsafe { msg_outnum(total_count) };
+        msg_advance(13);
+        msg_outnum(total_count);
         unsafe { msg_puts(c"\n".as_ptr()) };
     }
 }
@@ -171,22 +171,22 @@ fn syntime_report() {
 fn report_row(entry: &TimeEntry) {
     unsafe { msg_puts(profile_msg(entry.total).as_ptr()) };
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(13) };
-    unsafe { msg_outnum(entry.count) };
+    msg_advance(13);
+    msg_outnum(entry.count);
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(20) };
-    unsafe { msg_outnum(entry.matches) };
+    msg_advance(20);
+    msg_outnum(entry.matches);
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(26) };
+    msg_advance(26);
     unsafe { msg_puts(profile_msg(entry.slowest).as_ptr()) };
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(38) };
+    msg_advance(38);
     unsafe { msg_puts(profile_msg(entry.average).as_ptr()) };
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(50) };
+    msg_advance(50);
     unsafe { msg_outtrans(highlight_group_name(entry.id - 1), 0, false) };
     unsafe { msg_puts(c" ".as_ptr()) };
-    unsafe { msg_advance(69) };
+    msg_advance(69);
 
     // The pattern gets whatever is left of the line; under 80 columns it
     // will wrap anyway, so a fixed 20 is as good as any.

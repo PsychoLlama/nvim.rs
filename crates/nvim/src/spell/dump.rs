@@ -79,7 +79,7 @@ pub fn ex_spellinfo(_args: *mut ExArg) {
     }
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    unsafe { msg_start() };
+    msg_start();
     // SAFETY: the current window and its syntax block are live.
     let langp = unsafe { &(*Win::current().w_s).b_langp };
     let mut lpi = 0;
@@ -89,17 +89,17 @@ pub fn ex_spellinfo(_args: *mut ExArg) {
         unsafe { msg_puts((*(*lp).lp_slang).sl_fname) };
         let p = unsafe { (*(*lp).lp_slang).sl_info };
         if lpi < langp.ga_len || !p.is_null() {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         if !p.is_null() {
             unsafe { msg_puts(p) };
             if lpi < langp.ga_len - 1 {
-                unsafe { msg_putchar('\n' as c_int) };
+                msg_putchar('\n' as c_int);
             }
         }
         lpi += 1;
     }
-    unsafe { msg_end() };
+    msg_end();
 }
 
 /// `:spelldump` — open a new window holding every word of the current
@@ -123,7 +123,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
     optval_free(spl);
 
-    if !unsafe { buf_is_empty(Buf::current()) } {
+    if !buf_is_empty(Buf::current()) {
         return;
     }
 

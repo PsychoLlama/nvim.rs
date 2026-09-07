@@ -435,8 +435,7 @@ fn tabmove(ea: Ex) {
 pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
     // SAFETY: writes the message area.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    // SAFETY: starts a message.
-    unsafe { msg_start() };
+    msg_start();
     msg_scroll.set(1);
 
     let lastused_win = last_used_tab().and_then(TabPage::current_window);
@@ -511,8 +510,7 @@ fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
 }
 
 fn msg_char(c: c_int) {
-    // SAFETY: writes one character to the message area.
-    unsafe { msg_putchar(c) };
+    msg_putchar(c);
 }
 
 /// Print what [`fill_name`] and friends left in `line`.

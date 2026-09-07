@@ -293,8 +293,7 @@ pub unsafe fn did_set_cpoptions(args: &mut OptSet) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_diffanchors(args: &mut OptSet) -> Option<&CStr> {
     let local = args.os_flags.has(OptionSetFlags::LOCAL);
-    // SAFETY: re-reads the option's own value.
-    if unsafe { diffanchors_changed(local) }.is_err() {
+    if diffanchors_changed(local).is_err() {
         return invalid();
     }
     None
@@ -303,8 +302,7 @@ pub unsafe fn did_set_diffanchors(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_diffopt(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: re-reads the option's own value.
-    if unsafe { diffopt_changed() }.is_err() {
+    if diffopt_changed().is_err() {
         return invalid();
     }
     None

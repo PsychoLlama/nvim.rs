@@ -183,7 +183,7 @@ pub(super) unsafe fn spell_read_dic(
                 let fmt = gettext(c"line %6d, word %6d - %s");
                 let count = spin.si_foldwcount + spin.si_keepwcount;
                 unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
-                unsafe { msg_start() };
+                msg_start();
                 unsafe { msg_outtrans_long(message.as_mut_ptr(), 0) };
                 unsafe { msg_clr_eos() };
                 msg_didout.set(false);

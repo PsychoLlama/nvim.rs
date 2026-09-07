@@ -115,9 +115,9 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
                 unsafe { msg_ext_set_kind(c"echo".as_ptr()) };
                 if args.cmdidx == CmdIdx::echo {
                     if !msg_didout.get() {
-                        unsafe { msg_sb_eol() };
+                        msg_sb_eol();
                     }
-                    unsafe { msg_start() };
+                    msg_start();
                 }
             } else if args.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
@@ -157,7 +157,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
         unsafe { msg_clr_eos() };
     }
     if args.cmdidx == CmdIdx::echo {
-        unsafe { msg_end() };
+        msg_end();
     }
 }
 
@@ -315,8 +315,7 @@ pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
     if script_ctx.sc_sid == 0 {
         return;
     }
-    // SAFETY: the caller's promise -- `script_ctx` names a loaded script.
-    let p = unsafe { get_scriptname(script_ctx, true) };
+    let p = get_scriptname(script_ctx, true);
     msg_ext_skip_verbose.set(true);
     unsafe { verbose_enter() };
     // SAFETY: the text is a NUL-terminated literal.
@@ -326,10 +325,9 @@ pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
     if script_ctx.sc_lnum > 0 as LineNr {
         // SAFETY: `line_msg` is a shared NUL-terminated message.
         unsafe { msg_puts(gettext(line_msg).as_ptr()) };
-        // SAFETY: the number is rendered into the message area.
-        unsafe { msg_outnum(script_ctx.sc_lnum as c_int) };
+        msg_outnum(script_ctx.sc_lnum as c_int);
     // SAFETY: the caller's promise about `script_ctx`.
-    } else if unsafe { script_is_lua(script_ctx.sc_sid) } {
+    } else if script_is_lua(script_ctx.sc_sid) {
         // SAFETY: the hint is a NUL-terminated literal.
         unsafe { msg_puts(gettext(c" (run Nvim with -V1 for more details)").as_ptr()) };
     }

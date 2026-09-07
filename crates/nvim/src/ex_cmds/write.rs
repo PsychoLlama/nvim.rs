@@ -166,8 +166,7 @@ pub unsafe fn ex_file(args: *mut ExArg) {
 
     // print file name if no argument or 'F' is not in 'shortmess'
     if no_arg || !shortmess(ShmFlag::FILEINFO) {
-        // SAFETY: main thread, message state.
-        unsafe { fileinfo(0, 0, args.forceit != 0) };
+        fileinfo(0, 0, args.forceit != 0);
     }
 }
 
@@ -438,8 +437,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
         ptr::swap(&raw mut alt_buf.b_ffname, &raw mut Buf::current().b_ffname);
         ptr::swap(&raw mut alt_buf.b_sfname, &raw mut Buf::current().b_sfname);
     };
-    // SAFETY: `curbuf` is live.
-    unsafe { buf_name_changed(Buf::current()) };
+    buf_name_changed(Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, alt_buf);
     if alt_buf.b_p_bl == 0 {
@@ -841,7 +839,7 @@ pub unsafe fn getfile(
     if other
         && !forceit
         && Buf::current().b_nwindows == 1
-        && !unsafe { buf_hide(Buf::current()) }
+        && !buf_hide(Buf::current())
         && curbuf_is_changed()
         && unsafe { autowrite(Buf::current(), forceit) }.is_err()
     {

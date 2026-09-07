@@ -557,7 +557,6 @@ unsafe fn profile_script_start(si: *mut ScriptItem) {
 /// # Safety
 /// A script is on the execution stack and `current_sctx` still names it.
 unsafe fn profile_script_stop(wait_start: ProfTime) {
-    // SAFETY: the caller's contract.
     let si = script_item(current_sctx.get().sc_sid);
     if unsafe { (*si).sn_prof_on } {
         unsafe { (*si).sn_pr_start = profile_end((*si).sn_pr_start) };
@@ -787,8 +786,7 @@ unsafe fn source_bracket(
 
     // Sourcing a string from a Lua script keeps the Lua script's SID, so
     // `:verbose` still names something useful.
-    // SAFETY: `script_is_lua` only reads the registry.
-    if !req.is(Origin::Str) || !unsafe { script_is_lua(current_sctx.get().sc_sid) } {
+    if !req.is(Origin::Str) || !script_is_lua(current_sctx.get().sc_sid) {
         current_sctx.with_mut(|sctx| {
             sctx.sc_sid = sid;
             sctx.sc_lnum = 0;

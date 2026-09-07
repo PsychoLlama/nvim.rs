@@ -86,6 +86,10 @@ fn ucs2bytes(c: c_uint, flags: c_int) -> ([u8; 4], usize, bool) {
 /// Generate the byte-order mark for encoding `name` into `buf`.
 ///
 /// Returns its length, zero when the encoding has no BOM.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn make_bom(buf: &mut [c_char], name: *mut c_char) -> usize {
     let flags = unsafe { get_fio_flags(name) };
     // Can't put a BOM in a non-Unicode file.
@@ -175,7 +179,7 @@ impl<'a> ByteWriter<'a> {
     /// Reserve the conversion scratch buffer, `mult` bytes per staged byte.
     ///
     /// False when there was not enough memory, which aborts the write.
-    pub(crate) unsafe fn reserve_conv_buf(&mut self, mult: usize) -> bool {
+    pub(crate) fn reserve_conv_buf(&mut self, mult: usize) -> bool {
         self.conv_buflen = self.buf.len() * mult;
         self.conv_buf = unsafe { verbose_try_malloc(self.conv_buflen) }.cast();
         !self.conv_buf.is_null()
@@ -187,12 +191,20 @@ impl<'a> ByteWriter<'a> {
     }
 
     /// Stage the byte-order mark for encoding `fenc`, and return its length.
+    ///
+    /// # Safety
+    ///
+    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn stage_bom(&mut self, fenc: *mut c_char) -> usize {
         self.len = unsafe { make_bom(self.buf, fenc) };
         self.len
     }
 
     /// Set up iconv to convert to `fenc`. False when iconv cannot do it.
+    ///
+    /// # Safety
+    ///
+    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
         self.iconv = unsafe { my_iconv_open(fenc, c"utf-8".as_ptr().cast_mut()) };
         if self.iconv == no_iconv() {
@@ -219,13 +231,13 @@ impl<'a> ByteWriter<'a> {
     ///
     /// Bytes of an incomplete character at the end are moved to the front of
     /// the buffer and stay staged. False on a conversion or write error.
-    pub(crate) unsafe fn flush(&mut self) -> bool {
+    pub(crate) fn flush(&mut self) -> bool {
         let staged = self.len;
         // Skip conversion when writing the BOM.
         let converted = if self.flags & FIO_NOCONVERT != 0 {
             Some((self.buf.as_ptr(), staged, staged))
         } else {
-            unsafe { self.convert() }
+            self.convert()
         };
         let Some((out, outlen, consumed)) = converted else {
             return false;
@@ -252,7 +264,7 @@ impl<'a> ByteWriter<'a> {
     ///
     /// Returns where the converted bytes are, how many there are, and how
     /// many staged bytes went into them.
-    unsafe fn convert(&mut self) -> Option<(*const c_char, usize, usize)> {
+    fn convert(&mut self) -> Option<(*const c_char, usize, usize)> {
         let flags = self.flags;
         let staged = self.len;
         let mut out = self.buf.as_ptr();
@@ -315,6 +327,10 @@ impl<'a> ByteWriter<'a> {
     }
 
     /// Hand `inlen` bytes at `input` to iconv.
+    ///
+    /// # Safety
+    ///
+    /// `input` must point at a NUL-terminated string.
     unsafe fn convert_with_iconv(
         &mut self,
         input: *const c_char,

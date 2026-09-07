@@ -288,7 +288,7 @@ unsafe fn echo_search_cmd(
     }
 
     // Compute msg_row early.
-    unsafe { msg_start() };
+    msg_start();
     unsafe { msg_ext_set_kind(c"search_cmd".as_ptr()) };
 
     let mut off_buf: [c_char; 40] = [0; 40];

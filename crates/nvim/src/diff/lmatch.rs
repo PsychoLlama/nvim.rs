@@ -23,6 +23,10 @@ use core::ffi::c_int;
 ///
 /// `linematch:N` is a budget on the block's *total* size across every buffer,
 /// because the algorithm is exponential in the number of buffers.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
     if diff_flags.get() & DIFF_LINEMATCH == 0 {
         return false;
@@ -46,6 +50,10 @@ pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
 /// line: bit `j` says buffer `outputmap[j]` contributes a line there.  A run
 /// of identical decisions is one diff block, so the block list grows by one
 /// every time the set changes.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
     let tp = TabPage::current();
     let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
@@ -86,6 +94,10 @@ unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
 /// Each buffer's share of the block is written out as one memory image, the
 /// alignment is computed over all of them at once, and the answer replaces
 /// the block.
+///
+/// # Safety
+///
+/// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     let tp = TabPage::current();
     let mut images = [MMFILE_INIT; DB_COUNT as usize];

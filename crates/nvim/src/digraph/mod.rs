@@ -304,8 +304,7 @@ fn digraph_header(name: &'static [u8]) {
 
 /// `msg_putchar('\n')`: end the current message line.
 fn newline() {
-    // SAFETY: plain message output, no arguments.
-    unsafe { msg_putchar('\n' as c_int) };
+    msg_putchar('\n' as c_int);
 }
 
 /// Print one digraph. With `previous`, print a section header when this
@@ -331,8 +330,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
         newline();
     }
     if msg_col.get() % LIST_WIDTH != 0 {
-        // SAFETY: plain message output with a plain value argument.
-        unsafe { msg_advance((msg_col.get() / LIST_WIDTH + 1) * LIST_WIDTH) };
+        msg_advance((msg_col.get() / LIST_WIDTH + 1) * LIST_WIDTH);
     }
     outtrans(&[dp.char1, dp.char2, b' '], 0);
     let mut buf = [0u8; 12];

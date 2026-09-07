@@ -115,7 +115,6 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
         let mut interrupted = false;
         // SAFETY: module contract; nothing below adds or removes a command.
         for cmd in unsafe { scope.list() } {
-            // SAFETY: module contract.
             let matches =
                 unsafe { ucmd_name(cmd).starts_with(wanted) && !message_filtered(cmd.uc_name) };
             if !matches {
@@ -128,8 +127,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 unsafe { msg_puts_title(gettext_ptr(heading).as_ptr()) };
             }
             found = true;
-            // SAFETY: module contract.
-            unsafe { msg_putchar(b'\n' as c_int) };
+            msg_putchar(b'\n' as c_int);
             if got_int.get() {
                 interrupted = true;
                 break;
@@ -161,7 +159,6 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     let a = cmd.uc_argt;
     // The flag column is right-aligned in four cells.
     let mut blank = 4;
-    // SAFETY: module contract.
     for (present, mark) in [
         (a.has(ExArgt::BANG), b'!'),
         (a.has(ExArgt::REGSTR), b'"'),
@@ -169,7 +166,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
         (a.has(ExArgt::TRLBAR), b'|'),
     ] {
         if present {
-            unsafe { msg_putchar(mark as c_int) };
+            msg_putchar(mark as c_int);
             blank -= 1;
         }
     }
@@ -186,7 +183,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
         unsafe { msg_puts(SPACES.as_ptr().add(len - 4)) };
         len = 21;
     }
-    unsafe { msg_putchar(b' ' as c_int) };
+    msg_putchar(b' ' as c_int);
     len += 1;
     let over = len as int64_t - 22;
 

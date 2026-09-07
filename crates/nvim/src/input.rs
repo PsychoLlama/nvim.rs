@@ -64,8 +64,7 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
         if r == Ctrl_C || r == ESC {
             r = 'n' as c_int;
             if !ui_has(kUIMessages) {
-                // SAFETY: main-thread editor call.
-                unsafe { msg_putchar(r) };
+                msg_putchar(r);
             }
         }
     }

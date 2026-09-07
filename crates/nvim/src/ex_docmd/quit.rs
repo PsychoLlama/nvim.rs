@@ -690,8 +690,7 @@ fn apply_autocmds(
 
 /// `buf_hide()` as checked code.
 fn buf_hide(buffer: Buf) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::buffer::buf_hide(buffer) }
+    crate::buffer::buf_hide(buffer)
 }
 
 /// `check_changed_any()` as checked code.

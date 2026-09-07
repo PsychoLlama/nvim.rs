@@ -455,8 +455,7 @@ fn beep() {
 /// Whether `buffer` may be left in a window that is closing (`'hidden'`,
 /// `'bufhidden'`).
 fn hides(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer) }
+    buf_hide(buffer)
 }
 
 /// Clamp the cursor of `win` back into its buffer.

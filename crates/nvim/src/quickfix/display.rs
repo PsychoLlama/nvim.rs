@@ -138,7 +138,7 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
     }
 
     if msg_col.get() > 0 {
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
     }
     let cursel = if cursel { HLF_QFL } else { qfFile_hl_id.get() };
     unsafe { msg_outtrans(heading.as_mut_ptr(), cursel, false) };

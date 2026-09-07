@@ -104,7 +104,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
         // One star per character, not per byte.
         let mut i = 0;
         while i < len {
-            unsafe { msg_putchar('*' as ::core::ffi::c_int) };
+            msg_putchar('*' as ::core::ffi::c_int);
             i += unsafe { utfc_ptr2len(cc.at(start + i)) };
         }
     } else if !cc.last_colors.chunks().is_empty() {
@@ -142,7 +142,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     let mut cc = Cc::current();
     if !ui_has(kUICmdline) {
         msg_no_more.set(true);
-        unsafe { msg_putchar(c as ::core::ffi::c_int) };
+        msg_putchar(c as ::core::ffi::c_int);
         if shift {
             draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
@@ -169,7 +169,7 @@ pub fn unputcmdline() {
     let mut cc = Cc::current();
     msg_no_more.set(true);
     if cc.len() == cc.cmdpos && !ui_has(kUICmdline) {
-        unsafe { msg_putchar(' ' as ::core::ffi::c_int) };
+        msg_putchar(' ' as ::core::ffi::c_int);
     } else {
         unsafe {
             draw_cmdline(
@@ -326,7 +326,7 @@ pub(crate) fn redrawcmdprompt() {
         return;
     }
     if cc.cmdfirstc != NUL {
-        unsafe { msg_putchar(cc.cmdfirstc) };
+        msg_putchar(cc.cmdfirstc);
     }
     if !cc.cmdprompt.is_null() {
         unsafe { msg_puts_hl(cc.cmdprompt, cc.hl_id, false) };
@@ -338,7 +338,7 @@ pub(crate) fn redrawcmdprompt() {
     } else {
         let mut i = cc.cmdindent;
         while i > 0 {
-            unsafe { msg_putchar(' ' as ::core::ffi::c_int) };
+            msg_putchar(' ' as ::core::ffi::c_int);
             i -= 1;
         }
     }
@@ -365,8 +365,8 @@ pub fn redrawcmd() {
 
     redrawing_cmdline.set(true);
 
-    unsafe { sb_text_restart_cmdline() };
-    unsafe { msg_start() };
+    sb_text_restart_cmdline();
+    msg_start();
     redrawcmdprompt();
 
     // Don't use the more prompt; truncate the command line if it doesn't
@@ -429,7 +429,7 @@ pub fn gotocmdline(clr: bool) {
     if ui_has(kUICmdline) {
         return;
     }
-    unsafe { msg_start() };
+    msg_start();
     // Always start in column 0.
     msg_col.set(0);
     if clr {

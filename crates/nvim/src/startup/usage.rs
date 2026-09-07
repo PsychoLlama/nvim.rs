@@ -86,7 +86,7 @@ pub(crate) fn version() {
     unsafe { nlua_init(ptr::null_mut(), 0, -1) };
     info_message.set(true);
     unsafe { list_version() };
-    unsafe { msg_putchar('\n' as c_int) };
+    msg_putchar('\n' as c_int);
     msg_didout.set(false);
 }
 

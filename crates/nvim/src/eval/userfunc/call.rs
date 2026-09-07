@@ -284,8 +284,7 @@ pub unsafe fn call_user_func(
                     // SAFETY: `i` is inside the caller's argument array.
                     let tv = unsafe { Tv::new(args.offset(i as isize)) };
                     if tv.v_type == VAR_NUMBER {
-                        // SAFETY: the tag says the union holds a Number.
-                        unsafe { msg_outnum(tv.number_or_zero() as c_int) };
+                        msg_outnum(tv.number_or_zero() as c_int);
                     } else {
                         // Do not want errors such as E724 here.
                         let tofree = {

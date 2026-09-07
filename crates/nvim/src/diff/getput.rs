@@ -35,7 +35,7 @@ fn writable_target(buffer: Buf, cmdidx: CmdIdx) -> bool {
 ///
 /// With a count the block is named by *buffer number* rather than by
 /// position, which is the only way to choose a side in a three-way diff.
-pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
+pub fn nv_diffgetput(put: bool, count: size_t) {
     if buf_is_prompt(current_buf()) {
         // SAFETY: the editor exists.
         unsafe { vim_beep(kOptBoFlagOperator as c_int as c_uint) };
@@ -356,8 +356,7 @@ fn diffgetput(
                 }
             }
 
-            // SAFETY: the current buffer is live.
-            let mut buf_empty = unsafe { buf_is_empty(Buf::current()) };
+            let mut buf_empty = buf_is_empty(Buf::current());
             let mut added: c_int = 0;
             for _ in 0..count {
                 buf_empty = Buf::current().b_ml.ml_line_count == 1 as LineNr;

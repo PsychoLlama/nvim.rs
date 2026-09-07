@@ -139,15 +139,15 @@ pub(crate) unsafe fn list_one_function(
         if line.is_null() {
             continue;
         }
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
         if ea.forceit == 0 {
             // The line number, right-aligned in three columns.
-            unsafe { msg_outnum(j as c_int + 1) };
+            msg_outnum(j as c_int + 1);
             if j < 9 {
-                unsafe { msg_putchar(b' ' as c_int) };
+                msg_putchar(b' ' as c_int);
             }
             if j < 99 {
-                unsafe { msg_putchar(b' ' as c_int) };
+                msg_putchar(b' ' as c_int);
             }
             if function_list_modified(prev_ht_changed) != 0 {
                 break;
@@ -157,7 +157,7 @@ pub(crate) unsafe fn list_one_function(
         line_breakcheck();
     }
     if !got_int.get() {
-        unsafe { msg_putchar(b'\n' as c_int) };
+        msg_putchar(b'\n' as c_int);
         if function_list_modified(prev_ht_changed) == 0 {
             let end = if ea.forceit != 0 {
                 c"endfunction".as_ptr()

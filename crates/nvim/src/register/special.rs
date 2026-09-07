@@ -145,8 +145,7 @@ pub unsafe fn get_spec_reg(
         }
         // `"#` -- the alternate file name.
         c if c == '#' as c_int => {
-            // SAFETY: main thread, with the alternate-file list set up.
-            value = unsafe { getaltfname(errmsg) };
+            value = getaltfname(errmsg);
             true
         }
         // `"=` -- the expression, evaluated.

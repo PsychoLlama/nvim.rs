@@ -110,6 +110,11 @@ fn current_win() -> Win {
 // Looking a name up
 
 /// The file name and remembered line number of buffer `fnum`.
+///
+/// # Safety
+///
+/// `fname` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `lnum` must point at a writable line number the caller owns.
 pub unsafe fn buflist_name_nr(
     fnum: c_int,
     fname: *mut *mut c_char,
@@ -124,8 +129,7 @@ pub unsafe fn buflist_name_nr(
     // SAFETY: the caller's promise -- two out-parameters to fill in.
     let (fname, lnum) = unsafe { (&mut *fname, &mut *lnum) };
     *fname = buf.b_fname;
-    // SAFETY: a live buffer.
-    *lnum = unsafe { buflist_findlnum(buf) };
+    *lnum = buflist_findlnum(buf);
     Ok(())
 }
 
@@ -136,6 +140,12 @@ pub unsafe fn buflist_name_nr(
 ///
 /// Fails, with `message`, when another *loaded* buffer already has the name;
 /// an unloaded one is wiped to make room.
+///
+/// # Safety
+///
+/// `ffname_arg` must point at a NUL-terminated string, unaliased for the
+/// call. `sfname_arg` must point at a NUL-terminated string, unaliased for
+/// the call.
 pub unsafe fn setfname(
     buffer: Buf,
     ffname_arg: *mut c_char,
@@ -206,13 +216,16 @@ pub unsafe fn setfname(
         b.file_id = file_id;
     }
 
-    // SAFETY: a live buffer.
-    unsafe { buf_name_changed(buffer) };
+    buf_name_changed(buffer);
     Ok(())
 }
 
 /// A crude way of changing a buffer's name; use with care. The name is
 /// relative to the current directory.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
     let Some(mut b) = find_buf(fnum) else {
         return;
@@ -231,11 +244,10 @@ pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
 }
 
 /// What has to happen once a buffer's name has changed.
-pub unsafe fn buf_name_changed(b: Buf) {
+pub fn buf_name_changed(b: Buf) {
     if !b.b_ml.ml_mfp.is_null() {
         // The swap file's name follows the buffer's.
-        // SAFETY: a live buffer with a memline.
-        unsafe { ml_setname(b) };
+        ml_setname(b);
     }
     let cur = current_win();
     if cur.w_buffer == b.raw() {
@@ -243,20 +255,23 @@ pub unsafe fn buf_name_changed(b: Buf) {
         // SAFETY: a live window.
         check_arg_idx(cur);
     }
-    // SAFETY: the window title and the status lines are drawn from globals.
-    unsafe { maketitle() };
+    maketitle();
     status_redraw_all();
     // SAFETY: a live buffer, whose named file marks and timestamp follow its
     // name.
     unsafe { fmarks_check_names(b) };
-    // SAFETY: as above.
-    unsafe { ml_timestamp(b) };
+    ml_timestamp(b);
 }
 
 // ---------------------------------------------------------------------------
 // The alternate file
 
 /// Set the alternate file name for the current window.
+///
+/// # Safety
+///
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: LineNr) -> Option<Buf> {
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null; the
@@ -271,7 +286,7 @@ pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: LineNr
 }
 
 /// The alternate file name for the current window, null when there is none.
-pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
+pub fn getaltfname(errmsg: bool) -> *mut c_char {
     let mut fname: *mut c_char = ptr::null_mut();
     let mut dummy: LineNr = 0;
     // SAFETY: two locals to fill in.
@@ -286,6 +301,10 @@ pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
 
 /// Add a file name to the buffer list and answer its number. Takes
 /// [`buflist_new`]'s flags, except `BLN_DUMMY`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: a name to hand over, which may be null.
     let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as LineNr, flags) };
@@ -298,10 +317,9 @@ pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
 
 /// Record the alternate cursor position for the current buffer in `win`,
 /// saving its window-local options too.
-pub unsafe fn buflist_altfpos(win: Win) {
+pub fn buflist_altfpos(win: Win) {
     let (lnum, col) = (win.w_cursor.lnum, win.w_cursor.col);
-    // SAFETY: reads the window's options into the buffer's saved entry.
-    unsafe { buflist_setfpos(Buf::current(), Some(win), lnum, col, true) };
+    buflist_setfpos(Buf::current(), Some(win), lnum, col, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +327,10 @@ pub unsafe fn buflist_altfpos(win: Win) {
 
 /// Whether `ffname` (a full path) names a different file from the current
 /// buffer's.
+///
+/// # Safety
+///
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn otherfile(ffname: *mut c_char) -> bool {
     // SAFETY: the current buffer and a NUL-terminated full path.
     unsafe { otherfile_buf(Buf::current(), ffname, ptr::null_mut(), false) }
@@ -318,6 +340,11 @@ pub unsafe fn otherfile(ffname: *mut c_char) -> bool {
 ///
 /// `file_id_p` is the caller's already-computed file id for `ffname`, null to
 /// have it looked up here.
+///
+/// # Safety
+///
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_id_p` must point at a live `FileID`, unaliased for the call.
 pub(crate) unsafe fn otherfile_buf(
     mut b: Buf,
     ffname: *mut c_char,
@@ -368,6 +395,12 @@ pub fn buf_set_file_id(mut b: Buf) {
 /// Make `*ffname` a full file name and point `*sfname` at the name given, if
 /// it had none. The value `*ffname` comes back as should be treated as not
 /// allocated.
+///
+/// # Safety
+///
+/// `ffname` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `sfname` must point at a writable `*mut c_char` slot the caller
+/// owns for the call.
 pub unsafe fn fname_expand(ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
     // SAFETY: the caller's promise -- two name slots to read and write.
     let (ffname, sfname) = unsafe { (&mut *ffname, &mut *sfname) };

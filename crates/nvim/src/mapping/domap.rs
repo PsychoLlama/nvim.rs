@@ -270,8 +270,7 @@ pub(crate) unsafe fn buf_do_map(
             }
 
             if do_print {
-                // SAFETY: starts a message; reads nothing of ours.
-                unsafe { msg_start() };
+                msg_start();
             }
 
             // Check that a new local mapping was not already defined

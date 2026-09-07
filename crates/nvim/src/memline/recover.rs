@@ -49,7 +49,7 @@ fn read_original(
     unsafe { readfile(name, short, from, skip, lines, no_cmd, flags, false) }
 }
 
-pub unsafe fn ml_recover(checkext: bool) {
+pub fn ml_recover(checkext: bool) {
     // The recovery report runs autocommands between the calls that fill this,
     // so it is this frame's rather than the shared `NameBuff`.
     let mut path = [0 as c_char; MAXPATHL as usize];
@@ -126,23 +126,23 @@ pub unsafe fn ml_recover(checkext: bool) {
         unsafe { msg_ext_set_kind(c"emsg".as_ptr()) };
         hp = unsafe { mf_get(mfp, 0, 1) };
         if hp.is_null() {
-            unsafe { msg_start() };
+            msg_start();
             note(c"Unable to read block 0 from ", hl_id);
             unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
             note(
                 c"\nMaybe no changes were made or Nvim did not update the swap file.",
                 hl_id,
             );
-            unsafe { msg_end() };
+            msg_end();
             break 'theend;
         }
         let mut b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
         if unsafe { cstr::starts_with((*b0p).b0_version.as_ptr(), b"VIM 3.0") } {
-            unsafe { msg_start() };
+            msg_start();
             unsafe { msg_outtrans(mf_fname(mfp), 0, true) };
             note(c" cannot be used with this version of Nvim.\n", 0);
             note(c"Use Vim version 3.0.\n", 0);
-            unsafe { msg_end() };
+            msg_end();
             break 'theend;
         }
         if !ml_check_b0_id(unsafe { &*b0p }) {
@@ -152,7 +152,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             break 'theend;
         }
         if b0_magic_wrong(unsafe { &*b0p }) {
-            unsafe { msg_start() };
+            msg_start();
             unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
             note(c" cannot be used on this computer.\n", hl_id);
             note(c"The file was created on ", hl_id);
@@ -161,7 +161,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             unsafe { (*b0p).b0_fname[0] = NUL as c_char };
             unsafe { msg_puts_hl((*b0p).b0_hname.as_ptr(), hl_id, true) };
             note(c",\nor the file has been damaged.", hl_id);
-            unsafe { msg_end() };
+            msg_end();
             break 'theend;
         }
 
@@ -172,13 +172,13 @@ pub unsafe fn ml_recover(checkext: bool) {
             let previous_page_size = unsafe { (*mfp).mf_page_size };
             unsafe { mf_new_page_size(mfp, recorded_page_size) };
             if unsafe { (*mfp).mf_page_size } < previous_page_size {
-                unsafe { msg_start() };
+                msg_start();
                 unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
                 note(
                     c" has been damaged (page size is smaller than minimum value).\n",
                     hl_id,
                 );
-                unsafe { msg_end() };
+                msg_end();
                 break 'theend;
             }
             let size = unsafe { lseek((*mfp).mf_fd, 0, SEEK_END) };
@@ -230,11 +230,11 @@ pub unsafe fn ml_recover(checkext: bool) {
             let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
             unsafe { home_replace(None, Buf::current().b_ffname, out, room, true) };
         }
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         // SAFETY: the copy above NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Original file \"{shown}\"");
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         msg_ext_skip_flush.set(false);
 
         // Compare the dates of the swap file and the original.
@@ -315,7 +315,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // is empty; that is not a modification.
             if !(Buf::current().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
                 changed_internal(Buf::current());
-                unsafe { buf_inc_changedtick(Buf::current()) };
+                buf_inc_changedtick(Buf::current());
             }
         } else {
             for idx in 1..=lnum {
@@ -326,7 +326,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 unsafe { xfree(p.cast()) };
                 if !same {
                     changed_internal(Buf::current());
-                    unsafe { buf_inc_changedtick(Buf::current()) };
+                    buf_inc_changedtick(Buf::current());
                     break;
                 }
             }
@@ -375,6 +375,10 @@ pub unsafe fn ml_recover(checkext: bool) {
 /// Whether this name is itself a swap file name: it ends in `.s`, a letter
 /// from `a` to `w`, and any letter — the extensions `findswapname` permutes
 /// through.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
     let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
     len >= 4
@@ -393,6 +397,10 @@ unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
 /// or the one the user names out of a listing.
 ///
 /// Returns the allocated name, or `None` to give up.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
     let (dir, out) = (core::ptr::null_mut(), core::ptr::null_mut());
     let count = unsafe { recover_names(fname, false, dir, 0, out) };
@@ -407,7 +415,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
     } else {
         unsafe { recover_names(fname, true, core::ptr::null_mut(), 0, core::ptr::null_mut()) };
         if !ui_has(kUIMessages) {
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
         let nr = unsafe {
             prompt_for_input(
@@ -435,6 +443,12 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
 /// costs a `???` line and the walk carries on. Returns the number of lines
 /// appended and the number of problems found, or `Err` when block 1 itself is
 /// unusable, which leaves nothing to recover.
+///
+/// # Safety
+///
+/// `mfp` must point at the recovery memfile, live for the call, and `hp` at a
+/// slot holding the block the walk starts from: it is released and rewritten
+/// as the walk moves.
 unsafe fn recover_lines(
     mut buffer: Buf,
     mfp: *mut MemFile,
@@ -662,6 +676,11 @@ unsafe fn recover_lines(
 }
 
 /// Say how it went, and what the user should do next.
+///
+/// # Safety
+///
+/// `b0p` must point at a live `ZeroBlock`. `fname_used` must point at a NUL-
+/// terminated string.
 unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *const c_char) {
     if got_int.get() {
         complain(c"E311: Recovery Interrupted");
@@ -677,7 +696,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
             ))
         };
         drop(no_prompt);
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         tell(c"See \":help E312\" for more information.", 0);
         msg(c"\n>>>>>>>>>>>>>", 0);
         return;
@@ -723,7 +742,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
 /// `check_file`: also check that the original file still exists and is
 /// unchanged. `check_char`: stop as soon as a character is typed, having
 /// synced at least one block.
-pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
+pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and the memfile
         // it owns.
@@ -744,7 +763,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
                     || file_info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
                     || unsafe { os_fileinfo_size(&raw mut file_info) } != buf.b_orig_size
                 {
-                    unsafe { ml_preserve(buf, false, do_fsync) };
+                    ml_preserve(buf, false, do_fsync);
                     did_check_timestamps.set(false);
                     need_check_timestamps.set(true); // give the message later
                 }
@@ -777,7 +796,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
 ///
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
-pub unsafe fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
+pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     let mfp = buffer.b_ml.ml_mfp;
     if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
         if message {

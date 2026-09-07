@@ -183,7 +183,7 @@ pub(super) unsafe fn show_one_mark(
         if !DID_TITLE.replace(true) {
             unsafe { msg_puts_title(gettext(c"\nmark line  col file/text").as_ptr()) };
         }
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         if !got_int.get() {
             unsafe {
                 snprintf(

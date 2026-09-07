@@ -698,7 +698,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
         if ca.op().op_type == OpType::Delete && ca.cmdchar == 'p' as c_int {
             clear_op(ca.op());
             debug_assert!(ca.opcount >= 0);
-            unsafe { nv_diffgetput(true, ca.opcount as size_t) };
+            nv_diffgetput(true, ca.opcount as size_t);
         } else {
             clear_op_beep(ca.op());
         }
@@ -841,7 +841,7 @@ pub(crate) unsafe fn nv_open(cmd_arg: *mut CmdArg) {
         // `do` is `:diffget`, not "delete, then open".
         clear_op(ca.op());
         debug_assert!(ca.opcount >= 0);
-        unsafe { nv_diffgetput(false, ca.opcount as size_t) };
+        nv_diffgetput(false, ca.opcount as size_t);
     } else if visual_active() {
         v_swap_corners(ca.cmdchar);
     } else if buf_is_prompt(current_buf())

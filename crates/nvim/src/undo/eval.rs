@@ -83,8 +83,7 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
     let mut rows = rows;
     // The walk reaches the branches in tree order, not in sequence order.
     rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-    // SAFETY: the editor's own message state.
-    unsafe { msg_start() };
+    msg_start();
     let heading = gettext(c"number changes  when               saved");
     // SAFETY: the string `gettext` just answered, NUL-terminated.
     unsafe { msg_puts_hl(heading.as_ptr(), HLF_T, false) };
@@ -92,16 +91,14 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
         if got_int.get() {
             break;
         }
-        // SAFETY: the editor's own message state.
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
         if got_int.get() {
             break;
         }
         // SAFETY: a NUL-terminated string this function owns.
         unsafe { msg_puts(row.as_ptr()) };
     }
-    // SAFETY: the editor's own message state.
-    unsafe { msg_end() };
+    msg_end();
 }
 
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,

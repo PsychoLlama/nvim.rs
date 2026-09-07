@@ -55,6 +55,13 @@ static simple_diffline_change: GlobalCell<DiffLineChange> = GlobalCell::new(Diff
 /// begins at column 0 and one that ends below it runs to the end of the line.
 /// The answer is whether the range is an *addition* rather than a change,
 /// which the caller paints `DiffTextAdd` instead of `DiffText`.
+///
+/// # Safety
+///
+/// `diffline` must point at a live `DiffLine`, unaliased for the call.
+/// `change` must point at a live `DiffLineChange`, unaliased for the call.
+/// `change_start` must point at a writable `int` the caller owns.
+/// `change_end` must point at a writable `int` the caller owns.
 pub unsafe fn diff_change_parse(
     diffline: *mut DiffLine,
     change: *mut DiffLineChange,
@@ -322,6 +329,12 @@ pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLin
 /// column of a line -- but only under `inline:none`/`inline:simple`, where
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);

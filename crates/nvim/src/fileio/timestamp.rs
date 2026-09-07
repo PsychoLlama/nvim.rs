@@ -329,13 +329,13 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
     }
 
     if !autocmd_busy.get() {
-        unsafe { msg_start() };
+        msg_start();
         unsafe { msg_puts_hl(tbuf.as_ptr(), HLF_E, true) };
         if !mesg2.is_empty() {
             unsafe { msg_puts_hl(mesg2.as_ptr(), HLF_W, true) };
         }
         unsafe { msg_clr_eos() };
-        unsafe { msg_end() };
+        msg_end();
         if emsg_silent.get() == 0 && !in_assert_fails.get() && !ui_has(kUIMessages) {
             unsafe { msg_delay(1004, true) }; // give the user some time to think about it
             redraw_cmdline.set(false); // don't redraw and erase the message
@@ -577,7 +577,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // move the buffer contents to a hidden buffer.
     let mut savebuf = ptr::null_mut::<Buffer>();
     let mut bufref = BufRef::NONE;
-    if !(unsafe { buf_is_empty(Buf::current()) } || saved.is_err()) {
+    if !(buf_is_empty(Buf::current()) || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe {
             buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int)
@@ -628,7 +628,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             if !savebuf.is_null() && bufref.valid() && buffer.raw() == Buf::current_raw() {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
-                while !unsafe { buf_is_empty(Buf::current()) } {
+                while !buf_is_empty(Buf::current()) {
                     if unsafe { ml_delete(buffer.b_ml.ml_line_count) }.is_err() {
                         break;
                     }

@@ -69,8 +69,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
         }
         // SAFETY: a live buffer, either the caller's or one off the list.
         if buf_has_signs(cbuf) {
-            // SAFETY: a static newline.
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
             // A live buffer's name is a NUL-terminated string, and the
             // formatting happens inside `msg_buf!`'s own region.
             let lbuf = msg_buf!(c"Signs for %s:", cbuf.b_fname);
@@ -103,8 +102,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
 /// # Safety
 /// Every mark must carry a live sign decoration.
 unsafe fn report_signs(signs: &[MTKey]) {
-    // SAFETY: a static newline.
-    unsafe { msg_putchar('\n' as c_int) };
+    msg_putchar('\n' as c_int);
     for (i, mark) in signs.iter().enumerate() {
         // SAFETY: the caller promised every mark carries a live sign.
         let sh = unsafe { Sh::new(decor_find_sign(mt_decor(*mark))) };
@@ -134,8 +132,7 @@ unsafe fn report_signs(signs: &[MTKey]) {
         // SAFETY: each buffer above is this frame's, and NUL-terminated.
         unsafe { msg_puts(lbuf.as_ptr()) };
         if i + 1 < signs.len() {
-            // SAFETY: a static newline.
-            unsafe { msg_putchar('\n' as c_int) };
+            msg_putchar('\n' as c_int);
         }
     }
 }
@@ -229,7 +226,6 @@ unsafe fn sign_list_by_name(name: *mut c_char) {
 /// `name` and `cmdline` must be writable NUL-terminated strings; this
 /// terminates each argument in place.
 unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
-    // SAFETY: the caller's command line.
     let null = ::core::ptr::null_mut();
     let (mut icon, mut text) = (null, null);
     let (mut linehl, mut texthl, mut culhl, mut numhl) = (null, null, null, null);
@@ -413,7 +409,6 @@ impl Default for SignCmdArgs {
 /// `arg` must be a writable NUL-terminated string; the `name=` and `group=`
 /// values are terminated in place and pointed into.
 unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArgs> {
-    // SAFETY: the caller's command line.
     let mut out = SignCmdArgs::default();
     let arg1 = arg;
     let mut arg = arg;

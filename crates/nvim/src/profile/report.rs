@@ -126,8 +126,7 @@ unsafe fn prof_sort_list(
 /// # Safety
 /// `func` is a live function-table entry with a non-zero `uf_script_ctx`.
 unsafe fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
-    // SAFETY: `get_scriptname` answers an owned, NUL-terminated name.
-    let p = unsafe { get_scriptname(func.uf_script_ctx, true) };
+    let p = get_scriptname(func.uf_script_ctx, true);
     write!(fd, "    Defined: ")?;
     fd.write_all(p.to_bytes())?;
     writeln!(fd, ":{}", func.uf_script_ctx.sc_lnum)?;

@@ -87,7 +87,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 
         if !cmd_silent.get() && !ui_has(kUICmdline) {
             msg_col.set(0);
-            unsafe { msg_putchar(' ' as ::core::ffi::c_int) }; // delete ':'
+            msg_putchar(' ' as ::core::ffi::c_int); // delete ':'
         }
         s.is_state.search_start = s.is_state.save_cursor;
         redraw_cmdline.set(true);
@@ -556,7 +556,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                     unputcmdline();
                 } else {
                     draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
-                    unsafe { msg_putchar(' ' as ::core::ffi::c_int) };
+                    msg_putchar(' ' as ::core::ffi::c_int);
                     cursorcmd();
                 }
             }

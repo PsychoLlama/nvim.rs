@@ -137,8 +137,7 @@ fn buf_changed(buffer: Buf) -> bool {
 }
 
 fn buf_hidden(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer) }
+    buf_hide(buffer)
 }
 
 fn auto_write(buffer: Buf) -> Result<(), Failed> {
@@ -181,6 +180,10 @@ fn with_clean_error_state(f: impl FnOnce()) {
 // :ball
 
 /// Open a window for every listed buffer, closing the superfluous ones.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_buffer_all(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
     let args = unsafe { &*args };

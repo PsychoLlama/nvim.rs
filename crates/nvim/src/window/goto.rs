@@ -342,8 +342,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         }
     }
 
-    // SAFETY: reads the current buffer's name.
-    unsafe { maketitle() };
+    maketitle();
     Win::current().w_redr_status = true;
     redraw_tabline.set(true);
     if restart_edit.get() != 0 {

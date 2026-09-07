@@ -506,7 +506,7 @@ pub unsafe fn ml_open_file(buffer: Buf) {
             continue;
         }
         unsafe { (*mfp).mf_dirty = MfDirty::YesNoSync }; // don't sync yet in ml_sync_all
-        unsafe { ml_upd_block0(buffer, UB_SAME_DIR) };
+        ml_upd_block0(buffer, UB_SAME_DIR);
 
         // Flush block zero, so others can read it.
         if unsafe { mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int) }.is_ok() {

@@ -81,6 +81,12 @@ pub(crate) enum PreWrite {
 /// Returns true for the `E676` case: an `acwrite`-style buffer being written
 /// over its own name has nothing but a `*WriteCmd` autocommand to write it,
 /// and none matched.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `sfname` must point at a NUL-terminated string,
+/// unaliased for the call. `args` must point at the command's `ExArg`.
 unsafe fn apply_pre(
     event: AutoEvent,
     sfname: *mut c_char,
@@ -100,6 +106,11 @@ unsafe fn apply_pre(
 /// still happen.
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`. `mode` must be an initialized
+/// `WriteMode` whose pointer fields point at live data for the call.
 pub(crate) unsafe fn buf_write_do_autocmds(
     buffer: Buf,
     names: &mut WriteNames,
@@ -211,7 +222,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             };
             if mode.overwriting {
                 // Assume the buffer was written; update the timestamp.
-                unsafe { ml_timestamp(buffer) };
+                ml_timestamp(buffer);
                 if mode.req.append {
                     buffer.b_flags.clear(BufFlags::NEW);
                 } else {
@@ -277,6 +288,12 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 /// Apply the post-write autocommands.
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `args` must point at the command's `ExArg`. `mode` must be an initialized
+/// `WriteMode` whose pointer fields point at live data for the call.
 pub(crate) unsafe fn buf_write_do_post_autocmds(
     buffer: Buf,
     fname: *mut c_char,

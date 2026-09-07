@@ -107,8 +107,7 @@ pub(crate) fn ins_del() {
 /// separately); not into an auto-indent without `indent`; and not over a
 /// line break without `eol`.  All of it is off in 'revins'.
 fn bs_blocked() -> bool {
-    // SAFETY: `curbuf` is live for the whole session.
-    if unsafe { buf_is_empty(Buf::current()) } {
+    if buf_is_empty(Buf::current()) {
         return true;
     }
     if revins_on.get() {

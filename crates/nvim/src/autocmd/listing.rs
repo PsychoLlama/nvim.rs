@@ -139,7 +139,7 @@ pub(crate) unsafe fn au_show_for_event(
                 if got_int.get() {
                     return;
                 }
-                unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                msg_putchar('\n' as ::core::ffi::c_int);
                 if got_int.get() {
                     return;
                 }
@@ -159,11 +159,11 @@ pub(crate) unsafe fn au_show_for_event(
             // The pattern only when it changed.
             if last_ap != ap {
                 last_ap = ap;
-                unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                msg_putchar('\n' as ::core::ffi::c_int);
                 if got_int.get() {
                     return;
                 }
-                unsafe { msg_advance(4) };
+                msg_advance(4);
                 // SAFETY: the pattern's own NUL-terminated text.
                 unsafe { msg_outtrans((*ap).pat, 0, false) };
             }
@@ -172,9 +172,9 @@ pub(crate) unsafe fn au_show_for_event(
                 return;
             }
             if msg_col.get() >= 14 {
-                unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+                msg_putchar('\n' as ::core::ffi::c_int);
             }
-            unsafe { msg_advance(14) };
+            msg_advance(14);
             if got_int.get() {
                 return;
             }

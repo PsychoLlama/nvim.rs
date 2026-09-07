@@ -55,7 +55,7 @@ pub(crate) fn search_path_mutex() -> *mut uv_mutex_t {
 }
 
 /// Initialise the runtime family's process-wide state.
-pub unsafe fn runtime_init() {
+pub fn runtime_init() {
     // SAFETY: called once at startup, before any thread can reach the mutex.
     unsafe { uv_mutex_init(search_path_mutex()) };
 }
@@ -122,9 +122,7 @@ impl RuntimeSearchPath {
 /// # Safety
 /// `ref_0` must point at a local `int` that outlives the borrow.
 pub(crate) unsafe fn runtime_search_path_get_cached(ref_0: *mut c_int) -> RuntimeSearchPath {
-    // SAFETY: rebuilding may source files, which is why this happens before
-    // the borrow is taken.
-    unsafe { runtime_search_path_validate() };
+    runtime_search_path_validate();
 
     // SAFETY: the caller's local.
     unsafe { *ref_0 = 0 };
@@ -427,7 +425,7 @@ pub(crate) unsafe fn path_is_after(buf: *mut c_char, buflen: size_t) -> bool {
 /// directory here; entries that were not spelled in 'runtimepath' share the
 /// offset of the comma before its `after/` tail, which keeps the sequence
 /// monotonic. [`add_pack_dir_to_rtp`] splices new entries by comparing it.
-unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
+fn runtime_search_path_build() -> RuntimeSearchPath {
     let mut pack_entries: Vec<String_0> = Vec::new();
     let mut pack_used: IdMap<Box<[u8]>, c_int> = id_map();
     let mut rtp_used: PathSet = id_set();
@@ -599,7 +597,7 @@ unsafe fn runtime_search_path_free(path: RuntimeSearchPath) {
 }
 
 /// Rebuild the cached search path if it has been invalidated.
-pub unsafe fn runtime_search_path_validate() {
+pub fn runtime_search_path_validate() {
     // The path cannot be rebuilt in an async context. A plugin will invoke
     // itself asynchronously from sync code in the same plugin, so the lua or
     // autoload module it is looking for is almost certainly in the cached path
@@ -613,13 +611,11 @@ pub unsafe fn runtime_search_path_validate() {
         unsafe { msg_ext_ui_flush() };
         unsafe { runtime_search_path_free(runtime_search_path.get()) };
     }
-    // SAFETY: building sources nothing; it only globs.
-    runtime_search_path.set(unsafe { runtime_search_path_build() });
+    runtime_search_path.set(runtime_search_path_build());
     runtime_search_path_valid.set(true);
     // Initially unowned.
     runtime_search_path_ref.set(ptr::null_mut());
-    // SAFETY: the worker threads' snapshot follows the main one.
-    unsafe { update_runtime_search_path_thread(true) };
+    update_runtime_search_path_thread(true);
 }
 
 /// Refresh the snapshot the worker threads read.
@@ -627,7 +623,7 @@ pub unsafe fn runtime_search_path_validate() {
 /// Without `force` this is a no-op unless the main cache is valid and the
 /// snapshot is not — that is, it is the cheap "catch up if you are behind"
 /// call the `:packadd` family makes.
-pub unsafe fn update_runtime_search_path_thread(force: bool) {
+pub fn update_runtime_search_path_thread(force: bool) {
     if !force && !(runtime_search_path_valid.get() && !runtime_search_path_valid_thread.get()) {
         return;
     }

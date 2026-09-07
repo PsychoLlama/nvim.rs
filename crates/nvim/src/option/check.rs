@@ -75,8 +75,7 @@ const BIN_DEP_OPTS: [OptIndex; 4] = [kOptTextwidth, kOptWrapmargin, kOptModeline
 /// Rebuild the window title, unless the screen has not started yet.
 pub(crate) fn did_set_title() {
     if starting.get() != NO_SCREEN {
-        // SAFETY: the screen is up, so the buffers it names are live.
-        unsafe { maketitle() };
+        maketitle();
     }
 }
 

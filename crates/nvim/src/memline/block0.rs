@@ -68,6 +68,10 @@ impl ZeroBlock {
     /// nothing usable, which is why that is reported rather than returning a
     /// half-filled block; the two failures are told apart because
     /// `swapinfo()` and the ATTENTION message report them differently.
+    ///
+    /// # Safety
+    ///
+    /// `path` must point at a NUL-terminated string.
     pub(crate) unsafe fn read(path: *const c_char) -> Result<Self, NoBlock> {
         // SAFETY: `path` is a NUL-terminated path, and this is a
         // plain-old-data struct, so zero is a valid value for it and so is
@@ -88,8 +92,8 @@ impl ZeroBlock {
 }
 
 /// Record the file's timestamp in the swap file, after it has been written.
-pub unsafe fn ml_timestamp(buffer: Buf) {
-    unsafe { ml_upd_block0(buffer, UB_FNAME) }
+pub fn ml_timestamp(buffer: Buf) {
+    ml_upd_block0(buffer, UB_FNAME)
 }
 
 /// Whether the two bytes that identify a swap file are at the head of this
@@ -112,7 +116,7 @@ pub(crate) fn ml_check_b0_strings(b0: &ZeroBlock) -> bool {
 /// Bring block zero up to date with the buffer: either the file name and
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
-pub(crate) unsafe fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
+pub(crate) fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = buffer;
@@ -140,6 +144,10 @@ pub(crate) unsafe fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
 /// `buffer.b_mtime` from the same `stat`.
 ///
 /// Must not use the caller's name buffer: some of them still hold it.
+///
+/// # Safety
+///
+/// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
@@ -211,6 +219,10 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
 /// Record whether the file and its swap file are in the same directory.
 ///
 /// Fail safe: anything short of proof leaves the flag clear.
+///
+/// # Safety
+///
+/// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
     let same = unsafe { same_directory(mf_fname(buffer.b_ml.ml_mfp).cast_mut(), buffer.b_ffname) };
     unsafe { (*b0p).set_flag(B0_SAME_DIR, same) };
@@ -221,6 +233,10 @@ pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
 /// It goes at the *end* of the name field with a NUL in front of it, so a
 /// reader that does not know about [`B0_HAS_FENC`] still sees a terminated
 /// name and never reaches the encoding.
+///
+/// # Safety
+///
+/// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, b: Buf) {
     let size = B0_FNAME_SIZE_NOCRYPT as usize;
     let fenc = b.b_p_fenc;
@@ -262,6 +278,11 @@ pub(crate) fn swapfile_proc_running(b0: &ZeroBlock, swap_fname: *const c_char) -
 /// Describe a swap file for the `swapinfo()` builtin: the block-zero fields
 /// if they can be read and make sense, an `error` key saying why not if they
 /// cannot.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string. `d` must point at a live
+/// dictionary, unaliased for the call.
 pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
     let error = |text: &'static CStr| unsafe { dict_add_str(d, c"error", text.as_ptr(), -1) };
     match unsafe { ZeroBlock::read(fname) } {
@@ -294,10 +315,18 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells
 /// that pair `S_LEN(key)`. A negative `len` means "up to the NUL".
+///
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call. `val` must
+/// point at `len` readable bytes.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char, len: c_int) {
     let _ = unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
 }
 
+/// # Safety
+///
+/// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
@@ -305,6 +334,10 @@ unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 /// Describe a swap file in the ATTENTION message and in `:recover`'s listing.
 ///
 /// Returns the swap file's own timestamp, or 0 if it could not be stat'ed.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub(crate) unsafe fn swapfile_info(fname: *const c_char, msg: &mut Vec<u8>) -> time_t {
     debug_assert!(!fname.is_null());
     let mut x: time_t = 0;
@@ -410,6 +443,10 @@ pub(crate) fn push_tr(msg: &mut Vec<u8>, text: &'static CStr) {
 /// Whether this swap file can be deleted without losing anything: it is
 /// intact, records no unsaved changes, and the process that wrote it died on
 /// this same host.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
     if !unsafe { os_path_exists(fname) } {
         return false;
@@ -453,6 +490,10 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
 /// swap file into one place.
 ///
 /// Also publishes [`proc_running`], which the dialog below reads.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn swapfile_is_for_other_file(buffer: Buf, fname: *mut c_char) -> bool {
     // The expanded name out of block zero; upstream shares `NameBuff`, and
     // `set_b0_fname` above documents that its callers hold it.
@@ -503,6 +544,11 @@ pub(crate) fn b0_magic_wrong(b0: &ZeroBlock) -> bool {
 /// as given decide.
 ///
 /// `ino_block0` is the inode block zero recorded.
+///
+/// # Safety
+///
+/// `fname_c` must point at a NUL-terminated string, unaliased for the call.
+/// `fname_s` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn files_differ(
     fname_c: *mut c_char,
     fname_s: *mut c_char,
@@ -562,7 +608,7 @@ pub(crate) fn b0_read_number(src: &[c_char; 4]) -> c_long {
 /// Update the flags block zero carries about the buffer — whether it has
 /// unsaved changes, its `'fileformat'` and its `'fileencoding'` — and push
 /// block zero alone to disk.
-pub unsafe fn ml_setflags(buffer: Buf) {
+pub fn ml_setflags(buffer: Buf) {
     let b = buffer;
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {

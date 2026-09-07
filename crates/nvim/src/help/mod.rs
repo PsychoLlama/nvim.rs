@@ -674,7 +674,7 @@ pub(crate) unsafe fn prepare_help_buffer() {
     unsafe { (*wo).wo_diff = 0 };
     unsafe { (*wo).wo_spell = 0 };
 
-    unsafe { set_buflisted(0) };
+    set_buflisted(0);
 }
 
 /// Populate `*local-additions*` in `help.txt`.

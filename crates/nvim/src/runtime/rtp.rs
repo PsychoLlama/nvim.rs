@@ -183,7 +183,7 @@ unsafe fn bytes_of<'a>(s: *const c_char) -> &'a [u8] {
 /// The configured path when it exists, else `lib/nvim` beside the binary's
 /// install prefix -- which is what makes a relocated or AppImage build find
 /// its own files.
-pub unsafe fn get_lib_dir() -> *mut c_char {
+pub fn get_lib_dir() -> *mut c_char {
     // SAFETY: `default_lib_dir` is a NUL-terminated build-time constant, and
     // `exe_name` is `MAXPATHL` bytes for the two calls that fill it.
     // TODO(bfredl): too fragile? Ideally default_lib_dir would be made
@@ -235,7 +235,7 @@ pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
         stdpaths_get_xdg_var(kXDGConfigHome)
     };
     let vimruntime = unsafe { vim_getenv(c"VIMRUNTIME".as_ptr()) };
-    let libdir = unsafe { get_lib_dir() };
+    let libdir = get_lib_dir();
     let data_dirs = stdpaths_get_xdg_var(kXDGDataDirs);
     let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
 

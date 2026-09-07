@@ -50,9 +50,9 @@ pub(crate) struct WriteNotes {
 }
 
 /// Flush a full staging buffer, adding what went out to `nchars`.
-unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
+fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
     let full = writer.capacity() as c_int;
-    if !unsafe { writer.flush() } {
+    if !writer.flush() {
         return false;
     }
     *nchars += full - writer.staged() as c_int;
@@ -64,7 +64,7 @@ unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
 /// `sha` hashes the text as it goes, for the undo file. When `writer.fd` is
 /// -1 nothing reaches a file: that pass only exists to find out whether the
 /// conversion works.
-pub(crate) unsafe fn write_lines(
+pub(crate) fn write_lines(
     buffer: Buf,
     range: (LineNr, LineNr),
     writer: &mut ByteWriter,
@@ -105,7 +105,7 @@ pub(crate) unsafe fn write_lines(
                 c
             };
             if writer.push(byte) {
-                if !unsafe { flush_full(writer, &mut nchars) } {
+                if !flush_full(writer, &mut nchars) {
                     end = 0; // write error: break the loop
                     break;
                 }
@@ -133,7 +133,7 @@ pub(crate) unsafe fn write_lines(
             if fileformat != EOL_DOS {
                 full
             } else {
-                if full && !unsafe { flush_full(writer, &mut nchars) } {
+                if full && !flush_full(writer, &mut nchars) {
                     end = 0; // write error: break the loop
                     break;
                 }
@@ -141,7 +141,7 @@ pub(crate) unsafe fn write_lines(
             }
         };
         if full {
-            if !unsafe { flush_full(writer, &mut nchars) } {
+            if !flush_full(writer, &mut nchars) {
                 end = 0; // write error: break the loop
                 break;
             }
@@ -156,7 +156,7 @@ pub(crate) unsafe fn write_lines(
 
     if writer.staged() > 0 && end > 0 {
         let remaining = writer.staged() as c_int;
-        if !unsafe { writer.flush() } {
+        if !writer.flush() {
             end = 0; // write error
         }
         nchars += remaining - writer.staged() as c_int;
@@ -181,6 +181,10 @@ pub(crate) unsafe fn write_lines(
 }
 
 /// Build and show the message a successful write ends with.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn report_written(
     buffer: Buf,
     fname: *mut c_char,

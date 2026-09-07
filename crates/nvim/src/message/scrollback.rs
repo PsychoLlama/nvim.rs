@@ -53,8 +53,8 @@ pub(crate) unsafe fn store_sb_text(
     finish: c_int,
 ) {
     if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE {
-        unsafe { clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL) };
-        unsafe { msg_sb_eol() }; // prevent messages from overlapping
+        clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL);
+        msg_sb_eol(); // prevent messages from overlapping
         if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
             && s > unsafe { *sb_str }
             && unsafe { **sb_str } == b'\n'.cast_signed()
@@ -90,26 +90,26 @@ pub(crate) unsafe fn store_sb_text(
 }
 
 /// Finished showing messages: clear the scroll-back text on the next one.
-pub unsafe fn may_clear_sb_text() {
+pub fn may_clear_sb_text() {
     unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
     do_clear_sb_text.set(SB_CLEAR_ALL);
     do_clear_hist_temp.set(true);
 }
 
 /// Starting to edit the command line: do not clear messages now.
-pub unsafe fn sb_text_start_cmdline() {
+pub fn sb_text_start_cmdline() {
     if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_BUSY {
         // A recursive command line: the outer one need not be remembered,
         // it will be redrawn when this level returns.
-        unsafe { sb_text_restart_cmdline() };
+        sb_text_restart_cmdline();
     } else {
-        unsafe { msg_sb_eol() };
+        msg_sb_eol();
         do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     }
 }
 
 /// Redrawing the command line: drop the last unfinished line.
-pub unsafe fn sb_text_restart_cmdline() {
+pub fn sb_text_restart_cmdline() {
     // Needed when returning from a nested command line.
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
     if last_msgchunk.get().is_null() || unsafe { (*last_msgchunk.get()).sb_eol } != 0 {
@@ -136,7 +136,7 @@ pub fn sb_text_end_cmdline() {
 }
 
 /// Forget the remembered text. With `all` false the last screen line is kept.
-pub unsafe fn clear_sb_text(all: bool) {
+pub fn clear_sb_text(all: bool) {
     // The slot holding the newest chunk to drop: either the list head, or
     // the `sb_prev` of the line that is being kept.
     let lastp = if all {
@@ -155,7 +155,7 @@ pub unsafe fn clear_sb_text(all: bool) {
 }
 
 /// The `g<` command.
-pub unsafe fn show_sb_text() {
+pub fn show_sb_text() {
     if ui_has(kUIMessages) {
         let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),
@@ -177,6 +177,10 @@ pub unsafe fn show_sb_text() {
 }
 
 /// Walk back to the chunk that starts the screen line `mps` is part of.
+///
+/// # Safety
+///
+/// `mps` must point at a live `MsgChunk`, unaliased for the call.
 pub(crate) unsafe fn msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
     let mut mp = mps;
     while !mp.is_null()
@@ -189,7 +193,7 @@ pub(crate) unsafe fn msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
 }
 
 /// Mark the last chunk as finishing its screen line.
-pub unsafe fn msg_sb_eol() {
+pub fn msg_sb_eol() {
     if !last_msgchunk.get().is_null() {
         unsafe { (*last_msgchunk.get()).sb_eol = 1 };
     }
@@ -197,6 +201,10 @@ pub unsafe fn msg_sb_eol() {
 
 /// Redisplay one remembered screen line at `row`, answering the chunk the
 /// next line starts at (null at the end of the list).
+///
+/// # Safety
+///
+/// `smp` must point at a live `MsgChunk`, unaliased for the call.
 pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut MsgChunk) -> *mut MsgChunk {
     let mut mp = smp;
     loop {

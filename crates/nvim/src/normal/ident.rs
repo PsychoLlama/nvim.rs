@@ -533,14 +533,13 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     }
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
-    let must_write = curbuf_is_changed()
-        && Buf::current().b_nwindows <= 1
-        && !unsafe { buf_hide(Buf::current()) };
+    let must_write =
+        curbuf_is_changed() && Buf::current().b_nwindows <= 1 && !buf_hide(Buf::current());
     if must_write {
         let _ = unsafe { autowrite(Buf::current(), false) };
     }
     setpcmark();
-    let hidden = unsafe { buf_hide(Buf::current()) };
+    let hidden = buf_hide(Buf::current());
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());

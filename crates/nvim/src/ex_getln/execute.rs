@@ -515,7 +515,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
     if err.is_set() {
         if !ui_has(kUIMessages) {
-            unsafe { msg_putchar('\n' as ::core::ffi::c_int) };
+            msg_putchar('\n' as ::core::ffi::c_int);
         }
         msg_scroll.set(1);
         unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };

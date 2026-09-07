@@ -72,8 +72,7 @@ fn last_winid() -> c_int {
 /// Whether `buffer` may stay loaded when it is no longer shown -- `'hidden'`,
 /// `'bufhidden'` or a `:hide` modifier.
 fn may_hide(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { buf_hide(buffer) }
+    buf_hide(buffer)
 }
 
 /// Sync the undo state, so that what follows starts a new change.
@@ -84,9 +83,7 @@ fn sync_undo() {
 
 /// Remember `win`'s cursor position for the alternate file.
 fn remember_altfpos(win: Win) {
-    // SAFETY: records the window's position in the current buffer's own
-    // entry list.
-    unsafe { buflist_altfpos(win) };
+    buflist_altfpos(win);
 }
 
 /// Restore the window-local options `win` last used with this buffer.
@@ -124,8 +121,7 @@ fn cursor_in_indent() -> bool {
 
 /// Put the cursor back where this window last was in this buffer.
 fn restore_position() {
-    // SAFETY: reads the current window and buffer, both set.
-    unsafe { buflist_getfpos() };
+    buflist_getfpos();
 }
 
 /// Re-check the argument-list index after the buffer changed.
@@ -136,8 +132,7 @@ fn recheck_arg_idx(win: Win) {
 
 /// Rebuild `'title'` and `'icon'`.
 fn rebuild_title() {
-    // SAFETY: reads the current window and buffer.
-    unsafe { maketitle() };
+    maketitle();
 }
 
 /// Scroll so that the cursor line sits in the middle of the window.

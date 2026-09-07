@@ -159,7 +159,7 @@ fn report_no_such_arg(argn: c_int) {
 unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
     let mut other = true;
     // SAFETY: reads the current buffer's 'hidden' state.
-    if unsafe { buf_hide(Buf::current()) } {
+    if buf_hide(Buf::current()) {
         // SAFETY: caller contract; `fix_fname` hands back an owned name.
         // SAFETY: caller contract; `fix_fname` hands back an owned name,
         // which is freed once `otherfile` has read it.
@@ -229,8 +229,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // SAFETY: the argument name outlives `do_ecmd`'s use of it, and `args` is
     // the caller's own live command block.
     let wp = Win::current();
-    // SAFETY: `curwin` is live, so is its buffer.
-    let hidden = unsafe { buf_hide(wp.buffer()) };
+    let hidden = buf_hide(wp.buffer());
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     let name = arg_name(cur_arg_idx());
     let last = newlnum::LAST as LineNr;
@@ -328,14 +327,12 @@ pub unsafe fn ex_argedit(args: *mut ExArg) {
         cur_arg_idx() + 1
     };
     // Whether curbuf will be reused, in which case b_ffname will be set.
-    // SAFETY: reads the current buffer's state.
-    let curbuf_is_reusable = unsafe { curbuf_reusable() };
+    let curbuf_is_reusable = curbuf_reusable();
     // SAFETY: caller contract; the argument is NUL-terminated.
     if !unsafe { do_arglist(args.arg, ArgListOp::Add, argn, true) } {
         return;
     }
-    // SAFETY: rebuilds the window title from the current buffer.
-    unsafe { maketitle() };
+    maketitle();
     // SAFETY: curbuf is valid.
     let empty_curbuf = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
         && (Buf::current().b_ffname.is_null() || curbuf_is_reusable);
@@ -361,7 +358,7 @@ pub unsafe fn ex_argadd(args: *mut ExArg) {
     };
     // SAFETY: caller contract; the argument is NUL-terminated.
     unsafe { do_arglist(args.arg, ArgListOp::Add, after, false) };
-    unsafe { maketitle() };
+    maketitle();
 }
 
 /// `:argdelete` — by range (`:2,3argdelete`, or bare for the current entry)
@@ -380,7 +377,7 @@ pub unsafe fn ex_argdelete(args: *mut ExArg) {
     } else {
         unsafe { do_arglist(args.arg, ArgListOp::Delete, 0, false) };
     }
-    unsafe { maketitle() };
+    maketitle();
 }
 
 /// The range half of `:argdelete`. Without a range it deletes the current

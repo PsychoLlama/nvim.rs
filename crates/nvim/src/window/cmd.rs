@@ -709,8 +709,7 @@ fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
 
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
-    // SAFETY: a buffer number the list was just searched for.
-    let _ = unsafe { buflist_getfile(fnum, 0 as LineNr, GETF_ALT as c_int, 0) };
+    let _ = buflist_getfile(fnum, 0 as LineNr, GETF_ALT as c_int, 0);
 }
 
 /// Whether the current buffer may not be changed right now.

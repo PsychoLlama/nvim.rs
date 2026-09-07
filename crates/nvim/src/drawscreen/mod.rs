@@ -536,7 +536,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     updating_screen.set(false);
 
     if need_maketitle.get() {
-        unsafe { maketitle() };
+        maketitle();
     }
 
     // Last, because scrolling may mess the command line up.

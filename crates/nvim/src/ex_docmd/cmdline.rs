@@ -428,7 +428,7 @@ pub unsafe fn do_cmdline(
             if !flags.has(DoCmdOpts::NOWAIT) && RECURSIVE.get() == 0 {
                 msg_didout_before_start = msg_didout.get();
                 msg_didany.set(false);
-                unsafe { msg_start() };
+                msg_start();
                 msg_scroll.set(1);
                 quiet_output = Some((Suppress::wait_return(), Suppress::redraw()));
             }

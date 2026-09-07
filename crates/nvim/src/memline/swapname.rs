@@ -33,7 +33,7 @@ use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
 /// The name is what identifies the swap file to the next `:recover`, so it
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
-pub unsafe fn ml_setname(buffer: Buf) {
+pub fn ml_setname(buffer: Buf) {
     let mfp = buffer.b_ml.ml_mfp;
     if unsafe { (*mfp).mf_fd } < 0 {
         // There is no swap file yet: with `'updatecount'` zero and
@@ -79,7 +79,7 @@ pub unsafe fn ml_setname(buffer: Buf) {
             success = true;
             unsafe { mf_free_fnames(mfp) };
             unsafe { mf_set_fnames(mfp, fname) };
-            unsafe { ml_upd_block0(buffer, UB_SAME_DIR) };
+            ml_upd_block0(buffer, UB_SAME_DIR);
             break;
         }
         unsafe { xfree(fname.cast()) }; // this name did not work, try another
@@ -105,6 +105,12 @@ pub unsafe fn ml_setname(buffer: Buf) {
 ///
 /// An unnamed buffer is handled as `""`, i.e. `<currentdir>/""`. The last
 /// character of `dir` must be an extra path separator; it is removed.
+///
+/// # Safety
+///
+/// `dir` must point at a NUL-terminated string, unaliased for the call.
+/// `dir_end` must point at a NUL-terminated string, unaliased for the call.
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn make_percent_swname(
     dir: *mut c_char,
     dir_end: *mut c_char,
@@ -142,6 +148,11 @@ pub unsafe fn make_percent_swname(
 /// `resolve()` in Vimscript does this for every part of the path; this does
 /// not. Returns `Ok` when `buf` holds a resolved name, `Err` when the caller
 /// should keep the name it already has.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string. `buf` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<(), Failed> {
     if fname.is_null() {
         return Err(Failed);
@@ -212,6 +223,12 @@ fn ends_with_double_sep(dir: &[u8]) -> bool {
 
 /// The swap file name for `fname` under the `'directory'` entry `dir_name`,
 /// allocated, or null.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `_ffname` must point at a NUL-terminated string, unaliased for the call.
+/// `dir_name` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn makeswapname(
     fname: *mut c_char,
     _ffname: *mut c_char,
@@ -259,6 +276,11 @@ pub unsafe fn makeswapname(
 /// - otherwise: in `dname`, under `fname`'s tail.
 ///
 /// The result is allocated, and may be null.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `dname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
     let tail = unsafe { path_tail(fname) };
     // SAFETY: the caller's NUL-terminated directory name. A tail of it is
@@ -291,6 +313,11 @@ pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_
 /// the way, and what the user can do about it.
 ///
 /// `fhname` is `fname` with the home directory replaced by `~`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `fhname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn attention_message(
     buffer: Buf,
     fname: *mut c_char,
@@ -347,6 +374,10 @@ unsafe fn attention_message(
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     unsafe { set_vim_var_string(Vv::Swapname, fname, -1) };
     unsafe { set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1) };
@@ -378,6 +409,11 @@ unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
 /// put the ATTENTION message in front of the user.
 ///
 /// Returns true when the swap file is gone afterwards, so its name is free.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `buf_fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn resolve_swapfile_clash(
     mut buffer: Buf,
     fname: *mut c_char,
@@ -449,6 +485,10 @@ unsafe fn resolve_swapfile_clash(
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
@@ -515,6 +555,12 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
 /// directory in the list exists, no new one is created.
 ///
 /// Returns the allocated name, or null.
+///
+/// # Safety
+///
+/// `dirp` must point at a writable `*mut c_char` slot the caller owns for the
+/// call. `old_fname` must point at a NUL-terminated string.
+/// `found_existing_dir` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn findswapname(
     buffer: Buf,
     dirp: *mut *mut c_char,
@@ -646,6 +692,12 @@ fn expanded(
 /// when non-zero, asks for the n'th name in `fname_out`.
 ///
 /// Returns the number of swap files found.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `ret_list` must point at a live list, unaliased for the call. `fname_out`
+/// must point at a writable `*mut c_char` slot the caller owns for the call.
 pub unsafe fn recover_names(
     fname: *mut c_char,
     do_list: bool,
@@ -670,7 +722,7 @@ pub unsafe fn recover_names(
         // Use msg() to start the scrolling properly.
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         tell(c"Swap files found:", 0);
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
     }
 
     let mut file_count = 0;
@@ -820,10 +872,10 @@ pub unsafe fn recover_names(
             } else {
                 for &name in found.iter() {
                     file_count += 1;
-                    unsafe { msg_outnum(file_count) };
+                    msg_outnum(file_count);
                     unsafe { msg_puts(c".    ".as_ptr()) };
                     unsafe { msg_puts(path_tail(name)) };
-                    unsafe { msg_putchar('\n' as c_int) };
+                    msg_putchar('\n' as c_int);
 
                     // Upstream's `kv_resize(msg, IOSIZE)`: a size hint.
                     let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
@@ -875,6 +927,12 @@ unsafe fn file_list<'a>(files: *mut *mut c_char, count: c_int) -> &'a mut [*mut 
 ///
 /// `prepend_dot` also asks for the hidden form, for a swap file kept in the
 /// same directory as the file itself.
+///
+/// # Safety
+///
+/// `names` must be six empty slots the caller owns and will free: each is
+/// written with an allocation. `path` must point at a NUL-terminated file
+/// name.
 unsafe fn recov_file_names(
     names: &mut [*mut c_char; 6],
     path: *mut c_char,

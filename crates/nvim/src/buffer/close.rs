@@ -424,8 +424,7 @@ fn close_buffer_inner(
         }
         let cursor = wp.w_cursor;
         let lnum = if cursor.lnum == 1 { 0 } else { cursor.lnum };
-        // SAFETY: a live buffer and a live window.
-        unsafe { buflist_setfpos(buffer, Some(wp), lnum, cursor.col, true) };
+        buflist_setfpos(buffer, Some(wp), lnum, cursor.col, true);
     }
 
     let bufref = BufRef::of(buffer);

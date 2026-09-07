@@ -208,7 +208,7 @@ pub(crate) unsafe fn ex_blast(args: *mut ExArg) {
 ///
 /// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_preserve(_args: *mut ExArg) {
-    unsafe { ml_preserve(Buf::current(), true, true) };
+    ml_preserve(Buf::current(), true, true);
 }
 
 /// `:recover` — read the buffer back out of a swap file.
@@ -241,7 +241,7 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
         && (byte(args.arg) == NUL
             || unsafe { setfname(Buf::current(), args.arg, ptr::null_mut(), true) }.is_ok())
     {
-        unsafe { ml_recover(true) };
+        ml_recover(true);
     }
     recoverymode.set(false);
 }
@@ -465,7 +465,7 @@ pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
         let was_invalid = Win::current().w_arg_idx_invalid;
         check_arg_idx(Win::current());
         if was_invalid != Win::current().w_arg_idx_invalid {
-            unsafe { maketitle() };
+            maketitle();
         }
     }
 
@@ -668,8 +668,7 @@ pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
 
 /// `buf_hide()` as checked code.
 fn buf_hide(buffer: Buf) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::buffer::buf_hide(buffer) }
+    crate::buffer::buf_hide(buffer)
 }
 
 /// `do_bang()` as checked code.

@@ -226,9 +226,9 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
         // Wait a bit when overwriting an error message.
         unsafe { msg_check_for_delay(false) };
     }
-    unsafe { msg_start() };
+    msg_start();
     if prev_msg_col != 0 && msg_col.get() == 0 {
-        unsafe { msg_putchar(b'\r' as c_int) }; // overwrite any previous message
+        msg_putchar(b'\r' as c_int); // overwrite any previous message
     }
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);

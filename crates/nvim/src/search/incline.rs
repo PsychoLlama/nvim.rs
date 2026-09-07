@@ -159,7 +159,7 @@ pub(crate) unsafe fn show_pat_in_path(
     // machinery below writes again.
     let mut num = [0 as c_char; IOSIZE as usize];
     if did_show {
-        unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
+        msg_putchar('\n' as c_int); // cursor below the last one
     } else if msg_silent.get() == 0 {
         gotocmdline(true); // cursor at the status line
     }
@@ -216,6 +216,6 @@ pub(crate) unsafe fn show_pat_in_path(
             line = unsafe { ml_get(*lnum) };
             linelen = unsafe { ml_get_len(*lnum) } as size_t;
         }
-        unsafe { msg_putchar('\n' as c_int) };
+        msg_putchar('\n' as c_int);
     }
 }

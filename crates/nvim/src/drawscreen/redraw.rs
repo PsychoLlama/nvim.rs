@@ -284,7 +284,7 @@ pub unsafe fn redraw_statuslines() {
         unsafe { draw_tabline() };
     }
     if need_maketitle.get() {
-        unsafe { maketitle() };
+        maketitle();
     }
 }
 

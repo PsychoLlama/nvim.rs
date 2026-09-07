@@ -87,7 +87,7 @@ pub(super) unsafe fn switch_to_other_buffer(
             Win::current().w_alt_fnum = Buf::current().handle;
         }
         if let Some(old) = oldwin.and_then(WinId::get) {
-            unsafe { buflist_altfpos(old) };
+            buflist_altfpos(old);
         }
     }
 

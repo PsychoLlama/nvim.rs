@@ -189,8 +189,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     curhead.uh_entry = newlist;
     curhead.uh_flags = new_flags;
-    // SAFETY: a live buffer.
-    if old_flags & UH_EMPTYBUF != 0 && unsafe { buf_is_empty(buf) } {
+    if old_flags & UH_EMPTYBUF != 0 && buf_is_empty(buf) {
         buf.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     if old_flags & UH_CHANGED != 0 {

@@ -88,6 +88,11 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
 /// buffer and its window current around `get_address` -- the grammar reaches
 /// marks, patterns and the cursor.  `check_only` is the option validator,
 /// which runs before the buffer is necessarily in a window.
+///
+/// # Safety
+///
+/// `anchors` must point at a writable line number the caller owns.
+/// `num_anchors` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn parse_diffanchors(
     check_only: bool,
     buffer: Buf,
@@ -179,7 +184,7 @@ pub(crate) unsafe fn parse_diffanchors(
 ///
 /// `buflocal` says the buffer-local value changed rather than the global one,
 /// so only tabpages showing the current buffer need recomputing.
-pub unsafe fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
+pub fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
     let result = unsafe {
         parse_diffanchors(
             true,
@@ -200,7 +205,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
 }
 
 /// `'diffopt'` was set: parse it whole, or reject it whole.
-pub unsafe fn diffopt_changed() -> Result<(), Failed> {
+pub fn diffopt_changed() -> Result<(), Failed> {
     let mut context_new = 6;
     let mut foldcolumn_new = 2;
     let mut linematch_new = 0;
