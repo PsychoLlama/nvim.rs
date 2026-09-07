@@ -40,6 +40,10 @@ pub(crate) fn given(tv: &TypVal) -> bool {
 ///
 /// Returns `None` after raising the error, which both callers turn into a
 /// silent `-1` result.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval, unaliased for the call.
 pub(crate) unsafe fn strict_bool_arg(tv: *mut TypVal) -> Option<bool> {
     let mut error = false;
     let value = unsafe { tv_get_bool_chk(tv, &raw mut error) };
@@ -54,6 +58,10 @@ pub(crate) unsafe fn strict_bool_arg(tv: *mut TypVal) -> Option<bool> {
 }
 
 /// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
+///
+/// # Safety
+///
+/// `s` must point at `maxlen` readable bytes.
 unsafe fn strnlen(s: *const c_char, maxlen: size_t) -> size_t {
     let mut n = 0;
     while n < maxlen && unsafe { *s.add(n) } != 0 {
@@ -107,6 +115,10 @@ fn strnicmp_asc(a: &[u8], b: &[u8], len: size_t) -> c_int {
 
 /// Copy at most `len` bytes of `string` into a fresh NUL-terminated
 /// buffer, zero-filling the remainder (strncpy semantics).
+///
+/// # Safety
+///
+/// `string` must point at `len` readable bytes.
 pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
     let n = unsafe { strnlen(string, len) };
     let ret = unsafe { xmallocz(len) as *mut c_char };
@@ -119,6 +131,10 @@ pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
 }
 
 /// Truncate unescaped trailing spaces and tabs in place.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn del_trailing_spaces(text: *mut c_char) {
     let len = unsafe { CStr::from_ptr(text) }.to_bytes().len();
     let s = unsafe { slice::from_raw_parts_mut(text as *mut u8, len) };
@@ -128,11 +144,20 @@ pub unsafe fn del_trailing_spaces(text: *mut c_char) {
 
 /// Case-insensitive `strcmp` equality where NULL only equals NULL.
 /// strcasecmp is locale-aware, so the libc call stays.
+///
+/// # Safety
+///
+/// `a` must point at a NUL-terminated string. `b` must point at a NUL-
+/// terminated string.
 pub unsafe fn striequal(a: *const c_char, b: *const c_char) -> bool {
     (a.is_null() && b.is_null())
         || (!a.is_null() && !b.is_null() && unsafe { strcasecmp(a, b) } == 0)
 }
 
+/// # Safety
+///
+/// `s1` must point at a NUL-terminated string. `s2` must point at `len`
+/// readable bytes.
 pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t) -> c_int {
     strnicmp_asc(
         unsafe { CStr::from_ptr(s1) }.to_bytes(),
@@ -142,6 +167,10 @@ pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t
 }
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     if c <= 0 {
         ptr::null_mut()
@@ -155,6 +184,11 @@ pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
     }
 }
 
+/// # Safety
+///
+/// As `qsort`'s comparator over an array of `*mut c_char`: `s1` and `s2` must
+/// each point at one of those elements, and each element must be a NUL-
+/// terminated string.
 unsafe extern "C" fn sort_compare(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -162,6 +196,10 @@ unsafe extern "C" fn sort_compare(
     unsafe { cstr::cmp(*(s1 as *const *const c_char), *(s2 as *const *const c_char)) as c_int }
 }
 
+/// # Safety
+///
+/// `files` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
     type Compare = unsafe extern "C" fn(*const c_void, *const c_void) -> c_int;
     let base = files as *mut c_void;
@@ -170,11 +208,19 @@ pub unsafe fn sort_strings(files: *mut *mut c_char, count: c_int) {
     unsafe { qsort(base, count, width, Some(sort_compare as Compare)) };
 }
 
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string.
 pub unsafe fn has_non_ascii(s: *const c_char) -> bool {
     unsafe { !s.is_null() && any_non_ascii(CStr::from_ptr(s).to_bytes()) }
 }
 
 /// Freshly allocated `str1 ++ str2`, NUL-terminated.
+///
+/// # Safety
+///
+/// `str1` must point at a NUL-terminated string. `str2` must point at a NUL-
+/// terminated string.
 pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char {
     let a = unsafe { CStr::from_ptr(str1) }.to_bytes();
     let b = unsafe { CStr::from_ptr(str2) }.to_bytes_with_nul();
@@ -189,6 +235,10 @@ pub unsafe fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_cha
 /// Composing sequences move as a unit — `utfc_ptr2len` gives the length of
 /// the whole character at each position — so the source is walked forwards
 /// while the destination is filled from the back.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
     let len = unsafe { CStr::from_ptr(s) }.to_bytes().len();
     // `xmallocz` writes the terminator the C wrote by hand.
@@ -209,6 +259,11 @@ pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
 
 /// Every occurrence of `what` in `src` replaced by `rep`, freshly
 /// allocated, or NULL when `what` does not occur at all.
+///
+/// # Safety
+///
+/// `src` must point at a NUL-terminated string. `what` must point at a NUL-
+/// terminated string. `rep` must point at a NUL-terminated string.
 pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
     let what_len = unsafe { cstr::bytes_at(what) }.len();
 
@@ -259,6 +314,12 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
 /// The comparison length is the *longer* of the two, so a prefix sorts
 /// before the string it prefixes — `strncmp` stops at the shorter one's
 /// terminator either way.
+///
+/// # Safety
+///
+/// As `qsort`'s comparator over an array of `KeyValue`: `a` and `b` must each
+/// point at one of those elements, whose `value` must be a NUL-terminated
+/// string.
 pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
     let kv1 = unsafe { &*(a as *const KeyValue) };
     let kv2 = unsafe { &*(b as *const KeyValue) };

@@ -31,6 +31,7 @@ use crate::types::{
 
 // The carve of the transpiled module; see each child's docs.
 mod emit;
+mod float;
 mod spec;
 
 pub use self::emit::*;
@@ -45,6 +46,10 @@ const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 /// -- and the array is terminated by a `VAR_UNKNOWN` entry rather than by a
 /// count, so that entry is the only bound there is. The index moves on only
 /// when an argument was actually there.
+///
+/// # Safety
+///
+/// `tvs` must point at an initialized typval, unaliased for the call.
 unsafe fn next_arg(tvs: *mut TypVal, idxp: &mut c_int) -> Option<*mut TypVal> {
     let tv = unsafe { tvs.offset(*idxp as isize - 1) };
     if !given(unsafe { &*tv }) {
@@ -56,6 +61,10 @@ unsafe fn next_arg(tvs: *mut TypVal, idxp: &mut c_int) -> Option<*mut TypVal> {
 }
 
 /// The next argument as a number; 0 if it is not one.
+///
+/// # Safety
+///
+/// `tvs` must point at an initialized typval, unaliased for the call.
 pub(crate) unsafe fn tv_nr(tvs: *mut TypVal, idxp: &mut c_int) -> VarNumber {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0;
@@ -95,6 +104,10 @@ pub(crate) unsafe fn tv_str(
 ///
 /// Every pointer-shaped value -- String, List, Dict, Blob, Partial --
 /// occupies the same union slot, so reading `v_string` reads all of them.
+///
+/// # Safety
+///
+/// `tvs` must point at an initialized typval.
 pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_void {
     match unsafe { next_arg(tvs.cast_mut(), idxp) } {
         Some(tv) => unsafe { (*tv).vval.v_string as *const c_void },
@@ -104,6 +117,10 @@ pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_vo
 
 /// The next argument as a float; a Number is widened, anything else is
 /// `E807` and zero.
+///
+/// # Safety
+///
+/// `tvs` must point at an initialized typval, unaliased for the call.
 pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0.0;
@@ -119,6 +136,14 @@ pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
 }
 
 /// Append a formatted value to the string already in `str`.
+///
+/// # Safety
+///
+/// `str` must point at `str_m` writable bytes the caller owns holding a NUL-
+/// terminated string, unaliased for the call; the result is appended to it.
+/// `fmt` must point at a NUL-terminated format, and the variadic arguments
+/// must be exactly the ones its conversions name, at the types they name --
+/// the list is read blind.
 pub unsafe extern "C" fn vim_snprintf_add(
     str: *mut c_char,
     str_m: size_t,
@@ -135,6 +160,14 @@ pub unsafe extern "C" fn vim_snprintf_add(
 /// Returns the number of bytes, excluding the NUL, that *would* have been
 /// written had `str_m` been large enough — which is why it is not safe to
 /// use as a buffer offset. See `vim_snprintf_safelen`.
+///
+/// # Safety
+///
+/// `fmt` must point at a NUL-terminated format, and the variadic arguments
+/// must be exactly the ones its conversions name, at the types they name --
+/// the list is read blind. `str` must point at `str_m` writable bytes the
+/// caller owns, unaliased for the call; it is left NUL-terminated whenever
+/// `str_m` is not zero.
 pub unsafe extern "C" fn vim_snprintf(
     str: *mut c_char,
     str_m: size_t,
@@ -146,6 +179,14 @@ pub unsafe extern "C" fn vim_snprintf(
 
 /// Like `vim_snprintf` but with a return value that can safely increment a
 /// buffer length: never greater than `str_m - 1`.
+///
+/// # Safety
+///
+/// `fmt` must point at a NUL-terminated format, and the variadic arguments
+/// must be exactly the ones its conversions name, at the types they name --
+/// the list is read blind. `str` must point at `str_m` writable bytes the
+/// caller owns, unaliased for the call; it is left NUL-terminated whenever
+/// `str_m` is not zero.
 pub unsafe extern "C" fn vim_snprintf_safelen(
     str: *mut c_char,
     str_m: size_t,
@@ -163,6 +204,10 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     (str_l as size_t).min(str_m - 1)
 }
 
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string, unaliased for the call. `fmt`
+/// must point at a NUL-terminated string.
 pub unsafe fn vim_vsnprintf(
     str: *mut c_char,
     str_m: size_t,
@@ -204,6 +249,13 @@ const TMP_LEN: c_int = 350;
 /// The happy path formats into the rest of the current block and only
 /// charges the arena for what it used; if it does not fit, a block of
 /// exactly the right size is taken and the format run again.
+///
+/// # Safety
+///
+/// `arena` must be null or point at a live arena, which the answer's bytes
+/// are taken from and must outlive. `fmt` must point at a NUL-terminated
+/// format, and the variadic arguments must be exactly the ones its
+/// conversions name, at the types they name -- the list is read blind.
 pub unsafe extern "C" fn arena_printf(
     arena: *mut Arena,
     fmt: *const c_char,

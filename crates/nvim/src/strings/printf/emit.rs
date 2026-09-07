@@ -27,16 +27,16 @@ use core::ffi::{
 };
 use core::ptr;
 
+use super::float::render_float;
 use super::spec::{
     MAX_ALLOWED_STRING_WIDTH, format_overflow_error, get_unsigned_int, parse_fmt_types, skip_to_arg,
 };
-use super::{TMP_LEN, infinity_str, tv_float, tv_nr, tv_ptr, tv_str};
+use super::{TMP_LEN, tv_float, tv_nr, tv_ptr, tv_str};
 use crate::ascii::ascii_isdigit;
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
-use crate::memory::{xfree, xmemscan, xstrchrnul, xstrlcpy};
+use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf};
-use crate::strings::vim_strchr;
 use crate::types::{
     TypVal, VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t,
 };
@@ -44,7 +44,7 @@ use crate::types::{
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
 
 /// The scratch buffer one conversion is rendered into.
-const TMP: usize = TMP_LEN as usize;
+pub(super) const TMP: usize = TMP_LEN as usize;
 
 // ---------------------------------------------------------------------
 // The destination
@@ -86,6 +86,10 @@ impl Sink {
     }
 
     /// Append `n` bytes from `src`, truncating at the end of the buffer.
+    ///
+    /// # Safety
+    ///
+    /// `src` must point at `n` readable bytes.
     unsafe fn copy(&mut self, src: *const c_char, n: size_t) {
         if self.fits {
             let avail = self.avail();
@@ -101,6 +105,12 @@ impl Sink {
     }
 
     /// Append `n` copies of `byte`, truncating at the end of the buffer.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a `Sink` built by `Sink::new` from `capacity` writable
+    /// bytes the caller owns, unaliased for the call: nothing checks the buffer,
+    /// only the count it was given.
     unsafe fn fill(&mut self, byte: u8, n: size_t) {
         if self.fits {
             let avail = self.avail();
@@ -111,6 +121,12 @@ impl Sink {
     }
 
     /// NUL-terminate, at the end of the output or of the buffer.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a `Sink` built by `Sink::new` from `capacity` writable
+    /// bytes the caller owns, unaliased for the call: nothing checks the buffer,
+    /// only the count it was given.
     unsafe fn terminate(&self) {
         if self.capacity > 0 {
             unsafe { *self.buf.add(self.produced.min(self.capacity - 1)) = 0 };
@@ -128,16 +144,16 @@ impl Sink {
 /// `VAR_UNKNOWN`-terminated `TypVal` array that can be indexed; otherwise
 /// it is a C `va_list`, which can only be read forwards -- hence `position`,
 /// `ap_start` and the recorded `ap_types`.
-struct Args<'f> {
-    tvs: *mut TypVal,
-    ap: VaList<'f>,
-    ap_start: VaList<'f>,
-    ap_types: *mut *const c_char,
+pub(super) struct Args<'f> {
+    pub(super) tvs: *mut TypVal,
+    pub(super) ap: VaList<'f>,
+    pub(super) ap_start: VaList<'f>,
+    pub(super) ap_types: *mut *const c_char,
     /// One-based index of the argument to read next.
-    arg_idx: c_int,
+    pub(super) arg_idx: c_int,
     /// Where the `va_list` actually is.
-    arg_cur: c_int,
-    fmt: *const c_char,
+    pub(super) arg_cur: c_int,
+    pub(super) fmt: *const c_char,
 }
 
 impl<'f> Args<'f> {
@@ -146,6 +162,14 @@ impl<'f> Args<'f> {
     }
 
     /// Move the `va_list` onto argument `arg_idx`.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be an `Args` built for the format it is being walked against:
+    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
+    /// `fmt`, its `arg_cur` must say where `ap` really is, and reaching an
+    /// argument behind the cursor re-reads every argument in between at the
+    /// recorded types.
     unsafe fn position(&mut self) {
         // Bound in the order the call would have evaluated them: the clone
         // reads `ap_start` before the three field addresses are taken, and
@@ -161,6 +185,10 @@ impl<'f> Args<'f> {
 
     /// `numbuf` is scratch a Number argument is rendered into; it must
     /// outlive the answer.
+    ///
+    /// # Safety
+    ///
+    /// `numbuf` must point at a NUL-terminated string, unaliased for the call.
     unsafe fn next_string(
         &mut self,
         tofree: &mut *mut c_char,
@@ -174,6 +202,12 @@ impl<'f> Args<'f> {
         }
     }
 
+    /// # Safety
+    ///
+    /// `self` must be an `Args` built for the format it is being walked against:
+    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
+    /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
+    /// reaches must have been passed as a pointer.
     unsafe fn next_pointer(&mut self) -> *const c_void {
         if self.reads_typvals() {
             unsafe { tv_ptr(self.tvs, &mut self.arg_idx) }
@@ -183,7 +217,13 @@ impl<'f> Args<'f> {
         }
     }
 
-    unsafe fn next_float(&mut self) -> c_double {
+    /// # Safety
+    ///
+    /// `self` must be an `Args` built for the format it is being walked against:
+    /// its `ap_types` table must be the one `parse_fmt_types` filled in for
+    /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
+    /// reaches must have been passed as a `double`.
+    pub(super) unsafe fn next_float(&mut self) -> c_double {
         if self.reads_typvals() {
             unsafe { tv_float(self.tvs, &mut self.arg_idx) }
         } else {
@@ -217,28 +257,28 @@ macro_rules! next_number {
 
 /// A parsed `%` conversion: everything between the `%` and the end of the
 /// specifier, plus the two padding counts the render step fills in.
-struct Conversion {
-    min_field_width: size_t,
-    precision: size_t,
-    precision_specified: bool,
-    zero_padding: bool,
-    justify_left: bool,
-    alternate_form: bool,
-    force_sign: bool,
+pub(super) struct Conversion {
+    pub(super) min_field_width: size_t,
+    pub(super) precision: size_t,
+    pub(super) precision_specified: bool,
+    pub(super) zero_padding: bool,
+    pub(super) justify_left: bool,
+    pub(super) alternate_form: bool,
+    pub(super) force_sign: bool,
     /// A positive value is prefixed with a space rather than a `+`. Set by
     /// the ` ` flag, cleared by `+`, which is why `%+ d` prints `+`.
-    space_for_positive: bool,
+    pub(super) space_for_positive: bool,
     /// `\0`, `h`, `l`, `L` (for `ll`) or `z`.
-    length_modifier: u8,
-    fmt_spec: u8,
+    pub(super) length_modifier: u8,
+    pub(super) fmt_spec: u8,
     /// Zeros inserted between the sign/prefix and the digits.
-    zeros_to_pad: size_t,
+    pub(super) zeros_to_pad: size_t,
     /// How far into the rendered text those zeros go.
-    zero_insertion_ind: size_t,
+    pub(super) zero_insertion_ind: size_t,
 }
 
 /// Where a rendered conversion ended up.
-enum Body {
+pub(super) enum Body {
     /// The first `n` bytes of the caller's scratch buffer.
     Tmp(size_t),
     /// `n` bytes at a pointer the caller does not own.
@@ -250,6 +290,10 @@ enum Body {
 /// `digstart` is only used to quote the offending digits in `E1510`; the
 /// `va_list` spelling clamps instead of raising, because an internal
 /// `vim_snprintf` has no user to blame.
+///
+/// # Safety
+///
+/// `digstart` must point at a NUL-terminated string.
 unsafe fn star_argument(
     args: &mut Args,
     p: &mut *const c_char,
@@ -276,6 +320,13 @@ unsafe fn star_argument(
 ///
 /// Reads arguments as it goes: a `*` width or precision consumes one before
 /// the conversion's own argument.
+///
+/// # Safety
+///
+/// `p` must point at a cursor standing on the `%` of a conversion in the NUL-
+/// terminated format `args` was built for; it is advanced past what is
+/// parsed. `args` carries the same obligation as `Args::next`: its argument
+/// list and type table must match that format.
 unsafe fn parse_conversion(
     args: &mut Args,
     p: &mut *const c_char,
@@ -419,6 +470,10 @@ unsafe fn parse_conversion(
 /// precision bounds the cell count, and the field width is then corrected
 /// by the difference between bytes and cells so that padding still lines
 /// up on screen.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 unsafe fn render_string(
     c: &mut Conversion,
     args: &mut Args,
@@ -495,6 +550,12 @@ unsafe fn render_string(
 /// into `tmp` through libc's `snprintf` (or, for `%b`, bit by bit), and
 /// then `zero_insertion_ind` is moved past whatever must stay in front of
 /// the zeros -- a `-` sign, or an alternate-form `0x` prefix.
+///
+/// # Safety
+///
+/// The argument `args` reaches next must have been passed at the type `c`'s
+/// conversion and length modifier name -- a `va_list` is read blind, and
+/// reading a `double` as an `int` is undefined behaviour.
 unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; TMP]) -> Body {
     // `arg_sign` is 0 for zero, 1 for positive, -1 for negative; an
     // unsigned value is never negative.
@@ -637,172 +698,6 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
     Body::Tmp(str_arg_l)
 }
 
-/// `%f`, `%F`, `%e`, `%E`, `%g` and `%G`.
-///
-/// Everything but infinity and NaN is handed to libc's `snprintf` with a
-/// format built here, because the exact digits are the platform's business.
-/// `%g` is not passed through: it is resolved to `%f` or `%e` first, and
-/// the trailing zeros it would have dropped are removed afterwards.
-unsafe fn render_float(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char; TMP]) -> Body {
-    let f = unsafe { args.next_float() };
-    // Not `f.abs()`: the C tests `f < 0`, so -0.0 stays -0.0.
-    let abs_f = if f < 0.0 { -f } else { f };
-    let mut remove_trailing_zeroes = false;
-
-    if matches!(c.fmt_spec, b'g' | b'G') {
-        // The range in which `%g` chooses fixed notation.
-        c.fmt_spec = if (0.001..10000000.0).contains(&abs_f) || abs_f == 0.0 {
-            if c.fmt_spec.is_ascii_uppercase() {
-                b'F'
-            } else {
-                b'f'
-            }
-        } else if c.fmt_spec == b'g' {
-            b'e'
-        } else {
-            b'E'
-        };
-        remove_trailing_zeroes = true;
-    }
-
-    // A fixed-notation value this large would not fit the scratch
-    // buffer, so it prints as infinity too.
-    if f.is_infinite() || (matches!(c.fmt_spec, b'f' | b'F') && abs_f > 1.0e307) {
-        let sign = c.fmt_spec as c_char;
-        let text = infinity_str(f > 0.0, sign, c.force_sign, c.space_for_positive);
-        let out = tmp.as_mut_ptr();
-        unsafe { xstrlcpy(out, text.as_ptr(), TMP) };
-        c.zero_padding = false;
-        return Body::Tmp(unsafe { cstr::bytes_at(tmp.as_ptr()) }.len());
-    }
-    if f.is_nan() {
-        let nan = if c.fmt_spec.is_ascii_uppercase() {
-            c"NAN"
-        } else {
-            c"nan"
-        };
-        let into = tmp.as_mut_ptr().cast::<u8>();
-        unsafe { into.copy_from(nan.as_ptr().cast(), 4) };
-        c.zero_padding = false;
-        return Body::Tmp(3);
-    }
-
-    // Build the format libc gets: '%', an optional sign flag, an
-    // optional precision, and the conversion.
-    let mut format = [0 as c_char; 40];
-    format[0] = b'%' as c_char;
-    let mut l: size_t = 1;
-    if c.force_sign {
-        format[l] = if c.space_for_positive { b' ' } else { b'+' } as c_char;
-        l += 1;
-    }
-    if c.precision_specified {
-        // Bound the precision so the result still fits `tmp`: a fixed
-        // conversion also spends digits on the integer part.
-        let mut max_prec = (TMP_LEN - 10) as size_t;
-        if matches!(c.fmt_spec, b'f' | b'F') && abs_f > 1.0 {
-            max_prec -= abs_f.log10() as size_t;
-        }
-        c.precision = c.precision.min(max_prec);
-        let out = unsafe { format.as_mut_ptr().add(l) };
-        let room = format.len() - l;
-        let prec = c.precision as c_int;
-        l += unsafe { snprintf(out, room, c".%d".as_ptr(), prec) as size_t };
-    }
-    debug_assert!(l + 1 < format.len());
-    // libc has no `%F`; it prints the same digits as `%f`.
-    format[l] = if c.fmt_spec == b'F' { b'f' } else { c.fmt_spec } as c_char;
-    format[l + 1] = 0;
-
-    let mut str_arg_l = unsafe { snprintf(tmp.as_mut_ptr(), TMP, format.as_ptr(), f) as size_t };
-    debug_assert!(str_arg_l < TMP);
-
-    if remove_trailing_zeroes {
-        str_arg_l = unsafe { trim_float(c, tmp, str_arg_l) };
-    } else {
-        str_arg_l = unsafe { trim_exponent_width(c, tmp, str_arg_l) };
-    }
-
-    // A zero-padded signed value keeps its sign in front of the zeros.
-    if c.zero_padding && c.min_field_width > str_arg_l && (tmp[0] as u8 == b'-' || c.force_sign) {
-        c.zeros_to_pad = c.min_field_width - str_arg_l;
-        c.zero_insertion_ind = 1;
-    }
-    Body::Tmp(str_arg_l)
-}
-
-/// Delete one byte at `at`, terminator included, and report the new length.
-unsafe fn delete_byte(at: *mut c_char, len: size_t) -> size_t {
-    let n_len = unsafe { cstr::bytes_at(at.add(1)) }.len();
-    unsafe { at.cast::<u8>().copy_from(at.add(1).cast(), n_len + 1) };
-    len - 1
-}
-
-/// `%g`'s trailing-zero removal.
-///
-/// In fixed notation the zeros are at the end; in exponential notation they
-/// are in front of the exponent, and the exponent itself also loses its `+`
-/// and its own leading zeros first.
-unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -> size_t {
-    let mut tp;
-    if matches!(c.fmt_spec, b'f' | b'F') {
-        tp = unsafe { tmp.as_mut_ptr().add(len).sub(1) };
-    } else {
-        // `as_mut_ptr`, not `as_ptr`: `delete_byte` writes through what
-        // this hands back, and a pointer derived from a *shared* borrow
-        // of `tmp` only grants read permission (Stacked Borrows).
-        let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
-        tp = unsafe { vim_strchr(tmp.as_mut_ptr().cast_const(), e) };
-        if tp.is_null() {
-            return len;
-        }
-        if unsafe { *tp.add(1) as u8 } == b'+' {
-            len = unsafe { delete_byte(tp.add(1), len) };
-        }
-        // Leading zeros of the exponent, past its sign.
-        let i = if unsafe { *tp.add(1) as u8 } == b'-' {
-            2
-        } else {
-            1
-        };
-        while unsafe { *tp.add(i) as u8 } == b'0' {
-            len = unsafe { delete_byte(tp.add(i), len) };
-        }
-        tp = unsafe { tp.sub(1) };
-    }
-
-    // An explicit precision asked for those zeros; keep them.
-    if !c.precision_specified {
-        // Never past `tmp[2]`, so `0.0` keeps a digit either side of
-        // the point.
-        while tp > unsafe { tmp.as_mut_ptr().add(2) }
-            && unsafe { *tp as u8 } == b'0'
-            && unsafe { *tp.sub(1) as u8 } != b'.'
-        {
-            len = unsafe { delete_byte(tp, len) };
-            tp = unsafe { tp.sub(1) };
-        }
-    }
-    len
-}
-
-/// Normalise an exponent that libc padded to three digits down to two.
-unsafe fn trim_exponent_width(c: &Conversion, tmp: &mut [c_char; TMP], len: size_t) -> size_t {
-    // Only the conversion's own case is looked for, so `%f` -- which
-    // has no exponent -- never matches.
-    let e = if c.fmt_spec == b'e' { b'e' } else { b'E' } as c_int;
-    let tp = unsafe { vim_strchr(tmp.as_ptr(), e) };
-    if !tp.is_null()
-        && matches!(unsafe { *tp.add(1) as u8 }, b'+' | b'-')
-        && unsafe { *tp.add(2) as u8 } == b'0'
-        && ascii_isdigit(unsafe { *tp.add(3) as c_int })
-        && ascii_isdigit(unsafe { *tp.add(4) as c_int })
-    {
-        return unsafe { delete_byte(tp.add(2), len) };
-    }
-    len
-}
-
 // ---------------------------------------------------------------------
 // The driver
 // ---------------------------------------------------------------------
@@ -812,6 +707,10 @@ unsafe fn trim_exponent_width(c: &Conversion, tmp: &mut [c_char; TMP], len: size
 /// Three pieces in order: the field-width padding when right-justified, the
 /// zeros (which go *inside* the rendered text, after its sign or `0x`
 /// prefix), the text itself, and the field-width padding when left-justified.
+///
+/// # Safety
+///
+/// `body` must point at `len` readable bytes.
 unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, len: size_t) {
     let padding = || {
         debug_assert!(len <= size_t::MAX - c.zeros_to_pad);
@@ -847,6 +746,14 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
 ///
 /// Returns the length the result *would* have had, excluding the NUL, so a
 /// return value at or past `str_m` means the output was truncated.
+///
+/// # Safety
+///
+/// `fmt` must point at a NUL-terminated format. Either `tvs` points at an
+/// array of initialized typvals long enough for the conversions `fmt` names,
+/// or it is null and `ap_start` holds exactly those arguments at exactly
+/// those types -- neither list carries its own length. `str` must point at
+/// `str_m` writable bytes the caller owns, unaliased for the call.
 pub unsafe fn vim_vsnprintf_typval<'f>(
     str: *mut c_char,
     str_m: size_t,

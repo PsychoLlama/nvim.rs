@@ -29,6 +29,10 @@ pub(crate) fn ascii_upcase(s: &mut [u8]) {
 }
 
 /// ASCII-uppercased copy of `string`.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strsave_up(string: *const c_char) -> *mut c_char {
     let p1 = unsafe { xmalloc(cstr::bytes_at(string).len().wrapping_add(1)) as *mut c_char };
     unsafe { vim_strcpy_up(p1, string) };
@@ -36,6 +40,10 @@ pub unsafe fn vim_strsave_up(string: *const c_char) -> *mut c_char {
 }
 
 /// ASCII-uppercased copy of at most `len` bytes of `string`.
+///
+/// # Safety
+///
+/// `string` must point at `len` readable bytes.
 pub unsafe fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char {
     let p1 = unsafe { xmalloc(len.wrapping_add(1)) as *mut c_char };
     unsafe { vim_strncpy_up(p1, string, len) };
@@ -43,12 +51,21 @@ pub unsafe fn vim_strnsave_up(string: *const c_char, len: size_t) -> *mut c_char
 }
 
 /// ASCII-uppercase the C string in place.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn vim_strup(p: *mut c_char) {
     let len = unsafe { CStr::from_ptr(p) }.to_bytes().len();
     ascii_upcase(unsafe { slice::from_raw_parts_mut(p as *mut u8, len) });
 }
 
 /// `strcpy` that ASCII-uppercases while copying.
+///
+/// # Safety
+///
+/// `dst` must point at a NUL-terminated string, unaliased for the call. `src`
+/// must point at a NUL-terminated string.
 pub unsafe fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
     let bytes = unsafe { CStr::from_ptr(src) }.to_bytes_with_nul();
     let out = unsafe { slice::from_raw_parts_mut(dst as *mut u8, bytes.len()) };
@@ -57,6 +74,11 @@ pub unsafe fn vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
 }
 
 /// Like `vim_strcpy_up` but copies at most `n` bytes; always terminates.
+///
+/// # Safety
+///
+/// `dst` must point at a NUL-terminated string, unaliased for the call. `src`
+/// must point at `n` readable bytes.
 pub unsafe fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     let len = unsafe { strnlen(src, n) };
     let out = unsafe { slice::from_raw_parts_mut(dst as *mut u8, len + 1) };
@@ -69,6 +91,11 @@ pub unsafe fn vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
 
 /// `memcpy` that ASCII-uppercases while copying: exactly `n` bytes, no
 /// terminator.
+///
+/// # Safety
+///
+/// `dst` must point at a NUL-terminated string, unaliased for the call. `src`
+/// must point at `n` readable bytes.
 pub unsafe fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
     if n == 0 {
         return;
@@ -80,6 +107,10 @@ pub unsafe fn vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: size_t) {
 
 /// Case-fold `orig` per character (multibyte-aware), growing the result
 /// when a folded character encodes longer than its original.
+///
+/// # Safety
+///
+/// `orig` must point at a NUL-terminated string.
 pub unsafe fn strcase_save(orig: *const c_char, upper: bool) -> *mut c_char {
     let mut orig_len = unsafe { cstr::bytes_at(orig) }.len();
     let mut res = unsafe { xmalloc(orig_len.wrapping_add(1)) as *mut c_char };

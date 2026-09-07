@@ -42,6 +42,13 @@ use crate::types::{
 const NUMBUFLEN: usize = 65;
 
 /// "str2list()" function: the string as a list of code points.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_str2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
@@ -57,6 +64,13 @@ pub unsafe fn f_str2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// The sign is handled here rather than by `vim_str2nr`, so that a base
 /// prefix may follow it and so that whitespace between the two is allowed.
 /// Text after the number is silently ignored.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_str2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut base = 10;
@@ -100,6 +114,13 @@ pub unsafe fn f_str2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// "stridx()" function: the byte index of the first occurrence.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_stridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -133,6 +154,13 @@ pub unsafe fn f_stridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// "strridx()" function: the byte index of the last occurrence at or
 /// before `end_idx`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -178,12 +206,26 @@ pub unsafe fn f_strridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "string()" function.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_string(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = encode_tv2string(args, ptr::null_mut()) };
 }
 
 /// "strlen()" function: the length in bytes.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strlen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = cstr::bytes_at(numbuf.string(args)).len() as VarNumber };
@@ -193,6 +235,12 @@ pub unsafe fn f_strlen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 ///
 /// `skipcc` folds a composing character into the base character it
 /// follows; without it each one counts on its own.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 unsafe fn strchar_common(args: *mut TypVal, result: *mut TypVal, skipcc: bool) {
     let mut numbuf = NumBuf::new();
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
@@ -210,12 +258,26 @@ unsafe fn strchar_common(args: *mut TypVal, result: *mut TypVal, skipcc: bool) {
 }
 
 /// "strcharlen()" function: characters, composing characters folded in.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strcharlen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { strchar_common(args, result, true) }
 }
 
 /// "strchars()" function: characters, composing ones counted unless the
 /// optional `skipcc` argument says otherwise.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let skipcc = if given(unsafe { &*args.add(1) }) {
         match unsafe { strict_bool_arg(args.add(1)) } {
@@ -230,6 +292,13 @@ pub unsafe fn f_strchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
 /// "strdisplaywidth()" function: screen cells, tabs expanded against the
 /// optional starting column.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strdisplaywidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let s = unsafe { numbuf.string(args) };
@@ -244,12 +313,26 @@ pub unsafe fn f_strdisplaywidth(args: *mut TypVal, result: *mut TypVal, _fptr: E
 }
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = mb_string2cells(numbuf.string(args)) as VarNumber };
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strtrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
@@ -257,6 +340,13 @@ pub unsafe fn f_strtrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// "tolower()" function.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_tolower(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
@@ -264,6 +354,13 @@ pub unsafe fn f_tolower(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "toupper()" function.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_toupper(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
@@ -277,6 +374,13 @@ pub unsafe fn f_toupper(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// the end of `tostr`, or once, the first time an input character is *not*
 /// in `fromstr` and the counts can be compared directly. So
 /// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
@@ -373,6 +477,13 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
 /// no mask the set trimmed is whitespace plus U+00A0; with one it is
 /// exactly the mask's characters, and an empty mask reverts to the
 /// default.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf1 = [0 as c_char; NUMBUFLEN];

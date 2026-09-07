@@ -44,6 +44,10 @@ pub(crate) fn unquote(src: &[u8], emit: &mut impl FnMut(u8)) {
     }
 }
 
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string. `esc_chars` must point at
+/// a NUL-terminated string.
 pub unsafe fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     unsafe { vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, false) }
 }
@@ -51,6 +55,11 @@ pub unsafe fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_cha
 /// Copy `string`, prefixing `cc` to every byte in `esc_chars` (and, with
 /// `bsl`, to the backslashes `rem_backslash` flags). Multibyte characters
 /// are copied whole and never escaped.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string. `esc_chars` must point at
+/// a NUL-terminated string.
 pub unsafe fn vim_strsave_escaped_ext(
     string: *const c_char,
     esc_chars: *const c_char,
@@ -103,6 +112,10 @@ pub unsafe fn vim_strsave_escaped_ext(
 
 /// Copy `length` bytes of `string` with shell-style double-quoting
 /// resolved (see `unquote`), NUL-terminated.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strnsave_unquoted(string: *const c_char, length: size_t) -> *mut c_char {
     if length == 0 {
         return unsafe { xmallocz(0) as *mut c_char };
@@ -123,6 +136,10 @@ pub unsafe fn vim_strnsave_unquoted(string: *const c_char, length: size_t) -> *m
 /// Single-quote `string` for the shell, doubling embedded quotes
 /// (`'` → `'\''`) and — depending on the shell flavor and flags — escaping
 /// newlines, `!`, `\`, and `%`/`#` cmdline specials.
+///
+/// # Safety
+///
+/// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strsave_shellescape(
     string: *const c_char,
     do_special: bool,

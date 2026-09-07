@@ -65,6 +65,10 @@ impl CharLen {
 /// The code point at `p`, as the C reads it: through `utf_ptr2char` for a
 /// multi-byte character and as a **signed** `char` otherwise, so a stray
 /// byte over 0x7f is negative and never counts as a surrogate pair.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
     if char_len > 1 {
         // SAFETY: the caller's contract.
@@ -80,6 +84,12 @@ unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
 ///
 /// `comp` is the `byteidxcomp()` spelling, which counts a composing
 /// character as one of its own.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 unsafe fn byteidx_common(args: *mut TypVal, result: *mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -124,16 +134,37 @@ unsafe fn byteidx_common(args: *mut TypVal, result: *mut TypVal, comp: bool) {
 }
 
 /// "byteidx()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_byteidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { byteidx_common(args, result, false) }
 }
 
 /// "byteidxcomp()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_byteidxcomp(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { byteidx_common(args, result, true) }
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_charidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -196,6 +227,13 @@ pub unsafe fn f_charidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strgetchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -223,6 +261,13 @@ pub unsafe fn f_strgetchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "strutf16len()" function: the string's length in UTF-16 code units.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strutf16len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
@@ -250,6 +295,13 @@ pub unsafe fn f_strutf16len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// "strcharpart()" function: a substring measured in characters.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let p = unsafe { numbuf.string(args) };
@@ -319,6 +371,13 @@ pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut error = false;
@@ -364,6 +423,13 @@ pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_utf16idx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };

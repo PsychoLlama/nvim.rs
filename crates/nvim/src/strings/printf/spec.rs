@@ -88,6 +88,10 @@ impl ArgType {
 /// `spec` points *into* a format string, at the first character after the
 /// flags/width/precision — so it may be a length modifier, and it is never
 /// NUL-terminated at the end of the conversion.
+///
+/// # Safety
+///
+/// `spec` must point at a NUL-terminated string.
 pub(crate) unsafe fn format_typeof(spec: *const c_char) -> ArgType {
     let mut spec = spec;
     // Allowed length modifiers: none, h, l, ll (recorded as 'L'), z.
@@ -140,6 +144,10 @@ pub(crate) unsafe fn format_typeof(spec: *const c_char) -> ArgType {
 }
 
 /// The translated name of `spec`'s class, for an error message.
+///
+/// # Safety
+///
+/// `spec` must point at a NUL-terminated string.
 unsafe fn format_typename(spec: *const c_char) -> *const c_char {
     unsafe { gettext(format_typeof(spec).name()).as_ptr() }
 }
@@ -147,6 +155,10 @@ unsafe fn format_typename(spec: *const c_char) -> *const c_char {
 /// Record that positional argument `arg` (one-based) is used at the type
 /// `spec` spells, growing `ap_types` to fit and rejecting a position used
 /// at two incompatible types.
+///
+/// # Safety
+///
+/// `spec` must point at a NUL-terminated string.
 unsafe fn adjust_types(
     ap_types: &mut *mut *const c_char,
     arg: c_int,
@@ -217,6 +229,10 @@ unsafe fn adjust_types(
 }
 
 /// `E1510`, quoting only the digits that overflowed.
+///
+/// # Safety
+///
+/// `pstart` must point at a NUL-terminated string.
 pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
     let mut p = pstart;
     while ascii_isdigit(unsafe { *p as c_int }) {
@@ -234,6 +250,10 @@ pub(crate) unsafe fn format_overflow_error(pstart: *const c_char) {
 /// so an absurdly long run of digits cannot overflow the accumulator.
 /// `overflow_err` then decides between raising `E1510` and clamping —
 /// `printf()` raises, an internal `vim_snprintf` clamps.
+///
+/// # Safety
+///
+/// `pstart` must point at a NUL-terminated string.
 pub(crate) unsafe fn get_unsigned_int(
     pstart: *const c_char,
     p: &mut *const c_char,
@@ -260,6 +280,11 @@ pub(crate) unsafe fn get_unsigned_int(
 ///
 /// On failure `ap_types` is freed and both outputs are reset, so the
 /// caller may simply stop.
+///
+/// # Safety
+///
+/// `fmt` must point at a NUL-terminated string. `tvs` must point at an
+/// initialized typval, unaliased for the call.
 pub(crate) unsafe fn parse_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
@@ -279,6 +304,11 @@ pub(crate) unsafe fn parse_fmt_types(
 }
 
 /// `parse_fmt_types`' body; the caller owns the cleanup.
+///
+/// # Safety
+///
+/// `fmt` must point at a NUL-terminated string. `tvs` must point at an
+/// initialized typval, unaliased for the call.
 unsafe fn scan_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
@@ -481,6 +511,17 @@ unsafe fn scan_fmt_types(
 /// in between — at the types `parse_fmt_types` recorded, which is what
 /// `ap_types` is for. `arg_cur` tracks where the list actually is; the
 /// common case, the next argument in order, is the early return.
+///
+/// # Safety
+///
+/// `ap_types` must point at the type table `parse_fmt_types` filled in for
+/// `fmt`, with an entry for every positional argument; `fmt` must be the NUL-
+/// terminated format it was built from. `ap` must point at a `VaList`
+/// positioned `*arg_cur` arguments into `ap_start`'s list, and `arg_idx` and
+/// `arg_cur` at writable `int`s the caller owns. Walking to an argument
+/// behind the cursor *reads* every argument in between at the recorded types,
+/// so a wrong table is undefined behaviour even when the wanted argument is
+/// right.
 pub(crate) unsafe fn skip_to_arg<'f>(
     ap_types: *mut *const c_char,
     ap_start: VaList<'f>,
