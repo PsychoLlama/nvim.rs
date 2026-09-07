@@ -39,6 +39,14 @@ fn exacttext() -> bool {
 ///
 /// The copied string is stored in `*match_out`, and the actual end position of
 /// the matched text is returned in `*match_end`.
+///
+/// # Safety
+///
+/// `start` must point at an initialized position, unaliased for the call.
+/// `end` must point at an initialized position, unaliased for the call.
+/// `match_out` must point at a writable `*mut c_char` slot the caller owns
+/// for the call. `match_end` must point at an initialized position, unaliased
+/// for the call.
 pub(crate) unsafe fn copy_substring_from_pos(
     start: *mut Pos,
     end: *mut Pos,
@@ -109,6 +117,11 @@ pub(crate) unsafe fn copy_substring_from_pos(
 /// True if `str` matches the regex pattern `pat`.
 ///
 /// Honours `'ignorecase'` and `'smartcase'` to decide case sensitivity.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call. `str`
+/// must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool {
     if unsafe { cstr::eq(pat, str) } {
         return true;
@@ -147,6 +160,12 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
 ///
 /// If `lowercase` is true the appended text is folded down first, which is how
 /// `'smartcase'` behaviour is reproduced.  The answer is never NULL.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `end_match_pos` must point at an initialized position, unaliased for the
+/// call.
 pub(crate) unsafe fn concat_pattern_with_buffer_match(
     pat: *mut c_char,
     pat_len: c_int,
@@ -189,6 +208,13 @@ pub(crate) unsafe fn concat_pattern_with_buffer_match(
 ///
 /// `dir` is `FORWARD` or `BACKWARD`; `matches` and `num_matches` return the
 /// answer.  Returns `Ok` on success, `Err` otherwise.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub(crate) unsafe fn expand_pattern_in_buf(
     pat: *mut c_char,
     dir: Direction,

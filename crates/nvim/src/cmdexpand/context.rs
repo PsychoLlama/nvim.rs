@@ -32,6 +32,10 @@ fn is_cmd_alnum(c: u8) -> bool {
 ///
 /// `expand.xp_context` ends up one of the `EXPAND_*` values, with `xp_pattern`
 /// pointing at the text to expand.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn set_expand_context(expand: *mut Expand) {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -82,6 +86,13 @@ pub unsafe fn set_expand_context(expand: *mut Expand) {
 /// completion flags in `complp`.
 ///
 /// Returns a pointer to the text after the command, or NULL for failure.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string. `args` must point at the
+/// command's `ExArg`. `expand` must point at a live `Expand` context,
+/// unaliased for the call. `complp` must point at a live `ExpandContext`,
+/// unaliased for the call.
 pub(crate) unsafe fn set_cmd_index(
     cmd: *const c_char,
     args: *mut ExArg,
@@ -202,6 +213,13 @@ pub(crate) unsafe fn set_cmd_index(
 
 /// Set the completion context for a command argument with wild card
 /// characters.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`. `arg` must point at a NUL-
+/// terminated string. `expand` must point at a live `Expand` context,
+/// unaliased for the call. `complp` must point at a live `ExpandContext`,
+/// unaliased for the call.
 pub(crate) unsafe fn set_context_for_wildcard_arg(
     args: *mut ExArg,
     arg: *const c_char,
@@ -313,6 +331,11 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
 }
 
 /// Set the completion context for the `++opt=arg` argument.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_argopt(
     expand: *mut Expand,
     arg: *const c_char,
@@ -333,6 +356,11 @@ pub(crate) unsafe fn set_context_in_argopt(
 /// Set the completion context for the `:filter` command.
 ///
 /// Returns a pointer to the next command after the `:filter` command.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_filter_cmd(
     expand: *mut Expand,
     mut arg: *const c_char,
@@ -353,6 +381,11 @@ pub(crate) unsafe fn set_context_in_filter_cmd(
 /// Set the completion context for the `:match` command.
 ///
 /// Returns a pointer to the next command after the `:match` command.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_match_cmd(
     expand: *mut Expand,
     mut arg: *const c_char,
@@ -380,6 +413,10 @@ pub(crate) unsafe fn set_context_in_match_cmd(
 
 /// The next command after a `:global` or a `:v` command, or NULL if there is
 /// none.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn find_cmd_after_global_cmd(mut arg: *const c_char) -> *const c_char {
     let delim = unsafe { *arg } as u8 as c_int; // Get the delimiter.
     if delim != 0 {
@@ -401,6 +438,10 @@ pub(crate) unsafe fn find_cmd_after_global_cmd(mut arg: *const c_char) -> *const
 
 /// The next command after a `:substitute` or a `:&` command, or NULL if there
 /// is none.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn find_cmd_after_substitute_cmd(mut arg: *const c_char) -> *const c_char {
     let delim = unsafe { *arg } as u8 as c_int;
     if delim != 0 {
@@ -439,6 +480,11 @@ pub(crate) unsafe fn find_cmd_after_substitute_cmd(mut arg: *const c_char) -> *c
 
 /// The next command after a `:isearch`/`:dsearch`/`:ilist`/`:dlist`/`:ijump`/
 /// `:psearch`/`:djump`/`:isplit`/`:dsplit` command, or NULL if there is none.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn find_cmd_after_isearch_cmd(
     expand: *mut Expand,
     mut arg: *const c_char,
@@ -477,6 +523,11 @@ pub(crate) unsafe fn find_cmd_after_isearch_cmd(
 }
 
 /// Set the completion context for the `:unlet` command.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_unlet_cmd(
     expand: *mut Expand,
     mut arg: *const c_char,
@@ -504,6 +555,11 @@ pub(crate) unsafe fn set_context_in_unlet_cmd(
 }
 
 /// Set the completion context for the `:language` command.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_lang_cmd(
     expand: *mut Expand,
     arg: *const c_char,
@@ -532,6 +588,12 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
 }
 
 /// Set the completion context for the `:breakadd` command.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string. `cmdidx` must be an
+/// initialized `CmdIdx` whose pointer fields point at live data for the call.
 pub(crate) unsafe fn set_context_in_breakadd_cmd(
     expand: *mut Expand,
     arg: *const c_char,
@@ -587,6 +649,11 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
 }
 
 /// Set the completion context for the `:scriptnames` command.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_scriptnames_cmd(
     expand: *mut Expand,
     arg: *const c_char,
@@ -609,6 +676,11 @@ pub(crate) unsafe fn set_context_in_scriptnames_cmd(
 }
 
 /// Set the completion context for the `:filetype` command.  Always NULL.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_filetype_cmd(
     expand: *mut Expand,
     arg: *const c_char,
@@ -658,6 +730,10 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
 
 /// Set the completion context for commands that involve a search pattern and a
 /// line range (e.g. `:s`, `:g`, `:v`).
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn set_context_with_pattern(expand: *mut Expand) {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.

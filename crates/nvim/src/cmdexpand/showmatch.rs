@@ -20,6 +20,12 @@ use core::ptr;
 /// `matches[linenr]`, `matches[linenr + lines]`, … are the entries that share
 /// a line; `maxlen` is the column width and `showtail` asks for file names to
 /// be shown as their tail alone.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `matches` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn showmatches_oneline(
     expand: *mut Expand,
     matches: *mut *mut c_char,
@@ -122,6 +128,10 @@ pub(crate) unsafe fn showmatches_oneline(
 ///
 /// Answers `Expanded::Nothing` when the character that triggered expansion should
 /// be inserted as a normal character.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn showmatches(
     expand: *mut Expand,
     display_wildmenu: bool,
@@ -174,7 +184,7 @@ pub unsafe fn showmatches(
         };
         compl_selected.set(if noselect { -1 } else { 0 });
         pum_clear();
-        unsafe { cmdline_pum_display(true) };
+        cmdline_pum_display(true);
         return Expanded::Ok;
     }
 
@@ -290,6 +300,10 @@ pub unsafe fn showmatches(
 /// name path `s`, ignoring a trailing `/`.
 ///
 /// `eager` takes the text after the last separator even when it is empty.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_char {
     let mut t = s;
     let mut had_sep = false;
@@ -315,6 +329,10 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 ///
 /// When not completing file names, or when there is a wildcard in the path,
 /// false is returned.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -357,6 +375,12 @@ pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
 ///
 /// `context` is the `EXPAND_*` the pattern came from.  The answer is never
 /// NULL.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `context` must be an initialized `ExpandContext` whose pointer fields
+/// point at live data for the call.
 pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: ExpandContext) -> *mut c_char {
     if context != ExpandContext::Files
         && context != ExpandContext::FilesInPath

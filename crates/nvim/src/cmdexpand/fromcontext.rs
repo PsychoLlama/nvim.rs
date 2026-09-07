@@ -52,6 +52,14 @@ const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
 /// their own; the ones that do not fall through to [`expand_other`]'s table,
 /// and all of those run against a compiled regexp (or, under
 /// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub(crate) unsafe fn expand_from_context(
     expand: *mut Expand,
     pat: *mut c_char,
@@ -251,6 +259,16 @@ pub(crate) unsafe fn expand_from_context(
 ///
 /// `escaped` asks for spaces, tabs, backslashes and dots to be escaped in
 /// each match.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string. `expand` must point at a live
+/// `Expand` context, unaliased for the call. `regmatch` must point at a live
+/// `RegMatch`, unaliased for the call. `matches` must point at a writable
+/// `*mut *mut c_char` slot the caller owns for the call. `num_matches` must
+/// point at a writable `int` the caller owns. `func` must be an initialized
+/// `CompleteListItemGetter` whose pointer fields point at live data for the
+/// call.
 pub unsafe fn expand_generic(
     pat: *const c_char,
     expand: *mut Expand,

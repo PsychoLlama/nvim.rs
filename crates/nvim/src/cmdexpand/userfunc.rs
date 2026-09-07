@@ -38,6 +38,13 @@ const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
 /// `found` and remembered in `ht` so a later directory cannot offer them
 /// again -- the `ht` entries borrow `found`'s strings, so the table must not
 /// outlive it.
+///
+/// # Safety
+///
+/// `pathed_pattern` must point at a NUL-terminated string, unaliased for the
+/// call. `matches` must point at a writable `*mut *mut c_char` slot the
+/// caller owns for the call. `num_matches` must point at a writable `int` the
+/// caller owns. `ht` must point at a live hash table, unaliased for the call.
 pub(crate) unsafe fn expand_shellcmd_onedir(
     pathed_pattern: *mut c_char,
     pathlen: size_t,
@@ -87,6 +94,13 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
 /// `filepat` is a pattern to match with command names; `matches` and
 /// `num_matches` return the answer, with `*matches` either NULL or allocated.
 /// `flagsarg` is the caller's [`ExpandFlags`] set.
+///
+/// # Safety
+///
+/// `filepat` must point at a NUL-terminated string, unaliased for the call.
+/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub(crate) unsafe fn expand_shellcmd(
     filepat: *mut c_char,
     matches: *mut *mut *mut c_char,
@@ -246,6 +260,12 @@ pub(crate) unsafe fn expand_shellcmd(
 ///
 /// Returns its result — a string, a List or NULL.  The function is handed the
 /// pattern, the whole command line and the cursor column.
+///
+/// # Safety
+///
+/// `user_expand_func` must be an initialized `UserExpandFunc` whose pointer
+/// fields point at live data for the call. `expand` must point at a live
+/// `Expand` context, unaliased for the call.
 pub(crate) unsafe fn call_user_expand_func(
     user_expand_func: UserExpandFunc,
     expand: *mut Expand,
@@ -291,6 +311,14 @@ pub(crate) unsafe fn call_user_expand_func(
 
 /// Expand names with a function defined by the user
 /// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string. `expand` must point at a live
+/// `Expand` context, unaliased for the call. `regmatch` must point at a live
+/// `RegMatch`, unaliased for the call. `matches` must point at a writable
+/// `*mut *mut c_char` slot the caller owns for the call. `num_matches` must
+/// point at a writable `int` the caller owns.
 pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
     expand: *mut Expand,
@@ -378,6 +406,12 @@ pub(crate) unsafe fn expand_user_defined(
 }
 
 /// Copy the strings of a `customlist,` answer into a fresh match array.
+///
+/// # Safety
+///
+/// `retlist` must point at a live list, unaliased for the call. `matches`
+/// must point at a writable `*mut *mut c_char` slot the caller owns for the
+/// call. `num_matches` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn process_user_list(
     retlist: *mut List,
     matches: *mut *mut *mut c_char,
@@ -406,6 +440,13 @@ pub(crate) unsafe fn process_user_list(
 }
 
 /// Expand names with a list returned by a function defined by the user.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub(crate) unsafe fn expand_user_list(
     expand: *mut Expand,
     matches: *mut *mut *mut c_char,
@@ -426,6 +467,13 @@ pub(crate) unsafe fn expand_user_list(
 }
 
 /// Expand names with a Lua completion function.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `num_matches` must point at a writable `int` the caller owns. `matches`
+/// must point at a writable `*mut *mut c_char` slot the caller owns for the
+/// call.
 pub(crate) unsafe fn expand_user_lua(
     expand: *mut Expand,
     num_matches: *mut c_int,
@@ -453,6 +501,12 @@ pub(crate) unsafe fn expand_user_lua(
 /// matches to `ga`.
 ///
 /// If `dirs` is true only directory names are expanded.
+///
+/// # Safety
+///
+/// `path` must point at a NUL-terminated string, unaliased for the call.
+/// `file` must point at a NUL-terminated string, unaliased for the call. `ga`
+/// must point at a live growable array, unaliased for the call.
 pub unsafe fn globpath(
     path: *mut c_char,
     file: *mut c_char,

@@ -150,7 +150,7 @@ unsafe fn pum_compute_text_attrs(
     }
 
     let leader = if State.get() & MODE_CMDLINE != 0 {
-        unsafe { cmdline_compl_pattern() }
+        cmdline_compl_pattern()
     } else {
         ins_compl_leader()
     };
@@ -159,7 +159,7 @@ unsafe fn pum_compute_text_attrs(
     }
 
     let in_fuzzy = if State.get() & MODE_CMDLINE != 0 {
-        unsafe { cmdline_compl_is_fuzzy() }
+        cmdline_compl_is_fuzzy()
     } else {
         let flags = get_cot_flags();
         flags & kOptCotFlagFuzzy != 0

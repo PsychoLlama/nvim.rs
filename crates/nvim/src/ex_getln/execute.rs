@@ -131,7 +131,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: :
                     || c == Ctrl_W
                     || c == Ctrl_U);
         }
-        unsafe { cmdline_pum_remove(c != -1 && s.skip_pum_redraw) };
+        cmdline_pum_remove(c != -1 && s.skip_pum_redraw);
     }
     if s.xpc.xp_numfiles != -1 {
         s.expand(WildOpts::NONE, WildMode::Free);

@@ -254,7 +254,7 @@ pub(crate) unsafe fn command_line_enter(
     } else {
         unsafe { expand_init(s.xpc()) };
         cc.xpc = s.xpc();
-        unsafe { clear_cmdline_orig() };
+        clear_cmdline_orig();
 
         cmdmsg_rl.set(
             Win::current().w_onebuf_opt.wo_rl != 0
@@ -426,7 +426,7 @@ pub(crate) unsafe fn command_line_enter(
         // wildmenu, if a special key like <Esc> or <C-\> was used as
         // 'wildchar'. Clean up anyway, to avoid memory corruption.
         if cmdline_pum_active() {
-            unsafe { cmdline_pum_remove(false) };
+            cmdline_pum_remove(false);
         } else {
             // A previous cmdline_pum_remove() may have deferred redraw.
             unsafe { pum_check_clear() };
@@ -437,7 +437,7 @@ pub(crate) unsafe fn command_line_enter(
 
         unsafe { expand_cleanup(s.xpc()) };
         cc.xpc = ::core::ptr::null_mut::<Expand>();
-        unsafe { clear_cmdline_orig() };
+        clear_cmdline_orig();
 
         unsafe { finish_incsearch_highlighting(s.gotesc, s.is_state(), false) };
 

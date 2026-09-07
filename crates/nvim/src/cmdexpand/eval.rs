@@ -31,6 +31,12 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 /// `expand_one`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -177,6 +183,13 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
@@ -206,6 +219,13 @@ pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr:
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
+///
+/// # Safety
+///
+/// `_args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_cmdcomplete_info(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let xpc = Cc::current().xpc();
 

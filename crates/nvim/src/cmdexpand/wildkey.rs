@@ -31,6 +31,12 @@ const _: () = assert!(
 ///
 /// The horizontal arrows step through the matches, and `<CR>` after a menu
 /// name ending in `.` opens the submenu rather than executing.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call. `expand` must point at a live `Expand` context, unaliased
+/// for the call.
 pub(crate) unsafe fn wildmenu_translate_key(
     cclp: Cc,
     key: c_int,
@@ -62,6 +68,11 @@ pub(crate) unsafe fn wildmenu_translate_key(
 }
 
 /// Delete characters on the command line, from `from` to the current position.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call.
 unsafe fn cmdline_del(mut cclp: Cc, from: c_int) {
     debug_assert!(cclp.cmdpos <= cclp.len());
     // +1 for the NUL.
@@ -86,6 +97,12 @@ fn recomplete() -> c_int {
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call. `expand` must point at a live `Expand` context, unaliased
+/// for the call.
 unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -139,6 +156,12 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: *mut Expa
 /// `<Down>` descends into the directory under the cursor and `<Up>` leaves it,
 /// both by editing the path on the command line and asking for a fresh
 /// completion of the result.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call. `expand` must point at a live `Expand` context, unaliased
+/// for the call.
 unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -236,6 +259,12 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: *mut Expa
 }
 
 /// Handle a key pressed while the wildmenu is displayed.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call. `expand` must point at a live `Expand` context, unaliased
+/// for the call.
 pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, expand: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -257,6 +286,11 @@ pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, expand: *mut Exp
 /// Which of the three ways it went up decides how it comes down: it either
 /// scrolled the command line, borrowed the status line by forcing
 /// `'laststatus'`, or drew over the last window's existing status line.
+///
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
     if p_wmnu.get() == 0 || wild_menu_showing.get() == 0 {
         return;

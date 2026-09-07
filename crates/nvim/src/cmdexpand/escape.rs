@@ -20,6 +20,10 @@ use core::ffi::{c_char, c_int, c_void};
 /// The listed contexts answer no whatever `'wildoptions'` says: each of them
 /// expands a path, an option value or a tag, where a fuzzy match would offer
 /// something the command being completed cannot use.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context.
 pub(crate) unsafe fn cmdline_fuzzy_completion_supported(expand: *const Expand) -> bool {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -59,6 +63,10 @@ pub(crate) unsafe fn cmdline_fuzzy_completion_supported(expand: *const Expand) -
 ///
 /// An empty search pattern never fuzzy-matches: it would score every candidate
 /// alike and throw away the sort order the caller wants.
+///
+/// # Safety
+///
+/// `fuzzystr` must point at a NUL-terminated string.
 pub unsafe fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool {
     wop_flags.get() & kOptWopFlagFuzzy != 0 && unsafe { *fuzzystr } != 0
 }
@@ -67,6 +75,12 @@ pub unsafe fn cmdline_fuzzy_complete(fuzzystr: *const c_char) -> bool {
 /// `<SNR>` functions sort to the end.
 ///
 /// Stays `extern "C"`: it is handed to `qsort`.
+///
+/// # Safety
+///
+/// As `qsort`'s comparator: `s1` and `s2` must each point at an element of
+/// the array being sorted, and the elements must be of the type this reads
+/// them at.
 pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     let p1 = unsafe { *s1.cast::<*mut c_char>() };
     let p2 = unsafe { *s2.cast::<*mut c_char>() };
@@ -85,6 +99,11 @@ pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const 
 /// `str` is the pattern that produced them, needed only for its leading
 /// `"\~"`.  Both callers expand only when there is at least one match, which
 /// is what makes the unconditional `matches[0]` at the end in bounds.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `str` must point at a NUL-terminated string.
 pub(crate) unsafe fn wildescape(
     expand: *mut Expand,
     str: *const c_char,
@@ -166,6 +185,11 @@ pub(crate) unsafe fn wildescape(
 }
 
 /// Prepare a freshly expanded match array for use on the command line.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `str` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn escape_matches(
     expand: *mut Expand,
     str: *mut c_char,

@@ -252,7 +252,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 let _ = unsafe { update_screen() };
                 unsafe { redrawcmdline() };
                 if pum_drawn() {
-                    unsafe { cmdline_pum_display(false) };
+                    cmdline_pum_display(false);
                 }
             } else {
                 update_topline(Win::current());

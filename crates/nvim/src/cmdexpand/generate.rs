@@ -31,6 +31,13 @@ const fn dirs_only(flags: ExpandFlags) -> ExpandFlags {
     flags.without(ExpandFlags::FILE).or(ExpandFlags::DIR)
 }
 
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `matches` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub(crate) unsafe fn expand_files_and_dirs(
     expand: *mut Expand,
     pat: *mut c_char,
@@ -157,6 +164,10 @@ pub(crate) fn get_breakadd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char 
 /// Answers a pointer into the expansion context's own scratch, so the
 /// caller must copy it before asking for the next one — which
 /// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn get_scriptnames_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
     let sid = idx + 1;
     if !script_id_valid(sid) {
@@ -193,6 +204,12 @@ pub(crate) fn get_mapclear_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char 
 ///
 /// Both Lua-backed generators cache one [`Object`] across the whole
 /// completion and index into it per call; this is the indexing half.
+///
+/// # Safety
+///
+/// `names` must hold a well-formed API object: if it is an array, its `size`
+/// items must be initialized, since one of them is read. `idx` is bounds-
+/// checked against that size and needs nothing.
 unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
     names.with(|names| {
         let Some(array) = names.as_array() else {
@@ -210,6 +227,10 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
 }
 
 /// Replace the cached answer with a fresh one, dropping the old.
+///
+/// # Safety
+///
+/// `args` must be a well-formed API array, its `size` elements initialized.
 unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
     let mut err = Error::none();
     let res = unsafe {
@@ -232,6 +253,10 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 ///
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
+///
+/// # Safety
+///
+/// `_expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
@@ -246,6 +271,10 @@ pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> 
 ///
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -334,6 +363,14 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
 ///
 /// Answers `Err` for a context that is not in the table, which is how
 /// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `rmp` must point at a live `RegMatch`, unaliased for the call. `matches`
+/// must point at a writable `*mut *mut c_char` slot the caller owns for the
+/// call. `num_matches` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn expand_other(
     pat: *mut c_char,
     expand: *mut Expand,

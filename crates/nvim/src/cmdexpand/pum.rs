@@ -22,6 +22,13 @@ use core::mem::size_of;
 use core::ptr;
 
 /// Create the completion popup menu with items from `matches`.
+///
+/// # Safety
+///
+/// `ccline` must be an initialized `Cc` whose pointer fields point at live
+/// data for the call. `expand` must point at a live `Expand` context,
+/// unaliased for the call. `matches` must point at a writable `*mut c_char`
+/// slot the caller owns for the call.
 pub(crate) unsafe fn cmdline_pum_create(
     ccline: Cc,
     expand: *mut Expand,
@@ -75,7 +82,7 @@ pub(crate) unsafe fn cmdline_pum_create(
     });
 }
 
-pub unsafe fn cmdline_pum_display(changed_array: bool) {
+pub fn cmdline_pum_display(changed_array: bool) {
     unsafe {
         pum_display(
             compl_match_array.get(),
@@ -94,20 +101,24 @@ pub fn cmdline_pum_active() -> bool {
 
 /// Remove the cmdline completion popup menu (if present) and free the list of
 /// items.
-pub unsafe fn cmdline_pum_remove(defer_redraw: bool) {
+pub fn cmdline_pum_remove(defer_redraw: bool) {
     unsafe { pum_undisplay(!defer_redraw) };
     unsafe { xfree(compl_match_array.get() as *mut c_void) };
     compl_match_array.set(ptr::null_mut());
     compl_match_arraysize.set(0);
 }
 
+/// # Safety
+///
+/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn cmdline_pum_cleanup(cclp: Cc) {
-    unsafe { cmdline_pum_remove(false) };
+    cmdline_pum_remove(false);
     unsafe { wildmenu_cleanup(cclp) };
 }
 
 /// The current cmdline completion pattern.
-pub unsafe fn cmdline_compl_pattern() -> *mut c_char {
+pub fn cmdline_compl_pattern() -> *mut c_char {
     let expand = Cc::current().xpc();
     if expand.is_null() {
         ptr::null_mut()
@@ -119,7 +130,7 @@ pub unsafe fn cmdline_compl_pattern() -> *mut c_char {
 }
 
 /// True if fuzzy cmdline completion is active.
-pub unsafe fn cmdline_compl_is_fuzzy() -> bool {
+pub fn cmdline_compl_is_fuzzy() -> bool {
     let expand = Cc::current().xpc();
     !expand.is_null() && unsafe { cmdline_fuzzy_completion_supported(expand) }
 }
@@ -139,6 +150,11 @@ pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
 ///
 /// These are backslashes used for escaping.  Backslashes *are* shown in help
 /// tags and in search pattern completion matches.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `s` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn skip_wildmenu_char(expand: *mut Expand, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -169,6 +185,11 @@ pub(crate) unsafe fn skip_wildmenu_char(expand: *mut Expand, s: *mut c_char) -> 
 }
 
 /// The length of an item as it will be shown in the status line.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `s` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn wildmenu_match_len(expand: *mut Expand, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -197,6 +218,12 @@ pub(crate) unsafe fn wildmenu_match_len(expand: *mut Expand, s: *mut c_char) -> 
 /// At least the `match_idx` item is shown.  We start at item `first_match` in
 /// the list and show all matches that fit; if inversion is possible we use it,
 /// else `=` characters are used.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `matches` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn redraw_wildmenu(
     expand: *mut Expand,
     num_matches: c_int,

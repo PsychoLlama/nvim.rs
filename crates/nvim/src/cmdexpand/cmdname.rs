@@ -26,6 +26,15 @@ use core::ptr;
 /// the completion type.
 ///
 /// Returns a pointer to the next command, or NULL if there is no next command.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string. `cmdidx` must be an
+/// initialized `CmdIdx` whose pointer fields point at live data for the call.
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string. `context` must be an
+/// initialized `ExpandContext` whose pointer fields point at live data for
+/// the call.
 pub(crate) unsafe fn set_context_by_cmdname(
     cmd: *const c_char,
     cmdidx: CmdIdx,
@@ -463,6 +472,11 @@ pub(crate) unsafe fn set_context_by_cmdname(
 /// probably won't change that much -- webb.
 ///
 /// `buff` is the command string.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `buff` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_one_cmd_context(
     expand: *mut Expand,
     buff: *const c_char,
@@ -683,6 +697,12 @@ pub(crate) unsafe fn set_one_cmd_context(
 ///
 /// `len` is the length of the command line excluding the NUL, `col` the cursor
 /// position, and `use_ccline` asks for the command line info to be consulted.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `str` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 pub unsafe fn set_cmd_context(
     expand: *mut Expand,
     str: *mut c_char,
@@ -763,6 +783,13 @@ pub enum Expanded {
 ///
 /// `expand.xp_pattern` points into `str`, to where the text that is to be
 /// expanded starts.  `matchcount` and `matches` return the answer.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `str` must point at a NUL-terminated string. `matchcount` must point at a
+/// writable `int` the caller owns. `matches` must point at a writable `*mut
+/// *mut c_char` slot the caller owns for the call.
 pub unsafe fn expand_cmdline(
     expand: *mut Expand,
     str: *const c_char,

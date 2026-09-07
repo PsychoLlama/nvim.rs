@@ -51,6 +51,10 @@ const fn first_selected(options: WildOpts) -> c_int {
 
 /// The expanded matches, as a slice.  Only call this where `xp_numfiles` is
 /// known positive: it is -1 before anything has been expanded.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context.
 unsafe fn matches_of(expand: *const Expand) -> &'static [*mut c_char] {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -71,6 +75,12 @@ unsafe fn matches_of(expand: *const Expand) -> &'static [*mut c_char] {
 ///
 /// `mode` is one of the `WILD_*` modes, passed on to [`expand_one`]; `escape`
 /// asks for the matches to be escaped for use on the command line.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `mode` must be an initialized `WildMode` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn nextwild(
     expand: *mut Expand,
     mode: WildMode,
@@ -259,6 +269,12 @@ pub(crate) unsafe fn nextwild(
 
 /// Move the selection within an already expanded match list, and answer a
 /// fresh copy of what is now selected (or of the original text, at index -1).
+///
+/// # Safety
+///
+/// `mode` must be an initialized `WildMode` whose pointer fields point at
+/// live data for the call. `expand` must point at a live `Expand` context,
+/// unaliased for the call.
 unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -326,7 +342,7 @@ unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
     if p_wmnu.get() != 0 {
         if !compl_match_array.get().is_null() {
             compl_selected.set(findex);
-            unsafe { cmdline_pum_display(false) };
+            cmdline_pum_display(false);
         } else if cmdline_compl_use_pum(true) {
             unsafe {
                 cmdline_pum_create(
@@ -340,7 +356,7 @@ unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
             };
             compl_selected.set(findex);
             pum_clear();
-            unsafe { cmdline_pum_display(true) };
+            cmdline_pum_display(true);
         } else {
             unsafe {
                 redraw_wildmenu(
@@ -369,6 +385,13 @@ unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
 /// Answers an allocated copy of the first match for the modes that select one
 /// (everything but `WildMode::All`, `WildMode::AllKeep` and `WildMode::Longest`, which the
 /// caller assembles itself), and NULL otherwise.
+///
+/// # Safety
+///
+/// `mode` must be an initialized `WildMode` whose pointer fields point at
+/// live data for the call. `expand` must point at a live `Expand` context,
+/// unaliased for the call. `str` must point at a NUL-terminated string,
+/// unaliased for the call.
 unsafe fn expand_one_start(
     mode: WildMode,
     expand: *mut Expand,
@@ -448,6 +471,10 @@ unsafe fn expand_one_start(
 ///
 /// Beeps (unless `WildOpts::NO_BEEP`) at the byte where they first diverge, which
 /// is how the user learns the expansion stopped short of a whole name.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 unsafe fn longest_common_match(expand: *mut Expand, options: WildOpts) -> *mut c_char {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -520,6 +547,14 @@ unsafe fn longest_common_match(expand: *mut Expand, options: WildOpts) -> *mut c
 /// `WildOpts::SILENT`, `WildOpts::ESCAPE` and `WildOpts::ICASE`.
 ///
 /// `expand.xp_context` and `expand.xp_backslash` must have been set.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `str` must point at a NUL-terminated string, unaliased for the call.
+/// `orig` must point at a NUL-terminated string, unaliased for the call.
+/// `mode` must be an initialized `WildMode` whose pointer fields point at
+/// live data for the call.
 pub unsafe fn expand_one(
     expand: *mut Expand,
     str: *mut c_char,
@@ -556,7 +591,7 @@ pub unsafe fn expand_one(
 
         // The entries from xp_files may be in the popup menu; remove it.
         if !compl_match_array.get().is_null() {
-            unsafe { cmdline_pum_remove(false) };
+            cmdline_pum_remove(false);
         }
     }
     expand.xp_selected = first_selected(options);
@@ -634,6 +669,10 @@ pub unsafe fn expand_one(
 }
 
 /// Prepare an expand structure for use.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn expand_init(expand: *mut Expand) {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -645,6 +684,10 @@ pub unsafe fn expand_init(expand: *mut Expand) {
 }
 
 /// Clean up an expand structure after use.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn expand_cleanup(expand: *mut Expand) {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -658,7 +701,7 @@ pub unsafe fn expand_cleanup(expand: *mut Expand) {
 }
 
 /// Drop the saved copy of the command line taken before the last expansion.
-pub unsafe fn clear_cmdline_orig() {
+pub fn clear_cmdline_orig() {
     unsafe { xfree(cmdline_orig.get() as *mut c_void) };
     cmdline_orig.set(ptr::null_mut());
 }
