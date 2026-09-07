@@ -319,13 +319,20 @@ pub(crate) struct FindTags {
 }
 
 impl FindTags {
-    fn new(pat: *mut c_char, flags: c_int, mincount: c_int) -> Self {
+    /// The state for one search for `pat`.
+    ///
+    /// # Safety
+    ///
+    /// `pat` must point at a NUL-terminated pattern that outlives the
+    /// search. It is measured here and then kept as `orgpat.pat`, which the
+    /// readers walk through *safe* methods -- so the promise cannot be
+    /// checked anywhere below this point.
+    unsafe fn new(pat: *mut c_char, flags: c_int, mincount: c_int) -> Self {
         FindTags {
             state: Reading::Start,
             stop_searching: false,
             orgpat: Pattern {
                 pat,
-                // SAFETY: the caller's pattern is NUL-terminated.
                 len: unsafe { CStr::from_ptr(pat) }.count_bytes() as c_int,
                 head: ptr::null_mut(),
                 headlen: 0,
@@ -730,7 +737,9 @@ pub unsafe fn find_tags(
 
     let help_save = Buf::current().b_help;
 
-    let mut st = FindTags::new(pat, flags, mincount);
+    // SAFETY: the caller's promise -- `pat` is a NUL-terminated pattern
+    // that outlives the search.
+    let mut st = unsafe { FindTags::new(pat, flags, mincount) };
     if st.help_only {
         Buf::current().b_help = true;
     }
