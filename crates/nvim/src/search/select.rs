@@ -6,6 +6,7 @@
 //! backwards then forwards -- so that a match under the cursor counts.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::normal::{

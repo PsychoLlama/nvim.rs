@@ -13,6 +13,8 @@
 //! reads at least one of them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 // luv's C API: `luv_CFpcall` and its neighbours are that library's exported
 // names.
 #![allow(non_camel_case_types)]

@@ -29,6 +29,7 @@
 //! condition it needs is filed in `si_prefcond` for the reader to compile.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

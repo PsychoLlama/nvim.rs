@@ -34,6 +34,7 @@
 //! Original: `src/nvim/ex_eval.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::flag::{
     CSTP_BREAK, CSTP_CONTINUE, CSTP_ERROR, CSTP_FINISH, CSTP_INTERRUPT, CSTP_NONE, CSTP_RETURN,

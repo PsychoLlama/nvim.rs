@@ -3,6 +3,7 @@
 //! from `\%(` through the `\%23l` position assertions.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::regexp::NfaOp;
 use core::ffi::c_int;

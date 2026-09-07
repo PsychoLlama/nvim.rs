@@ -21,6 +21,7 @@
 //! none of those rules apply to it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};

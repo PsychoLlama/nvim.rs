@@ -20,6 +20,7 @@
 //! `i_CTRL-D`, which add or remove one 'shiftwidth'.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::winlayer::{Buf, Win};

@@ -31,6 +31,7 @@
 //! character both folded and upper-case.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};

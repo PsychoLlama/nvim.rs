@@ -1,6 +1,7 @@
 //! Calling things: `call()`, `function()`, `eval()`, `execute()` and the
 //! bridges to the script hosts.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_number, arg_string, arg_string_chk, check_arg};

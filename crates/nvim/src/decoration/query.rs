@@ -12,6 +12,7 @@
 //! at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{mark_virt_chain, ns_in_win};
 use crate::decoration::{kMTMetaConcealLines, kMTMetaLines};

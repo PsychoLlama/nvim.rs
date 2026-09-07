@@ -21,6 +21,8 @@
 //! code, which is where this file's unchecked lines actually lived.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};

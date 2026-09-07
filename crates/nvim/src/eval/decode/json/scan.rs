@@ -6,6 +6,7 @@
 //! with [`Decoder::next_map_special`] set.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::Str2NrBases;
 use crate::message_fmt::{c_str_len, emsg_text};

@@ -18,6 +18,7 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 // The buffer-swap machinery, carved out so that neither half is over the
 // line cap; see its own docs.

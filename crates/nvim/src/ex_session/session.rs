@@ -23,6 +23,7 @@
 //! Original: `src/nvim/ex_session.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::flag::{FR_COL, FR_LEAF};
 use super::view::put_view;

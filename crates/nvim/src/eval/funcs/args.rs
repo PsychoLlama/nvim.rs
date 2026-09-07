@@ -10,6 +10,7 @@
 //! past the terminator is how a builtin tests for an optional argument.
 //! That is the whole contract, and [`Args`] is it, expressed once.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

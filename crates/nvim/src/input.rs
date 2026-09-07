@@ -7,6 +7,7 @@
 //! mapped characters; the price is that typeahead is ignored.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_getln::getcmdline_prompt;

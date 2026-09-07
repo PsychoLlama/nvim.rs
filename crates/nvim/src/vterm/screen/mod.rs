@@ -20,6 +20,10 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`getcell`, `vterm_obtain_screen`, `vterm_screen_convert_color_to_rgb`, `vterm_screen_enable_altscreen`, `vterm_screen_enable_reflow`, `vterm_screen_get_cell`, `vterm_screen_reset`, `vterm_screen_set_callbacks`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 pub mod resize;
 

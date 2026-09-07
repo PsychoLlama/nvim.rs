@@ -11,6 +11,7 @@
 //! [`pum_preview_set_text`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::ex_cmds::EcmdFlags;

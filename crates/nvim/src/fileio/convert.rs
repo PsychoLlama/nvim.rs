@@ -18,6 +18,7 @@
 //! This is the read side of `bufwrite::convert`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint, c_void};

@@ -11,6 +11,8 @@
 //! "process not found" outcome that only those platforms could report.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::event::libuv::uv_kill;
 use crate::log::{LOGLVL_INF, logmsg};

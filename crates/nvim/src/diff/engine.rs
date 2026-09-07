@@ -7,6 +7,7 @@
 //! call, with [`xdiff_out`] as its hunk callback.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

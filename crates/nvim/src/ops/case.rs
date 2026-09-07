@@ -14,6 +14,7 @@
 //! the length it was given.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::report_msg;

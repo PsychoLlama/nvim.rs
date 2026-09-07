@@ -8,6 +8,7 @@
 //! decides a name belongs to the builtin table instead.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};

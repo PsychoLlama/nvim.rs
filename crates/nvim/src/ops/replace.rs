@@ -14,6 +14,7 @@
 //!   return instead -- which is the whole job of the `had_ctrl_v_cr` flag.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;

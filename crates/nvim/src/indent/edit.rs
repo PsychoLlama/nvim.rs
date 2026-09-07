@@ -2,6 +2,7 @@
 //! shifts, Insert-mode smart indent, and copying an existing line's indent.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::CStr;

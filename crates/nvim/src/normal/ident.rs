@@ -2,6 +2,7 @@
 //! tags, `:help`, 'keywordprg', a declaration, a file name.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;

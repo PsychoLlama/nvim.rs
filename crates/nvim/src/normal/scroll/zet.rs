@@ -2,6 +2,7 @@
 //! commands and the spellfile additions.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win, windows};

@@ -9,6 +9,7 @@
 //! Every string in here is matched on by tests. None of it may drift.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};

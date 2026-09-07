@@ -1,6 +1,7 @@
 //! Building and reshaping strings: escaping, formatting, splitting,
 //! substituting, hashing, time formatting and spelling.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{

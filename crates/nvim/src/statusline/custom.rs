@@ -19,6 +19,7 @@
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};

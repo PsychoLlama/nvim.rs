@@ -13,6 +13,7 @@
 //! the parent map's scratch array, or the caller's `rettv` at the root.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};

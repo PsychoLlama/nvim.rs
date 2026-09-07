@@ -12,6 +12,7 @@
 //! but `#[inline(always)]`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::autocmd::state::did_cursorhold;
 use crate::charset::vim_isprintc;

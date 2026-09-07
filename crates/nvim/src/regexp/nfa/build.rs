@@ -11,6 +11,7 @@
 //! builds into that block.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::list::{op, out_of, out1_of};
 use crate::regexp::NfaOp;

@@ -1,6 +1,7 @@
 //! Commands that change the buffer text or the cursor, including
 //! `:normal`, which re-enters the normal-mode state machine.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Depth;

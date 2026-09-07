@@ -6,6 +6,8 @@
 //! equivalent -- and [`nlua_push_object`] is the dispatch over `ObjectType`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use core::ffi::c_int;
 

@@ -25,6 +25,9 @@
 //! character as part of it; the plain ones stop at the base.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`utf_ptr2char`, `utf_ptr2char_info_impl`, `utf_ptr2len`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use super::*;
 use core::ffi::{CStr, c_char, c_int};

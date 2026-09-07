@@ -11,6 +11,7 @@
 //! [`did_set_langmap`] parses the option into both.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

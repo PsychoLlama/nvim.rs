@@ -34,6 +34,7 @@
 //! reads in bounds and keeps the answer identical.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite;

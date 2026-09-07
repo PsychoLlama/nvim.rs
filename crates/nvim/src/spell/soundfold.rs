@@ -20,6 +20,7 @@
 //! into a caller-owned `res` buffer of that size.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::winlayer::Win;

@@ -10,6 +10,7 @@
 //! which is what bounds every message printed there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;

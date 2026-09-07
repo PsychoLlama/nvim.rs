@@ -19,6 +19,7 @@
 //! since ids are a scarce single byte shared with compound flags.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::c_str;

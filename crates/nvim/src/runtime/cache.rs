@@ -24,6 +24,7 @@
 //! `do_in_cached_path` source files that themselves change 'runtimepath'.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

@@ -7,6 +7,7 @@
 //! requires to have run.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer_updates::buf_updates_send_changes;

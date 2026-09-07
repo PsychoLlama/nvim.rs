@@ -21,6 +21,7 @@
 //! `do_pending_operator` to run one Normal-mode command and come back.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};

@@ -74,6 +74,7 @@
 //! on, and a checked add would panic where the C quietly wrapped.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 mod edit;
 mod node;

@@ -8,6 +8,7 @@
 //! which is why the checks here are spelled out again rather than shared
 //! with `do_one_cmd`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::types::CmdIdx;

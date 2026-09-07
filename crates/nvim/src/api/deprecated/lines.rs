@@ -5,6 +5,7 @@
 //! forwarding to `nvim_buf_get_lines` or `nvim_buf_set_lines`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 

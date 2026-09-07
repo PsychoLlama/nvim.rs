@@ -1,5 +1,6 @@
 //! Marks, jumps, changes and tags.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::tv_get_buf;

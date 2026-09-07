@@ -1,6 +1,7 @@
 //! What is on the screen: the `screen*()` cell queries, the `syn*()` syntax
 //! queries and the highlight-group lookups.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{

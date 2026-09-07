@@ -10,6 +10,7 @@
 //! report readable.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{NL, PROFILE_FNAME, func_line, profile_cmp, profile_msg_str, profiled_functions};
 use crate::fileio::vim_fgets;

@@ -14,6 +14,8 @@
 //! so a misbehaving library takes the editor down with it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
 use crate::types::uv_lib_t;

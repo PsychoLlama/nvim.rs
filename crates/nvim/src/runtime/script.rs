@@ -14,6 +14,7 @@
 //! hook.  [`ex_finish`] and [`source_finished`] are how a script stops early.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::memory::handoff::owned_cstr;

@@ -11,6 +11,7 @@
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::msg_cstr;
 use crate::tr;

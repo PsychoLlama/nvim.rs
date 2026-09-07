@@ -21,6 +21,7 @@
 //! filter and the `mouse_shape` key are upstream's and stay.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int};
 

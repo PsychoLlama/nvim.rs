@@ -14,6 +14,7 @@
 //! written to it, and the row order *is* the [`OpType`] numbering.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::{Ctrl_A, Ctrl_X};
 use crate::message::internal_error;

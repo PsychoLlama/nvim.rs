@@ -33,6 +33,7 @@
 //! anything: "a.b" -> "b.a" is a legitimate swap.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::spell::spell_iswordp;

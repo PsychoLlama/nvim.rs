@@ -6,6 +6,7 @@
 //! (Fish disk 217) by GRWalter (Fred).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 mod vim_patches;
 

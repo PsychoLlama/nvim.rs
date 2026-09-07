@@ -14,6 +14,7 @@
 //! `tv_list_len`, never through `(*l).lv_first`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Live;

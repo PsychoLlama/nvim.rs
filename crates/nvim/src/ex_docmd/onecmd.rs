@@ -11,6 +11,7 @@
 //! reports the error, rethrows it as an exception if something is catching,
 //! and unwinds the command modifiers. That is what the `'doend` block is.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;

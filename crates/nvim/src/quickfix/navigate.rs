@@ -9,6 +9,7 @@
 //! search here answers a number rather than an entry.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::types::CmdIdx;

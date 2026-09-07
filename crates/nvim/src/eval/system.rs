@@ -8,6 +8,7 @@
 //! one builds a buffer, the other rewrites one in place.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

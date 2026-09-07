@@ -1,6 +1,7 @@
 //! `:restart`, `:detach` and `:connect` — the commands that hand the
 //! session to another process or take it back.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};

@@ -6,6 +6,7 @@
 //! through [`expand_user_defined`], [`expand_user_list`] and [`expand_user_lua`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::WildOpts;

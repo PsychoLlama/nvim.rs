@@ -13,6 +13,7 @@
 //! is `]p`) and the `'[`/`']` marks are settled.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, PosRef, Win};
 use core::ffi::{c_char, c_int, c_void};

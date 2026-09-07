@@ -6,6 +6,7 @@
 //! of a name lands in [`tv_to_optval`]/[`optval_as_tv`] instead.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Suppress;

@@ -11,6 +11,7 @@
 //! the ATTENTION message.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::buffer::BufFlags;
 use crate::cstr;

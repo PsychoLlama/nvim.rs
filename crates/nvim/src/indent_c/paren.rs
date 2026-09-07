@@ -12,6 +12,7 @@
 //! more than once and each one used to overwrite the last answer's storage.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};

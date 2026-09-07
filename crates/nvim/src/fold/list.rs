@@ -21,6 +21,7 @@
 //! `crates/nvim/tests/unit/fold.rs`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{Fold, FoldLine};
 use crate::types::{GArray, LineNr};

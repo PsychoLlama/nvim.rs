@@ -1,6 +1,7 @@
 //! Reading a List, Dict or Blob: `get()`, `empty()`, `index()`,
 //! `flatten()` and friends.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::TV_TRANSLATE;
 use super::args::{Args, frame};

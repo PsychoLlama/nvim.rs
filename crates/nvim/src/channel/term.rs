@@ -5,6 +5,7 @@
 //! teardown that has to wait for the job's writes to drain.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_void};

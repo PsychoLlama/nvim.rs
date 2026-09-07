@@ -7,6 +7,7 @@
 //! 'scrolloff' is forced to zero in a terminal buffer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};

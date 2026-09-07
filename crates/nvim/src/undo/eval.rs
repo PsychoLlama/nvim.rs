@@ -4,6 +4,7 @@
 //! and one of asking where it would be stored.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::CStr;
 use std::ffi::CString;

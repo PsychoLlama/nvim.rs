@@ -30,6 +30,7 @@
 //! not are the ones the C left exposed too.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

@@ -10,6 +10,7 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::say;
 use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};

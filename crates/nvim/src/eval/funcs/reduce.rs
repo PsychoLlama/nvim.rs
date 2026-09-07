@@ -1,5 +1,6 @@
 //! Folding a sequence down to one value: `reduce()`, `max()`, `min()`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_copy, arg_string, check_arg};

@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! Rendering a tree for a human: `:lua vim.api.nvim__buf_debug_extmarks()`.
 //!

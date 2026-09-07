@@ -6,6 +6,7 @@
 //! flag parser write 'wrapscan' and puts the caller's value back on the way
 //! out, which [`SavedWrapScan`] does here instead of the C's `goto theend`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};

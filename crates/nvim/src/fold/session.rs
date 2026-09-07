@@ -5,6 +5,7 @@
 //! any window the user has touched by hand.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ex_session::{put_eol, put_line};
 use crate::types::Failed;

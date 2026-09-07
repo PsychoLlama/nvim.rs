@@ -12,6 +12,7 @@
 //! and never through `with`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::ModMask;
 use crate::ops::Op;

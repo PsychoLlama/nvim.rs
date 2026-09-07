@@ -7,6 +7,7 @@
 //! repeat the command before the insert rather than the insert itself.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};

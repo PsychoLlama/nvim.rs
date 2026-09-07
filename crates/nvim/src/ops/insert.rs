@@ -25,6 +25,7 @@
 //! legal column afterwards.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};

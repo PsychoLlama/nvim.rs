@@ -13,6 +13,7 @@
 //! a macro is phase 16's tree-wide sweep, and it has to stay mechanical.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};

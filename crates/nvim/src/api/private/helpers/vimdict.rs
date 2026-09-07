@@ -5,6 +5,7 @@
 //! and may run a hook when assigned.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api::private::converter::{object_to_vim, vim_to_object};

@@ -16,6 +16,8 @@
 //! the `stream_uv` union's three arms from costing a line per access.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `event/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

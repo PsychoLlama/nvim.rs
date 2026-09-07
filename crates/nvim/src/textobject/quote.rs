@@ -7,6 +7,7 @@
 //! inside a quoted string, and how 'selection' shifts both ends.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};

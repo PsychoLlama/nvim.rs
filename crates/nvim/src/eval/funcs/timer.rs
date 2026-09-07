@@ -1,5 +1,6 @@
 //! Time: the `timer_*()` family, `wait()` and the `reltime()` clock.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::wrappers::{arg_number, check_arg, list_alloc_ret};

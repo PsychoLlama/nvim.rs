@@ -5,6 +5,8 @@
 //! the raw calls are confined to one block per function and the surface takes
 //! and returns plain values.
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::cstr;
 #[cfg(not(miri))]

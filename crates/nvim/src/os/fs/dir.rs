@@ -7,6 +7,8 @@
 //! a path apart and put it back together and are the only string work here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::os::uv_error::UV_EOF;
 use core::ffi::{CStr, c_char, c_int};

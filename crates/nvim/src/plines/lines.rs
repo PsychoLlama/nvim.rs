@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! Vertical size: how many window lines a buffer line occupies.
 //!

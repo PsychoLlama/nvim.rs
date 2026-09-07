@@ -8,6 +8,7 @@
 //! formatting and C-indent code ask.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::charset::skip;

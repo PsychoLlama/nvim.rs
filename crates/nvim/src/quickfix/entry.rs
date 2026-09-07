@@ -11,6 +11,7 @@
 //! `qf_get_*_idx` pair are what `:cdo`/`:cfdo` count with.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::buffer::BufRef;

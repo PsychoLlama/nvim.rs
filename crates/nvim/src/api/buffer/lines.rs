@@ -8,6 +8,7 @@
 //! reaches too, to build the `nvim_buf_attach` change notifications.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};

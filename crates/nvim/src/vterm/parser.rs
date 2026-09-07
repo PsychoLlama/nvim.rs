@@ -17,6 +17,10 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`vterm_input_write`, `vterm_parser_set_callbacks`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use crate::types::{
     VTerm, VTerm_parser, VTerm_parser_v_csi, VTerm_parser_v_dcs, VTerm_parser_v_osc,

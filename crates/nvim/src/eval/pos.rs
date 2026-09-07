@@ -1,6 +1,7 @@
 //! Turning an expression into a buffer position.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::eval::Tv;

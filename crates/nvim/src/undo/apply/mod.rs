@@ -18,6 +18,7 @@
 //! never an owner.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 mod entry;
 mod time;

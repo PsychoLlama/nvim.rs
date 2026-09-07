@@ -11,6 +11,8 @@
 //! modifiers, which is why those two are spelled out here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::global_cell::GlobalCell;
 use crate::tui::termkey::driver_csi::termkey_interpret_mouse;

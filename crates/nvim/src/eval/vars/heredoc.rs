@@ -5,6 +5,7 @@
 //! is the only thing in the file that evaluates its own input.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::memory::handoff::owned_cstr;

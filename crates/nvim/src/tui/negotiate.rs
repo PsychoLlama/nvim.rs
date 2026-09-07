@@ -11,6 +11,8 @@
 //! is a negotiation with the line discipline rather than the terminal.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};

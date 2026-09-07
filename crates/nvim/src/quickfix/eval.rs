@@ -6,6 +6,7 @@
 //! every entry's user data is a `TypVal` the collector has to see.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::eval::typval::NumBuf;

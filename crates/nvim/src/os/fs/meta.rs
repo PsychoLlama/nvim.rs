@@ -10,6 +10,8 @@
 //! than libuv and is the only thing in this file with a shape of its own.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::os::uv_error::UV_EINVAL;
 use core::ffi::{CStr, c_char, c_double, c_int, c_void};

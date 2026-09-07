@@ -6,6 +6,7 @@
 //! `Progress` autocommand ([`do_autocmd_progress`]).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};

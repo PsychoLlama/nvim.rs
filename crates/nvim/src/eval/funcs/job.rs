@@ -1,5 +1,6 @@
 //! Child processes: the `job*()` family and the environment it hands them.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};

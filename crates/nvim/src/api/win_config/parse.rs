@@ -11,6 +11,7 @@
 //! validation messages ([`err_exp`] and friends).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::validate::{self, Bad, err_expected, err_invalid};

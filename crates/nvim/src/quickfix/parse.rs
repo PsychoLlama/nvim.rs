@@ -14,6 +14,7 @@
 //! own.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

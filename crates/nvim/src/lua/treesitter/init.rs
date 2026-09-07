@@ -6,6 +6,8 @@
 //! build accepts.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use super::*;
 

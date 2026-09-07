@@ -17,6 +17,9 @@
 //! directly from C, so it must stay a 256-byte array under that symbol.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`utf8len_tab`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

@@ -10,6 +10,7 @@
 //! that trail up and back down.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::super::store::{Header, Marks, header_chain};
 use super::super::*;

@@ -10,6 +10,8 @@
 //! `$NoDefaultCurrentDirectoryInExePath`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use super::throttle::{Ring, out_data_cb, out_data_decide_throttle, out_data_ring};
 use super::*;

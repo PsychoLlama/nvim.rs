@@ -9,6 +9,7 @@
 //! `exiting` is set *before* the checks and put back by `not_exiting` when
 //! any of them refuses, because the checks themselves look at it.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;

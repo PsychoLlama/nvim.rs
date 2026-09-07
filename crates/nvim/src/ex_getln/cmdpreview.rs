@@ -6,6 +6,7 @@
 //! `cmdpreview_save_*` / `cmdpreview_restore_*` pairs are that save-restore.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};

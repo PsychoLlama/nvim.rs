@@ -10,6 +10,7 @@
 //! `bool` because a hundred still-transpiled call sites test it that way.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

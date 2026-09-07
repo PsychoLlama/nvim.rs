@@ -6,6 +6,7 @@
 //! `VAR_UNKNOWN` (the argument was not given) as well.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::message_fmt::emsg_text;

@@ -7,6 +7,9 @@
 //! the seams `--startuptime` reports.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`early_init`, `event_init`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;

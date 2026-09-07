@@ -13,6 +13,7 @@
 //! it).  Which one wins is the whole of the second half.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};

@@ -9,6 +9,8 @@
 //! module that owns the state, not here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `event/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 // No forbid(unsafe_code): edition 2024 trips the unsafe_code lint on the
 // extern block below, and declaring the foreign surface is this file's

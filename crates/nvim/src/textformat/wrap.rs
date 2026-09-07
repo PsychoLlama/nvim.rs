@@ -7,6 +7,7 @@
 //! be broken ([`BreakSearch`]), and then what it takes to break it there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};

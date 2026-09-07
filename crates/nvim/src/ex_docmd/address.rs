@@ -12,6 +12,7 @@
 //! Each function is a walk over the command line the caller owns, so each
 //! takes one `unsafe` block for its whole body — see `scan.rs`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;

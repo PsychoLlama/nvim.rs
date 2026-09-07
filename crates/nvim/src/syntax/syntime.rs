@@ -5,6 +5,7 @@
 //! the table. Used to find the pattern that makes a syntax file slow.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::c_str;

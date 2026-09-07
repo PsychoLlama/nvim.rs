@@ -30,6 +30,7 @@
 //! itself — see [`line`](super::line).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::Ui;
 use crate::event::wstream::wstream_new_buffer;

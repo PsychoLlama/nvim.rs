@@ -13,6 +13,7 @@
 //! valid JSON either.  That is upstream's behaviour and evalsweep pins it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 

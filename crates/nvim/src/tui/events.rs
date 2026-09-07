@@ -9,6 +9,8 @@
 //! in [`paint`](super::paint).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};

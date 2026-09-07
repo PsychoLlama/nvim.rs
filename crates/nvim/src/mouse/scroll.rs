@@ -9,6 +9,7 @@
 //! Original: `src/nvim/mouse.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;

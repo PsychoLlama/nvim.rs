@@ -8,6 +8,7 @@
 //! are those two.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{
     MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,

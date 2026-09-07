@@ -20,6 +20,7 @@
 //! folded word to reconstruct how it should be spelled.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::spell::WordFlags;
 use crate::winlayer::Win;

@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! Blending one attribute set through another: `'winblend'`, `'pumblend'`.
 //!

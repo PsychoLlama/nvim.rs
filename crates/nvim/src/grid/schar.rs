@@ -1,4 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`schar_get`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 //! `ScreenChar`: the glyph in a screen cell.
 //!

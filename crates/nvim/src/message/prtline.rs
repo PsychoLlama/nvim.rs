@@ -5,6 +5,7 @@
 //! duplicates so much of the drawing code's character loop.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

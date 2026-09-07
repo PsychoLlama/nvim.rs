@@ -26,6 +26,7 @@
 //! [`State::Del`]'s first test enforces.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::getchar::state::got_int;
 use crate::mbyte::{utf_iscomposing_legacy, utf_ptr2char, utf8len_tab, utfc_ptr2len};

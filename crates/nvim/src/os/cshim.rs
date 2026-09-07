@@ -9,6 +9,8 @@
 //! handful of string functions it reaches, which Miri cannot call through.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 // `wint_t`, from the C library's `<wctype.h>`.
 #![allow(non_camel_case_types)]
 

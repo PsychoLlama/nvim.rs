@@ -7,6 +7,7 @@
 //! collects the input's marks first and then looks each state's up.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

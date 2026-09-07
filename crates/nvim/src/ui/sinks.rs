@@ -29,6 +29,9 @@
 //! event to the compositor on the way past.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`ui_call_chdir`, `ui_call_set_title`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

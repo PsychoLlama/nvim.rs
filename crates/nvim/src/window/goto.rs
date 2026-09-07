@@ -12,6 +12,7 @@
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;

@@ -7,6 +7,7 @@
 //! where a data block empties and has to be unhooked again.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_long, c_uint};

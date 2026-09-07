@@ -28,6 +28,7 @@
 //! changing either is a C compile failure inside `just unittest`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::types::NL;

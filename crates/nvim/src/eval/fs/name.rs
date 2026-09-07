@@ -28,6 +28,7 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, ret_string, str_arg_chk};
 use crate::eval::do_string_sub;

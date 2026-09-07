@@ -5,6 +5,7 @@
 //! renders it as a number, a string or a modifier mask.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

@@ -1,4 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 //! `:trust`, the ex-command face of `vim.secure.trust`.
 //!

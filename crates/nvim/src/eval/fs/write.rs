@@ -18,6 +18,7 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{
     Args, e_error_while_writing_str, frame, from, kFileAppend, kFileCreate, kFileMkDir,

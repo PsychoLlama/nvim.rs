@@ -1,6 +1,7 @@
 //! Commands that name a file or a buffer: reading, editing, finding,
 //! recovering, and the buffer list.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;

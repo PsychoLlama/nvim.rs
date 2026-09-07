@@ -6,6 +6,8 @@
 //! and `parser_get_ranges` are the parser methods over them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use super::*;
 

@@ -7,6 +7,7 @@
 //! `;"<Tab>field:value` fields at the end of a line.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::Jumped;
 use super::*;

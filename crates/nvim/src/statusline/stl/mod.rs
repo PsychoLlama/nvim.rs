@@ -45,6 +45,7 @@
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
 use core::ffi::{CStr, c_char, c_int, c_void};

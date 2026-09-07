@@ -22,6 +22,10 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`vterm_primary_device_attr`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 pub mod entry;
 

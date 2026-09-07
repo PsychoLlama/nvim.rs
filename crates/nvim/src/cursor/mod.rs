@@ -23,6 +23,7 @@
 //! forbids unsafe outright and is what `tests/unit/cursor.rs` drives.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;

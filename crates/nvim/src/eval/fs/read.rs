@@ -20,6 +20,7 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{__S_IFMT, Args, SEEK_END, SEEK_SET, frame, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;

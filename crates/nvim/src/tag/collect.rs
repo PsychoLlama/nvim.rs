@@ -7,6 +7,7 @@
 //! an equal one is already there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use core::ffi::{CStr, c_char, c_int};

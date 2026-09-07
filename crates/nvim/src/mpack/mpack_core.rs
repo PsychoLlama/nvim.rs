@@ -24,6 +24,7 @@
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_uint};
 

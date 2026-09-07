@@ -6,6 +6,7 @@
 //! which it is.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{CAR, NL, arena_string, arena_take_arraybuilder};
 use crate::api::private::validate::err_out_of_range;

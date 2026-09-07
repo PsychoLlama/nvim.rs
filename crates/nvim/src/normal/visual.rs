@@ -7,6 +7,7 @@
 //! area again.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ops::Op;
 use crate::winlayer::{Buf, Win};

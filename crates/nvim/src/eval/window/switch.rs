@@ -2,6 +2,7 @@
 //! `win_execute()` and the API's window-scoped entry points use.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

@@ -33,6 +33,7 @@
 //! so E363 fires at exactly the depth it used to.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

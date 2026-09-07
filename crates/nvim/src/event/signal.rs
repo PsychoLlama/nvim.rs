@@ -9,6 +9,8 @@
 //! so the bodies below are ordinary Rust; nothing here may move a watcher.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `event/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

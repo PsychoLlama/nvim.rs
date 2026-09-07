@@ -13,6 +13,10 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`vterm_keyboard_end_paste`, `vterm_keyboard_key`, `vterm_keyboard_start_paste`, `vterm_keyboard_unichar`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use crate::types::{VTerm, VTermKey, VTermKeyEncodingFlags, VTermModifier, VTermState, uint32_t};
 use crate::vterm::output::EscapeSeq;

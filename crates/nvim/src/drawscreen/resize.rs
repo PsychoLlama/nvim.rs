@@ -8,6 +8,7 @@
 //! autocommand may change `'lines'` or `'columns'` again.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::grid::default_grid_ref;

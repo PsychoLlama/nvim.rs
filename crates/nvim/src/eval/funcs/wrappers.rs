@@ -5,6 +5,7 @@
 //! Nothing here belongs to one family. The families themselves live in the
 //! sibling modules; this is what the parent module hands them.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, MAX_ARGS};
 use super::table::{BUILTINS, builtin_index};

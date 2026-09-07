@@ -18,6 +18,8 @@
 //! [`Terminal::identify`], rather than being re-derived per question.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::memory::{arena_memdupz, xfree};
 use crate::os::env::{os_env_exists, os_getenv};

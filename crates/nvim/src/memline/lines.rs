@@ -7,6 +7,7 @@
 //! `:global` uses to remember which lines it still has to visit.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

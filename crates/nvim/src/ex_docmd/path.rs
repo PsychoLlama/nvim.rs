@@ -5,6 +5,7 @@
 //! and `:cd -` goes back to the previous one *at that scope*. `post_chdir`
 //! is what keeps the three in step after any of them changes.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Lock;

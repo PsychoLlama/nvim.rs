@@ -9,6 +9,7 @@
 //! `'hlsearch'`'s own place in that order.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::option::cpo_has;

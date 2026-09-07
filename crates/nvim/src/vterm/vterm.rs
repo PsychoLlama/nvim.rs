@@ -8,6 +8,10 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `vterm/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`vterm_new`, `vterm_output_set_callback`, `vterm_set_size`, `vterm_set_utf8`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

@@ -15,6 +15,7 @@
 //! builds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};

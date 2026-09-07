@@ -15,6 +15,7 @@
 //! `compute_double_env_sep_len` and the arithmetic beside it is gone.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

@@ -6,6 +6,7 @@
 //! line. The `get_highlight_name*` pair is command-line completion.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int};
 

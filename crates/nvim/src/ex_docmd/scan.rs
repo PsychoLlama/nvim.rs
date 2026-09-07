@@ -7,6 +7,7 @@
 //! into a NUL-terminated buffer that outlives the call — and stating it once
 //! is both cheaper and more honest than stating it forty times.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;

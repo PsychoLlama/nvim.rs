@@ -6,6 +6,8 @@
 //! `vim.rpcnotify()`, which differ only in whether they wait.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::winlayer::Win;

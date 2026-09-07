@@ -14,6 +14,7 @@
 //! the option does. Note what [`get_leader_len`] does with it on failure.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};

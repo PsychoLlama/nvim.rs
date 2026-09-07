@@ -14,6 +14,7 @@
 //! rather than into a file; the msgpack API uses them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::msg_addr;
 use crate::siemsg;

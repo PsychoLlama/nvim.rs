@@ -6,6 +6,7 @@
 //! `repl_cmdline` does and why it is the only place allowed to free the
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_cmds::newlnum;
 use crate::os::cshim::snprintf;

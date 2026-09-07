@@ -14,6 +14,8 @@
 //! here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 use crate::channel::main_loop_events;
 use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;

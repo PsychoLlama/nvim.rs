@@ -11,6 +11,7 @@
 //! underneath it, which is what [`WriteNames`] is for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;

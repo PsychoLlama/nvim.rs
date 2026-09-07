@@ -28,6 +28,7 @@
 //! and fills the redo buffer with `ciw{word}<Esc>` so that `.` can.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::change::inserted_bytes;
 use crate::charset::rl_mirror_ascii;

@@ -6,6 +6,7 @@
 //! `[[text, hl], ..]` chunk arrays they were given as.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, find_window_by_handle, set_key};

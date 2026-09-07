@@ -14,6 +14,7 @@
 //! (the Rust global allocator is malloc-backed, so either side may free).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 mod ring;
 

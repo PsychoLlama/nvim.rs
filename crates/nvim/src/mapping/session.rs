@@ -6,6 +6,7 @@
 //! with whatever escaping makes it read back identically.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::keycodes::ModMask;

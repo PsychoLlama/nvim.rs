@@ -16,6 +16,7 @@
 //! `bomb_size`/`remove_bom` are the byte-order-mark half of the question.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 // `nl_item`, from POSIX's `<langinfo.h>`.
 #![allow(non_camel_case_types)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.

@@ -19,6 +19,7 @@
 //! *builds* the attribute table those exceptions exist to work around.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::Ui;
 use super::events::{count, linegrid, send};

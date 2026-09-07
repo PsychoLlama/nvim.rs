@@ -1,5 +1,6 @@
 //! `:terminal` and `:lsp`, which both hand a buffer to a process.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::xfree;

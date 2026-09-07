@@ -6,6 +6,7 @@
 //! `:dsplit` differ only in their third letter; `:tnext`, `:tprevious`,
 //! `:tselect` and the rest only in their second.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};

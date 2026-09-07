@@ -16,6 +16,7 @@
 //! and in one `ExpandFlags::NOBREAK`, not in what they do with `{name}`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

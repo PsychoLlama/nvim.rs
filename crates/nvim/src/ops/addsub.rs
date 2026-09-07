@@ -24,6 +24,7 @@
 //! short-circuits all of the above.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::Str2NrBases;
 use crate::ex_docmd::cmdmod_has;

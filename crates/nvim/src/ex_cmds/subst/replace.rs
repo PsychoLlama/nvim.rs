@@ -14,6 +14,7 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::exec::{Sub, SubArgs, save_undo_once};
 use super::{sub_grow_buf, subflags};

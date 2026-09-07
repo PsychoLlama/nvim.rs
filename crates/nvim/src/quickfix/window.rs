@@ -12,6 +12,7 @@
 //! the stack and the list get a wrapper apiece here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::buffer::{buf_valid, find_buf};

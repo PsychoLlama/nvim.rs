@@ -9,6 +9,8 @@
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::memory::{xfree, xmalloc};
 use crate::tui::termkey::csi::{self, CSI_MAX_PARAMS, CsiSeq};

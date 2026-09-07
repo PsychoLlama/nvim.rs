@@ -4,6 +4,7 @@
 //! window slot means the global argument list rather than any window's.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};

@@ -11,6 +11,7 @@
 //! *most* of the buffer back is the whole point.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::allocator::Owned;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};

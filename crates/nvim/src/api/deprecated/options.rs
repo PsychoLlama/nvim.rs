@@ -6,6 +6,7 @@
 //! only in which scope they fix and whether they read or write.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, find_buffer_by_handle, find_window_by_handle};

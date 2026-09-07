@@ -1,6 +1,7 @@
 //! Autocommands, `:filetype` and `:setfiletype` — the commands that decide
 //! what a buffer is. Plus `:checkhealth`, which is a Lua entry point.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::c_str;

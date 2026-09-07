@@ -14,6 +14,8 @@
 //! because `option/defaults.rs` calls it unconditionally.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::ascii::ascii_iswhite;
 use crate::buffer::maketitle;

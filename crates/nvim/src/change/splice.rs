@@ -22,6 +22,7 @@
 //! `_mark` suffix "adjust the marks first".
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_int, c_void};
 use core::mem::offset_of;

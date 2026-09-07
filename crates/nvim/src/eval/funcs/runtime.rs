@@ -1,6 +1,7 @@
 //! What the editor is right now: `has()`, `mode()`, `state()` and the rest
 //! of the feature and status queries.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::wrappers::{

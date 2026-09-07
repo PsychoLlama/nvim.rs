@@ -7,6 +7,7 @@
 //! convert to and from a list of byte numbers.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::message::emsg_ptr;

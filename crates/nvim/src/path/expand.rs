@@ -8,6 +8,7 @@
 //! flags say which of those apply.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;

@@ -13,6 +13,7 @@
 //! turn into a path.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::os::uv_error::UV_ENOTSUP;

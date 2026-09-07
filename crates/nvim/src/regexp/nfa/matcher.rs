@@ -12,6 +12,7 @@
 //! loop that asks and the bookkeeping around it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::regexp::NfaOp;
 use core::ffi::c_int;

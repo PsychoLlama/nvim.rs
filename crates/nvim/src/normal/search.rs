@@ -6,6 +6,7 @@
 //! spring open depends on the command having been *typed*, not replayed.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::keycodes::ModMask;

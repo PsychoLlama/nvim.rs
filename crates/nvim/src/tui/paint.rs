@@ -13,6 +13,8 @@
 //! costs one write.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::event::r#loop::{loop_purge, loop_size};
 use crate::grid::{schar_cache_clear_if_full, schar_get, schar_get_ascii};

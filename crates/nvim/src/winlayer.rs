@@ -120,6 +120,8 @@
 //! see that module's "when the link is read".
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `winlayer.rs` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 mod frame;
 pub mod graph;

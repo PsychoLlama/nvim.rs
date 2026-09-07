@@ -1,6 +1,7 @@
 //! Channels and servers: `chansend()`, `rpcrequest()`, `serverstart()` and
 //! the rest of the RPC and socket surface.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_string, list_alloc_ret};

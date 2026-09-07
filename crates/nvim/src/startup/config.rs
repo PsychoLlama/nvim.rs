@@ -7,6 +7,7 @@
 //! been loaded, which is why they are not in this module.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::c_str;
 use crate::semsg;

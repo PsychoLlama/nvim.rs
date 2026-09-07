@@ -15,6 +15,7 @@
 //! mode.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::winlayer::{Buf, Win};

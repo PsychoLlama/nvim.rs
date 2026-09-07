@@ -14,6 +14,7 @@
 //! `use_sandbox` unconditionally false here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};

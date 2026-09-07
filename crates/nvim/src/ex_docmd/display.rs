@@ -1,6 +1,7 @@
 //! Commands about what is on the screen rather than in the buffer:
 //! redrawing, `:redir`, highlighting and the digraph table.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::guard::{Allow, Saved, Suppress};
 use crate::semsg;

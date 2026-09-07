@@ -10,6 +10,7 @@
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use core::ffi::{c_char, c_int, c_void};

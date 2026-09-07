@@ -25,6 +25,7 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{
     Args, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg,

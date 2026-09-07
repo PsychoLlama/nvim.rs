@@ -1,5 +1,6 @@
 //! Matching a pattern against a string: the `match*()` family.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

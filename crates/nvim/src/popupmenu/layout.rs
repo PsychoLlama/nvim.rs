@@ -12,6 +12,7 @@
 //! and the later ones read what the earlier ones decided.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Win;

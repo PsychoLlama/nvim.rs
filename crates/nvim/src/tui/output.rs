@@ -11,6 +11,8 @@
 //! only function here that talks to libuv.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 //
 // Everything here takes `&mut TUIData` and is safe on the strength of that
 // type's invariant (see `TUIData`): the handles, staging buffer and terminfo

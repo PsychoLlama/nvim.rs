@@ -6,6 +6,7 @@
 //! share nothing but that shape.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::Reported;

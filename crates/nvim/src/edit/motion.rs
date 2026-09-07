@@ -17,6 +17,7 @@
 //! upstream's four are the same body twice apiece.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;

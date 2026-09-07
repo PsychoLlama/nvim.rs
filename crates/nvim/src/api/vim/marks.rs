@@ -5,6 +5,7 @@
 //! currently loaded, and `nvim_del_mark` removes one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};

@@ -9,6 +9,7 @@
 //! `hs=`/`he=`/`rs=`/`re=`/`lc=` offsets to a match.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
 

@@ -16,6 +16,7 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::complete::{COMMAND_COMPLETE, command_complete_name};
 use super::{FAIL, OK, UC_BUFFER};

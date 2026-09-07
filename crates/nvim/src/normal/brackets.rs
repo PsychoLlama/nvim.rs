@@ -2,6 +2,7 @@
 //! searches, the mark and fold jumps, and the paste variants.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::Key;
 use crate::winlayer::Buf;

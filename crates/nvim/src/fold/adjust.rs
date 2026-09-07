@@ -7,6 +7,7 @@
 //! happens once, in [`super::list`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;

@@ -6,6 +6,7 @@
 //! [`get_tagstack`] and [`set_tagstack`] are the Vimscript views.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::highlight_group::HLF_D;

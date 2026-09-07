@@ -11,6 +11,7 @@
 //! copied up front, so changing the original mid-loop has no effect.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};

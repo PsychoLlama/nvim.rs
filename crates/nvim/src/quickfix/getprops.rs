@@ -11,6 +11,7 @@
 //! each one out as a C literal plus a `size_of` of its array type.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};

@@ -12,6 +12,7 @@
 //! context back.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::eval::Parsed;
 use core::ffi::{c_char, c_int};

@@ -5,6 +5,7 @@
 //! `<C-X>` notation, which is what mapping listings and `keytrans()` show.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::charset::CharDisplay;

@@ -1,4 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/treesitter/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 // The whole subtree binds LuaJIT's `lua_State *L` under its own name: it is
 // the tree-sitter bindings' first argument in every entry point, and these
 // files are read against `runtime/lua/vim/treesitter/` and libtree-sitter's

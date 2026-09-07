@@ -8,6 +8,7 @@
 //! scratch buffer first, so that they can be put back if the re-read fails.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::buffer::BufFlags;
 use crate::cstr;

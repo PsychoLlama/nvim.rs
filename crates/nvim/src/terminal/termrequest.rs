@@ -17,6 +17,8 @@
 //! applied to vterm's pen immediately rather than waiting for the queue.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::channel::main_loop_events;

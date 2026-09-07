@@ -20,6 +20,7 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::attr::ADDR_TYPES;
 use super::{Scope, ucmd_name};

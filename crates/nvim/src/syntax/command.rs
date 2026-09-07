@@ -6,6 +6,7 @@
 //! or removes items lives in the sibling modules.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Suppress;

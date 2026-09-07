@@ -20,6 +20,7 @@
 //! them as the plain two-key dictionaries they are.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};

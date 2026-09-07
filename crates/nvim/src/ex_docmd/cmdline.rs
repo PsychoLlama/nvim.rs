@@ -14,6 +14,7 @@
 //! Ordering is load-bearing throughout, and the exit condition at the bottom
 //! is the specification of when a script stops on an error.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};

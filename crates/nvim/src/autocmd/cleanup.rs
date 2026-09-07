@@ -8,6 +8,7 @@
 //! [`aubuflocal_remove`] is what a wiped-out buffer's patterns go through.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

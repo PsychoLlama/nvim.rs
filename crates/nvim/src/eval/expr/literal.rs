@@ -9,6 +9,7 @@
 //! than the source text it was read from.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::Str2NrBases;
 use crate::cstr;

@@ -5,6 +5,7 @@
 //! the caller's `data` published as `v:event` for the duration.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, has_key};

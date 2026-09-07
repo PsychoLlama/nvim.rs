@@ -16,6 +16,8 @@
 //! has to settle before the screen is written at the right lines.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::change::changed_lines;

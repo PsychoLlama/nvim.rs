@@ -26,6 +26,7 @@
 //!    `set_ref_in_list_items` are the two loops that drain them.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::guard::Depth;
 use core::ffi::{c_char, c_int, c_void};

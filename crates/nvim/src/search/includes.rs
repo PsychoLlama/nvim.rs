@@ -9,6 +9,7 @@
 //! counts as a match, and `'path'` is where the names are resolved.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

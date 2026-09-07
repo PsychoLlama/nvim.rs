@@ -7,6 +7,7 @@
 //! [`tv2bool`] is the truthiness `if` and `while` ask for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::charset::Str2NrBases;

@@ -12,6 +12,8 @@
 //! [`update_attrs`] emits a full description rather than a diff.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;

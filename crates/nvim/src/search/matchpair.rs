@@ -9,6 +9,7 @@
 //! and the `'cpoptions'` flags `%` and `M` that switch those rules off.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! `Set_*` and `Map_*`: what is left of the khash-derived open-addressing
 //! tables the editor used to keep everything in.

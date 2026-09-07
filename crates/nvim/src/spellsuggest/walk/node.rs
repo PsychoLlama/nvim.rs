@@ -26,6 +26,7 @@
 //! case-folded tree to look for the word the prefix goes in front of.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::{skiptowhite, skipwhite};

@@ -8,6 +8,7 @@
 //! literal run never runs the machine at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

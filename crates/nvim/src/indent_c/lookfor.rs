@@ -20,6 +20,7 @@
 //! `Done` its `break`, at which point `amount` is the answer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

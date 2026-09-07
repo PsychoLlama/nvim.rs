@@ -61,6 +61,19 @@ thiserror = { version = "2", default-features = false, features = ["std"] }
 [lints.rust]
 unsafe_op_in_unsafe_fn = "allow"
 
+# The posture flip (roadmap phase 28 item 5). `unsafe_code` is allow-by-default,
+# so for the whole transpile nothing said where unsafe was allowed to live —
+# the tree's answer was the *absence* of `#![forbid(unsafe_code)]`, which is
+# not a claim a file makes, it is one it fails to make. Denying it here inverts
+# that: a file that needs `unsafe` — a block, an `unsafe fn`, an `unsafe trait`
+# or `impl`, an `unsafe extern` block, an `#[unsafe(no_mangle)]` export — says
+# so with an inner `#![allow(unsafe_code)]` and a one-line reason, and
+# scripts/ratchet.py holds `files_allowing_unsafe_code` shrink-only. A
+# perimeter module (docs/perimeter.md) names its row; anything else is debt,
+# and the count is what the migration has left to do. `forbid` still wins over
+# this deny and cannot be lifted, so a finished module keeps taking it.
+unsafe_code = "deny"
+
 # The crate root is a flat namespace of ~130 `pub mod`s, so for most of the
 # migration "pub" said nothing: an item was `pub` because c2rust made every
 # translation unit's symbols visible, not because anything outside reached it.

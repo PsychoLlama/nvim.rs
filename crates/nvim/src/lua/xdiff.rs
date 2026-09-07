@@ -1,4 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 //! `vim.diff()`: the Lua binding over the bundled xdiff.
 //!

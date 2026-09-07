@@ -13,6 +13,7 @@
 //! cursor is not allowed to come to rest on a column that is not there.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
 

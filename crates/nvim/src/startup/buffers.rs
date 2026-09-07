@@ -9,6 +9,7 @@
 //! [`quit_on_swap_exists`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;

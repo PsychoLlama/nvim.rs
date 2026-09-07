@@ -10,6 +10,7 @@
 //! decoder would go on to produce.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};

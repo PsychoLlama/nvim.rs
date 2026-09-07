@@ -13,6 +13,7 @@
 //! scanning function.  They are one struct here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::semsg;

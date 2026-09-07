@@ -20,6 +20,7 @@
 //! Original: `src/nvim/ex_cmds2.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::flag::{CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, DOBUF_FIRST};
 use super::{buffers, check_changed};

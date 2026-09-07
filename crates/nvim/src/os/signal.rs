@@ -6,6 +6,8 @@
 //! process's lifetime. Handlers here run from the event loop, not from a
 //! signal-handler context, so they may touch editor state freely.
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `os/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::autocmd::apply_autocmds;
 use crate::eval::vars::set_vim_var_nr;

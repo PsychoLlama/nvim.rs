@@ -10,6 +10,7 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;

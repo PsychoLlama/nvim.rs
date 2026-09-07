@@ -7,6 +7,7 @@
 //! unrelated plain-text line scanner insert-mode line completion uses.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

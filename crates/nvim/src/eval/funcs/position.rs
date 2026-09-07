@@ -1,6 +1,7 @@
 //! Positions in a buffer: the cursor, `line()`, `col()`, `virtcol()`,
 //! `getpos()`/`setpos()` and the character-search state.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{

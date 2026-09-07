@@ -13,6 +13,7 @@
 //! and it answers whether the sign column changed width.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::decoration::SignCountHalf;

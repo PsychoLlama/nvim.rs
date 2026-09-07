@@ -20,6 +20,7 @@
 //! Original: `src/nvim/help.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;

@@ -10,6 +10,7 @@
 //! outlives every token taken from it and is never written to.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::Str2NrBases;
 use core::ffi::{CStr, c_char, c_int};

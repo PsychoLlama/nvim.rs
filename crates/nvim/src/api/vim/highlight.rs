@@ -7,6 +7,7 @@
 //! colour functions are the built-in name table.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, dict_put_str, has_key};

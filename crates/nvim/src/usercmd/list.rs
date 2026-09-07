@@ -14,6 +14,7 @@
 //! Original: `src/nvim/usercmd.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;

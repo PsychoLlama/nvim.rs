@@ -33,6 +33,7 @@
 //! Original: `src/nvim/ex_eval.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::exception::{
     catch_exception, discard_current_exception, discard_exception, do_intthrow,

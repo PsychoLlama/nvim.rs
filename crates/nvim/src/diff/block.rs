@@ -12,6 +12,7 @@
 //! instead.  It still runs, because `:%diffput` needs the marks.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::semsg;

@@ -1,6 +1,7 @@
 //! `u_write_undo`: writing a buffer's undo tree out to its undo file.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::file::*;
 use super::format::*;

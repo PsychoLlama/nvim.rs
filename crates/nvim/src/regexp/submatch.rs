@@ -9,6 +9,7 @@
 //! `can_f_submatch` is what says the snapshot is live.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
 

@@ -5,6 +5,7 @@
 //! mark list holds against this buffer, which is why it is the long one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};

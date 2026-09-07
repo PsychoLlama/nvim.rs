@@ -8,6 +8,7 @@
 //! reports from interleaving line by line.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::{profile_start, profile_sub};
 use crate::event::libuv::uv_err_name;

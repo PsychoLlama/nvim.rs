@@ -7,6 +7,7 @@
 //! the option until 'foldlevel' is set again.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;

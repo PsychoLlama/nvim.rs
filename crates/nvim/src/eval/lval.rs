@@ -22,6 +22,7 @@
 //! value and then clear it twice.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::{c_str, c_str_len};

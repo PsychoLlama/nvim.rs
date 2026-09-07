@@ -1,5 +1,6 @@
 //! Variables themselves: the dictionary watchers, `islocked()` and `id()`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::wrappers::{arg_string, arg_string_chk};

@@ -7,6 +7,7 @@
 //! [`nv_operator`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Win;
 use core::ptr;

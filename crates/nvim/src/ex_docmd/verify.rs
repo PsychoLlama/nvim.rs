@@ -4,6 +4,7 @@
 //! table: `do_one_cmd` calls `verify_command` on every name it failed to
 //! resolve, so that the joke works without occupying a row.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char};
 

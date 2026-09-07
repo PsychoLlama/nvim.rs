@@ -10,6 +10,7 @@
 //! entry.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};

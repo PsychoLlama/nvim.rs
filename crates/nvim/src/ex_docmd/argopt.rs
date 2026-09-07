@@ -1,6 +1,7 @@
 //! Arguments that are not file names: `++opt=value`, `+cmd`, the tab page
 //! argument, and opening the file a command will write to.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 use crate::cstr;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;

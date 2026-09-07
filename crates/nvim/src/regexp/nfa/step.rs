@@ -5,6 +5,7 @@
 //! [`super::matcher`] is what acts on it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::regexp::NfaOp;
 use core::ffi::c_int;

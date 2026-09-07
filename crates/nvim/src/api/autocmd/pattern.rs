@@ -7,6 +7,7 @@
 //! "one or many" decoder it and the event list share.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::array_add;

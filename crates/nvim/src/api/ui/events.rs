@@ -16,6 +16,7 @@
 //! UIs too old to be rebuilt. It is kept exactly, not improved.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::packer::{push_call, ui_flush_buf};
 use crate::api::private::helpers::cstr_as_string;

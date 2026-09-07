@@ -5,6 +5,7 @@
 //! has reached is the one asked for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::list::op;
 use crate::regexp::NfaOp;

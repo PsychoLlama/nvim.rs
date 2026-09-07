@@ -12,6 +12,7 @@
 //! walking a line's bytes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

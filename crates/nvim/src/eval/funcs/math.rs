@@ -1,6 +1,7 @@
 //! Numbers: arithmetic, the bitwise operators and the random-number
 //! generator.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::VARNUMBER_MAX;
 use super::args::{Args, frame};

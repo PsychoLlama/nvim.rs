@@ -11,6 +11,7 @@
 //! [`WinLineVars::extra_todo`] and hand the first cell of it back to the loop.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

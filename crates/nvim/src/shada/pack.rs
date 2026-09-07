@@ -11,6 +11,7 @@
 //! map sizes below are counted before anything is written.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::message_fmt::c_str;
 use crate::semsg;

@@ -8,6 +8,8 @@
 //! message when it is the wrong one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::semsg;
 use core::ffi::{c_int, c_void};

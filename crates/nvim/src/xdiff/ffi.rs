@@ -21,6 +21,8 @@
 //! licenses/LGPL-2.1.txt).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `xdiff/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int, c_long};
 

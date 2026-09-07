@@ -7,6 +7,7 @@
 //! [`map_wildopts_to_ewflags`] translates `'wildoptions'` into `EW_*`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::WildOpts;

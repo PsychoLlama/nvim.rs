@@ -1,6 +1,7 @@
 //! The `Callback` value: building one from a typval, and calling it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::guard::Depth;

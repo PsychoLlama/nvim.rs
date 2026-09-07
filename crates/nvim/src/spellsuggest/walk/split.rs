@@ -25,6 +25,7 @@
 //! only thing stopping the two from taking turns forever.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::{skiptowhite, skipwhite};
 use crate::mbyte::{mb_charlen, utfc_ptr2len};

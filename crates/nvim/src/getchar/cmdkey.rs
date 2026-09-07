@@ -5,6 +5,7 @@
 //! carries a `LuaRef` in decimal that [`map_execute_lua`] calls.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::guard::Keys;

@@ -6,6 +6,8 @@
 //! `regex_gc` frees the compiled program.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::winlayer::{self, Buf};
 use core::ffi::{c_char, c_int};

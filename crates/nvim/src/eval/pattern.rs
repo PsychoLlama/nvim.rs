@@ -5,6 +5,7 @@
 //! means. Restoring it is not a plain assignment — see `do_string_sub`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy_nonoverlapping, null_mut};

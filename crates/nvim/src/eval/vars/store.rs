@@ -12,6 +12,7 @@
 //! what keeps each check a single `unsafe` block.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

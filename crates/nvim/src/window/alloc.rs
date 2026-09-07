@@ -11,6 +11,7 @@
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
 use core::mem::size_of;

@@ -7,6 +7,7 @@
 //! current mode and whether input is blocked.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, dict_put, has_key};

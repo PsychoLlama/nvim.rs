@@ -23,6 +23,8 @@
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `mpack/lmpack/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 // libmpack-lua's `L`, the Lua state every entry point takes first.
 #![allow(non_snake_case)]
 

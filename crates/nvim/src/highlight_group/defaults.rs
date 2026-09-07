@@ -6,6 +6,7 @@
 //! that a build with no runtime files still has usable colours.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;

@@ -14,6 +14,7 @@
 //! background, which is the one case where the order is reversed.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::decoration::kHlModeReplace;

@@ -6,6 +6,7 @@
 //! the head of a 557-row table. Everything else here is a special case the
 //! table cannot express.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::types::CmdIdx;

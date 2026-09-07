@@ -7,6 +7,8 @@
 //! through the same `try_enter`/`try_leave` bracket the API uses.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_int};
 use core::ptr;

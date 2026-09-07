@@ -12,6 +12,7 @@
 //! recording state against what the status line was last drawn with.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};

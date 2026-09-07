@@ -5,6 +5,7 @@
 //! grows into the words that actually occur.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

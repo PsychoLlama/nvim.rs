@@ -11,6 +11,7 @@
 //! folding (`vj~`, say) would still throw away every open/closed state.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::charset::skipwhite;
 use crate::diff::diff_infold;

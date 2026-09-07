@@ -9,6 +9,8 @@
 //! license; the notice is reproduced in licenses/libtermkey-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `tui/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::tui::terminfo::caps::{KEYS, MAX_FUNCTION_KEY, key_slot};
 use crate::tui::termkey::termkey::{

@@ -7,6 +7,7 @@
 //! editor's, which leaves only the calls into modules that are still
 //! transpiled inside an `unsafe` block.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

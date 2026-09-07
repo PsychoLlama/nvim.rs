@@ -10,6 +10,7 @@
 //! and stop timers. Nothing holds a borrow of the table across one.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{c_int, c_void};
 use core::mem::{offset_of, size_of};

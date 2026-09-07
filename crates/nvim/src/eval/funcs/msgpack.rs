@@ -1,5 +1,6 @@
 //! Serialisation: the `msgpack*()` and `json_*()` families.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::wrappers::{arg_string, arg_string_chk, blob_alloc_ret, list_alloc_ret};

@@ -8,6 +8,7 @@
 //! the user list first, in insertion order, then the default table.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 mod tables;
 

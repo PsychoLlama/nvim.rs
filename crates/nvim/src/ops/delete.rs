@@ -19,6 +19,7 @@
 //! [`get_region_bytecount`] measured up front.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::guard::Suppress;
 use crate::memline::MlFlags;

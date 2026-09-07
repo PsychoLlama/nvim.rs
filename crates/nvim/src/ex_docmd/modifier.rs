@@ -7,6 +7,7 @@
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::scan::ends_excmd;

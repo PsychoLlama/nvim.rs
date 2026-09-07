@@ -21,6 +21,7 @@
 //! Replace-mode arm that unwinds the stack instead of deleting text.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};

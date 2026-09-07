@@ -8,6 +8,9 @@
 //! leave a list.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`tv_list_alloc`, `tv_list_free`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::types::Refcount;

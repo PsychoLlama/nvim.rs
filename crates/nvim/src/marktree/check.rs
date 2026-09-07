@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! Whole-tree invariant checks, and the entry points the unit suite drives.
 //!

@@ -1,6 +1,7 @@
 //! The environment and the paths around it: `environ()`, `expand()`,
 //! `stdpath()` and the swap-file queries.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::frame;
 use super::wrappers::{

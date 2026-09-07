@@ -2,6 +2,7 @@
 //! restores for the debugger, the line getter it reads through, the loop
 //! line store `:while` and `:for` replay from, and Ex mode.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
 use crate::strings::vim_snprintf;
 

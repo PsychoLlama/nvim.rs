@@ -3,6 +3,7 @@
 //! items a `[]` collection can name — `[:alpha:]`, `[=a=]` and `[.a.]`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};

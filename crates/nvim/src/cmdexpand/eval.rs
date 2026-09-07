@@ -7,6 +7,7 @@
 //! generated eval function table.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};

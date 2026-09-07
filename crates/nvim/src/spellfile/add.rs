@@ -26,6 +26,7 @@
 //! language and encoding the buffer is actually using.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::semsg;

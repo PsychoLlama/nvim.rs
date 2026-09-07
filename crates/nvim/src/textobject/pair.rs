@@ -7,6 +7,7 @@
 //! Visual-mode extension -- an object already selected whole grows outwards.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::winlayer::Win;

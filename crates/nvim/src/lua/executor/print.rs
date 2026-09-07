@@ -7,6 +7,8 @@
 //! `vim.debug()` read-eval-print loop.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `lua/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};

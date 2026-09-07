@@ -13,6 +13,8 @@
 //! relative to it, which is why [`super::row_to_linenr`] exists.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
+#![allow(unsafe_code)]
 
 use crate::change::{appended_lines_buf, deleted_lines_buf};
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};

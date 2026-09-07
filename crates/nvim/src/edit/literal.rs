@@ -18,6 +18,7 @@
 //! what `did_putchar` tracks in three separate places here.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::keycodes::Key;

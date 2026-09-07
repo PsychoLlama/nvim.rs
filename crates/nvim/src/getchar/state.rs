@@ -17,10 +17,10 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// Not `forbid(unsafe_code)`: that lint rejects the name-mangling override on
-// `test_disable_char_avail`, which the functional suite sets to stub
-// `char_avail()` out.
 #![deny(unsafe_op_in_unsafe_fn)]
+// The exports here are metrics/abi-ledger.jsonl rows (`test_disable_char_avail`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

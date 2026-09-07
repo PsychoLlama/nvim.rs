@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 //! The extmark store: a wide B-tree keyed by (row, col).
 //!

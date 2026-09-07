@@ -8,6 +8,7 @@
 //! list moves.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{TabPage, Win, buffer_at, windows};

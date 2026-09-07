@@ -2,6 +2,7 @@
 //! handler, `:`, the CTRL-key odds and ends, and leaving a mode.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, Key};
 use crate::winlayer::{Buf, Win, windows};

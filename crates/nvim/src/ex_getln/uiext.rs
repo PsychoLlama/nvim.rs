@@ -6,6 +6,7 @@
 //! the command line gets these instead of anything [`super::draw`] writes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::cstr;

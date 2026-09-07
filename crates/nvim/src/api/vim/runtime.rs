@@ -6,6 +6,7 @@
 //! the Lua bridge because it is the runtime's entry point from the API.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};

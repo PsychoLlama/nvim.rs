@@ -12,6 +12,7 @@
 //! Original: `src/nvim/menu.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;

@@ -27,9 +27,11 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// Not `forbid(unsafe_code)`: that lint rejects the name-mangling override on
-// `curwin`, whose symbol plugins and the functional suite read directly.
 #![deny(unsafe_op_in_unsafe_fn)]
+// Unsafe perimeter: the `winlayer/` row in docs/perimeter.md.
+// The exports here are metrics/abi-ledger.jsonl rows (`curwin`, `win_col_off`), and
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+#![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 

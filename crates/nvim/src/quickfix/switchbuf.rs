@@ -10,6 +10,7 @@
 //! which want a help window.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};

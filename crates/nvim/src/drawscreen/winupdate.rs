@@ -12,6 +12,7 @@
 //! that some rows do not have to be redrawn.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::decoration::{DecorStateRef, kVPosWinCol};

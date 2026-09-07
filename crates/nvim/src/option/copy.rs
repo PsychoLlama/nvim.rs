@@ -11,6 +11,7 @@
 //! by its address.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::offset_of;

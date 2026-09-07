@@ -25,6 +25,7 @@
 //! [`dump_prefixes`] does that walk.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use crate::cstr;
 use crate::memory::xstrlcat;

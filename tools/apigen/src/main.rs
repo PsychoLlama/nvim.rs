@@ -967,6 +967,44 @@ pub(crate) fn upper_case_globals_allow(body: &str) -> &'static str {
     }
 }
 
+/// The unsafe constructs `unsafe_code` fires on, as they appear in generated
+/// text. Matched literally: the generator writes Rust, not arbitrary prose,
+/// and the doc comments it emits do not spell any of these.
+const UNSAFE_CONSTRUCTS: [&str; 6] = [
+    "unsafe {",
+    "unsafe fn",
+    "unsafe extern",
+    "unsafe impl",
+    "unsafe trait",
+    "unsafe(no_mangle",
+];
+
+/// A generated chunk with `#![allow(unsafe_code)]` inserted, when the chunk
+/// holds unsafe -- and unchanged when it does not.
+///
+/// The crate denies `unsafe_code` in `crates/nvim/Cargo.toml`, so a file that
+/// still needs unsafe says so with an inner allow (see docs/perimeter.md). A
+/// hand-written one in a generated file is gone at the next `just apigen`, so
+/// it is emitted here, and only where the chunk earned it: that is what keeps
+/// the ratchet's `files_allowing_unsafe_code` honest. `reason` is the
+/// one-line comment above it, empty for a chunk off the perimeter -- there
+/// the count *is* the reason, and it is debt.
+///
+/// The allow lands under `#![deny(unsafe_op_in_unsafe_fn)]`, which every
+/// header emitting unsafe already carries; a chunk that came out clean takes
+/// `#![forbid(unsafe_code)]` instead and never reaches here.
+fn with_unsafe_code_allow(text: &str, reason: &str) -> String {
+    const DENY: &str = "#![deny(unsafe_op_in_unsafe_fn)]\n";
+    if !UNSAFE_CONSTRUCTS.iter().any(|c| text.contains(c)) {
+        return text.to_string();
+    }
+    assert!(
+        text.contains(DENY),
+        "a generated chunk holding unsafe has no `{DENY}` to hang the allow on"
+    );
+    text.replacen(DENY, &format!("{DENY}{reason}#![allow(unsafe_code)]\n"), 1)
+}
+
 fn emit_fn(
     out: &mut String,
     f: &ApiFn,
@@ -4205,34 +4243,48 @@ fn run() -> Result<(), String> {
     let sidecar = parse_sidecar(&metadata_spec)?;
     let sizes: BTreeMap<String, usize> =
         keysets.iter().map(|k| (k.name.clone(), k.len())).collect();
+    // Each tree carries the reason its files give for `#![allow(unsafe_code)]`
+    // (see `with_unsafe_code_allow`). Only the Lua binding is on the unsafe
+    // perimeter; the rest is ordinary generated crate source, and its unsafe
+    // is debt like any other module's.
+    const PERIMETER_LUA: &str = "// Unsafe perimeter: the `lua/` row in docs/perimeter.md.\n";
     let trees = [
         (
             out_dir,
             generate(&api, &specs, &sizes, &config)?,
             "wrappers",
+            "",
         ),
         (
             tables_dir,
             generate_tables(&keysets, &specs, &config)?,
             "tables",
+            "",
         ),
-        (lua_dir, generate_lua(&api, &specs, &config)?, "Lua binding"),
+        (
+            lua_dir,
+            generate_lua(&api, &specs, &config)?,
+            "Lua binding",
+            PERIMETER_LUA,
+        ),
         (
             options_dir.clone(),
             options::generate(&root, &options_lua, &options_dir, &config)?,
             "option table",
+            "",
         ),
         (
             eval_dir.clone(),
             eval_funcs::generate(&root, &api, &specs, &eval_lua, &eval_dir, &config)?,
             "builtin table",
+            "",
         ),
     ];
 
     let mut wrote = false;
-    for (dir, mut files, what) in trees {
+    for (dir, mut files, what, reason) in trees {
         for file in &mut files {
-            file.text = rustfmt(&config, &file.text)?;
+            file.text = rustfmt(&config, &with_unsafe_code_allow(&file.text, reason))?;
             // The chunker works on unformatted text; if the margin it leaves
             // was not enough, say so rather than let the ratchet find out.
             let lines = file.text.lines().count();

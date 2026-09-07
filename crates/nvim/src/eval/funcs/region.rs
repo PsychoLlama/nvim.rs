@@ -1,6 +1,7 @@
 //! The text a Visual selection covers: `getregion()` and
 //! `getregionpos()`.
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::args::{Args, frame};
 use super::wrappers::{check_arg, list_alloc_ret};

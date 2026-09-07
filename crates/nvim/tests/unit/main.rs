@@ -3,6 +3,13 @@
 //! no editor state, no child process. Specs that need a live editor
 //! (`early_init`) stay in `test/unit`.
 
+// The harness calls the editor's `extern "C"` surface through raw pointers --
+// that is what a port of the LuaJIT FFI specs is -- so the whole crate needs
+// what `crates/nvim/Cargo.toml`'s `[lints.rust]` denies. Taken once at the
+// root: `tests/` is not source the ratchet measures, and there is no per-file
+// story to tell about it.
+#![allow(unsafe_code)]
+
 mod support;
 
 mod api_converter;

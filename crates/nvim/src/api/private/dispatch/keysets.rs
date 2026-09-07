@@ -4,6 +4,7 @@
 //! run `just apigen`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 // The names are upstream's, and each is looked up by that spelling.
 #![allow(non_upper_case_globals)]
 

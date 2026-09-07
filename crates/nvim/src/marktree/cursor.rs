@@ -29,6 +29,7 @@
 //! 2.0; see LICENSE.txt in the project root.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use core::ffi::c_int;
 use core::marker::PhantomData;

@@ -6,6 +6,7 @@
 //! the borrow that lookup hands back, never an owner.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::store::{Header, header_chain, header_free, store_release};
 use super::*;

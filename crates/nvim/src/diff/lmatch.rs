@@ -6,6 +6,7 @@
 //! the one block with the several the alignment implies.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::TabPage;
