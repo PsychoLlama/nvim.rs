@@ -78,7 +78,7 @@ pub(crate) unsafe fn cmdline_pum_create(
     compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_none() {
         col
     } else {
-        unsafe { cmd_screencol(col) }
+        cmd_screencol(col)
     });
 }
 

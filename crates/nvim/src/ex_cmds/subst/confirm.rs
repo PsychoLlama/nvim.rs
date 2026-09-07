@@ -233,8 +233,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     highlight_match.set(false);
 
     msg_didout.set(false); // don't scroll up
-    // SAFETY: message state.
-    unsafe { gotocmdline(true) };
+    gotocmdline(true);
     p_lz.set(save_p_lz);
     drop(redraw);
 

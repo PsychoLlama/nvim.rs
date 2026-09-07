@@ -161,7 +161,7 @@ pub(crate) unsafe fn show_pat_in_path(
     if did_show {
         unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
     } else if msg_silent.get() == 0 {
-        unsafe { gotocmdline(true) }; // cursor at the status line
+        gotocmdline(true); // cursor at the status line
     }
     if got_int.get() {
         return; // 'q' typed at the "--more--" message

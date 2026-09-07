@@ -239,8 +239,8 @@ pub(crate) unsafe fn nextwild(
         ccline.cmdpos += difflen;
     }
 
-    unsafe { redrawcmd() };
-    unsafe { cursorcmd() };
+    redrawcmd();
+    cursorcmd();
 
     // When expanding a ":map" command and no matches are found, assume
     // the key is supposed to be inserted literally.

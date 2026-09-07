@@ -180,7 +180,7 @@ pub fn get_digraph(cmdline: bool) -> c_int {
     if cmdline {
         // SAFETY: transpiled display helpers, plain value arguments.
         if unsafe { char2cells(c) } == 1 && c < 128 && cmdline_star.get() == 0 {
-            unsafe { putcmdline(c as c_char, true) };
+            putcmdline(c as c_char, true);
         }
     } else {
         // SAFETY: same as above.

@@ -111,7 +111,7 @@ pub(crate) unsafe fn get_function_body(
             } else {
                 unsafe { xfree(*line_to_free as *mut c_void) };
                 theline = match ea.ea_getline {
-                    None => unsafe { getcmdline(b':' as c_int, 0, indent, do_concat) },
+                    None => getcmdline(b':' as c_int, 0, indent, do_concat),
                     Some(getline) => unsafe {
                         getline(b':' as c_int, ea.cookie, indent, do_concat)
                     },

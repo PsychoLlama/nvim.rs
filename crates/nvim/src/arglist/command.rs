@@ -24,7 +24,6 @@ use crate::winlayer::{Buf, Win};
 pub unsafe fn ex_args(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(args) };
-    // SAFETY: caller contract.
     let cmdidx = eap.cmdidx;
     if cmdidx != CmdIdx::args {
         if arglist_is_locked() {
@@ -69,8 +68,7 @@ fn list_args() {
     }
     // Overwrite the command: for a short list no scrolling and hence no
     // wait_return() is needed.
-    // SAFETY: every entry's name is NUL-terminated and outlives the listing.
-    unsafe { gotocmdline(true) };
+    gotocmdline(true);
     let items: Vec<&CStr> = (0..argcount())
         .map(|i| unsafe { CStr::from_ptr(arg_name(i)) })
         .collect();
@@ -255,7 +253,6 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
 pub unsafe fn ex_next(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
-    // SAFETY: caller contract; the argument is NUL-terminated.
     let forceit = args.forceit != 0;
     let is_snext = args.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
@@ -399,16 +396,12 @@ unsafe fn delete_arg_range(args: *mut ExArg) {
             crate::semsg!("E610: No argument to delete");
             return;
         }
-        // SAFETY: caller contract.
         args.line2 = cur_arg_idx() + 1;
         args.line1 = args.line2;
     // ":1,4argdel": delete all the arguments in the range.
-    // SAFETY: caller contract.
     } else if args.line2 > argcount() {
-        // SAFETY: caller contract.
         args.line2 = argcount();
     }
-    // SAFETY: caller contract.
     let (line1, line2) = (args.line1, args.line2);
     let count = line2 - line1 + 1;
     if has_arg {

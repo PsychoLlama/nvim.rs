@@ -41,8 +41,7 @@ use crate::types::NUL;
 /// # Safety
 /// Runs the command line, and so arbitrary autocommands.
 pub unsafe fn get_expr_register() -> c_int {
-    // SAFETY: running the command line is the caller's promise.
-    let new_line = unsafe { getcmdline('=' as c_int, 0, 0, true) };
+    let new_line = getcmdline('=' as c_int, 0, 0, true);
     if new_line.is_null() {
         return NUL; // cancelled
     }

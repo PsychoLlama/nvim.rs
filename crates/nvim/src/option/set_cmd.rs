@@ -559,7 +559,7 @@ unsafe fn show_one(
         unsafe { msg_putchar('\n' as c_int) };
     } else {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        unsafe { gotocmdline(true) };
+        gotocmdline(true);
         *did_show = true;
     }
     unsafe { showoneopt(opt_idx, opt_flags) };

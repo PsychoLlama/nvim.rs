@@ -345,7 +345,7 @@ unsafe fn echo_search_cmd(
         unsafe { msg_outtrans(echo.buf.as_ptr(), 0, false) };
         unsafe { msg_clr_eos() };
         msg_check();
-        unsafe { gotocmdline(false) };
+        gotocmdline(false);
         unsafe { ui_flush() };
         ui_busy_stop();
         msg_nowait.set(true);

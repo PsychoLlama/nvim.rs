@@ -21,6 +21,12 @@ use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock};
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
+///
+/// # Safety
+///
+/// `colored_ccline` must be an initialized `Cc` whose pointer fields point at
+/// live data for the call. `ret_ccline_colors` must point at a live
+/// `ColoredCmdline`, unaliased for the call.
 pub(crate) unsafe fn color_expr_cmdline(
     colored_ccline: Cc,
     ret_ccline_colors: *mut ColoredCmdline,
@@ -135,6 +141,11 @@ enum Label {
 ///
 /// Answers true if [`super::draw::draw_cmdline`] may proceed, false if there
 /// is nothing for it to do.
+///
+/// # Safety
+///
+/// `colored_ccline` must be an initialized `Cc` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     let mut numbuf = NumBuf::new();
     let mut printed_errmsg = false;
@@ -389,7 +400,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         prev_prompt_errors.set(prev_prompt_errors.get() + 1);
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ccline_colors).clear_chunks() };
-        unsafe { redrawcmdline() };
+        redrawcmdline();
         ret = false;
     }
 

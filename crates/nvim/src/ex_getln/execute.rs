@@ -49,6 +49,11 @@ const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
 ///
 /// - `CTRL-\ CTRL-N` or `CTRL-\ CTRL-G` goes to Normal mode.
 /// - `CTRL-\ e` prompts for an expression.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
     let mut cc = Cc::current();
     s.c = {
@@ -103,7 +108,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
             cc.cmdpos = cc.len().min(new_cmdpos.get());
 
             KeyTyped.set(false); // don't do 'wildchar' completion
-            unsafe { redrawcmd() };
+            redrawcmd();
             return CtrlBsl::Changed;
         }
     }
@@ -111,12 +116,17 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
     got_int.set(false); // don't abandon the command line
     did_emsg.set(0);
     emsg_on_display.set(false);
-    unsafe { redrawcmd() };
+    redrawcmd();
     CtrlBsl::NotChanged
 }
 
 /// Free the expanded names and take the wildmenu down.  `c` is the key that
 /// ended it, or -1 when no key did.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::ffi::c_int) {
     if cmdline_pum_active() {
         if c != -1 {
@@ -147,6 +157,10 @@ pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: :
 /// The key loop's `state_execute` callback: one key, dispatched.  Installed
 /// in a `VimState`, so this one keeps its C ABI.  Answers -1 to fetch
 /// another key, 0 to leave the command line and 1 to keep going.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 pub(crate) unsafe fn command_line_execute(
     state: *mut VimState,
     key: ::core::ffi::c_int,
@@ -218,7 +232,7 @@ pub(crate) unsafe fn command_line_execute(
         }
 
         if !cmdline_was_last_drawn.get() {
-            unsafe { redrawcmdline() };
+            redrawcmdline();
         }
         return 1;
     }
@@ -353,7 +367,7 @@ pub(crate) unsafe fn command_line_execute(
         // TODO(vim): why is ex_normal_busy checked here?
         if (s.c == Key::Cmdwin.code() || ex_normal_busy.get() == 0) && !got_int.get() {
             // Open a window to edit the command line (and history).
-            s.c = unsafe { open_cmdwin() };
+            s.c = open_cmdwin();
             s.some_key_typed = true;
         }
     } else {
@@ -468,6 +482,11 @@ pub(crate) fn may_trigger_cursormovedc(s: Cls) {
 /// Incremental searches for `/` and `?` only search and redraw here if
 /// something changed in the past; [`command_line_changed`] is what runs when
 /// the line itself did change.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int {
     may_trigger_cursormovedc(s);
     s.prev_cmdpos = Cc::current().cmdpos;
@@ -478,7 +497,7 @@ pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int 
 }
 
 /// Trigger the `CmdlineChanged` autocommands.
-pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
+pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
     if !has_event(AutoEvent::CmdlineChanged) {
         return;
     }
@@ -501,12 +520,17 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
         msg_scroll.set(1);
         unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
         err.clear();
-        unsafe { redrawcmd() };
+        redrawcmd();
     }
 }
 
 /// A key changed the command line: show the `'inccommand'` preview or the
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
     let cc = Cc::current();
     let prev_cmdpreview = cmdpreview.get();
@@ -516,7 +540,7 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
         && vpeekc_any() == 0
-        && unsafe { cmdpreview_may_show(s.raw()) };
+        && cmdpreview_may_show(s.raw());
     if !preview_shown {
         cmdpreview.set(false);
         if prev_cmdpreview {
@@ -533,13 +557,11 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
         && (cc.cmdpos != s.prev_cmdpos
             || (!s.prev_cmdbuff.is_null() && !unsafe { cstr::eq(s.prev_cmdbuff, cc.text()) }))
     {
-        unsafe {
-            do_autocmd_cmdlinechanged(if s.firstc > 0 {
-                s.firstc
-            } else {
-                '-' as ::core::ffi::c_int
-            })
-        };
+        do_autocmd_cmdlinechanged(if s.firstc > 0 {
+            s.firstc
+        } else {
+            '-' as ::core::ffi::c_int
+        });
     }
 
     may_trigger_cursormovedc(s);
@@ -551,7 +573,7 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
         // intermediate redraws. If the cmdline is external the UI handles
         // shaping and no redraw is needed.
         if !ui_has(kUICmdline) && vpeekc() == NUL {
-            unsafe { redrawcmd() };
+            redrawcmd();
         }
     }
 

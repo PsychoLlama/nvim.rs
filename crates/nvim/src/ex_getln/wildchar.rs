@@ -24,6 +24,10 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 }
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
+///
+/// # Safety
+///
+/// `s` must point at a live `CommandLineState`, unaliased for the call.
 pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
     let cc = Cc::current();
     let res;
@@ -44,7 +48,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
             && wim_has(unsafe { (*s).wim_index }, kOptWimFlagList)
         {
             unsafe { showmatches(&raw mut (*s).xpc, false, true, wim_noselect) };
-            unsafe { redrawcmd() };
+            redrawcmd();
             unsafe { (*s).did_wild_list = true };
         }
         if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLongest) {
@@ -148,7 +152,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                 };
             }
 
-            unsafe { redrawcmd() };
+            redrawcmd();
             if wim_list {
                 unsafe { (*s).did_wild_list = true };
             }
@@ -184,7 +188,7 @@ const WIM_WORDS: [(&[u8], OptWimFlags); 5] = [
 
 /// Read the `'wildmode'` option and fill `wim_flags[]`.  Answers `Err` on a
 /// malformed value, leaving `wim_flags` alone.
-pub unsafe fn check_opt_wim() -> Result<(), Failed> {
+pub fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
 

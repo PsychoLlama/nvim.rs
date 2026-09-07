@@ -28,7 +28,7 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Set up the command preview buffer, creating it if it does not exist.
 ///
 /// Answers NULL if the buffer could not be made ready.
-pub(crate) unsafe fn cmdpreview_open_buf() -> Option<Buf> {
+pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
     let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
         find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
@@ -74,7 +74,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> Option<Buf> {
 
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
-pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
+pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let save_curwin = Win::current();
 
     if win_split(
@@ -116,7 +116,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
 }
 
 /// Close any open command preview windows.
-pub(crate) unsafe fn cmdpreview_close_win() {
+pub(crate) fn cmdpreview_close_win() {
     let buf = if cmdpreview_bufnr.get() != 0 {
         find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
@@ -352,7 +352,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 /// Run the command being typed as a preview, if it supports one.
 ///
 /// Answers true when a preview was shown.
-pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
+pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
     let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     let mut cmdpreview_type = 0;
@@ -389,7 +389,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // The cursor may be at the end of the message grid rather than at
         // cmdspos. Put it there in case the preview callback flushes.
         // #30696
-        unsafe { cursorcmd() };
+        cursorcmd();
         // Flush now: an external command line may itself wish to update
         // the screen, which is disallowed during cmdpreview.
         cmdline_ui_flush();
@@ -418,7 +418,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         // Open the preview buffer if 'inccommand' is "split".
         if icm_split && {
-            cmdpreview_buf = unsafe { cmdpreview_open_buf().map_or(ptr::null_mut(), Buf::raw) };
+            cmdpreview_buf = cmdpreview_open_buf().map_or(ptr::null_mut(), Buf::raw);
             cmdpreview_buf.is_null()
         } {
             // Failed to create the preview buffer, so disable the preview.
@@ -471,7 +471,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         // Close the preview window if it is open.
         if icm_split && cmdpreview_type == 2 && !cmdpreview_win.is_null() {
-            unsafe { cmdpreview_close_win() };
+            cmdpreview_close_win();
         }
 
         // SAFETY: as the `cmdpreview_prepare` above.
@@ -480,7 +480,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         unsafe { unblock_autocmds() };
         drop(silenced);
         drop(errors_silent);
-        unsafe { redrawcmdline() };
+        redrawcmdline();
     }
 
     unsafe { xfree(cmdline as *mut ::core::ffi::c_void) };

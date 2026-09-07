@@ -386,7 +386,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     if redr_type == UPD_CLEAR {
         // Resets `clear_cmdline` and sets UPD_NOT_VALID on every window.
         unsafe { screenclear() };
-        unsafe { cmdline_screen_cleared() };
+        cmdline_screen_cleared();
         if ui_has(kUIMessages) {
             ui_call_msg_clear();
         }

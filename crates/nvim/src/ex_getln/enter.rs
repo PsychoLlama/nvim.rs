@@ -125,7 +125,7 @@ const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
 };
 
 /// Initialize the current command-line info.
-pub(crate) unsafe fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int) {
+pub(crate) fn init_ccline(firstc: ::core::ffi::c_int, indent: ::core::ffi::c_int) {
     let mut cc = Cc::current();
     cc.overstrike = 0; // always start in insert mode
     debug_assert!(indent >= 0);
@@ -167,6 +167,11 @@ pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
 /// Set `v:event` to a dictionary describing the command line, for the
 /// `CmdlineEnter`/`CmdlineLeave` autocommands.  Answers the dictionary,
 /// which the caller hands back to `restore_v_event`.
+///
+/// # Safety
+///
+/// `save_v_event` must point at a live `SaveVEvent`, unaliased for the call.
+/// `cmdtype` must point at a NUL-terminated string.
 pub(crate) unsafe fn cmdline_event_dict(
     save_v_event: *mut SaveVEvent,
     cmdtype: *const ::core::ffi::c_char,
@@ -191,7 +196,7 @@ pub(crate) unsafe fn cmdline_event_dict(
 /// `count` is only used for incremental search, `indent` is the indent for
 /// inside conditionals, and `clear_ccline` asks for `ccline` to be cleared
 /// first.
-pub(crate) unsafe fn command_line_enter(
+pub(crate) fn command_line_enter(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
     indent: ::core::ffi::c_int,
@@ -237,7 +242,7 @@ pub(crate) unsafe fn command_line_enter(
         s.break_ctrl_c = true;
     }
 
-    unsafe { init_ccline(s.firstc, s.indent) };
+    init_ccline(s.firstc, s.indent);
     debug_assert!(cc.in_use());
     let prompt_id = last_prompt_id.get();
     last_prompt_id.set(prompt_id.wrapping_add(1));
@@ -267,8 +272,8 @@ pub(crate) unsafe fn command_line_enter(
 
         redir_off.set(true); // don't redirect the typed command
         if !cmd_silent.get() {
-            unsafe { gotocmdline(true) };
-            unsafe { redrawcmdprompt() }; // draw the prompt or the indent
+            gotocmdline(true);
+            redrawcmdprompt(); // draw the prompt or the indent
             cc.cmdspos = cmd_startcol();
         }
         s.xpc.xp_context = ExpandContext::Nothing;
@@ -332,7 +337,7 @@ pub(crate) unsafe fn command_line_enter(
                 msg_scroll.set(1);
                 unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
                 err.clear();
-                unsafe { redrawcmd() };
+                redrawcmd();
             }
             err = Error::none();
         }
@@ -347,7 +352,7 @@ pub(crate) unsafe fn command_line_enter(
         // want to type and execute commands. The display may be messed
         // up a bit.
         if did_emsg.get() != 0 {
-            unsafe { redrawcmd() };
+            redrawcmd();
         }
 
         // Redraw the statusline, in case it uses the current mode through
@@ -548,6 +553,10 @@ pub(crate) unsafe fn command_line_enter(
 
 /// The key loop's `state_check` callback, run before every key is fetched.
 /// Installed in a `VimState`, so this one keeps its C ABI.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_int {
     // SAFETY: `state_enter` hands back the `VimState` header of the
     // `CommandLineState` it was given, live for the whole of the loop.
@@ -586,7 +595,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
         s.skip_pum_redraw = true;
     }
 
-    unsafe { cursorcmd() }; // set the cursor on the right spot
+    cursorcmd(); // set the cursor on the right spot
     unsafe { ui_cursor_shape() };
     1
 }
@@ -619,13 +628,13 @@ pub(crate) fn abandon_cmdline() {
 /// is no command line.
 ///
 /// Careful: this can be called recursively.
-pub unsafe fn getcmdline(
+pub fn getcmdline(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
     indent: ::core::ffi::c_int,
     _do_concat: bool,
 ) -> *mut ::core::ffi::c_char {
-    unsafe { command_line_enter(firstc, count, indent, true) as *mut ::core::ffi::c_char }
+    command_line_enter(firstc, count, indent, true) as *mut ::core::ffi::c_char
 }
 
 /// Get a command line with a prompt.
@@ -639,6 +648,14 @@ pub unsafe fn getcmdline(
 /// of the user's input, `one_key` returns after a single key press (button
 /// prompts) and `mouse_used` is set when returning after a right click.
 /// Answers an allocated command line, or NULL.
+///
+/// # Safety
+///
+/// `prompt` must point at a NUL-terminated string. `xp_context` must be an
+/// initialized `ExpandContext` whose pointer fields point at live data for
+/// the call. `xp_arg` must point at a NUL-terminated string.
+/// `highlight_callback` must be an initialized callback the caller owns for
+/// the call. `mouse_used` must point at a writable `bool` the caller owns.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn getcmdline_prompt(
     firstc: ::core::ffi::c_int,
@@ -677,7 +694,7 @@ pub unsafe fn getcmdline_prompt(
     let loud = Allow::messages();
     cmd_silent.set(false); // want to see the prompt
 
-    let ret = unsafe { command_line_enter(firstc, 1, 0, false) } as *mut ::core::ffi::c_char;
+    let ret = command_line_enter(firstc, 1, 0, false) as *mut ::core::ffi::c_char;
     cc.redraw_state = kCmdRedrawNone;
     if did_save_ccline {
         restore_cmdline();

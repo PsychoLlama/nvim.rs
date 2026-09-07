@@ -92,6 +92,12 @@ pub(crate) fn set_search_match(t: &mut Pos) {
 /// Answers true when the line holds a valid pattern, having set `skiplen`
 /// (bytes before the pattern), `patlen`, `search_delim`, `search_first_line`
 /// and `search_last_line`.
+///
+/// # Safety
+///
+/// `search_delim` must point at a writable `int` the caller owns. `skiplen`
+/// must point at a writable `int` the caller owns. `patlen` must point at a
+/// writable `int` the caller owns.
 pub unsafe fn parse_pattern_and_range(
     incsearch_start: Pos,
     search_delim: *mut ::core::ffi::c_int,
@@ -308,6 +314,12 @@ pub(crate) fn do_incsearch_highlighting(
 }
 
 /// Do the `'incsearch'` preview, if it is wanted here.
+///
+/// # Safety
+///
+/// `s` must still be live: the incremental-search state it names is the
+/// caller's own, and nothing may have left the command line since it was
+/// taken.
 pub(crate) unsafe fn may_do_incsearch_highlighting(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
@@ -477,7 +489,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     }
 
     msg_starthere();
-    unsafe { redrawcmdline() };
+    redrawcmdline();
     s.did_incsearch = true;
 }
 
@@ -485,6 +497,12 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 /// `*c`.
 ///
 /// Answers `Ok` when the caller should treat the key as unchanged.
+///
+/// # Safety
+///
+/// `s` must still be live: the incremental-search state it names is the
+/// caller's own, and nothing may have left the command line since it was
+/// taken.
 pub(crate) unsafe fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
@@ -552,6 +570,12 @@ pub(crate) unsafe fn may_add_char_to_search(
 
 /// Undo the preview: put the cursor and the view back where the command line
 /// found them, and clear the match highlight.
+///
+/// # Safety
+///
+/// `s` must still be live: the incremental-search state it names is the
+/// caller's own, and nothing may have left the command line since it was
+/// taken.
 pub(crate) unsafe fn finish_incsearch_highlighting(
     gotesc: bool,
     mut s: Is,
@@ -595,6 +619,12 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 ///
 /// Answers `Ok` when there was no incremental search to move, `Err`
 /// otherwise (which is what tells the key loop the line did not change).
+///
+/// # Safety
+///
+/// `s` must still be live: the incremental-search state it names is the
+/// caller's own, and nothing may have left the command line since it was
+/// taken.
 pub(crate) unsafe fn may_do_command_line_next_incsearch(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
@@ -719,7 +749,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         redraw_later(Win::current(), UPD_NOT_VALID);
         let _ = unsafe { update_screen() };
         highlight_match.set(false);
-        unsafe { redrawcmdline() };
+        redrawcmdline();
         Win::current().w_cursor = s.match_end;
     } else {
         unsafe { vim_beep(kOptBoFlagError as ::core::ffi::c_uint) };
@@ -733,6 +763,11 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
 ///
 /// Only finds specific cases, such as a trailing `\|`, which can happen while
 /// a pattern is being typed.
+///
+/// # Safety
+///
+/// `p` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 pub(crate) unsafe fn empty_pattern(
     p: *mut ::core::ffi::c_char,
     len: size_t,
@@ -750,6 +785,10 @@ pub(crate) unsafe fn empty_pattern(
 }
 
 /// [`empty_pattern`] with the `'magic'` level already known.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn empty_pattern_magic(
     p: *mut ::core::ffi::c_char,
     mut len: size_t,

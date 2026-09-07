@@ -69,7 +69,7 @@ pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
         unsafe { nv_operator(cmd_arg) };
         return;
     }
-    ca.searchbuf = unsafe { getcmdline(ca.cmdchar, ca.count1, 0, true) };
+    ca.searchbuf = getcmdline(ca.cmdchar, ca.count1, 0, true);
     if ca.searchbuf.is_null() {
         clear_op(op);
         return;

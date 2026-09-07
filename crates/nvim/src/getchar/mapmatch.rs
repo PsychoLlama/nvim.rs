@@ -450,7 +450,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
     if unsafe { *mapdepth } >= p_mmd.get() as c_int {
         emsg(gettext(e_recursive_mapping));
         if State.get() & MODE_CMDLINE != 0 {
-            unsafe { redrawcmdline() };
+            redrawcmdline();
         } else {
             unsafe { setcursor() };
         }
@@ -514,7 +514,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
                     // Redraw the command below the error.
                     msg_didout.set(true);
                     msg_row.set(msg_row.get().max(cmdline_row.get()));
-                    unsafe { redrawcmd() };
+                    redrawcmd();
                 }
             } else if State.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
                 // Otherwise just put the cursor back.

@@ -27,6 +27,11 @@ use crate::winlayer::Buf;
 ///
 /// Answers [`KeyOutcome::GotoNormalMode`] when erasing emptied a bare `:`
 /// line, which leaves the command line altogether.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
     let mut cc = Cc::current();
     if s.c == Key::Kdel.code() {
@@ -71,7 +76,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
             // restored at the wrong position.
             s.is_state.old_viewstate = s.is_state.init_viewstate;
         }
-        unsafe { redrawcmd() };
+        redrawcmd();
     } else if cc.is_empty() && s.c != Ctrl_W && cc.cmdprompt.is_null() && s.indent == 0 {
         // In ex and debug mode it doesn't make sense to return.
         if exmode_active.get() || cc.cmdfirstc == '>' as ::core::ffi::c_int {
@@ -93,6 +98,11 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 
 /// Handle CTRL-^: toggle the use of the language `:lmap` mappings and/or the
 /// Input Method.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
     let b_im_ptr = if s.b_im_ptr_buf.is_some_and(buf_valid) {
         s.b_im_ptr
@@ -126,11 +136,16 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
 }
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
     let mut cc = Cc::current();
     let save_new_cmdpos = new_cmdpos.get();
 
-    unsafe { putcmdline('"' as ::core::ffi::c_char, true) };
+    putcmdline('"' as ::core::ffi::c_char, true);
     let raw_key = Keys::unmapped_with_codes();
     s.c = plain_vgetc(); // CTRL-R <char>
     let mut i = s.c;
@@ -177,7 +192,7 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
     new_cmdpos.set(save_new_cmdpos);
 
     cc.special_char = NUL as ::core::ffi::c_char; // remove the double quote
-    unsafe { redrawcmd() };
+    redrawcmd();
 
     // With "literally" the command line has already changed; otherwise the
     // text has been stuffed but the command line has not changed yet.
@@ -189,6 +204,11 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
 }
 
 /// Handle a left or right mouse click: put the cursor where it landed.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_left_right_mouse(mut s: Cls) {
     let mut cc = Cc::current();
     s.ignore_drag_release = s.c == Key::Leftrelease.code() || s.c == Key::Rightrelease.code();
@@ -196,7 +216,7 @@ pub(crate) unsafe fn command_line_left_right_mouse(mut s: Cls) {
     cc.cmdspos = cmd_startcol();
     cc.cmdpos = 0;
     while cc.cmdpos < cc.len() {
-        let cells = unsafe { cmdline_charsize(cc.cmdpos) };
+        let cells = cmdline_charsize(cc.cmdpos);
         if mouse_row.get() <= cmdline_row.get() + cc.cmdspos / Columns.get()
             && mouse_col.get() < cc.cmdspos % Columns.get() + cells
         {
@@ -217,6 +237,11 @@ pub(crate) unsafe fn command_line_left_right_mouse(mut s: Cls) {
 /// C's `break` out of that switch: the key was not handled specially — or its
 /// handler asked for it to be treated as ordinary text — and falls through to
 /// the abbreviation check and then to inserting it into the line.
+///
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     let mut cc = Cc::current();
     match Key::try_from(s.c) {
@@ -254,7 +279,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if cc.is_empty() {
                 s.is_state.search_start = s.is_state.save_cursor;
             }
-            unsafe { redrawcmd() };
+            redrawcmd();
             Some(unsafe { command_line_changed(s) })
         }
 
@@ -285,13 +310,13 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if s.show_matches(false, true, wim_has(0, kOptWimFlagNoselect)) == Expanded::Nothing {
                 return None; // use ^D as a normal character instead
             }
-            unsafe { redrawcmd() };
+            redrawcmd();
             Some(1) // don't do incremental search now
         }
 
         Ok(Key::Right | Key::SRight | Key::CRight) => {
             while cc.cmdpos < cc.len() {
-                let cells = unsafe { cmdline_charsize(cc.cmdpos) };
+                let cells = cmdline_charsize(cc.cmdpos);
                 if KeyTyped.get() && cc.cmdspos + cells >= Columns.get() * Rows.get() {
                     break;
                 }
@@ -306,7 +331,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                     break;
                 }
             }
-            cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
+            cc.cmdspos = cmd_screencol(cc.cmdpos);
             Some(unsafe { command_line_not_changed(s) })
         }
 
@@ -319,7 +344,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 // Move to the first byte of a possibly multibyte char.
                 cc.cmdpos -=
                     unsafe { utf_head_off(cc.text(), cc.text().offset(cc.cmdpos as isize)) };
-                cc.cmdspos -= unsafe { cmdline_charsize(cc.cmdpos) };
+                cc.cmdspos -= cmdline_charsize(cc.cmdpos);
                 if !(cc.cmdpos > 0
                     && (s.c == Key::SLeft.code()
                         || s.c == Key::CLeft.code()
@@ -331,9 +356,9 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 }
             }
 
-            cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
+            cc.cmdspos = cmd_screencol(cc.cmdpos);
             if cc.special_char as ::core::ffi::c_int != NUL {
-                unsafe { putcmdline(cc.special_char, cc.special_shift) };
+                putcmdline(cc.special_char, cc.special_shift);
             }
             Some(unsafe { command_line_not_changed(s) })
         }
@@ -354,7 +379,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 true,
                 true,
             );
-            unsafe { redrawcmd() };
+            redrawcmd();
             Some(unsafe { command_line_changed(s) })
         }
 
@@ -416,7 +441,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
         // End of the command line.
         Ok(Key::End | Key::Kend | Key::SEnd | Key::CEnd) | Err(NotAKey(Ctrl_E)) => {
             cc.cmdpos = cc.len();
-            cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
+            cc.cmdspos = cmd_screencol(cc.cmdpos);
             Some(unsafe { command_line_not_changed(s) })
         }
 
@@ -515,7 +540,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         Err(NotAKey(Ctrl_V | Ctrl_Q)) => {
             s.ignore_drag_release = true;
-            unsafe { putcmdline('^' as ::core::ffi::c_char, true) };
+            putcmdline('^' as ::core::ffi::c_char, true);
 
             // Get the next (two) characters. Do not include the modifiers
             // in the key, for CTRL-SHIFT-V.
@@ -528,11 +553,11 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 if ui_has(kUICmdline) {
                     // TODO(bfredl): why not make unputcmdline also work
                     // with true?
-                    unsafe { unputcmdline() };
+                    unputcmdline();
                 } else {
-                    unsafe { draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos) };
+                    draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
                     unsafe { msg_putchar(' ' as ::core::ffi::c_int) };
-                    unsafe { cursorcmd() };
+                    cursorcmd();
                 }
             }
             None
@@ -540,14 +565,14 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         Err(NotAKey(Ctrl_K)) => {
             s.ignore_drag_release = true;
-            unsafe { putcmdline('?' as ::core::ffi::c_char, true) };
+            putcmdline('?' as ::core::ffi::c_char, true);
             s.c = get_digraph(true);
             cc.special_char = NUL as ::core::ffi::c_char;
 
             if s.c != NUL {
                 return None;
             }
-            unsafe { redrawcmd() };
+            redrawcmd();
             Some(unsafe { command_line_not_changed(s) })
         }
 
@@ -579,6 +604,10 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     }
 }
 
+/// # Safety
+///
+/// `s` must be an initialized `Cls` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     // One character, its own buffer: `put_on_cmdline` reaches the message
     // machinery, which writes upstream's shared `IObuff`.

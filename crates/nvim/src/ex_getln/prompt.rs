@@ -30,6 +30,11 @@ const NUMBUFLEN: usize = 65;
 /// `lenp` receives the length without the trailing NUL (zero while skipping).
 /// Answers an allocated string, or NULL when skipping and on error; it shows
 /// no messages of its own.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`. `lenp` must point at a
+/// writable `size_t` the caller owns.
 pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
     let mut cmd = unsafe { (*args).arg };
@@ -82,6 +87,11 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 /// either a single `{opts}` dict or up to three positional arguments, whose
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval. `result` must point at the
+/// caller's return slot: an initialized typval it owns and will clear.
 pub unsafe fn get_user_input(
     args: *const TypVal,
     result: *mut TypVal,

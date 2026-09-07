@@ -250,7 +250,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 // old one.
                 redraw_popupmenu.set(false);
                 let _ = unsafe { update_screen() };
-                unsafe { redrawcmdline() };
+                redrawcmdline();
                 if pum_drawn() {
                     cmdline_pum_display(false);
                 }

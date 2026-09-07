@@ -108,7 +108,7 @@ pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
 /// Returns when the window is closed, with `CAR` if the command is to be
 /// executed, `Ctrl_C` if it is to be abandoned, and `K_IGNORE` if editing
 /// continues.
-pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
+pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     let mut bufref = BufRef::NONE;
     let old_curwin = Win::current().id();
     // Uninitialised in the C; `win_size_save` below fills it.
@@ -370,8 +370,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
                 cc.cmdpos = cc.len();
             }
             if cmdwin_result.get() == Key::Ignore.code() {
-                cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
-                unsafe { redrawcmd() };
+                cc.cmdspos = cmd_screencol(cc.cmdpos);
+                redrawcmd();
             }
         }
 

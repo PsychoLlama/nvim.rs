@@ -229,7 +229,7 @@ fn stuff_char(c: ::core::ffi::c_int) {
 /// `c` is normally `:`, and NUL for `:append`; `indent` is the indent for
 /// inside conditionals.  Registered as a `LineGetter` in several tables, so
 /// this one keeps its C ABI.
-pub unsafe fn getexline(
+pub fn getexline(
     c: ::core::ffi::c_int,
     _cookie: *mut ::core::ffi::c_void,
     indent: ::core::ffi::c_int,
@@ -241,8 +241,7 @@ pub unsafe fn getexline(
         // SAFETY: consumes the byte `vpeekc` just reported.
         vgetc();
     }
-    // SAFETY: reads a whole command line, re-entering the editor.
-    unsafe { getcmdline(c, 1, indent, do_concat) }
+    getcmdline(c, 1, indent, do_concat)
 }
 
 pub fn cmdline_overstrike() -> bool {
@@ -463,6 +462,10 @@ fn special_reg(
 /// With `literally` set the text is inserted as-is; otherwise it is stuffed
 /// back as if typed — which does not leave the command line, but does mean
 /// every character that would end it has to be quoted with CTRL-V.
+///
+/// # Safety
+///
+/// `s` must point at a NUL-terminated string.
 pub unsafe fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, literally: bool) {
     if literally {
         // SAFETY: a NUL-terminated string, whose length it works out itself.
@@ -527,6 +530,10 @@ pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
 /// Escape the special characters in `fname`, depending on `what`:
 /// `VSE_NONE` for a file-name argument after a Vim command, `VSE_SHELL` for
 /// a shell command, `VSE_BUFFER` for `:buffer`.  Answers allocated memory.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub unsafe fn vim_strsave_fnameescape(
     fname: *const ::core::ffi::c_char,
     what: ::core::ffi::c_int,
@@ -569,6 +576,11 @@ fn escaped(
 }
 
 /// Put a backslash before the file name in `fname`, which is allocated memory.
+///
+/// # Safety
+///
+/// `fname` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub unsafe fn escape_fname(fname: *mut *mut ::core::ffi::c_char) {
     // SAFETY: the caller's promise -- a slot holding allocated memory.
     unsafe { *fname = with_backslash(*fname) };
@@ -586,6 +598,12 @@ fn with_backslash(name: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 
 /// For each name in `files[..num_files]`: if `orig_pat` starts with `~/`,
 /// put the home directory back as `~`.
+///
+/// # Safety
+///
+/// `orig_pat` must point at a NUL-terminated string, unaliased for the call.
+/// `files` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub unsafe fn tilde_replace(
     orig_pat: *mut ::core::ffi::c_char,
     num_files: ::core::ffi::c_int,

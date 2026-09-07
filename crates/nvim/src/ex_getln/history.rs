@@ -16,6 +16,10 @@ use crate::types::{ExpandContext, Failed, NUL};
 
 /// Step `s->hiscnt` one entry back (or forward, with `next_match`) through
 /// the history, skipping entries that do not start with what was typed.
+///
+/// # Safety
+///
+/// `s` must point at a live `CommandLineState`, unaliased for the call.
 pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_match: bool) {
     loop {
         if !next_match {
@@ -61,6 +65,10 @@ pub(crate) unsafe fn command_line_next_histidx(s: *mut CommandLineState, next_ma
 }
 
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
+///
+/// # Safety
+///
+/// `s` must point at a live `CommandLineState`, unaliased for the call.
 pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> KeyOutcome {
     let mut cc = Cc::current();
     if unsafe { (*s).histype } == HIST_INVALID || get_hislen() == 0 || unsafe { (*s).firstc } == NUL
@@ -167,7 +175,7 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
         cc.cmdpos = plen;
     }
 
-    unsafe { redrawcmd() };
+    redrawcmd();
     KeyOutcome::Changed
 }
 
@@ -176,6 +184,12 @@ pub(crate) unsafe fn command_line_browse_history(s: *mut CommandLineState) -> Ke
 /// `str` is advanced past what was parsed; `num1` and `num2` are only written
 /// when the corresponding number was present.  Answers `Err` on a malformed
 /// range or one whose numbers do not fit an `int`.
+///
+/// # Safety
+///
+/// `str` must point at a writable `*mut c_char` slot the caller owns for the
+/// call. `num1` must point at a writable `int` the caller owns. `num2` must
+/// point at a writable `int` the caller owns.
 pub unsafe fn get_list_range(
     str: *mut *mut ::core::ffi::c_char,
     num1: *mut ::core::ffi::c_int,

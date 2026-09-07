@@ -13,6 +13,11 @@ use crate::cstr;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
+///
+/// # Safety
+///
+/// `line` must be an initialized `Cc` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
     let mut arena: Arena = ARENA_EMPTY;
 
@@ -145,6 +150,10 @@ impl Drop for CmdlineBlock {
 
 /// Append one line to the `ext_cmdline` block — the body a `:if` or
 /// `:function` accumulates while it is being typed.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
     let buf = unsafe { xmallocz(indent + cstr::bytes_at(line).len()) } as *mut ::core::ffi::c_char;
     unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
@@ -200,7 +209,7 @@ pub fn ui_ext_cmdline_block_leave() {
 }
 
 /// Extra redrawing needed for `:redraw!` and on `ui_attach`.
-pub unsafe fn cmdline_screen_cleared() {
+pub fn cmdline_screen_cleared() {
     if !ui_has(kUICmdline) {
         return;
     }
@@ -225,8 +234,7 @@ pub unsafe fn cmdline_screen_cleared() {
         }
         depth += 1;
     }
-    // SAFETY: redraws the command line the editor is on.
-    unsafe { redrawcmd() };
+    redrawcmd();
 }
 
 /// Called by `ui_flush`: send whatever redraws keep the externalised command

@@ -477,8 +477,7 @@ pub unsafe fn did_set_whichwrap(args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_wildmode(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: reads the option's own value.
-    if unsafe { check_opt_wim() }.is_err() {
+    if check_opt_wim().is_err() {
         return invalid();
     }
     None

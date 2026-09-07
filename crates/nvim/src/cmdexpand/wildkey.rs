@@ -305,14 +305,14 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
     if wild_menu_showing.get() == WM_SCROLLED {
         // Entered the command line, move it up.
         cmdline_row.set(cmdline_row.get() - 1);
-        unsafe { redrawcmd() };
+        redrawcmd();
     } else if save_p_ls.get() != -1 {
         // Restore 'laststatus' and 'winminheight'.
         p_ls.set(save_p_ls.get() as OptInt);
         p_wmh.set(save_p_wmh.get() as OptInt);
         last_status(false);
         let _ = unsafe { update_screen() }; // redraw the screen NOW
-        unsafe { redrawcmd() };
+        redrawcmd();
         save_p_ls.set(-1);
     } else {
         win_redraw_last_status(current_topframe());

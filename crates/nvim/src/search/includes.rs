@@ -480,7 +480,7 @@ unsafe fn show_include_name(
     if walk.did_show {
         unsafe { msg_putchar('\n' as c_int) }; // cursor below the last one
     } else {
-        unsafe { gotocmdline(true) }; // cursor at the status line
+        gotocmdline(true); // cursor at the status line
         unsafe { msg_puts_title(gettext(c"--- Included files ").as_ptr()) };
         if action != ACTION_SHOW_ALL {
             unsafe { msg_puts_title(gettext(c"not found ").as_ptr()) };
@@ -688,7 +688,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
 unsafe fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     walk.found = true;
     if !walk.did_show {
-        unsafe { gotocmdline(true) }; // cursor at the status line
+        gotocmdline(true); // cursor at the status line
     }
     if walk.curr_fname != walk.prev_fname {
         if walk.did_show {

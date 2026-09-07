@@ -197,8 +197,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
         let byte = tb.byte(tb.len() - 1);
         // SAFETY: the last valid byte of the typeahead is readable.
         if unsafe { ptr2cells(p.cast()) } == 1 && byte < 128 {
-            // SAFETY: draws one byte on the command line.
-            unsafe { putcmdline(byte as c_char, false) };
+            putcmdline(byte as c_char, false);
             partial.showing = true;
         }
     }
@@ -220,7 +219,7 @@ unsafe fn unshow_partial_key(partial: &Partial) {
             unsafe { edit_unputchar() };
         }
         if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
-            unsafe { unputcmdline() };
+            unputcmdline();
         } else {
             unsafe { setcursor() }; // put the cursor back where it belongs
         }

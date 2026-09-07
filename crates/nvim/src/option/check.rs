@@ -163,7 +163,7 @@ pub(crate) fn didset_options2() {
     unsafe { set_chars_option(Win::new(win), fcs, kFillchars, true, no_err, 0) };
     let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
     unsafe { set_chars_option(Win::new(win), lcs, kListchars, true, no_err, 0) };
-    let _ = unsafe { check_opt_wim() };
+    let _ = check_opt_wim();
     let buf = Buf::current_raw();
     unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
     unsafe { tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array) };

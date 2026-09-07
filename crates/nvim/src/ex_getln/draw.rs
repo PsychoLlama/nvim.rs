@@ -15,7 +15,7 @@ use crate::types::NUL;
 use crate::winlayer::cmdline_window;
 
 /// The screen width of the command-line byte at `idx`.
-pub(crate) unsafe fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub(crate) fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
     if cmdline_star.get() > 0 {
         // Showing '*': always one position.
         return 1;
@@ -31,7 +31,7 @@ pub(crate) fn cmd_startcol() -> ::core::ffi::c_int {
 }
 
 /// The screen column for a byte position on the command line.
-pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
+pub fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     let cc = Cc::current();
     let mut col = cmd_startcol();
 
@@ -49,7 +49,7 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 
     let mut i = 0;
     while i < cc.len() && i < bytepos {
-        let c = unsafe { cmdline_charsize(i) };
+        let c = cmdline_charsize(i);
         // Count ">" for a double-wide character that doesn't fit.
         unsafe { correct_screencol(i, c, &raw mut col) };
 
@@ -68,6 +68,10 @@ pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 
 /// If the character at `idx` is a `cells`-wide multi-byte character that does
 /// not fit on the line, account for the ">" that will be displayed instead.
+///
+/// # Safety
+///
+/// `col` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn correct_screencol(
     idx: ::core::ffi::c_int,
     cells: ::core::ffi::c_int,
@@ -84,7 +88,7 @@ pub(crate) unsafe fn correct_screencol(
 
 /// Draw `len` bytes of the command line from `start`, at the cursor position
 /// — or stars, when `cmdline_star` is set.
-pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
+pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
     let mut cc = Cc::current();
     if !cc.in_use() || !unsafe { color_cmdline(cc) } {
         return;
@@ -131,7 +135,7 @@ pub(crate) unsafe fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c
 /// Put character `c` on the command line, shifting the text after the cursor
 /// right when `shift` is set.  Used for CTRL-V, CTRL-K and the like; `c` must
 /// be printable and fit in one display cell.
-pub unsafe fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
+pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     if cmd_silent.get() {
         return;
     }
@@ -140,7 +144,7 @@ pub unsafe fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
         msg_no_more.set(true);
         unsafe { msg_putchar(c as ::core::ffi::c_int) };
         if shift {
-            unsafe { draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos) };
+            draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
         msg_no_more.set(false);
     } else if cc.redraw_state != kCmdRedrawAll {
@@ -151,14 +155,14 @@ pub unsafe fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
             cc.level as Integer,
         );
     }
-    unsafe { cursorcmd() };
+    cursorcmd();
     cc.special_char = c;
     cc.special_shift = shift;
     unsafe { ui_cursor_shape() };
 }
 
 /// Undo a `putcmdline(c, false)`.
-pub unsafe fn unputcmdline() {
+pub fn unputcmdline() {
     if cmd_silent.get() {
         return;
     }
@@ -175,7 +179,7 @@ pub unsafe fn unputcmdline() {
         };
     }
     msg_no_more.set(false);
-    unsafe { cursorcmd() };
+    cursorcmd();
     cc.special_char = NUL as ::core::ffi::c_char;
     unsafe { ui_cursor_shape() };
 }
@@ -186,6 +190,10 @@ pub unsafe fn unputcmdline() {
 /// With `redraw`, the new part of the command line and the rest of it are
 /// redrawn.  Two calls in a row should pass `false` and be followed by
 /// [`redrawcmd`].
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
 pub unsafe fn put_on_cmdline(
     str: *const ::core::ffi::c_char,
     mut len: ::core::ffi::c_int,
@@ -248,15 +256,15 @@ pub unsafe fn put_on_cmdline(
         if head_off != 0 {
             cc.cmdpos -= head_off;
             len += head_off;
-            cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
+            cc.cmdspos = cmd_screencol(cc.cmdpos);
         }
     }
 
     if redraw && !cmd_silent.get() {
         msg_no_more.set(true);
         let row_before = cmdline_row.get();
-        unsafe { cursorcmd() };
-        unsafe { draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos) };
+        cursorcmd();
+        draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         // Avoid clearing the rest of the line too often.
         if cmdline_row.get() != row_before || cc.overstrike != 0 {
             unsafe { msg_clr_eos() };
@@ -274,7 +282,7 @@ pub unsafe fn put_on_cmdline(
 
     let mut i = 0;
     while i < len {
-        let mut c = unsafe { cmdline_charsize(cc.cmdpos) };
+        let mut c = cmdline_charsize(cc.cmdpos);
         // Count ">" for a double-wide character that doesn't fit.
         unsafe { correct_screencol(cc.cmdpos, c, &raw mut cc.cmdspos) };
         // Stop the cursor at the end of the screen, but do advance the
@@ -295,20 +303,20 @@ pub unsafe fn put_on_cmdline(
 
 /// Redraw the command line after a screen size change, an incremental search
 /// or anything else that may have overwritten it.
-pub unsafe fn redrawcmdline() {
+pub fn redrawcmdline() {
     if cmd_silent.get() {
         return;
     }
     need_wait_return.set(false);
     compute_cmdrow();
-    unsafe { redrawcmd() };
-    unsafe { cursorcmd() };
+    redrawcmd();
+    cursorcmd();
     unsafe { ui_cursor_shape() };
 }
 
 /// Draw the `:` / `/` / `?` and the prompt in front of the command line, and
 /// record the indent they take up.
-pub(crate) unsafe fn redrawcmdprompt() {
+pub(crate) fn redrawcmdprompt() {
     if cmd_silent.get() {
         return;
     }
@@ -337,14 +345,14 @@ pub(crate) unsafe fn redrawcmdprompt() {
 }
 
 /// Redraw what is currently on the command line.
-pub unsafe fn redrawcmd() {
+pub fn redrawcmd() {
     if cmd_silent.get() {
         return;
     }
 
     let mut cc = Cc::current();
     if ui_has(kUICmdline) {
-        unsafe { draw_cmdline(0, cc.len()) };
+        draw_cmdline(0, cc.len());
         return;
     }
 
@@ -359,19 +367,19 @@ pub unsafe fn redrawcmd() {
 
     unsafe { sb_text_restart_cmdline() };
     unsafe { msg_start() };
-    unsafe { redrawcmdprompt() };
+    redrawcmdprompt();
 
     // Don't use the more prompt; truncate the command line if it doesn't
     // fit.
     msg_no_more.set(true);
-    unsafe { draw_cmdline(0, cc.len()) };
+    draw_cmdline(0, cc.len());
     unsafe { msg_clr_eos() };
     msg_no_more.set(false);
 
-    cc.cmdspos = unsafe { cmd_screencol(cc.cmdpos) };
+    cc.cmdspos = cmd_screencol(cc.cmdpos);
 
     if cc.special_char as ::core::ffi::c_int != NUL {
-        unsafe { putcmdline(cc.special_char, cc.special_shift) };
+        putcmdline(cc.special_char, cc.special_shift);
     }
 
     // An earlier emsg() may have set msg_scroll; in command-line mode it
@@ -402,7 +410,7 @@ pub fn compute_cmdrow() {
 }
 
 /// Move the screen cursor to the command line's cursor position.
-pub unsafe fn cursorcmd() {
+pub fn cursorcmd() {
     if cmd_silent.get() || ui_has(kUICmdline) {
         return;
     }
@@ -417,7 +425,7 @@ pub unsafe fn cursorcmd() {
 
 /// Move the screen cursor to the start of the command line, clearing the
 /// bottom lines when `clr` is set.
-pub unsafe fn gotocmdline(clr: bool) {
+pub fn gotocmdline(clr: bool) {
     if ui_has(kUICmdline) {
         return;
     }

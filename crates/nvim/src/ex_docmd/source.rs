@@ -358,7 +358,7 @@ pub(crate) unsafe fn get_loop_line(
         }
         let line = match cp.lc_getline {
             Some(get) => unsafe { get(c, cp.cookie, indent, do_concat) },
-            None => unsafe { getcmdline(c, 0, indent, do_concat) },
+            None => getcmdline(c, 0, indent, do_concat),
         };
         if !line.is_null() {
             unsafe { store_loop_line(cp.lines_gap, line) };
