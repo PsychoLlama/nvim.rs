@@ -28,6 +28,11 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     (b.line_count() as Integer).reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive. `lstate` must point at the Lua state this
+/// call runs on, unaliased for the call.
 pub unsafe fn nvim_buf_get_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -71,6 +76,11 @@ pub unsafe fn nvim_buf_get_lines(
     rv.reported(error)
 }
 
+/// # Safety
+///
+/// `replacement` must be a well-formed API array, its `size` elements
+/// initialized. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_set_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -277,6 +287,12 @@ pub unsafe fn nvim_buf_set_lines(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
+/// for the call. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive. `lstate` must point at the
+/// Lua state this call runs on, unaliased for the call.
 pub unsafe fn nvim_buf_get_text(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -322,8 +338,7 @@ pub unsafe fn nvim_buf_get_text(
     let first = start_row as int64_t;
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
-        // SAFETY: `b` is the live buffer and `error` this call's error slot.
-        let line: String_0 = unsafe { buf_get_text(b, first, from, to, &mut error) };
+        let line: String_0 = buf_get_text(b, first, from, to, &mut error);
         if !error.is_set() {
             let (data, len) = (line.data(), line.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -333,8 +348,7 @@ pub unsafe fn nvim_buf_get_text(
     } else {
         let from = start_col as int64_t;
         let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
-        // SAFETY: `b` is the live buffer and `error` this call's error slot.
-        str = unsafe { buf_get_text(b, first, from, to, &mut error) };
+        str = buf_get_text(b, first, from, to, &mut error);
         if !error.is_set() {
             let (data, len) = (str.data(), str.len());
             // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
@@ -347,8 +361,7 @@ pub unsafe fn nvim_buf_get_text(
             }
             let last = end_row as int64_t;
             let to = end_col as int64_t;
-            // SAFETY: `b` is the live buffer and `error` this call's error slot.
-            str = unsafe { buf_get_text(b, last, 0 as int64_t, to, &mut error) };
+            str = buf_get_text(b, last, 0 as int64_t, to, &mut error);
             if !error.is_set() {
                 let (data, len) = (str.data(), str.len());
                 let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
@@ -363,7 +376,7 @@ pub unsafe fn nvim_buf_get_text(
     rv.reported(error)
 }
 
-pub unsafe fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
+pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as Integer).reported(error);
@@ -384,6 +397,12 @@ pub unsafe fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<I
     (offset as Integer).reported(error)
 }
 
+/// # Safety
+///
+/// `lstate` must point at the Lua state this call runs on, unaliased for the
+/// call. `a` must point at an API array the caller owns, unaliased for the
+/// call. `arena` must point at a live arena, which the memory this answers
+/// with is taken from and must outlive.
 #[inline]
 unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t, arena: *mut Arena) {
     if !lstate.is_null() {
@@ -393,6 +412,13 @@ unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t, a
     };
 }
 
+/// # Safety
+///
+/// `lstate` must point at the Lua state this call runs on, unaliased for the
+/// call. `a` must point at an API array the caller owns, unaliased for the
+/// call. `s` must point at `len` readable bytes. `arena` must point at a
+/// live arena, which the memory this answers with is taken from and must
+/// outlive.
 unsafe fn push_linestr(
     lstate: *mut lua_State,
     a: *mut Array,
@@ -436,6 +462,12 @@ unsafe fn push_linestr(
     };
 }
 
+/// # Safety
+///
+/// `l` must point at an API array the caller owns, unaliased for the call.
+/// `lstate` must point at the Lua state this call runs on, unaliased for the
+/// call. `arena` must point at a live arena, which the memory this answers
+/// with is taken from and must outlive.
 pub unsafe fn buf_collect_lines(
     buffer: Buf,
     n: size_t,

@@ -26,6 +26,12 @@ use crate::narrow::len_as_int;
 use crate::types::Failed;
 use crate::winlayer::Live;
 
+/// # Safety
+///
+/// `event` must be a well-formed API object the caller owns for the call.
+/// `opts` must point at the `KeyDict_create_autocmd` the dispatcher filled
+/// in, live for the call. `arena` must point at a live arena, which the
+/// memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_create_autocmd(
     channel_id: uint64_t,
     event: Object,
@@ -241,6 +247,11 @@ pub fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_clear_autocmds` the dispatcher filled
+/// in, live for the call. `arena` must point at a live arena, which the
+/// memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_clear_autocmds(
     opts: *mut KeyDict_clear_autocmds,
     arena: *mut Arena,
@@ -347,6 +358,9 @@ pub unsafe fn nvim_clear_autocmds(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn clear_autocmd(
     event: AutoEvent,
     pat: *mut ::core::ffi::c_char,

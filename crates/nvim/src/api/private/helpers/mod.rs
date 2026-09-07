@@ -145,6 +145,10 @@ pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> Opt
 
 /// Start catching what Vimscript throws, saving the state to put back into
 /// `tstate`. Pairs with [`try_leave`].
+///
+/// # Safety
+///
+/// `tstate` must point at the caller's `TryState`, unaliased for the call.
 pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
@@ -172,6 +176,10 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
 
 /// Stop catching, report whatever was caught through `err`, and restore what
 /// [`try_enter`] saved into `tstate`.
+///
+/// # Safety
+///
+/// `tstate` must point at the caller's `TryState`.
 pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
     debug_assert!(trylevel.get() > 0);
     trylevel.set(trylevel.get() - 1);
@@ -303,6 +311,11 @@ impl<T> Reported for T {
 /// Set the mark `name` in `buffer` to line/column, or delete it when `line` is
 /// 0. False, with `err` set, when the position is out of range or the mark
 /// name is not one that can be set.
+///
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub(crate) unsafe fn set_mark(
     buffer: Option<Buf>,
     name: String_0,

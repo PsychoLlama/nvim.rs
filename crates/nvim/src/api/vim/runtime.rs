@@ -16,6 +16,12 @@ use crate::types::NUL;
 use crate::winlayer::Live;
 use core::ffi::CStr;
 
+/// # Safety
+///
+/// `code` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `args` must be a well-formed API array, its `size`
+/// elements initialized. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_exec_lua(
     code: String_0,
     args: Array,
@@ -28,6 +34,12 @@ pub unsafe fn nvim_exec_lua(
     unsafe { nlua_exec(code, name, args, kRetObject, arena, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `code` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `args` must be a well-formed API array, its `size`
+/// elements initialized. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 // `nvim__exec_lua_fast` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__exec_lua_fast(
@@ -38,6 +50,10 @@ pub unsafe fn nvim__exec_lua_fast(
     unsafe { nvim_exec_lua(code, args, arena) }
 }
 
+/// # Safety
+///
+/// `text` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     let mut error = Error::none();
     if text.len() > ::core::ffi::c_int::MAX as size_t {
@@ -47,16 +63,29 @@ pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     (unsafe { mb_string2cells(text.data()) } as Integer).reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error> {
     unsafe { nvim_get_runtime_file(String_0::NULL, true, arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__runtime_inspect` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
     unsafe { runtime_inspect(arena) }
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_runtime_file(
     name: String_0,
     all: Boolean,
@@ -105,6 +134,11 @@ pub unsafe fn nvim_get_runtime_file(
     unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) }.reported(error)
 }
 
+/// # Safety
+///
+/// `fnames` must point at `num_fnames` NUL-terminated names, and `c` at the
+/// `CollectCookie` this callback was registered with -- `do_in_runtimepath`
+/// passes back exactly what it was handed.
 unsafe fn find_runtime_cb(
     num_fnames: ::core::ffi::c_int,
     fnames: *mut *mut ::core::ffi::c_char,
@@ -141,10 +175,16 @@ unsafe fn find_runtime_cb(
 
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__get_lib_dir() -> String_0 {
+pub fn nvim__get_lib_dir() -> String_0 {
     unsafe { cstr_as_string(get_lib_dir()) }
 }
 
+/// # Safety
+///
+/// `pat` must be a well-formed API array, its `size` elements initialized.
+/// `opts` must point at the `KeyDict_runtime` the dispatcher filled in, live
+/// for the call. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 // `nvim__get_runtime` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__get_runtime(
@@ -183,6 +223,10 @@ fn too_long(err: &mut Error, name: &CStr) {
     *err = err_bad_value(name, c"(too long)");
 }
 
+/// # Safety
+///
+/// `dir` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     if dir.len() >= 4096 as size_t {

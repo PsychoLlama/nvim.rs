@@ -46,6 +46,12 @@ struct Context {
     scl_hl_id: c_int,
 }
 
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `opts` must point at the `KeyDict_eval_statusline` the
+/// dispatcher filled in, live for the call. `arena` must point at a live
+/// arena, which the memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_eval_statusline(
     str: String_0,
     opts: *mut KeyDict_eval_statusline,
@@ -397,6 +403,11 @@ fn highlight_dicts(
     values
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_complete_set` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 // `nvim__complete_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__complete_set(

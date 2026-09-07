@@ -34,6 +34,13 @@ use core::ptr;
 
 /// The value `key` has in `dict`, as an API object. Nil — with `err` set —
 /// when the key is absent.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call. `key` must
+/// be a well-formed API string: `size` readable bytes with a NUL at
+/// `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub(crate) unsafe fn dict_get_value(
     dict: *mut Dict,
     key: String_0,
@@ -58,6 +65,12 @@ pub(crate) unsafe fn dict_get_value(
 ///
 /// A null return does not mean failure: an absent key is fine for an
 /// assignment. Callers check `err`.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call. `key` must
+/// be a well-formed API string: `size` readable bytes with a NUL at
+/// `data[size]`.
 pub(crate) unsafe fn dict_check_writable(
     dict: *mut Dict,
     key: String_0,
@@ -103,6 +116,14 @@ pub(crate) unsafe fn dict_check_writable(
 
 /// Set or remove `key` in `dict`. With `retval` the previous value comes
 /// back, otherwise nil. Fires the dictionary's watchers either way.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call. `key` must
+/// be a well-formed API string: `size` readable bytes with a NUL at
+/// `data[size]`. `value` must be a well-formed API object the caller owns for
+/// the call. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub(crate) unsafe fn dict_set_var(
     dict: *mut Dict,
     key: String_0,

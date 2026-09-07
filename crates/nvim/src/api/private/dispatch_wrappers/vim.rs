@@ -44,9 +44,7 @@ pub unsafe fn handle_nvim__chan_set_detach(
         wrong_type(error, 1, c"nvim__chan_set_detach", c"Boolean");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim__chan_set_detach(channel_id, arg_1) } {
+    if let Err(e) = nvim__chan_set_detach(channel_id, arg_1) {
         return failure(error, e);
     }
     Object::Nil
@@ -186,9 +184,7 @@ pub unsafe fn handle_nvim__get_lib_dir(
         wrong_arity(error, 0, args.len());
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim__get_lib_dir() };
+    let rv = nvim__get_lib_dir();
     Object::String(rv)
 }
 
@@ -497,9 +493,7 @@ pub unsafe fn handle_nvim__invalidate_glyph_cache(
         wrong_arity(error, 0, args.len());
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim__invalidate_glyph_cache() };
+    nvim__invalidate_glyph_cache();
     Object::Nil
 }
 

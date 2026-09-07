@@ -31,6 +31,12 @@ struct ConvFrame {
     ret_node_p: *mut Object,
 }
 
+/// # Safety
+///
+/// `expr` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `flags` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`. `arena` must point at a live arena,
+/// which the memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_parse_expression(
     expr: String_0,
     flags: String_0,
@@ -255,7 +261,6 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
                 node_p: unsafe { &raw mut (*node).children },
                 ret_node_p: children_array.items,
             });
-        // SAFETY: `node` is live.
         } else if !unsafe { (*node).next }.is_null() {
             stack.push(ConvFrame {
                 // SAFETY: as above.

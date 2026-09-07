@@ -18,6 +18,10 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::narrow::number_as_int;
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_hl_by_id(
     hl_id: Integer,
     rgb: Boolean,
@@ -36,6 +40,11 @@ pub unsafe fn nvim_get_hl_by_id(
     unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_hl_by_name(
     name: String_0,
     rgb: Boolean,

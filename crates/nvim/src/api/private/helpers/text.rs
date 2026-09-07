@@ -67,6 +67,10 @@ impl String_0 {
 }
 
 /// A copy of the C string `str`, owned by the caller.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string.
 pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
     // SAFETY: `str` is null or NUL-terminated.
     unsafe {
@@ -79,18 +83,32 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
 
 /// A copy of `size` bytes of `buf`, owned by the caller and NUL-terminated
 /// however many NULs the bytes themselves hold.
+///
+/// # Safety
+///
+/// `buf` must point at `size` readable bytes.
 pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
     // SAFETY: `buf` has `size` readable bytes.
     unsafe { String_0::from_raw_parts(xmemdupz(buf.cast(), size).cast(), size) }
 }
 
 /// A NUL-terminated copy of `str`'s bytes, owned by the caller.
+///
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub(crate) unsafe fn string_to_cstr(str: String_0) -> *mut c_char {
     // SAFETY: `str` has `size` readable bytes.
     unsafe { xstrndup(str.data(), str.len()) }
 }
 
 /// `str` viewed as an API string, borrowing rather than copying.
+///
+/// # Safety
+///
+/// `str` must be null, or point at a NUL-terminated string, which the
+/// answer borrows rather than copies.
 pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
     // SAFETY: `str` is null or NUL-terminated.
     unsafe {
@@ -103,6 +121,11 @@ pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
 
 /// [`cstr_as_string`] for a buffer that need not be NUL-terminated within
 /// `maxsize` bytes.
+///
+/// # Safety
+///
+/// `str` must point at `maxsize` readable bytes, which the answer borrows
+/// rather than copies.
 pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> String_0 {
     // SAFETY: `str` has `maxsize` readable bytes.
     unsafe { String_0::from_raw_parts(str, strnlen(str, maxsize)) }
@@ -114,6 +137,12 @@ pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> Strin
 /// the text stands for a newline, as it does everywhere a buffer line is
 /// passed as a C string, and is turned back into one. Text that ends *with*
 /// a break gets a trailing empty item, so that the array round-trips.
+///
+/// # Safety
+///
+/// `input` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array {
     // SAFETY: an `ArrayBuilder` is a size, a capacity, two pointers and an
     // inline array of plain-data objects, so all-zero is a valid value.
@@ -177,6 +206,10 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
 ///
 /// `end_exclusive` allows one past the last line, which is what an
 /// end-of-range index means.
+///
+/// # Safety
+///
+/// `oob` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn normalize_index(
     buffer: Buf,
     index: int64_t,
@@ -206,7 +239,7 @@ pub(crate) unsafe fn normalize_index(
 
 /// The text of line `lnum` between the two columns, as a *borrowed* string
 /// into the buffer's own line. Negative columns count back from the end.
-pub(crate) unsafe fn buf_get_text(
+pub(crate) fn buf_get_text(
     buffer: Buf,
     lnum: int64_t,
     start_col: int64_t,

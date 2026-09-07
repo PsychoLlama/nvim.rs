@@ -22,6 +22,10 @@ use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
 
+/// # Safety
+///
+/// `src` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_exec(
     channel_id: uint64_t,
     src: String_0,
@@ -33,6 +37,10 @@ pub unsafe fn nvim_exec(
     unsafe { exec_impl(channel_id, src, &raw mut opts, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `command` must be a well-formed API string: `size` readable bytes with a
+/// NUL at `data[size]`.
 pub unsafe fn nvim_command_output(
     channel_id: uint64_t,
     command: String_0,
@@ -43,6 +51,12 @@ pub unsafe fn nvim_command_output(
     unsafe { exec_impl(channel_id, command, &raw mut opts, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `code` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `args` must be a well-formed API array, its `size`
+/// elements initialized. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_execute_lua(
     code: String_0,
     args: Array,
@@ -54,6 +68,11 @@ pub unsafe fn nvim_execute_lua(
     unsafe { nvim_exec_lua(code, args, arena) }
 }
 
+/// # Safety
+///
+/// `calls` must be a well-formed API array, its `size` elements initialized.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_call_atomic(
     channel_id: uint64_t,
     calls: Array,

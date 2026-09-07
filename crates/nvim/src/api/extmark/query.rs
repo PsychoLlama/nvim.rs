@@ -16,6 +16,10 @@ use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array {
     let mut chunks: Array = arena_array(arena, vt.size);
     let mut i: size_t = 0 as size_t;
@@ -60,6 +64,10 @@ pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena)
     chunks
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 unsafe fn extmark_to_array(
     extmark: MTPair,
     id: bool,
@@ -115,6 +123,11 @@ unsafe fn extmark_to_array(
     rv
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_get_extmark` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_get_extmark_by_id(
     buf: BufferHandle,
     ns_id: Integer,
@@ -149,6 +162,13 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     unsafe { extmark_to_array(extmark, false, details, hl_name, arena) }.reported(error)
 }
 
+/// # Safety
+///
+/// `start` must be a well-formed API object the caller owns for the call.
+/// `end` must be a well-formed API object the caller owns for the call.
+/// `opts` must point at the `KeyDict_get_extmarks` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_get_extmarks(
     buf: BufferHandle,
     ns_id: Integer,
@@ -278,6 +298,11 @@ pub unsafe fn nvim_buf_get_extmarks(
     rv.reported(error)
 }
 
+/// # Safety
+///
+/// `obj` must be a well-formed API object the caller owns for the call. `row`
+/// must point at a writable `int` the caller owns. `col` must point at a
+/// writable column the caller owns.
 unsafe fn extmark_get_index_from_obj(
     buffer: Buf,
     ns_id: Integer,
@@ -347,7 +372,7 @@ unsafe fn extmark_get_index_from_obj(
 
 // `nvim__buf_debug_extmarks` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__buf_debug_extmarks(
+pub fn nvim__buf_debug_extmarks(
     buf: BufferHandle,
     keys: Boolean,
     dot: Boolean,

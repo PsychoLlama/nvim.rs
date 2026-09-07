@@ -20,6 +20,10 @@ use super::*;
 use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::cstr;
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
     let mut rv: Array = arena_array(arena, 2 as size_t);
     debug_assert!(
@@ -31,6 +35,16 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Arra
     rv
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `mut version` must be a well-formed API dictionary, its
+/// `size` entries initialized. `type_0` must be a well-formed API string:
+/// `size` readable bytes with a NUL at `data[size]`. `methods` must be a
+/// well-formed API dictionary, its `size` entries initialized. `attributes`
+/// must be a well-formed API dictionary, its `size` entries initialized.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_set_client_info(
     channel_id: uint64_t,
     name: String_0,
@@ -90,7 +104,7 @@ pub unsafe fn nvim_set_client_info(
 
 // `nvim__chan_set_detach` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
+pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     let mut error = Error::none();
     let chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
@@ -103,6 +117,10 @@ pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Re
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_chan_info(
     channel_id: uint64_t,
     mut chan: Integer,
@@ -125,10 +143,18 @@ pub unsafe fn nvim_get_chan_info(
     unsafe { channel_info(chan.cast_unsigned(), arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_list_chans(arena: *mut Arena) -> Array {
     unsafe { channel_all_info(arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_list_uis(arena: *mut Arena) -> Array {
     unsafe { ui_array(arena) }
 }

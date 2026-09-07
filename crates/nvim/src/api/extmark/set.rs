@@ -24,6 +24,10 @@ use crate::winlayer::Live;
 /// buys every `opts.field` below.
 type Opts = Live<KeyDict_set_extmark>;
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_set_extmark` the dispatcher filled in,
+/// live for the call.
 pub unsafe fn nvim_buf_set_extmark(
     buf: BufferHandle,
     ns_id: Integer,

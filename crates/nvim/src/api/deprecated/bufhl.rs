@@ -84,6 +84,10 @@ pub fn nvim_buf_clear_highlight(
     nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end)
 }
 
+/// # Safety
+///
+/// `hl_group` must be a well-formed API string: `size` readable bytes with a
+/// NUL at `data[size]`.
 pub unsafe fn nvim_buf_add_highlight(
     buffer: BufferHandle,
     mut ns_id: Integer,
@@ -145,6 +149,11 @@ pub unsafe fn nvim_buf_add_highlight(
     ns_id.reported(error)
 }
 
+/// # Safety
+///
+/// `chunks` must be a well-formed API array, its `size` elements initialized.
+/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
+/// for the call.
 pub unsafe fn nvim_buf_set_virtual_text(
     buffer: BufferHandle,
     mut src_id: Integer,

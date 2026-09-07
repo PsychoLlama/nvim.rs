@@ -88,8 +88,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__get_lib_dir(lstate: *mut lua_Stat
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) {
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim__get_lib_dir() };
+        let ret = nvim__get_lib_dir();
         // SAFETY: as above.
         unsafe { nlua_push_string(lstate, ret, PUSH_SPECIAL) };
         // SAFETY: as above; the result is the binding's.
@@ -399,8 +398,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__invalidate_glyph_cache(
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) {
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim__invalidate_glyph_cache() };
+        nvim__invalidate_glyph_cache();
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim__invalidate_glyph_cache", 0, 0, convert) }

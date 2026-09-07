@@ -690,8 +690,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_hl_ns(lstate: *mut lua_State) 
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_set_hl_ns(arg_1) } {
+        if let Err(e) = nvim_set_hl_ns(arg_1) {
             *err = e;
         }
     }
@@ -728,8 +727,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_hl_ns_fast(lstate: *mut lua_St
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_set_hl_ns_fast(arg_1) };
+        nvim_set_hl_ns_fast(arg_1);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch_fast(lstate, 1, 0, convert) }

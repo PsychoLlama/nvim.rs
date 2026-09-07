@@ -22,6 +22,11 @@ use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected}
 use crate::narrow::number_as_int;
 use crate::winlayer::Live;
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `opts` must point at the `KeyDict_create_augroup` the
+/// dispatcher filled in, live for the call.
 pub unsafe fn nvim_create_augroup(
     channel_id: uint64_t,
     name: String_0,
@@ -57,7 +62,7 @@ pub unsafe fn nvim_create_augroup(
     Integer::from(augroup).reported(error)
 }
 
-pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
+pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut error = Error::none();
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
@@ -79,6 +84,10 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let mut tstate: TryState = TryState {
@@ -96,6 +105,9 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `group` must be a well-formed API object the caller owns for the call.
 pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> ::core::ffi::c_int {
     let au_group: ::core::ffi::c_int;
     let name: *mut ::core::ffi::c_char;

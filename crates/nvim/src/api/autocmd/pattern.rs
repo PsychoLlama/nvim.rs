@@ -21,6 +21,12 @@ use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_expected;
 use crate::kvec::InitVec;
 
+/// # Safety
+///
+/// `v` must be a well-formed API object the caller owns for the call. `k`
+/// must point at a NUL-terminated string, unaliased for the call. `arena`
+/// must point at a live arena, which the memory this answers with is taken
+/// from and must outlive.
 pub(crate) unsafe fn unpack_string_or_array(
     v: Object,
     k: *mut ::core::ffi::c_char,
@@ -63,6 +69,12 @@ pub(crate) unsafe fn unpack_string_or_array(
     }
 }
 
+/// # Safety
+///
+/// `pattern` must be a well-formed API object the caller owns for the call.
+/// `fallback` must point at a NUL-terminated string, unaliased for the call.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     pattern: Object,
     has_buf: bool,

@@ -16,6 +16,11 @@ use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode
 use crate::types::NUL;
 use crate::winlayer::{Buf, PosRef, Win, tab_windows};
 
+/// # Safety
+///
+/// `mut replacement` must be a well-formed API array, its `size` elements
+/// initialized. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -347,17 +352,15 @@ pub unsafe fn nvim_buf_set_text(
                     {
                         // SAFETY: a live window.
                         let win = unsafe { Win::new(win) };
-                        unsafe {
-                            fix_cursor_cols(
-                                win,
-                                start_row as LineNr,
-                                start_col as ColNr,
-                                end_row as LineNr,
-                                end_col as ColNr,
-                                new_len as LineNr,
-                                last_item.len() as ColNr,
-                            )
-                        };
+                        fix_cursor_cols(
+                            win,
+                            start_row as LineNr,
+                            start_col as ColNr,
+                            end_row as LineNr,
+                            end_col as ColNr,
+                            new_len as LineNr,
+                            last_item.len() as ColNr,
+                        );
                     } else {
                         let (lo, hi) = (start_row as LineNr, end_row as LineNr);
                         // SAFETY: a live window showing this buffer.
@@ -387,6 +390,9 @@ pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
     };
 }
 
+/// # Safety
+///
+/// `pos` must point at an initialized position, unaliased for the call.
 unsafe fn fix_pos_col(
     buffer: Buf,
     pos: *mut Pos,
@@ -444,7 +450,7 @@ unsafe fn fix_pos_col(
     }
 }
 
-unsafe fn fix_cursor_cols(
+fn fix_cursor_cols(
     mut win: Win,
     start_row: LineNr,
     start_col: ColNr,

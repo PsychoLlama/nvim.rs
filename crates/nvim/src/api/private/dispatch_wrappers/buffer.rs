@@ -583,9 +583,7 @@ pub unsafe fn handle_nvim_buf_get_name(
         wrong_type(error, 1, c"nvim_buf_get_name", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_get_name(arg_1) } {
+    let rv = match nvim_buf_get_name(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
@@ -630,9 +628,7 @@ pub unsafe fn handle_nvim_buf_get_offset(
         wrong_type(error, 2, c"nvim_buf_get_offset", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_get_offset(arg_1, arg_2) } {
+    let rv = match nvim_buf_get_offset(arg_1, arg_2) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };

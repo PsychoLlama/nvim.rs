@@ -22,6 +22,11 @@ use crate::types::NUL;
 use core::ffi::c_char;
 use core::ptr;
 
+/// # Safety
+///
+/// `src` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `opts` must point at the `KeyDict_exec_opts` the
+/// dispatcher filled in, live for the call.
 pub unsafe fn nvim_exec2(
     channel_id: uint64_t,
     src: String_0,
@@ -49,6 +54,12 @@ pub unsafe fn nvim_exec2(
 
 /// Source `src` as an anonymous script, answering whatever it printed when
 /// `opts.output` asked for it (and the empty string otherwise, or on error).
+///
+/// # Safety
+///
+/// `src` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `opts` must point at the `KeyDict_exec_opts` the
+/// dispatcher filled in, live for the call.
 pub unsafe fn exec_impl(
     channel_id: uint64_t,
     src: String_0,
@@ -124,6 +135,10 @@ pub unsafe fn exec_impl(
     String_0::NULL
 }
 
+/// # Safety
+///
+/// `cmd` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     api_try(&mut error, |_| {

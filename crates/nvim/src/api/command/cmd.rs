@@ -87,6 +87,12 @@ fn sub_keyset<K>(dict: ApiDict, get_field: FieldHashfn, err: &mut Error) -> Opti
     }
 }
 
+/// # Safety
+///
+/// `cmd` must point at the `KeyDict_cmd` the dispatcher filled in, live for
+/// the call. `opts` must point at the `KeyDict_cmd_opts` the dispatcher
+/// filled in, live for the call. `arena` must point at a live arena, which
+/// the memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_cmd(
     channel_id: uint64_t,
     cmd: *mut KeyDict_cmd,
@@ -133,6 +139,12 @@ pub unsafe fn nvim_cmd(
 ///
 /// False means stop: either a stage set `err`, or the Dict carried modifiers
 /// and nothing else, which upstream treats as a silent no-op.
+///
+/// # Safety
+///
+/// `cmdline` must point at a `*mut c_char` slot the caller owns; on success
+/// it is left holding a heap-allocated command line the caller frees. `arena`
+/// must point at a live arena the answer borrows from.
 unsafe fn prepare_cmd(
     cmd: &KeyDict_cmd,
     ea: &mut ExArg,
@@ -200,6 +212,11 @@ unsafe fn prepare_cmd(
 ///
 /// `Some(range_only)` on success -- a "range only" command such as `:1` has
 /// no name at all. `None` means stop, per [`prepare_cmd`].
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 unsafe fn resolve_command(
     cmd: &KeyDict_cmd,
     ea: &mut ExArg,
@@ -303,6 +320,11 @@ unsafe fn resolve_command(
 /// from, and check the count against `argt`.
 ///
 /// `Some(true)` means the one argument was consumed as the command's count.
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 unsafe fn collect_args(
     cmd: &KeyDict_cmd,
     ea: &mut ExArg,
@@ -727,6 +749,11 @@ unsafe fn apply_argopt(ea: &mut ExArg, err: &mut Error) -> bool {
 }
 
 /// Run the prepared command, capturing its messages when asked.
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 unsafe fn run_cmd(
     channel_id: uint64_t,
     ea: &mut ExArg,

@@ -23,6 +23,11 @@ use crate::types::OptionSetFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_void};
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let (buf, win) = (Buf::current(), Win::current());
@@ -33,6 +38,11 @@ pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<
         .reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `value` must be a well-formed API object the caller owns
+/// for the call.
 pub unsafe fn nvim_set_option(
     channel_id: uint64_t,
     name: String_0,
@@ -44,12 +54,20 @@ pub unsafe fn nvim_set_option(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     // SAFETY: as `nvim_set_option`.
     unsafe { get_option_from(NULL, kOptScopeGlobal, name, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
@@ -61,6 +79,11 @@ pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Resul
     unsafe { get_option_from(from, kOptScopeBuf, name, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `value` must be a well-formed API object the caller owns
+/// for the call.
 pub unsafe fn nvim_buf_set_option(
     channel_id: uint64_t,
     buffer: BufferHandle,
@@ -77,6 +100,10 @@ pub unsafe fn nvim_buf_set_option(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(win) = find_window_by_handle(window, &mut error) else {
@@ -88,6 +115,11 @@ pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Resul
     unsafe { get_option_from(from, kOptScopeWin, name, &mut error) }.reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `value` must be a well-formed API object the caller owns
+/// for the call.
 pub unsafe fn nvim_win_set_option(
     channel_id: uint64_t,
     window: WindowHandle,
@@ -183,7 +215,6 @@ unsafe fn set_option_to(
     let Some(optval) = object_as_optval(value) else {
         let want = c"valid option type";
         let got = api_typename(value.kind());
-        // SAFETY: the names and values are NUL-terminated strings.
         *err = err_expected(c"value", want, Some(got));
         return;
     };

@@ -16,6 +16,11 @@ use crate::cstr;
 use crate::kvec::InitVec;
 use crate::winlayer::Live;
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_get_autocmds` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_get_autocmds(
     opts: *mut KeyDict_get_autocmds,
     arena: *mut Arena,
@@ -323,7 +328,6 @@ pub unsafe fn nvim_get_autocmds(
                                 }
                                 let mut autocmd_info: ApiDict = arena_dict(arena, 12 as size_t);
                                 if unsafe { (*ap).group } != AUGROUP_DEFAULT as ::core::ffi::c_int {
-                                    // SAFETY: a live pointer the code around it already holds.
                                     let d_group =
                                         unsafe { Object::integer((*ap).group as Integer) };
                                     // SAFETY: the collection is this call's own.
@@ -344,7 +348,6 @@ pub unsafe fn nvim_get_autocmds(
                                     unsafe { dict_put(&mut autocmd_info, c"id", d_id) };
                                 }
                                 if !unsafe { (*ac).desc }.is_null() {
-                                    // SAFETY: a live pointer the code around it already holds.
                                     let d_desc =
                                         unsafe { Object::string(cstr_as_string((*ac).desc)) };
                                     // SAFETY: the collection is this call's own.
@@ -399,7 +402,6 @@ pub unsafe fn nvim_get_autocmds(
                                         Callback::None => unsafe { abort() },
                                     }
                                 }
-                                // SAFETY: a live pointer the code around it already holds.
                                 let d_pattern =
                                     unsafe { Object::string(cstr_as_string((*ap).pat)) };
                                 // SAFETY: the collection is this call's own.
@@ -417,12 +419,10 @@ pub unsafe fn nvim_get_autocmds(
                                     let d_buflocal = Object::boolean(true);
                                     // SAFETY: the collection is this call's own.
                                     unsafe { dict_put(&mut autocmd_info, c"buflocal", d_buflocal) };
-                                    // SAFETY: a live pointer the code around it already holds.
                                     let d_buf =
                                         unsafe { Object::integer((*ap).buflocal_nr as Integer) };
                                     // SAFETY: the collection is this call's own.
                                     unsafe { dict_put(&mut autocmd_info, c"buf", d_buf) };
-                                    // SAFETY: a live pointer the code around it already holds.
                                     let d_buffer =
                                         unsafe { Object::integer((*ap).buflocal_nr as Integer) };
                                     // SAFETY: the collection is this call's own.

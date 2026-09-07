@@ -14,6 +14,12 @@ use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
+/// # Safety
+///
+/// `event` must be a well-formed API object the caller owns for the call.
+/// `opts` must point at the `KeyDict_exec_autocmds` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_exec_autocmds(
     event: Object,
     opts: *mut KeyDict_exec_autocmds,

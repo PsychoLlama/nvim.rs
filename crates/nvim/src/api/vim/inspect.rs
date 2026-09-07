@@ -20,18 +20,33 @@ use crate::popupmenu::pum_grid_ref;
 use crate::winlayer::Win;
 use core::ptr;
 
+/// # Safety
+///
+/// `obj` must be a well-formed API object the caller owns for the call.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
 }
 
+/// # Safety
+///
+/// `arr` must be a well-formed API array, its `size` elements initialized.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__id_array` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
     unsafe { copy_array(arr, arena) }
 }
 
+/// # Safety
+///
+/// `dct` must be a well-formed API dictionary, its `size` entries
+/// initialized. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 // `nvim__id_dict` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__id_dict(dct: ApiDict, arena: *mut Arena) -> ApiDict {
@@ -77,6 +92,10 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
     rv
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut rv: ::core::ffi::c_int = 0;
@@ -136,6 +155,10 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
     rvobj.reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut rvobj: Object = Object::Nil;
@@ -183,6 +206,10 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     rvobj.reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__inspect_cell` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__inspect_cell(
@@ -243,11 +270,16 @@ pub fn nvim__screenshot(path: String_0) {
 
 // `nvim__invalidate_glyph_cache` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__invalidate_glyph_cache() {
+pub fn nvim__invalidate_glyph_cache() {
     unsafe { schar_cache_clear() };
     must_redraw.set(UPD_CLEAR);
 }
 
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {

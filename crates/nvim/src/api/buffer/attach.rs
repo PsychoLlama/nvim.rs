@@ -23,6 +23,10 @@ pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> Op
     Some(b)
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_buf_attach` the dispatcher filled in,
+/// live for the call.
 pub unsafe fn nvim_buf_attach(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -81,7 +85,7 @@ pub fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolea
     true.reported(error)
 }
 
-pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
+pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return Object::Nil.reported(error);
@@ -118,6 +122,10 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
     res.reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__buf_stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<ApiDict, Error> {

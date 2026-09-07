@@ -132,27 +132,51 @@ impl TypvalSink for ObjectSink {
     const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
         self.stack.push(Object::Nil);
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
         self.stack.push(Object::Boolean(num));
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
         self.stack.push(Object::Integer(num as Integer));
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_unsigned_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
         self.stack.push(Object::Integer(num.cast_signed()));
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
         self.stack.push(Object::Float(flt as Float));
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         debug_assert!(len == 0 || !buf.is_null());
         // SAFETY: the walk hands over `len` readable bytes.
@@ -163,6 +187,11 @@ impl TypvalSink for ObjectSink {
 
     /// An `ext` value has no API image, so it comes out as nil — and falling
     /// through leaves its buffer for the walk to free.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
         _tv: *mut TypVal,
@@ -175,6 +204,11 @@ impl TypvalSink for ObjectSink {
     }
 
     /// A blob is bytes, and so is a `String` object.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
         let len = usize::try_from(len).expect("a blob length is never negative");
         // SAFETY: a non-empty blob has a `bv_ga` holding `len` bytes.
@@ -192,6 +226,11 @@ impl TypvalSink for ObjectSink {
     /// A funcref that is really a Lua function goes back as a `LuaRef`;
     /// anything else is nil.  Either way the walk stops here, so a partial's
     /// arguments and self dictionary are never visited.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
         _tv: *mut TypVal,
@@ -219,25 +258,46 @@ impl TypvalSink for ObjectSink {
         Flow::Stop
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
         self.stack.push(Object::Array(Array::EMPTY));
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.stack.push(Object::Dict(ApiDict::EMPTY));
     }
 
     /// Reserve the whole array now; the items fill it in place.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
         let len = usize::try_from(len).expect("a list length is never negative");
         self.stack.push(Object::Array(arena_array(self.arena, len)));
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
         self.close_list_item();
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
         self.close_list_item();
         debug_assert!(matches!(
@@ -246,6 +306,10 @@ impl TypvalSink for ObjectSink {
         ));
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
         self.stack.push(Object::Dict(arena_dict(self.arena, len)));
         Flow::Go
@@ -253,6 +317,11 @@ impl TypvalSink for ObjectSink {
 
     /// The key lands in the next free slot but does not claim it — the value
     /// that follows is what advances `size`.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         let key = self.take_top();
         // SAFETY: the walk is inside a dictionary; `key` is the object it just
@@ -266,6 +335,10 @@ impl TypvalSink for ObjectSink {
         }
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         let value = self.take_top();
         // SAFETY: as `conv_dict_after_key`, whose slot this completes.
@@ -276,6 +349,10 @@ impl TypvalSink for ObjectSink {
         }
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         // SAFETY: as `conv_dict_between_items`.
         unsafe { self.conv_dict_between_items(tv, dictp) };
@@ -287,6 +364,11 @@ impl TypvalSink for ObjectSink {
 
     /// An `Object` tree is acyclic, so a container that references itself
     /// cannot be represented: the second sighting becomes nil.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_recurse(
         &mut self,
         _val: *mut c_void,

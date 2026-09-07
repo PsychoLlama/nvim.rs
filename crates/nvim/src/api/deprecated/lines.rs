@@ -16,6 +16,11 @@
 
 use super::*;
 
+/// # Safety
+///
+/// `lines` must be a well-formed API array, its `size` elements initialized.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn buffer_insert(
     buffer: BufferHandle,
     lnum: Integer,
@@ -26,6 +31,10 @@ pub unsafe fn buffer_insert(
     unsafe { nvim_buf_set_lines(0, buffer, lnum, lnum, true, lines, arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn buffer_get_line(
     buffer: BufferHandle,
     index: Integer,
@@ -45,6 +54,11 @@ pub unsafe fn buffer_get_line(
     Ok(first.as_string().unwrap_or(String_0::NULL))
 }
 
+/// # Safety
+///
+/// `line` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn buffer_set_line(
     buffer: BufferHandle,
     index: Integer,
@@ -63,6 +77,10 @@ pub unsafe fn buffer_set_line(
     unsafe { nvim_buf_set_lines(0, buffer, index, index + 1, true, array, arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn buffer_del_line(
     buffer: BufferHandle,
     index: Integer,
@@ -73,6 +91,10 @@ pub unsafe fn buffer_del_line(
     unsafe { nvim_buf_set_lines(0, buffer, index, index + 1, true, Array::EMPTY, arena) }
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn buffer_get_line_slice(
     buffer: BufferHandle,
     start: Integer,
@@ -88,6 +110,11 @@ pub unsafe fn buffer_get_line_slice(
     unsafe { nvim_buf_get_lines(0, buffer, start, end, false, arena, no_lua) }
 }
 
+/// # Safety
+///
+/// `replacement` must be a well-formed API array, its `size` elements
+/// initialized. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn buffer_set_line_slice(
     buffer: BufferHandle,
     start: Integer,

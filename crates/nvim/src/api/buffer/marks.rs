@@ -19,6 +19,10 @@ use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
 use crate::winlayer::Win;
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
@@ -53,6 +57,11 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     (res as Boolean).reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `_opts` must point at the `KeyDict_empty` the dispatcher
+/// filled in, live for the call.
 pub unsafe fn nvim_buf_set_mark(
     buf: BufferHandle,
     name: String_0,
@@ -76,6 +85,11 @@ pub unsafe fn nvim_buf_set_mark(
     (res as Boolean).reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_get_mark(
     buf: BufferHandle,
     name: String_0,

@@ -27,6 +27,11 @@ const FLAGS: [::core::ffi::c_int; 6] = [
     kCtxFuncs as ::core::ffi::c_int,
 ];
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_context` the dispatcher filled in, live
+/// for the call. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_context(
     opts: *mut KeyDict_context,
     arena: *mut Arena,
@@ -80,6 +85,10 @@ pub unsafe fn nvim_get_context(
     dict.reported(error)
 }
 
+/// # Safety
+///
+/// `dict` must be a well-formed API dictionary, its `size` entries
+/// initialized.
 pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut ctx: Context = CONTEXT_INIT;
@@ -95,6 +104,10 @@ pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     Object::Nil.reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_mode(arena: *mut Arena) -> ApiDict {
     let mut rv: ApiDict = arena_dict(arena, 2 as size_t);
     let modestr: *mut ::core::ffi::c_char =

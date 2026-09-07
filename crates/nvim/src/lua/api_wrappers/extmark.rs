@@ -59,8 +59,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__buf_debug_extmarks(lstate: *mut l
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim__buf_debug_extmarks(arg_1, arg_2, arg_3) } {
+        let ret = match nvim__buf_debug_extmarks(arg_1, arg_2, arg_3) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

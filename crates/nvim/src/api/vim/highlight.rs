@@ -13,10 +13,19 @@ use super::*;
 use crate::api::private::helpers::{Reported, dict_put_str, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     unsafe { syn_check_group(name.data(), name.len()) as Integer }
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_get_highlight` the dispatcher filled in,
+/// live for the call. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 pub unsafe fn nvim_get_hl(
     ns_id: Integer,
     opts: *mut KeyDict_get_highlight,
@@ -26,6 +35,11 @@ pub unsafe fn nvim_get_hl(
     unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, &mut error).reported(error) }
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `val` must point at the `KeyDict_highlight` the
+/// dispatcher filled in, live for the call.
 pub unsafe fn nvim_set_hl(
     channel_id: uint64_t,
     ns_id: Integer,
@@ -67,6 +81,10 @@ pub unsafe fn nvim_set_hl(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_get_ns` the dispatcher filled in, live
+/// for the call.
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
     let mut error = Error::none();
     if has_key(
@@ -82,7 +100,7 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
     }
 }
 
-pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
+pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     let mut error = Error::none();
     if !(ns_id >= 0 as Integer) {
         error = err_bad_number(c"namespace", ns_id);
@@ -94,16 +112,24 @@ pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     ().reported(error)
 }
 
-pub unsafe fn nvim_set_hl_ns_fast(ns_id: Integer) {
+pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
     ns_hl_fast.set(ns_id as NS);
     unsafe { hl_check_ns() };
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
     // An API string is NUL-terminated.
     name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> ApiDict {
     let mut colors: ApiDict = arena_dict(arena, COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {

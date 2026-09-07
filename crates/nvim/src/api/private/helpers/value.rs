@@ -116,6 +116,12 @@ pub(crate) unsafe fn dict_put_str(dict: &mut ApiDict, key: String_0, value: Obje
 /// A copy of `str` in `arena`, NUL-terminated. The empty string is a shared
 /// literal rather than an allocation — but only when there is an arena to
 /// outlive it; without one the caller frees what it gets.
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive. `str` must be a well-formed API string:
+/// `size` readable bytes with a NUL at `data[size]`.
 pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 {
     // SAFETY: `str` has `size` readable bytes.
     unsafe {
@@ -136,6 +142,12 @@ pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 
 
 /// Move a builder's items into an arena-allocated array of exactly the right
 /// size, freeing the builder's own buffer if it had grown onto the heap.
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive. `arr` must point at the caller's
+/// `ArrayBuilder`, unaliased for the call.
 pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array {
     // SAFETY: `arr` is the caller's builder, live for the call, and the four
     // fields are its own.
@@ -163,6 +175,10 @@ pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayB
 
 // -- Freeing ---------------------------------------------------------------
 
+/// # Safety
+///
+/// `value` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub(crate) unsafe fn api_free_string(value: String_0) {
     // SAFETY: `value` owns its allocation.
     unsafe { xfree(value.data().cast()) };
@@ -170,6 +186,10 @@ pub(crate) unsafe fn api_free_string(value: String_0) {
 
 /// Free `value` and everything below it. Only for objects that were built on
 /// the heap; an arena-allocated object is freed with its arena.
+///
+/// # Safety
+///
+/// `value` must be a well-formed API object the caller owns for the call.
 pub unsafe fn api_free_object(value: Object) {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `value` owns whatever it points at.
@@ -182,6 +202,9 @@ pub unsafe fn api_free_object(value: Object) {
     }
 }
 
+/// # Safety
+///
+/// `value` must be a well-formed API array, its `size` elements initialized.
 pub(crate) unsafe fn api_free_array(value: Array) {
     for i in 0..value.size {
         // SAFETY: as `api_free_object`; `i` is below `size`.
@@ -191,6 +214,10 @@ pub(crate) unsafe fn api_free_array(value: Array) {
     unsafe { xfree(value.items.cast()) };
 }
 
+/// # Safety
+///
+/// `value` must be a well-formed API dictionary, its `size` entries
+/// initialized.
 pub(crate) unsafe fn api_free_dict(value: ApiDict) {
     for i in 0..value.size {
         // SAFETY: as `api_free_object`; `i` is below `size`.
@@ -207,6 +234,10 @@ pub(crate) unsafe fn api_free_dict(value: ApiDict) {
 /// Release the Lua references `value` holds, without freeing `value` itself.
 /// For arena-allocated objects, whose memory the arena reclaims but whose
 /// references the Lua registry does not.
+///
+/// # Safety
+///
+/// `value` must be a well-formed API object the caller owns for the call.
 pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `value` owns the references it names.
@@ -218,6 +249,9 @@ pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
     }
 }
 
+/// # Safety
+///
+/// `value` must be a well-formed API array, its `size` elements initialized.
 pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
     for i in 0..value.size {
         // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
@@ -225,6 +259,10 @@ pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
     }
 }
 
+/// # Safety
+///
+/// `value` must be a well-formed API dictionary, its `size` entries
+/// initialized.
 pub(crate) unsafe fn api_luarefs_free_dict(value: ApiDict) {
     for i in 0..value.size {
         // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
@@ -236,6 +274,12 @@ pub(crate) unsafe fn api_luarefs_free_dict(value: ApiDict) {
 
 /// A copy of `str` in `arena`. Unlike [`arena_string`] a null string stays
 /// null rather than becoming the empty one.
+///
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
     if str.data().is_null() {
         return String_0::NULL;
@@ -245,6 +289,11 @@ pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
     String_0::from_raw_parts(copy, str.len())
 }
 
+/// # Safety
+///
+/// `array` must be a well-formed API array, its `size` elements initialized.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
     // Sized for exactly this many items, so it cannot need to grow.
     let mut rv = arena_array(arena, array.size);
@@ -257,6 +306,11 @@ pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
     rv
 }
 
+/// # Safety
+///
+/// `dict` must be a well-formed API dictionary, its `size` entries
+/// initialized. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub(crate) unsafe fn copy_dict(dict: ApiDict, arena: *mut Arena) -> ApiDict {
     let mut rv = arena_dict(arena, dict.size);
     for i in 0..dict.size {
@@ -278,6 +332,12 @@ pub(crate) unsafe fn copy_dict(dict: ApiDict, arena: *mut Arena) -> ApiDict {
 
 /// A deep copy of `obj` in `arena`. Handles and scalars copy as they stand;
 /// a Lua reference gets a second registry reference of its own.
+///
+/// # Safety
+///
+/// `obj` must be a well-formed API object the caller owns for the call.
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
     // SAFETY (every arm): the tag says which arm of the union is live, and
     // `obj` is live for the call.
@@ -298,7 +358,7 @@ static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<Co
 
 /// The API description, as the `nvim_get_api_info` reply carries it. Unpacked
 /// from the blob on first use and then shared.
-pub(crate) unsafe fn api_metadata() -> Object {
+pub(crate) fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     if METADATA.with(Object::is_nil) {
         let mut arena = ARENA_EMPTY;
@@ -350,6 +410,11 @@ pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
 
 /// `obj` as a boolean. An integer is true when nonzero and nil takes
 /// `nil_value`; anything else is an error naming `what`.
+///
+/// # Safety
+///
+/// `obj` must be a well-formed API object the caller owns for the call.
+/// `what` must point at a NUL-terminated string.
 pub(crate) unsafe fn api_object_to_bool(
     obj: Object,
     what: *const c_char,
@@ -372,6 +437,11 @@ pub(crate) unsafe fn api_object_to_bool(
 
 /// `obj` as a highlight group id, defining the group if it was named and does
 /// not exist yet. Zero for the empty name and for an id out of range.
+///
+/// # Safety
+///
+/// `obj` must be a well-formed API object the caller owns for the call.
+/// `what` must point at a NUL-terminated string.
 pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut Error) -> c_int {
     if let Some(str) = obj.as_string() {
         if str.is_empty() {
@@ -391,7 +461,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut
 }
 
 /// `kv_push` for a plain kvec, which starts empty and doubles from 8.
-unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
+fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
     if msg.size == msg.capacity {
         msg.capacity = if msg.capacity != 0 {
             msg.capacity * 2
@@ -410,6 +480,10 @@ unsafe fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
 
 /// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into a
 /// highlighted message. Empty, with `err` set, on the first bad chunk.
+///
+/// # Safety
+///
+/// `chunks` must be a well-formed API array, its `size` elements initialized.
 pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) -> HlMessage {
     let mut hl_msg = EMPTY_HL_MESSAGE;
     for i in 0..chunks.size {
@@ -444,8 +518,7 @@ pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) 
         } else {
             0
         };
-        // SAFETY: `hl_msg` is this frame's growable vector.
-        unsafe { push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id }) };
+        push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id });
     }
     hl_msg
 }

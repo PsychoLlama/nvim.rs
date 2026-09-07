@@ -22,6 +22,11 @@ use core::ptr;
 ///
 /// Upstream also breaks out of the scan on a NUL, which cannot happen:
 /// `ascii_iswhite` has already answered false for one and returned.
+///
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub(crate) unsafe fn string_iswhite(str: String_0) -> bool {
     for i in 0..str.len() {
         // SAFETY: `i` is below `len`, so the byte is inside the string.
@@ -109,6 +114,12 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
     }
 }
 
+/// # Safety
+///
+/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns,
+/// left holding a heap-allocated line. `cmd` must point at the command's
+/// `ExArg` and `cmdinfo` at its `CmdParseInfo`, both live and unaliased for
+/// the call.
 pub(crate) unsafe fn build_cmdline_str(
     cmdlinep: *mut *mut c_char,
     cmd: *mut ExArg,

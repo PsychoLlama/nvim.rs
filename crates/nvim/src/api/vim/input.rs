@@ -23,6 +23,11 @@ use crate::keycodes::{
 };
 use crate::message_fmt::msg_bytes;
 
+/// # Safety
+///
+/// `keys` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `mode` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`.
 pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     let mut remap: bool = true;
     let mut insert: bool = false;
@@ -96,11 +101,21 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
     }
 }
 
+/// # Safety
+///
+/// `keys` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
     may_trigger_vim_suspend_resume(false);
     unsafe { input_enqueue(channel_id, keys) as Integer }
 }
 
+/// # Safety
+///
+/// `button` must be a well-formed API string: `size` readable bytes with a
+/// NUL at `data[size]`. `action` must be a well-formed API string: `size`
+/// readable bytes with a NUL at `data[size]`. `modifier` must be a well-
+/// formed API string: `size` readable bytes with a NUL at `data[size]`.
 pub unsafe fn nvim_input_mouse(
     button: String_0,
     action: String_0,
@@ -188,6 +203,10 @@ pub unsafe fn nvim_input_mouse(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_replace_termcodes(
     str: String_0,
     from_part: Boolean,
@@ -220,10 +239,22 @@ pub unsafe fn nvim_replace_termcodes(
     unsafe { cstr_as_string(ptr) }
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
     unsafe { keymap_array(mode, None, arena) }
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`. `rhs` must be a well-formed API string:
+/// `size` readable bytes with a NUL at `data[size]`. `opts` must point at the
+/// `KeyDict_keymap` the dispatcher filled in, live for the call.
 pub unsafe fn nvim_set_keymap(
     channel_id: uint64_t,
     mode: String_0,
@@ -239,6 +270,11 @@ pub unsafe fn nvim_set_keymap(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`.
 pub unsafe fn nvim_del_keymap(
     channel_id: uint64_t,
     mode: String_0,
@@ -247,6 +283,10 @@ pub unsafe fn nvim_del_keymap(
     unsafe { nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs) }
 }
 
+/// # Safety
+///
+/// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
+/// for the call.
 pub unsafe fn nvim_select_popupmenu_item(
     item: Integer,
     mut insert: Boolean,

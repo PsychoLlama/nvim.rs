@@ -52,9 +52,7 @@ pub unsafe fn handle_nvim__buf_debug_extmarks(
         wrong_type(error, 3, c"nvim__buf_debug_extmarks", c"Boolean");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim__buf_debug_extmarks(arg_1, arg_2, arg_3) } {
+    let rv = match nvim__buf_debug_extmarks(arg_1, arg_2, arg_3) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };

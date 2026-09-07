@@ -60,6 +60,10 @@ pub fn nvim_buf_clear_namespace(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_set_decoration_provider` the dispatcher
+/// filled in, live for the call.
 pub unsafe fn nvim_set_decoration_provider(
     ns_id: Integer,
     opts: *mut KeyDict_set_decoration_provider,
@@ -137,6 +141,10 @@ pub unsafe fn nvim_set_decoration_provider(
     unsafe { (*p).hl_cached = false };
 }
 
+/// # Safety
+///
+/// `chunks` must be a well-formed API array, its `size` elements initialized.
+/// `width` must point at a writable `int` the caller owns.
 pub unsafe fn parse_virt_text(
     chunks: Array,
     err: &mut Error,

@@ -59,6 +59,13 @@ pub(crate) const fn set_key(set: OptionalKeys, idx: c_int) -> OptionalKeys {
 
 /// [`api_luarefs_free_object`] over a keydict, walking `table` to find which
 /// of its fields can hold a reference.
+///
+/// # Safety
+///
+/// `dict` must point at the keydict `table` describes, and `table` at the
+/// generated `KeySetLink` table for that keydict's type -- the offsets and
+/// field types are read from it and applied to `dict`, and the walk stops at
+/// the row with a null name.
 pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const KeySetLink) {
     // SAFETY: `table` is the generated table for `dict`'s type, so its
     // offsets and types describe `dict`'s fields; it ends with a null name.
@@ -81,6 +88,12 @@ pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const K
 
 /// The fields of a keydict, as its generated `KeySetLink` table lists them.
 /// The table ends with a null name.
+///
+/// # Safety
+///
+/// `table` must point at one of the generated `KeySetLink` tables, which end
+/// with a row whose name is null; the iterator borrows it for `'static`, so
+/// it must be one of those statics and not a temporary.
 unsafe fn keyset_fields(table: *const KeySetLink) -> impl Iterator<Item = &'static KeySetLink> {
     // SAFETY: `table` is one of the generated tables, which are
     // null-terminated by construction.
@@ -103,6 +116,12 @@ unsafe fn keyset_fields(table: *const KeySetLink) -> impl Iterator<Item = &'stat
 /// `retval` is untyped because there is one such struct per API function;
 /// `hashy` is that struct's generated perfect-hash lookup and the
 /// `KeySetLink` it returns is what says where and what the field is.
+///
+/// # Safety
+///
+/// `retval` must point at the keydict struct `hashy` was generated for, live
+/// and unaliased for the call: every field this writes is found by offset
+/// from it.
 pub(crate) unsafe fn api_dict_to_keydict(
     retval: *mut c_void,
     hashy: FieldHashfn,
@@ -258,6 +277,14 @@ pub(crate) unsafe fn api_dict_to_keydict(
 /// The reverse of [`api_dict_to_keydict`]: the keydict `value` as a plain
 /// dictionary, holding only the fields that were set. Lua references are
 /// skipped — they mean nothing outside the Lua state.
+///
+/// # Safety
+///
+/// `value` must point at the keydict `table` describes, and `table` at the
+/// generated `KeySetLink` table for that keydict's type -- the offsets and
+/// field types are read from it and applied to `value`, and the walk stops at
+/// the row with a null name. `max_size` must be that table's length, and
+/// `arena` must point at a live arena the answer is allocated in.
 pub(crate) unsafe fn api_keydict_to_dict(
     value: *mut c_void,
     table: *const KeySetLink,

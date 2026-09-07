@@ -158,8 +158,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_call(lstate: *mut lua_State) -
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = match unsafe { nvim_buf_call(arg_1, arg_2.value) } {
+        let mut ret = match nvim_buf_call(arg_1, arg_2.value) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;
@@ -605,8 +604,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_name(lstate: *mut lua_Stat
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_get_name(arg_1) } {
+        let ret = match nvim_buf_get_name(arg_1) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;
@@ -655,8 +653,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_offset(lstate: *mut lua_St
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_get_offset(arg_1, arg_2) } {
+        let ret = match nvim_buf_get_offset(arg_1, arg_2) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

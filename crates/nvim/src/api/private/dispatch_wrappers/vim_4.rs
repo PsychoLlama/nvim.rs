@@ -142,9 +142,7 @@ pub unsafe fn handle_nvim_set_hl_ns(
         wrong_type(error, 1, c"nvim_set_hl_ns", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_set_hl_ns(arg_1) } {
+    if let Err(e) = nvim_set_hl_ns(arg_1) {
         return failure(error, e);
     }
     Object::Nil
@@ -184,9 +182,7 @@ pub unsafe fn handle_nvim_set_hl_ns_fast(
         wrong_type(error, 1, c"nvim_set_hl_ns_fast", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim_set_hl_ns_fast(arg_1) };
+    nvim_set_hl_ns_fast(arg_1);
     Object::Nil
 }
 

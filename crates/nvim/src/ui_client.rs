@@ -259,10 +259,7 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
 ///
 /// The API metadata must be initialised.
 unsafe fn api_version() -> ApiDict {
-    // SAFETY: the caller's promise.
-    let metadata = unsafe { api_metadata() }
-        .as_dict()
-        .expect("API metadata is a dict");
+    let metadata = api_metadata().as_dict().expect("API metadata is a dict");
     assert!(metadata.size > 0, "API metadata is empty");
     for i in 0..metadata.size {
         let entry = unsafe { *metadata.items.add(i) };

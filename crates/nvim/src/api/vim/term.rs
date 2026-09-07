@@ -17,6 +17,10 @@ use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Win;
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_open_term` the dispatcher filled in,
+/// live for the call.
 pub unsafe fn nvim_open_term(
     buf: BufferHandle,
     opts: *mut KeyDict_open_term,
@@ -114,6 +118,10 @@ pub unsafe fn nvim_open_term(
 
 fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
 
+/// # Safety
+///
+/// `buf` must point at `size` readable bytes and `data` at the `Channel` this
+/// terminal was opened for; libvterm's callback contract.
 unsafe fn term_write(
     buf: *const ::core::ffi::c_char,
     size: size_t,
@@ -152,6 +160,10 @@ fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::co
 
 fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 
+/// # Safety
+///
+/// `data` must point at the `Channel` this terminal was opened for;
+/// libvterm's callback contract.
 unsafe fn term_close(data: *mut ::core::ffi::c_void) {
     let chan: *mut Channel = data as *mut Channel;
     unsafe { terminal_destroy(&raw mut (*chan).term) };
@@ -160,6 +172,10 @@ unsafe fn term_close(data: *mut ::core::ffi::c_void) {
     unsafe { channel_decref(chan) };
 }
 
+/// # Safety
+///
+/// `data` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
     let mut slot = Error::none();
     let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();

@@ -135,6 +135,10 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
     ns < next_namespace_id.get() as uint32_t
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_ns_opts` the dispatcher filled in, live
+/// for the call.
 // `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
@@ -199,6 +203,10 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 // `nvim__ns_get` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {

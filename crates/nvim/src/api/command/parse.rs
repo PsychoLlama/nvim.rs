@@ -23,6 +23,12 @@ use core::ptr;
 
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
+///
+/// # Safety
+///
+/// `arg_str` must point at a NUL-terminated string. `arena` must point at a
+/// live arena, which the memory this answers with is taken from and must
+/// outlive.
 unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
     let mut args: Array = arena_array(arena, 2);
     let lhs_start: *mut c_char = arg_str.cast_mut();
@@ -161,6 +167,11 @@ fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object);
 }
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
+///
+/// # Safety
+///
+/// `arena` must point at a live arena, which the memory this answers with is
+/// taken from and must outlive.
 unsafe fn parse_mods(cmdmod: &CmdMod, arena: *mut Arena) -> ApiDict {
     // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern, and the
     // arena copy outlives the Dict.
@@ -220,6 +231,12 @@ unsafe fn parse_mods(cmdmod: &CmdMod, arena: *mut Arena) -> ApiDict {
     )
 }
 
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `_opts` must point at the `KeyDict_empty` the dispatcher
+/// filled in, live for the call. `arena` must point at a live arena, which
+/// the memory this answers with is taken from and must outlive.
 pub unsafe fn nvim_parse_cmd(
     str: String_0,
     _opts: *mut KeyDict_empty,

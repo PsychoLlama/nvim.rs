@@ -22,6 +22,11 @@ use crate::types::Failed;
 
 use crate::winlayer::Buf;
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_get_var(
     buf: BufferHandle,
     name: String_0,
@@ -42,6 +47,11 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
     buf_get_changedtick(b).reported(error)
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `arena` must point at a live arena, which the memory this
+/// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_get_keymap(
     buf: BufferHandle,
     mode: String_0,
@@ -59,6 +69,13 @@ pub unsafe fn nvim_buf_get_keymap(
     unsafe { keymap_array(mode, Some(b), arena) }.reported(error)
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`. `rhs` must be a well-formed API string:
+/// `size` readable bytes with a NUL at `data[size]`. `opts` must point at the
+/// `KeyDict_keymap` the dispatcher filled in, live for the call.
 pub unsafe fn nvim_buf_set_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -72,6 +89,11 @@ pub unsafe fn nvim_buf_set_keymap(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
+/// bytes with a NUL at `data[size]`.
 pub unsafe fn nvim_buf_del_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -88,6 +110,11 @@ pub unsafe fn nvim_buf_del_keymap(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`. `value` must be a well-formed API object the caller owns
+/// for the call.
 pub unsafe fn nvim_buf_set_var(
     buf: BufferHandle,
     name: String_0,
@@ -104,6 +131,10 @@ pub unsafe fn nvim_buf_set_var(
     ().reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
@@ -116,7 +147,7 @@ pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), 
     ().reported(error)
 }
 
-pub unsafe fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
+pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     let mut error = Error::none();
     let rv: String_0 =
         String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
@@ -126,6 +157,10 @@ pub unsafe fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     unsafe { cstr_as_string(b.b_ffname) }.reported(error)
 }
 
+/// # Safety
+///
+/// `name` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
@@ -173,6 +208,10 @@ pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     b.is_some_and(|b| !b.b_ml.ml_mfp.is_null())
 }
 
+/// # Safety
+///
+/// `opts` must point at the `KeyDict_buf_delete` the dispatcher filled in,
+/// live for the call.
 pub unsafe fn nvim_buf_delete(
     buf: BufferHandle,
     opts: *mut KeyDict_buf_delete,
