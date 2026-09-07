@@ -9,9 +9,20 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote how the editor refers to its own windows, buffers, tab pages and
+  window layout: each is now a handle that carries its own identity, so a
+  window closed by an autocommand is noticed rather than followed. `curwin`,
+  `curbuf` and `curtab` are written in one place, and `curwin` keeps the
+  exported symbol plugins read it through. Two crashes go with it — `:split`
+  or `:tabedit` whose `WinEnter` autocommand closed the window it was called
+  from, and keyword completion (`CTRL-N`) over a buffer wiped out while the
+  scan was running.
+- Documented what every remaining unchecked entry point requires of its
+  caller, and dropped the marker from the seven hundred that turned out to
+  require nothing.
 - Flipped the crate's default posture on `unsafe`: `unsafe_code` is denied at
-  the root, and the 1,009 files that still need it say so in their own source
-  with a reason. Nothing about the editor changes; what changes is that
+  the root, and the 1,015 files that still need it say so in their own source
+  with a reason. Nothing else about the editor changes; what changes is that
   permission to write `unsafe` is now something a file asks for and the
   ratchet counts, rather than something it inherits by saying nothing.
 
