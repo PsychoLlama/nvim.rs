@@ -54,8 +54,9 @@ use crate::types::{
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
     self, find_tabpage, tabpage_move, win_drag_status_line, win_drag_vsep_line, win_enter,
+    win_valid,
 };
-use crate::winlayer::{Buf, PosRef, Win, first_tab, window_at};
+use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod click;
@@ -225,12 +226,13 @@ impl Win {
         unsafe { win_enter(self, true) };
     }
 
-    /// Whether the window is still in a tab page's list.
+    /// Whether the window is still in the current tab page's list.
     ///
-    /// Asked about a window `enter` may already have closed, so the address is
-    /// compared and never read.
+    /// Asked about a window `enter` may already have closed, and by identity
+    /// — the handle was taken while it was live, so a window freed and
+    /// replaced at the same address answers `false`.
     fn is_valid(self) -> bool {
-        window_at(self.raw()).is_some()
+        win_valid(self.id())
     }
 
     /// Move this window's status line down by `count` rows.

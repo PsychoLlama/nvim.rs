@@ -141,7 +141,7 @@ pub(crate) use handles::{
 pub(crate) use walk::{
     buffer_at, buffers, buffers_back, cmdline_window, cmdwin_window, first_buffer, first_tab,
     first_window, frames, frames_back, last_buffer, last_used_tab, last_window, prev_window,
-    tab_windows, tabpage_at, tabs, window_at, windows, windows_back, windows_in_tab,
+    tab_windows, tabs, window_at, windows, windows_back, windows_in_tab,
 };
 
 use core::ffi::c_char;

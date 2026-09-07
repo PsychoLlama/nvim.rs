@@ -21,7 +21,7 @@ use core::ptr;
 use super::*;
 
 use crate::autocmd::state::autocmd_busy;
-use crate::buffer::{BufRef, buf_is_prompt, close_buffer, is_changed, reset_syntax};
+use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
@@ -37,7 +37,7 @@ use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
-use crate::winlayer::{Win, WinId, buffer_at, first_buffer, first_window, tabs};
+use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: Win) {
     enter_window(win);
@@ -398,7 +398,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip; // don't close the current window
             }
             // autocommands messed this one up
-            if !buf_is_valid(wp.buffer()) && valid_win(wp.id()).is_some() {
+            if !buf_is_valid(wp) && valid_win(wp.id()).is_some() {
                 wp.w_buffer = ptr::null_mut::<Buffer>();
                 close(wp, false, false);
                 break 'skip;
@@ -433,12 +433,14 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 }
 
-/// Whether `buffer` is still on the buffer list.
+/// Whether the window still shows a buffer that is on the buffer list.
 ///
-/// Takes the address, not the identity: the caller's `w_buffer` may already
-/// have been freed, and [`buffer_at`] compares without reading it.
-fn buf_is_valid(buffer: Buf) -> bool {
-    buffer_at(buffer.raw()).is_some()
+/// By identity, and `None` where the window has no buffer at all: `w_buffer`
+/// is null for the moment between losing one and being given another.
+fn buf_is_valid(window: Win) -> bool {
+    window
+        .buffer_or_none()
+        .is_some_and(|buf| buf_valid(buf.id()))
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.

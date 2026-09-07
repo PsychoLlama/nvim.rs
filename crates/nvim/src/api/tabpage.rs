@@ -24,9 +24,11 @@ use crate::types::{
     Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
     TabpageHandle, WindowHandle, kErrorTypeException, size_t,
 };
-use crate::window::{tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf};
+use crate::window::{
+    tabpage_win_valid, valid_tab, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
+};
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
-use crate::winlayer::{Win, tabpage_at, windows_in_tab};
+use crate::winlayer::{Win, windows_in_tab};
 use ::libc::abort;
 use core::ffi::CStr;
 use core::ptr;
@@ -225,8 +227,8 @@ pub unsafe fn nvim_open_tabpage(
         return Err(err);
     };
     // `win_new_tabpage` fires `TabNew`, which can close what it just opened,
-    // so both answers come back as addresses to compare and never to read.
-    let Some(tp) = tabpage_at(tp.raw()) else {
+    // so the tab page is looked up again by the identity it was born with.
+    let Some(tp) = valid_tab(tp.id()) else {
         return Err(tabpage_closed(err));
     };
 

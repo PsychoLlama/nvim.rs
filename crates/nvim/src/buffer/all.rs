@@ -33,11 +33,9 @@ use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
     lastwin_nofloating, tabline_height, tabpage_index, win_close, win_enter, win_locked,
-    win_move_after, win_split,
+    win_move_after, win_split, win_valid,
 };
-use crate::winlayer::{
-    Buf, TabPage, Win, buffers, first_tab, first_window, last_window, window_at, windows,
-};
+use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, first_window, last_window, windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -112,13 +110,13 @@ fn is_locked(win: Win) -> bool {
     unsafe { win_locked(win) != 0 }
 }
 
-/// Whether `win` is still in the window list -- asked about a pointer
-/// autocommands may already have freed, which is why it does not take a
-/// [`Win`].
+/// Whether `win` is still in the window list.
+///
+/// By identity: the handle was taken while the window was live, so a window
+/// autocommands have since freed answers `false` even where the allocator
+/// has put another one at the same address.
 fn is_valid(win: Win) -> bool {
-    // `window_at` walks the window list comparing addresses, which is the
-    // only safe question about a window that may already be freed.
-    window_at(win.raw()).is_some()
+    win_valid(win.id())
 }
 
 fn is_aucmd(win: Win) -> bool {
