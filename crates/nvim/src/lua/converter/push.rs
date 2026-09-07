@@ -305,7 +305,7 @@ pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut TypVal, flags: c
         }
         let mut sink = LuaSink {
             lstate,
-            special: flags & super::kNluaPushSpecial as c_int != 0,
+            special: flags & super::kNluaPushSpecial != 0,
         };
         if !encode_typval(&mut sink, tv, c"nlua_push_typval argument".as_ptr()) {
             return false;

@@ -26,6 +26,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod autocmd;
 mod buffer;
@@ -205,8 +212,8 @@ use known::*;
 /// releases the Lua references it holds as it converts. `kNluaPushSpecial`
 /// additionally converts `nil` and the other special values the pre-0.11
 /// way, which is what clients of methods older than API level 11 expect.
-const PUSH: c_int = kNluaPushFreeRefs as c_int;
-const PUSH_SPECIAL: c_int = (kNluaPushSpecial | kNluaPushFreeRefs) as c_int;
+const PUSH: c_int = kNluaPushFreeRefs;
+const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {

@@ -6,6 +6,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 
@@ -249,7 +256,7 @@ static BINDINGS: [(&CStr, unsafe extern "C-unwind" fn(*mut lua_State) -> c_int);
 pub unsafe extern "C-unwind" fn nlua_add_api_functions(lstate: *mut lua_State) {
     // SAFETY: the caller's stack.
     unsafe {
-        lua_createtable(lstate, 0, BINDINGS.len() as c_int);
+        lua_createtable(lstate, 0, 181);
         for (name, binding) in BINDINGS {
             bind(lstate, binding, name);
         }

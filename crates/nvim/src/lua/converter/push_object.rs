@@ -92,7 +92,7 @@ pub unsafe fn nlua_push_integer(lstate: *mut lua_State, n: Integer, _flags: c_in
 /// `lstate` must be a live Lua state.
 pub unsafe fn nlua_push_float(lstate: *mut lua_State, f: Float, flags: c_int) {
     unsafe {
-        if flags & kNluaPushSpecial as c_int != 0 {
+        if flags & kNluaPushSpecial != 0 {
             nlua_create_typed_table(lstate, 0, 1, kObjectTypeFloat);
             nlua_push_val_idx(lstate);
             lua_pushnumber(lstate, f);
@@ -160,7 +160,7 @@ pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: 
     unsafe {
         match *obj {
             Object::Nil => {
-                if flags & kNluaPushSpecial as c_int != 0 {
+                if flags & kNluaPushSpecial != 0 {
                     lua_pushnil(lstate);
                 } else {
                     nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
@@ -168,7 +168,7 @@ pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: 
             }
             Object::LuaRef(r) => {
                 nlua_pushref(lstate, r);
-                if flags & kNluaPushFreeRefs as c_int != 0 {
+                if flags & kNluaPushFreeRefs != 0 {
                     api_free_luaref(r);
                     *obj = Object::LuaRef(LUA_NOREF as LuaRef);
                 }

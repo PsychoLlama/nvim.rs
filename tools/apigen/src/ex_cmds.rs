@@ -356,6 +356,13 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
     let mut table = String::from(TABLE_DOC);
     table.push_str(
         "\n#![forbid(unsafe_code)]\n\
+         #![deny(\n\
+         clippy::cast_lossless,\n\
+         clippy::cast_possible_truncation,\n\
+         clippy::cast_possible_wrap,\n\
+         clippy::cast_sign_loss,\n\
+         clippy::ptr_as_ptr\n\
+         )]\n\
          // The names are upstream's, and each is looked up by that spelling.\n\
          #![allow(non_upper_case_globals)]\n\n#[allow(unused_imports)]\nuse super::*;\n\
          use crate::global_cell::ConstTable;\n\

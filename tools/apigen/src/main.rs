@@ -1005,6 +1005,34 @@ fn with_unsafe_code_allow(text: &str, reason: &str) -> String {
     text.replacen(DENY, &format!("{DENY}{reason}#![allow(unsafe_code)]\n"), 1)
 }
 
+/// The cast deny (`clippy::cast_lossless` and its four siblings), for a tree
+/// whose output has finished its casts.
+///
+/// The ratchet counts files *not* carrying it (`files_without_deny_casts`),
+/// so a generated tree that comes out clean has to say so from here: a
+/// hand-written attribute in a generated file is gone at the next
+/// `just apigen`. It hangs off whichever unsafe attribute the header already
+/// carries -- `#![allow(unsafe_code)]` when the chunk holds unsafe (emitted
+/// just above), `#![forbid(unsafe_code)]` when it does not -- so the two
+/// shapes of header need no separate anchor. `just lint` is the net: turning
+/// this on for a tree that still casts fails the build outright.
+fn with_cast_deny(text: &str) -> String {
+    const DENY: &str = "#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
+";
+    for anchor in ["#![allow(unsafe_code)]\n", "#![forbid(unsafe_code)]\n"] {
+        if text.contains(anchor) {
+            return text.replacen(anchor, &format!("{anchor}{DENY}"), 1);
+        }
+    }
+    panic!("a generated chunk has no unsafe attribute to hang the cast deny on")
+}
+
 fn emit_fn(
     out: &mut String,
     f: &ApiFn,
@@ -2443,8 +2471,8 @@ const LUA_SUPPORT: &str = r#"
 /// releases the Lua references it holds as it converts. `kNluaPushSpecial`
 /// additionally converts `nil` and the other special values the pre-0.11
 /// way, which is what clients of methods older than API level 11 expect.
-const PUSH: c_int = kNluaPushFreeRefs as c_int;
-const PUSH_SPECIAL: c_int = (kNluaPushSpecial | kNluaPushFreeRefs) as c_int;
+const PUSH: c_int = kNluaPushFreeRefs;
+const PUSH_SPECIAL: c_int = kNluaPushSpecial | kNluaPushFreeRefs;
 
 /// What one binding carries from its first conversion to its last release.
 struct Call {
@@ -3176,11 +3204,9 @@ fn emit_lua_registration(out: &mut String, bound: &[&str]) {
     .unwrap();
     writeln!(out, "    // SAFETY: the caller's stack.").unwrap();
     writeln!(out, "    unsafe {{").unwrap();
-    writeln!(
-        out,
-        "        lua_createtable(lstate, 0, BINDINGS.len() as c_int);"
-    )
-    .unwrap();
+    // The size hint is `bound.len()` written out, not `BINDINGS.len() as
+    // c_int`: the generator knows the count and a literal needs no cast.
+    writeln!(out, "        lua_createtable(lstate, 0, {});", bound.len()).unwrap();
     writeln!(out, "        for (name, binding) in BINDINGS {{").unwrap();
     writeln!(out, "            bind(lstate, binding, name);").unwrap();
     writeln!(out, "        }}").unwrap();
@@ -4103,6 +4129,13 @@ const METADATA_HEADER: &str = r#"//! The API metadata blob.
 //! signatures, tools/apigen/metadata.txt and the tree's own `ui_ext_names`
 //! and `NVIM_VERSION_*`. Do not edit: run `just apigen`.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 "#;
 
@@ -4247,6 +4280,10 @@ fn run() -> Result<(), String> {
     // (see `with_unsafe_code_allow`). Only the Lua binding is on the unsafe
     // perimeter; the rest is ordinary generated crate source, and its unsafe
     // is debt like any other module's.
+    //
+    // The last field is the cast deny (see `with_cast_deny`): every tree but
+    // the msgpack-RPC wrappers comes out with no cast findings, and the
+    // wrappers still decode 224 argument casts by hand.
     const PERIMETER_LUA: &str = "// Unsafe perimeter: the `lua/` row in docs/perimeter.md.\n";
     let trees = [
         (
@@ -4254,37 +4291,44 @@ fn run() -> Result<(), String> {
             generate(&api, &specs, &sizes, &config)?,
             "wrappers",
             "",
+            false,
         ),
         (
             tables_dir,
             generate_tables(&keysets, &specs, &config)?,
             "tables",
             "",
+            true,
         ),
         (
             lua_dir,
             generate_lua(&api, &specs, &config)?,
             "Lua binding",
             PERIMETER_LUA,
+            true,
         ),
         (
             options_dir.clone(),
             options::generate(&root, &options_lua, &options_dir, &config)?,
             "option table",
             "",
+            true,
         ),
         (
             eval_dir.clone(),
             eval_funcs::generate(&root, &api, &specs, &eval_lua, &eval_dir, &config)?,
             "builtin table",
             "",
+            true,
         ),
     ];
 
     let mut wrote = false;
-    for (dir, mut files, what, reason) in trees {
+    for (dir, mut files, what, reason, casts) in trees {
         for file in &mut files {
-            file.text = rustfmt(&config, &with_unsafe_code_allow(&file.text, reason))?;
+            let text = with_unsafe_code_allow(&file.text, reason);
+            let text = if casts { with_cast_deny(&text) } else { text };
+            file.text = rustfmt(&config, &text)?;
             // The chunker works on unformatted text; if the margin it leaves
             // was not enough, say so rather than let the ratchet find out.
             let lines = file.text.lines().count();

@@ -39,7 +39,7 @@ pub use self::pop_typval::*;
 pub use self::push_object::*;
 
 /// `nlua_push_*` flags.
-pub type NluaPushFlags = ::core::ffi::c_uint;
+pub type NluaPushFlags = ::core::ffi::c_int;
 /// Push Vimscript's `null` and empty dictionary as `nil` and a `{_TYPE,
 /// _VAL}` table, rather than as the `vim.NIL` and `vim.empty_dict()`
 /// singletons Lua code normally sees.

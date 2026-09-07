@@ -13,6 +13,13 @@
 #![allow(unsafe_code)]
 // `wint_t`, from the C library's `<wctype.h>`.
 #![allow(non_camel_case_types)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 // No forbid(unsafe_code): edition 2024 trips the unsafe_code lint on the
 // extern block below, and declaring the foreign surface is this file's

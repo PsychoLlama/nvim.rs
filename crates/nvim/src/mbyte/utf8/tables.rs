@@ -22,6 +22,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 /// One of the two tables, given the answer for a byte that introduces nothing.
 const fn lead_byte_lengths(introduces_nothing: u8) -> [u8; 256] {
