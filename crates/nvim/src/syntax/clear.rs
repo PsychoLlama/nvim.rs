@@ -24,6 +24,10 @@ use core::ffi::c_int;
 use super::*;
 
 /// Clear all syntax info for one block.
+///
+/// # Safety
+///
+/// `block` must point at a live `SynBlock`, unaliased for the call.
 pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     // SAFETY: the caller's promise -- a live syntax block.
     let mut block = unsafe { SynBlockRef::new(block) };
@@ -83,7 +87,7 @@ pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
 }
 
 /// Get rid of `:ownsyntax` for window `window`.
-pub(crate) unsafe fn reset_synblock(mut window: Win) {
+pub(crate) fn reset_synblock(mut window: Win) {
     if window.w_s != unsafe { &raw mut (*window.w_buffer).b_s } {
         unsafe { syntax_clear(window.w_s) };
         // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and

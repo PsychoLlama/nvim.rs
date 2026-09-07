@@ -354,7 +354,7 @@ unsafe fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         if rg.mod_top == 0 || rg.mod_top > buffer.b_mod_top {
             rg.mod_top = buffer.b_mod_top;
             // Lines above the change may be included in a pattern match.
-            if unsafe { syntax_present(win) } {
+            if syntax_present(win) {
                 rg.mod_top -= buffer.b_s.b_syn_sync_linebreaks;
                 rg.mod_top = rg.mod_top.max(1);
             }
@@ -408,7 +408,7 @@ unsafe fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
     if rg.mod_top != 0 && rg.mod_top < win.w_topline {
         if rg.mod_bot > win.w_topline {
             rg.mod_top = win.w_topline;
-        } else if unsafe { syntax_present(win) } {
+        } else if syntax_present(win) {
             rg.top_end = 1;
         }
     }

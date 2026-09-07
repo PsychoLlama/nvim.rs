@@ -16,7 +16,7 @@ use crate::pos::MAXCOL;
 use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
-pub(crate) unsafe fn syntax_present(win: Win) -> bool {
+pub(crate) fn syntax_present(win: Win) -> bool {
     unsafe {
         !(*win.w_s).b_syn_patterns.is_empty()
             || !(*win.w_s).b_syn_clusters.is_empty()
@@ -60,6 +60,10 @@ pub(crate) fn set_context_in_echohl_cmd(expand: &mut Expand, arg: *const c_char)
 }
 
 /// Command-line completion for `:syntax`.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 pub(crate) unsafe fn set_context_in_syntax_cmd(expand: &mut Expand, arg: *const c_char) {
     // Default: expand subcommands.
     expand.xp_context = ExpandContext::Syntax;
@@ -125,6 +129,10 @@ const SYNC_ARGS: [&CStr; 10] = [
 
 /// `expand_generic`'s callback: the `idx`th completion candidate, or NULL past
 /// the end.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     let nth = |names: &[&CStr]| {
         usize::try_from(idx)
@@ -160,6 +168,10 @@ pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_
 /// `trans` removes transparency; `spellp` answers whether spell checking
 /// applies there; `keep_state` keeps the state of the character at `col` so
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
+///
+/// # Safety
+///
+/// `spellp` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn syn_get_id(
     window: Win,
     lnum: LineNr,
@@ -175,7 +187,7 @@ pub(crate) unsafe fn syn_get_id(
         || lnum != current_lnum.get()
         || col < current_col.get()
     {
-        unsafe { syntax_start(window, lnum) };
+        syntax_start(window, lnum);
     } else if col > current_col.get() {
         // `next_match` may be wrong when moving around, e.g. with the
         // "skip" expression of `searchpair()`.
@@ -192,6 +204,10 @@ pub(crate) unsafe fn syn_get_id(
 
 /// Extra information about the current syntax item: answers its flags and
 /// stores its sequence number. Must be called right after [`get_syntax_attr`].
+///
+/// # Safety
+///
+/// `seqnrp` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
     unsafe { *seqnrp = current_seqnr.get() };
     current_flags.get()
@@ -229,7 +245,7 @@ fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub(crate) unsafe fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
+pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.
@@ -237,7 +253,7 @@ pub(crate) unsafe fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
         && !unsafe { (*window.w_s).b_syn_error }
         && !unsafe { (*window.w_s).b_syn_slow }
     {
-        unsafe { syntax_start(window, lnum) };
+        syntax_start(window, lnum);
 
         // Start with the fold level at the start of the line.
         level = syn_cur_foldlevel();

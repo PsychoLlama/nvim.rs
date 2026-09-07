@@ -230,9 +230,7 @@ unsafe fn special_feature(name: *const c_char) -> Option<bool> {
         _ if unsafe { same_name(name, c"ttyout") } => stdout_isatty.get(),
         _ if unsafe { same_name(name, c"multi_byte_encoding") } => true,
         _ if unsafe { same_name(name, c"gui_running") } => ui_gui_attached(),
-        _ if unsafe { same_name(name, c"syntax_items") } => unsafe {
-            syntax_present(Win::current())
-        },
+        _ if unsafe { same_name(name, c"syntax_items") } => syntax_present(Win::current()),
         _ if unsafe { same_name(name, c"wsl") } => has_wsl(),
         _ => return None,
     })

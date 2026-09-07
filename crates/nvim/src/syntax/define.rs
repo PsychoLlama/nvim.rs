@@ -431,6 +431,10 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
 /// Read one delimited pattern plus its offsets into `ci`.
 ///
 /// Answers what follows it, or NULL after reporting an error.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut SynPat) -> *mut c_char {
     // Need at least three characters: two delimiters and something between.
     if arg.is_null()
@@ -479,6 +483,10 @@ pub(crate) static SPO_NAME_TAB: [&CStr; SPO_COUNT as usize] =
     [c"ms=", c"me=", c"hs=", c"he=", c"rs=", c"re=", c"lc="];
 
 /// Which `SPO_*` offset the three characters at `end` name.
+///
+/// # Safety
+///
+/// `end` must point at a NUL-terminated string.
 unsafe fn offset_name(end: *const c_char) -> Option<c_int> {
     let mut idx = SPO_COUNT;
     loop {
@@ -497,6 +505,10 @@ unsafe fn offset_name(end: *const c_char) -> Option<c_int> {
 /// Answers the first character that is not part of them. An unrecognised name,
 /// an unrecognised `s`/`b`/`e` suffix or a missing comma ends the list; the
 /// caller diagnoses whatever is left.
+///
+/// # Safety
+///
+/// `end` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn read_pattern_offsets(ci: &mut SynPat, mut end: *mut c_char) -> *mut c_char {
     loop {
         let Some(mut idx) = (unsafe { offset_name(end) }) else {

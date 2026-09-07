@@ -295,7 +295,7 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
         if !unsafe { (*buf).b_mod_set } {
             continue;
         }
-        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && unsafe { syntax_present(wp) } {
+        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && syntax_present(wp) {
             unsafe { syn_stack_apply_changes(Buf::new(buf)) };
             unsafe { (*buf).b_mod_tick_syn = display_tick.get() };
         }

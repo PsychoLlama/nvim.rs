@@ -118,7 +118,7 @@ pub unsafe fn spell_move_to(
     let mut found_pos: Pos = unsafe { mem::zeroed() };
     let mut found_len: size_t = 0;
     let mut attr: Hlf = HLF_COUNT;
-    let has_syntax = unsafe { syntax_present(window) };
+    let has_syntax = syntax_present(window);
     let mut buf: *mut c_char = core::ptr::null_mut();
     let mut buflen: size_t = 0;
     let mut skip = 0;

@@ -16,6 +16,10 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use super::*;
 
 /// `:syntime {on,off,clear,report}`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_syntime(args: *mut ExArg) {
     let arg = unsafe { CStr::from_ptr((*args).arg) };
     match arg.to_bytes() {
@@ -41,7 +45,7 @@ pub(crate) fn syn_clear_time(st: &mut SynTime) {
 
 /// `:syntime clear` — forget the timings of every pattern in this window.
 fn syntime_clear() {
-    if !unsafe { syntax_present(Win::current()) } {
+    if !syntax_present(Win::current()) {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
@@ -77,6 +81,12 @@ struct TimeEntry {
 /// Still `qsort` and not `sort_by`: two patterns can accumulate exactly the
 /// same total, and which of them the sort leaves first is then unprovable for
 /// any other algorithm.
+///
+/// # Safety
+///
+/// As `qsort`'s comparator: `v1` and `v2` must each point at an element of
+/// the array being sorted, and the elements must be of the type this reads
+/// them at.
 unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -> c_int {
     profile_cmp(unsafe { (*(v1 as *const TimeEntry)).total }, unsafe {
         (*(v2 as *const TimeEntry)).total
@@ -85,7 +95,7 @@ unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -
 
 /// `:syntime report` — the timing table, slowest pattern last.
 fn syntime_report() {
-    if !unsafe { syntax_present(Win::current()) } {
+    if !syntax_present(Win::current()) {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
@@ -142,7 +152,7 @@ fn syntime_report() {
         if got_int.get() {
             break;
         }
-        unsafe { report_row(entry) };
+        report_row(entry);
     }
     if !got_int.get() {
         unsafe { msg_puts(c"\n".as_ptr()) };
@@ -158,7 +168,7 @@ fn syntime_report() {
 /// `msg_advance` pads to a column, so a value wider than its field simply
 /// pushes the rest of the row right; the trailing space after each value is
 /// what keeps two of them from running together when that happens.
-unsafe fn report_row(entry: &TimeEntry) {
+fn report_row(entry: &TimeEntry) {
     unsafe { msg_puts(profile_msg(entry.total).as_ptr()) };
     unsafe { msg_puts(c" ".as_ptr()) };
     unsafe { msg_advance(13) };

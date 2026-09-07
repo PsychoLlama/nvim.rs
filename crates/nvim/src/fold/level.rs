@@ -756,14 +756,12 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
 /// `line` must name a line inside its window's buffer.
 pub(super) unsafe fn foldlevel_syntax(line: FLine) {
     let lnum = line.lnum() + line.off();
-    // SAFETY: a live window, and a line inside its buffer.
-    line.set_lvl(unsafe { syn_get_foldlevel(line.win(), lnum) });
+    line.set_lvl(syn_get_foldlevel(line.win(), lnum));
     line.set_start(0);
     if lnum < line.win().buffer().b_ml.ml_line_count {
         // A fold that starts on the next line starts here as far as the
         // tree is concerned, so the syntax item's first line is inside.
-        // SAFETY: a live window, and the line after one inside its buffer.
-        let n = unsafe { syn_get_foldlevel(line.win(), lnum + 1) };
+        let n = syn_get_foldlevel(line.win(), lnum + 1);
         if n > line.lvl() {
             line.set_start(n - line.lvl());
             line.set_lvl(n);

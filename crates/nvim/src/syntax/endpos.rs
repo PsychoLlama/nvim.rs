@@ -59,7 +59,7 @@ impl RegionEnd {
 /// The engine may hand back a *different* program (`vim_regexec_multi` can
 /// recompile), so the answer is written back into the pattern, and each
 /// pattern is timed into its own `sp_time`.
-pub(crate) unsafe fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, RegMMatch) {
+pub(crate) fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, RegMMatch) {
     let mut regmatch = empty_regmmatch();
     let mut block = syn_block();
     let spp = block.pattern_mut(idx);
@@ -87,6 +87,10 @@ pub(crate) fn syn_pattern_count() -> c_int {
 ///
 /// `start_ext` are the submatches of the START pattern, which the END and SKIP
 /// patterns may refer to with `\1`..`\9`.
+///
+/// # Safety
+///
+/// `start_ext` must point at a live `RegExtMatch`, unaliased for the call.
 pub(crate) unsafe fn find_endpos(
     mut idx: c_int,
     startpos: LPos,
@@ -129,7 +133,7 @@ pub(crate) unsafe fn find_endpos(
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
-    let answer = unsafe { find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol) };
+    let answer = find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol);
 
     restore_chartab(&buf_chartab);
     unsafe { unref_extmatch(re_extmatch_in.get()) };
@@ -139,21 +143,20 @@ pub(crate) unsafe fn find_endpos(
 
 /// The search loop of [`find_endpos`]: try every END pattern from `start_idx`,
 /// step `matchcol` over anything the SKIP pattern claims, and repeat.
-unsafe fn find_endpos_scan(
+fn find_endpos_scan(
     start_idx: c_int,
     skip_idx: Option<c_int>,
     startpos: LPos,
     matchcol: &mut ColNr,
 ) -> RegionEnd {
     loop {
-        let Some((best_idx, best)) = (unsafe { best_end_match(start_idx, startpos, *matchcol) })
-        else {
+        let Some((best_idx, best)) = best_end_match(start_idx, startpos, *matchcol) else {
             // All end patterns tried with no match: the item continues
             // until end-of-line.
             return RegionEnd::none();
         };
         if let Some(skip_idx) = skip_idx {
-            match unsafe { skip_past(skip_idx, startpos, best.startpos[0], *matchcol) } {
+            match skip_past(skip_idx, startpos, best.startpos[0], *matchcol) {
                 Skipped::No => {}
                 // The skip match reaches the end of the line (or the next
                 // one): no end pattern can match in this line after all.
@@ -164,16 +167,12 @@ unsafe fn find_endpos_scan(
                 }
             }
         }
-        return unsafe { end_positions(best_idx, &best, startpos) };
+        return end_positions(best_idx, &best, startpos);
     }
 }
 
 /// The END pattern that matches first at or after `matchcol`, with its match.
-unsafe fn best_end_match(
-    start_idx: c_int,
-    startpos: LPos,
-    matchcol: ColNr,
-) -> Option<(c_int, RegMMatch)> {
+fn best_end_match(start_idx: c_int, startpos: LPos, matchcol: ColNr) -> Option<(c_int, RegMMatch)> {
     let mut best: Option<(c_int, RegMMatch)> = None;
     let mut idx = start_idx;
     while idx < syn_pattern_count() {
@@ -184,7 +183,7 @@ unsafe fn best_end_match(
         }
         let lc_col = (matchcol as c_int - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
 
-        let (matched, regmatch) = unsafe { run_pattern(idx, startpos.lnum, lc_col as ColNr) };
+        let (matched, regmatch) = run_pattern(idx, startpos.lnum, lc_col as ColNr);
         let col = regmatch.startpos[0].col;
         if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
             best = Some((idx, regmatch));
@@ -205,10 +204,10 @@ enum Skipped {
 }
 
 /// Does the SKIP pattern match before the best END pattern's match?
-unsafe fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr) -> Skipped {
+fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr) -> Skipped {
     let offsets = syn_block().pattern(skip_idx).offsets();
     let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
-    let (matched, regmatch) = unsafe { run_pattern(skip_idx, startpos.lnum, lc_col as ColNr) };
+    let (matched, regmatch) = run_pattern(skip_idx, startpos.lnum, lc_col as ColNr);
     if !matched || regmatch.startpos[0].col > best_start.col {
         return Skipped::No;
     }
@@ -244,7 +243,7 @@ unsafe fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol:
 }
 
 /// Turn the winning END match into the four positions the caller wants.
-unsafe fn end_positions(best_idx: c_int, best: &RegMMatch, startpos: LPos) -> RegionEnd {
+fn end_positions(best_idx: c_int, best: &RegMMatch, startpos: LPos) -> RegionEnd {
     let block = syn_block();
     let spp = block.pattern(best_idx);
     let offsets = spp.offsets();
@@ -329,6 +328,11 @@ pub(crate) fn limit_pos_zero(pos: &mut LPos, limit: LPos) {
 ///
 /// `extra` is added when the offset is measured from the *start* of the match
 /// (`me=s+1`), which is how "one past" is spelled for a region's end.
+///
+/// # Safety
+///
+/// `spp` must be an initialized `PatOffsets` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn syn_add_end_off(
     spp: PatOffsets,
     regmatch: &RegMMatch,
@@ -348,7 +352,7 @@ pub(crate) unsafe fn syn_add_end_off(
         // "rs=e+2" when there is a matchgroup.
         0
     } else {
-        unsafe { walk_chars(base.lnum, base.col, off) }
+        walk_chars(base.lnum, base.col, off)
     };
     LPos {
         lnum: base.lnum,
@@ -363,6 +367,11 @@ pub(crate) unsafe fn syn_add_end_off(
 /// offset is measured from the match *end* rather than its start, and a
 /// position past the last line is clamped to the end of the last line instead
 /// of to column 0.
+///
+/// # Safety
+///
+/// `spp` must be an initialized `PatOffsets` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn syn_add_start_off(
     spp: PatOffsets,
     regmatch: &RegMMatch,
@@ -386,13 +395,13 @@ pub(crate) unsafe fn syn_add_start_off(
     };
     LPos {
         lnum,
-        col: unsafe { walk_chars(lnum, col, off) },
+        col: walk_chars(lnum, col, off),
     }
 }
 
 /// Step `off` characters forward (or backward) from `col` in line `lnum`,
 /// stopping at the line's ends. Answers the resulting column.
-unsafe fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
+fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
     if off == 0 {
         return col;
     }
@@ -451,6 +460,11 @@ pub(crate) fn syn_buf_line_count() -> LineNr {
 ///
 /// Answers whether there was a match, and on a match shifts `rmp`'s positions
 /// from pattern-relative to buffer-absolute line numbers.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMMatch`, unaliased for the call. `st` must
+/// point at a live `SynTime`, unaliased for the call.
 pub(crate) unsafe fn syn_regexec(
     rmp: *mut RegMMatch,
     lnum: LineNr,
@@ -519,6 +533,14 @@ pub(crate) struct KeywordMatch {
 /// Check one position in a line for a matching keyword.
 ///
 /// The caller must have established that a keyword can start at `startcol`.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated line with a word character at
+/// `startcol` — the caller has already established that a keyword can start
+/// there, and the scan for its end reads forwards from it. `cur_si`, when it
+/// is `Some`, must still be live: nothing may have pushed to, popped from or
+/// cleared the syntax state stack since it was taken.
 pub(crate) unsafe fn check_keyword_id(
     line: *mut c_char,
     startcol: c_int,
@@ -571,6 +593,13 @@ pub(crate) unsafe fn check_keyword_id(
 /// overrides everything; otherwise a keyword is accepted at the top level when
 /// it is not `contained`, and inside an item when that item's `contains=` list
 /// names it.
+///
+/// # Safety
+///
+/// `keyword` must point at a NUL-terminated string, unaliased for the call.
+/// `ht` must point at a live hash table, unaliased for the call. `cur_si`
+/// must still be live: nothing may have pushed to, popped from or cleared the
+/// syntax state stack since it was taken, when it is `Some`.
 unsafe fn match_keyword(
     keyword: *mut c_char,
     ht: *mut HashTab,

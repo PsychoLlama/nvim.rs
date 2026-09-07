@@ -65,7 +65,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // Update the screen first so syntax highlighting is right after a
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
-        if unsafe { syntax_present(Win::current()) } && must_redraw.get() != 0 {
+        if syntax_present(Win::current()) && must_redraw.get() != 0 {
             let _ = unsafe { update_screen() };
         }
         // An autocommand may call getcurpos(), so curswant has to be

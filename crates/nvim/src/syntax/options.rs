@@ -24,6 +24,11 @@ use crate::winlayer::Win;
 /// `name_end` is left at the end of the name; the answer is the first argument
 /// after it, or NULL when the command ended instead. The first argument may be
 /// a pattern, in which which `|` is allowed, so only a NUL counts as the end.
+///
+/// # Safety
+///
+/// `arg` must point at the NUL-terminated rest of the command line.
+/// `name_end` is written through and needs nothing.
 pub(crate) unsafe fn get_group_name(arg: *mut c_char, name_end: &mut *mut c_char) -> *mut c_char {
     *name_end = unsafe { skiptowhite(arg) };
     let rest = unsafe { skipwhite(*name_end) };
@@ -116,6 +121,10 @@ fn starts_option(c: u8) -> bool {
 /// The comparison is ASCII-case-insensitive, which is what upstream's
 /// doubled-case name table (`"cCoOnNtTaAiInNeEdD"`) spells out a byte at a
 /// time. A NUL never matches a letter, so the walk stops at the terminator.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
     let name = f.name.to_bytes();
     for (i, &want) in name.iter().enumerate() {
@@ -137,6 +146,10 @@ unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
 /// `keyword` is set while parsing `:syntax keyword`, where `display`, `fold`
 /// and `extend` are keywords rather than options — a match on one of those is
 /// reported as no match at all, which stops option parsing right there.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFlag> {
     let f = FLAG_TAB
         .iter()
@@ -158,6 +171,10 @@ unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFla
 /// Callable at any point in an argument list and repeatedly, so that options
 /// before, between and after the patterns of a `:syntax region` all land in
 /// the same [`SynOptArg`].
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_syn_options(
     mut arg: *mut c_char,
     opt: &mut SynOptArg,
@@ -227,6 +244,10 @@ pub(crate) unsafe fn get_syn_options(
 /// index it names in `opt.sync_idx`.
 ///
 /// Answers what follows it, or NULL after reporting an error.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut SynOptArg) -> *mut c_char {
     if !opt.takes_sync_idx {
         emsg(gettext(c"E393: group[t]here not accepted here"));
@@ -280,6 +301,11 @@ struct IdListPass {
 /// `arg` points at the keyword and is advanced past the list. The argument is
 /// modified in passing (the parse writes NULs into it). Answers `Err` on any
 /// error; an existing `*list` is kept and the new one discarded.
+///
+/// # Safety
+///
+/// `arg` must point at a cursor standing on the NUL-terminated list argument;
+/// it is read through and left past what was parsed.
 pub(crate) unsafe fn get_id_list(
     arg: &mut *mut c_char,
     keylen: c_int,
@@ -317,6 +343,10 @@ pub(crate) unsafe fn get_id_list(
 }
 
 /// One pass over `keyword=a,b,@cl` starting at `arg`.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPass {
     let mut ids: Vec<int16_t> = Vec::new();
 
@@ -387,6 +417,12 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 /// Answers the id to add, `None` when the name added its own (a regexp) or
 /// added nothing (`@cluster` while skipping), and `Err` when a message has
 /// been given.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call. `p`
+/// must point at a NUL-terminated string, unaliased for the call. `end` must
+/// point at a NUL-terminated string, unaliased for the call.
 unsafe fn parse_id_name(
     arg: *mut c_char,
     p: *mut c_char,
@@ -512,6 +548,14 @@ pub(crate) fn copy_id_list(list: &IdList) -> *mut int16_t {
 /// `cur_si` is the current item, or NULL when the `containedin` list is not
 /// being checked. This runs once per candidate pattern per column: keep it
 /// fast.
+///
+/// # Safety
+///
+/// `cur_si` must still be live: nothing may have pushed to, popped from or
+/// cleared the syntax state stack since it was taken, when it is `Some`.
+/// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated syntax
+/// id list the parser owns. `cont_in_list` must be null, `ID_LIST_ALL`, or
+/// point at a zero-terminated syntax id list the parser owns.
 pub(crate) unsafe fn in_id_list(
     cur_si: Option<Item>,
     list: *mut int16_t,
@@ -551,6 +595,11 @@ pub(crate) unsafe fn in_id_list(
 ///
 /// A cluster that includes itself indirectly would recurse forever, so the
 /// depth is capped at 30.
+///
+/// # Safety
+///
+/// `list` must be null, `ID_LIST_ALL`, or point at a zero-terminated syntax
+/// id list the parser owns.
 unsafe fn id_list_has(mut list: *mut int16_t, ssp: sp_syn, flags: SynFlags, depth: c_int) -> bool {
     if list.is_null() {
         return false;

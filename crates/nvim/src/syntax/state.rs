@@ -30,7 +30,7 @@ use crate::types::NUL;
 /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
 /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
 /// are likely to point somewhere else entirely.
-pub(crate) unsafe fn syntax_start(window: Win, lnum: LineNr) {
+pub(crate) fn syntax_start(window: Win, lnum: LineNr) {
     // The last change id we parsed at. A change may have invalidated the
     // current state, so this is checked as if it were part of the identity
     // of the buffer.
@@ -158,6 +158,10 @@ fn store_distance() -> LineNr {
 /// When the cached entry for this line matches what we parsed, every entry
 /// below it that was only waiting on a change *before* this line becomes valid
 /// again -- which is what turns one re-parse into a whole valid tail.
+///
+/// # Safety
+///
+/// `prev` must point at a live syntax state, unaliased for the call.
 unsafe fn record_line(mut prev: *mut SynState, lnum: LineNr, dist: LineNr) -> *mut SynState {
     if prev.is_null() {
         prev = syn_stack_find_entry(current_lnum.get() - 1);
@@ -207,6 +211,10 @@ unsafe fn record_line(mut prev: *mut SynState, lnum: LineNr, dist: LineNr) -> *m
 /// A stack of `BufState`s cannot simply be discarded -- each item may hold a
 /// reference to the submatches of the pattern that started it. Safe to call
 /// twice: the heap arm is nulled as it is released.
+///
+/// # Safety
+///
+/// `p` must point at a live syntax state, unaliased for the call.
 pub(crate) unsafe fn clear_syn_state(p: *mut SynState) {
     let size = unsafe { (*p).sst_stacksize };
     if size > SST_FIX_STATES {
@@ -334,7 +342,7 @@ pub(crate) fn syn_update_ends(startofline: bool) {
 /// now depends on the line below the last parsed one. The window looks like:
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
-pub(crate) unsafe fn syntax_end_parsing(window: Win, lnum: LineNr) {
+pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
     if syn_block().raw() != window.w_s {
         return; // not the right window
     }

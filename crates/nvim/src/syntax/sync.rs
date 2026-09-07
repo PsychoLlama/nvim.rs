@@ -30,6 +30,10 @@ use crate::winlayer::graph::{switch_buffer, switch_window};
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
+///
+/// # Safety
+///
+/// `last_valid` must point at a live syntax state, unaliased for the call.
 pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut SynState) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
@@ -39,9 +43,7 @@ pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut 
 
     let flags = syn_block().b_syn_sync_flags;
     if flags & SF_CCOMMENT != 0 {
-        // SAFETY: the caller's promise -- a live window.
-        // SAFETY: `syn_sync`'s own contract reaches its callee.
-        unsafe { sync_by_ccomment(window, start_lnum) };
+        sync_by_ccomment(window, start_lnum);
     } else if flags & SF_MATCH != 0 {
         unsafe { sync_by_match(start_lnum, last_valid) };
     }
@@ -79,7 +81,7 @@ fn sync_backoff(start_lnum: LineNr) -> LineNr {
 
 /// Search backwards for the end of a C-style comment, and if the start line
 /// turns out to be inside one, push the syntax item that defines it.
-unsafe fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
+fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
     // `find_start_comment` works on the current buffer, so make syn_buf it
     // for a moment. The window moves without its buffer: the parser's buffer
     // is `syn_buf`, which need not be the one `window` shows.
@@ -141,6 +143,10 @@ struct SyncPoint {
 }
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
+///
+/// # Safety
+///
+/// `last_valid` must point at a live syntax state, unaliased for the call.
 unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
     let maxlines = syn_block().b_syn_sync_maxlines;
     let break_lnum = if maxlines != 0 && start_lnum > maxlines {
@@ -170,13 +176,13 @@ unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
             break;
         }
         // Does the previous line have the line-continuation pattern?
-        if lnum > 1 && unsafe { syn_match_linecont(lnum - 1) } {
+        if lnum > 1 && syn_match_linecont(lnum - 1) {
             continue;
         }
 
         // Start with nothing on the state stack.
         validate_current_state();
-        let found = unsafe { scan_for_sync_point(lnum, end_lnum, start_lnum) };
+        let found = scan_for_sync_point(lnum, end_lnum, start_lnum);
 
         let Some(found) = found else {
             end_lnum = lnum;
@@ -227,11 +233,7 @@ unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
 ///
 /// The scan does not stop at the first sync point: it keeps looking further on
 /// in the line, so the one that wins is the closest to `end_lnum`.
-unsafe fn scan_for_sync_point(
-    from: LineNr,
-    end_lnum: LineNr,
-    start_lnum: LineNr,
-) -> Option<SyncPoint> {
+fn scan_for_sync_point(from: LineNr, end_lnum: LineNr, start_lnum: LineNr) -> Option<SyncPoint> {
     let mut found: Option<SyncPoint> = None;
     current_lnum.set(from);
     while current_lnum.get() < end_lnum {
@@ -322,7 +324,7 @@ pub(crate) fn restore_chartab(chartab: &[uint64_t; 4]) {
 
 /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
 /// line after it continue it?
-pub(crate) unsafe fn syn_match_linecont(lnum: LineNr) -> bool {
+pub(crate) fn syn_match_linecont(lnum: LineNr) -> bool {
     if syn_block().b_syn_linecont_prog.is_null() {
         return false;
     }
@@ -529,6 +531,10 @@ enum LineContError {
 /// means the next one continues it.
 ///
 /// Answers what follows the pattern.
+///
+/// # Safety
+///
+/// `next_arg` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_char, LineContError> {
     if unsafe { *next_arg } as c_int == NUL {
         return Err(LineContError::Illegal); // missing pattern

@@ -227,6 +227,12 @@ pub(crate) fn check_state_ends() {
 
 /// Fill in `si_id`, `si_attr`, `si_trans_id` and `si_cont_list` for the item at
 /// `idx`, from the pattern it came from.
+///
+/// # Safety
+///
+/// `idx` must name a live item on the current syntax state stack, as
+/// [`state_at`] requires, and nothing may reallocate the stack for the length
+/// of the call.
 pub(crate) unsafe fn update_si_attr(idx: c_int) {
     let mut sip = unsafe { state_at(idx) };
     if sip.si_idx < 0 {

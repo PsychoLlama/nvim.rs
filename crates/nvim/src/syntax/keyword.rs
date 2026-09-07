@@ -24,6 +24,10 @@ use crate::types::NUL;
 pub(crate) const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(KeyEntry, keyword);
 
 /// The entry a hash key points into.
+///
+/// # Safety
+///
+/// `key` must point at a NUL-terminated string, unaliased for the call.
 #[inline]
 pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut KeyEntry {
     unsafe { key.byte_sub(KEYWORD_OFFSET) as *mut KeyEntry }
@@ -34,6 +38,10 @@ pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut KeyEntry {
 /// `&raw mut (*kp).keyword` and not `.as_ptr()`: the field is a zero-length
 /// array, so an autoref would cover no bytes and the pointer could not be
 /// walked.
+///
+/// # Safety
+///
+/// `kp` must point at a live `KeyEntry`, unaliased for the call.
 #[inline]
 pub(crate) unsafe fn entry_to_key(kp: *mut KeyEntry) -> *mut c_char {
     unsafe { (&raw mut (*kp).keyword).cast::<c_char>() }
@@ -43,6 +51,10 @@ pub(crate) unsafe fn entry_to_key(kp: *mut KeyEntry) -> *mut c_char {
 ///
 /// The three `xfree`s of the carve-out (see [`KeyEntry`]): the entry is one
 /// block with its text inside it, so nothing here can be a `Box`.
+///
+/// # Safety
+///
+/// `kp` must point at a live `KeyEntry`, unaliased for the call.
 unsafe fn free_entry(kp: *mut KeyEntry) {
     unsafe { xfree((*kp).next_list as *mut c_void) };
     unsafe { xfree((*kp).cont_in_list as *mut c_void) };
@@ -50,6 +62,10 @@ unsafe fn free_entry(kp: *mut KeyEntry) {
 }
 
 /// Drop every keyword of group `id` from `ht`.
+///
+/// # Safety
+///
+/// `ht` must point at a live hash table, unaliased for the call.
 pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut HashTab) {
     unsafe { hash_lock(ht) };
     let mut todo = unsafe { (*ht).ht_used } as c_int;
@@ -94,6 +110,10 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut HashTab) {
 }
 
 /// Empty a whole keyword table.
+///
+/// # Safety
+///
+/// `ht` must point at a live hash table, unaliased for the call.
 pub(crate) unsafe fn clear_keywtab(ht: *mut HashTab) {
     let mut todo = unsafe { (*ht).ht_used } as c_int;
     let mut idx = 0;
@@ -129,6 +149,10 @@ struct KeywordDef<'a> {
 }
 
 /// Add one keyword to the table its case sensitivity selects.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
     // With `:syntax case ignore` the table is keyed on the folded form,
     // and the lookup folds too.
@@ -187,6 +211,10 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
 /// editing the buffer in place: the `[` becomes the NUL of the short form,
 /// then each following character is shifted left over it. `None` means the
 /// notation was malformed and the message has been given.
+///
+/// # Safety
+///
+/// `kw` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<*mut c_char> {
     let mut kwlen;
     let mut p = unsafe { vim_strchr(kw, '[' as c_int) };

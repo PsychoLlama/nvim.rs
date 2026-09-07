@@ -151,8 +151,8 @@ pub(crate) unsafe fn draw_window_lines(
         window.w_display_tick = display_tick.get();
 
         // Tell the syntax machinery where parsing stopped.
-        if w.syntax_last_parsed != 0 && unsafe { syntax_present(window) } {
-            unsafe { syntax_end_parsing(window, w.syntax_last_parsed + 1) };
+        if w.syntax_last_parsed != 0 && syntax_present(window) {
+            syntax_end_parsing(window, w.syntax_last_parsed + 1);
         }
 
         let old_botline = window.w_botline;
@@ -235,7 +235,7 @@ unsafe fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -
                 && (w.lnum < rg.mod_bot
                     || w.did_update == DidUpdate::Fold
                     || (w.did_update == DidUpdate::Line
-                        && unsafe { syntax_present(window) }
+                        && syntax_present(window)
                         && ((foldmethod_is_syntax(window) && has_any_folding(window) != 0)
                             || syntax_check_changed(w.lnum)))
                     // A match at a fixed position may need redrawing when
@@ -312,11 +312,9 @@ unsafe fn draw_one_line(
     } else {
         unsafe { prepare_search_hl(window, SearchHl::current().raw(), w.lnum) };
         // Let the syntax machinery know lines were skipped.
-        if w.syntax_last_parsed != 0
-            && w.syntax_last_parsed + 1 < w.lnum
-            && unsafe { syntax_present(window) }
+        if w.syntax_last_parsed != 0 && w.syntax_last_parsed + 1 < w.lnum && syntax_present(window)
         {
-            unsafe { syntax_end_parsing(window, w.syntax_last_parsed + 1) };
+            syntax_end_parsing(window, w.syntax_last_parsed + 1);
         }
 
         // Spell checking only applies to real buffer text: a concealed line

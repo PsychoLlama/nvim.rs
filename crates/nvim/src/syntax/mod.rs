@@ -698,6 +698,10 @@ static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Set the time limit for parsing, or clear it with NULL.
+///
+/// # Safety
+///
+/// `tm` must point at a live `ProfTime`, unaliased for the call.
 pub(crate) unsafe fn syn_set_timeout(tm: *mut ProfTime) {
     syn_tm.set(tm);
 }

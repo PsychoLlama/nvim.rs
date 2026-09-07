@@ -261,7 +261,7 @@ impl LineSetup {
     /// `window` must be a live window.
     unsafe fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window.
-        if !unsafe { syntax_present(window) }
+        if !syntax_present(window)
             || unsafe { (*window.w_s).b_syn_error }
             || unsafe { (*window.w_s).b_syn_slow }
             || self.has_foldtext
@@ -270,7 +270,7 @@ impl LineSetup {
         }
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
-        unsafe { syntax_start(window, lnum) };
+        syntax_start(window, lnum);
         if did_emsg.get() != 0 {
             unsafe { (*window.w_s).b_syn_error = true };
         } else {
@@ -858,7 +858,7 @@ impl LineSetup {
 
         // Syntax highlighting has to be restarted for this line.
         if self.has_syntax {
-            unsafe { syntax_start(window, lnum) };
+            syntax_start(window, lnum);
         }
     }
 

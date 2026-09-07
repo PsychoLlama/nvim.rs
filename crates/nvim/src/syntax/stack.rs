@@ -30,6 +30,10 @@ use crate::winlayer::windows;
 ///
 /// `sst_union` is a C union discriminated by `sst_stacksize`, and this is the
 /// one place that discrimination is written down.
+///
+/// # Safety
+///
+/// `p` must point at a live syntax state, unaliased for the call.
 unsafe fn entry_states(p: *mut SynState, stacksize: c_int) -> *mut BufState {
     if stacksize > SST_FIX_STATES {
         unsafe { (*p).sst_union.sst_heap }
@@ -151,7 +155,7 @@ fn clamp_entries(len: c_int) -> c_int {
 ///
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
-pub(crate) unsafe fn syn_stack_apply_changes(mut buffer: Buf) {
+pub(crate) fn syn_stack_apply_changes(mut buffer: Buf) {
     unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut buffer.b_s), buffer) };
 
     for wp in windows() {
@@ -166,6 +170,11 @@ pub(crate) unsafe fn syn_stack_apply_changes(mut buffer: Buf) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
+///
+/// # Safety
+///
+/// `block` must be an initialized `SynBlockRef` whose pointer fields point at
+/// live data for the call.
 unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: Buf) {
     let mut prev = ::core::ptr::null_mut::<SynState>();
     let mut p = block.b_sst_first;
@@ -270,6 +279,12 @@ pub(crate) fn syn_stack_cleanup() -> bool {
 }
 
 /// Release an entry's memory and put it on the free list.
+///
+/// # Safety
+///
+/// `block` must be an initialized `SynBlockRef` whose pointer fields point at
+/// live data for the call. `p` must point at a live syntax state, unaliased
+/// for the call.
 pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlockRef, p: *mut SynState) {
     unsafe { clear_syn_state(p) };
     unsafe { (*p).sst_next = block.b_sst_firstfree };
@@ -347,6 +362,12 @@ fn state_continues_from_previous_line() -> bool {
 }
 
 /// Take `state` out of the used list.
+///
+/// # Safety
+///
+/// `block` must be an initialized `SynBlockRef` whose pointer fields point at
+/// live data for the call. `state` must point at a live syntax state,
+/// unaliased for the call.
 unsafe fn unlink_entry(mut block: SynBlockRef, state: *mut SynState) {
     if block.b_sst_first == state {
         unsafe { block.b_sst_first = (*state).sst_next };
@@ -366,6 +387,12 @@ unsafe fn unlink_entry(mut block: SynBlockRef, state: *mut SynState) {
 /// `after` (or at the front when that is null).
 ///
 /// Answers null when there is no room even after a cleanup.
+///
+/// # Safety
+///
+/// `block` must be an initialized `SynBlockRef` whose pointer fields point at
+/// live data for the call. `after` must point at a live syntax state,
+/// unaliased for the call.
 unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut SynState) -> *mut SynState {
     if block.b_sst_freecount == 0 {
         syn_stack_cleanup();
@@ -391,6 +418,10 @@ unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut SynState) -> *mut Sy
 }
 
 /// Copy the current state stack into `state`, overwriting whatever was there.
+///
+/// # Safety
+///
+/// `state` must point at a live syntax state, unaliased for the call.
 unsafe fn fill_entry(state: *mut SynState) {
     unsafe { clear_syn_state(state) };
     let size = state_len();
@@ -423,6 +454,10 @@ unsafe fn fill_entry(state: *mut SynState) {
 }
 
 /// Copy a cached state stack into the current state.
+///
+/// # Safety
+///
+/// `from` must point at a live syntax state, unaliased for the call.
 pub(crate) unsafe fn load_current_state(from: *mut SynState) {
     clear_current_state();
     validate_current_state();
@@ -472,6 +507,10 @@ pub(crate) unsafe fn load_current_state(from: *mut SynState) {
 ///
 /// Equality means the re-parse that produced the current state has arrived
 /// back at what was cached, so everything below can be trusted again.
+///
+/// # Safety
+///
+/// `state` must point at a live syntax state, unaliased for the call.
 pub(crate) unsafe fn syn_stack_equal(state: *mut SynState) -> bool {
     // A quick check first: same size and same nextlist.
     let size = state_len();
@@ -507,6 +546,11 @@ pub(crate) unsafe fn syn_stack_equal(state: *mut SynState) -> bool {
 /// Do two extmatch references hold the same submatch strings?
 ///
 /// Case is ignored when the item's start pattern had `sp_ic` set.
+///
+/// # Safety
+///
+/// `a` must point at a live `RegExtMatch`, unaliased for the call. `b` must
+/// point at a live `RegExtMatch`, unaliased for the call.
 unsafe fn extmatch_equal(a: *mut RegExtMatch, b: *mut RegExtMatch, idx: c_int) -> bool {
     if a.is_null() || b.is_null() {
         return false;

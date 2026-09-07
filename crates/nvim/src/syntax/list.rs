@@ -30,7 +30,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
     }
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    if !unsafe { syntax_present(Win::current()) } {
+    if !syntax_present(Win::current()) {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }
@@ -478,6 +478,10 @@ impl KeywordOpts {
     }
 
     /// What one keyword needs printed before it.
+    ///
+    /// # Safety
+    ///
+    /// `kp` must point at a live `KeyEntry`.
     unsafe fn of(kp: *const KeyEntry) -> Self {
         KeywordOpts {
             contained: unsafe { (*kp).flags }.masked(SynFlags::CONTAINED),
@@ -495,6 +499,10 @@ impl KeywordOpts {
 ///
 /// The keywords come out in hash order, not alphabetically, which is why the
 /// options are re-printed whenever two neighbours disagree.
+///
+/// # Safety
+///
+/// `ht` must point at a live hash table.
 unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool) -> bool {
     let mut prev = KeywordOpts::none();
 
@@ -521,6 +529,10 @@ unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool)
 /// which makes `syn_list_header` answer true and resets `prev` — that reset is
 /// what keeps a NULL `containedin=`/`nextgroup=` from ever reaching
 /// [`id_list_ids`], which may not be handed one.
+///
+/// # Safety
+///
+/// `kp` must point at a live `KeyEntry`, unaliased for the call.
 unsafe fn put_keyword(
     kp: *mut KeyEntry,
     id: c_int,

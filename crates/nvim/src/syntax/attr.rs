@@ -30,6 +30,10 @@ use crate::types::NUL;
 ///
 /// `keep_state` keeps the state stack as it stands at `col` rather than closing
 /// the items that end there, which is what `synstack()` needs.
+///
+/// # Safety
+///
+/// `can_spell` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_state: bool) -> c_int {
     if !can_spell.is_null() {
         unsafe { *can_spell = default_can_spell() };
@@ -80,6 +84,10 @@ fn default_can_spell() -> bool {
 /// `syncing` restricts matching to `:syntax sync` items; `displaying` says the
 /// answer will be drawn, which admits `display` items; `keep_state` leaves the
 /// items that end here on the stack.
+///
+/// # Safety
+///
+/// `can_spell` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn syn_current_attr(
     syncing: bool,
     displaying: bool,
@@ -339,6 +347,13 @@ fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
 /// Matching with a pattern takes a good deal of time, so this remembers per
 /// pattern where it last matched in this line (`sp_startcol`/`sp_line_id`) and
 /// skips any pattern that cannot beat the best match so far.
+///
+/// # Safety
+///
+/// `cur_si`, when it is `Some`, must still be live: nothing may have pushed
+/// to, popped from or cleared the syntax state stack since it was taken.
+/// `cur_extmatch` is a slot the scan writes a new match into and needs
+/// nothing.
 unsafe fn scan_patterns(
     syncing: bool,
     displaying: bool,
@@ -369,8 +384,7 @@ unsafe fn scan_patterns(
 
         let lc_col = (current_col.get() - scan.offsets.offsets[SPO_LC_OFF as usize]).max(0);
         let lnum = current_lnum.get();
-        // SAFETY: the parser's own pattern, timed into its own `sp_time`.
-        let (matched, regmatch) = unsafe { run_pattern(idx, lnum, lc_col) };
+        let (matched, regmatch) = run_pattern(idx, lnum, lc_col);
         if !matched {
             // No match in this line; try another pattern.
             syn_block().pattern_mut(idx).sp_startcol = MAXCOL as c_int;
@@ -504,6 +518,11 @@ impl PatScan {
 ///
 /// This is one `if (A && B && C && D)` upstream, and every operand short
 /// circuits: `in_id_list` is the expensive one and runs last.
+///
+/// # Safety
+///
+/// `cur_si` must still be live: nothing may have pushed to, popped from or
+/// cleared the syntax state stack since it was taken, when it is `Some`.
 #[inline]
 unsafe fn pattern_admitted(
     spp: &PatScan,

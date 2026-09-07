@@ -487,8 +487,7 @@ pub(crate) fn invalidate_window_folds(win: Win) {
 
 /// Drop the window's own syntax state (`:ownsyntax`).
 pub(crate) fn reset_syntax(win: Win) {
-    // SAFETY: a live window.
-    unsafe { reset_synblock(win) };
+    reset_synblock(win);
 }
 
 /// Remember the cursor position in the jump list.

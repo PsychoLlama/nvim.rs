@@ -312,6 +312,10 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 ];
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
     // SAFETY: the command table's promise -- the argument block of the
     // `:` command being run, which nothing else holds while it runs.
@@ -345,6 +349,10 @@ pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
 /// `:ownsyntax {name}` — give this window its own syntax block.
 ///
 /// Upstream marks this `@deprecated`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     // SAFETY: the command table's promise, as `ex_syntax`'s.
     let args = unsafe { &mut *args };
