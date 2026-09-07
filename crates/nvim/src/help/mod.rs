@@ -343,8 +343,7 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
         })
         .flatten();
     if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows > 0) {
-        // SAFETY: a live window. Runs autocommands.
-        unsafe { win_enter(wp, true) };
+        win_enter(wp, true);
         return Some(opened);
     }
 

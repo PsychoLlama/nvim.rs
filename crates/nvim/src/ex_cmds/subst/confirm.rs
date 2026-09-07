@@ -293,11 +293,9 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
             break;
         }
         if typed == Ctrl_E {
-            // SAFETY: the current window is live.
-            unsafe { scrollup_clamp() };
+            scrollup_clamp();
         } else if typed == Ctrl_Y {
-            // SAFETY: as above.
-            unsafe { scrolldown_clamp() };
+            scrolldown_clamp();
         }
     }
     State.set(save_state);

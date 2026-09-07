@@ -79,8 +79,7 @@ pub unsafe fn utf_char2cells(c: c_int) -> c_int {
         return 1;
     }
 
-    // SAFETY: the caller's obligation, forwarded.
-    if !unsafe { vim_isprintc(c) } {
+    if !vim_isprintc(c) {
         debug_assert!(c <= 0xffff, "c <= 0xFFFF");
         // Shown as <xx> or <xxxx>.
         return if c > 0xff { 6 } else { 4 };
@@ -278,7 +277,7 @@ pub unsafe fn f_setcellwidths(args: *mut TypVal, _result: *mut TypVal, _fptr: Ev
     }
 
     changed_window_setting_all();
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
 }
 
 /// Validate `setcellwidths()`'s argument into the sorted, disjoint table

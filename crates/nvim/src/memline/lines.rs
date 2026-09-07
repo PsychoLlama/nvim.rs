@@ -74,22 +74,12 @@ pub struct Lines(Buf);
 
 impl Lines {
     /// Borrow the current buffer's line cache.
-    ///
-    /// # Safety
-    /// While the handle is live, nothing may read or change another line of
-    /// this buffer: no `ml_replace`/`ml_append`/`ml_delete`, no `ml_get` for
-    /// a second line, and nothing that redraws (a redraw reads lines). Keep
-    /// the handle's life to the walk that needs it.
-    pub unsafe fn current() -> Self {
+    pub fn current() -> Self {
         Lines(Buf::current())
     }
 
     /// Borrow `buffer`'s line cache.
-    ///
-    /// # Safety
-    /// As [`Lines::current`], and `buffer` must stay live and have a memline
-    /// for as long as the handle does.
-    pub unsafe fn in_buffer(buffer: Buf) -> Self {
+    pub fn in_buffer(buffer: Buf) -> Self {
         Lines(buffer)
     }
 
@@ -192,10 +182,7 @@ pub unsafe fn gchar_pos(pos: *mut Pos) -> ::core::ffi::c_int {
 }
 
 /// Whether the line last handed out by `ml_get` is in allocated memory.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_line_alloced() -> bool {
+pub fn ml_line_alloced() -> bool {
     Buf::current().b_ml.line_is_dirty()
 }
 

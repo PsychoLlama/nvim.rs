@@ -45,8 +45,7 @@ pub use time::undo_time;
 ///
 /// A live current buffer and window.
 pub unsafe fn u_undo(count: c_int) {
-    // SAFETY: a live current buffer and window, by the contract above.
-    let count = unsafe { count_after_sync(count) };
+    let count = count_after_sync(count);
     if cpo_has(CpoFlag::UNDO) {
         undo_undoes.set(!undo_undoes.get());
     } else {
@@ -78,8 +77,7 @@ pub unsafe fn u_redo(count: c_int) {
 ///
 /// A live current buffer and window.
 pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
-    // SAFETY: a live current buffer and window, by the contract above.
-    let count = unsafe { count_after_sync(count) };
+    let count = count_after_sync(count);
     undo_undoes.set(true);
     // SAFETY: as above.
     unsafe { u_doit(count, true, do_buf_event) };
@@ -118,15 +116,10 @@ pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
 /// an unsynced buffer means we are inside a macro, where vi undoes exactly
 /// one change however the command was counted. Twice in one macro and the
 /// result stops being vi-compatible either way.
-///
-/// # Safety
-///
-/// A live current buffer.
-unsafe fn count_after_sync(count: c_int) -> c_int {
+fn count_after_sync(count: c_int) -> c_int {
     if Buf::current().b_u_synced {
         return count;
     }
-    // SAFETY: as above.
     u_sync(true);
     1
 }
@@ -231,13 +224,11 @@ fn undo_report(oldcount: c_int, newcount: c_int) -> (c_int, &'static CStr) {
 /// A live current buffer and window.
 pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     if fdo_flags.get() & kOptFdoFlagUndo as c_uint != 0 && KeyTyped.get() {
-        // SAFETY: a live current window, by the contract above.
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
     // No messages until :global has finished, and none while 'lazyredraw'
     // holds them back.
-    // SAFETY: nothing here holds a borrow of editor state.
-    if quiet || global_busy.get() != 0 || !unsafe { messaging() } {
+    if quiet || global_busy.get() != 0 || !messaging() {
         return;
     }
 

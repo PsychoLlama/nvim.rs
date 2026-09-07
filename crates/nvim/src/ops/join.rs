@@ -294,20 +294,18 @@ fn measure_join(
             let row = Win::current().w_cursor.lnum as c_int - 1;
             let (old, new) = ((removed + 1) as BCount, added as BCount);
             let op = kExtmarkUndo;
-            unsafe {
-                extmark_splice(
-                    Buf::current(),
-                    row,
-                    plan.sumsize,
-                    1,
-                    removed,
-                    old,
-                    0,
-                    added,
-                    new,
-                    op,
-                )
-            };
+            extmark_splice(
+                Buf::current(),
+                row,
+                plan.sumsize,
+                1,
+                removed,
+                old,
+                0,
+                added,
+                new,
+                op,
+            );
         }
 
         plan.currsize = unsafe { cstr::bytes_at(plan.curr) }.len() as c_int;
@@ -390,7 +388,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
         // deleted than added, a mark inside them moves no further than
         // what was added.
         let lnum = Win::current().w_cursor.lnum + t;
-        unsafe { mark_col_adjust(lnum, 0, -t, at, spaces_removed) };
+        mark_col_adjust(lnum, 0, -t, at, spaces_removed);
 
         if t == 0 {
             break;

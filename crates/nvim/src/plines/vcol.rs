@@ -165,7 +165,7 @@ pub(crate) unsafe fn getvvcol(
     let ptr = unsafe { ml_get_buf(window.buffer(), (*pos).lnum) };
     if unsafe { (*pos).col } < unsafe { ml_get_buf_len(window.buffer(), (*pos).lnum) } {
         let c = unsafe { utf_ptr2char(ptr.offset((*pos).col as isize)) };
-        if c != TAB && unsafe { vim_isprintc(c) } {
+        if c != TAB && vim_isprintc(c) {
             endadd = unsafe { ptr2cells(ptr.offset((*pos).col as isize)) } - 1;
             if coladd > endadd {
                 // Past the end of the line.

@@ -481,7 +481,7 @@ pub unsafe fn eval_vars(
                             unsafe { *usedlen = 1 };
                             return ptr::null_mut();
                         }
-                        let oldfiles = unsafe { get_vim_var_list(Vv::Oldfiles) };
+                        let oldfiles = get_vim_var_list(Vv::Oldfiles);
                         result =
                             unsafe { tv_list_find_str(oldfiles, i - 1, &mut numbuf) }.cast_mut();
                         if result.is_null() {

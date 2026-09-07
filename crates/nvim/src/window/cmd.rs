@@ -715,8 +715,7 @@ fn open_buffer_here(fnum: c_int) {
 
 /// Whether the current buffer may not be changed right now.
 fn buffer_locked() -> bool {
-    // SAFETY: reads the editor's lock state.
-    unsafe { curbuf_locked() }
+    curbuf_locked()
 }
 
 /// [`buffer_locked`] with the text lock as well, saying why when it holds.

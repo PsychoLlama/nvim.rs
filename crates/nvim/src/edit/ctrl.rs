@@ -57,7 +57,7 @@ pub(crate) fn ins_reg() {
     // SAFETY: every `unsafe` call in this function is an editor-wide routine
     // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
     // with.
-    if unsafe { redrawing() } && !char_avail() {
+    if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
         unsafe { ins_redraw(false) };
         unsafe { edit_putchar('"' as c_int, true) };
@@ -220,7 +220,7 @@ pub(crate) fn ins_ctrl_hat() {
             State.set(State.get() | MODE_LANGMAP);
         }
     }
-    unsafe { set_iminsert_global(Buf::current()) };
+    set_iminsert_global(Buf::current());
     show_mode();
     // Show or unshow the value of 'keymap' in status lines.
     status_redraw_curbuf();
@@ -237,9 +237,6 @@ pub(crate) fn ins_ctrl_hat() {
 pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     static disabled_redraw: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
-    // with.
     check_spell_redraw();
 
     let temp = Win::current().w_cursor.col;
@@ -280,7 +277,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             return false;
         }
         unsafe { stop_insert(&mut Win::current().w_cursor, 1, nomove as c_int) };
-        unsafe { undisplay_dollar() };
+        undisplay_dollar();
     }
 
     if !single_char_insert {
@@ -294,7 +291,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
 
     // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-        let view = unsafe { mark_view_make(Win::current(), Win::current().w_cursor) };
+        let view = mark_view_make(Win::current(), Win::current().w_cursor);
         let mut buf = Buf::current();
         let fm = &mut buf.b_last_insert;
         unsafe { free_fmark(fm.clone()) };
@@ -347,7 +344,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     if reg_recording.get() != 0 || restart_edit.get() != NUL {
         show_mode();
     } else if p_smd.get() != 0
-        && (got_int.get() || !unsafe { skip_showmode() })
+        && (got_int.get() || !skip_showmode())
         && !(p_ch.get() == 0 && !ui_has(kUIMessages))
     {
         unsafe { unshowmode(false) };
@@ -383,7 +380,7 @@ pub(crate) fn ins_ctrl_() {
         revins_scol.set(Win::current().w_cursor.col);
         revins_legal.set(revins_legal.get() + 1);
         revins_chars.set(0);
-        unsafe { undisplay_dollar() };
+        undisplay_dollar();
     } else {
         revins_scol.set(-1);
     }

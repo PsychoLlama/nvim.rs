@@ -388,7 +388,7 @@ pub unsafe fn autocmd_register(
         // state, or it fires immediately on a difference that predates
         // it.
         if event == AutoEvent::ModeChanged && !has_event(AutoEvent::ModeChanged) {
-            last_mode.set(unsafe { get_mode() });
+            last_mode.set(get_mode());
         }
         if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
             || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
@@ -401,12 +401,12 @@ pub unsafe fn autocmd_register(
         {
             let save_curtab = TabPage::current();
             for tp in tabs() {
-                unsafe { unuse_tabpage(TabPage::current()) };
-                unsafe { use_tabpage(tp) };
+                unuse_tabpage(TabPage::current());
+                use_tabpage(tp);
                 snapshot_windows_scroll_size();
             }
-            unsafe { unuse_tabpage(TabPage::current()) };
-            unsafe { use_tabpage(save_curtab) };
+            unuse_tabpage(TabPage::current());
+            use_tabpage(save_curtab);
         }
 
         // Spelled out rather than reusing `findgroup`: they are the

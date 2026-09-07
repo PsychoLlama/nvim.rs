@@ -167,7 +167,7 @@ pub unsafe fn callback_call(
                 if unsafe { check_luafunc_name(name, false) } == 0 {
                     return false;
                 }
-                partial = unsafe { get_vim_var_partial(Vv::Lua) };
+                partial = get_vim_var_partial(Vv::Lua);
             }
         }
         Callback::Partial(held) => {

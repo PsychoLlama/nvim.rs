@@ -90,8 +90,7 @@ fn remember_altfpos(win: Win) {
 
 /// Restore the window-local options `win` last used with this buffer.
 fn restore_winopts(buffer: Buf) {
-    // SAFETY: reads the option tables and the window's own saved entry.
-    unsafe { get_winopts(buffer) };
+    get_winopts(buffer);
 }
 
 /// Copy the buffer-local option values into `buffer`.
@@ -101,7 +100,6 @@ fn copy_options_into(buffer: Buf, flags: c_int) {
 }
 
 fn diff_add(buffer: Buf) {
-    // SAFETY: a live buffer.
     diff_buf_add(buffer);
 }
 
@@ -213,10 +211,7 @@ fn add_changedtick(mut buffer: Buf) {
 /// `DOBUF_UNLOAD`/`DEL`/`WIPE` do what they say).
 ///
 /// With `update_jumplist` the position being left joins the jump list.
-///
-/// # Safety
-/// `curbuf`/`curwin` must be set.
-pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
+pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD as c_int
         || action == DOBUF_DEL as c_int
         || action == DOBUF_WIPE as c_int;

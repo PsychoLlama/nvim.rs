@@ -126,7 +126,7 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
     loop {
         let at = |i: usize| unsafe { *name.add(i) } as u8;
         let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
-        if !(unsafe { vim_isfilec(at(len) as c_int) }
+        if !(vim_isfilec(at(len) as c_int)
             || escaped_space
             || (hyp && unsafe { path_is_url(name.add(len)) } != 0)
             || (is_url && !unsafe { vim_strchr(c":?&=".as_ptr(), at(len) as c_int) }.is_null()))

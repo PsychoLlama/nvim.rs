@@ -81,7 +81,7 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     }
 }
 
-pub unsafe fn win_split_ins(
+pub fn win_split_ins(
     size: c_int,
     flags: c_int,
     new_wp: Option<Win>,
@@ -457,8 +457,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         let wp = win_alloc(after, false);
         attach_frame(wp);
         // Make the contents of the new window the same as the current one.
-        // SAFETY: two live windows.
-        unsafe { win_init(wp, Win::current(), flags) };
+        win_init(wp, Win::current(), flags);
         return Some(wp);
     };
     win_append(after, wp, None);
@@ -760,7 +759,7 @@ fn size_horizontal(
 // ---------------------------------------------------------------------------
 // Copying a window
 
-pub unsafe fn win_init(newp: Win, oldp: Win, flags: c_int) {
+pub fn win_init(newp: Win, oldp: Win, flags: c_int) {
     init(newp, oldp, flags);
 }
 

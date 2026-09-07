@@ -10,7 +10,7 @@
 //! with.
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
-
+#![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
@@ -117,10 +117,7 @@ impl Win {
 }
 
 /// [`scroll_redraw_cur`], for the callers still holding a raw count.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn scroll_redraw(up: c_int, count: LineNr) {
+pub fn scroll_redraw(up: c_int, count: LineNr) {
     scroll_redraw_cur(Win::current(), up != 0, count);
 }
 
@@ -155,15 +152,13 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
             && win.w_topfill == prev_topfill
         {
             if up {
-                // SAFETY: the caller's promise -- `win` is `curwin`.
-                if win.w_cursor.lnum > prev_lnum || unsafe { cursor_down(1, false) }.is_err() {
+                if win.w_cursor.lnum > prev_lnum || cursor_down(1, false).is_err() {
                     break;
                 }
             } else if win.w_cursor.lnum < prev_lnum || prev_topline == 1 {
                 break;
             } else {
-                // SAFETY: the caller's promise -- `win` is `curwin`.
-                if unsafe { cursor_up(1, false) }.is_err() {
+                if cursor_up(1, false).is_err() {
                     break;
                 }
             }
@@ -417,10 +412,7 @@ impl Win {
 
 /// Called after changing the cursor column: make sure `w_skipcol` is right for
 /// 'smoothscroll'.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn adjust_skipcol() {
+pub fn adjust_skipcol() {
     let mut win = Win::current();
     if !do_sms(win) || win.w_cursor.lnum != win.w_topline {
         return;
@@ -513,10 +505,7 @@ impl Win {
 }
 
 /// Scroll the screen one line down, unless that would move the cursor off it.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn scrolldown_clamp() {
+pub fn scrolldown_clamp() {
     let mut win = Win::current();
     let can_fill = win.w_topfill < win.fill_above(win.w_topline);
     if win.w_topline <= 1 && !can_fill {
@@ -557,10 +546,7 @@ pub unsafe fn scrolldown_clamp() {
 }
 
 /// Scroll the screen one line up, unless that would move the cursor off it.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn scrollup_clamp() {
+pub fn scrollup_clamp() {
     let mut win = Win::current();
     if win.w_topline == win.buffer().line_count() && win.w_topfill == 0 {
         return;

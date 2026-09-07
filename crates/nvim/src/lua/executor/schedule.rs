@@ -313,6 +313,6 @@ pub(crate) unsafe fn viml_func_is_fast(name: *const core::ffi::c_char) -> bool {
 }
 
 /// Whether anything that is not `fast` may run right now.
-pub unsafe fn nlua_is_deferred_safe() -> bool {
+pub fn nlua_is_deferred_safe() -> bool {
     in_fast_callback.get() == 0
 }

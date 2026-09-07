@@ -288,10 +288,7 @@ fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Ar
 ///
 /// True when the subscriber is watching afterwards, whether it was added
 /// now or already there; false only when the buffer is not loaded.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_register(
+pub fn buf_updates_register(
     buffer: Buf,
     channel_id: uint64_t,
     cb: BufUpdateCallbacks,
@@ -367,10 +364,7 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
 }
 
 /// Whether anything is watching `buffer`.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_active(buffer: Buf) -> bool {
+pub fn buf_updates_active(buffer: Buf) -> bool {
     active(buffer)
 }
 
@@ -379,10 +373,7 @@ fn active(mut buffer: Buf) -> bool {
 }
 
 /// Tell one channel it is no longer attached.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_send_end(buffer: Buf, channelid: uint64_t) {
+pub fn buf_updates_send_end(buffer: Buf, channelid: uint64_t) {
     send_end(buffer, channelid);
 }
 
@@ -393,10 +384,7 @@ fn send_end(buffer: Buf, channelid: uint64_t) {
 }
 
 /// Detach `channelid` from `buffer`, if it is attached.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
+pub fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
     unregister(buffer, channelid);
 }
 
@@ -435,10 +423,7 @@ fn unregister(mut buffer: Buf, channelid: uint64_t) {
 
 /// Drop everything watching `buffer`, silently: the buffer itself is going
 /// away, so nobody is told.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_free_callbacks(buffer: Buf) {
+pub fn buf_free_callbacks(buffer: Buf) {
     free_callbacks(buffer);
 }
 
@@ -455,10 +440,7 @@ fn free_callbacks(mut buffer: Buf) {
 /// The buffer's contents are gone: detach every channel, and give every
 /// callback its `on_reload` (when the contents are coming back) or its
 /// `on_detach` (when they are not).
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_unload(buffer: Buf, can_reload: bool) {
+pub fn buf_updates_unload(buffer: Buf, can_reload: bool) {
     unload(buffer, can_reload);
 }
 
@@ -514,10 +496,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
 // The events
 
 /// `num_added` lines replaced `num_removed` lines starting at `firstline`.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_send_changes(
+pub fn buf_updates_send_changes(
     buffer: Buf,
     firstline: LineNr,
     num_added: int64_t,
@@ -629,10 +608,7 @@ fn tick_obj(buffer: Buf, send_tick: bool) -> Object {
 
 /// A byte-level edit: `old_*` bytes at `start_*` became `new_*` bytes.
 /// Callbacks only — no RPC event carries this.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_send_splice(
+pub fn buf_updates_send_splice(
     buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
@@ -708,10 +684,7 @@ fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
 /// callback, and it does not need one: its single caller is `u_undoredo`,
 /// and the 'inccommand' undo reaches that through `u_undo_and_forget(count,
 /// false)`, which suppresses the event outright.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_changedtick(buffer: Buf) {
+pub fn buf_updates_changedtick(buffer: Buf) {
     changedtick_event(buffer);
 }
 
@@ -750,10 +723,7 @@ fn changedtick_event(mut buffer: Buf) {
 }
 
 /// `nvim_buf_changedtick_event` for one channel.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn buf_updates_changedtick_single(buffer: Buf, channel_id: uint64_t) {
+pub fn buf_updates_changedtick_single(buffer: Buf, channel_id: uint64_t) {
     changedtick_single(buffer, channel_id);
 }
 
@@ -766,9 +736,6 @@ fn changedtick_single(buffer: Buf, channel_id: uint64_t) {
 }
 
 /// Release one attachment's Lua references.
-///
-/// # Safety
-/// The references must be ones the caller owns.
-pub unsafe fn buffer_update_callbacks_free(cb: BufUpdateCallbacks) {
+pub fn buffer_update_callbacks_free(cb: BufUpdateCallbacks) {
     callbacks_free(cb);
 }

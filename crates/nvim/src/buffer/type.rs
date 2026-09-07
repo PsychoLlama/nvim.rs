@@ -184,8 +184,7 @@ pub unsafe fn buf_hide(buffer: Buf) -> bool {
 // The name a buffer without a file is shown under
 
 /// The name to display for a special buffer, or null for an ordinary one.
-pub unsafe fn buf_spname(buffer: Buf) -> *mut c_char {
-    // SAFETY: the caller's promise -- a live buffer.
+pub fn buf_spname(buffer: Buf) -> *mut c_char {
     let b = buffer;
     if buf_is_quickfix(Some(b)) {
         if b.handle == qf_stack_get_bufnr() {
@@ -211,8 +210,7 @@ pub unsafe fn buf_spname(buffer: Buf) -> *mut c_char {
     ptr::null_mut()
 }
 
-pub unsafe fn buf_get_fname(buffer: Buf) -> *mut c_char {
-    // SAFETY: the caller's promise -- a live buffer.
+pub fn buf_get_fname(buffer: Buf) -> *mut c_char {
     let name = buffer.b_fname;
     if name.is_null() {
         return tr(c"[No Name]");
@@ -244,7 +242,6 @@ pub unsafe fn set_buflisted(on: c_int) {
 }
 
 pub unsafe fn buf_is_empty(buffer: Buf) -> bool {
-    // SAFETY: the caller's promise -- a live buffer.
     let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.

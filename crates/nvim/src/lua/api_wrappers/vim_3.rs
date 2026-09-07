@@ -418,7 +418,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_buf(lstate: *mut lua_S
             err_param,
         } = call;
         // SAFETY: as above.
-        if unsafe { text_locked() } {
+        if text_locked() {
             text_locked_error(err);
             return;
         }
@@ -429,8 +429,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_buf(lstate: *mut lua_S
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_set_current_buf(arg_1) } {
+        if let Err(e) = nvim_set_current_buf(arg_1) {
             *err = e;
         }
     }
@@ -541,7 +540,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_tabpage(lstate: *mut l
             err_param,
         } = call;
         // SAFETY: as above.
-        if unsafe { text_locked() } {
+        if text_locked() {
             text_locked_error(err);
             return;
         }
@@ -552,8 +551,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_tabpage(lstate: *mut l
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_set_current_tabpage(arg_1) } {
+        if let Err(e) = nvim_set_current_tabpage(arg_1) {
             *err = e;
         }
     }
@@ -584,7 +582,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_win(lstate: *mut lua_S
             err_param,
         } = call;
         // SAFETY: as above.
-        if unsafe { text_locked() } {
+        if text_locked() {
             text_locked_error(err);
             return;
         }
@@ -595,8 +593,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_win(lstate: *mut lua_S
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_set_current_win(arg_1) } {
+        if let Err(e) = nvim_set_current_win(arg_1) {
             *err = e;
         }
     }

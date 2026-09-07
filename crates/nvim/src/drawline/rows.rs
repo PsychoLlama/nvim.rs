@@ -32,7 +32,6 @@ impl Cells {
         window: Win,
         f: &LineFrame,
     ) -> Step {
-        // SAFETY: the caller's window and frame.
         if self.cul_screenline {
             wlv.cursorline_attr = 0;
             wlv.line_attr = self.line_attr_save;
@@ -319,7 +318,7 @@ impl Cells {
             return Step::Done;
         }
 
-        unsafe { wlv.start_line(window) };
+        wlv.start_line(window);
         self.columns_todo = true;
         self.lcs_prec_todo = window.w_p_lcs_chars.prec;
         if wlv.filler_todo <= 0 {

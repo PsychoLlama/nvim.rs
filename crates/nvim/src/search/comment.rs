@@ -146,13 +146,8 @@ pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
 }
 
 /// Whether line `lnum` is empty or holds nothing but white space.
-///
-/// # Safety
-/// `lnum` must be a line of the current buffer.
-pub unsafe fn linewhite(lnum: LineNr) -> bool {
-    // SAFETY: the slice is read and dropped before anything else runs, so
-    // nothing can swap the line out from under it.
-    let mut lines = unsafe { Lines::current() };
+pub fn linewhite(lnum: LineNr) -> bool {
+    let mut lines = Lines::current();
     let line = lines.line(lnum);
     skip::white(line) == line.len()
 }

@@ -135,7 +135,7 @@ impl Put {
                 unsafe { changed_bytes(lnum, col) };
                 let inserted = totlen as c_int;
                 let buffer = Buf::current();
-                unsafe { extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo) };
+                extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo);
                 if visual_active() {
                     lnum += 1;
                 }
@@ -420,11 +420,7 @@ impl Put {
                         // newline the split itself added.
                         (self.split_pos, self.y_size as c_int + 1, 0, totsize + 2)
                     };
-                    // SAFETY: a live buffer; nothing was replaced, so the
-                    // "old" extent of the splice is zero throughout.
-                    unsafe {
-                        extmark_splice(buf, at, start, 0, 0, 0, rows, cols, bytes, kExtmarkUndo)
-                    };
+                    extmark_splice(buf, at, start, 0, 0, 0, rows, cols, bytes, kExtmarkUndo);
                 }
 
                 if cnt == 1 {

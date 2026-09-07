@@ -265,7 +265,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
     let redraw = (cclp.input_fn != 0).then(Allow::redraw);
 
     // Clear highlighting applied during wildmenu activity.
-    unsafe { set_no_hlsearch(true) };
+    set_no_hlsearch(true);
 
     if wild_menu_showing.get() == WM_SCROLLED {
         // Entered the command line, move it up.

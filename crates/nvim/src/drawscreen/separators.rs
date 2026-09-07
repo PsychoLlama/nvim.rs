@@ -61,10 +61,7 @@ pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
     {
         buf.b_signcols.autom = true;
         let last = buf.b_ml.ml_line_count - 1;
-        // SAFETY: a live buffer, on the main thread.
-        unsafe {
-            buf_signcols_count_range(buf, 0, last, MAXLNUM as c_int, SignCountHalf::Both);
-        }
+        buf_signcols_count_range(buf, 0, last, MAXLNUM as c_int, SignCountHalf::Both);
     }
 
     // `b_signcols.max` is a high-water mark that nothing lowers as signs go
@@ -120,13 +117,12 @@ fn neighbour_frame(window: Win, layout: c_int, before: bool) -> Option<FrameRef>
 ///
 /// Assumes the global statusline is enabled — without it a horizontal boundary
 /// is a status line, not a separator.
-pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
-    // SAFETY: walking the window layout tree on the main thread.
+pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     let before = corner.is_left();
     let sep_row = if corner.is_top() {
         window.w_winrow - 1
     } else {
-        unsafe { win_endrow(window) }
+        win_endrow(window)
     };
 
     let Some(mut fr) = neighbour_frame(window, FR_ROW, before) else {
@@ -151,20 +147,17 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = fr.win().expect("a leaf frame holds a window");
-    sep_row == other.w_winrow - 1 || sep_row == unsafe { win_endrow(other) }
+    sep_row == other.w_winrow - 1 || sep_row == win_endrow(other)
 }
 
 /// Whether window `window`'s vertical separator at `corner` is continued by the
 /// vertical separator of the window above or below it.
-pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
-    // SAFETY: walking the window layout tree on the main thread.
-    // The mirror image of `hsep_connected`: "before" is up rather than
-    // left, and the sibling direction is a column rather than a row.
+pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     let before = corner.is_top();
     let sep_col = if corner.is_left() {
         window.w_wincol - 1
     } else {
-        unsafe { win_endcol(window) }
+        win_endcol(window)
     };
 
     let Some(mut fr) = neighbour_frame(window, FR_COL, before) else {
@@ -185,7 +178,7 @@ pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = fr.win().expect("a leaf frame holds a window");
-    sep_col == other.w_wincol - 1 || sep_col == unsafe { win_endcol(other) }
+    sep_col == other.w_wincol - 1 || sep_col == win_endcol(other)
 }
 
 /// Draw the vertical separator right of window `window`.
@@ -195,8 +188,8 @@ pub(crate) unsafe fn draw_vsep_win(window: Win) {
         return;
     }
     let attr = unsafe { win_hl_attr(window, HLF_C) };
-    let col = unsafe { win_endcol(window) };
-    let end_row = unsafe { win_endrow(window) };
+    let col = win_endcol(window);
+    let end_row = win_endrow(window);
     for row in (window.w_winrow)..end_row {
         unsafe { grid_line_start(default_gridview(), row) };
         grid_line_put_schar(col, window.w_p_fcs_chars.vert, attr);
@@ -213,7 +206,7 @@ pub(crate) unsafe fn draw_hsep_win(window: Win) {
     unsafe { grid_line_start(default_gridview(), win_endrow(window)) };
     grid_line_fill(
         window.w_wincol,
-        unsafe { win_endcol(window) },
+        win_endcol(window),
         window.w_p_fcs_chars.horiz,
         unsafe { win_hl_attr(window, HLF_C) },
     );
@@ -225,11 +218,10 @@ pub(crate) unsafe fn draw_hsep_win(window: Win) {
 /// Two windows can be connected neither vertically nor horizontally, so if the
 /// vertical separator does not continue through the corner the horizontal one
 /// must — which is why the second half needs no test of its own.
-unsafe fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
-    // SAFETY: a live window of the current layout.
+fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
     let fcs = &window.w_p_fcs_chars;
-    if unsafe { vsep_connected(window, corner) } {
-        if unsafe { hsep_connected(window, corner) } {
+    if vsep_connected(window, corner) {
+        if hsep_connected(window, corner) {
             fcs.verthoriz
         } else if corner.is_left() {
             fcs.vertright
@@ -269,9 +261,9 @@ pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
     let at_left = neighbour_frame(window, FR_ROW, true).is_none();
 
     let top = window.w_winrow - 1;
-    let bottom = unsafe { win_endrow(window) };
+    let bottom = win_endrow(window);
     let left = window.w_wincol - 1;
-    let right = unsafe { win_endcol(window) };
+    let right = win_endcol(window);
 
     for (draw, row, col, corner) in [
         (!(at_top || at_left), top, left, WindowCorner::TopLeft),
@@ -291,7 +283,7 @@ pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
     ] {
         if draw {
             unsafe { grid_line_start(default_gridview(), row) };
-            grid_line_put_schar(col, unsafe { get_corner_sep_connector(window, corner) }, hl);
+            grid_line_put_schar(col, get_corner_sep_connector(window, corner), hl);
             unsafe { grid_line_flush() };
         }
     }

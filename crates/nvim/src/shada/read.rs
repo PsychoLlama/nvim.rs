@@ -90,7 +90,7 @@ struct Reading {
 /// Read a ShaDa file and apply it.
 pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     let force = flags & kShaDaForceit as c_int != 0;
-    let mut oldfiles_list = unsafe { get_vim_var_list(Vv::Oldfiles) };
+    let mut oldfiles_list = get_vim_var_list(Vv::Oldfiles);
     // `v:oldfiles` is only filled in while it is still empty, so that a
     // second file does not append to the first one's answer.
     let get_old_files = flags & (kShaDaGetOldfiles | kShaDaForceit) as c_int != 0
@@ -204,7 +204,7 @@ impl Reading {
         }
         if pat.is_last_used {
             set_last_used_pattern(is_sub);
-            unsafe { set_no_hlsearch(!pat.highlighted) };
+            set_no_hlsearch(!pat.highlighted);
         }
     }
 

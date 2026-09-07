@@ -177,7 +177,7 @@ pub(crate) unsafe fn read_stdin() {
             return;
         }
         let initial_buf_handle: Handle = Buf::current().handle;
-        unsafe { set_curbuf(stdin_buf.expect("a live handle"), 0, false) };
+        set_curbuf(stdin_buf.expect("a live handle"), 0, false);
         let last = MAXLNUM as c_int as LineNr;
         let null_ea = ptr::null_mut::<ExArg>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
@@ -211,7 +211,7 @@ pub(crate) unsafe fn read_stdin() {
     no_wait_return.set(0);
     msg_didany.set(save_msg_didany);
     time_msg_at(c"reading stdin");
-    unsafe { check_swap_exists_action() };
+    check_swap_exists_action();
 }
 
 /// How many times the "open a buffer for every window" loop below may start
@@ -306,7 +306,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             let _ = unsafe { open_buffer(false, ptr::null_mut::<ExArg>(), 0) };
 
             if swap_exists_action.get() == SEA_QUIT {
-                if got_int.get() || unsafe { only_one_window() } {
+                if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
                 // The window cannot be closed here without disturbing
@@ -352,7 +352,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
     if Win::current().w_arg_idx == -1 {
-        unsafe { win_close(Win::current(), true, false) };
+        win_close(Win::current(), true, false);
         advance = false;
     }
 
@@ -364,7 +364,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     for i in 1..parm.window_count {
         if Win::current().w_arg_idx == -1 {
             arg_idx += 1;
-            unsafe { win_close(Win::current(), true, false) };
+            win_close(Win::current(), true, false);
             advance = false;
             continue;
         }
@@ -386,7 +386,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 let Some(next) = Win::current().next() else {
                     break;
                 };
-                unsafe { win_enter(next, false) };
+                win_enter(next, false);
             }
         }
         advance = true;
@@ -408,10 +408,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
             let win = Win::current().id();
             let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, Some(win)) };
             if swap_exists_did_quit.get() {
-                if got_int.get() || unsafe { only_one_window() } {
+                if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);
                 }
-                unsafe { win_close(Win::current(), true, false) };
+                win_close(Win::current(), true, false);
                 advance = false;
             }
             if arg_idx == unsafe { (*alist).al_ga.len() as c_int } - 1 {
@@ -448,12 +448,12 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
         };
         win = next;
     }
-    unsafe { win_enter(win, false) };
+    win_enter(win, false);
     drop(no_leave);
 
     time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
-        unsafe { win_equal(Win::current_or_none(), false, 'b' as c_int) };
+        win_equal(Win::current_or_none(), false, 'b' as c_int);
     }
 }
 
@@ -469,7 +469,7 @@ unsafe fn set_shortmess(value: *mut c_char) {
 }
 
 /// Act on the ATTENTION prompt's answer after a buffer was loaded.
-pub(crate) unsafe fn check_swap_exists_action() {
+pub(crate) fn check_swap_exists_action() {
     if swap_exists_action.get() == SEA_QUIT {
         quit_on_swap_exists(false);
     }

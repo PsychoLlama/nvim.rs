@@ -215,7 +215,7 @@ pub(crate) unsafe fn command_line_enter(
     // SAFETY: `state` lives in this frame for the whole of the key loop.
     let mut s = unsafe { Cls::new(&raw mut state) };
     s.save_p_icm = unsafe { xstrdup(p_icm.get()) };
-    unsafe { init_incsearch_state(s.is_state()) };
+    init_incsearch_state(s.is_state());
 
     let mut cc = Cc::current();
     let mut did_save_ccline = false;
@@ -367,7 +367,7 @@ pub(crate) unsafe fn command_line_enter(
                 redraw_tabline.set(true);
                 found_one = true;
             }
-            if unsafe { redraw_custom_title_later() } {
+            if redraw_custom_title_later() {
                 found_one = true;
             }
             if found_one {
@@ -467,14 +467,14 @@ pub(crate) unsafe fn command_line_enter(
             }
 
             if s.gotesc {
-                unsafe { abandon_cmdline() };
+                abandon_cmdline();
             }
         }
 
         // If the screen was shifted up, redraw the whole screen (later).
         // If the line is too long, clear it, so that the ruler and the
         // shown command do not get printed in the middle of it.
-        unsafe { msg_check() };
+        msg_check();
         if p_ch.get() == 0 as OptInt && !ui_has(kUIMessages) {
             set_must_redraw(UPD_VALID);
         }
@@ -505,11 +505,11 @@ pub(crate) unsafe fn command_line_enter(
         State.set(s.save_state);
         if cmdpreview.get() != save_cmdpreview {
             cmdpreview.set(save_cmdpreview); // restore the preview state
-            unsafe { redraw_all_later(UPD_SOME_VALID) };
+            redraw_all_later(UPD_SOME_VALID);
         }
         unsafe { may_trigger_modechanged() };
         setmouse();
-        unsafe { sb_text_end_cmdline() };
+        sb_text_end_cmdline();
     }
 
     // C's `theend:`.
@@ -526,7 +526,7 @@ pub(crate) unsafe fn command_line_enter(
         ui_ext_cmdline_hide(s.gotesc);
     }
     if !cmd_silent.get() {
-        unsafe { redraw_custom_title_later() };
+        redraw_custom_title_later();
         status_redraw_all(); // redraw to show the mode change
     }
 
@@ -590,10 +590,10 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
     1
 }
 
-pub(crate) unsafe fn abandon_cmdline() {
+pub(crate) fn abandon_cmdline() {
     dealloc_cmdbuff();
     if msg_scrolled.get() == 0 {
-        unsafe { compute_cmdrow() };
+        compute_cmdrow();
     }
     // Avoid overwriting a key prompt.
     if !Cc::current().one_key {

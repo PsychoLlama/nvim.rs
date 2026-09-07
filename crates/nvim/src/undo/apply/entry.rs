@@ -171,8 +171,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     if curhead.uh_flags & UH_RELOAD != 0 {
         // Upstream TODO(bfredl): crude. With 'undoreload' there is enough
         // information to send a buffer-reloading on_lines/on_bytes event.
-        // SAFETY: a live buffer.
-        unsafe { buf_updates_unload(buf, true) };
+        buf_updates_unload(buf, true);
     }
 
     // The cursor goes where the entries decided; check the line exists.
@@ -196,8 +195,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // Those two bumped changedtick again, so the watchers need an event
     // carrying just its new value.
     if do_buf_event {
-        // SAFETY: a live buffer.
-        unsafe { buf_updates_changedtick(buf) };
+        buf_updates_changedtick(buf);
     }
 
     // SAFETY: a live buffer and a live header.
@@ -206,8 +204,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         buf.b_visual = curhead.uh_visual;
         curhead.uh_visual = saved_visual;
     }
-    // SAFETY: a live buffer, window and header.
-    unsafe { place_cursor(buf, win, curhead) };
+    place_cursor(buf, win, curhead);
 
     // Where "g-" and ":earlier 10s" resume from. After an undo we are below
     // the change just undone, but it is recorded as just *above* it so that
@@ -326,8 +323,7 @@ unsafe fn apply_entry(
         // schedule it for redrawing just in case.
         // SAFETY: a live current window.
         if unsafe { spell_check_window(Win::current()) } && bot <= buffer.b_ml.ml_line_count {
-            // SAFETY: as above.
-            unsafe { redraw_win_line(Win::current(), bot) };
+            redraw_win_line(Win::current(), bot);
         }
     }
 
@@ -376,11 +372,7 @@ unsafe fn swap_marks(mut buffer: Buf, mut curhead: Header, saved: &[FileMark; NM
 
 /// Puts the cursor where the header says it was, or on the first line the
 /// move actually changed.
-///
-/// # Safety
-///
-/// A live buffer, window and header.
-unsafe fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
+fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
     if curhead.uh_cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > 1 {
@@ -394,18 +386,14 @@ unsafe fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
         win.w_cursor.coladd = 0;
     } else if curhead.uh_cursor.lnum == win.w_cursor.lnum {
         win.w_cursor.col = curhead.uh_cursor.col;
-        // SAFETY: a live window, by the contract above.
         if virtual_active(win) && curhead.uh_cursor_vcol >= 0 {
-            // SAFETY: as above.
             coladvance(win, curhead.uh_cursor_vcol);
         } else {
             win.w_cursor.coladd = 0;
         }
     } else {
-        // SAFETY: a live current window.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // Make sure the cursor is on an existing line and column.
-    // SAFETY: a live window.
     check_cursor(win);
 }

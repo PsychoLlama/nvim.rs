@@ -167,8 +167,7 @@ impl Win {
     }
 
     pub(super) fn fdccol_count(self) -> c_int {
-        // SAFETY: a live window.
-        unsafe { win_fdccol_count(self) }
+        win_fdccol_count(self)
     }
 
     /// Whether 'showbreak' is unset for this window.
@@ -205,7 +204,6 @@ impl Win {
 
     /// Move the cursor to the first line of the fold it landed in.
     pub(super) fn fold_adjust_cursor(self) {
-        // SAFETY: a live window.
         fold_adjust_cursor(self);
     }
 
@@ -248,15 +246,13 @@ impl Win {
 
     /// Whether any line of the window is hidden outright by a decoration.
     pub(super) fn lines_concealed(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { win_lines_concealed(self) }
+        win_lines_concealed(self)
     }
 
     /// Whether line `lnum` (zero-based, as the decoration layer counts) is
     /// hidden outright.
     pub(super) fn conceals_line(self, lnum: c_int, include_cursor: bool) -> bool {
-        // SAFETY: a live window.
-        unsafe { decor_conceal_line(self, lnum, include_cursor) }
+        decor_conceal_line(self, lnum, include_cursor)
     }
 
     /// Whether the cursor line is drawn concealed in the current mode.
@@ -283,8 +279,7 @@ impl Win {
 
     /// Redraw just the cursor's line.
     pub(super) fn redraw_cursor_line(self) {
-        // SAFETY: a live window.
-        unsafe { redraw_win_line(self, self.w_cursor.lnum) };
+        redraw_win_line(self, self.w_cursor.lnum);
     }
 
     /// Let any float anchored to this window follow it.
@@ -294,7 +289,6 @@ impl Win {
 
     /// Clamp the cursor's line number to the buffer.
     pub(super) fn check_cursor_lnum(self) {
-        // SAFETY: a live window.
         check_cursor_lnum(self);
     }
 
@@ -341,14 +335,7 @@ impl Win {
 /// Answers the height and the last line of a fold starting at `lnum`.
 /// Upstream passes both back through `LineNr *`/`bool *` out-params; no
 /// caller ever asked for the third.
-///
-/// # Safety
-/// `window` must be a valid window.
-pub unsafe fn plines_correct_topline(
-    window: Win,
-    lnum: LineNr,
-    limit_winheight: bool,
-) -> (c_int, LineNr) {
+pub fn plines_correct_topline(window: Win, lnum: LineNr, limit_winheight: bool) -> (c_int, LineNr) {
     let (n, next, _) = window.corrected_plines(lnum, limit_winheight);
     (n, next)
 }
@@ -418,8 +405,7 @@ fn redraw_for_cursorcolumn(win: Win) {
     }
     // The current buffer's cursor moving in Visual mode changes the highlight.
     if visual_active() && win.w_buffer == Buf::current_raw() {
-        // SAFETY: `curbuf` is set from startup to exit.
-        unsafe { redraw_buf_later(Buf::current(), UPD_INVERTED) };
+        redraw_buf_later(Buf::current(), UPD_INVERTED);
     }
 }
 
@@ -481,10 +467,7 @@ pub fn changed_cline_bef_curs(window: Win) {
 
 /// As [`changed_cline_bef_curs`], for a line *above* the cursor in the
 /// current window.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn changed_line_abv_curs() {
+pub fn changed_line_abv_curs() {
     Win::current().invalidate_above_cursor();
 }
 
@@ -575,10 +558,8 @@ pub fn validate_cursor(window: Win) {
 /// Compute `w_cline_row` and `w_cline_height` from the current `w_topline`.
 fn curs_rows(mut win: Win) {
     // Are the remembered `w_lines[].wl_size` usable at all?
-    // SAFETY: `redrawing` reads editor state, not a pointer of ours.
-    let all_invalid = !unsafe { redrawing() }
-        || win.w_lines_valid == 0
-        || win.remembered_line(0).wl_lnum > win.w_topline;
+    let all_invalid =
+        !redrawing() || win.w_lines_valid == 0 || win.remembered_line(0).wl_lnum > win.w_topline;
     let mut i: c_int = 0;
     win.w_cline_row = 0;
     let mut lnum = win.w_topline;

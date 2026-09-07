@@ -108,7 +108,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                 && utf8len_tab[next as usize] as c_int == 1
                 && i < INPUT_BUFLEN
                 && (textwidth == 0 || {
-                    virtcol += unsafe { byte2cells(buf[i as usize - 1] as uint8_t as c_int) };
+                    virtcol += byte2cells(buf[i as usize - 1] as uint8_t as c_int);
                     virtcol < textwidth
                 })
                 && !(!no_abbr.get()
@@ -167,10 +167,6 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
 /// already too long, and lacks `b` or a blank was inserted at or before
 /// 'textwidth'.
 fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c_int) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let force_format = flags & INSCHAR_FORMAT as c_int;
     let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
     let fo_ins_long = has_format_option(FoFlag::INS_LONG);
@@ -217,10 +213,6 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
 /// has to come off and the end leader go in -- all but its last character,
 /// which the caller inserts as an ordinary one.
 fn end_pending_comment(c: c_int) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if !did_ai.get() || c != end_comment_pending.get() {
         return;
     }
@@ -269,7 +261,7 @@ fn end_pending_comment(c: c_int) {
         && lead_end[end_len as usize - 1] as uint8_t as c_int == end_comment_pending.get()
     {
         // Backspace over everything being replaced.
-        unsafe { backspace_until_column(i) };
+        backspace_until_column(i);
         // Insert the end-comment string except for its last character,
         // which the caller inserts as an ordinary one.
         unsafe { ins_bytes_len(lead_end.as_mut_ptr(), (end_len - 1) as size_t) };
@@ -304,10 +296,6 @@ pub(crate) fn echeck_abbr(c: c_int) -> bool {
 /// `v:char`, and null to go on inserting `c` -- which is also the answer when
 /// there is no such autocommand at all.
 pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if c == Ctrl_RSB || !has_event(AutoEvent::InsertCharPre) {
         return ::core::ptr::null_mut();
     }

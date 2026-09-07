@@ -167,7 +167,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
     copyid: c_int,
     objname: *const c_char,
 ) -> Result<(), Refused> {
-    unsafe { sink.check_before() };
+    sink.check_before();
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
     match val.v_type {
@@ -332,7 +332,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
         .position(|&l| l == type_list.cast_const());
     // Upstream runs the check a second time here, before it knows whether
     // this is a special dictionary at all.
-    unsafe { sink.check_before() };
+    sink.check_before();
     let Some(found) = found else {
         return Ok(None);
     };
@@ -541,7 +541,7 @@ unsafe fn walk<S: TypvalSink>(
     top_tv: *mut TypVal,
     objname: *const c_char,
 ) -> Result<(), Refused> {
-    let copyid = unsafe { get_copy_id() };
+    let copyid = get_copy_id();
     let mut stack = ConvStack::new();
     unsafe { convert_one_value(sink, &mut stack, top_tv, copyid, objname) }?;
 

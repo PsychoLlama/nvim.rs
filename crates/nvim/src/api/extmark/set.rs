@@ -212,9 +212,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         let mut ch: ::core::ffi::c_int = 0;
                         hl.conceal_char =
                             unsafe { utfc_ptr2schar(opts.conceal.data(), &raw mut ch) };
-                        if !(hl.conceal_char != 0
-                            && unsafe { vim_isprintc(ch) } as ::core::ffi::c_int != 0)
-                        {
+                        if !(hl.conceal_char != 0 && vim_isprintc(ch) as ::core::ffi::c_int != 0) {
                             let why = c"conceal char has to be printable";
                             error = Error::validation(why);
                             break '_error;

@@ -361,8 +361,8 @@ pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
     unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
     unsafe { parse_winhl_opt(ptr::null(), Some(window)) };
-    unsafe { check_blending(window) };
-    unsafe { set_winbar_win(window, false, valid_cursor) };
+    check_blending(window);
+    set_winbar_win(window, false, valid_cursor);
     let _ = unsafe { check_signcolumn(ptr::null_mut(), Some(window)) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
@@ -431,9 +431,9 @@ pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
         };
 
         if b.b_p_initialized {
-            unsafe { free_buf_options(buffer, false) };
+            free_buf_options(buffer, false);
         } else {
-            unsafe { free_buf_options(buffer, true) };
+            free_buf_options(buffer, true);
             b.b_p_ro = 0;
             b.b_p_fenc = dup_global(&p_fenc);
             // A new buffer takes the *first* of 'fileformats' rather
@@ -702,21 +702,11 @@ pub(crate) fn reset_modifiable() {
 
 /// Carry a buffer's 'iminsert' back to the global value, so that the next
 /// buffer starts where this one left off.
-///
-/// # Safety
-///
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn set_iminsert_global(buffer: Buf) {
-    // SAFETY: the caller's buffer.
+pub(crate) fn set_iminsert_global(buffer: Buf) {
     p_iminsert.set(buffer.b_p_iminsert);
 }
 
 /// As [`set_iminsert_global`], for 'imsearch'.
-///
-/// # Safety
-///
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn set_imsearch_global(buffer: Buf) {
-    // SAFETY: the caller's buffer.
+pub(crate) fn set_imsearch_global(buffer: Buf) {
     p_imsearch.set(buffer.b_p_imsearch);
 }

@@ -294,11 +294,10 @@ unsafe fn statuscol_state(
     } else {
         HLF_N
     };
-    // SAFETY: three plain number variables of the editor's own.
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
+    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
     let rel = unsafe { labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long) };
-    unsafe { set_vim_var_nr(Vv::Relnum, rel as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::Virtnum, 0 as VarNumber) };
+    set_vim_var_nr(Vv::Relnum, rel as VarNumber);
+    set_vim_var_nr(Vv::Virtnum, 0 as VarNumber);
     (stc_hl_id, if on_cursorline { HLF_CLS } else { HLF_SC })
 }
 
@@ -408,8 +407,7 @@ pub unsafe fn nvim__complete_set(
     let mut rv = arena_dict(arena, 2);
     // SAFETY: the API dispatcher's own frame.
     let opts = unsafe { &*opts };
-    // SAFETY: reads the 'completeopt' flags.
-    if unsafe { get_cot_flags() } & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
+    if get_cot_flags() & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
         error = Error::exception(c"completeopt option does not include popup");
         return rv.reported(error);
     }

@@ -90,16 +90,13 @@ fn leave_cleanup_now(cs: &mut Cleanup) {
     unsafe { leave_cleanup(cs) };
 }
 fn close_win(win: Win, free_buf: bool, force: bool) -> c_int {
-    // SAFETY: a live window.
-    unsafe { win_close(win, free_buf, force) }
+    win_close(win, free_buf, force)
 }
 fn window_locked(win: Win) -> bool {
-    // SAFETY: a live window.
-    unsafe { win_locked(win) != 0 }
+    win_locked(win) != 0
 }
 fn is_last_window(win: Win) -> bool {
-    // SAFETY: a live window.
-    unsafe { last_window(win) }
+    last_window(win)
 }
 fn is_autocmd_window(win: Win) -> bool {
     is_aucmd_win(win)
@@ -111,8 +108,7 @@ fn split_window() -> Result<(), Failed> {
 /// Jump to a window of this tab page already showing `buffer`, if `'switchbuf'`
 /// says to; the answer is whether one was found.
 fn window_showing(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
-    !unsafe { swbuf_goto_win_with_buf(Some(buffer)) }.is_none()
+    !swbuf_goto_win_with_buf(Some(buffer)).is_none()
 }
 fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(forceit as c_int)
@@ -566,10 +562,7 @@ fn do_buffer_ext(
     }
 
     // Go to the other buffer.
-    // SAFETY: upstream's own assumption, recorded rather than fixed --
-    // `swbuf_goto_win_with_buf`, `win_split` and the `:confirm` dialog above
-    // all re-enter, and only the dialog re-validates `buf` afterwards.
-    unsafe { set_curbuf(buf, action, update_jumplist) };
+    set_curbuf(buf, action, update_jumplist);
 
     if action == DOBUF_SPLIT as c_int {
         let mut win = Win::current(); // reset 'scrollbind' and 'cursorbind'

@@ -219,10 +219,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
 /// `k`: move the cursor up `n` lines and back to the wanted column.
 ///
 /// `Err` when the cursor is already on line 1.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn cursor_up(n: LineNr, upd_topline: bool) -> Result<(), Failed> {
+pub(crate) fn cursor_up(n: LineNr, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
     if n > 0 && win.w_cursor.lnum <= 1 {
         return Err(Failed);
@@ -276,10 +273,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
 ///
 /// `Err` when the cursor is already in the last line -- or in the fold that
 /// ends on it, which is why the bound is measured from the fold's end.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
+pub(crate) fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
     let mut lnum = win.w_cursor.lnum;
     fold_end(win, lnum, &mut lnum);
@@ -301,8 +295,7 @@ pub(crate) unsafe fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Fail
 /// Keep 'smoothscroll''s skipped column in range after a cursor move.
 #[inline(always)]
 fn adjust_skipcol_now() {
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { adjust_skipcol() }
+    adjust_skipcol()
 }
 
 /// Move `win`'s cursor to virtual column `vcol` of its line.
@@ -322,29 +315,25 @@ fn cursor_pos_ptr() -> *mut c_char {
 /// The cursor's virtual column.
 #[inline(always)]
 fn viscol() -> ColNr {
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { getviscol() }
+    getviscol()
 }
 
 /// Is 'virtualedit' letting `win`'s cursor stand where no character is?
 #[inline(always)]
 fn virtual_edit(win: Win) -> bool {
-    // SAFETY: a live window.
     virtual_active(win)
 }
 
 /// Does `win` hide any of its lines, by a fold or a decoration?
 #[inline(always)]
 fn lines_concealed(win: Win) -> bool {
-    // SAFETY: a live window.
-    unsafe { win_lines_concealed(win) }
+    win_lines_concealed(win)
 }
 
 /// Is the line *before* `lnum` hidden by a `conceal_lines` decoration?
 #[inline(always)]
 fn line_concealed(win: Win, lnum: LineNr) -> bool {
-    // SAFETY: a live window and a line number of its buffer.
-    unsafe { decor_conceal_line(win, lnum as c_int - 1, true) }
+    decor_conceal_line(win, lnum as c_int - 1, true)
 }
 
 /// Is `lnum` inside a closed fold of `win`?  `first` is left holding that

@@ -181,8 +181,7 @@ impl Env {
     /// otherwise its path with `$HOME` folded away, made printable and
     /// optionally cut down to its last component.
     pub(super) fn file_name(&self, full: bool, tail: bool, text: &mut Vec<u8>) {
-        // SAFETY: a live buffer; `buf_spname` answers a string or null.
-        let name = unsafe { buf_spname(self.buf) };
+        let name = buf_spname(self.buf);
         let mut buf = [0 as c_char; MAXPATHL as usize];
         {
             let nb = &mut buf;
@@ -329,8 +328,7 @@ impl Env {
 
     /// How wide the fold column is here, which is what `%C` draws.
     pub(super) fn fold_column_width(&self) -> c_int {
-        // SAFETY: a live window.
-        unsafe { compute_foldcolumn(self.win, 0) }
+        compute_foldcolumn(self.win, 0)
     }
 
     /// Draw the fold column's `fdc` glyphs into `text`, answering the
@@ -359,8 +357,7 @@ impl Env {
             len += put_schar(&mut buf, len, glyph);
         }
         text.extend_from_slice(&buf[..len]);
-        // SAFETY: a live window and the line the fold describes.
-        let cul = unsafe { use_cursor_line_highlight(self.win, lnum) };
+        let cul = use_cursor_line_highlight(self.win, lnum);
         -if cul { HLF_CLF } else { HLF_FC }
     }
 
@@ -446,8 +443,7 @@ fn take_cstring(str: *mut c_char) -> Option<Vec<u8>> {
 
 /// `v:lnum`, `v:relnum` and `v:virtnum`, which `'statuscolumn'` items read.
 pub(super) fn vim_var(idx: Vv) -> VarNumber {
-    // SAFETY: the index is a compile-time [`Vv`] variant.
-    unsafe { get_vim_var_nr(idx) }
+    get_vim_var_nr(idx)
 }
 
 /// Whether the editor is in Insert mode, which `%c`/`%o` ask about.
@@ -704,8 +700,7 @@ pub unsafe fn build_stl_str_hl(
     // `kOptInvalid` when the caller is nvim_eval_statusline(), which is
     // therefore never sandboxed.
     let sandbox = opt_idx as c_int != kOptInvalid as c_int && {
-        // SAFETY: a live window and one of the option indices.
-        unsafe { was_set_insecurely(window, opt_idx, opt_scope) }
+        was_set_insecurely(window, opt_idx, opt_scope)
     };
 
     // SAFETY: the caller's NUL-terminated format string.

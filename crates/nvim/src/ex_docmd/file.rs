@@ -328,7 +328,7 @@ pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
                 need_wait_return.set(false);
                 let save_ms = msg_scroll.get();
                 msg_scroll.set(0);
-                unsafe { redraw_all_later(UPD_NOT_VALID) };
+                redraw_all_later(UPD_NOT_VALID);
                 pending_exmode_active.set(true);
                 normal_enter(false, true);
                 pending_exmode_active.set(false);
@@ -357,7 +357,7 @@ pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
             old_curwin.is_none().then(|| Win::current().id()),
         );
     } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(ea.arg) != NUL {
-        if byte(ea.arg) != NUL && unsafe { text_or_buf_locked() } {
+        if byte(ea.arg) != NUL && text_or_buf_locked() {
             return;
         }
         let saved_readonly = readonlymode.get();
@@ -398,7 +398,7 @@ pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
                     let free = !need_hide && !buf_hide(Buf::current());
-                    unsafe { win_close(Win::current(), free, false) };
+                    win_close(Win::current(), free, false);
                     unsafe { leave_cleanup(&raw mut cs) };
                 }
             }
@@ -450,7 +450,7 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     }
 
     let read = if byte(args.arg) == NUL {
-        if unsafe { check_fname() }.is_err() {
+        if check_fname().is_err() {
             return;
         }
         readfile(

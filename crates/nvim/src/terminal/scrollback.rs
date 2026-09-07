@@ -260,8 +260,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
         // SAFETY: a live buffer, deleting a line the scrollback no longer
         // holds.
         let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
-        // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buffer, 1 as LineNr, 1 as LineNr) };
+        deleted_lines_buf(buffer, 1 as LineNr, 1 as LineNr);
         deleted -= 1;
     }
     old_height = old_height.min(buffer.line_count() as c_int);
@@ -275,8 +274,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
         // SAFETY: a live buffer, taking the row this terminal's own line
         // buffer holds.
         let _ = unsafe { ml_append_buf(buffer, at, text, 0 as ColNr, false) };
-        // SAFETY: as above, reporting the line just appended.
-        unsafe { appended_lines_buf(buffer, at, 1 as LineNr) };
+        appended_lines_buf(buffer, at, 1 as LineNr);
         term.sb.mark_mirrored();
     }
 
@@ -286,8 +284,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
         let last = buffer.line_count();
         // SAFETY: a live buffer, deleting its own last line.
         let _ = unsafe { ml_delete_buf(buffer, last, false) };
-        // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buffer, buffer.line_count(), 1 as LineNr) };
+        deleted_lines_buf(buffer, buffer.line_count(), 1 as LineNr);
     }
 
     adjust_scrollback(term, buffer);

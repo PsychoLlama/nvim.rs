@@ -245,7 +245,7 @@ impl ComplOrigExtmarks {
 /// Start the completion `complete()` describes: `startcol` is where the
 /// matched text starts (1 is the first column) and `list` holds the matches.
 pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
-    let cur_cot_flags = unsafe { get_cot_flags() };
+    let cur_cot_flags = get_cot_flags();
     let compl_longest = cur_cot_flags & kOptCotFlagLongest as c_uint != 0;
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0;
     let compl_no_select = cur_cot_flags & kOptCotFlagNoselect as c_uint != 0;

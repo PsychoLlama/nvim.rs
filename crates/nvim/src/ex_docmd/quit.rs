@@ -96,7 +96,7 @@ pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
 pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
-    if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
+    if byte(get_vim_var_str(Vv::Exitreason)) == NUL {
         set_vim_var_string(Vv::Exitreason, c"quit".as_ptr(), 4 as ptrdiff_t);
     }
     apply_autocmds(
@@ -370,7 +370,7 @@ pub(crate) unsafe fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabP
             win_close(w, hide, forceit != 0);
         }
         Some(tp) => {
-            unsafe { win_close_othertab(win, hide as c_int, tp, forceit != 0) };
+            win_close_othertab(win, hide as c_int, tp, forceit != 0);
         }
     }
 }
@@ -529,7 +529,7 @@ pub(crate) unsafe fn ex_only(args: *mut ExArg) {
     if args.addr_count > 0 {
         let wp = window_at_stepwise(args.line2);
         if wp != Win::current_or_none() {
-            unsafe { win_goto(wp.expect("a live handle")) };
+            win_goto(wp.expect("a live handle"));
         }
     }
     close_others(1, args.forceit);
@@ -655,14 +655,12 @@ fn check_more(message: bool, forceit: bool) -> c_int {
 
 /// `close_others()` as checked code.
 fn close_others(message: c_int, forceit: c_int) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::window::close_others(message, forceit) }
+    crate::window::close_others(message, forceit)
 }
 
 /// `curbuf_locked()` as checked code.
 fn curbuf_locked() -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_getln::curbuf_locked() }
+    crate::ex_getln::curbuf_locked()
 }
 
 /// `emsg()` as checked code.
@@ -691,8 +689,7 @@ fn not_exiting(save_exiting: bool) {
 
 /// `only_one_window()` as checked code.
 fn only_one_window() -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::window::only_one_window() }
+    crate::window::only_one_window()
 }
 
 /// `set_vim_var_string()` as checked code.
@@ -703,20 +700,17 @@ fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 
 /// `text_locked()` as checked code.
 fn text_locked() -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_getln::text_locked() }
+    crate::ex_getln::text_locked()
 }
 
 /// `text_locked_msg()` as checked code.
 fn text_locked_msg() {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_getln::text_locked_msg() }
+    crate::ex_getln::text_locked_msg()
 }
 
 /// `win_close()` as checked code.
 fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::window::win_close(win, free_buf, force) }
+    crate::window::win_close(win, free_buf, force)
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

@@ -190,11 +190,7 @@ pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// The address is what the caller wants — `extmark`'s undo list hangs off
 /// `uh_extmark` — and the store's allocations are stable, so handing one out
 /// is sound.
-///
-/// # Safety
-///
-/// `buffer` points at a live buffer, and a live current window.
-pub unsafe fn u_force_get_undo_header(buffer: Buf) -> *mut UndoHeader {
+pub fn u_force_get_undo_header(buffer: Buf) -> *mut UndoHeader {
     let mut b = buffer;
     if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         return uh.raw();

@@ -248,10 +248,7 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 ///
 /// Answers whether the buffer has any marks at all, which is the caller's cue
 /// to bother with the rest of the machinery.
-///
-/// # Safety
-/// `window` must be live.
-pub unsafe fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
+pub fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
     state.row = -1;
     state.win = window.raw();
 
@@ -295,10 +292,7 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 
 /// Seeds the state at the top of a window with the marks that start *above*
 /// `top_row` and reach into it.
-///
-/// # Safety
-/// `window` must be live.
-pub unsafe fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef) -> bool {
+pub fn decor_redraw_start(window: Win, top_row: c_int, mut state: DecorStateRef) -> bool {
     let buf = window.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
@@ -354,15 +348,11 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 }
 
 /// Moves the state on to `row`.
-///
-/// # Safety
-/// `window` must be live.
-pub unsafe fn decor_redraw_line(window: Win, row: c_int, mut state: DecorStateRef) {
+pub fn decor_redraw_line(window: Win, row: c_int, mut state: DecorStateRef) {
     decor_state_pack(state);
 
     if state.row == -1 {
-        // SAFETY: as above.
-        unsafe { decor_redraw_start(window, row, state) };
+        decor_redraw_start(window, row, state);
     } else if !state.itr_valid {
         state.seek(window.buffer(), row);
         state.itr_valid = true;

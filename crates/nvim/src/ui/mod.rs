@@ -165,10 +165,7 @@ fn reaches(ui: *mut RemoteUI, reach: Reach) -> bool {
     }
 }
 
-/// # Safety
-///
-/// Call once, before any grid is drawn.
-pub unsafe fn ui_init() {
+pub fn ui_init() {
     let mut grid = default_grid_ref();
     grid.handle = DEFAULT_GRID_HANDLE;
     ui_comp_init();
@@ -284,7 +281,7 @@ pub unsafe fn ui_refresh() {
         ui_schedule_refresh();
         return;
     }
-    unsafe { ui_default_colors_set() };
+    ui_default_colors_set();
     // 'lazyredraw' would defer the resize past the point the UIs are
     // told about it.
     let save_p_lz = p_lz.get();
@@ -340,23 +337,16 @@ pub fn ui_schedule_refresh() {
 }
 
 /// Marks the default colours as needing to be re-sent.
-///
-/// # Safety
-///
-/// Reads the resolved `Normal` highlight.
-pub unsafe fn ui_default_colors_set() {
+pub fn ui_default_colors_set() {
     pending_default_colors.set(true);
     // Before startup finishes the colours are still being computed, and
     // the pending flag is enough — `ui_line` picks it up.
     if starting.get() == 0 {
-        unsafe { ui_may_set_default_colors() };
+        ui_may_set_default_colors();
     }
 }
 
-/// # Safety
-///
-/// As [`ui_default_colors_set`].
-unsafe fn ui_may_set_default_colors() {
+fn ui_may_set_default_colors() {
     if !pending_default_colors.get() {
         return;
     }
@@ -528,7 +518,7 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
         };
     }
     if ext == kUITermColors {
-        unsafe { ui_default_colors_set() };
+        ui_default_colors_set();
     }
 }
 
@@ -554,7 +544,7 @@ pub unsafe fn ui_line(
     if startcol == 0 && invalid_row {
         flags |= kLineFlagInvalid;
     }
-    unsafe { ui_may_set_default_colors() };
+    ui_may_set_default_colors();
 
     let off = grid.cell_offset(row, startcol);
     let (chars, attrs) = grid.cells(off, (grid.cols - startcol) as usize);
@@ -859,7 +849,7 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mu
         unsafe { screen_resize(width, height) };
         return;
     }
-    let wp = unsafe { get_win_by_grid_handle(grid_handle) };
+    let wp = get_win_by_grid_handle(grid_handle);
     if wp.is_none() {
         *err = err_bad_number(c"window handle", grid_handle as i64);
         return;
@@ -875,7 +865,6 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mu
         // A split's size is a request: the layout decides what it gets.
         wp.w_height_request = height.max(0);
         wp.w_width_request = width.max(0);
-        // SAFETY: a live window.
-        unsafe { win_set_inner_size(wp, true) };
+        win_set_inner_size(wp, true);
     }
 }

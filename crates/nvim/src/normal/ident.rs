@@ -295,13 +295,11 @@ pub(crate) unsafe fn nv_gd(op: *mut OpArg, nchar: c_int, thisblock: c_int) {
         // SAFETY: `op` is the caller's live operator.
         && unsafe { (*op).op_type } == OpType::Nop
     {
-        // SAFETY: the editor's fold state is live.
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
     // The search left a "search hit" message that has nothing to say
     // here, unless 'shortmess' has already suppressed it.
-    // SAFETY: reads the message state, which is live.
-    if unsafe { messaging() } && msg_silent.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
+    if messaging() && msg_silent.get() == 0 && !shortmess(ShmFlag::SEARCHCOUNT) {
         clear_cmdline.set(true);
     }
 }
@@ -935,7 +933,6 @@ pub(crate) unsafe fn nv_ident(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_tagpop(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
     }

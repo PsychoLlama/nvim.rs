@@ -51,7 +51,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
                 if unsafe { list_func_head(fp, false, false) }.is_err() {
                     return;
                 }
-                if unsafe { function_list_modified(prev_ht_changed) } != 0 {
+                if function_list_modified(prev_ht_changed) != 0 {
                     return;
                 }
             }
@@ -148,7 +148,7 @@ pub(crate) unsafe fn list_one_function(
             if j < 99 {
                 unsafe { msg_putchar(b' ' as c_int) };
             }
-            if unsafe { function_list_modified(prev_ht_changed) } != 0 {
+            if function_list_modified(prev_ht_changed) != 0 {
                 break;
             }
         }
@@ -157,7 +157,7 @@ pub(crate) unsafe fn list_one_function(
     }
     if !got_int.get() {
         unsafe { msg_putchar(b'\n' as c_int) };
-        if unsafe { function_list_modified(prev_ht_changed) } == 0 {
+        if function_list_modified(prev_ht_changed) == 0 {
             let end = if ea.forceit != 0 {
                 c"endfunction".as_ptr()
             } else {

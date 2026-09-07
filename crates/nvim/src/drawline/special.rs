@@ -72,8 +72,7 @@ impl Cells {
     /// # Safety
     /// `window` must be a live window.
     pub(super) unsafe fn draw_extends(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's decoration state.
-        let lcs_ext = unsafe { get_lcs_ext(window) };
+        let lcs_ext = get_lcs_ext(window);
         if lcs_ext == NUL as ScreenChar
             || wlv.filler_todo > 0
             || wlv.col != self.view_width - 1
@@ -242,8 +241,7 @@ impl Cells {
             && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
         {
             unsafe { self.tab(wlv, window) };
-        } else if self.cell_char == NUL as ScreenChar && unsafe { self.wants_eol_cell(wlv, window) }
-        {
+        } else if self.cell_char == NUL as ScreenChar && self.wants_eol_cell(wlv, window) {
             unsafe { self.eol_cell(wlv, window) };
         } else if self.cell_char != NUL as ScreenChar {
             unsafe { self.escaped(wlv, window) };
@@ -412,7 +410,7 @@ impl Cells {
         wlv.escape_buf = unsafe { transchar_buf(Buf::from_raw(window.w_buffer), self.char_code) };
         wlv.extra_text = wlv.escape_buf.as_mut_ptr();
         if wlv.extra_todo == 0 {
-            wlv.extra_todo = unsafe { byte2cells(self.char_code) } - 1;
+            wlv.extra_todo = byte2cells(self.char_code) - 1;
         }
         if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
@@ -431,7 +429,7 @@ impl Cells {
             unsafe { *p.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
             wlv.extra_text = p;
         } else {
-            wlv.extra_todo = unsafe { byte2cells(self.char_code) } - 1;
+            wlv.extra_todo = byte2cells(self.char_code) - 1;
             self.char_code = unsafe { *wlv.extra_text } as uint8_t as ::core::ffi::c_int;
             wlv.extra_text = unsafe { wlv.extra_text.offset(1) };
         }
@@ -445,11 +443,7 @@ impl Cells {
     ///
     /// Either because `'list'` asks for one, or because a Visual or
     /// `'incsearch'` range includes the break and needs somewhere to show it.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
-        // SAFETY: the caller's window.
+    pub(super) fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
         (window.w_onebuf_opt.wo_list != 0
             || ((wlv.fromcol >= 0 || self.fromcol_prev >= 0)
                 && wlv.tocol > wlv.vcol

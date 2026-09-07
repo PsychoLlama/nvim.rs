@@ -156,7 +156,7 @@ pub unsafe fn tv_blob_slice_or_index(
 
 /// Whether `n1` names a byte of a `bloblen`-byte blob, or the slot just past
 /// the end (which an assignment may append to).
-pub unsafe fn tv_blob_check_index(
+pub fn tv_blob_check_index(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
     quiet: bool,
@@ -171,7 +171,7 @@ pub unsafe fn tv_blob_check_index(
 }
 
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
-pub unsafe fn tv_blob_check_range(
+pub fn tv_blob_check_range(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
     n2: VarNumber,

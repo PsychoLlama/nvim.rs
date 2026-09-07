@@ -36,7 +36,6 @@ use crate::ui::ui_has;
 /// `window` must be a live window. Evaluating `'statusline'` re-enters the
 /// editor, so nothing may be held across this.
 pub unsafe fn win_redr_status(window: Win) {
-    // SAFETY: the caller's promise.
     let mut win = window;
     let is_stl_global = stl_is_global();
 
@@ -68,8 +67,7 @@ pub unsafe fn win_redr_status(window: Win) {
     // May need to draw the character below the vertical separator.
     if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
         let mut group = HLF_C;
-        // SAFETY: a live window's frame chain.
-        let fillchar = if unsafe { stl_connected(window) } {
+        let fillchar = if stl_connected(window) {
             let (g, fillchar) = fillchar_status_of(win);
             group = g;
             fillchar
@@ -89,10 +87,7 @@ pub unsafe fn win_redr_status(window: Win) {
 /// window right of it -- as opposed to meeting a vertical separator there.
 ///
 /// Only meaningful when `window.w_vsep_width != 0`.
-///
-/// # Safety
-/// `window` must be a live window.
-pub unsafe fn stl_connected(window: Win) -> bool {
+pub fn stl_connected(window: Win) -> bool {
     let mut fr = window.frame();
     while let Some(parent) = fr.parent() {
         if c_int::from(parent.fr_layout) == FR_COL {
@@ -119,8 +114,7 @@ pub unsafe fn stl_connected(window: Win) -> bool {
 /// # Safety
 /// `buffer` must be a live buffer.
 pub(crate) unsafe fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
-    // SAFETY: the caller's promise.
-    let spname = unsafe { buf_spname(buffer) };
+    let spname = buf_spname(buffer);
     let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
     // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes, which
     // each of the three writes below is told.

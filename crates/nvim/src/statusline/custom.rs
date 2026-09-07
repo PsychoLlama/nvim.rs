@@ -521,8 +521,7 @@ unsafe fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, 
         return;
     }
 
-    // SAFETY: the target's grid is live and the batch is flushed below.
-    unsafe { screengrid_line_start(target.canvas, target.row, 0) };
+    screengrid_line_start(target.canvas, target.row, 0);
     let (col, curattr) = paint_chunks(&target, line, runs, win, None);
     paint_fill(col, start_col + target.maxwidth, target.fillchar, curattr);
     paint_flush();
@@ -547,7 +546,6 @@ pub unsafe fn win_redr_winbar(window: Win) {
         return;
     }
     ENTERED.set(true);
-    // SAFETY: the caller's promise.
     let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()

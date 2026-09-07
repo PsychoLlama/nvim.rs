@@ -91,8 +91,8 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let mut numbuf2 = NumBuf::new();
     let mut err = Error::none();
     let no_ui = ui_active() == 0;
-    let exepath = unsafe { get_vim_var_str(Vv::Progpath) };
-    let argv_list = unsafe { get_vim_var_list(Vv::Argv) };
+    let exepath = get_vim_var_str(Vv::Progpath);
+    let argv_list = get_vim_var_list(Vv::Argv);
     let argc = unsafe { tv_list_len(argv_list) };
 
     // Three more than `v:argv`: `--embed`, `--headless`, and the null

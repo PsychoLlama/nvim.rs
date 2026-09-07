@@ -329,7 +329,7 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
 }
 
 /// The `EX_*` flag set of a command.
-pub unsafe fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
+pub fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
     cmdnames[idx.index()].cmd_argt
 }
 

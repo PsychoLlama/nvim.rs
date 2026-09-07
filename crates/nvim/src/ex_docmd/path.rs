@@ -282,7 +282,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     // The DirChangedPre autocommand below runs while `new_dir` may point in
     // here, which is exactly why it is not the shared `NameBuff`.
     let mut dir = [0 as c_char; MAXPATHL as usize];
-    if new_dir.is_null() || unsafe { allbuf_locked() } {
+    if new_dir.is_null() || allbuf_locked() {
         return false;
     }
     if unsafe { cstr::eq_bytes(new_dir, b"-") } {

@@ -136,7 +136,7 @@ pub(crate) fn splice_delete(
 }
 
 /// Undo or redo one recorded extmark operation.
-pub unsafe fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
+pub fn extmark_apply_undo(undo_info: ExtmarkUndoObject, undo: bool) {
     let buf = current_buf();
     if let ExtmarkUndoObject::Splice(splice) = undo_info {
         // A splice: any text operation that changes position except `:move`.

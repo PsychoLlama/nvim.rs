@@ -57,13 +57,8 @@ fn cls() -> c_int {
 
 /// Step over a run of characters of class `cclass`. Answers true when the
 /// end of the file was reached.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-unsafe fn skip_chars(cclass: c_int, dir: c_int) -> bool {
+fn skip_chars(cclass: c_int, dir: c_int) -> bool {
     while cls() == cclass {
-        // SAFETY: the caller guarantees a current window with its cursor on a
-        // line of the current buffer, which is what both of these ask for.
         let step = if dir == FORWARD as c_int {
             inc_cursor()
         } else {
@@ -78,14 +73,9 @@ unsafe fn skip_chars(cclass: c_int, dir: c_int) -> bool {
 
 /// Go back to the start of the word, or of the run of white space, the
 /// cursor is inside -- without leaving the line.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-unsafe fn back_in_line() {
+fn back_in_line() {
     let sclass = cls();
     while Win::current().w_cursor.col != 0 {
-        // SAFETY, both: the caller guarantees a current window with its cursor
-        // on a line of the current buffer.
         dec_cursor();
         if cls() != sclass {
             inc_cursor(); // stop at the start of the word
@@ -204,7 +194,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
                     }
                 }
                 // Back to the start of this word.
-                if unsafe { skip_chars(cls(), BACKWARD as c_int) } {
+                if skip_chars(cls(), BACKWARD as c_int) {
                     return Ok(());
                 }
             }
@@ -212,8 +202,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
         }
         stop = false;
     }
-    // SAFETY: on the main thread with a current window.
-    unsafe { adjust_skipcol() };
+    adjust_skipcol();
     Ok(())
 }
 
@@ -270,7 +259,7 @@ pub unsafe fn end_word(
         'finished: {
             if cls() == sclass && sclass != 0 {
                 // In the middle of a word: just go to its end.
-                if unsafe { skip_chars(sclass, FORWARD as c_int) } {
+                if skip_chars(sclass, FORWARD as c_int) {
                     return Err(Failed);
                 }
             } else if !stop || sclass == 0 {
@@ -289,7 +278,7 @@ pub unsafe fn end_word(
                         return Err(Failed); // hit the end of the file
                     }
                 }
-                if unsafe { skip_chars(cls(), FORWARD as c_int) } {
+                if skip_chars(cls(), FORWARD as c_int) {
                     return Err(Failed);
                 }
             }
@@ -350,8 +339,7 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<
             }
         }
     }
-    // SAFETY: on the main thread with a current window.
-    unsafe { adjust_skipcol() };
+    adjust_skipcol();
     Ok(())
 }
 
@@ -394,10 +382,7 @@ pub unsafe fn current_word(
     // Outside Visual mode, or with a one-character Visual area, select
     // the word and/or white space under the cursor.
     if !visual_active() || equalpos(Win::current().w_cursor, visual_anchor()) {
-        // SAFETY, for every walk in this function: the caller guarantees a
-        // current window with its cursor on a line of the current buffer, and
-        // each of these leaves it on one.
-        unsafe { back_in_line() };
+        back_in_line();
         start_pos = Win::current().w_cursor;
 
         // Starting on white space that is to be included (" word"), or
@@ -481,7 +466,7 @@ pub unsafe fn current_word(
         let pos = Win::current().w_cursor;
         Win::current().w_cursor = start_pos;
         if unsafe { oneleft() }.is_ok() {
-            unsafe { back_in_line() };
+            back_in_line();
             if cls() == 0 && Win::current().w_cursor.col > 0 {
                 if visual_active() {
                     set_visual_anchor(Win::current().w_cursor);

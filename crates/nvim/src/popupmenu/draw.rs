@@ -160,7 +160,7 @@ unsafe fn pum_compute_text_attrs(
     let in_fuzzy = if State.get() & MODE_CMDLINE != 0 {
         unsafe { cmdline_compl_is_fuzzy() }
     } else {
-        let flags = unsafe { get_cot_flags() };
+        let flags = get_cot_flags();
         flags & kOptCotFlagFuzzy != 0
     };
     // The fuzzy matcher answers the character positions it matched, or
@@ -571,7 +571,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
     };
     let trunc_attr = unsafe { win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI }) };
 
-    unsafe { screengrid_line_start(pum_grid_ref(), grid_row, 0) };
+    screengrid_line_start(pum_grid_ref(), grid_row, 0);
 
     if style.extra_space {
         let attr = unsafe {

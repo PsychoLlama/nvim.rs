@@ -139,8 +139,7 @@ impl<'a> Cursor<'a> {
     /// walk an ordinary one positioned at (`row`, `col`).
     pub fn seek_overlap(&mut self, row: c_int, col: c_int) -> bool {
         let (tree, itr) = self.parts();
-        // SAFETY: a live tree; this is what positions the iterator in it.
-        unsafe { marktree_itr_get_overlap(tree, row, col, itr) }
+        marktree_itr_get_overlap(tree, row, col, itr)
     }
 
     /// One more range covering the position [`Cursor::seek_overlap`] was

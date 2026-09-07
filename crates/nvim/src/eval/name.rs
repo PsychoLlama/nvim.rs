@@ -458,7 +458,7 @@ pub fn eval_isdictc(c: c_int) -> bool {
 /// # Safety
 /// `partial` must be null or valid.
 pub unsafe fn is_luafunc(partial: *mut Partial) -> bool {
-    unsafe { partial == get_vim_var_partial(Vv::Lua) }
+    partial == get_vim_var_partial(Vv::Lua)
 }
 
 /// Is this typval `v:lua`?

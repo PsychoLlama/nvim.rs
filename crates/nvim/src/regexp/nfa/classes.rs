@@ -44,13 +44,11 @@ fn ignoring_case(rex: Rex) -> bool {
 /// `vim_is_ident_char` and `vim_isfilec` are pure tests on a code point that read
 /// only option state.
 fn is_ident_char(c: c_int) -> bool {
-    // SAFETY: a pure test on a code point.
-    unsafe { vim_is_ident_char(c) }
+    vim_is_ident_char(c)
 }
 
 fn is_file_char(c: c_int) -> bool {
-    // SAFETY: as `is_ident_char`.
-    unsafe { vim_isfilec(c) }
+    vim_isfilec(c)
 }
 
 /// Does the class opcode `op` accept the character `curc` at the input?

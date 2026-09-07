@@ -201,7 +201,6 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
 /// # Safety
 /// There must be a current buffer.
 pub unsafe fn preprocs_left() -> bool {
-    // SAFETY: the caller's contract.
     let buf = Buf::current_raw();
     unsafe {
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0
@@ -216,7 +215,6 @@ pub unsafe fn preprocs_left() -> bool {
 /// # Safety
 /// There must be a current buffer.
 pub unsafe fn may_do_si() -> bool {
-    // SAFETY: the caller's contract.
     let buf = Buf::current_raw();
     unsafe {
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0 && *(*buf).b_p_inde == 0 && p_paste.get() == 0
@@ -411,12 +409,8 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 
 /// Moves `Insstart` and `ai_col` back by what the indent lost, so that the
 /// insert still starts where the user began typing.
-///
-/// # Safety
-/// There must be a current window.
-unsafe fn adjust_insert_start(insstart_less: c_int) {
+fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = Insstart.get();
-    // SAFETY: the caller's contract.
     let lnum = Win::current().w_cursor.lnum;
     if lnum == insstart.lnum && insstart.col != 0 {
         insstart.col = if (insstart.col as c_int) <= insstart_less {
@@ -439,7 +433,6 @@ unsafe fn adjust_insert_start(insstart_less: c_int) {
 /// # Safety
 /// There must be an open replace stack.
 unsafe fn fix_replace_stack(mut start_col: c_int) {
-    // SAFETY: the caller's contract.
     let win = Win::current_raw();
     while start_col > unsafe { (*win).w_cursor.col } as c_int {
         replace_join(0); // remove a NUL from the replace stack
@@ -467,7 +460,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
     let _ = unsafe { ml_replace((*win).w_cursor.lnum, orig_line, false) };
     unsafe { (*win).w_cursor.col = orig_col };
     let splice = Suppress::splice();
-    unsafe { backspace_until_column(0) };
+    backspace_until_column(0);
     unsafe { ins_bytes(new_line) };
     unsafe { xfree(new_line.cast()) };
     drop(splice);
@@ -546,7 +539,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
     unsafe { (*win).w_set_curswant = true };
     changed_cline_bef_curs(unsafe { Win::new(win) });
     if State.get() & MODE_INSERT != 0 {
-        unsafe { adjust_insert_start(insstart_less) };
+        adjust_insert_start(insstart_less);
     }
     if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
         unsafe { fix_replace_stack(start_col) };
@@ -646,10 +639,7 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
 
 /// Reports "resulting text is too long", and breaks out of any loop when
 /// there is no `:try` to catch it.
-///
-/// # Safety
-/// There must be a message layer, i.e. anywhere in the editor.
-unsafe fn emsg_text_too_long() {
+fn emsg_text_too_long() {
     emsg(gettext(e_resulting_text_too_long));
     if trylevel.get() == 0 {
         got_int.set(true);
@@ -788,7 +778,7 @@ impl Retab {
         let len = self.num_spaces + num_tabs;
         let new_len = scan.old_len - scan.col + self.start_col + len + 1;
         if new_len <= 0 || new_len >= MAXCOL as c_int {
-            unsafe { emsg_text_too_long() };
+            emsg_text_too_long();
             return Retabulated::TooLong;
         }
         let new_line: *mut c_char = unsafe { xmalloc(new_len as size_t) }.cast();
@@ -882,8 +872,7 @@ impl Retab {
             }
             scan.vcol += width(&scan) as int64_t;
             if scan.vcol >= MAXCOL as int64_t {
-                // SAFETY: reporting an error needs no more than a live editor.
-                unsafe { emsg_text_too_long() };
+                emsg_text_too_long();
                 break;
             }
             scan.col += charlen(&scan);

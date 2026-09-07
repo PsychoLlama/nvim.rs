@@ -8,7 +8,7 @@
 //! [`extmark_free_all`] the teardown when a buffer is freed.
 //!
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
-
+#![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;
@@ -28,7 +28,7 @@ use crate::types::{
 /// Every mark between two positions, the ones at either end included.
 ///
 /// `amount` is the caller's limit, `INT64_MAX` for "all of them".
-pub unsafe fn extmark_get(
+pub fn extmark_get(
     mut buffer: Buf,
     ns_id: uint32_t,
     l_row: c_int,
@@ -107,7 +107,7 @@ fn push_mark(
 }
 
 /// The extmark `id` of namespace `ns_id`, paired with its end position.
-pub unsafe fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair {
+pub fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair {
     let mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, None);
     if mark.id == 0 {
         // Invalid.
@@ -120,7 +120,7 @@ pub unsafe fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) ->
 }
 
 /// Release every mark of a buffer, as it is freed.
-pub unsafe fn extmark_free_all(mut buffer: Buf) {
+pub fn extmark_free_all(mut buffer: Buf) {
     let mut itr = MarkTreeIter::default();
     itr_get(buffer.marktree(), 0, 0, &mut itr);
     loop {

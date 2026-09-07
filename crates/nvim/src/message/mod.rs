@@ -781,10 +781,7 @@ pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
 }
 
 /// Would a message be seen if it were shown now?
-///
-/// # Safety
-/// Only that the typeahead is in a consistent state.
-pub unsafe fn messaging() -> bool {
+pub fn messaging() -> bool {
     !(p_lz.get() != 0 && char_avail() && !KeyTyped.get()) && (p_ch.get() > 0 || ui_has(kUIMessages))
 }
 
@@ -799,7 +796,7 @@ pub unsafe fn msgmore(n: c_int) {
     // autocmd reached from either could overwrite mid-assembly.
     let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
     let text = buf.as_mut_ptr();
-    if global_busy.get() != 0 || !unsafe { messaging() } {
+    if global_busy.get() != 0 || !messaging() {
         // Don't report when :global is executing.
         return;
     }

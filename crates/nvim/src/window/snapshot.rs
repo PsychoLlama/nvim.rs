@@ -379,7 +379,7 @@ pub fn get_last_winid() -> c_int {
     last_win_id.get()
 }
 
-pub unsafe fn win_locked(window: Win) -> c_int {
+pub fn win_locked(window: Win) -> c_int {
     window.w_locked as c_int
 }
 
@@ -416,8 +416,7 @@ pub unsafe fn win_ui_flush(validate: bool) {
             let moved = wp.w_pos_changed || wp.w_grid_alloc.pending_comp_index_update;
             if moved && wp.w_grid_alloc.is_allocated() {
                 if tp.is_current() {
-                    // SAFETY: a live window.
-                    unsafe { ui_ext_win_position(wp, validate) };
+                    ui_ext_win_position(wp, validate);
                 } else {
                     // A window of another tab page is not on the screen.
                     ui_call_win_hide(wp.w_grid_alloc.handle as Integer);
@@ -426,8 +425,7 @@ pub unsafe fn win_ui_flush(validate: bool) {
                 wp.w_grid_alloc.pending_comp_index_update = false;
             }
             if tp.is_current() {
-                // SAFETY: a live window.
-                unsafe { ui_ext_win_viewport(wp) };
+                ui_ext_win_viewport(wp);
             }
         }
     }

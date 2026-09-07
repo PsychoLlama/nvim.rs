@@ -201,7 +201,7 @@ pub unsafe fn spell_add_word(
         if !buf.is_null() {
             unsafe { buf_reload(Buf::new(buf), (*buf).b_orig_mode, false) };
         }
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        redraw_all_later(UPD_SOME_VALID);
     }
 
     unsafe { xfree(fnamebuf as *mut c_void) };

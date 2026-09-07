@@ -101,10 +101,7 @@ pub fn setpcmark() {
 /// where ever, then call checkpcmark().  This ensures that the previous
 /// context will only be changed if the cursor moved to a different line.
 /// If pcmark was deleted (with "dG") the previous mark is restored.
-///
-/// # Safety
-/// The editor's globals must be live.
-pub unsafe fn checkpcmark() {
+pub fn checkpcmark() {
     let mut win = Win::current();
     if win.w_prev_pcmark.lnum != 0
         && (equalpos(win.w_pcmark, win.w_cursor) || win.w_pcmark.lnum == 0)
@@ -141,7 +138,6 @@ pub unsafe fn get_jumplist(mut win: Win, mut count: c_int) -> *mut FileMark {
         // Stepping off the one-past-the-end state first records where the
         // user is *now*, so that `<C-i>` can come back to it.
         if win.w_jumplistidx == win.w_jumplistlen {
-            // SAFETY: the editor's globals are live.
             setpcmark();
             win.w_jumplistidx -= 1;
             if win.w_jumplistidx + count < 0 {
@@ -171,11 +167,7 @@ pub unsafe fn get_jumplist(mut win: Win, mut count: c_int) -> *mut FileMark {
 /// `count` — count to move may be negative.
 ///
 /// Returns mark, NULL if out of bounds.
-///
-/// # Safety
-/// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buffer: Buf, win: Win, count: c_int) -> *mut FileMark {
-    // SAFETY: the caller promised a live buffer and window.
+pub fn get_changelist(buffer: Buf, win: Win, count: c_int) -> *mut FileMark {
     let (buf, mut win) = (buffer, win);
     if buf.b_changelistlen == 0 {
         return ptr::null_mut();

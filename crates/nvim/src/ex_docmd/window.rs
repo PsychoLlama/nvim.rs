@@ -205,7 +205,6 @@ pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
 pub(crate) unsafe fn ex_wrongmodifier(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(args);
     ea.errmsg = err_msg(e_invcmd.as_ptr());
 }
@@ -213,7 +212,6 @@ pub(crate) unsafe fn ex_wrongmodifier(args: *mut ExArg) {
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
 /// `:tabfind` — open a window or a tab page, then edit into it.
 pub unsafe fn ex_splitview(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     splitview(Ex(args));
 }
 
@@ -347,7 +345,6 @@ pub fn tabpage_new() {
 /// spells as a negative argument; the rest go to an absolute number that
 /// `get_tabpage_arg` works out.
 pub(crate) unsafe fn ex_tabnext(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     tabnext(Ex(args));
 }
 
@@ -404,7 +401,6 @@ fn tabnext(mut ea: Ex) {
 
 /// `:tabmove`.
 pub(crate) unsafe fn ex_tabmove(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     tabmove(Ex(args));
 }
 
@@ -482,8 +478,7 @@ fn list_tab_windows(
 /// `buffer`'s display name in `out`: the special name a scratch buffer has, or
 /// its file name with the home directory folded back to `~`.
 fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
-    // SAFETY: a live buffer; the answer is a static name or null.
-    let special = unsafe { buf_spname(buffer) };
+    let special = buf_spname(buffer);
     let (raw, fname) = (buffer.raw(), buffer.b_fname);
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
@@ -519,7 +514,6 @@ fn is_changed(buffer: Buf) -> bool {
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
 pub(crate) unsafe fn ex_mode(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
     if byte(ea.arg) == NUL {
         must_redraw.set(UPD_CLEAR);
@@ -536,7 +530,6 @@ pub(crate) unsafe fn ex_mode(args: *mut ExArg) {
 /// the sign, so the current size is simply added. No argument at all means
 /// "as large as possible".
 pub(crate) unsafe fn ex_resize(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     resize(Ex(args));
 }
 
@@ -579,7 +572,6 @@ fn resize(ea: Ex) {
 
 /// `:winsize` — two numbers, and nothing else.
 pub(crate) unsafe fn ex_winsize(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     winsize(Ex(args));
 }
 
@@ -613,7 +605,6 @@ fn digits(cursor: *mut *mut c_char) -> c_int {
 
 /// `:wincmd` — one window command, spelled as a command line.
 pub(crate) unsafe fn ex_wincmd(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     wincmd(Ex(args));
 }
 
@@ -655,14 +646,12 @@ fn wincmd(mut ea: Ex) {
 
 /// The Vim commands that only make sense with a built-in GUI.
 pub(crate) unsafe fn ex_nogui(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(args);
     ea.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
 }
 
 /// `:popup`.
 pub(crate) unsafe fn ex_popup(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
     let (name, use_mouse_pos) = (ea.arg, ea.forceit);
     // SAFETY: a NUL-terminated menu path.
@@ -682,7 +671,6 @@ pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
 
 /// `:pedit`.
 pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
     let curwin_save = Win::current().id();
     prepare_preview_window();
@@ -702,8 +690,7 @@ pub(crate) unsafe fn ex_pbuffer(args: *mut ExArg) {
 /// Open or reuse the preview window, and make it current.
 fn prepare_preview_window() {
     g_do_tagpreview.set(p_pvh.get() as c_int);
-    // SAFETY: opens a window over the window list.
-    unsafe { prepare_tagpreview(true) };
+    prepare_tagpreview(true);
 }
 
 /// Go back to the window `:pedit` was run from, if it is still there.

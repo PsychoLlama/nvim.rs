@@ -55,7 +55,7 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     };
     unsafe { fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get()) };
     changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
-    unsafe { buf_updates_send_changes(buf, start.lnum, num_changed, num_changed) };
+    buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
 }
 
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
@@ -70,7 +70,6 @@ pub(super) unsafe fn fold_add_marker(
     markerlen: size_t,
 ) {
     let lnum = pos.lnum;
-    // SAFETY: the caller's promise.
     let cms = buffer.b_p_cms;
     // Where 'commentstring' puts the text, if it has a place for it.
     let p = unsafe { strstr(cms, c"%s".as_ptr()) };
@@ -125,16 +124,14 @@ pub(super) unsafe fn fold_add_marker(
     };
     let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
     if added != 0 {
-        unsafe {
-            extmark_splice_cols(
-                buffer,
-                lnum as c_int - 1,
-                line_len as ColNr,
-                0,
-                added as ColNr,
-                kExtmarkUndo,
-            )
-        };
+        extmark_splice_cols(
+            buffer,
+            lnum as c_int - 1,
+            line_len as ColNr,
+            0,
+            added as ColNr,
+            kExtmarkUndo,
+        );
     }
 }
 
@@ -189,7 +186,6 @@ pub(super) unsafe fn fold_del_marker(
     marker: *mut c_char,
     markerlen: size_t,
 ) {
-    // SAFETY: the caller's promise.
     if lnum > buffer.b_ml.ml_line_count {
         return;
     }

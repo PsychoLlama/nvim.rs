@@ -127,13 +127,13 @@ pub(crate) unsafe fn prepare_line(
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
-    unsafe { decor_redraw_line(window, lnum - 1, wlv.decor) };
+    decor_redraw_line(window, lnum - 1, wlv.decor);
     if !s.has_decor && decor_has_more_decorations(wlv.decor, lnum - 1) {
         s.has_decor = true;
         s.extra_check = true;
     }
 
-    unsafe { s.keep_cursor_visible(wlv, window) };
+    s.keep_cursor_visible(wlv, window);
 
     if col_rows == 0 && s.draw_text && !s.has_foldtext {
         let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
@@ -161,7 +161,7 @@ pub(crate) unsafe fn prepare_line(
         s.area_highlighting = true;
     }
 
-    unsafe { wlv.start_line(window) };
+    wlv.start_line(window);
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
@@ -181,7 +181,6 @@ impl LineSetup {
     /// # Safety
     /// `window` must be a live window.
     unsafe fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
-        // SAFETY: the caller's window.
         let has_fold = wlv.foldinfo.fi_level != 0 && wlv.foldinfo.fi_lines > 0;
         let has_foldtext = has_fold && unsafe { *window.w_onebuf_opt.wo_fdt } != 0;
         LineSetup {
@@ -498,7 +497,6 @@ impl LineSetup {
     /// # Safety
     /// `window` must be a live window.
     unsafe fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
         if window.w_onebuf_opt.wo_cul == 0
             || window.w_p_culopt_flags as ::core::ffi::c_int
                 == kOptCuloptFlagNumber as ::core::ffi::c_int
@@ -516,7 +514,7 @@ impl LineSetup {
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.
-            (self.left_curline_col, self.right_curline_col) = unsafe { margin_columns_win(window) };
+            (self.left_curline_col, self.right_curline_col) = margin_columns_win(window);
         } else {
             unsafe { wlv.apply_cursorline_highlight(window) };
         }
@@ -529,7 +527,6 @@ impl LineSetup {
     /// # Safety
     /// `window` must be a live window.
     unsafe fn signs_and_statuscolumn(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
         let mut sign_line_attr = 0;
         // TODO(bfredl, vigoux): line_attr should not take priority over
         // decoration.
@@ -553,13 +550,13 @@ impl LineSetup {
             self.statuscol.foldinfo = wlv.foldinfo;
             self.statuscol.width =
                 window.col_off() - (cmdwin_win.get() == Some(window.id())) as ::core::ffi::c_int;
-            self.statuscol.sign_cul_id = if unsafe { use_cursor_line_highlight(window, wlv.lnum) } {
+            self.statuscol.sign_cul_id = if use_cursor_line_highlight(window, wlv.lnum) {
                 wlv.sign_cul_attr
             } else {
                 0
             };
         } else if wlv.sign_cul_attr > 0 {
-            wlv.sign_cul_attr = if unsafe { use_cursor_line_highlight(window, wlv.lnum) } {
+            wlv.sign_cul_attr = if use_cursor_line_highlight(window, wlv.lnum) {
                 unsafe { syn_id2attr(wlv.sign_cul_attr) }
             } else {
                 0
@@ -670,7 +667,6 @@ impl LineSetup {
     /// # Safety
     /// `window` must be a live window and [`LineSetup::line`] its line `lnum`.
     unsafe fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
-        // SAFETY: the caller's window and line.
         if window.w_p_lcs_chars.space != 0
             || !window.w_p_lcs_chars.multispace.is_null()
             || !window.w_p_lcs_chars.leadmultispace.is_null()
@@ -724,7 +720,6 @@ impl LineSetup {
         spv: *mut SpellVars,
     ) {
         let start_vcol = self.start_vcol;
-        // SAFETY: the caller's window and line.
         let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
         let mut csarg = CharsizeArg::default();
@@ -870,11 +865,7 @@ impl LineSetup {
     /// to stay visible.
     ///
     /// Doing it once here saves testing for it on every character.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window.
+    fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, window: Win) {
         if wlv.fromcol < 0 {
             return;
         }

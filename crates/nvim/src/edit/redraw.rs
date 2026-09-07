@@ -62,7 +62,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         }
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
-        unsafe { update_curswant() };
+        update_curswant();
         unsafe { ins_apply_autocmds(AutoEvent::CursorMovedI) };
         last_cursormoved_win.set(Win::current_raw());
         last_cursormoved.set(Win::current().w_cursor);
@@ -215,9 +215,9 @@ pub(crate) unsafe fn edit_unputchar() {
         // restored a cell at a time; redraw the whole line instead.
         PutChar::Right => {
             win.w_wcol += 1;
-            unsafe { redraw_win_line(win, win.w_cursor.lnum) };
+            redraw_win_line(win, win.w_cursor.lnum);
         }
-        PutChar::Left => unsafe { redraw_win_line(win, win.w_cursor.lnum) },
+        PutChar::Left => redraw_win_line(win, win.w_cursor.lnum),
         PutChar::Set => {
             unsafe { grid_line_start(win.w_grid, pc_row.get()) };
             grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
@@ -235,7 +235,7 @@ pub(crate) unsafe fn edit_unputchar() {
 pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
     let col = col_arg.max(0);
 
-    if !unsafe { redrawing() } {
+    if !redrawing() {
         return;
     }
 
@@ -258,17 +258,12 @@ pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
 
 /// Take the `$` away again.  Call before moving the cursor off the normal
 /// insert position.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn undisplay_dollar() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
+pub(crate) fn undisplay_dollar() {
     if dollar_vcol.get() < 0 {
         return;
     }
     dollar_vcol.set(-1);
-    unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
+    redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
 }
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'

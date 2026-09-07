@@ -36,8 +36,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> Option<Buf> {
 
     // If the preview buffer doesn't exist, open one.
     if cmdpreview_buf.is_null() {
-        // SAFETY: creating a scratch buffer needs only a live editor.
-        let created = unsafe { nvim_create_buf(false, true) };
+        let created = nvim_create_buf(false, true);
         let Ok(bufnr) = created else {
             return None;
         };
@@ -111,7 +110,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     Win::current().w_onebuf_opt.wo_spell = 0;
     Win::current().w_onebuf_opt.wo_fen = 0;
 
-    unsafe { win_enter(save_curwin, false) };
+    win_enter(save_curwin, false);
     unsafe { Win::from_raw(preview_win) }
 }
 
@@ -272,17 +271,14 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 
         buf.b_changed = cp_bufinfo.save_b_changed;
 
-        // SAFETY: clearing the preview namespace's marks in a live buffer.
-        unsafe {
-            extmark_clear(
-                buf,
-                cmdpreview_ns.get() as uint32_t,
-                0,
-                0,
-                MAXLNUM as ::core::ffi::c_int,
-                MAXCOL,
-            )
-        };
+        extmark_clear(
+            buf,
+            cmdpreview_ns.get() as uint32_t,
+            0,
+            0,
+            MAXLNUM as ::core::ffi::c_int,
+            MAXCOL,
+        );
 
         // Undo all the changes the preview made to this buffer.
         if buf.b_u_seq_cur != cp_bufinfo.undo_info.save_b_u_seq_cur {
@@ -291,8 +287,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             } else {
                 buf.b_u_newhead
             };
-            // SAFETY: `start` is a header of `buf`'s own undo chain.
-            let chain = unsafe { header_chain(buf, start, |uh| uh.uh_next) };
+            let chain = header_chain(buf, start, |uh| uh.uh_next);
             let count = chain.count() as ::core::ffi::c_int;
 
             let mut aco = AcoSave::default();

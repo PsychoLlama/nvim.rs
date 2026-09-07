@@ -66,10 +66,7 @@ pub(crate) unsafe fn truncate_spaces(line: *mut c_char, len: size_t) {
 /// even when a composing character sits on the boundary, which is why the
 /// non-Replace arm goes through [`del_char_after_col`] rather than
 /// `del_char`.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn backspace_until_column(col: c_int) {
+pub(crate) fn backspace_until_column(col: c_int) {
     while Win::current().w_cursor.col > col {
         Win::current().w_cursor.col -= 1;
         if State.get() & REPLACE_FLAG != 0 {
@@ -193,10 +190,6 @@ pub(crate) fn replace_join(mut off: c_int) {
 /// *off* while it works, because the insertions it does must not push onto
 /// the stack it is popping.
 pub(crate) fn replace_pop_ins() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let old_state = State.get();
     State.set(MODE_NORMAL); // don't want MODE_REPLACE here
     while replace_pop_if_nul() > 0 {

@@ -251,15 +251,12 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
     let mut name = name_of_code(key);
     // Not a known key and not printable: try to read modifiers off the byte.
     if key > 0 && utf_char2len(key) == 1 {
-        if name.is_none()
-            && (!unsafe { vim_isprintc(key) } || key & 0x7f == ' ' as c_int)
-            && key & 0x80 != 0
-        {
+        if name.is_none() && (!vim_isprintc(key) || key & 0x7f == ' ' as c_int) && key & 0x80 != 0 {
             key &= 0x7f;
             modifiers |= ModMask::ALT;
             name = name_of_code(key);
         }
-        if name.is_none() && !unsafe { vim_isprintc(key) } && key < ' ' as c_int {
+        if name.is_none() && !vim_isprintc(key) && key < ' ' as c_int {
             key += '@' as c_int;
             modifiers |= ModMask::CTRL;
         }
@@ -283,7 +280,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
         // Not a special key at all: only modifiers, printed directly.
         None => {
             let len = utf_char2len(key);
-            if len == 1 && unsafe { vim_isprintc(key) } {
+            if len == 1 && vim_isprintc(key) {
                 out[at] = key as u8;
                 at += 1;
             } else if len > 1 {
@@ -292,7 +289,7 @@ pub fn get_special_key_name(key: c_int, modifiers: ModMask) -> SpecialKeyName {
                 out[at..at + len].copy_from_slice(&wide[..len]);
                 at += len;
             } else {
-                let display = unsafe { transchar(key) };
+                let display = transchar(key);
                 let shown = unsafe { CStr::from_ptr(display.as_ptr()) }.to_bytes();
                 out[at..at + shown.len()].copy_from_slice(shown);
                 at += shown.len();

@@ -173,7 +173,7 @@ pub(crate) unsafe fn nv_screengo(
         if dir == FORWARD as c_int
             && virtcol < win.w_curswant
             && win.w_curswant <= width1
-            && !unsafe { vim_isprintc(c) }
+            && !vim_isprintc(c)
             && c > 255
         {
             let _ = unsafe { oneright() };
@@ -192,7 +192,7 @@ pub(crate) unsafe fn nv_screengo(
     if atend {
         win.w_curswant = MAXCOL as ColNr;
     }
-    unsafe { adjust_skipcol() };
+    adjust_skipcol();
     retval
 }
 
@@ -211,14 +211,14 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
         win.w_cursor.lnum = win.w_botline - 1;
         if count1 as LineNr > win.w_cursor.lnum {
             win.w_cursor.lnum = 1;
-        } else if unsafe { win_lines_concealed(wp) } {
+        } else if win_lines_concealed(wp) {
             // A concealed line takes no screen row, so the count has to be
             // walked rather than subtracted.
             let mut n = count1 - 1;
             while n > 0 && win.w_cursor.lnum > win.w_topline {
                 let lnum = win.w_cursor.lnum;
                 has_folding(win, lnum, Some(&mut win.w_cursor.lnum), None);
-                n += unsafe { decor_conceal_line(wp, win.w_cursor.lnum as c_int, true) } as c_int;
+                n += decor_conceal_line(wp, win.w_cursor.lnum as c_int, true) as c_int;
                 if win.w_cursor.lnum > win.w_topline {
                     win.w_cursor.lnum -= 1;
                 }
@@ -260,11 +260,11 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
             }
         } else {
             n = count1 - 1;
-            if unsafe { win_lines_concealed(wp) } {
+            if win_lines_concealed(wp) {
                 let mut lnum = win.w_topline;
                 // The decrement is inside the condition, so a concealed
                 // line is stepped over without spending any of the count.
-                while (unsafe { decor_conceal_line(wp, lnum as c_int - 1, true) } || {
+                while (decor_conceal_line(wp, lnum as c_int - 1, true) || {
                     let before = n;
                     n -= 1;
                     before > 0
@@ -456,7 +456,7 @@ pub(crate) unsafe fn nv_up(cmd_arg: *mut CmdArg) {
         return;
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_up(ca.count1 as LineNr, ca.op().op_type == OpType::Nop) }.is_err() {
+    if cursor_up(ca.count1 as LineNr, ca.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -495,7 +495,7 @@ pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
         }
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_down(ca.count1, ca.op().op_type == OpType::Nop) }.is_err() {
+    if cursor_down(ca.count1, ca.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `+`, `<CR>` and `CTRL-N` land on the first non-blank; `j` does
@@ -529,7 +529,7 @@ pub(crate) unsafe fn nv_dollar(cmd_arg: *mut CmdArg) {
     if !virtual_active(Win::current()) || gchar_cursor() != NUL || ca.op().op_type == OpType::Nop {
         Win::current().w_curswant = MAXCOL as ColNr;
     }
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
+    if cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(ca.op());
     } else {
         unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };

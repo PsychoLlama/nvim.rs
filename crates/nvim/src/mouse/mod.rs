@@ -216,14 +216,12 @@ impl Win {
     /// Whether the window's status line runs into a window to its right, so
     /// that its last cell is not a vertical separator.
     fn status_line_connected(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { stl_connected(self) }
+        stl_connected(self)
     }
 
     /// Make this the current window.  Can make the pointer invalid!
     fn enter(self) {
-        // SAFETY: a live window.
-        unsafe { win_enter(self, true) };
+        win_enter(self, true);
     }
 
     /// Whether the window is still in the current tab page's list.
@@ -237,14 +235,12 @@ impl Win {
 
     /// Move this window's status line down by `count` rows.
     fn drag_status_line(self, count: c_int) {
-        // SAFETY: a live window.
-        unsafe { win_drag_status_line(self, count) };
+        win_drag_status_line(self, count);
     }
 
     /// Move this window's vertical separator right by `count` columns.
     fn drag_sep_line(self, count: c_int) {
-        // SAFETY: a live window.
-        unsafe { win_drag_vsep_line(self, count) };
+        win_drag_vsep_line(self, count);
     }
 
     /// The click definitions drawn for this window's status line, winbar and
@@ -506,14 +502,12 @@ fn do_mousescroll_horiz(mut win: Win, leftcol: ColNr) -> bool {
 
     // When the line of the cursor is too short, move the cursor to the
     // longest visible line.
-    // SAFETY: a live window.
     if !virtual_active(win) && leftcol > scroll_line_len(win, win.w_cursor.lnum) {
         win.w_cursor.lnum = find_longest_lnum(win);
         win.w_cursor.col = 0;
     }
 
-    // SAFETY: a live window.
-    unsafe { set_leftcol(leftcol) }
+    set_leftcol(leftcol)
 }
 
 // ---------------------------------------------------------------------------

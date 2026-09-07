@@ -76,10 +76,7 @@ impl Cell {
     }
 
     /// The cell's character, as the grid's packed representation.
-    ///
-    /// # Safety
-    /// `self` is on the grid.
-    unsafe fn schar(&self) -> ScreenChar {
+    fn schar(&self) -> ScreenChar {
         grid_getchar(self.grid, self.row, self.col, None)
     }
 

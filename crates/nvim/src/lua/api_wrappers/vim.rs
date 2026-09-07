@@ -302,8 +302,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__id_float(lstate: *mut lua_State) 
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim__id_float(arg_1) };
+        let ret = nvim__id_float(arg_1);
         // SAFETY: as above.
         unsafe { nlua_push_float(lstate, ret, PUSH_SPECIAL) };
     }
@@ -499,8 +498,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__screenshot(lstate: *mut lua_State
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim__screenshot(arg_1) };
+        nvim__screenshot(arg_1);
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch_fast(lstate, 1, 0, convert) }
@@ -661,8 +659,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_create_buf(lstate: *mut lua_State)
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_create_buf(arg_1, arg_2) } {
+        let ret = match nvim_create_buf(arg_1, arg_2) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

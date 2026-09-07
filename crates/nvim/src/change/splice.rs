@@ -136,8 +136,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     let win = Win::current();
     if win.w_buffer == buffer.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
         let at = win.w_cursor;
-        // SAFETY: the current window is live.
-        view = unsafe { mark_view_make(win, at) };
+        view = mark_view_make(win, at);
     }
 
     // RESET_FMARK: the old mark's additional data is freed first.
@@ -318,8 +317,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
             && unsafe { diff_internal() } != 0;
         if diffed {
             TabPage::current().tp_diff_update = 1;
-            // SAFETY: a line of the current buffer.
-            unsafe { diff_update_line(lnum) };
+            diff_update_line(lnum);
         }
     }
 
@@ -328,8 +326,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
     }
 
     if Win::current().w_buffer == buffer.raw() && visual_active() {
-        // SAFETY: the editor exists.
-        unsafe { check_visual_pos() };
+        check_visual_pos();
     }
 
     for wp in tab_windows() {
@@ -372,13 +369,11 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
         && lnum < Buf::current().b_ml.ml_line_count
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {
-        // SAFETY: the current window is live.
-        unsafe { redraw_win_line(Win::current(), lnum + 1) };
+        redraw_win_line(Win::current(), lnum + 1);
     }
 
     // Notify any channels that are watching.
-    // SAFETY: the current buffer is live.
-    unsafe { buf_updates_send_changes(Buf::current(), lnum, 1, 1) };
+    buf_updates_send_changes(Buf::current(), lnum, 1, 1);
 
     // Diff highlighting in the other diff windows may need updating too.
     if Win::current().w_onebuf_opt.wo_diff != 0 {
@@ -401,8 +396,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
 pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
         let cb = Buf::current();
-        // SAFETY: the current buffer is live and `lnum` is a line of it.
-        unsafe { extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo) };
+        extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo);
     }
     // SAFETY: as above.
     unsafe { changed_bytes(lnum, start_col) };
@@ -411,20 +405,13 @@ pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new
 /// `count` lines were appended below line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
+pub fn appended_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
     changed_lines(buffer, lnum + 1, 0, lnum + 1, count, true);
 }
 
 /// [`appended_lines_buf`] for the current buffer.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
-    // SAFETY: the current buffer is live.
-    unsafe { appended_lines_buf(Buf::current(), lnum, count) };
+pub fn appended_lines(lnum: LineNr, count: LineNr) {
+    appended_lines_buf(Buf::current(), lnum, count);
 }
 
 /// [`appended_lines`], adjusting the marks first.
@@ -442,20 +429,13 @@ pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
 /// `count` lines were deleted at line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
+pub fn deleted_lines_buf(buffer: Buf, lnum: LineNr, count: LineNr) {
     changed_lines(buffer, lnum, 0, lnum + count, -count, true);
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
-    // SAFETY: the current buffer is live.
-    unsafe { deleted_lines_buf(Buf::current(), lnum, count) };
+pub fn deleted_lines(lnum: LineNr, count: LineNr) {
+    deleted_lines_buf(Buf::current(), lnum, count);
 }
 
 /// [`deleted_lines`], adjusting the marks first.
@@ -474,7 +454,7 @@ pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let back = -count + i32::from(made_empty);
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum, last, max, -count, kExtmarkNOOP) };
-    unsafe { extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo) };
+    extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo);
     changed_lines(cb, lnum, 0, lnum + count, -count, true);
 }
 
@@ -561,8 +541,6 @@ pub fn changed_lines(
     if do_buf_event {
         let num_added = int64_t::from(lnume + xtra - lnum);
         let num_removed = int64_t::from(lnume - lnum);
-        // SAFETY: a live buffer, and the two counts describe the splice just
-        // made to it.
-        unsafe { buf_updates_send_changes(buffer, lnum, num_added, num_removed) };
+        buf_updates_send_changes(buffer, lnum, num_added, num_removed);
     }
 }

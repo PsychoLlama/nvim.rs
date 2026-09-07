@@ -83,7 +83,7 @@ pub fn win_setheight(height: c_int) {
     setheight_win(height, Win::current());
 }
 
-pub unsafe fn win_setheight_win(height: c_int, win: Win) {
+pub fn win_setheight_win(height: c_int, win: Win) {
     setheight_win(height, win);
 }
 
@@ -254,7 +254,7 @@ pub fn win_setwidth(width: c_int) {
     setwidth_win(width, Win::current());
 }
 
-pub unsafe fn win_setwidth_win(width: c_int, window: Win) {
+pub fn win_setwidth_win(width: c_int, window: Win) {
     setwidth_win(width, window);
 }
 
@@ -383,7 +383,7 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
     }
 }
 
-pub unsafe fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh.get() > 0 as OptInt {
@@ -400,7 +400,7 @@ pub unsafe fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-pub unsafe fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
     while p_wmw.get() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {
@@ -415,7 +415,7 @@ pub unsafe fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-pub unsafe fn win_drag_status_line(dragwin: Win, offset: c_int) {
+pub fn win_drag_status_line(dragwin: Win, offset: c_int) {
     drag_status_line(dragwin, offset);
 }
 
@@ -518,7 +518,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
     unsafe { showmode() };
 }
 
-pub unsafe fn win_drag_vsep_line(dragwin: Win, offset: c_int) {
+pub fn win_drag_vsep_line(dragwin: Win, offset: c_int) {
     drag_vsep_line(dragwin, offset);
 }
 

@@ -163,9 +163,7 @@ pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
             }
             if to == NUL {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
-                // SAFETY: `transchar` answers a NUL-terminated rendering that
-                // outlives the call.
-                return fail(missing, unsafe { transchar(from) }.as_ptr());
+                return fail(missing, transchar(from).as_ptr());
             }
 
             if from >= 256 {

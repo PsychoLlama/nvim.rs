@@ -204,7 +204,6 @@ fn clone_folds(from: *mut GArray, to: *mut GArray) {
 }
 
 fn clear_window_folds(win: Win) {
-    // SAFETY: a live window.
     clear_folding(win);
 }
 
@@ -219,8 +218,7 @@ fn set_minimal_style(win: Win) {
 
 /// The view (topline offset and skipcol) `win` would restore `pos` with.
 fn view_of(win: Win, pos: Pos) -> FileMarkView {
-    // SAFETY: a live window.
-    unsafe { mark_view_make(win, pos) }
+    mark_view_make(win, pos)
 }
 
 fn current_win() -> Win {
@@ -349,7 +347,7 @@ fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) ->
 /// Reset the current window's buffer-local options to the values last used
 /// in this window; failing that, to the most recently used window's; failing
 /// that, to the window's own global values.
-pub unsafe fn get_winopts(mut buffer: Buf) {
+pub fn get_winopts(mut buffer: Buf) {
     let mut cur = current_win();
     clear_options(&raw mut cur.w_onebuf_opt);
     clear_window_folds(cur);

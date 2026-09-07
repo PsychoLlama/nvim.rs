@@ -416,7 +416,7 @@ pub unsafe fn restore_funccal() {
 }
 
 /// The call in progress, or null.
-pub unsafe fn get_current_funccal() -> *mut FuncCall {
+pub fn get_current_funccal() -> *mut FuncCall {
     current_funccal.get()
 }
 

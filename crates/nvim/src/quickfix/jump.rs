@@ -65,7 +65,7 @@ unsafe fn list_still_current(
     {
         return true;
     }
-    unsafe { emsg_list_changed(qfl.qfl_type) };
+    emsg_list_changed(qfl.qfl_type);
     false
 }
 
@@ -172,7 +172,6 @@ unsafe fn escape_winfixbuf(
 ) -> Option<bool> {
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
     if forceit != 0 || Win::current().w_onebuf_opt.wo_wfb == 0 || Buf::current().handle == fnum {
         return Some(true);
     }
@@ -186,7 +185,7 @@ unsafe fn escape_winfixbuf(
         win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0 && !buf_is_quickfix(p.buffer_or_none())
     });
     if let Some(prev) = usable {
-        unsafe { win_goto(prev) };
+        win_goto(prev);
     }
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return Some(true);
@@ -399,7 +398,6 @@ unsafe fn qf_jump_to_buffer(
 ) -> Jumped {
     // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
-    // SAFETY: forwarded from the caller.
     let old_curbuf = Buf::current_raw();
     let old_lnum = Win::current().w_cursor.lnum;
 
@@ -420,7 +418,7 @@ unsafe fn qf_jump_to_buffer(
     let pattern = qf_ptr.qf_pattern;
     unsafe { qf_jump_goto_line(lnum2, col, viscol, pattern) };
     if fdo_flags.get() & kOptFdoFlagQuickfix as c_uint != 0 && openfold {
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
     if print_message {
         unsafe { qf_jump_print_msg(qi, qf_index, qf_ptr.raw(), Buf::new(old_curbuf), old_lnum) };
@@ -513,7 +511,7 @@ pub(crate) unsafe fn qf_jump_newwin(
                 };
                 if jumped != Jumped::Done {
                     if opened_window {
-                        unsafe { win_close(Win::current(), true, false) };
+                        win_close(Win::current(), true, false);
                     }
                     if jumped == Jumped::Aborted {
                         settle = None;

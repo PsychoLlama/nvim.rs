@@ -62,7 +62,7 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub unsafe fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
+pub fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
     set_buf(win, buffer, &mut *err);
 }
 
@@ -110,7 +110,7 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
 }
 
-pub unsafe fn win_fdccol_count(window: Win) -> c_int {
+pub fn win_fdccol_count(window: Win) -> c_int {
     fdccol_count(window)
 }
 
@@ -176,7 +176,7 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // ---------------------------------------------------------------------------
 // Telling the UI where a window sits
 
-pub unsafe fn ui_ext_win_position(window: Win, validate: bool) {
+pub fn ui_ext_win_position(window: Win, validate: bool) {
     ext_win_position(window, validate);
 }
 
@@ -360,7 +360,7 @@ fn anchor_to_window(
     *col += (tcol - 1) as Float;
 }
 
-pub unsafe fn ui_ext_win_viewport(window: Win) {
+pub fn ui_ext_win_viewport(window: Win) {
     ext_win_viewport(window);
 }
 
@@ -474,18 +474,16 @@ fn text_height(
 
 pub unsafe fn check_split_disallowed(window: Win) -> c_int {
     let mut err = Error::none();
-    // SAFETY: the caller's promise -- a live window; `err` is ours.
-    let ok = unsafe { check_split_disallowed_err(window, &mut err) };
+    let ok = check_split_disallowed_err(window, &mut err);
     if err.is_set() {
         // SAFETY: the message the check just wrote, owned by `err`.
         unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
-        // SAFETY: as above.
         err.clear();
     }
     if ok { OK } else { FAIL }
 }
 
-pub unsafe fn check_split_disallowed_err(window: Win, err: &mut Error) -> bool {
+pub fn check_split_disallowed_err(window: Win, err: &mut Error) -> bool {
     if split_disallowed.get() > 0 {
         *err = Error::exception(c"E242: Can't split a window while closing another");
         return false;

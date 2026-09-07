@@ -123,7 +123,7 @@ fn insert_enter(s: &mut InsertState) {
     clear_showcmd();
     revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
     if revins_on.get() {
-        unsafe { undisplay_dollar() };
+        undisplay_dollar();
     }
     revins_chars.set(0);
     revins_legal.set(0);
@@ -135,7 +135,7 @@ fn insert_enter(s: &mut InsertState) {
         arrow_used.set(where_paste_started.get().lnum == 0);
         restart_edit.set(0);
         validate_virtcol(Win::current());
-        unsafe { update_curswant() };
+        update_curswant();
         restore_ctrl_o_column();
         ins_at_eol.set(false);
     } else {
@@ -149,7 +149,7 @@ fn insert_enter(s: &mut InsertState) {
     if did_restart_edit.get() == 0 {
         // Open a fold at the cursor line, unless it was already open when
         // CTRL-O left.
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
 
     // `showmode`'s answer is how many lines the message took, which
@@ -193,7 +193,7 @@ fn insert_enter(s: &mut InsertState) {
         o_lnum.set(Win::current().w_cursor.lnum);
     }
     unsafe { pum_check_clear() };
-    unsafe { fold_update_after_insert() };
+    fold_update_after_insert();
     if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int && s.c != Ctrl_C {
         unsafe { ins_apply_autocmds(AutoEvent::InsertLeave) };
     }
@@ -328,7 +328,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     // The mode message is not scrolled away.
     msg_scroll.set(0);
     if fdo_flags.get() & kOptFdoFlagInsert as ::core::ffi::c_uint != 0 {
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
     if !key_available() {
         unsafe { fold_check_close() };
@@ -357,7 +357,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         unsafe { do_check_cursorbind() };
     }
     if s.count <= 1 {
-        unsafe { update_curswant() };
+        update_curswant();
     }
     s.old_topline = Win::current().w_topline;
     s.old_topfill = Win::current().w_topfill;
@@ -378,12 +378,9 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         s.ins_just_started = false;
         // Autocomplete: with a word character already before the cursor,
         // start completing without waiting for another key.
-        if unsafe { ins_compl_has_autocomplete() }
-            && !key_available()
-            && Win::current().w_cursor.col > 0
-        {
+        if ins_compl_has_autocomplete() && !key_available() && Win::current().w_cursor.col > 0 {
             s.c = unsafe { char_before_cursor() };
-            if unsafe { vim_isprintc(s.c) } {
+            if vim_isprintc(s.c) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
@@ -576,12 +573,10 @@ const fn mirror_arrow_key(c: c_int) -> c_int {
 /// `<CR>` under 'completeopt' `noinsert`) accepts.  Answers true when the key
 /// was consumed.
 fn compl_takes_key(s: &mut InsertState) -> bool {
-    // SAFETY: `curwin`/`curbuf` are live, which is all the completion
-    // machine's routines below ask for.
     if !(ins_compl_active()
         && Win::current().w_cursor.col >= ins_compl_col()
-        && unsafe { ins_compl_has_shown_match() }
-        && unsafe { pum_wanted() })
+        && ins_compl_has_shown_match()
+        && pum_wanted())
     {
         return false;
     }
@@ -599,7 +594,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     }
 
     // CTRL-L: take the rest of the shown match.
-    if s.c == Ctrl_L && (!ctrl_x_mode_line_or_eval() || unsafe { ins_compl_long_shown_match() }) {
+    if s.c == Ctrl_L && (!ctrl_x_mode_line_or_eval() || ins_compl_long_shown_match()) {
         unsafe { ins_compl_addfrommatch() };
         return true;
     }
@@ -631,13 +626,13 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
         && stop_arrow_ok()
     {
         unsafe { ins_compl_delete(false) };
-        if unsafe { ins_compl_preinsert_longest() } && !unsafe { ins_compl_is_match_selected() } {
+        if ins_compl_preinsert_longest() && !ins_compl_is_match_selected() {
             unsafe { ins_compl_insert(false, true) };
             ins_compl_init_get_longest();
             return true;
         }
         unsafe { ins_compl_insert(false, false) };
-    } else if ascii_iswhite_nl_or_nul(s.c) && unsafe { ins_compl_preinsert_effect() } {
+    } else if ascii_iswhite_nl_or_nul(s.c) && ins_compl_preinsert_effect() {
         unsafe { ins_compl_delete(false) };
     }
     false

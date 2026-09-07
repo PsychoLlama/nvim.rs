@@ -96,10 +96,7 @@ pub unsafe fn next_virt_text_chunk(
 /// The first virtual *text* on `row` — skipping virtual *lines*, which are a
 /// different thing on the same chain — from namespace `ns_id`, or from any
 /// namespace when that is 0. Null if the row has none.
-///
-/// # Safety
-/// `buffer` must point to a live buffer.
-pub unsafe fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *mut DecorVirtText {
+pub fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *mut DecorVirtText {
     let mut itr = MarkTreeIter::default();
     let mut walk = Cursor::in_buffer(buffer, &mut itr);
     walk.seek(row, 0);
@@ -127,10 +124,7 @@ pub unsafe fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> *
 /// Providers are asked last, and only when no mark already answered — their
 /// `_on_conceal_line` callback may place marks, which is what the answer of
 /// [`decor_providers_invoke_conceal_line`] reports.
-///
-/// # Safety
-/// `window` must point to a live window; runs Lua through the providers.
-pub unsafe fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
+pub fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
     if row < 0
         || window.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
@@ -174,10 +168,7 @@ pub unsafe fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) ->
 
 /// Whether `window` may have folded or concealed lines at all — the cheap test
 /// that lets the layout code skip the per-row questions above.
-///
-/// # Safety
-/// `window` must point to a live window.
-pub unsafe fn win_lines_concealed(window: Win) -> bool {
+pub fn win_lines_concealed(window: Win) -> bool {
     window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
@@ -256,8 +247,7 @@ pub unsafe fn decor_virt_lines(
 impl Win {
     /// [`decor_conceal_line`] for a window already promised live.
     fn conceal_line(self, row: c_int, check_cursor: bool) -> bool {
-        // SAFETY: a live window. Runs Lua through the providers.
-        unsafe { decor_conceal_line(self, row, check_cursor) }
+        decor_conceal_line(self, row, check_cursor)
     }
 }
 

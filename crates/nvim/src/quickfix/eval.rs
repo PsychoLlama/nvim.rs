@@ -49,7 +49,6 @@ unsafe fn holds_references(tv: *const TypVal) -> bool {
 ///
 /// `qi` must be a live stack.
 unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
-    // SAFETY: forwarded from the caller.
     let mut aborted = false;
     let mut i = 0;
     while i < unsafe { (*qi).max_count() } && !aborted {
@@ -83,7 +82,6 @@ unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
 ///
 /// `qi` must be a live stack.
 unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
-    // SAFETY: forwarded from the caller.
     let mut aborted = false;
     let mut i = 0;
     while i < unsafe { (*qi).max_count() } && !aborted {
@@ -132,7 +130,7 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
         }
         false
     };
-    unsafe { find_tab_win(aborting) }.is_some()
+    find_tab_win(aborting).is_some()
 }
 
 /// The body of `getqflist()` and `getloclist()`: with no `what` argument the

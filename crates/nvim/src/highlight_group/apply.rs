@@ -181,14 +181,14 @@ pub(crate) unsafe fn set_hl_group(
         if changed {
             unsafe { highlight_attr_set_all() };
         }
-        unsafe { ui_default_colors_set() };
+        ui_default_colors_set();
     } else if unsafe { cursor_mode_uses_syn_id(id) } {
         // A cursor style uses this group; its attribute has changed.
         ui_mode_info_set();
     }
 
     if !updating_screen.get() {
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
     }
     need_highlight_changed.set(true);
 }

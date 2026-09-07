@@ -128,12 +128,7 @@ unsafe fn stack_of(args: *mut ExArg, print_emsg: bool) -> Option<Qi> {
 
 /// Call `wanted` on every window of every tab page, answering the first one
 /// it accepts.
-///
-/// # Safety
-///
-/// `wanted` must not close or reorder windows: the walk is over the live
-/// tab page and window lists.
-pub(crate) unsafe fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
+pub(crate) fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
     tab_windows().find(|&wp| wanted(wp))
 }
 

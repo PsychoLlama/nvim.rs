@@ -130,7 +130,7 @@ pub(crate) unsafe fn check_num_option_bounds(
                 if *newval != 0 {
                     errmsg = e_scroll.as_ptr();
                 }
-                *newval = unsafe { win_default_scroll(Win::current()) };
+                *newval = win_default_scroll(Win::current());
             }
         }
         _ => {}

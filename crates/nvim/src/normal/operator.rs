@@ -192,8 +192,7 @@ pub(crate) unsafe fn nv_operator(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let op_type = get_op_type(ca.cmdchar, ca.nchar);
     // A prompt buffer only lets its own last line be changed.
-    if buf_is_prompt(current_buf()) && op_is_change(op_type) && !unsafe { prompt_curpos_editable() }
-    {
+    if buf_is_prompt(current_buf()) && op_is_change(op_type) && !prompt_curpos_editable() {
         clear_op_beep(ca.op());
         return;
     }
@@ -232,7 +231,7 @@ pub(crate) unsafe fn nv_lineop(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTLineWise;
     let op = ca.op();
-    if unsafe { cursor_down(ca.count1 - 1, op.op_type == OpType::Nop) }.is_err() {
+    if cursor_down(ca.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);
     } else if (op.op_type == OpType::Delete
         && op.motion_force != 'v' as c_int

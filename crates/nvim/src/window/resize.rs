@@ -125,7 +125,7 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // ---------------------------------------------------------------------------
 // The cursor's place in the window
 
-pub unsafe fn set_fraction(window: Win) {
+pub fn set_fraction(window: Win) {
     save_fraction(window);
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
 }
 
-pub unsafe fn win_new_height(window: Win, height: c_int) {
+pub fn win_new_height(window: Win, height: c_int) {
     new_win_height(window, height);
 }
 
@@ -251,7 +251,7 @@ pub(crate) fn new_win_height(window: Win, height: c_int) {
     set_inner_size(window, true);
 }
 
-pub unsafe fn scroll_to_fraction(window: Win, prev_height: c_int) {
+pub fn scroll_to_fraction(window: Win, prev_height: c_int) {
     to_fraction(window, prev_height);
 }
 
@@ -303,8 +303,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
                 }
                 if lnum == 1 {
                     // The first line in the buffer is folded.
-                    // SAFETY: a live window; row 0 is the line above line 1.
-                    line_size = !unsafe { decor_conceal_line(window, 0, false) } as c_int;
+                    line_size = !decor_conceal_line(window, 0, false) as c_int;
                     sline -= 1;
                     break;
                 }
@@ -342,7 +341,7 @@ pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
     invalidate_botline(window);
 }
 
-pub unsafe fn win_set_inner_size(window: Win, valid_cursor: bool) {
+pub fn win_set_inner_size(window: Win, valid_cursor: bool) {
     set_inner_size(window, valid_cursor);
 }
 
@@ -429,7 +428,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     window.w_redr_status = true;
 }
 
-pub unsafe fn win_new_width(window: Win, width: c_int) {
+pub fn win_new_width(window: Win, width: c_int) {
     new_win_width(window, width);
 }
 
@@ -441,7 +440,7 @@ pub(crate) fn new_win_width(window: Win, width: c_int) {
     set_inner_size(window, true);
 }
 
-pub unsafe fn win_default_scroll(window: Win) -> OptInt {
+pub fn win_default_scroll(window: Win) -> OptInt {
     default_scroll(window)
 }
 
@@ -451,7 +450,7 @@ pub(crate) fn default_scroll(window: Win) -> OptInt {
     (window.w_view_height / 2).max(1) as OptInt
 }
 
-pub unsafe fn win_comp_scroll(window: Win) {
+pub fn win_comp_scroll(window: Win) {
     comp_scroll(window);
 }
 
@@ -556,7 +555,7 @@ pub(crate) fn update_last_status(morewin: bool) {
     win_float_anchor_laststatus();
 }
 
-pub unsafe fn win_remove_status_line(window: Win, add_hsep: bool) {
+pub fn win_remove_status_line(window: Win, add_hsep: bool) {
     remove_status_line(window, add_hsep);
 }
 
@@ -666,7 +665,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub unsafe fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
+pub fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     winbar_win(window, make_room, valid_cursor)
 }
 
@@ -770,7 +769,7 @@ fn first_window() -> Win {
     windows().next().expect("a tab page has a window")
 }
 
-pub unsafe fn min_rows(tabpage: TabPage) -> c_int {
+pub fn min_rows(tabpage: TabPage) -> c_int {
     min_rows_of(tabpage)
 }
 
@@ -817,7 +816,7 @@ pub(crate) fn min_rows_all_tabpages() -> c_int {
     total + tabline_rows() + global_stl_rows()
 }
 
-pub unsafe fn only_one_window() -> bool {
+pub fn only_one_window() -> bool {
     // If there is another tab page there always is another window.
     if tabs().nth(1).is_some() {
         return false;

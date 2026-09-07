@@ -714,8 +714,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
             None
         })
     };
-    // SAFETY: `redraw_all_later` only marks the editor's own windows.
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
     None
 }
 

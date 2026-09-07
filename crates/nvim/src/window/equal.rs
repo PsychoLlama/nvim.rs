@@ -22,7 +22,7 @@ use crate::types::OptInt;
 use crate::ui::state::Columns;
 use crate::winlayer::{FrameRef, Win};
 
-pub unsafe fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
+pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
     equal(next_curwin, current, dir);
 }
 

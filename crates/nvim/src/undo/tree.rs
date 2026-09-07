@@ -20,7 +20,7 @@ use crate::winlayer::Win;
 /// Nothing frees a header this walk has already visited.
 pub(crate) unsafe fn u_unch_branch(buffer: Buf, start: UndoLink) {
     // SAFETY: nothing here frees a header.
-    for mut uh in unsafe { header_chain(buffer, start, |uh| uh.uh_prev) } {
+    for mut uh in header_chain(buffer, start, |uh| uh.uh_prev) {
         uh.uh_flags |= UH_CHANGED;
         if uh.uh_alt_next.is_some() {
             unsafe { u_unch_branch(buffer, uh.uh_alt_next) };
@@ -287,16 +287,14 @@ pub unsafe fn u_undoline() {
     let _ = unsafe { ml_replace(lnum, line, true) };
     let oldp_len = unsafe { cstr::bytes_at(oldp) }.len();
     let ptr_len = unsafe { cstr::bytes_at(Buf::current().b_u_line_ptr) }.len();
-    unsafe {
-        extmark_splice_cols(
-            Buf::current(),
-            Buf::current().b_u_line_lnum as c_int - 1,
-            0,
-            oldp_len as ColNr,
-            ptr_len as ColNr,
-            kExtmarkUndo,
-        )
-    };
+    extmark_splice_cols(
+        Buf::current(),
+        Buf::current().b_u_line_lnum as c_int - 1,
+        0,
+        oldp_len as ColNr,
+        ptr_len as ColNr,
+        kExtmarkUndo,
+    );
     unsafe { changed_bytes(Buf::current().b_u_line_lnum, 0) };
     unsafe { xfree(Buf::current().b_u_line_ptr as *mut c_void) };
     Buf::current().b_u_line_ptr = oldp;

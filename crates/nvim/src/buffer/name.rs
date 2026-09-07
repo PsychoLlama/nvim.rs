@@ -237,7 +237,6 @@ pub unsafe fn buf_name_changed(b: Buf) {
     }
     // SAFETY: the window title and the status lines are drawn from globals.
     unsafe { maketitle() };
-    // SAFETY: as above.
     status_redraw_all();
     // SAFETY: a live buffer, whose named file marks and timestamp follow its
     // name.
@@ -337,8 +336,7 @@ pub(crate) unsafe fn otherfile_buf(
     }
 
     if same_file_id(&mut b, file_id_p) {
-        // SAFETY: a live buffer.
-        unsafe { buf_set_file_id(b) };
+        buf_set_file_id(b);
         if same_file_id(&mut b, file_id_p) {
             return false;
         }
@@ -347,7 +345,7 @@ pub(crate) unsafe fn otherfile_buf(
 }
 
 /// Record the file id of `buffer`'s file, for recognising it under another name.
-pub unsafe fn buf_set_file_id(mut b: Buf) {
+pub fn buf_set_file_id(mut b: Buf) {
     if b.b_fname.is_null() {
         b.file_id_valid = false;
         return;

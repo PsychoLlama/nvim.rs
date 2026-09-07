@@ -504,8 +504,7 @@ pub(crate) fn paint_flush() {
 /// Whether the screen may be redrawn right now -- C's `redrawing()`, which
 /// only reads globals.
 pub(crate) fn is_redrawing() -> bool {
-    // SAFETY: reads `RedrawingDisabled`, `updating_screen` and `p_lz`.
-    unsafe { redrawing() }
+    redrawing()
 }
 
 /// The first byte of an option string, which is what the "is it set?" tests
@@ -631,10 +630,8 @@ pub unsafe fn build_statuscol_str(
     let fillclick = relnum >= 0 && stcp.width > 0 && lnum == win.w_topline;
 
     if relnum >= 0 {
-        // SAFETY: both are plain number variables of the editor's own.
-        unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
-        // SAFETY: as above.
-        unsafe { set_vim_var_nr(Vv::Relnum, relnum as VarNumber) };
+        set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
+        set_vim_var_nr(Vv::Relnum, relnum as VarNumber);
     }
 
     let job = StlJob {

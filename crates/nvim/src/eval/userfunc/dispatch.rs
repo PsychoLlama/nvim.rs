@@ -58,7 +58,7 @@ pub unsafe fn get_func_tv(
     if ret.is_ok() {
         // Prepare for calling `test_garbagecollect_now()`, which needs to
         // know which variables are used on the call stack.
-        let pushed = if unsafe { get_vim_var_nr(Vv::Testing) } != 0 {
+        let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
             funcargs.with_mut(|args| {
                 args.extend(
                     (0..argcount).map(|i| unsafe { argvars.as_mut_ptr().offset(i as isize) }),

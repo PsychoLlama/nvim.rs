@@ -23,7 +23,7 @@ use crate::winlayer::Win;
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
 /// Answers whether either does.
-pub unsafe fn redraw_custom_title_later() -> bool {
+pub fn redraw_custom_title_later() -> bool {
     let custom = (p_icon.get() != 0 && stl_syntax.get().has(StlSyntax::ICON))
         || (p_title.get() != 0 && stl_syntax.get().has(StlSyntax::TITLE));
     if custom {
@@ -71,7 +71,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
         if unsafe { *p_wbr.get() } != 0 || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
             wp.w_redr_status = true;
         }
-        unsafe { redraw_custom_title_later() };
+        redraw_custom_title_later();
     }
 
     wp.w_stl_cursor = wp.w_cursor;
@@ -109,8 +109,7 @@ pub fn redraw_later(mut window: Win, redr_type: c_int) {
 }
 
 /// Mark every window of the current tab page for redraw.
-pub unsafe fn redraw_all_later(redr_type: c_int) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn redraw_all_later(redr_type: c_int) {
     for wp in winlayer::windows() {
         redraw_later(wp, redr_type);
     }
@@ -134,8 +133,7 @@ fn set_must_redraw_unchecked(redr_type: c_int) {
 
 /// Drop every window's cached attribute state; used when the highlight tables
 /// are rebuilt.
-pub unsafe fn screen_invalidate_highlights() {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn screen_invalidate_highlights() {
     for mut wp in winlayer::windows() {
         redraw_later(wp, UPD_NOT_VALID);
         wp.w_grid_alloc.valid = false;
@@ -147,13 +145,11 @@ pub unsafe fn screen_invalidate_highlights() {
 /// Safe: the only promise is that the editor exists, which `curbuf` carries
 /// from startup to exit.
 pub fn redraw_curbuf_later(redr_type: c_int) {
-    // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { redraw_buf_later(Buf::current(), redr_type) }
+    redraw_buf_later(Buf::current(), redr_type)
 }
 
 /// Mark every window showing `buffer`.
-pub unsafe fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
     for wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw() {
             redraw_later(wp, redr_type);
@@ -165,11 +161,10 @@ pub unsafe fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
 ///
 /// `force` also marks a line *past* the end of the buffer, which is how a
 /// deletion gets the rows it used to occupy redrawn.
-pub unsafe fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw() {
-            unsafe { redraw_win_line(wp, line.min(buffer.b_ml.ml_line_count)) };
+            redraw_win_line(wp, line.min(buffer.b_ml.ml_line_count));
             if force && line > buffer.b_ml.ml_line_count {
                 wp.w_redraw_bot = line;
             }
@@ -180,8 +175,7 @@ pub unsafe fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
 /// Widen window `window`'s pending redraw range to cover lines `first..=last`.
 ///
 /// Nothing is marked when the range is entirely outside the window.
-pub unsafe fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
-    // SAFETY: a live window on the main thread.
+pub fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
     let mut win = window;
     if last >= win.w_topline && first < win.w_botline {
         if win.w_redraw_top == 0 || win.w_redraw_top > first {
@@ -198,17 +192,15 @@ pub unsafe fn redraw_win_range_later(window: Win, first: LineNr, last: LineNr) {
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-pub unsafe fn redraw_win_line(window: Win, lnum: LineNr) {
-    // SAFETY: a live window on the main thread.
-    unsafe { redraw_win_range_later(window, lnum, lnum) }
+pub fn redraw_win_line(window: Win, lnum: LineNr) {
+    redraw_win_range_later(window, lnum, lnum)
 }
 
 /// Mark lines `first..=last` of `buffer` in every window showing it.
-pub unsafe fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+pub fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
     for wp in winlayer::windows() {
         if wp.w_buffer == buffer.raw() {
-            unsafe { redraw_win_range_later(wp, first, last) };
+            redraw_win_range_later(wp, first, last);
         }
     }
 }

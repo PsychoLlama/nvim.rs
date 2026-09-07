@@ -299,7 +299,7 @@ unsafe fn do_filter(
     // SAFETY: `curwin` is the live current window and `line1` a line of it.
     Win::current().w_cursor.lnum = line1;
     Win::current().w_cursor.col = 0;
-    unsafe { changed_line_abv_curs() };
+    changed_line_abv_curs();
     invalidate_botline_win(Win::current());
 
     // When using temp files:
@@ -512,7 +512,7 @@ unsafe fn do_filter(
                 Buf::current().b_op_start.lnum -= linecount;
                 Buf::current().b_op_end.lnum -= linecount;
                 // adjust last line for next write
-                unsafe { write_lnum_adjust(-linecount) };
+                write_lnum_adjust(-linecount);
                 fold_update(
                     Win::current(),
                     Buf::current().b_op_start.lnum,
@@ -869,20 +869,17 @@ pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool
     silent_mode.set(false);
     info_message.set(true); // use stdout, not stderr
     if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
-        // SAFETY: message state.
         say::start();
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         global_need_msg_kind.set(false);
     } else if !save_silent {
         // don't want trailing newline with regular messaging
-        // SAFETY: message state.
         say::putchar('\n' as c_int);
     }
 
     // SAFETY: caller's contract.
     unsafe { print_line_no_prefix(lnum, use_number, list) };
     if save_silent {
-        // SAFETY: message state.
         say::putchar('\n' as c_int);
         silent_mode.set(save_silent);
     }

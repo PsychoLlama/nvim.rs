@@ -100,7 +100,6 @@ fn has_flag(arg: *const c_char, c: u8) -> bool {
 }
 
 fn buf_changed(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
     buf_is_changed(buffer)
 }
 
@@ -111,8 +110,7 @@ fn job_running(buffer: Buf) -> bool {
 }
 
 fn special_name(buffer: Buf) -> *mut c_char {
-    // SAFETY: a live buffer.
-    unsafe { buf_spname(buffer) }
+    buf_spname(buffer)
 }
 
 fn remembered_lnum(buffer: Buf) -> LineNr {
@@ -602,8 +600,7 @@ pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_in
 pub unsafe fn maketitle() {
     let mut scratch: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
 
-    // SAFETY: reads the redraw state.
-    if !unsafe { redrawing() } {
+    if !redrawing() {
         // Postpone updating the title when 'lazyredraw' is set.
         need_maketitle.set(true);
         return;

@@ -572,7 +572,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub unsafe fn did_set_runtimepackpath(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_runtimepackpath(_args: &mut OptSet) -> Option<&CStr> {
     runtime_search_path_valid.set(false);
     None
 }
@@ -595,8 +595,7 @@ pub unsafe fn runtime_search_path_validate() {
     // itself asynchronously from sync code in the same plugin, so the lua or
     // autoload module it is looking for is almost certainly in the cached path
     // already: a stale cache beats an error here.
-    // SAFETY: a plain read of the Lua state's nesting flags.
-    if !unsafe { nlua_is_deferred_safe() } || runtime_search_path_valid.get() {
+    if !nlua_is_deferred_safe() || runtime_search_path_valid.get() {
         return;
     }
     if runtime_search_path_ref.get().is_null() {

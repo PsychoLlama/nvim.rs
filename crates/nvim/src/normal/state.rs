@@ -178,15 +178,14 @@ fn new_state() -> NormalState {
 ///
 /// Beeps and clears the pending operator when there is one to clear.
 pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
-    // SAFETY (throughout): `op` is null or the caller's operator.
-    if !unsafe { text_locked() } {
+    if !text_locked() {
         return false;
     }
     if !op.is_null() {
         // SAFETY: past the null check, `op` is the caller's live operator.
         clear_op_beep(unsafe { Op::new(op) });
     }
-    unsafe { text_locked_msg() };
+    text_locked_msg();
     true
 }
 
@@ -197,7 +196,7 @@ pub(crate) unsafe fn check_text_or_curbuf_locked(op: *mut OpArg) -> bool {
     if unsafe { check_text_locked(op) } {
         return true;
     }
-    if !unsafe { curbuf_locked() } {
+    if !curbuf_locked() {
         return false;
     }
     if !op.is_null() {
@@ -493,7 +492,7 @@ fn normal_check_folds() {
     if has_any_folding(Win::current()) != 0 && !char_avail() {
         unsafe { fold_check_close() };
         if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
-            unsafe { fold_open_cursor() };
+            fold_open_cursor();
         }
     }
 }
@@ -586,13 +585,13 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
             unsafe { time_msg(c"first screen update".as_ptr(), ptr::null()) };
             time_finish();
         }
-        unsafe { may_make_initial_scroll_size_snapshot() };
+        may_make_initial_scroll_size_snapshot();
     }
 
     // Collecting is only safe where no caller up the stack is holding a
     // value: the command-line window and Ex mode both are.
     may_garbage_collect.set(!ns.cmdwin && !ns.noexmode);
-    unsafe { update_curswant() };
+    update_curswant();
 
     if exmode_active.get() {
         if ns.noexmode {
@@ -619,7 +618,7 @@ pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut boo
     if ca.opcount != 0 {
         count = ca.opcount as int64_t * if count == 0 { 1 } else { count };
     }
-    unsafe { set_vcount(count, if count == 0 { 1 } else { count }, *set_prevcount) };
+    set_vcount(count, if count == 0 { 1 } else { count }, *set_prevcount);
     *set_prevcount = false;
 }
 

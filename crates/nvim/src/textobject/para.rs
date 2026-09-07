@@ -361,10 +361,7 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
 
 /// [`linewhite`] for a line of the current buffer.
 fn line_is_white(lnum: LineNr) -> bool {
-    // SAFETY: on the main thread with a current buffer; `ml_get` checks the
-    // line number itself, so any `lnum` is answered rather than read out of
-    // bounds.
-    unsafe { linewhite(lnum) }
+    linewhite(lnum)
 }
 
 /// [`starts_para`] for a line of the current buffer.

@@ -588,7 +588,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         && ctrl_x_mode_normal()
         && (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R || ins_compl_pum_key(c));
 
-    compl_direction.set(unsafe { ins_compl_key2dir(c) });
+    compl_direction.set(ins_compl_key2dir(c));
     let insert_match = ins_compl_use_match(c);
 
     if !compl_started.get() {
@@ -674,7 +674,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         unsafe { ui_flush() };
         loop {
             if char_avail() {
-                if unsafe { ins_compl_preinsert_effect() } && ins_compl_win_active(Win::current()) {
+                if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
                     unsafe { ins_compl_delete(false) }; // Remove pre-inserted text
                     compl_ins_end_col.set(compl_col.get());
                 }

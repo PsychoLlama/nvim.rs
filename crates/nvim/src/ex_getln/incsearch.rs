@@ -61,7 +61,7 @@ pub(crate) fn restore_viewstate(mut window: Win, vs: ViewState) {
 }
 
 /// Start an incremental search from where the cursor and view are now.
-pub(crate) unsafe fn init_incsearch_state(mut s: Is) {
+pub(crate) fn init_incsearch_state(mut s: Is) {
     s.winid = Win::current().handle;
     s.match_start = Win::current().w_cursor;
     s.did_incsearch = false;
@@ -212,14 +212,13 @@ pub unsafe fn parse_pattern_and_range(
     }
 
     p = skip_ws(p);
-    let delim =
-        if delim_optional && unsafe { vim_is_ident_char(at(p) as uint8_t as ::core::ffi::c_int) } {
-            ' ' as ::core::ffi::c_int
-        } else {
-            let c = at(p);
-            p = p.wrapping_offset(1);
-            c
-        };
+    let delim = if delim_optional && vim_is_ident_char(at(p) as uint8_t as ::core::ffi::c_int) {
+        ' ' as ::core::ffi::c_int
+    } else {
+        let c = at(p);
+        p = p.wrapping_offset(1);
+        c
+    };
     *search_delim = delim;
 
     let end = skip_pattern(p, delim, &mut magic);
@@ -416,8 +415,8 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         ui_busy_stop();
     } else {
         // Turn off the previous highlight.
-        unsafe { set_no_hlsearch(true) };
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        set_no_hlsearch(true);
+        redraw_all_later(UPD_SOME_VALID);
     }
 
     // Add or remove the search match position.
@@ -448,8 +447,8 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         if unsafe { empty_pattern(cc.at(skiplen), patlen as size_t, search_delim) }
             && !no_hlsearch.get()
         {
-            unsafe { redraw_all_later(UPD_SOME_VALID) };
-            unsafe { set_no_hlsearch(true) };
+            redraw_all_later(UPD_SOME_VALID);
+            set_no_hlsearch(true);
         }
         set_cmd_byte(cc, skiplen + patlen, next_char);
     }
@@ -476,7 +475,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         Win::current().w_valid_cursor = end_pos;
     }
 
-    unsafe { msg_starthere() };
+    msg_starthere();
     unsafe { redrawcmdline() };
     s.did_incsearch = true;
 }
@@ -584,7 +583,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
     // Needed for TAB.
     validate_curwin_cursor();
     status_redraw_all();
-    unsafe { redraw_all_later(UPD_SOME_VALID) };
+    redraw_all_later(UPD_SOME_VALID);
     if call_update_screen {
         let _ = unsafe { update_screen() };
     }

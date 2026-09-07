@@ -22,7 +22,7 @@ use crate::types::{FAIL, Failed, NUL, OK, Refcount};
 
 /// Whether the function table changed under a listing, which means the
 /// `UserFunc` the caller is holding may be gone.  Reports E454 when it did.
-pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
+pub(crate) fn function_list_modified(prev_ht_changed: c_int) -> c_int {
     if prev_ht_changed != func_table().changed() {
         emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED));
         return 1;
@@ -48,7 +48,7 @@ pub(crate) unsafe fn list_func_head(
 
     // Check no function was added or removed from a callback, as
     // `msg_start` may have invoked a redraw.
-    if unsafe { function_list_modified(prev_ht_changed) } != 0 {
+    if function_list_modified(prev_ht_changed) != 0 {
         return Err(Failed);
     }
 

@@ -257,7 +257,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
     // closed fold -- with 'foldmethod' indent, deleting the first
     // non-white character before a TAB can put it in one.
     if did_backspace {
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
     did_backspace
 }
@@ -532,14 +532,12 @@ fn beep_backspace() {
 /// Step the cursor one character forward, over a line break if need be.
 #[inline(always)]
 fn cursor_forward() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     inc_cursor()
 }
 
 /// Step the cursor one character back, over a line break if need be.
 #[inline(always)]
 fn cursor_back() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     dec_cursor()
 }
 
@@ -553,7 +551,6 @@ fn delete_one_char() -> Result<(), Failed> {
 /// The character under the cursor, `NUL` at the end of the line.
 #[inline(always)]
 fn char_at_cursor() -> c_int {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     gchar_cursor()
 }
 

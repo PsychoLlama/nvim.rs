@@ -211,10 +211,7 @@ fn selection_is_old() -> bool {
 // The public interface
 
 /// Virtual column of the cursor, as `getvvcol` reports it (list mode off).
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn getviscol() -> ColNr {
+pub fn getviscol() -> ColNr {
     let win = Win::current();
     win.virtual_vcol(win.cursor())
 }
@@ -543,10 +540,7 @@ pub fn check_cursor(window: Win) {
 }
 
 /// Clamp the start of the Visual area to the current buffer.
-///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn check_visual_pos() {
+pub fn check_visual_pos() {
     let visual = visual_anchor();
     let last = Buf::current().line_count();
     if visual.lnum > last {
@@ -569,10 +563,7 @@ pub unsafe fn check_visual_pos() {
 
 /// Step the cursor back off the NUL at the end of the line, where Normal
 /// mode does not let it rest.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn adjust_cursor_col() {
+pub fn adjust_cursor_col() {
     let cursor = Win::current().cursor();
     if cursor.col() > 0 && (!visual_active() || selection_is_old()) && gchar_cursor() == NUL {
         cursor.set_col(cursor.col() - 1);
@@ -581,10 +572,7 @@ pub unsafe fn adjust_cursor_col() {
 
 /// Scroll the current window horizontally to `leftcol`, pulling the cursor
 /// along if 'sidescrolloff' demands it. Answers whether the cursor moved.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn set_leftcol(leftcol: ColNr) -> bool {
+pub fn set_leftcol(leftcol: ColNr) -> bool {
     let win = Win::current();
     if win.leftcol() == leftcol {
         return false;

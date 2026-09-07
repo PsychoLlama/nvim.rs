@@ -73,8 +73,7 @@ impl SavedState {
     fn leave(self) {
         drop(self.redraw_off);
         drop(self.no_prompt);
-        // SAFETY: no arguments; it only marks the grid dirty.
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
         need_wait_return.set(false);
         msg_scroll.set(self.msg_scroll);
         lines_left.set(Rows.get() - 1);
@@ -288,8 +287,7 @@ unsafe fn debug_prompt(cmd: *mut c_char) {
         ex_normal_busy.set(save_ex_normal_busy);
 
         cmdline_row.set(msg_row.get());
-        // SAFETY: no argument.
-        unsafe { msg_starthere() };
+        msg_starthere();
 
         if !cmdline.is_null() {
             // SAFETY: `cmdline` is the NUL-terminated line just read, and

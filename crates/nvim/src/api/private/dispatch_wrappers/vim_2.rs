@@ -448,9 +448,7 @@ pub unsafe fn handle_nvim_get_current_buf(
         wrong_arity(error, 0, args.len());
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_current_buf() };
+    let rv = nvim_get_current_buf();
     Object::Buffer(rv as Integer)
 }
 
@@ -523,9 +521,7 @@ pub unsafe fn handle_nvim_get_current_tabpage(
         wrong_arity(error, 0, args.len());
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_current_tabpage() };
+    let rv = nvim_get_current_tabpage();
     Object::Tabpage(rv as Integer)
 }
 
@@ -559,9 +555,7 @@ pub unsafe fn handle_nvim_get_current_win(
         wrong_arity(error, 0, args.len());
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_get_current_win() };
+    let rv = nvim_get_current_win();
     Object::Window(rv as Integer)
 }
 

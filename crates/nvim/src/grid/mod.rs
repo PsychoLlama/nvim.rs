@@ -459,12 +459,6 @@ pub fn grid_del_lines(
 }
 
 /// The window in the current tab whose own grid has `handle`, if any.
-///
-/// # Safety
-/// The window list must be consistent.
-///
-/// The walk keeps that promise itself now; the signature stays `unsafe`
-/// because every caller still spells the call out that way.
-pub unsafe fn get_win_by_grid_handle(handle: Handle) -> Option<Win> {
+pub fn get_win_by_grid_handle(handle: Handle) -> Option<Win> {
     windows().find(|wp| wp.w_grid_alloc.handle == handle)
 }

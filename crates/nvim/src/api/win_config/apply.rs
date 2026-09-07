@@ -108,8 +108,7 @@ unsafe fn win_config_split(
                 return false;
             }
         }
-        // SAFETY: the caller's window and error slot.
-        if !unsafe { check_split_disallowed_err(win, slot_mut(err)) } {
+        if !check_split_disallowed_err(win, slot_mut(err)) {
             return false;
         }
         let to_split_ok;
@@ -121,10 +120,8 @@ unsafe fn win_config_split(
         let altwin_0: Option<Win>;
         '_restore_curwin: {
             if curwin_moving_tp {
-                // SAFETY: the caller's window, still in its tab page.
-                let altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) }.expect("altwin");
-                // SAFETY: `altwin` is the live neighbour just found.
-                unsafe { win_goto(altwin) };
+                let altwin = win_find_altwin(win, expect_tab(win_tp)).expect("altwin");
+                win_goto(altwin);
                 if Win::current_raw() == win.raw() {
                     let handle = win_id.handle();
                     let why = api_error!(
@@ -225,17 +222,13 @@ unsafe fn win_config_split(
                     unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
                 debug_assert!(result.is_ok(), "the window was switched to");
             }
-            // SAFETY: the caller's window; `unflat_altfr` is the frame the
-            // removal above left behind, `None` if it has since been freed.
-            to_split_ok = unsafe {
-                win_split_ins(
-                    0 as ::core::ffi::c_int,
-                    flags,
-                    Some(win),
-                    0 as ::core::ffi::c_int,
-                    unflat_altfr.and_then(FrameId::get),
-                )
-            }
+            to_split_ok = win_split_ins(
+                0 as ::core::ffi::c_int,
+                flags,
+                Some(win),
+                0 as ::core::ffi::c_int,
+                unflat_altfr.and_then(FrameId::get),
+            )
             .is_some();
             if !to_split_ok {
                 win_append(w.prev(), w, other_tab(expect_tab(win_tp)));
@@ -268,18 +261,15 @@ unsafe fn win_config_split(
             }
         }
         if curwin_moving_tp && win_valid(win_id) {
-            // SAFETY: the caller's window, still valid -- just checked.
-            unsafe { win_goto(w) };
+            win_goto(w);
         }
         return false;
     }
     if set(KEYSET_OPTIDX_win_config__width) {
-        // SAFETY: the caller's window.
-        unsafe { win_setwidth_win(fconfig.width, w) };
+        win_setwidth_win(fconfig.width, w);
     }
     if set(KEYSET_OPTIDX_win_config__height) {
-        // SAFETY: as above.
-        unsafe { win_setheight_win(fconfig.height, w) };
+        win_setheight_win(fconfig.height, w);
     }
     if !was_split {
         // SAFETY: the caller's config.
@@ -324,13 +314,11 @@ unsafe fn win_config_float_tp(
             if !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) } {
                 return false;
             }
-            // SAFETY: the caller's window, still in its tab page.
-            altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) };
+            altwin = win_find_altwin(win, expect_tab(win_tp));
             debug_assert!(altwin.is_some(), "altwin");
             if win.is_current() {
                 curwin_moving_tp = true;
-                // SAFETY: `altwin` is the live neighbour just found.
-                unsafe { win_goto(altwin.expect("altwin")) };
+                win_goto(altwin.expect("altwin"));
                 if win.is_current() {
                     let handle = win.id().handle();
                     let why = api_error!(
@@ -352,8 +340,7 @@ unsafe fn win_config_float_tp(
                 {
                     break '_restore_curwin;
                 }
-                // SAFETY: as above.
-                altwin = unsafe { win_find_altwin(win, expect_tab(win_tp)) };
+                altwin = win_find_altwin(win, expect_tab(win_tp));
                 debug_assert!(altwin.is_some(), "altwin");
             }
         }
@@ -387,8 +374,7 @@ unsafe fn win_config_float_tp(
         return true;
     }
     if curwin_moving_tp && win_valid(win.id()) {
-        // SAFETY: the caller's window, still valid -- just checked.
-        unsafe { win_goto(w) };
+        win_goto(w);
     }
     false
 }

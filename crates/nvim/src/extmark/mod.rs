@@ -225,8 +225,7 @@ fn itr_get_ext(tree: &mut MarkTree, p: MTPos, itr: &mut MarkTreeIter) -> bool {
 }
 
 fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, itr: &mut MarkTreeIter) -> bool {
-    // SAFETY: as [`itr_get`].
-    unsafe { marktree_itr_get_overlap(tree, row, col, itr) }
+    marktree_itr_get_overlap(tree, row, col, itr)
 }
 
 fn itr_step_overlap(tree: &mut MarkTree, itr: &mut MarkTreeIter, pair: &mut MTPair) -> bool {
@@ -291,8 +290,7 @@ fn invalidate_decor_state(buffer: Buf) {
 }
 
 fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
-    // SAFETY: a live buffer, whose own marktree this walks.
-    unsafe { buf_signcols_count_range(buffer, row1, row2, add, half) }
+    buf_signcols_count_range(buffer, row1, row2, add, half)
 }
 
 /// The highest extmark id handed out in namespace `key`, registering the
@@ -335,8 +333,7 @@ fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
 /// `u_force_get_undo_header(buf)`, and then the extmark list on it. NULL when
 /// the change is not undoable.
 fn undo_marks(buffer: Buf) -> *mut extmark_undo_vec_t {
-    // SAFETY: a live buffer.
-    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buffer) };
+    let uhp: *mut UndoHeader = u_force_get_undo_header(buffer);
     if uhp.is_null() {
         return ptr::null_mut();
     }
@@ -362,14 +359,10 @@ pub(crate) struct Extent {
 
 /// `buf_updates_send_splice`: the `on_bytes` half of every change.
 fn send_splice(buffer: Buf, start: Extent, old: Extent, new: Extent) {
-    // SAFETY: a live buffer. This re-enters the editor through the update
-    // callbacks, which is why no borrow of the buffer spans the call.
-    unsafe {
-        buf_updates_send_splice(
-            buffer, start.row, start.col, start.byte, old.row, old.col, old.byte, new.row, new.col,
-            new.byte,
-        );
-    }
+    buf_updates_send_splice(
+        buffer, start.row, start.col, start.byte, old.row, old.col, old.byte, new.row, new.col,
+        new.byte,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -430,7 +423,7 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 // file already spending the row.
 
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
-pub unsafe fn extmark_adjust(
+pub fn extmark_adjust(
     buffer: Buf,
     line1: LineNr,
     line2: LineNr,
@@ -446,7 +439,7 @@ pub unsafe fn extmark_adjust(
 ///
 /// `old_col` and `new_col` encode an offset from `start_col` when the
 /// matching row extent is 0, and the end column of the region otherwise.
-pub unsafe fn extmark_splice(
+pub fn extmark_splice(
     buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
@@ -473,7 +466,7 @@ pub unsafe fn extmark_splice(
 
 /// The single-line shorthand: the column delta is both the column count and
 /// the byte count.
-pub unsafe fn extmark_splice_cols(
+pub fn extmark_splice_cols(
     buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
@@ -495,7 +488,7 @@ pub unsafe fn extmark_splice_cols(
 }
 
 /// Text removed from one place and inserted at another, as `:move` does it.
-pub unsafe fn extmark_move_region(
+pub fn extmark_move_region(
     buffer: Buf,
     start_row: c_int,
     start_col: ColNr,

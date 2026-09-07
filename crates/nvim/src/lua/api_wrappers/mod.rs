@@ -405,8 +405,7 @@ unsafe fn run(
     if unsafe { lua_gettop(lstate) } != argc {
         wrong_arity(&mut call.err, argc);
     } else {
-        // SAFETY: as above; the query has no side effects.
-        let refused = deferred.filter(|_| !unsafe { nlua_is_deferred_safe() });
+        let refused = deferred.filter(|_| !nlua_is_deferred_safe());
         if let Some(name) = refused {
             let (fmt, name) = (e_fast_api_disabled.as_ptr(), name.as_ptr());
             // SAFETY: as above; both strings are static and NUL-terminated,

@@ -153,12 +153,12 @@ pub unsafe fn msg_outtrans_len(
         let mb_len = unsafe { utfc_ptr2len_len(str, left + 1) };
         if mb_len > 1 {
             let c = unsafe { utf_ptr2char(str) };
-            if unsafe { vim_isprintc(c) } {
+            if vim_isprintc(c) {
                 cells += unsafe { utf_ptr2cells(str) };
             } else {
                 flush_plain(str, plain_start);
                 plain_start = unsafe { str.add(mb_len as usize) };
-                let display = unsafe { transchar_buf(None, c) };
+                let display = transchar_buf(None, c);
                 unsafe { msg_puts_hl(display.as_ptr(), special_hl(hl_id), false) };
                 cells += unsafe { char2cells(c) };
             }

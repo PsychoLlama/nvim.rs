@@ -611,7 +611,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
                 didset_options();
                 didset_options2();
                 ui_refresh_options();
-                unsafe { redraw_all_later(UPD_CLEAR) };
+                redraw_all_later(UPD_CLEAR);
             } else {
                 unsafe { showoptions(true, opt_flags) };
                 did_show = true;

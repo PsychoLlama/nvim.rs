@@ -311,8 +311,7 @@ fn secure() -> bool {
 
 /// Whether a deferred call can be registered, having reported if not.
 fn can_defer() -> bool {
-    // SAFETY: reads the call stack and may report; no arguments.
-    unsafe { can_add_defer() }
+    can_add_defer()
 }
 
 /// Whether the running script is Lua, which is what makes a String argument

@@ -363,7 +363,7 @@ pub unsafe fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
 /// # Safety
 /// `text` must point at a NUL-terminated string.
 pub unsafe fn indent_size_no_ts(text: *const c_char) -> c_int {
-    let tab_size = unsafe { byte2cells(TAB) };
+    let tab_size = byte2cells(TAB);
     let mut vcol = 0;
     let mut text = text;
     loop {
@@ -733,16 +733,14 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
         if flags & SIN_NOMARK as c_int == 0 {
             // SAFETY: a live buffer.
             let buf = unsafe { Buf::new(buf) };
-            unsafe {
-                extmark_splice_cols(
-                    buf,
-                    Win::current().w_cursor.lnum as c_int - 1,
-                    skipcols,
-                    old_offset - skipcols,
-                    new_offset - skipcols,
-                    kExtmarkUndo,
-                )
-            };
+            extmark_splice_cols(
+                buf,
+                Win::current().w_cursor.lnum as c_int - 1,
+                skipcols,
+                old_offset - skipcols,
+                new_offset - skipcols,
+                kExtmarkUndo,
+            );
         }
         if flags & SIN_CHANGED as c_int != 0 {
             unsafe { changed_bytes(Win::current().w_cursor.lnum, 0) };

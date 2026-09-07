@@ -186,11 +186,7 @@ impl BreakList {
     /// entry's expression runs arbitrary Vimscript and anything it does --
     /// including another `:breakadd` -- can grow the list and move every
     /// entry with it.
-    ///
-    /// # Safety
-    /// `idx` must be below [`BreakList::len`], and the pointer must not be
-    /// held across anything that can add to the list.
-    unsafe fn entry(self, idx: c_int) -> *mut Breakpoint {
+    fn entry(self, idx: c_int) -> *mut Breakpoint {
         self.cell()
             .with_mut(|entries| entries.as_mut_ptr().wrapping_offset(idx as isize))
     }
@@ -620,9 +616,7 @@ pub unsafe fn ex_breaklist(_args: *mut ExArg) {
     let namebuff = shortened.as_mut_ptr();
 
     for i in 0..list.len() {
-        // SAFETY: `i` is below `ga_len`; the entry's name is owned and
-        // NUL-terminated, and the messages print bytes verbatim.
-        let bp = unsafe { list.entry(i) };
+        let bp = list.entry(i);
         let kind = unsafe { (*bp).dbg_type };
         if kind == DBG_FILE {
             unsafe { home_replace(None, (*bp).dbg_name, namebuff, MAXPATHL as size_t, true) };
@@ -700,9 +694,7 @@ unsafe fn debuggy_find(
 
     let mut lnum = 0 as LineNr;
     for i in 0..list.len() {
-        // SAFETY: `i` is below `ga_len`. Re-read every pass, because a watch
-        // expression below can grow the array.
-        let bp = unsafe { list.entry(i) };
+        let bp = list.entry(i);
         // SAFETY: as above.
         let kind = unsafe { (*bp).dbg_type };
         // Skip entries of the wrong kind, and ones for a line beyond a

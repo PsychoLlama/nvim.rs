@@ -112,7 +112,7 @@ pub unsafe extern "C" fn event_init() {
     signal_init();
     unsafe { channel_init() };
     unsafe { terminal_init() };
-    unsafe { ui_init() };
+    ui_init();
     time_msg_at(c"event init");
 }
 
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     estack_init();
     cmdline_init();
     unsafe { eval_init() };
-    unsafe { set_vim_var_nr(Vv::Starttime, os_realtime()) };
+    set_vim_var_nr(Vv::Starttime, os_realtime());
 
     let exename = if !argv0.get().is_null() {
         argv0.get() as *const c_char
@@ -265,7 +265,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let remote_ui = ui_client_channel_id.get() != 0;
     if use_builtin_ui && !remote_ui {
         ui_client_forward_stdin.set(!stdin_isatty.get());
-        let progpath = unsafe { get_vim_var_str(Vv::Progpath) };
+        let progpath = get_vim_var_str(Vv::Progpath);
         let chan = unsafe { ui_client_start_server(progpath, params.argc as usize, params.argv) };
         if chan == 0 {
             unsafe { fprintf(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
@@ -317,7 +317,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     msg_scroll.set(1);
     no_wait_return.set(1);
     unsafe { init_highlight(true, false) };
-    unsafe { ui_comp_syn_init() };
+    ui_comp_syn_init();
     time_msg_at(c"init highlight");
 
     debug_break_level.set(params.use_debug_break_level);
@@ -376,15 +376,15 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     unsafe { exe_pre_commands(&raw mut params) };
     if !vimrc_none || params.clean {
-        unsafe { filetype_plugin_enable() };
+        filetype_plugin_enable();
     }
     unsafe { source_startup_scripts(&raw mut params) };
     if !vimrc_none || params.clean {
-        unsafe { filetype_maybe_enable() };
-        unsafe { syn_maybe_enable() };
+        filetype_maybe_enable();
+        syn_maybe_enable();
     }
 
-    unsafe { set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber) };
+    set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber);
     unsafe { load_plugins() };
     unsafe { set_window_layout(&raw mut params) };
 
@@ -409,7 +409,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let _ = unsafe { shada_read_everything(ptr::null(), false, true) };
         time_msg_at(c"reading ShaDa");
     }
-    if unsafe { get_vim_var_list(Vv::Oldfiles) }.is_null() {
+    if get_vim_var_list(Vv::Oldfiles).is_null() {
         unsafe { set_vim_var_list(Vv::Oldfiles, tv_list_alloc(0)) };
     }
 
@@ -468,11 +468,11 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     starting.set(0);
     RedrawingDisabled.set(0);
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
     no_wait_return.set(0);
     do_autochdir();
 
-    unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber) };
+    set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber);
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::VimEnter;
     unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };

@@ -75,8 +75,7 @@ pub unsafe fn f_foldlevel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
-        // SAFETY: `lnum` is inside the current buffer.
-        rv.vval.v_number = unsafe { fold_level(lnum) } as VarNumber;
+        rv.vval.v_number = fold_level(lnum) as VarNumber;
     }
 }
 
@@ -91,21 +90,18 @@ pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     rv.vval.v_string = ptr::null_mut();
     // SAFETY: reading three `v:` variables the fold drawing has just set.
     let (start, end, dash) = (Vv::Foldstart, Vv::Foldend, Vv::Folddashes);
-    let (foldstart, foldend, dashes) = unsafe {
-        (
-            get_vim_var_nr(start),
-            get_vim_var_nr(end),
-            get_vim_var_str(dash),
-        )
-    };
+    let (foldstart, foldend, dashes) = (
+        get_vim_var_nr(start),
+        get_vim_var_nr(end),
+        get_vim_var_str(dash),
+    );
     let (foldstart, foldend) = (foldstart as LineNr, foldend as LineNr);
     if !(foldstart > 0 && foldend <= Buf::current().b_ml.ml_line_count) {
         return;
     }
     // The first line of the fold that has anything on it.
     let mut lnum = foldstart;
-    // SAFETY: `lnum` is inside the buffer, `foldend` having been checked.
-    while lnum < foldend && unsafe { linewhite(lnum) } {
+    while lnum < foldend && linewhite(lnum) {
         lnum += 1;
     }
     // Both are NUL-terminated: a buffer line, and 'folddashes'.

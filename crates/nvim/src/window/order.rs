@@ -88,8 +88,7 @@ pub(crate) fn exchange(prenum: c_int) {
         emsg(e_floatexchange);
         return;
     }
-    // SAFETY: beeps; reads no argument of ours.
-    if is_only_window(cur, None) || unsafe { text_or_buf_locked() } {
+    if is_only_window(cur, None) || text_or_buf_locked() {
         // SAFETY: as above.
         beep_flush();
         return;
@@ -161,8 +160,7 @@ pub(crate) fn exchange(prenum: c_int) {
     } else if visual_active() {
         wp.w_cursor = cur.w_cursor;
     }
-    // SAFETY: a live window; nothing derived from it is read afterwards.
-    unsafe { win_enter(wp, true) };
+    win_enter(wp, true);
     Win::current().redraw_later(UPD_NOT_VALID);
     wp.redraw_later(UPD_NOT_VALID);
 }
@@ -242,7 +240,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
+pub fn win_splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
     splitmove(window, size, flags)
 }
 
@@ -277,8 +275,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     // held: `win_split_ins` flattens it on the way through, so the frame the
     // failure path wants back may be gone by the time it looks.
     let unflat = unflat_altfr.and_then(FrameId::get);
-    // SAFETY: a live window.
-    if unsafe { win_split_ins(size, flags, Some(window), dir, unflat) }.is_none() {
+    if win_split_ins(size, flags, Some(window), dir, unflat).is_none() {
         // Restore the window to its original position.
         if !window.w_floating
             && let Some(unflat) = unflat_altfr.and_then(FrameId::get)
@@ -301,7 +298,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     Ok(())
 }
 
-pub unsafe fn win_move_after(win1: Win, win2: Win) {
+pub fn win_move_after(win1: Win, win2: Win) {
     move_after(win1, win2);
 }
 
@@ -349,8 +346,7 @@ fn move_after(win1: Win, win2: Win) {
     }
     win1.w_pos_changed = true;
     win2.w_pos_changed = true;
-    // SAFETY: a live window; nothing derived from it is read afterwards.
-    unsafe { win_enter(win1, false) };
+    win_enter(win1, false);
 }
 
 /// How many windows would fit in `height` rows of frame `fr`: each costs

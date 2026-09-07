@@ -22,13 +22,10 @@ use crate::types::{MAXPATHL, NUL, ShmFlag, Vv};
 /// Whether to postpone the mode message: not redrawing, or inside a mapping.
 ///
 /// Answering true also sets `redraw_mode`, so it is shown on the next redraw.
-pub unsafe fn skip_showmode() -> bool {
-    // SAFETY: `char_avail` pumps the input layer on the main thread.
-    // `char_avail` is only asked last: it costs a poll of the input layer,
-    // and `redrawing()` may already have paid for one.
+pub fn skip_showmode() -> bool {
     if global_busy.get() != 0
         || msg_silent.get() != 0
-        || !unsafe { redrawing() }
+        || !redrawing()
         || (char_avail() && !KeyTyped.get())
     {
         redraw_mode.set(true);
@@ -63,7 +60,7 @@ pub unsafe fn showmode() -> c_int {
     let can_show_mode = p_ch.get() != 0 || ui_has(kUIMessages);
 
     if (do_mode || reg_recording.get() != 0) && can_show_mode {
-        if unsafe { skip_showmode() } {
+        if skip_showmode() {
             return 0;
         }
 
@@ -259,7 +256,7 @@ pub(crate) fn msg_pos_mode() {
 /// separate from [`showmode`]. Callers check `mode_displayed` first.
 pub unsafe fn unshowmode(force: bool) {
     // SAFETY: `char_avail` pumps the input layer on the main thread.
-    if !unsafe { redrawing() } || (!force && char_avail() && !KeyTyped.get()) {
+    if !redrawing() || (!force && char_avail() && !KeyTyped.get()) {
         redraw_cmdline.set(true); // delete it later
     } else {
         unsafe { clearmode() };
@@ -356,5 +353,5 @@ pub unsafe fn comp_col() {
     sc_col.set((Columns.get() - sc_width).max(1));
     ru_col.set((Columns.get() - ru_width).max(1));
 
-    unsafe { set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as VarNumber) };
+    set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as VarNumber);
 }

@@ -284,7 +284,7 @@ unsafe fn read_uint64(
 }
 
 /// What the msgpack parser made of an entry's payload.
-pub(crate) unsafe fn shada_check_status(
+pub(crate) fn shada_check_status(
     initial_fpos: uintmax_t,
     status: c_int,
     remaining: size_t,
@@ -427,7 +427,7 @@ pub(crate) unsafe fn shada_read_next_item(
 
         if let Disposition::VerifyOnly = disposition {
             let status = cursor.skip();
-            match unsafe { shada_check_status(parse_pos, status, cursor.left) } {
+            match shada_check_status(parse_pos, status, cursor.left) {
                 kSDReadStatusSuccess => continue,
                 status => return status,
             }
@@ -469,7 +469,7 @@ unsafe fn read_unknown(
     // before the file is believed to be ShaDa at all.
     if header.fpos == 0 {
         let status = cursor.skip();
-        let checked = unsafe { shada_check_status(parse_pos, status, cursor.left) };
+        let checked = shada_check_status(parse_pos, status, cursor.left);
         if checked != kSDReadStatusSuccess {
             unsafe { (*entry).data = ShadaEntryData::Missing };
             return checked;

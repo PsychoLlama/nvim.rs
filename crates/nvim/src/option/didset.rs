@@ -177,7 +177,7 @@ pub(crate) unsafe fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
         }
         if p_arshape.get() == 0 {
             p_arshape.set(1);
-            unsafe { redraw_all_later(UPD_NOT_VALID) };
+            redraw_all_later(UPD_NOT_VALID);
         }
     }
     if unsafe { !cstr::eq_bytes(p_enc.get(), b"utf-8") } {
@@ -199,7 +199,7 @@ fn cstr_optval(value: &'static CStr) -> OptVal {
 }
 
 /// 'autochdir': follow the current file's directory from now on.
-pub(crate) unsafe fn did_set_autochdir(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_autochdir(_args: &mut OptSet) -> Option<&CStr> {
     do_autochdir();
     None
 }
@@ -243,7 +243,7 @@ pub(crate) unsafe fn did_set_buflisted(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest reads globals.
     let old_value = unsafe { Frame::read(args) }.old_number();
-    let room = (Rows.get() - unsafe { min_rows(TabPage::current()) } + 1) as OptInt;
+    let room = (Rows.get() - min_rows(TabPage::current()) + 1) as OptInt;
     if p_ch.get() > room {
         p_ch.set(room);
     }
@@ -270,7 +270,7 @@ pub(crate) unsafe fn did_set_diff(args: &mut OptSet) -> Option<&CStr> {
 
 /// 'endoffile', 'endofline', 'fixendofline', 'bomb': all four show in the
 /// window title.
-pub(crate) unsafe fn did_set_eof_eol_fixeol_bomb(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_eof_eol_fixeol_bomb(_args: &mut OptSet) -> Option<&CStr> {
     redraw_titles();
     None
 }
@@ -280,15 +280,14 @@ pub(crate) unsafe fn did_set_equalalways(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let f = unsafe { Frame::read(args) };
     if p_ea.get() != 0 && f.old_boolean() == Some(false) {
-        unsafe { win_equal(Some(f.win), false, 0) };
+        win_equal(Some(f.win), false, 0);
     }
     None
 }
 
 /// 'foldlevel': open or close folds to match.
-pub(crate) unsafe fn did_set_foldlevel(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: `curwin` is live.
-    unsafe { new_fold_level() };
+pub(crate) fn did_set_foldlevel(_args: &mut OptSet) -> Option<&CStr> {
+    new_fold_level();
     None
 }
 
@@ -312,8 +311,7 @@ pub(crate) unsafe fn did_set_foldnestmax(args: &mut OptSet) -> Option<&CStr> {
 
 /// 'helpheight': grow the current window if it is a help window and now too
 /// short.
-pub(crate) unsafe fn did_set_helpheight(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: `curbuf`/`curwin` are live.
+pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Option<&CStr> {
     if firstwin.get() != lastwin.get()
         && Buf::current().b_help
         && (Win::current().w_height as OptInt) < p_hh.get()
@@ -324,17 +322,15 @@ pub(crate) unsafe fn did_set_helpheight(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'hlsearch': switching it on un-suppresses the current match highlight.
-pub(crate) unsafe fn did_set_hlsearch(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: reads globals only.
-    unsafe { set_no_hlsearch(false) };
+pub(crate) fn did_set_hlsearch(_args: &mut OptSet) -> Option<&CStr> {
+    set_no_hlsearch(false);
     None
 }
 
 /// 'ignorecase': what the search highlight matches changes with it.
-pub(crate) unsafe fn did_set_ignorecase(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_ignorecase(_args: &mut OptSet) -> Option<&CStr> {
     if p_hls.get() != 0 {
-        // SAFETY: the screen is the editor's own.
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        redraw_all_later(UPD_SOME_VALID);
     }
     None
 }
@@ -348,13 +344,13 @@ pub(crate) unsafe fn did_set_iminsert(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'langnoremap': the deprecated inverse of 'langremap'.
-pub(crate) unsafe fn did_set_langnoremap(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_langnoremap(_args: &mut OptSet) -> Option<&CStr> {
     p_lrm.set((p_lnr.get() == 0) as c_int);
     None
 }
 
 /// 'langremap': keeps the deprecated 'langnoremap' in step.
-pub(crate) unsafe fn did_set_langremap(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_langremap(_args: &mut OptSet) -> Option<&CStr> {
     p_lnr.set((p_lrm.get() == 0) as c_int);
     None
 }
@@ -412,7 +408,7 @@ pub(crate) unsafe fn did_set_lines_or_columns(args: &mut OptSet) -> Option<&CStr
             // record the size and keep the command line on screen.
             Rows.set(p_lines.get() as c_int);
             Columns.set(p_columns.get() as c_int);
-            unsafe { check_screensize() };
+            check_screensize();
             let new_row = (Rows.get() as OptInt - p_ch.get().max(1)) as c_int;
             if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch.get() {
                 debug_assert!(p_ch.get() >= 0);
@@ -437,7 +433,7 @@ pub(crate) unsafe fn did_set_lisp(args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'modifiable': shows in the window title.
-pub(crate) unsafe fn did_set_modifiable(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_modifiable(_args: &mut OptSet) -> Option<&CStr> {
     redraw_titles();
     None
 }
@@ -558,7 +554,7 @@ pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: &mut OptSet) -> Option<&CS
 }
 
 /// 'showtabline': the tab line takes a screen row from the windows.
-pub(crate) unsafe fn did_set_showtabline(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_showtabline(_args: &mut OptSet) -> Option<&CStr> {
     win_new_screen_rows();
     None
 }
@@ -605,7 +601,7 @@ pub(crate) unsafe fn did_set_textwidth(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'title'/'icon': rebuild what the terminal is showing.
-pub(crate) unsafe fn did_set_title_icon(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_title_icon(_args: &mut OptSet) -> Option<&CStr> {
     did_set_title();
     None
 }
@@ -701,13 +697,13 @@ pub(crate) unsafe fn did_set_winblend(args: &mut OptSet) -> Option<&CStr> {
         let mut win = f.win;
         win.w_onebuf_opt.wo_winbl = win.w_onebuf_opt.wo_winbl.clamp(0, 100);
         win.w_hl_needs_update = true;
-        unsafe { check_blending(win) };
+        check_blending(win);
     }
     None
 }
 
 /// 'window': the scroll amount `CTRL-F` uses, capped at the screen.
-pub(crate) unsafe fn did_set_window(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_window(_args: &mut OptSet) -> Option<&CStr> {
     if p_window.get() < 1 || p_window.get() >= Rows.get() as OptInt {
         p_window.set((Rows.get() - 1) as OptInt);
     }
@@ -715,8 +711,7 @@ pub(crate) unsafe fn did_set_window(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'winheight': grow the current window if it is now too short.
-pub(crate) unsafe fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: `curwin` is live.
+pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
     if firstwin.get() != lastwin.get() && (Win::current().w_height as OptInt) < p_wh.get() {
         win_setheight(p_wh.get() as c_int);
     }
@@ -724,8 +719,7 @@ pub(crate) unsafe fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// 'winwidth': widen the current window if it is now too narrow.
-pub(crate) unsafe fn did_set_winwidth(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: `curwin` is live.
+pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Option<&CStr> {
     if firstwin.get() != lastwin.get() && (Win::current().w_width as OptInt) < p_wiw.get() {
         win_setwidth(p_wiw.get() as c_int);
     }

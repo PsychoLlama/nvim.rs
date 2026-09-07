@@ -368,7 +368,7 @@ unsafe fn leave_for_buffer(
     // this window (or another window).  If not used before, reset the
     // local window options to the global values.  Also restores old
     // folding stuff.
-    unsafe { get_winopts(Buf::current()) };
+    get_winopts(Buf::current());
     state.did_get_winopts = true;
 
     au_new_curbuf.set(save_au_new_curbuf);

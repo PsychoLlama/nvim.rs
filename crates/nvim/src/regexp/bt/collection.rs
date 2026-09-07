@@ -305,12 +305,12 @@ fn in_class(rex: Rex, class: CharClass, c: c_int) -> bool {
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
         Lower => mb_islower(c) && c != 170 && c != 186,
-        Print => unsafe { vim_isprintc(c) },
+        Print => vim_isprintc(c),
         Upper => mb_isupper(c),
         Xdigit => ascii_isxdigit(c),
-        Ident => unsafe { vim_is_ident_char(c) },
+        Ident => vim_is_ident_char(c),
         Keyword => reg_iswordc(rex, c),
-        Fname => unsafe { vim_isfilec(c) },
+        Fname => vim_isfilec(c),
         _ => false,
     }
 }

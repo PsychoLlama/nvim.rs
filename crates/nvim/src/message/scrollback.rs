@@ -122,7 +122,7 @@ pub unsafe fn sb_text_restart_cmdline() {
 
 /// Finished editing the command line: clear the old lines, but the last one
 /// only later.
-pub unsafe fn sb_text_end_cmdline() {
+pub fn sb_text_end_cmdline() {
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_DONE);
 }
 

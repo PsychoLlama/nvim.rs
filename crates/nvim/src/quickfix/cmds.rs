@@ -173,7 +173,6 @@ pub unsafe fn ex_cbuffer(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
     let mut title = [0 as c_char; IOSIZE as usize];
-    // SAFETY: forwarded from the caller.
     let au_name = cbuffer_get_auname(args.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
@@ -268,12 +267,7 @@ fn cexpr_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// an autocommand aborted, in which case the expression is not evaluated at
 /// all — which is why this is separate from [`cexpr_core`], whose callers
 /// hand it a value that has already been computed.
-///
-/// # Safety
-///
-/// There must be a current buffer.
-unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
-    // SAFETY: the caller's promise.
+fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
     if let Some(name) = cexpr_get_auname(cmdidx) {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
@@ -360,8 +354,7 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
 pub unsafe fn ex_cexpr(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
-    // SAFETY: forwarded from the caller.
-    if !unsafe { trigger_cexpr_autocmd(args.cmdidx) } {
+    if !trigger_cexpr_autocmd(args.cmdidx) {
         return;
     }
     // Evaluate the expression. When the result is a string or a list of

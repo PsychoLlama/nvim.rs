@@ -218,7 +218,7 @@ pub unsafe fn nvim_create_autocmd(
     (autocmd_id as Integer).reported(error)
 }
 
-pub unsafe fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
+pub fn nvim_del_autocmd(id: Integer) -> Result<(), Error> {
     let mut error = Error::none();
     if !(id > 0 as Integer) {
         error = err_bad_number(c"autocmd id", id);

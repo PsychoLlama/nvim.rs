@@ -295,7 +295,7 @@ pub unsafe fn handle_nvim_buf_delete(
             }
         };
     // SAFETY: a wrapper runs on the main loop.
-    if unsafe { text_locked() } {
+    if text_locked() {
         text_locked_error(error);
         return Object::Nil;
     }
@@ -341,9 +341,7 @@ pub unsafe fn handle_nvim_buf_detach(
         wrong_type(error, 1, c"nvim_buf_detach", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_detach(channel_id, arg_1) } {
+    let rv = match nvim_buf_detach(channel_id, arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
@@ -384,9 +382,7 @@ pub unsafe fn handle_nvim_buf_get_changedtick(
         wrong_type(error, 1, c"nvim_buf_get_changedtick", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_get_changedtick(arg_1) } {
+    let rv = match nvim_buf_get_changedtick(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
@@ -802,9 +798,7 @@ pub unsafe fn handle_nvim_buf_is_loaded(
         wrong_type(error, 1, c"nvim_buf_is_loaded", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_is_loaded(arg_1) };
+    let rv = nvim_buf_is_loaded(arg_1);
     Object::Boolean(rv)
 }
 
@@ -842,9 +836,7 @@ pub unsafe fn handle_nvim_buf_is_valid(
         wrong_type(error, 1, c"nvim_buf_is_valid", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim_buf_is_valid(arg_1) };
+    let rv = nvim_buf_is_valid(arg_1);
     Object::Boolean(rv)
 }
 
@@ -882,9 +874,7 @@ pub unsafe fn handle_nvim_buf_line_count(
         wrong_type(error, 1, c"nvim_buf_line_count", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_line_count(arg_1) } {
+    let rv = match nvim_buf_line_count(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };

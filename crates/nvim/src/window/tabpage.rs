@@ -53,7 +53,7 @@ use crate::winlayer::graph::{
 };
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
-pub unsafe fn unuse_tabpage(tabpage: TabPage) {
+pub fn unuse_tabpage(tabpage: TabPage) {
     stash_tabpage(tabpage);
 }
 
@@ -67,7 +67,7 @@ pub(crate) fn stash_tabpage(tabpage: TabPage) {
     tabpage.tp_curwin = Win::current_or_none().map(Win::id);
 }
 
-pub unsafe fn use_tabpage(tabpage: TabPage) {
+pub fn use_tabpage(tabpage: TabPage) {
     adopt_tabpage(tabpage);
 }
 
@@ -108,7 +108,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     tp
 }
 
-pub unsafe fn free_tabpage(tabpage: TabPage) {
+pub fn free_tabpage(tabpage: TabPage) {
     free_tab(tabpage);
 }
 
@@ -358,7 +358,7 @@ pub fn valid_tabpage_win(tpc: TabPage) -> c_int {
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.id())) as c_int
 }
 
-pub unsafe fn close_tabpage(tab: TabPage) {
+pub fn close_tabpage(tab: TabPage) {
     close_tab(tab);
 }
 
@@ -587,11 +587,9 @@ pub fn goto_tabpage(n: c_int) {
 /// Go to tab page `n`, as `:tab N` and `Ngt` ask it: zero is the next one,
 /// negative counts backwards, and 9999 is the last.
 pub(crate) fn goto_tab_number(n: c_int) {
-    // SAFETY: reads the editor's lock state.
-    if unsafe { text_locked() } {
+    if text_locked() {
         // Not allowed when editing the command line.
-        // SAFETY: prints why.
-        unsafe { text_locked_msg() };
+        text_locked_msg();
         return;
     }
     // If there is only one it can't work.
@@ -633,7 +631,7 @@ pub(crate) fn goto_tab_number(n: c_int) {
     goto_tab(tp, true, true);
 }
 
-pub unsafe fn goto_tabpage_tp(
+pub fn goto_tabpage_tp(
     tabpage: TabPage,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
@@ -682,7 +680,7 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe fn goto_tabpage_win(tabpage: TabPage, window: Win) {
+pub fn goto_tabpage_win(tabpage: TabPage, window: Win) {
     let (tp, wp) = (tabpage, window);
     goto_tab_win(tp, wp);
 }

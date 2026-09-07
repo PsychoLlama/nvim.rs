@@ -217,7 +217,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // SAFETY: `home_replace` NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Using swap file \"{shown}\"");
-        if !unsafe { buf_spname(Buf::current()) }.is_null() {
+        if !buf_spname(Buf::current()).is_null() {
             unsafe {
                 xstrlcpy(
                     path.as_mut_ptr(),
@@ -537,7 +537,7 @@ unsafe fn recover_lines(
                     }
 
                     // One block deeper in the tree.
-                    let top = unsafe { ml_add_stack(buffer) };
+                    let top = ml_add_stack(buffer);
                     let frame = InfoPtr {
                         ip_bnum: bnum,
                         ip_low: 0,

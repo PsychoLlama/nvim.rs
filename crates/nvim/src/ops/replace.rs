@@ -45,7 +45,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     unsafe { *p.offset(pos.col as isize) = c as c_char };
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum as c_int - 1;
-        unsafe { extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo) };
+        extmark_splice_cols(Buf::current(), row, pos.col, 1, 1, kExtmarkUndo);
     }
 }
 
@@ -247,20 +247,18 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     let row = baselnum as c_int - 1;
     let (col, len) = (bd.textcol, bd.textlen);
     let op = kExtmarkUndo;
-    unsafe {
-        extmark_splice(
-            Buf::current(),
-            row,
-            col,
-            0,
-            len,
-            old_bytes,
-            newrows,
-            newcols,
-            new_bytes,
-            op,
-        )
-    };
+    extmark_splice(
+        Buf::current(),
+        row,
+        col,
+        0,
+        len,
+        old_bytes,
+        newrows,
+        newcols,
+        new_bytes,
+        op,
+    );
 }
 
 /// The charwise and linewise arm: walk the region a character at a time.

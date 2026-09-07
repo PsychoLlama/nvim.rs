@@ -126,7 +126,7 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
         let wcol = if op.op_type == OpType::Append {
             op.end_vcol + 1
         } else {
-            unsafe { getviscol() }
+            getviscol()
         };
         unsafe { coladvance_force(wcol) };
         if op.op_type == OpType::Append {
@@ -444,7 +444,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
             let splice = vpos.coladd + ins_len;
             let row = linenr as c_int - 1;
             let buffer = Buf::current();
-            unsafe { extmark_splice_cols(buffer, row, bd.textcol, 0, splice, kExtmarkUndo) };
+            extmark_splice_cols(buffer, row, bd.textcol, 0, splice, kExtmarkUndo);
         }
         linenr += 1;
     }
@@ -457,12 +457,7 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
 
 /// Move the cursor left off the NUL past the end of the line, when it should
 /// not be sitting there.
-///
-/// # Safety
-/// Operates on the current window's cursor.
-pub unsafe fn adjust_cursor_eol() {
-    // SAFETY: the caller's promise -- the cursor is on a line of the current
-    // buffer, which is all any of these reads.
+pub fn adjust_cursor_eol() {
     let cur_ve_flags = get_ve_flags(Win::current());
     let adj_cursor = Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL

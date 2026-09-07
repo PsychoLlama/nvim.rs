@@ -217,8 +217,7 @@ fn alloc_window(after: Win) -> Win {
     win_alloc(Some(after), false)
 }
 fn init_window(win: Win) {
-    // SAFETY: two live windows.
-    unsafe { win_init(win, current_win(), 0) };
+    win_init(win, current_win(), 0);
 }
 
 /// Take `win` out of `tabpage`'s frame tree, handing its space to a neighbour. The
@@ -248,12 +247,10 @@ fn recompute_positions() {
     win_comp_pos();
 }
 fn remove_status_line(win: Win) {
-    // SAFETY: a live window.
-    unsafe { win_remove_status_line(win, false) };
+    win_remove_status_line(win, false);
 }
 fn set_inner_size(win: Win) {
-    // SAFETY: a live window.
-    unsafe { win_set_inner_size(win, true) };
+    win_set_inner_size(win, true);
 }
 fn merge_config(win: &mut Win, fconfig: WinConfig) {
     // SAFETY: a live window's own config.
@@ -273,16 +270,13 @@ fn valid_window(win: WinId) -> Option<Win> {
 /// Fires `WinClosed`/`WinLeave` and can re-enter this module, so nothing may
 /// be borrowed across it.
 fn close_window(win: Win) -> c_int {
-    // SAFETY: a live window.
-    unsafe { win_close(win, false, false) }
+    win_close(win, false, false)
 }
 fn enter_window(win: Win) {
-    // SAFETY: a live window.
-    unsafe { win_enter(win, false) };
+    win_enter(win, false);
 }
 fn set_window_buf(win: Win, buffer: Buf, err: &mut Error) {
-    // SAFETY: a live window and buffer, and the caller's error slot.
-    unsafe { win_set_buf(win, buffer, err) };
+    win_set_buf(win, buffer, err);
 }
 fn set_error(err: &mut Error, msg: &'static CStr) {
     *err = Error::from_message(kErrorTypeException, msg);
@@ -326,8 +320,7 @@ fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     (row, scol)
 }
 fn create_scratch_buffer(err: &mut Error) -> BufferHandle {
-    // SAFETY: nothing here outlives the call.
-    match unsafe { nvim_create_buf(false, true) } {
+    match nvim_create_buf(false, true) {
         Ok(buf) => buf,
         Err(e) => {
             *err = e;

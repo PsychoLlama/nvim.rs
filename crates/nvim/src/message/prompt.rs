@@ -63,7 +63,7 @@ pub unsafe fn msg_end_prompt() {
 /// Only that the editor is in a state where it can read a key.
 pub unsafe fn wait_return(redraw: c_int) {
     if redraw == 1 {
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
     }
 
     if ui_has(kUIMessages) {
@@ -256,7 +256,7 @@ pub unsafe fn wait_return(redraw: c_int) {
     let tmp_state = State.get();
     State.set(old_state); // restore State before screen_resize()
     setmouse();
-    unsafe { msg_check() };
+    msg_check();
     need_wait_return.set(false);
     did_wait_return.set(true);
     emsg_on_display.set(false); // can delete error message now
@@ -300,7 +300,7 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     }
     let prompt = gettext(c"Press ENTER or type command to continue");
     unsafe { msg_puts_hl(prompt.as_ptr(), HLF_R, false) };
-    if unsafe { msg_use_printf() } == 0 {
+    if msg_use_printf() == 0 {
         unsafe { msg_clr_eos() };
     }
     p_more.set(save_p_more);
@@ -491,7 +491,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
             while toscroll > 0 && !mp_last.is_null() {
                 // A throttled scroll here would be undone by the flush, so
                 // discount it instead.
-                if unsafe { msg_do_throttle() } && !msg_grid_ref().throttled {
+                if msg_do_throttle() && !msg_grid_ref().throttled {
                     msg_scrolled_at_flush.set(msg_scrolled_at_flush.get() - 1);
                     msg_grid_scroll_discount.set(msg_grid_scroll_discount.get() + 1);
                 }
@@ -542,7 +542,7 @@ pub(crate) unsafe fn msg_moremsg(full: bool) {
         let help = gettext(keys);
         len += unsafe { grid_line_puts(len, help.as_ptr(), -1, attr) };
     }
-    unsafe { grid_line_cursor_goto(len) };
+    grid_line_cursor_goto(len);
     unsafe { grid_line_flush() };
 }
 

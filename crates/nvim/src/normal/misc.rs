@@ -98,7 +98,7 @@ pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
     // command line; a mapped one leaves the display alone.
     if KeyTyped.get() {
         unsafe { msg_ext_set_trigger(c"typed_cmd".as_ptr()) };
-        unsafe { compute_cmdrow() };
+        compute_cmdrow();
     }
     let cmd_result = if is_lua {
         unsafe { map_execute_lua(true, false) }

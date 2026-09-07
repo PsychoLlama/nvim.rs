@@ -106,7 +106,6 @@ impl ShlWalk {
 pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let mut search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: the caller's window and search state.
     let mut cur = window.w_match_head;
     while !cur.is_null() {
         // The highlight state borrows the item's program; the
@@ -305,7 +304,7 @@ unsafe fn next_search_hl(
                 if shl == search_hl {
                     // A match's regprog is a copy and must not be freed.
                     unsafe { vim_regfree(shl.rm.regprog) };
-                    unsafe { set_no_hlsearch(true) };
+                    set_no_hlsearch(true);
                 }
                 shl.rm.regprog = ::core::ptr::null_mut();
                 shl.lnum = 0;
@@ -421,7 +420,6 @@ pub(crate) unsafe fn prepare_search_hl_line(
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: the caller's window, line and out-parameters.
     let mut area_highlighting = false;
     let mut walk = unsafe { ShlWalk::new(window, search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {

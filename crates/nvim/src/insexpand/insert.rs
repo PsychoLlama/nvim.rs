@@ -197,7 +197,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
         } else {
             orig_col
         };
-    if unsafe { ins_compl_preinsert_effect() } {
+    if ins_compl_preinsert_effect() {
         col += ins_compl_leader_len() as c_int;
         Win::current().w_cursor.col = compl_ins_end_col.get();
     }
@@ -227,7 +227,7 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
             unsafe { xfree(remaining.data().cast::<c_void>()) };
             return;
         }
-        unsafe { backspace_until_column(col) };
+        backspace_until_column(col);
         compl_ins_end_col.set(Win::current().w_cursor.col);
     }
 
@@ -283,9 +283,7 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     // Upstream dereferences `compl_shown_match` here without checking.
     let shown = shown_match().expect("a running completion has a shown match");
     let compl_len = get_compl_len();
-    // SAFETY: no precondition left; still an `unsafe fn` for its call sites
-    // outside this family.
-    let preinsert = unsafe { ins_compl_has_preinsert() };
+    let preinsert = ins_compl_has_preinsert();
     let mut cp_str = shown.cp_str.data();
     let mut cp_str_len = shown.cp_str.len();
     let leader_len = ins_compl_leader_len();
@@ -366,9 +364,7 @@ pub(crate) unsafe fn find_next_completion_match(
 ) -> c_int {
     let mut found_end;
     let mut found_compl: Option<Cm> = None;
-    // SAFETY: no precondition left; still an `unsafe fn` for its call sites
-    // outside this family.
-    let has_preinsert = unsafe { ins_compl_has_preinsert() };
+    let has_preinsert = ins_compl_has_preinsert();
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect as c_uint != 0
         || compl_autocomplete.get() && !has_preinsert;
 
@@ -380,9 +376,8 @@ pub(crate) unsafe fn find_next_completion_match(
         // Upstream dereferences `compl_shown_match` here without checking.
         let shown = shown_match().expect("a running completion has a shown match");
         if compl_shows_dir_forward() && !shown.cp_next.is_null() {
-            // SAFETY: a completion with a shown match is running.
             let next = if !compl_match_array().is_unset() {
-                unsafe { find_next_match_in_menu() }.raw()
+                find_next_match_in_menu().raw()
             } else {
                 shown.cp_next
             };
@@ -391,9 +386,8 @@ pub(crate) unsafe fn find_next_completion_match(
             found_end = first_match().is_some() && (is_first_match(now.cp_next) || now.is_first());
         } else if compl_shows_dir_backward() && !shown.cp_prev.is_null() {
             found_end = shown.is_first();
-            // SAFETY: as above.
             let prev = if !compl_match_array().is_unset() {
-                unsafe { find_next_match_in_menu() }.raw()
+                find_next_match_in_menu().raw()
             } else {
                 shown.cp_prev
             };
@@ -491,9 +485,7 @@ pub(crate) unsafe fn ins_compl_next(
     // and replaced". See the re-entry rule in [`crate::winlayer`].
     let orig_curbuf = Buf::current().id();
     let cur_cot_flags = completeopt_flags();
-    // SAFETY: no precondition left; still an `unsafe fn` for its call sites
-    // outside this family.
-    let compl_preinsert = unsafe { ins_compl_has_preinsert() };
+    let compl_preinsert = ins_compl_has_preinsert();
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0
         || compl_autocomplete.get() && !compl_preinsert;
     let has_autocomplete_delay = compl_autocomplete.get() && p_acl.get() > 0;
@@ -542,7 +534,7 @@ pub(crate) unsafe fn ins_compl_next(
     // Insert the text of the new completion, or the compl_leader.
     // SAFETY: no precondition left; still an `unsafe fn` for its call sites
     // outside this family.
-    if !started && unsafe { ins_compl_preinsert_longest() } {
+    if !started && ins_compl_preinsert_longest() {
         unsafe { ins_compl_insert(true, true) };
         if has_autocomplete_delay {
             let _ = unsafe { update_screen() }; // Show the inserted text right away
@@ -559,9 +551,8 @@ pub(crate) unsafe fn ins_compl_next(
     } else if insert_match {
         if !compl_get_longest.get() || compl_used_match.get() {
             // None selected.
-            // SAFETY: as above.
-            let preinsert_longest = unsafe { ins_compl_preinsert_longest() }
-                && shown_match().is_some_and(Cm::is_original);
+            let preinsert_longest =
+                ins_compl_preinsert_longest() && shown_match().is_some_and(Cm::is_original);
             unsafe { ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest) };
         } else {
             debug_assert!(!compl_leader().is_unset());

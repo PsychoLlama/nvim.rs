@@ -538,7 +538,6 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     if first_buffer().is_none() {
         return false;
     }
-    // SAFETY: module contract.
     let mut culprit = ptr::null_mut::<Buffer>();
     for nr in unsafe { changed_check_order() } {
         let buf = find_buf(nr).map_or(ptr::null_mut(), |b| b.raw());
@@ -575,7 +574,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
                 continue;
             }
             let bufref = BufRef::of_opt(unsafe { Buf::from_raw(culprit) });
-            unsafe { goto_tabpage_win(tp, wp) };
+            goto_tabpage_win(tp, wp);
             // Paranoia: did autocommands wipe out the changed buffer?
             if !bufref.valid() {
                 return true;
@@ -588,13 +587,11 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     if culprit != Buf::current_raw() {
         // SAFETY: a live buffer.
         let culprit = unsafe { Buf::new(culprit) };
-        unsafe {
-            set_curbuf(
-                culprit,
-                if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,
-                true,
-            )
-        };
+        set_curbuf(
+            culprit,
+            if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,
+            true,
+        );
     }
     true
 }
@@ -623,10 +620,10 @@ unsafe fn report_unwritten(buffer: Buf) {
             )
         }
     } else {
-        let name = if unsafe { buf_spname(buffer) }.is_null() {
+        let name = if buf_spname(buffer).is_null() {
             buffer.b_fname
         } else {
-            unsafe { buf_spname(buffer) }
+            buf_spname(buffer)
         };
         unsafe {
             semsg!(
@@ -645,10 +642,7 @@ unsafe fn report_unwritten(buffer: Buf) {
 
 /// `Err` and an error message when the current buffer has no file name,
 /// `Ok` when it has one.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
+pub(crate) fn check_fname() -> Result<(), Failed> {
     if Buf::current().b_ffname.is_null() {
         emsg(gettext(c"E32: No file name"));
         return Err(Failed);
@@ -830,7 +824,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
         if wp.buffer().raw() != buf {
             continue;
         }
-        unsafe { goto_tabpage_win(tp, wp) };
+        goto_tabpage_win(tp, wp);
         Win::current().w_arg_idx = 0;
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.

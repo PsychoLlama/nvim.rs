@@ -1103,7 +1103,7 @@ fn emit_fn(
     // globals, which only the main loop -- where a wrapper runs -- has set up.
     if spec.textlock {
         writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
-        writeln!(out, "    if unsafe {{ text_locked() }} {{").unwrap();
+        writeln!(out, "    if text_locked() {{").unwrap();
         writeln!(out, "        text_locked_error(error);").unwrap();
         writeln!(out, "        return Object::Nil;").unwrap();
         writeln!(out, "    }}").unwrap();
@@ -2607,8 +2607,7 @@ unsafe fn run(
     if unsafe { lua_gettop(lstate) } != argc {
         wrong_arity(&mut call.err, argc);
     } else {
-        // SAFETY: as above; the query has no side effects.
-        let refused = deferred.filter(|_| !unsafe { nlua_is_deferred_safe() });
+        let refused = deferred.filter(|_| !nlua_is_deferred_safe());
         if let Some(name) = refused {
             let (fmt, name) = (e_fast_api_disabled.as_ptr(), name.as_ptr());
             // SAFETY: as above; both strings are static and NUL-terminated,
@@ -2896,7 +2895,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
 
     if spec.textlock {
         writeln!(out, "        // SAFETY: as above.").unwrap();
-        writeln!(out, "        if unsafe {{ text_locked() }} {{").unwrap();
+        writeln!(out, "        if text_locked() {{").unwrap();
         writeln!(out, "            text_locked_error(err);").unwrap();
         writeln!(out, "            return;").unwrap();
         writeln!(out, "        }}").unwrap();

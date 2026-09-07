@@ -97,11 +97,7 @@ pub unsafe fn msg_grid_set_pos(row: c_int, scrolled: bool) {
 /// Are messages drawn on a grid at all?
 ///
 /// They are not before the first redraw, and not under `ext_messages`.
-///
-/// # Safety
-/// Only that the default grid is initialised.
-pub unsafe fn msg_use_grid() -> bool {
-    // SAFETY: a `static`'s address is always valid.
+pub fn msg_use_grid() -> bool {
     default_grid_ref().is_allocated() && !ui_has(kUIMessages)
 }
 
@@ -112,9 +108,7 @@ pub unsafe fn msg_use_grid() -> bool {
 pub unsafe fn msg_grid_validate() {
     let mut grid = msg_grid_ref();
     grid_assign_handle(&mut grid);
-    // SAFETY: the caller's promise, throughout -- the grids are initialised
-    // and `curwin` is live, which is all `ui_ext_msg_set_pos` needs.
-    let should_alloc = unsafe { msg_use_grid() };
+    let should_alloc = msg_use_grid();
     let max_rows = Rows.get() - p_ch.get() as c_int;
 
     if should_alloc
@@ -193,11 +187,8 @@ pub fn msg_scrollsize() -> c_int {
 }
 
 /// Should message output be batched into one scroll at flush time?
-///
-/// # Safety
-/// See [`msg_use_grid`].
-pub unsafe fn msg_do_throttle() -> bool {
-    unsafe { msg_use_grid() && rdb_flags.get() & kOptRdbFlagNothrottle as c_uint == 0 }
+pub fn msg_do_throttle() -> bool {
+    msg_use_grid() && rdb_flags.get() & kOptRdbFlagNothrottle as c_uint == 0
 }
 
 /// Scroll the message area up one line.
@@ -209,8 +200,7 @@ pub unsafe fn msg_do_throttle() -> bool {
 /// Only that the grids are initialised.
 pub unsafe fn msg_scroll_up(may_throttle: bool, zerocmd: bool) {
     let mut grid = msg_grid_ref();
-    // SAFETY: the caller's promise -- the grids are initialised.
-    if may_throttle && unsafe { msg_do_throttle() } {
+    if may_throttle && msg_do_throttle() {
         grid.throttled = true;
     }
     msg_did_scroll.set(true);
@@ -291,7 +281,6 @@ pub unsafe fn msg_scroll_flush() {
 /// Only that the grids are initialised.
 pub unsafe fn msg_reset_scroll() {
     let mut grid = msg_grid_ref();
-    // SAFETY: the caller's promise -- the grids are initialised.
     if ui_has(kUIMessages) {
         // TODO(bfredl): some duplicate logic with update_screen(). Later
         // on we should properly disentangle message clear with full screen

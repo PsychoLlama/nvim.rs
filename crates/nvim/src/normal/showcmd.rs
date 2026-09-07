@@ -314,8 +314,8 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     // branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`, and both
     // outlive the borrow.
     // SAFETY: `c` is a plain character value.
-    let extra = if c <= 0x7f || !unsafe { vim_isprintc(c) } {
-        display = unsafe { transchar(c) };
+    let extra = if c <= 0x7f || !vim_isprintc(c) {
+        display = transchar(c);
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
         if display[0] as c_int == ' ' as c_int {

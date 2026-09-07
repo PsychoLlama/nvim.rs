@@ -10,7 +10,7 @@
 //! moves to satisfy `'scrolloff'`.
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
-
+#![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_int;

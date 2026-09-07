@@ -41,11 +41,7 @@ pub unsafe fn f_getwinposy(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// been checked for the two things neither of them can move: a float, which
 /// has no separators, and a window in another tab page, whose sizes are not
 /// the ones on screen.
-///
-/// # Safety
-/// The arguments must be live typvals.
-unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
-    // SAFETY: the caller's obligation.
+fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
     let wp = arg_win(args, 0)?;
     if wp.w_floating {
         return None;
@@ -61,11 +57,10 @@ unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
 pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = 0;
-    // SAFETY: the arguments are live typvals and the window is live.
-    let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
+    let Some((wp, offset)) = drag_target(args) else {
         return;
     };
-    unsafe { win_drag_vsep_line(wp, offset) };
+    win_drag_vsep_line(wp, offset);
     result.vval.v_number = 1;
 }
 
@@ -73,11 +68,10 @@ pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr
 pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = 0;
-    // SAFETY: the arguments are live typvals and the window is live.
-    let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
+    let Some((wp, offset)) = drag_target(args) else {
         return;
     };
-    unsafe { win_drag_status_line(wp, offset) };
+    win_drag_status_line(wp, offset);
     result.vval.v_number = 1;
 }
 
@@ -149,24 +143,21 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     } else {
         (0, 0)
     };
-    if is_aucmd_win(wp)
-        || unsafe { text_or_buf_locked() }
-        || unsafe { check_split_disallowed(wp) } == FAIL
-    {
+    if is_aucmd_win(wp) || text_or_buf_locked() || unsafe { check_split_disallowed(wp) } == FAIL {
         return;
     }
     if !targetwin.is_current() {
-        unsafe { win_goto(targetwin) };
+        win_goto(targetwin);
     }
     if targetwin.is_current() && win_valid(wp.id()) {
-        if unsafe { win_splitmove(wp, size, flags) }.is_ok() {
+        if win_splitmove(wp, size, flags).is_ok() {
             result.vval.v_number = 0;
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
     }
     if !oldwin.is_current() && win_valid(oldwin.id()) {
-        unsafe { win_goto(oldwin) };
+        win_goto(oldwin);
     }
 }
 
@@ -277,8 +268,8 @@ pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: Eval
 
     // SAFETY: a live window, and `curbuf` is set.
     check_cursor(win);
-    unsafe { win_new_height(win, win.w_height) };
-    unsafe { win_new_width(win, win.w_width) };
+    win_new_height(win, win.w_height);
+    win_new_width(win, win.w_width);
     changed_window_setting(win);
     // SAFETY: `curbuf` is set from startup to exit.
     let line_count = Buf::current().line_count();
@@ -320,8 +311,7 @@ pub unsafe fn f_winsaveview(_args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     nr(c"col", VarNumber::from(win.w_cursor.col));
     nr(c"coladd", VarNumber::from(win.w_cursor.coladd));
     // 'curswant' is only up to date once the cursor move has been resolved.
-    // SAFETY: `curwin` is set.
-    unsafe { update_curswant() };
+    update_curswant();
     nr(c"curswant", VarNumber::from(win.w_curswant));
     nr(c"topline", VarNumber::from(win.w_topline));
     nr(c"topfill", VarNumber::from(win.w_topfill));

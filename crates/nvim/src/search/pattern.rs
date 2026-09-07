@@ -255,9 +255,9 @@ pub unsafe fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: size_t, magic: b
     last_idx.set(idx);
     // With 'hlsearch' a changed pattern means a redraw.
     if p_hls.get() != 0 {
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        redraw_all_later(UPD_SOME_VALID);
     }
-    unsafe { set_no_hlsearch(false) };
+    set_no_hlsearch(false);
 }
 
 /// Save the search patterns so they can be restored later. Used around
@@ -299,7 +299,7 @@ pub fn restore_search_patterns() {
     compiled_pat.set(saved_compiled_pat.get());
     compiled_patlen.set(saved_compiled_patlen.get());
     last_idx.set(saved_spats_last_idx.get());
-    unsafe { set_no_hlsearch(saved_spats_no_hlsearch.get()) };
+    set_no_hlsearch(saved_spats_no_hlsearch.get());
 }
 
 /// Save the search pattern for incremental search.
@@ -339,7 +339,7 @@ pub fn restore_last_search_pattern() {
     put_spat(RE_SEARCH, saved);
     set_vv_searchforward();
     last_idx.set(saved_last_idx.get());
-    unsafe { set_no_hlsearch(saved_no_hlsearch.get()) };
+    set_no_hlsearch(saved_no_hlsearch.get());
 }
 
 /// Save the incremental-search highlighting variables, so that calling
@@ -548,7 +548,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
     }
     // With 'hlsearch' a changed pattern means a redraw.
     if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        redraw_all_later(UPD_SOME_VALID);
     }
 }
 
@@ -581,7 +581,7 @@ pub fn set_search_direction(cdir: c_int) {
 pub(crate) fn set_vv_searchforward() {
     // SAFETY: setting a `v:` variable to a number.
     let forward = (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as VarNumber;
-    unsafe { set_vim_var_nr(Vv::Searchforward, forward) };
+    set_vim_var_nr(Vv::Searchforward, forward);
 }
 
 /// Whether `pattern` matches zero-width.

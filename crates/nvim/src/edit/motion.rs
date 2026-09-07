@@ -69,8 +69,7 @@ pub(crate) fn ins_start_select(c: c_int) -> bool {
 /// was typed rather than mapped.
 fn may_open_fold_hor() {
     if fdo_flags.get() & kOptFdoFlagHor as ::core::ffi::c_uint != 0 && KeyTyped.get() {
-        // SAFETY: `curwin` is live for the whole session.
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
 }
 
@@ -239,11 +238,10 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
     hide_dollar();
 
     let mut tpos = Win::current().w_cursor;
-    // SAFETY: `curwin` is live, which is all a cursor motion asks for.
     let moved = if up {
-        unsafe { cursor_up(1, true) }
+        cursor_up(1, true)
     } else {
-        unsafe { cursor_down(1, true) }
+        cursor_down(1, true)
     };
     if moved.is_ok() {
         if startcol {
@@ -296,8 +294,7 @@ fn beep_cursor() {
 /// Take the `$` 'cpoptions' puts at the end of a change off the screen.
 #[inline(always)]
 fn hide_dollar() {
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { undisplay_dollar() }
+    undisplay_dollar()
 }
 
 /// End the undoable insert before an arrow key moves the cursor away from

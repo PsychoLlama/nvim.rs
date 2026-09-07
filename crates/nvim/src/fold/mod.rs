@@ -345,10 +345,7 @@ pub fn has_folding_win(
 }
 
 /// Returns fold level at line number "lnum" in the current window.
-///
-/// # Safety
-/// The current window must be live.
-unsafe fn fold_level(lnum: LineNr) -> c_int {
+fn fold_level(lnum: LineNr) -> c_int {
     let win = Win::current();
     if invalid_top.get() == 0 {
         checkupdate(win);
@@ -493,17 +490,13 @@ pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
 }
 
 /// Updates folds when leaving insert-mode.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_update_after_insert() {
+pub fn fold_update_after_insert() {
     let win = Win::current();
     if foldmethod_is_manual(win) || foldmethod_is_syntax(win) || foldmethod_is_expr(win) {
         return;
     }
     fold_update_all(win);
-    // SAFETY: the caller's promise.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
 }
 
 /// Update all lines in a window for folding.

@@ -265,7 +265,7 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
             let _ = unsafe { ml_replace(lnum, newp, false) };
             let row = lnum as c_int - 1;
             let buffer = Buf::current();
-            unsafe { extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo) };
+            extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
         }
         lnum += 1;
     }
@@ -475,7 +475,7 @@ fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
     let rows = op.line_count as c_int - 1;
     let row = startpos.lnum as c_int - 1;
     let buf = Buf::current();
-    unsafe { extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo) };
+    extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo);
     Ok(())
 }
 

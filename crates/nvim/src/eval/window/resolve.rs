@@ -330,8 +330,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         result.vval.v_number = 1;
         return;
     }
-    // SAFETY: the editor's own tab page and window lists.
-    if unsafe { text_or_buf_locked() } {
+    if text_or_buf_locked() {
         return;
     }
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
@@ -341,7 +340,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     if visual_active() && wp.buffer().raw() != Buf::current_raw() {
         end_visual_mode();
     }
-    unsafe { goto_tabpage_win(tp, wp) };
+    goto_tabpage_win(tp, wp);
     result.vval.v_number = 1;
 }
 

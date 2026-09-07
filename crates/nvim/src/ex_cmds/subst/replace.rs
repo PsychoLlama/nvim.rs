@@ -101,8 +101,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                     )
                 };
                 if subflags.with(|flags| flags.do_ask) {
-                    // SAFETY: the line was just appended.
-                    unsafe { appended_lines(st.lnum - 1 as LineNr, 1 as LineNr) };
+                    appended_lines(st.lnum - 1 as LineNr, 1 as LineNr);
                 } else {
                     if st.first_line == 0 as LineNr {
                         st.first_line = st.lnum;
@@ -151,7 +150,6 @@ pub(super) unsafe fn build_replacement(
     let counting = subflags.with(|flags| flags.do_count);
     if counting {
         // Prevent a function from accidentally changing the buffer.
-        // SAFETY: as above.
         Buf::current().b_p_ma = 0;
     }
     // Held to the end of the function: the only path that reaches here with
@@ -294,8 +292,7 @@ pub(super) unsafe fn build_replacement(
         } else {
             0 as c_int
         };
-    // SAFETY: the cursor is on a line of the buffer.
-    unsafe { save_undo_once(st) };
+    save_undo_once(st);
 
     // Store the extmark data for this match; the whole batch is sent once the
     // line has been replaced.
@@ -342,8 +339,7 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
         )
     };
     if subflags.with(|flags| flags.do_ask) {
-        // SAFETY: as above.
-        unsafe { deleted_lines(st.lnum, st.nmatch_tl) };
+        deleted_lines(st.lnum, st.nmatch_tl);
     }
     st.lnum -= 1;
     st.line2 -= st.nmatch_tl; // the number of lines decreases
@@ -381,21 +377,18 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
 
     // Call extmark_splice for each match on this line.
     for m in &st.line_matches {
-        // SAFETY: the current buffer is live and the data describes it.
-        unsafe {
-            extmark_splice(
-                Buf::current(),
-                m.lnum_before as c_int - 1 as c_int,
-                m.start_col as ColNr,
-                m.end.lnum as c_int - m.start.lnum as c_int,
-                m.matchcols as ColNr,
-                m.matchbytes,
-                m.lnum_after as c_int - m.lnum_before as c_int,
-                m.subcols as ColNr,
-                m.subbytes,
-                kExtmarkUndo,
-            )
-        };
+        extmark_splice(
+            Buf::current(),
+            m.lnum_before as c_int - 1 as c_int,
+            m.start_col as ColNr,
+            m.end.lnum as c_int - m.start.lnum as c_int,
+            m.matchcols as ColNr,
+            m.matchbytes,
+            m.lnum_after as c_int - m.lnum_before as c_int,
+            m.subcols as ColNr,
+            m.subbytes,
+            kExtmarkUndo,
+        );
     }
     // Reset the match data for the next line.
     st.line_matches.clear();

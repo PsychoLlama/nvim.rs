@@ -25,7 +25,7 @@ pub(crate) const LINE_INSERTED: c_int = -2;
 ///
 /// `dofold` also rebuilds the folds, which is what a block-list change needs
 /// and a mere scroll does not.
-pub unsafe fn diff_redraw(dofold: bool) {
+pub fn diff_redraw(dofold: bool) {
     need_diff_redraw.set(false);
     let mut wp_other: Option<Win> = None;
     let mut used_max_fill_curwin = false;
@@ -43,7 +43,6 @@ pub unsafe fn diff_redraw(dofold: bool) {
         if !wp.is_current() {
             wp_other = Some(wp);
         }
-        // SAFETY: a live window, here and in the two calls below.
         if dofold && foldmethod_is_diff(wp) {
             fold_update_all(wp);
         }
@@ -77,7 +76,6 @@ pub unsafe fn diff_redraw(dofold: bool) {
             None
         };
         if let Some((from, to)) = pair {
-            // SAFETY: both windows are live.
             diff_set_topline(from, to);
         }
     }
@@ -129,9 +127,7 @@ pub unsafe fn diff_check_with_linestatus(
     // A line inside a closed fold or concealed away has no status of its
     // own to report.
     //
-    // SAFETY: a live window. The short circuit is upstream's: the conceal
-    // query runs only for a line that is not folded away.
-    if window.fold_span(lnum).0 || unsafe { decor_conceal_line(window, lnum - 1, false) } {
+    if window.fold_span(lnum).0 || decor_conceal_line(window, lnum - 1, false) {
         return 0;
     }
 

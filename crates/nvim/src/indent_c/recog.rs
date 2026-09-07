@@ -88,14 +88,10 @@ pub(crate) unsafe fn cin_has_js_key(text: *const c_char) -> bool {
         _ => 0,
     };
     let mut i = usize::from(quote != 0);
-    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
-    // long before any buffer is indented.
-    if !unsafe { vim_is_ident_char(c_int::from(byte_at(bytes, i))) } {
+    if !vim_is_ident_char(c_int::from(byte_at(bytes, i))) {
         return false; // need at least one ID character
     }
-    // SAFETY: the same; `byte_at` answers the terminator past the end, which
-    // is not an ID character, so `i` stops at `bytes.len()`.
-    while unsafe { vim_is_ident_char(c_int::from(byte_at(bytes, i))) } {
+    while vim_is_ident_char(c_int::from(byte_at(bytes, i))) {
         i += 1;
     }
     if byte_at(bytes, i) != 0 && byte_at(bytes, i) == quote {
@@ -228,9 +224,7 @@ pub(crate) unsafe fn cin_starts_with(s: *const c_char, word: &[u8]) -> bool {
     // SAFETY: the caller's promise -- `s` is a NUL-terminated string.
     let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
     let after = byte_at(bytes, word.len());
-    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
-    // long before any buffer is indented.
-    bytes.starts_with(word) && !unsafe { vim_is_ident_char(c_int::from(after)) }
+    bytes.starts_with(word) && !vim_is_ident_char(c_int::from(after))
 }
 
 /// `s` with a leading `}` -- and any comment behind it -- stepped over: the
@@ -374,9 +368,7 @@ pub(crate) unsafe fn cin_is_if_for_while_before_offset(
 
     // It is only the keyword if nothing identifier-ish precedes it.
     let before = byte_at(bytes, (offset - 1) as usize);
-    // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is set up
-    // long before any buffer is indented.
-    if offset != 0 && unsafe { vim_is_ident_char(c_int::from(before)) } {
+    if offset != 0 && vim_is_ident_char(c_int::from(before)) {
         return false;
     }
     *poffset = offset;

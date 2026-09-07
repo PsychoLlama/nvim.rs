@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::marktree::key::MtFlags;
 use crate::winlayer::Buf;
 
-pub unsafe fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
+pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
@@ -74,14 +74,13 @@ unsafe fn set_decor(
     }
 }
 
-pub unsafe fn nvim_buf_clear_highlight(
+pub fn nvim_buf_clear_highlight(
     buffer: BufferHandle,
     ns_id: Integer,
     line_start: Integer,
     line_end: Integer,
 ) -> Result<(), Error> {
-    // SAFETY: every argument is a plain integer off the wire.
-    unsafe { nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end) }
+    nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end)
 }
 
 pub unsafe fn nvim_buf_add_highlight(
@@ -170,8 +169,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     }
 
     let lnum = line as ::core::ffi::c_int;
-    // SAFETY: `buf` is live.
-    let existing = unsafe { decor_find_virttext(buf, lnum, ns_id as uint64_t) };
+    let existing = decor_find_virttext(buf, lnum, ns_id as uint64_t);
     if !existing.is_null() {
         // Replacing what this namespace already put on the line, rather than
         // stacking a second decoration on it.

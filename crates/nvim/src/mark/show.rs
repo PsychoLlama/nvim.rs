@@ -356,8 +356,7 @@ unsafe fn delmarks_all(buffer: Buf) {
             unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buffer) };
         }
     }
-    // SAFETY: `buffer` is live.
-    unsafe { clrallmarks(buffer, os_time()) };
+    clrallmarks(buffer, os_time());
 }
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a

@@ -359,7 +359,7 @@ unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
     let saved_curswant = unsafe { (*cur).w_curswant };
     let saved_virtcol = unsafe { (*cur).w_virtcol };
     if window == unsafe { Win::from_raw(cur) } {
-        unsafe { update_curswant() };
+        update_curswant();
     }
     // SAFETY throughout: `window` is null or the window resolved above, and `l` the list
     // being filled in.

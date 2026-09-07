@@ -240,8 +240,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
         changed_window_setting(win);
     }
     if end != bot {
-        // SAFETY: a live window.
-        unsafe { redraw_win_range_later(win, top, end) };
+        redraw_win_range_later(win, top, end);
     }
     invalid_top.set(0);
 }
@@ -441,7 +440,6 @@ pub(super) unsafe fn fold_update_computed_recurse(
                     // It ends above the new fold.
                     if current.top() >= startlnum {
                         // Entirely inside the removed range.
-                        // SAFETY: `i` names an entry of `folds`.
                         drop_fold(folds, i, true);
                     } else {
                         current.set_len(startlnum - current.top());
@@ -669,10 +667,7 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
 
 /// Low level function to get the foldlevel for the "diff" method.
 /// Doesn't use any caching.
-///
-/// # Safety
-/// `line` must name a line inside its window's buffer.
-pub(super) unsafe fn foldlevel_diff(line: FLine) {
+pub(super) fn foldlevel_diff(line: FLine) {
     let infold = diff_infold(line.win(), line.lnum() + line.off());
     line.set_lvl(c_int::from(infold));
 }
@@ -688,7 +683,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
     let lnum = line.lnum() + line.off();
     // The current window is restored below.
     let saved = switch_to(line.win());
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
+    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
     line.set_start(0);
     line.set_had_end(line.end());
     line.set_end(MAX_LEVEL + 1);

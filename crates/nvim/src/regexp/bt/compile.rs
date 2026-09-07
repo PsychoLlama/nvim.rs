@@ -55,15 +55,8 @@ pub(crate) struct BtProg(*mut BtRegProg);
 impl BtProg {
     /// The program the running match is for, or `None` if the caller handed
     /// in a match structure with no program.
-    ///
-    /// # Safety
-    ///
-    /// The context must name a program *this* engine compiled. That is what
-    /// the engine table promises: `vim_regexec` dispatches through the
-    /// program's own `engine` field, so a `bt_regexec_*` entry point is only
-    /// ever reached for a backtracking program.
     #[inline(always)]
-    pub(crate) unsafe fn of_match(rex: Rex) -> Option<BtProg> {
+    pub(crate) fn of_match(rex: Rex) -> Option<BtProg> {
         let prog = rex.regprog();
         (!prog.is_null()).then(|| BtProg(prog.cast()))
     }

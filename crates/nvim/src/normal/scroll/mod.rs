@@ -139,7 +139,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
                 win.w_redr_status = true;
             }
             if want_hor {
-                unsafe { set_leftcol(tgt_leftcol) };
+                set_leftcol(tgt_leftcol);
             }
         }
     }
@@ -175,7 +175,7 @@ pub(crate) unsafe fn nv_scroll_line(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op(ca.op()) {
-        unsafe { scroll_redraw(ca.arg, ca.count1 as LineNr) };
+        scroll_redraw(ca.arg, ca.count1 as LineNr);
     }
 }
 

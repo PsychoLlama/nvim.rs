@@ -69,11 +69,7 @@ pub(crate) struct Push {
 
 impl TagStack {
     /// Borrow the tag stack of `window`.
-    ///
-    /// # Safety
-    /// Nothing else may be reaching into `window`'s tag stack for as long as
-    /// this lives.
-    pub(crate) unsafe fn of(window: Win) -> Self {
+    pub(crate) fn of(window: Win) -> Self {
         TagStack { win: window }
     }
 
@@ -228,9 +224,7 @@ pub unsafe fn tagstack_clear_entry(item: &mut Taggy) {
 /// Must be called with a live `curwin`.
 pub unsafe fn do_tags(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `curwin` is live and nothing else is holding its tag stack;
-    // `fm_getname` answers an allocation we free again below.
-    let mut stack = unsafe { TagStack::of(Win::current()) };
+    let mut stack = TagStack::of(Win::current());
     let curidx = stack.curidx();
     let len = stack.len();
 
@@ -323,8 +317,7 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
 /// # Safety
 /// `retdict` must be a live dict.
 pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
-    // SAFETY: the dict is live, and nothing else holds the window's stack.
-    let mut stack = unsafe { TagStack::of(window) };
+    let mut stack = TagStack::of(window);
     unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
     unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
 
@@ -363,7 +356,7 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
         items = unsafe { (*di).di_tv.vval.v_list };
     }
 
-    let mut stack = unsafe { TagStack::of(window) };
+    let mut stack = TagStack::of(window);
     if let Some(di) = unsafe { find(d, c"curidx") } {
         stack.set_curidx(unsafe { tv_get_number(&raw mut (*di).di_tv) } as c_int - 1);
     }

@@ -548,8 +548,7 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
 
     if had_diffs || !tp.tp_first_diff.is_null() {
         let nul = ::core::ptr::null_mut::<c_char>();
-        // SAFETY: the editor exists; `DiffUpdated` takes no file name.
-        unsafe { diff_redraw(true) };
+        diff_redraw(true);
         let buffer = Buf::current_or_none();
         unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, buffer) };
     }

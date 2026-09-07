@@ -467,8 +467,7 @@ pub(crate) fn end_visual() {
 ///
 /// Fires `WinClosed`/`BufWinLeave`; everything held may be stale afterwards.
 pub(crate) fn close_all_windows(buffer: Buf, keep_curwin: bool) {
-    // SAFETY: a live buffer.
-    unsafe { close_windows(buffer, keep_curwin) };
+    close_windows(buffer, keep_curwin);
 }
 
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
@@ -478,12 +477,10 @@ pub(crate) fn recheck_colorcolumn(win: Win) {
 }
 
 pub(crate) fn clear_window_folds(win: Win) {
-    // SAFETY: a live window.
     clear_folding(win);
 }
 
 pub(crate) fn invalidate_window_folds(win: Win) {
-    // SAFETY: a live window.
     fold_update_all(win);
 }
 
@@ -501,7 +498,6 @@ pub(crate) fn set_pcmark() {
 
 /// Whether `buffer` has unsaved changes.
 pub(crate) fn is_changed(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
     buf_is_changed(buffer)
 }
 

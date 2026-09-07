@@ -36,11 +36,7 @@ pub unsafe extern "C" fn close_fold(pos: Pos, count: c_int) {
 }
 
 /// Close fold for current window at position `pos` recursively.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn close_fold_recurse(pos: Pos) {
-    // SAFETY: the caller's promise.
+pub fn close_fold_recurse(pos: Pos) {
     set_manual_fold(pos, false, true, None);
 }
 
@@ -50,10 +46,7 @@ pub unsafe fn close_fold_recurse(pos: Pos) {
 /// `opening` — true to open, false to close
 /// `recurse` — true to do it recursively
 /// `had_visual` — true when Visual selection used
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn op_fold_range(
+pub fn op_fold_range(
     firstpos: Pos,
     lastpos: Pos,
     opening: c_int,
@@ -70,10 +63,6 @@ pub unsafe fn op_fold_range(
             coladd: 0,
         };
         let mut lnum_next = lnum;
-        // SAFETY: the caller's promise. Which side of `set_manual_fold` the
-        // closed range is read on matters: opening a fold makes the closed
-        // range shorter and closing one makes it longer, and the walk has to
-        // step past whichever range the command leaves behind.
         if opening != 0 && recurse == 0 {
             has_folding(Win::current(), lnum, None, Some(&mut lnum_next));
         }
@@ -84,11 +73,9 @@ pub unsafe fn op_fold_range(
         lnum = lnum_next + 1;
     }
     if done == DONE_NOTHING {
-        // SAFETY: a static message.
         emsg_nofold();
     }
     if had_visual {
-        // SAFETY: the caller's promise.
         redraw_curbuf_later(UPD_INVERTED);
     }
 }
@@ -104,19 +91,12 @@ pub unsafe extern "C" fn open_fold(pos: Pos, count: c_int) {
 }
 
 /// Open fold for current window at position `pos` recursively.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn open_fold_recurse(pos: Pos) {
-    // SAFETY: the caller's promise.
+pub fn open_fold_recurse(pos: Pos) {
     set_manual_fold(pos, true, true, None);
 }
 
 /// Open folds until the cursor line is not in a closed fold.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_open_cursor() {
+pub fn fold_open_cursor() {
     checkupdate(Win::current());
     if has_any_folding(Win::current()) == 0 {
         return;
@@ -134,10 +114,7 @@ pub unsafe fn fold_open_cursor() {
 }
 
 /// Set new foldlevel for current window.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn new_fold_level() {
+pub fn new_fold_level() {
     new_fold_level_win(Win::current());
     if !(foldmethod_is_diff(Win::current()) && Win::current().w_onebuf_opt.wo_scb != 0) {
         return;
@@ -206,11 +183,7 @@ pub(super) fn close_folds_off_cursor(folds: FoldList, lnum: LineNr, level: c_int
 
 /// Returns true if it's allowed to manually create or delete a fold or,
 ///          give an error message and return false if not.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
-    // SAFETY: the caller's promise.
+pub fn fold_manual_allowed(create: bool) -> c_int {
     if foldmethod_is_manual(Win::current()) || foldmethod_is_marker(Win::current()) {
         return 1;
     }
@@ -410,18 +383,15 @@ pub unsafe fn delete_fold(
             unsafe { delete_fold_markers(win, fold, recursive != 0, found_off) };
         }
         did_one = true;
-        // SAFETY: the caller's promise.
         changed_window_setting(win);
     }
     if !did_one {
         // SAFETY: a static message, and a live buffer.
         emsg_nofold();
         if had_visual {
-            // SAFETY: `win` is live, so its buffer is.
-            unsafe { redraw_buf_later(win.buffer(), UPD_INVERTED) };
+            redraw_buf_later(win.buffer(), UPD_INVERTED);
         }
     } else {
-        // SAFETY: the caller's promise.
         check_cursor_col(window);
     }
     if last_lnum > 0 {

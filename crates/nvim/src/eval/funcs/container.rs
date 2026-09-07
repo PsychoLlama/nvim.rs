@@ -63,7 +63,7 @@ pub unsafe fn f_deepcopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         return;
     }
     let noref = args.has(1) && unsafe { tv_get_bool_chk(args.ptr(1), ptr::null_mut()) } != 0;
-    let copy_id = if noref { 0 } else { unsafe { get_copy_id() } };
+    let copy_id = if noref { 0 } else { get_copy_id() };
     let _ = unsafe { var_item_copy(ptr::null(), args.ptr(0), result, true, copy_id) };
 }
 
@@ -334,7 +334,6 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
 /// # Safety
 /// `pt` is a live Partial and `result` is the cleared return value.
 unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
-    // SAFETY throughout: the caller's obligation.
     let (mut required, mut optional, mut varargs) = (0, 0, false);
     let name = unsafe { partial_name(pt) };
     let (req, opt, var) = (&raw mut required, &raw mut optional, &raw mut varargs);
@@ -526,11 +525,11 @@ unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: *mut TypVal) -> 
     } else {
         startidx
     };
-    unsafe { set_vim_var_type(Vv::Key, VAR_NUMBER) };
-    unsafe { set_vim_var_type(Vv::Val, VAR_NUMBER) };
+    set_vim_var_type(Vv::Key, VAR_NUMBER);
+    set_vim_var_type(Vv::Val, VAR_NUMBER);
     let called_emsg_start = called_emsg.get();
     for idx in start..unsafe { tv_blob_len(b) } as VarNumber {
-        unsafe { set_vim_var_nr(Vv::Key, idx) };
+        set_vim_var_nr(Vv::Key, idx);
         unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as VarNumber) };
         if unsafe { indexof_matches(expr) } {
             return idx;
@@ -549,7 +548,6 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: *mut TypVal) -> 
     if l.is_null() {
         return -1;
     }
-    // SAFETY throughout: the caller's obligation.
     let mut idx: VarNumber = 0;
     let mut item: *mut ListItem;
     // A zero start index is taken literally rather than run through
@@ -565,10 +563,10 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: *mut TypVal) -> 
             debug_assert!(!item.is_null());
         }
     }
-    unsafe { set_vim_var_type(Vv::Key, VAR_NUMBER) };
+    set_vim_var_type(Vv::Key, VAR_NUMBER);
     let called_emsg_start = called_emsg.get();
     while !item.is_null() {
-        unsafe { set_vim_var_nr(Vv::Key, idx) };
+        set_vim_var_nr(Vv::Key, idx);
         unsafe { tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(Vv::Val)) };
         let found = unsafe { indexof_matches(expr) };
         unsafe { tv_clear(get_vim_var_tv(Vv::Val)) };

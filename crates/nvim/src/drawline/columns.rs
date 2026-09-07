@@ -108,11 +108,8 @@ impl WinLineVars {
     /// The virtual column of each cell is deliberately left alone:
     /// [`WinLineVars::start_line`] already set the whole line buffer to `-1`,
     /// and a filled column is never buffer text.
-    ///
-    /// # Safety
-    /// `off + width` must be within the line buffer.
     #[inline]
-    pub(crate) unsafe fn draw_col_fill(
+    pub(crate) fn draw_col_fill(
         &mut self,
         fillchar: ScreenChar,
         width: ::core::ffi::c_int,
@@ -133,12 +130,7 @@ impl WinLineVars {
 // ---------------------------------------------------------------------------
 
 /// Whether the `CursorLineSign`/`CursorLineFold` highlights apply to `lnum`.
-///
-/// # Safety
-/// `window` must be a live window.
-pub unsafe fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
-    // SAFETY: the caller's live window.
-    // SAFETY: the caller's window.
+pub fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
     window.w_onebuf_opt.wo_cul != 0
         && lnum == window.w_cursorline
         && window.w_p_culopt_flags as ::core::ffi::c_int
@@ -153,16 +145,12 @@ pub unsafe fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
 /// shown, `foldinner` when that is set, and otherwise a *digit*: with a
 /// `'foldcolumn'` narrower than the nesting, the number says how deep the
 /// column is, and `>` once that runs past nine.
-///
-/// # Safety
-/// `window` must be a live window.
 #[inline]
-unsafe fn foldcolumn_sep_char(
+fn foldcolumn_sep_char(
     first_level: ::core::ffi::c_int,
     i: ::core::ffi::c_int,
     window: Win,
 ) -> ScreenChar {
-    // SAFETY: the caller's window.
     if first_level == 1 {
         window.w_p_fcs_chars.foldsep
     } else if window.w_p_fcs_chars.foldinner != NUL as ScreenChar {
@@ -181,17 +169,13 @@ unsafe fn foldcolumn_sep_char(
 /// `is_virt` marks a filler line — a diff filler or a virtual line. Those are
 /// drawn *above* their buffer line, so a line that opens a fold must show the
 /// fold column of the line before it, not its own opening marker.
-///
-/// # Safety
-/// `window` must be live, and `fdc` may not exceed [`MAX_FOLDCOLUMN`].
-unsafe fn fold_column_cells(
+fn fold_column_cells(
     window: Win,
     foldinfo: FoldInfo,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
 ) -> [(ScreenChar, ColNr); MAX_FOLDCOLUMN] {
-    // SAFETY: the caller's window.
     let closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
     let level = foldinfo.fi_level;
     // Too narrow for the nesting: start at the lowest level that fits and
@@ -218,13 +202,13 @@ unsafe fn fold_column_cells(
         } else if foldinfo.fi_lnum == lnum && first_level + i >= foldinfo.fi_low_level {
             window.w_p_fcs_chars.foldopen
         } else {
-            unsafe { foldcolumn_sep_char(first_level, i, window) }
+            foldcolumn_sep_char(first_level, i, window)
         };
         if let Some((outer_level, outer_first_level)) = outer {
             symbol = if i >= outer_level {
                 schar_from_ascii(b' ')
             } else {
-                unsafe { foldcolumn_sep_char(outer_first_level, i, window) }
+                foldcolumn_sep_char(outer_first_level, i, window)
             };
         }
         let vcol = if i >= level {
@@ -253,8 +237,7 @@ pub unsafe fn fill_foldcolumn(
     out_vcol: *mut ColNr,
     out_buffer: *mut ScreenChar,
 ) {
-    // SAFETY: the caller's window and arrays.
-    let cells = unsafe { fold_column_cells(window, foldinfo, lnum, fdc, is_virt) };
+    let cells = fold_column_cells(window, foldinfo, lnum, fdc, is_virt);
     for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
         unsafe { *out_vcol.add(i) = vcol };
         unsafe { *out_buffer.add(i) = symbol };
@@ -267,8 +250,7 @@ impl WinLineVars {
     /// # Safety
     /// `window` must be a live window.
     pub(crate) unsafe fn draw_foldcolumn(&mut self, window: Win) {
-        // SAFETY: the caller's window.
-        let fdc = unsafe { compute_foldcolumn(window, 0) };
+        let fdc = compute_foldcolumn(window, 0);
         if fdc <= 0 {
             return;
         }
@@ -283,7 +265,7 @@ impl WinLineVars {
             )
         };
         let is_virt = self.filler_todo > 0;
-        let cells = unsafe { fold_column_cells(window, self.foldinfo, self.lnum, fdc, is_virt) };
+        let cells = fold_column_cells(window, self.foldinfo, self.lnum, fdc, is_virt);
         for &(symbol, vcol) in cells.iter().take(fdc as usize) {
             put_cell(self.off, symbol, attr, vcol);
             self.off += 1;
@@ -331,13 +313,11 @@ impl WinLineVars {
             // No sign on this row. The number column never gets here:
             // `draw_lnum_col` only asks for `nrcol` when there is a sign.
             debug_assert!(!nrcol);
-            unsafe {
-                self.draw_col_fill(
-                    schar_from_ascii(b' '),
-                    SIGN_WIDTH as ::core::ffi::c_int,
-                    scl_attr,
-                )
-            };
+            self.draw_col_fill(
+                schar_from_ascii(b' '),
+                SIGN_WIDTH as ::core::ffi::c_int,
+                scl_attr,
+            );
             return;
         }
 
@@ -415,11 +395,7 @@ impl WinLineVars {
     /// It does on the first screen row of the cursor line, and on the
     /// continuation rows only when `'cursorlineopt'` also contains "line" —
     /// otherwise the highlight follows the number itself, not the column.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn use_cursor_line_nr(&self, window: Win) -> bool {
-        // SAFETY: the caller's window.
+    fn use_cursor_line_nr(&self, window: Win) -> bool {
         let culopt = window.w_p_culopt_flags as ::core::ffi::c_int;
         window.w_onebuf_opt.wo_cul != 0
             && self.lnum == window.w_cursorline
@@ -435,7 +411,6 @@ impl WinLineVars {
     /// # Safety
     /// `window` must be a live window.
     pub(crate) unsafe fn line_number_attr(&mut self, window: Win) -> ::core::ffi::c_int {
-        // SAFETY: the caller's window.
         let mut numhl_attr = self.sign_num_attr;
         if self.n_virt_lines - self.filler_todo < self.n_virt_below {
             // A virtual line belonging to the line above takes *its* sign
@@ -459,7 +434,7 @@ impl WinLineVars {
             numhl_attr = self.prev_num_attr;
         }
 
-        let hlf = if unsafe { self.use_cursor_line_nr(window) } {
+        let hlf = if self.use_cursor_line_nr(window) {
             // TODO(vim): can CursorLine stand in when CursorLineNr is unset?
             HLF_CLN
         } else if window.w_onebuf_opt.wo_rnu != 0 && self.lnum < window.w_cursor.lnum {
@@ -479,7 +454,6 @@ impl WinLineVars {
     /// # Safety
     /// `window` must be a live window.
     pub(crate) unsafe fn draw_lnum_col(&mut self, window: Win) {
-        // SAFETY: the caller's window.
         let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
         if window.w_onebuf_opt.wo_nu == 0 && window.w_onebuf_opt.wo_rnu == 0 {
             return;
@@ -514,7 +488,7 @@ impl WinLineVars {
         if !(first_row && (window.w_skipcol == 0 || self.row > 0 || both)) {
             // A continuation row, or the first row of a line whose top is
             // scrolled off with 'smoothscroll': blank.
-            unsafe { self.draw_col_fill(schar_from_ascii(b' '), width, attr) };
+            self.draw_col_fill(schar_from_ascii(b' '), width, attr);
             return;
         }
 
@@ -592,7 +566,7 @@ impl WinLineVars {
             // with the largest line number there can be, and widen before
             // anything is drawn.
             window.w_statuscol_line_count = window.w_nrwidth_line_count;
-            unsafe { set_vim_var_nr(Vv::Virtnum, 0) };
+            set_vim_var_nr(Vv::Virtnum, 0);
             let width = unsafe {
                 build_statuscol_str(
                     window,
@@ -618,7 +592,7 @@ impl WinLineVars {
             }
         }
 
-        unsafe { set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber) };
+        set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
         let width = unsafe { build_statuscol_str(window, lnum, relnum, buf.as_mut_ptr(), stcp) };
         let was_reset = unsafe { *window.w_onebuf_opt.wo_stc } == NUL as ::core::ffi::c_char;
         if was_reset
@@ -747,7 +721,6 @@ impl WinLineVars {
     /// # Safety
     /// `window` must be a live window.
     pub(crate) unsafe fn handle_breakindent(&mut self, window: Win) {
-        // SAFETY: the caller's window.
         if window.w_onebuf_opt.wo_bri != 0
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
@@ -802,14 +775,13 @@ impl WinLineVars {
     /// # Safety
     /// `window` must be a live window.
     pub(crate) unsafe fn handle_showbreak_and_filler(&mut self, window: Win) {
-        // SAFETY: the caller's window.
         let remaining = window.w_view_width - self.off;
         if self.filler_todo > self.filler_lines - self.n_virt_lines {
             // A virtual line: its text is drawn by the decoration code, so
             // all this owes is the background.
             // TODO(bfredl): check this doesn't inhibit TUI-style
             //               clear-to-end-of-line.
-            unsafe { self.draw_col_fill(schar_from_ascii(b' '), remaining, 0) };
+            self.draw_col_fill(schar_from_ascii(b' '), remaining, 0);
         } else if self.filler_todo > 0 {
             // A "deleted" diff line.
             unsafe {

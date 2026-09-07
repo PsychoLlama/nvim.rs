@@ -144,11 +144,10 @@ pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
 /// # Safety
 /// There must be a current buffer and window.
 pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
-    let use_sandbox =
-        unsafe { was_set_insecurely(Win::current(), kOptFormatexpr, OptionSetFlags::LOCAL) };
+    let use_sandbox = was_set_insecurely(Win::current(), kOptFormatexpr, OptionSetFlags::LOCAL);
 
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::Count, count as VarNumber) };
+    set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::Count, count as VarNumber);
     unsafe { set_vim_var_char(c) };
 
     // Copy it: the option can be changed while it is running.
@@ -213,7 +212,7 @@ unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_coun
     };
     if strip > 0 {
         let _ = unsafe { del_bytes(strip as ColNr, false, false) };
-        unsafe { mark_col_adjust(Win::current().w_cursor.lnum, 0, 0, -(strip as ColNr), 0) };
+        mark_col_adjust(Win::current().w_cursor.lnum, 0, 0, -(strip as ColNr), 0);
     }
     Win::current().w_cursor.lnum -= 1;
     if unsafe { do_join(2 as size_t, true, false, false, false) }.is_err() {

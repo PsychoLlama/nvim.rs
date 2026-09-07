@@ -126,45 +126,27 @@ pub unsafe fn set_vim_var_tv(idx: Vv, tv: *mut TypVal) {
 }
 
 /// The name of `v:` variable `idx`, without the `v:`.
-///
-/// # Safety
-/// `idx` names a `v:` variable.
-pub unsafe fn get_vim_var_name(idx: Vv) -> *mut c_char {
+pub fn get_vim_var_name(idx: Vv) -> *mut c_char {
     vimvar(idx).vv_name
 }
 
 /// The value of `v:` variable `idx`, which the caller may write through.
-///
-/// # Safety
-/// `idx` names a `v:` variable.
-pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
+pub fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
     vimvar_val(idx).raw()
 }
 
 /// `v:` variable `idx` as a Number.  The caller knows its declared type.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_nr(idx: Vv) -> VarNumber {
-    // SAFETY: the caller's obligation -- the declared type is the Number arm.
+pub fn get_vim_var_nr(idx: Vv) -> VarNumber {
     vimvar_val(idx).number_or_zero()
 }
 
 /// `v:` variable `idx` as a List.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_list(idx: Vv) -> *mut List {
-    // SAFETY: the caller's obligation -- the declared type is the List arm.
+pub fn get_vim_var_list(idx: Vv) -> *mut List {
     vimvar_val(idx).list_or_null()
 }
 
 /// `v:` variable `idx` as a Dict.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut Dict {
-    // SAFETY: the caller's obligation -- the declared type is the Dict arm.
+pub fn get_vim_var_dict(idx: Vv) -> *mut Dict {
     vimvar_val(idx).dict_or_null()
 }
 
@@ -175,10 +157,7 @@ pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut Dict {
 /// an assignment of another type, so there is nothing to convert and nothing
 /// to convert it into: the answer lives as long as the variable does, which
 /// is what the callers holding it across a call need.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
+pub fn get_vim_var_str(idx: Vv) -> *mut c_char {
     let tv = vimvar_val(idx);
     debug_assert_eq!(tv.v_type, VAR_STRING, "v: variable {idx:?} is not a String");
     let s = tv.string_or_null();
@@ -190,39 +169,26 @@ pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
 }
 
 /// `v:` variable `idx` as a Partial.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_partial(idx: Vv) -> *mut Partial {
-    // SAFETY: the caller's obligation -- the declared type is the Partial arm.
+pub fn get_vim_var_partial(idx: Vv) -> *mut Partial {
     vimvar_val(idx).partial_or_null()
 }
 
 /// Declare `v:` variable `idx` to be of type `type_0`, without touching its
 /// value.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_type(idx: Vv, type_0: VarType) {
+pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
     let mut tv = vimvar_val(idx);
     tv.v_type = type_0;
 }
 
 /// Set `v:` variable `idx` to the Number `val`.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_nr(idx: Vv, val: VarNumber) {
+pub fn set_vim_var_nr(idx: Vv, val: VarNumber) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.vval.v_number = val;
 }
 
 /// Set `v:` variable `idx` to `v:true` or `v:false`.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
+pub fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.v_type = VAR_BOOL;
@@ -230,10 +196,7 @@ pub unsafe fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
 }
 
 /// Set `v:` variable `idx` to `v:null`.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
+pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.v_type = VAR_SPECIAL;
@@ -496,12 +459,8 @@ pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
 
 /// Set `v:count` and `v:count1`, and `v:prevcount` from the old `v:count`
 /// first when asked.
-///
-/// # Safety
-/// Nothing.
-pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
+pub fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     if set_prevcount {
-        // SAFETY: `v:count` is declared a Number.
         let old = vimvar_val(Vv::Count).number_or_zero();
         let mut prev = vimvar_val(Vv::Prevcount);
         prev.vval.v_number = old;
@@ -588,7 +547,7 @@ pub unsafe fn before_set_vvar(
             set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });
         } else if unsafe { cstr::eq_bytes(varname, b"hlsearch") } {
             no_hlsearch.set(n == 0);
-            unsafe { redraw_all_later(UPD_SOME_VALID) };
+            redraw_all_later(UPD_SOME_VALID);
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.

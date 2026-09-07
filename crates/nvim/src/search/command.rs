@@ -279,7 +279,7 @@ unsafe fn echo_search_cmd(
     options: c_int,
 ) -> (Echo, bool) {
     if !(options & SEARCH_ECHO != 0
-        && unsafe { messaging() }
+        && messaging()
         && msg_silent.get() == 0
         && (!cmd_silent.get() || !shortmess(ShmFlag::SEARCHCOUNT)))
     {
@@ -343,7 +343,7 @@ unsafe fn echo_search_cmd(
 
         unsafe { msg_outtrans(echo.buf.as_ptr(), 0, false) };
         unsafe { msg_clr_eos() };
-        unsafe { msg_check() };
+        msg_check();
         unsafe { gotocmdline(false) };
         unsafe { ui_flush() };
         ui_busy_stop();
@@ -512,8 +512,8 @@ pub unsafe fn do_search(
 
     // Turn 'hlsearch' highlighting back on.
     if no_hlsearch.get() && options & SEARCH_KEEP == 0 {
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
-        unsafe { set_no_hlsearch(false) };
+        redraw_all_later(UPD_SOME_VALID);
+        set_no_hlsearch(false);
     }
 
     // The copy skip_regexp_ex makes when it rewrites "\?" to "?"; it

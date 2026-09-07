@@ -131,10 +131,7 @@ pub fn get_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
 }
 
 /// Get the buffer-local hashed map list for `state` and first character `c`.
-///
-/// # Safety
-/// `curbuf` must be a live buffer.
-pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
+pub fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
     Buf::current().b_maphash[map_hash(state, c)]
 }
 

@@ -96,7 +96,6 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
         // SAFETY: message state, main thread.
         say::clear_eos();
     }
-    // SAFETY: message state, main thread.
     say::end();
 }
 
@@ -117,7 +116,7 @@ unsafe fn describe_byte(
     let mut nonprint: [c_char; 20] = [0; 20];
     // SAFETY: `nonprint` is 20 bytes and `transchar_nonprint` writes at most
     // seven into `raw` before the `  <%s>` wrapper takes it.
-    if unsafe { vim_isprintc(c) } && !(' ' as c_int..='~' as c_int).contains(&c) {
+    if vim_isprintc(c) && !(' ' as c_int..='~' as c_int).contains(&c) {
         let mut raw: [c_char; 7] = [0; 7];
         unsafe { transchar_nonprint(Buf::current_or_none(), raw.as_mut_ptr(), c) };
         unsafe {
@@ -375,7 +374,6 @@ unsafe fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
 unsafe fn linelen() -> (c_int, bool) {
     // Get the line.  If it's empty bail out early (could be the empty string
     // for an unloaded buffer).
-    // SAFETY: caller's contract.
     let line = get_cursor_line_ptr();
     // SAFETY: buffer lines are NUL-terminated.
     let text = unsafe { CStr::from_ptr(line) }.to_bytes();

@@ -75,11 +75,11 @@ unsafe fn decor_spell_nav_col(
 ) -> Option<bool> {
     // SAFETY: the caller's window and state; the callbacks run Lua.
     if *decor_lnum != lnum {
-        unsafe { decor_redraw_reset(window, state) };
+        decor_redraw_reset(window, state);
         unsafe {
             decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1)
         };
-        unsafe { decor_redraw_line(window, lnum as c_int - 1, state) };
+        decor_redraw_line(window, lnum as c_int - 1, state);
         *decor_lnum = lnum;
     }
     unsafe { decor_redraw_col(window, col, 0, false, state, MAXCOL as c_int) };

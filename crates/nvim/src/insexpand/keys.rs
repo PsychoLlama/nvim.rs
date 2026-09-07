@@ -22,7 +22,7 @@ use crate::winlayer::Win;
 /// Answers the character to use, or NUL when the work is done and another
 /// character is to be got from the user.
 pub unsafe fn ins_compl_bs() -> c_int {
-    if unsafe { ins_compl_preinsert_effect() } {
+    if ins_compl_preinsert_effect() {
         unsafe { ins_compl_delete(false) };
     }
 
@@ -68,9 +68,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
 
     // Clear the selection if a menu item is currently selected in
     // autocompletion.
-    if compl_autocomplete.get()
-        && !compl_first_match.get().is_null()
-        && !unsafe { ins_compl_has_preinsert() }
+    if compl_autocomplete.get() && !compl_first_match.get().is_null() && !ins_compl_has_preinsert()
     {
         compl_shown_match.set(compl_first_match.get());
     }
@@ -111,7 +109,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         // Matches were cleared, need to search for them now. Set
         // "compl_restarting" to avoid that the first match is inserted.
         compl_restarting.set(true);
-        if unsafe { ins_compl_has_autocomplete() } {
+        if ins_compl_has_autocomplete() {
             ins_compl_enable_autocomplete();
         } else {
             compl_autocomplete.set(false);
@@ -130,12 +128,12 @@ pub(crate) unsafe fn ins_compl_new_leader() {
     // Don't let Enter select the original text when there is no popup menu.
     if compl_match_array().is_unset() {
         compl_enter_selects.set(false);
-    } else if unsafe { ins_compl_has_preinsert() } && !compl_leader().is_empty() {
+    } else if ins_compl_has_preinsert() && !compl_leader().is_empty() {
         unsafe { ins_compl_insert(true, false) };
     } else if compl_started.get()
-        && unsafe { ins_compl_preinsert_longest() }
+        && ins_compl_preinsert_longest()
         && !compl_leader().is_empty()
-        && !unsafe { ins_compl_preinsert_effect() }
+        && !ins_compl_preinsert_effect()
     {
         unsafe { ins_compl_insert(true, true) };
     }
@@ -147,7 +145,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
 
 /// Append one character to the match leader. May reduce the number of matches.
 pub unsafe fn ins_compl_addleader(c: c_int) {
-    if unsafe { ins_compl_preinsert_effect() } {
+    if ins_compl_preinsert_effect() {
         unsafe { ins_compl_delete(false) };
     }
 
@@ -258,7 +256,7 @@ pub unsafe fn ins_compl_addfrommatch() {
 /// Stop insert completion mode.
 pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
     // Remove pre-inserted text when present.
-    if unsafe { ins_compl_preinsert_effect() } && ins_compl_win_active(Win::current()) {
+    if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
         unsafe { ins_compl_delete(false) };
     }
 
@@ -320,7 +318,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
         retval = true;
         // May need to remove ComplMatchIns highlight.
-        unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
+        redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
     }
 
     // When a match was inserted but the pum was never displayed (e.g. only
@@ -465,7 +463,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
 
     // Set "compl_get_longest" when finding the first matches.
     if ctrl_x_mode_not_defined_yet() || (ctrl_x_mode_normal() && !compl_started.get()) {
-        compl_get_longest.set(unsafe { get_cot_flags() } & kOptCotFlagLongest as c_uint != 0);
+        compl_get_longest.set(get_cot_flags() & kOptCotFlagLongest as c_uint != 0);
         compl_used_match.set(true);
     }
 
@@ -584,7 +582,7 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     if c != NUL && !test_disable_char_avail.get() {
         if unsafe { vim_is_ctrl_x_key(c) } && c != Ctrl_X && c != Ctrl_R {
             c = safe_vgetc(); // Eat the character
-            compl_shows_dir.set(unsafe { ins_compl_key2dir(c) });
+            compl_shows_dir.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
                 !matches!(Key::try_from(c), Ok(Key::Up | Key::Down)),
@@ -617,7 +615,7 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     if compl_pending.get() != 0
         && !got_int.get()
         && cot_flags.get() & (kOptCotFlagNoinsert as c_uint | kOptCotFlagFuzzy as c_uint) == 0
-        && (!compl_autocomplete.get() || unsafe { ins_compl_has_preinsert() })
+        && (!compl_autocomplete.get() || ins_compl_has_preinsert())
     {
         // Insert the first match immediately and advance
         // compl_shown_match, before finding other matches.

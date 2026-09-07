@@ -72,11 +72,7 @@ unsafe fn try_to_free_memory() {
 }
 
 /// Report an allocation failure, once per process.
-///
-/// # Safety
-///
-/// Runs on the main thread; `semsg` reaches the editor's message layer.
-unsafe fn do_outofmem_msg(size: usize) {
+fn do_outofmem_msg(size: usize) {
     if did_outofmem_msg.get() {
         return;
     }

@@ -785,7 +785,7 @@ pub(crate) unsafe fn eval7(
                 let lua = unsafe { strnequal(name, c"v:lua.".as_ptr(), 6) };
                 if rv.v_type == VAR_UNKNOWN && lua {
                     rv.v_type = VAR_PARTIAL;
-                    let partial = unsafe { get_vim_var_partial(Vv::Lua) };
+                    let partial = get_vim_var_partial(Vv::Lua);
                     rv.vval.v_partial = partial;
                     // SAFETY: `get_vim_var_partial` answers a live partial.
                     unsafe { (*partial).pt_refcount.retain() };

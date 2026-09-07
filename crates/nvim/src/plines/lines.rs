@@ -57,7 +57,7 @@ pub(crate) unsafe fn plines_win(window: Win, lnum: LineNr, limit_winheight: bool
 /// # Safety
 /// `window` must be live and `lnum` a line of its buffer.
 pub(crate) unsafe fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    if unsafe { decor_conceal_line(window, lnum - 1, false) } {
+    if decor_conceal_line(window, lnum - 1, false) {
         return 0;
     }
     if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
@@ -203,7 +203,7 @@ pub(crate) unsafe fn plines_win_full(
         unsafe { win_get_fill(window, lnum) }
     };
 
-    if unsafe { decor_conceal_line(window, lnum - 1, false) } {
+    if decor_conceal_line(window, lnum - 1, false) {
         return filler_lines;
     }
 

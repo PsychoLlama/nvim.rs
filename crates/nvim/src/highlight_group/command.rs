@@ -178,7 +178,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
             }
             unsafe { init_highlight(true, true) };
             unsafe { highlight_changed() };
-            unsafe { redraw_all_later(UPD_NOT_VALID) };
+            redraw_all_later(UPD_NOT_VALID);
             return;
         }
     }
@@ -229,10 +229,10 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         } else {
             // TUI and newer UIs repaint themselves; the UPD_NOT_VALID
             // redraw below still handles `guibg=fg` and friends.
-            unsafe { ui_default_colors_set() };
+            ui_default_colors_set();
         }
         did_highlight_changed = true;
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
     } else {
         unsafe { set_hl_attr(id) };
     }
@@ -248,7 +248,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         // Do not redraw while redrawing: evaluating 'statusline' can
         // change the StatusLine group.
         if !updating_screen.get() {
-            unsafe { redraw_all_later(UPD_NOT_VALID) };
+            redraw_all_later(UPD_NOT_VALID);
         }
         need_highlight_changed.set(true);
     }
@@ -330,7 +330,7 @@ unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: 
             unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
             entry.cleared = false;
         });
-        unsafe { redraw_all_later(UPD_SOME_VALID) };
+        redraw_all_later(UPD_SOME_VALID);
         // Only call highlight_changed() once after multiple changes.
         need_highlight_changed.set(true);
     }
@@ -456,10 +456,10 @@ impl KeyLoop {
     unsafe fn store(&mut self, key: &[u8], arg: &[u8], key_start: *const c_char) -> bool {
         // SAFETY: the caller's line, and the editor's own tables.
         match key {
-            b"TERM" | b"CTERM" | b"GUI" => unsafe { self.set_attrs(key, arg) },
+            b"TERM" | b"CTERM" | b"GUI" => self.set_attrs(key, arg),
             b"CTERMFG" | b"CTERMBG" => unsafe { self.set_cterm_color(key, arg, key_start) },
             b"GUIFG" | b"GUIBG" | b"GUISP" => {
-                unsafe { self.set_gui_color(key, arg) };
+                self.set_gui_color(key, arg);
                 true
             }
             // Fonts, and the raw terminal codes, are ignored.
@@ -480,10 +480,7 @@ impl KeyLoop {
     }
 
     /// `term=`/`cterm=`/`gui=`: a comma-separated list of attribute names.
-    ///
-    /// # Safety
-    /// See [`do_highlight`].
-    unsafe fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> bool {
+    fn set_attrs(&mut self, key: &[u8], arg: &[u8]) -> bool {
         let mut attr = HlAttrFlags::NONE;
         let mut off = 0;
         while off < arg.len() {
@@ -650,10 +647,7 @@ impl KeyLoop {
     }
 
     /// `guifg=`/`guibg=`/`guisp=`.
-    ///
-    /// # Safety
-    /// See [`do_highlight`].
-    unsafe fn set_gui_color(&mut self, key: &[u8], arg: &[u8]) {
+    fn set_gui_color(&mut self, key: &[u8], arg: &[u8]) {
         if self.init && group(self.id).set & SG_GUI as c_int != 0 {
             return;
         }

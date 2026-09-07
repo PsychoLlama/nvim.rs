@@ -261,28 +261,23 @@ pub unsafe fn ins_compl_accept_char(c: c_int) -> bool {
     }
     if ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0 {
         // Expanding an identifier: only identifier characters.
-        // SAFETY: the character tables belong to the current buffer, which
-        // exists whenever a completion is running.
-        return unsafe { vim_is_ident_char(c) };
+        return vim_is_ident_char(c);
     }
     match ctrl_x_mode.get() {
         // File names, but not path separators, so that "proto/<Tab>"
         // expands files in "proto", not "proto/" as a whole.
         CTRL_X_FILES => {
-            // SAFETY: as above.
-            let isfilec = unsafe { vim_isfilec(c) };
+            let isfilec = vim_isfilec(c);
             isfilec && !vim_ispathsep(c)
         }
         // Command line and omni completion take just about any printable
         // character, but do stop at white space.
         CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
-            // SAFETY: as above.
-            let isprintc = unsafe { vim_isprintc(c) };
+            let isprintc = vim_isprintc(c);
             isprintc && !ascii_iswhite(c)
         }
         // For whole-line completion a space can be part of the line.
-        // SAFETY: as above.
-        CTRL_X_WHOLE_LINE => unsafe { vim_isprintc(c) },
+        CTRL_X_WHOLE_LINE => vim_isprintc(c),
         // SAFETY: as above.
         _ => unsafe { vim_iswordc(c) },
     }
@@ -300,13 +295,13 @@ pub(crate) fn is_nearest_active() -> bool {
     (compl_autocomplete.get() || completeopt_flags() & kOptCotFlagNearest != 0) && !cot_fuzzy()
 }
 
-pub unsafe fn ins_compl_is_match_selected() -> bool {
+pub fn ins_compl_is_match_selected() -> bool {
     shown_match().is_some_and(|shown| !shown.is_first())
 }
 
 /// Autocompletion inserting the longest common prefix: `'completeopt'` has
 /// `longest` without `preinsert` or `fuzzy`.
-pub unsafe fn ins_compl_preinsert_longest() -> bool {
+pub fn ins_compl_preinsert_longest() -> bool {
     compl_autocomplete.get()
         && completeopt_flags() & (kOptCotFlagLongest | kOptCotFlagPreinsert | kOptCotFlagFuzzy)
             == kOptCotFlagLongest
@@ -352,7 +347,7 @@ pub unsafe fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
     multiple && lnum >= compl_lnum.get() && lnum <= Win::current().w_cursor.lnum
 }
 
-pub unsafe fn ins_compl_has_shown_match() -> bool {
+pub fn ins_compl_has_shown_match() -> bool {
     match shown_match() {
         None => true,
         Some(shown) => shown.cp_next != shown.raw(),
@@ -360,7 +355,7 @@ pub unsafe fn ins_compl_has_shown_match() -> bool {
 }
 
 /// The shown match is longer than what has been inserted so far.
-pub unsafe fn ins_compl_long_shown_match() -> bool {
+pub fn ins_compl_long_shown_match() -> bool {
     let Some(shown) = shown_match() else {
         return false;
     };
@@ -377,12 +372,7 @@ pub(crate) fn completeopt_flags() -> c_uint {
 }
 
 /// [`completeopt_flags`] under the name the rest of the editor calls it by.
-///
-/// # Safety
-/// None left. It keeps the `unsafe` only so that the call sites outside
-/// `insexpand/` -- which still wrap it in a lone `unsafe {}` -- do not become
-/// `unused_unsafe`; it goes with the last of them.
-pub unsafe fn get_cot_flags() -> c_uint {
+pub fn get_cot_flags() -> c_uint {
     completeopt_flags()
 }
 
@@ -427,7 +417,7 @@ pub fn ins_compl_len() -> c_int {
 /// The match is previewed in the buffer rather than only in the menu:
 /// `'completeopt'` has `preinsert` (with `menuone`, when autocompletion is
 /// off) and not `fuzzy`.
-pub unsafe fn ins_compl_has_preinsert() -> bool {
+pub fn ins_compl_has_preinsert() -> bool {
     let flags = completeopt_flags();
     if compl_autocomplete.get() && p_ic.get() != 0 && p_inf.get() == 0 {
         return false;
@@ -441,10 +431,8 @@ pub unsafe fn ins_compl_has_preinsert() -> bool {
 }
 
 /// A previewed match is currently in the buffer ahead of the cursor.
-pub unsafe fn ins_compl_preinsert_effect() -> bool {
-    // SAFETY: neither has a precondition left; both are still `unsafe fn`s
-    // for their call sites outside this family.
-    let previewing = unsafe { ins_compl_has_preinsert() || ins_compl_preinsert_longest() };
+pub fn ins_compl_preinsert_effect() -> bool {
+    let previewing = ins_compl_has_preinsert() || ins_compl_preinsert_longest();
     previewing && Win::current().w_cursor.col < compl_ins_end_col.get()
 }
 
@@ -459,7 +447,7 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 }
 
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
-pub unsafe fn ins_compl_has_autocomplete() -> bool {
+pub fn ins_compl_has_autocomplete() -> bool {
     let local = Buf::current().b_p_ac;
     (if local >= 0 { local } else { p_ac.get() }) != 0
 }
@@ -624,7 +612,7 @@ pub(crate) fn ins_compl_mode() -> *mut c_char {
 }
 
 /// Which way the key typed moves through the matches: BACKWARD or FORWARD.
-pub(crate) unsafe fn ins_compl_key2dir(c: c_int) -> Direction {
+pub(crate) fn ins_compl_key2dir(c: c_int) -> Direction {
     if c == Key::Event.code() || c == Key::Command.code() || c == Key::Lua.code() {
         return if pum_want.get().item < compl_selected_item.get() {
             BACKWARD

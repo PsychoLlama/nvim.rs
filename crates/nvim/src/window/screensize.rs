@@ -89,8 +89,7 @@ pub(crate) fn new_screen_rows() {
     }
     comp_positions();
     win_reconfig_floats();
-    // SAFETY: recomputes the row the command line starts on.
-    unsafe { compute_cmdrow() };
+    compute_cmdrow();
     TabPage::current().tp_ch_used = p_ch.get();
     if !skip_win_fix_scroll.get() {
         fix_scroll(true);
@@ -137,7 +136,7 @@ fn snapshot_window(window: &mut Win) {
     window.w_last_height = window.w_height;
 }
 
-pub unsafe fn may_make_initial_scroll_size_snapshot() {
+pub fn may_make_initial_scroll_size_snapshot() {
     if !did_initial_scroll_size_snapshot.get() {
         did_initial_scroll_size_snapshot.set(true);
         snapshot_windows_scroll_size();

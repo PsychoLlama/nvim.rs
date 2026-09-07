@@ -70,8 +70,7 @@ pub(crate) unsafe fn jump_to_help_window(
     };
     // SAFETY: a live window's buffer is a live buffer.
     if let Some(wp) = wp.filter(|wp| unsafe { (*wp.w_buffer).b_nwindows } > 0) {
-        // SAFETY: a live window, from the window list.
-        unsafe { win_enter(wp, true) };
+        win_enter(wp, true);
         restart_edit.set(0);
         return Ok(());
     }
@@ -107,9 +106,7 @@ pub(crate) fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
     for tp in tabs() {
         for wp in windows_in_tab(tp) {
             if wp.buffer().handle == fnum {
-                // SAFETY: a live tab page and one of its live windows. The
-                // walk stops here, so the lists it was reading may move.
-                unsafe { goto_tabpage_win(tp, wp) };
+                goto_tabpage_win(tp, wp);
                 return true;
             }
         }
@@ -170,8 +167,7 @@ unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref:
             }
             win
         });
-    // SAFETY: a live window, from the window list.
-    unsafe { win_goto(win) };
+    win_goto(win);
     // A window that has no location list of its own adopts the one the
     // location list window was showing.
     if win.w_llist.is_null() && !ll_ref.is_null() {
@@ -229,8 +225,7 @@ fn qf_goto_win_with_qfl_file(qf_fnum: c_int) {
             altwin = Some(win);
         }
     }
-    // SAFETY: a live window, from the window list.
-    unsafe { win_goto(win) };
+    win_goto(win);
 }
 
 /// Enter a window that can show the file an entry names, splitting one off

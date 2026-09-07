@@ -265,7 +265,6 @@ unsafe fn draw_one_line(
     spv: &mut SpellVars,
     decor: DecorStateRef,
 ) -> bool {
-    // SAFETY: the caller's window, buffer and `w_lines` array.
     if w.lnum == rg.mod_top {
         rg.top_to_mod = false;
     }
@@ -279,7 +278,7 @@ unsafe fn draw_one_line(
     };
 
     // A concealed line with no filler lines takes no rows at all.
-    let concealed = unsafe { decor_conceal_line(window, w.lnum - 1, false) };
+    let concealed = decor_conceal_line(window, w.lnum - 1, false);
     if concealed && unsafe { win_get_fill(window, w.lnum) } == 0 {
         let step = if foldinfo.fi_lines != 0 {
             foldinfo.fi_lines
@@ -485,7 +484,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
             new_rows += old_cline_height;
             j += 1;
         } else {
-            let (n, l_last) = unsafe { plines_correct_topline(window, l, true) };
+            let (n, l_last) = plines_correct_topline(window, l, true);
             (l, new_rows) = (l_last, new_rows + n);
             j += c_int::from(n > 0); // do not count concealed lines
         }
@@ -654,7 +653,7 @@ unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
     window.w_valid.clear(WinValid::WCOL);
-    unsafe { decor_redraw_reset(window, decor) };
+    decor_redraw_reset(window, decor);
     unsafe { decor_providers_invoke_win(window, decor) };
 }
 
@@ -766,9 +765,7 @@ unsafe fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
 /// rows there. Nothing happens when the area to move would be off the window --
 /// the caller redraws it instead.
 pub unsafe fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
-    // SAFETY: a live window; `grid_adjust` maps its rows onto the grid that
-    // carries them.
-    if !unsafe { redrawing() } || line_count == 0 {
+    if !redrawing() || line_count == 0 {
         return;
     }
 
@@ -823,7 +820,7 @@ pub unsafe fn win_draw_end(
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.
     let view_width = window.w_view_width;
-    let fdc = unsafe { compute_foldcolumn(window, 0) };
+    let fdc = compute_foldcolumn(window, 0);
     let scwidth = window.w_scwidth;
 
     // The `win_hl_attr` lookups deliberately stay inside the loop, in

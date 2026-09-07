@@ -624,7 +624,7 @@ unsafe fn continue_multiline(prefix: u8, qfl: *mut QfList, fields: &mut Fields) 
         if unsafe { (*prev).qf_nr } == -1 {
             unsafe { (*prev).qf_nr = fields.enr };
         }
-        if unsafe { vim_isprintc(c_int::from(fields.kind)) } && unsafe { (*prev).qf_type } == 0 {
+        if vim_isprintc(c_int::from(fields.kind)) && unsafe { (*prev).qf_type } == 0 {
             // Only printable characters allowed.
             unsafe { (*prev).qf_type = fields.kind };
         }

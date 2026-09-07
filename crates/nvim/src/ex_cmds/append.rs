@@ -79,8 +79,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
 
     // The ! flag toggles autoindent.
     if forceit != 0 {
-        // SAFETY: as above.
-        unsafe { toggle_autoindent() };
+        toggle_autoindent();
     }
 
     // First autoindent comes from the line we start on.
@@ -100,7 +99,6 @@ pub unsafe fn ex_append(args: *mut ExArg) {
 
     // Behave like in Insert mode.
     State.set(MODE_INSERT);
-    // SAFETY: `curbuf` is live.
     if Buf::current().b_p_iminsert == B_IMODE_LMAP as OptInt {
         State.set(State.get() | MODE_LANGMAP);
     }
@@ -141,7 +139,6 @@ pub unsafe fn ex_append(args: *mut ExArg) {
         }
 
         let ended = &text[typed..] == b".";
-        // SAFETY: `lnum` is a line of the current buffer, or zero.
         let undo_failed =
             !ended && !did_undo && u_save(lnum, lnum + 1 + LineNr::from(empty)).is_err();
         if ended || undo_failed {
@@ -159,7 +156,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
         let _ = unsafe { ml_append(lnum, theline.0, 0, false) };
         if empty {
             // There are no marks below the inserted lines.
-            unsafe { appended_lines(lnum, 1) };
+            appended_lines(lnum, 1);
         } else {
             unsafe { appended_lines_mark(lnum, 1) };
         }
@@ -177,15 +174,13 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     unsafe { ui_cursor_shape() };
 
     if forceit != 0 {
-        // SAFETY: `curbuf` is live.
-        unsafe { toggle_autoindent() };
+        toggle_autoindent();
     }
 
     // "start" is set to eap->line2+1 unless that position is invalid (when
     // eap->line2 pointed to the end of the buffer and nothing was appended);
     // "end" is set to lnum when something has been appended, otherwise
     // it is the same as "start"  -- Acevedo
-    // SAFETY: `curbuf` is live.
     let mut start = Buf::current().b_ml.ml_line_count;
     if line2 < start {
         start = line2 + 1;
@@ -193,8 +188,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     if cmdidx != CmdIdx::append {
         start -= 1;
     }
-    // SAFETY: `curbuf` is live.
-    unsafe { set_op_range(start, if line2 < lnum { lnum } else { start }) };
+    set_op_range(start, if line2 < lnum { lnum } else { start });
 
     // SAFETY: `curwin` is the live current window.
     Win::current().w_cursor.lnum = lnum;
@@ -207,11 +201,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
 }
 
 /// Flip 'autoindent' for the duration of a `!` command.
-///
-/// # Safety
-/// The current buffer must be live.
-unsafe fn toggle_autoindent() {
-    // SAFETY: caller's contract.
+fn toggle_autoindent() {
     Buf::current().b_p_ai = c_int::from(Buf::current().b_p_ai == 0);
 }
 
@@ -289,7 +279,6 @@ pub unsafe fn ex_change(args: *mut ExArg) {
     }
 
     // The ! flag toggles autoindent.
-    // SAFETY: `curbuf` is live.
     let autoindent = Buf::current().b_p_ai;
     if if forceit != 0 {
         autoindent == 0
@@ -335,8 +324,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
         args.flags,
         args.line2,
     );
-    // SAFETY: the window layout and 'scroll' are live.
-    let mut bigness = unsafe { default_bigness(forceit) }.max(1);
+    let mut bigness = default_bigness(forceit).max(1);
 
     // SAFETY: the command argument is NUL-terminated.
     let text = unsafe { CStr::from_ptr(arg) }.to_bytes();
@@ -354,7 +342,6 @@ pub unsafe fn ex_z(args: *mut ExArg) {
         // SAFETY: `at` indexes the argument's own bytes.
         bigness = unsafe { atol(arg.add(at)) };
         // `bigness` could be < 0 if atol() overflowed.
-        // SAFETY: `curbuf` is live.
         let cap = int64_t::from(Buf::current().b_ml.ml_line_count) * 2;
         if bigness > cap || bigness < 0 {
             bigness = cap;
@@ -402,7 +389,6 @@ pub unsafe fn ex_z(args: *mut ExArg) {
         }
     };
 
-    // SAFETY: `curbuf` is live.
     let last = Buf::current().b_ml.ml_line_count;
     start = start.max(1);
     end = end.min(last);
@@ -410,8 +396,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
 
     for i in start..=end {
         if minus && i == lnum {
-            // SAFETY: message state, main thread.
-            unsafe { rule_off() };
+            rule_off();
         }
         // SAFETY: `i` is a line of the current buffer.
         unsafe {
@@ -423,8 +408,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
             )
         };
         if minus && i == lnum {
-            // SAFETY: message state, main thread.
-            unsafe { rule_off() };
+            rule_off();
         }
     }
 
@@ -438,11 +422,7 @@ pub unsafe fn ex_z(args: *mut ExArg) {
 
 /// How many lines `:z` shows: the display height for `:z!`, twice 'scroll' in
 /// the only window, and the window's height less three otherwise.
-///
-/// # Safety
-/// The window layout must be live.
-unsafe fn default_bigness(forceit: c_int) -> int64_t {
-    // SAFETY: caller's contract.
+fn default_bigness(forceit: c_int) -> int64_t {
     if forceit != 0 {
         int64_t::from(Rows.get() - 1)
     } else if firstwin.get() == lastwin.get() {
@@ -453,11 +433,7 @@ unsafe fn default_bigness(forceit: c_int) -> int64_t {
 }
 
 /// The line of dashes `:z=` rules the current line off with.
-///
-/// # Safety
-/// Message state must be usable.
-unsafe fn rule_off() {
-    // SAFETY: caller's contract.
+fn rule_off() {
     say::putchar(NL);
     for _ in 1..Columns.get() {
         say::putchar('-' as c_int);

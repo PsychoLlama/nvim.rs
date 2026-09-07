@@ -561,8 +561,7 @@ unsafe fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
 /// Main thread; the buffers of `fr`'s windows are live.
 unsafe fn ses_do_frame(fr: FrameRef) -> bool {
     match fr.win() {
-        // SAFETY: caller contract.
-        Some(win) => unsafe { ses_do_win(win) },
+        Some(win) => ses_do_win(win),
         // SAFETY: as above.
         None => fr.children().any(|child| unsafe { ses_do_frame(child) }),
     }

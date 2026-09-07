@@ -523,7 +523,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
         clear_showcmd();
     }
-    unsafe { checkpcmark() };
+    checkpcmark();
     unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
     unsafe { mb_check_adjust_col(Win::current_raw().cast::<c_void>()) };
 
@@ -595,10 +595,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (unsafe { vim_isprintc(ns.c) }
-            || ns.c == NL
-            || ns.c == CAR
-            || ns.c == Key::Kenter.code())
+        && (vim_isprintc(ns.c) || ns.c == NL || ns.c == CAR || ns.c == Key::Kenter.code())
     {
         let len = unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };
         if KeyTyped.get() {
@@ -637,7 +634,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     ns.ca.count1 = if ns.ca.count0 == 0 { 1 } else { ns.ca.count0 };
     if ns.toplevel && readbuf1_empty() {
         let (n0, n1) = (ns.ca.count0 as int64_t, ns.ca.count1 as int64_t);
-        unsafe { set_vcount(n0, n1, ns.set_prevcount) };
+        set_vcount(n0, n1, ns.set_prevcount);
     }
 
     if ns.ctrl_w {
@@ -840,9 +837,8 @@ pub(crate) unsafe fn clearopbeep(op: *mut OpArg) {
 /// Read one more key for a command that takes several, with mappings and
 /// 'langmap' handled the way a command character wants them, and show it in
 /// the 'showcmd' area.
-pub(crate) unsafe fn read_command_char() -> c_int {
+pub(crate) fn read_command_char() -> c_int {
     let raw_key = Keys::unmapped_with_codes();
-    // SAFETY: transpiled input machinery, plain value arguments.
     let mut c = plain_vgetc();
     langmap_adjust(&mut c, true);
     drop(raw_key);
@@ -857,7 +853,7 @@ pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
 }
 
@@ -865,7 +861,6 @@ pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
 pub(crate) unsafe fn unshift_special(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    // SAFETY: `cmd_arg` is the caller's live command argument.
     ca.cmdchar = match Key::try_from(ca.cmdchar) {
         Ok(Key::SRight) => Key::Right.code(),
         Ok(Key::SLeft) => Key::Left.code(),

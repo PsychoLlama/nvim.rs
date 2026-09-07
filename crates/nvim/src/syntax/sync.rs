@@ -33,7 +33,7 @@ pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut 
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
-    let start_lnum = unsafe { sync_backoff(start_lnum) };
+    let start_lnum = sync_backoff(start_lnum);
     current_lnum.set(start_lnum);
 
     let flags = syn_block().b_syn_sync_flags;
@@ -53,7 +53,7 @@ pub(crate) unsafe fn syn_sync(window: Win, start_lnum: LineNr, last_valid: *mut 
 /// resync on every line: it then resyncs one line in N, where N is minlines
 /// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
 /// minlines is MAXLNUM.
-unsafe fn sync_backoff(start_lnum: LineNr) -> LineNr {
+fn sync_backoff(start_lnum: LineNr) -> LineNr {
     let minlines = syn_block().b_syn_sync_minlines;
     if minlines > start_lnum {
         return 1;
@@ -83,7 +83,6 @@ unsafe fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
     // for a moment. The window moves without its buffer: the parser's buffer
     // is `syn_buf`, which need not be the one `window` shows.
     let saved_win = switch_window(window);
-    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
     let saved_buf = switch_buffer(syn_buffer());
 
     // Skip lines that end in a backslash.

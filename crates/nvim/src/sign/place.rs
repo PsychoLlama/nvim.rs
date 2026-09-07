@@ -294,8 +294,7 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
     }
     // SAFETY: every mark collected above carries a live sign decoration.
     unsafe { sort_signs(&mut signs) };
-    // SAFETY: a live buffer.
-    unsafe { extmark_del_id(buffer, signs[0].ns, signs[0].id) };
+    extmark_del_id(buffer, signs[0].ns, signs[0].id);
     OK
 }
 
@@ -371,7 +370,6 @@ unsafe fn sign_unplace_inner(
     group: *const c_char,
     atlnum: LineNr,
 ) -> c_int {
-    // SAFETY: the caller's buffer.
     if !buf_has_signs(buffer) {
         return FAIL;
     }
@@ -387,8 +385,7 @@ unsafe fn sign_unplace_inner(
         return FAIL;
     }
     let ns = u32::try_from(ns).expect("a namespace id fits its own handle type");
-    // SAFETY: the caller's buffer.
-    if !unsafe { extmark_del_id(buffer, ns, id.cast_unsigned()) } {
+    if !extmark_del_id(buffer, ns, id.cast_unsigned()) {
         return FAIL;
     }
     OK
@@ -433,7 +430,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
         return -1;
     }
     // SAFETY: a live buffer.
-    if !unsafe { buf_jump_open_win(buffer) }.is_none() {
+    if !buf_jump_open_win(buffer).is_none() {
         let mut win = Win::current();
         win.w_cursor.lnum = lnum;
         check_cursor_lnum(win);
@@ -461,7 +458,6 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
         };
     }
 
-    // SAFETY: the editor's own fold state.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
     lnum
 }

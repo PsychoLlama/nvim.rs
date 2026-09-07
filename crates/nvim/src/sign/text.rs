@@ -129,9 +129,7 @@ pub(crate) unsafe fn init_sign_text(
         if cells < width_limit {
             out[cells] = sc;
         }
-        // SAFETY: `c` is the codepoint just decoded; the printability test
-        // reaches the editor's character tables.
-        if !unsafe { vim_isprintc(c) } {
+        if !vim_isprintc(c) {
             break;
         }
         if width == 2 && cells + 1 < width_limit {

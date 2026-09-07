@@ -64,7 +64,6 @@ impl Walk<'_> {
     #[inline(always)]
     pub(super) unsafe fn end_nul(&mut self) {
         let level = self.depth as usize;
-        // SAFETY: `su` is the caller's suggestion state.
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
         unsafe { (*self.su).su_badflags = saved };
 
@@ -290,8 +289,7 @@ impl Walk<'_> {
 
         // SAFETY: as above, and `su` is the caller's suggestion state.
         if !(self.fword_at(bad_idx) != NUL && unsafe { self.try_deeper(newscore) }) {
-            // SAFETY: the walk's trees are valid by the contract above.
-            unsafe { self.ins_prep() };
+            self.ins_prep();
             return;
         }
 
@@ -326,12 +324,8 @@ impl Walk<'_> {
 
     /// Find the first byte of this node worth inserting, or give up on
     /// inserting here.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees must be valid.
     #[inline(always)]
-    pub(super) unsafe fn ins_prep(&mut self) {
+    pub(super) fn ins_prep(&mut self) {
         let level = self.depth as usize;
 
         if self.stack[level].flags & FLAG_DID_DEL != 0 {
@@ -344,9 +338,6 @@ impl Walk<'_> {
         // Skip over the NUL bytes.
         let node = self.stack[level].node;
         loop {
-            // SAFETY: `node` is a node the walk arrived at, whose first
-            // byte is the count of children that follow it; the loop reads
-            // a child only after finding the child number within it.
             if self.stack[level].child as c_int > self.byte_at(node) as c_int {
                 // Only NUL bytes at this node.
                 self.stack[level].state = State::Swap;

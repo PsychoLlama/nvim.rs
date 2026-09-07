@@ -288,7 +288,7 @@ pub unsafe fn put_on_cmdline(
     }
 
     if redraw {
-        unsafe { msg_check() };
+        msg_check();
     }
 }
 
@@ -299,7 +299,7 @@ pub unsafe fn redrawcmdline() {
         return;
     }
     need_wait_return.set(false);
-    unsafe { compute_cmdrow() };
+    compute_cmdrow();
     unsafe { redrawcmd() };
     unsafe { cursorcmd() };
     unsafe { ui_cursor_shape() };
@@ -385,7 +385,7 @@ pub unsafe fn redrawcmd() {
 }
 
 /// Recompute the screen row the command line lives on.
-pub unsafe fn compute_cmdrow() {
+pub fn compute_cmdrow() {
     if exmode_active.get() || msg_scrolled.get() != 0 {
         cmdline_row.set(Rows.get() - 1);
     } else {

@@ -245,8 +245,7 @@ unsafe fn search_maphash(
     };
 
     // Buffer-local mappings first, then the global ones.
-    // SAFETY: `curbuf` is set from startup to exit, so its maphash is live.
-    let mut head = unsafe { get_buf_maphash_list(local_state, tb_c1) };
+    let mut head = get_buf_maphash_list(local_state, tb_c1);
     let mut head2 = get_maphash_list(local_state, tb_c1);
     if head.is_null() {
         head = head2;

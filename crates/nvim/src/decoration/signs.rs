@@ -288,10 +288,7 @@ pub enum SignCountHalf {
 
 /// Re-counts the signs on rows `row1..=row2` and folds the difference into
 /// `buffer.b_signcols`, the histogram `'signcolumn'`'s `auto:N` reads.
-///
-/// # Safety
-/// `buffer` must point to a live buffer.
-pub unsafe fn buf_signcols_count_range(
+pub fn buf_signcols_count_range(
     buffer: Buf,
     row1: c_int,
     row2: c_int,

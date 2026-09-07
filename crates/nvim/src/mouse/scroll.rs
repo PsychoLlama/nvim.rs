@@ -40,8 +40,7 @@ use crate::types::{CmdArg, Direction, OpArg};
 pub(crate) unsafe fn ins_mouse(c: c_int) {
     let old_curwin = Win::current();
 
-    // SAFETY: both only touch the current window's Insert-mode state.
-    unsafe { undisplay_dollar() };
+    undisplay_dollar();
     let mut tpos = old_curwin.w_cursor;
 
     // SAFETY: `do_mouse` accepts a null operator.
@@ -170,8 +169,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
         if pum_visible() {
             return;
         }
-        // SAFETY: only touches Insert mode's own state.
-        unsafe { undisplay_dollar() };
+        undisplay_dollar();
     }
 
     let orig_cursor = win.w_cursor;

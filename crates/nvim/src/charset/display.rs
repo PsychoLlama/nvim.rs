@@ -144,8 +144,7 @@ pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
             // A multibyte character is left alone.
             len -= step;
         } else {
-            // SAFETY: the current buffer is valid.
-            let trs = unsafe { render_byte(Buf::current_or_none(), bytes[at] as c_int) };
+            let trs = render_byte(Buf::current_or_none(), bytes[at] as c_int);
             step = trs.len;
             if step > 1 {
                 room -= step as isize - 1;
@@ -177,8 +176,7 @@ pub unsafe fn transstr_len(s: *const c_char, untab: bool) -> size_t {
         }
         let l = cursor.char_len();
         if l > 1 {
-            // SAFETY: this only reads the global table.
-            if unsafe { vim_isprintc(cursor.code()) } {
+            if vim_isprintc(cursor.code()) {
                 len += l;
             } else {
                 // An unprintable multibyte character is spelled out one
@@ -234,8 +232,7 @@ pub unsafe fn transstr_buf(
             if written + l > limit {
                 break;
             }
-            // SAFETY: this only reads the global table.
-            if unsafe { vim_isprintc(cursor.code()) } {
+            if vim_isprintc(cursor.code()) {
                 out[written..written + l].copy_from_slice(cursor.bytes(l));
                 written += l;
             } else {
@@ -259,8 +256,7 @@ pub unsafe fn transstr_buf(
             cursor.advance(1);
             read += 1;
         } else {
-            // SAFETY: the current buffer is valid.
-            let tb = unsafe { render_byte(Buf::current_or_none(), cursor.byte() as c_int) };
+            let tb = render_byte(Buf::current_or_none(), cursor.byte() as c_int);
             cursor.advance(1);
             read += 1;
             if written + tb.len > limit {
@@ -473,11 +469,8 @@ fn render_nonprint(buffer: Option<Buf>, c: c_int) -> render::Rendered {
 
 /// The display form of the character `c` as it would appear in `buffer`, as a
 /// value.
-///
-/// # Safety
-/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
+fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
     let (prefix, c) = if c < 0 {
@@ -487,9 +480,8 @@ unsafe fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
         (None, c)
     };
     // Before the tables exist, printable ASCII is all that can be trusted.
-    // SAFETY: `vim_isprintc` only reads the global table.
     let body = if (!chartab_initialized.get() && (' ' as c_int..='~' as c_int).contains(&c))
-        || (c <= 0xff && unsafe { vim_isprintc(c) })
+        || (c <= 0xff && vim_isprintc(c))
     {
         render::Rendered::literal(c as uint8_t)
     } else if c <= 0xff {
@@ -505,55 +497,34 @@ unsafe fn render_char(buffer: Option<Buf>, c: c_int) -> render::Rendered {
 
 /// [`render_char`] for a single byte: unlike it, a high byte is never taken
 /// for a printable Latin-1 character.
-///
-/// # Safety
-/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_byte(buffer: Option<Buf>, c: c_int) -> render::Rendered {
+fn render_byte(buffer: Option<Buf>, c: c_int) -> render::Rendered {
     if c >= 0x80 {
-        // SAFETY: forwarded to this function's contract.
         return render_nonprint(buffer, c);
     }
-    // SAFETY: as above.
-    unsafe { render_char(buffer, c) }
+    render_char(buffer, c)
 }
 
 /// The display form of character `c`.
-///
-/// # Safety
-/// The current buffer must be valid.
-pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
-    // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_buf(Buf::current_or_none(), c) }
+pub(crate) fn transchar(c: c_int) -> CharDisplay {
+    transchar_buf(Buf::current_or_none(), c)
 }
 
 /// The display form of `c` as it would appear in `buffer` (which decides how a
 /// carriage return renders).
-///
-/// # Safety
-/// `buffer` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
-    // SAFETY: forwarded to the caller's contract.
-    owned(&unsafe { render_char(buffer, c) })
+pub(crate) fn transchar_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+    owned(&render_char(buffer, c))
 }
 
 /// The display form of the single byte `c`. Unlike [`transchar_buf`] this
 /// never treats a high byte as a printable Latin-1 character.
-///
-/// # Safety
-/// `buffer` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_byte_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
-    // SAFETY: forwarded to the caller's contract.
-    owned(&unsafe { render_byte(buffer, c) })
+pub(crate) fn transchar_byte_buf(buffer: Option<Buf>, c: c_int) -> CharDisplay {
+    owned(&render_byte(buffer, c))
 }
 
 /// [`transchar_byte_buf`] for the current buffer.
-///
-/// # Safety
-/// The current buffer must be valid.
-pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
-    // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_byte_buf(Buf::current_or_none(), c) }
+pub(crate) fn transchar_byte(c: c_int) -> CharDisplay {
+    transchar_byte_buf(Buf::current_or_none(), c)
 }
 
 /// Write the display form of the unprintable byte `c` into `charbuf`.
@@ -596,10 +567,7 @@ pub unsafe fn rl_mirror_ascii(str: *mut c_char, end: *mut c_char) {
 }
 
 /// The display width of the byte `b`, or zero for a multibyte lead byte.
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn byte2cells(b: c_int) -> c_int {
+pub fn byte2cells(b: c_int) -> c_int {
     byte_cells(b)
 }
 

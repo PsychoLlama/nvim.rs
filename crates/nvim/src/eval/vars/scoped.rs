@@ -244,10 +244,7 @@ pub(crate) unsafe fn tv_to_optval(
 
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
 /// Number, which is what the old spelling of the accessors answered.
-///
-/// # Safety
-/// `value` is a live option value; the String case hands its buffer over.
-pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
+pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
     let mut rettv = TypVal {
         v_type: VAR_SPECIAL,
         v_lock: VarLock::Unlocked,
@@ -434,12 +431,12 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
     // autocommands that close this tab page.
     let save_curtab = TabPage::current().id();
     let save_lu_tp = lastused_tabpage.get();
-    unsafe { goto_tabpage_tp(tp.expect("a live handle"), false, false) };
+    goto_tabpage_tp(tp.expect("a live handle"), false, false);
 
     unsafe { set_scoped_var(c"t:", varname, varp) };
 
     if let Some(save_curtab) = valid_tab(save_curtab) {
-        unsafe { goto_tabpage_tp(save_curtab, false, false) };
+        goto_tabpage_tp(save_curtab, false, false);
         // Going back must not count as a use of the previous tab page.
         if save_lu_tp.is_some_and(valid_tabpage) {
             lastused_tabpage.set(save_lu_tp);

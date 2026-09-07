@@ -114,9 +114,9 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
 
     if !b_im_ptr.is_null() {
         if b_im_ptr == cur_buf_iminsert() {
-            unsafe { set_iminsert_global(Buf::current()) };
+            set_iminsert_global(Buf::current());
         } else {
-            unsafe { set_imsearch_global(Buf::current()) };
+            set_imsearch_global(Buf::current());
         }
     }
     unsafe { ui_cursor_shape() }; // may show a different cursor shape
@@ -518,7 +518,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
             // Get the next (two) characters. Do not include the modifiers
             // in the key, for CTRL-SHIFT-V.
-            s.c = unsafe { get_literal(mod_mask.get().has(ModMask::SHIFT)) };
+            s.c = get_literal(mod_mask.get().has(ModMask::SHIFT));
 
             s.do_abbr = false; // don't do abbreviation now
             cc.special_char = NUL as ::core::ffi::c_char;

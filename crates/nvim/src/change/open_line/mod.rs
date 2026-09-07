@@ -68,7 +68,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
         return ::core::ptr::null_mut();
     }
     let prompt_line = ml_get(Win::current().w_cursor.lnum);
-    let prompt = unsafe { prompt_text() };
+    let prompt = prompt_text();
     let prompt_len = unsafe { cstr::bytes_at(prompt) }.len();
     if !unsafe { cstr::prefix_eq(prompt_line, prompt, prompt_len) } {
         return ::core::ptr::null_mut();
@@ -204,9 +204,7 @@ unsafe fn truncate_old_line(
         let cb = Buf::current();
         let row = Win::current().w_cursor.lnum - 1;
         let gone = Win::current().w_cursor.col - new_len;
-        // SAFETY: the current buffer is live, and the row is the line just
-        // replaced.
-        unsafe { extmark_splice_cols(cb, row, new_len, gone, 0, kExtmarkUndo) };
+        extmark_splice_cols(cb, row, new_len, gone, 0, kExtmarkUndo);
         cols_spliced = gone;
     }
 
@@ -222,16 +220,11 @@ unsafe fn truncate_old_line(
         let new_b = (1 + added) as BCount;
         let undo = kExtmarkUndo;
         let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
-        // SAFETY: the current buffer is live, and the row names the line that
-        // was just split.
-        unsafe {
-            extmark_splice(cb, row, at, 0, off, old_b, 1, added, new_b, undo);
-            changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
-        }
+        extmark_splice(cb, row, at, 0, off, old_b, 1, added, new_b, undo);
+        changed_lines(cb, cur_lnum, cur_col, cur_lnum + 1, 1, true);
         // Move marks that were after the break onto the new line.
         if flags & OPENLINE_MARKFIX != 0 {
-            // SAFETY: the editor exists.
-            unsafe { mark_col_adjust(cur_lnum, cur_col + off, 1, -less_cols, 0) };
+            mark_col_adjust(cur_lnum, cur_col + off, 1, -less_cols, 0);
         }
     } else {
         unsafe { changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col) };
@@ -573,11 +566,8 @@ pub unsafe fn open_line(
             let at = Win::current().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
             let extra = ml_get_len(at) as BCount;
-            // SAFETY: as above.
-            unsafe {
-                extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
-                changed_lines(cb, at, 0, at, 1, true);
-            }
+            extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
+            changed_lines(cb, at, 0, at, 1, true);
         }
         drop(splice);
 

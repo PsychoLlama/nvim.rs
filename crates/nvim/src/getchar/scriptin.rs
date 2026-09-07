@@ -92,7 +92,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
 
     let started_at = curscript.get();
     while {
-        unsafe { update_topline_cursor() }; // cursor position and topline
+        update_topline_cursor(); // cursor position and topline
         unsafe { normal_cmd(&raw mut oa, false) }; // one command
         vpeekc(); // check for end of file
         curscript.get() >= started_at

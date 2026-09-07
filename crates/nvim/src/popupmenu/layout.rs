@@ -246,21 +246,20 @@ pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
         find_win_outer(&mut pos);
     }
     let (grid, mut row, mut col) = (pos.grid, pos.row, pos.col);
-    if grid > 1 {
-        // SAFETY: the grid handle the UI sent.
-        if let Some(wp) = unsafe { get_win_by_grid_handle(grid as Handle) } {
-            row += wp.w_winrow;
-            col += wp.w_wincol;
-            pum_win_row_offset.set(wp.w_winrow);
-            pum_win_col_offset.set(wp.w_wincol);
+    if grid > 1
+        && let Some(wp) = get_win_by_grid_handle(grid as Handle)
+    {
+        row += wp.w_winrow;
+        col += wp.w_wincol;
+        pum_win_row_offset.set(wp.w_winrow);
+        pum_win_col_offset.set(wp.w_wincol);
 
-            if wp.w_view_height > 0 || wp.w_view_width > 0 {
-                // The user asked for a different grid size; let the menu
-                // extend to it.
-                let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
-                max_row = (Rows.get() - winrow).max(winrow + wp.w_view_height);
-                max_col = (Columns.get() - wincol).max(wincol + wp.w_view_width);
-            }
+        if wp.w_view_height > 0 || wp.w_view_width > 0 {
+            // The user asked for a different grid size; let the menu
+            // extend to it.
+            let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
+            max_row = (Rows.get() - winrow).max(winrow + wp.w_view_height);
+            max_col = (Columns.get() - wincol).max(wincol + wp.w_view_width);
         }
     }
     if pum_handle != 0 && grid == pum_handle {

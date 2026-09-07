@@ -197,7 +197,7 @@ fn bt_regexec_both(
     let mut col = startcol;
     // SAFETY: the caller pointed the context at a live match structure.
     let line = unsafe { aim_at_capture_arrays(rex, line) };
-    let prog = unsafe { BtProg::of_match(rex) };
+    let prog = BtProg::of_match(rex);
 
     let mut retval = 0;
     match prog {

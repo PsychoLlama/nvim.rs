@@ -122,7 +122,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: :
             s.skip_pum_redraw = s.skip_pum_redraw
                 && !key_is_wc
                 && !ascii_iswhite(c)
-                && (unsafe { vim_isprintc(c) }
+                && (vim_isprintc(c)
                     || c == Key::Bs.code()
                     || c == Ctrl_H
                     || c == Key::Del.code()
@@ -192,7 +192,7 @@ pub(crate) unsafe fn command_line_execute(
         }
         // If the window changed, the incremental search state is invalid.
         if s.is_state.winid != Win::current().handle {
-            unsafe { init_incsearch_state(s.is_state()) };
+            init_incsearch_state(s.is_state());
         }
         // Re-apply 'incsearch' highlighting in case it was cleared.
         if Win::current().w_display_tick > display_tick_saved && s.is_state.did_incsearch {
@@ -306,7 +306,7 @@ pub(crate) unsafe fn command_line_execute(
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         s.event_cmdlineleavepre_triggered = true;
         if (s.c == ESC || s.c == Ctrl_C) && wim_has(0, kOptWimFlagList) {
-            unsafe { set_no_hlsearch(true) };
+            set_no_hlsearch(true);
         }
     }
 
@@ -443,7 +443,7 @@ pub(crate) unsafe fn command_line_execute(
     if matches!(wild_type, Some(WildMode::Cancel | WildMode::Apply)) {
         // Apply search highlighting.
         if s.is_state.winid != Win::current().handle {
-            unsafe { init_incsearch_state(s.is_state()) };
+            init_incsearch_state(s.is_state());
         }
         if KeyTyped.get() || vpeekc() == NUL {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
@@ -454,7 +454,7 @@ pub(crate) unsafe fn command_line_execute(
     unsafe { command_line_handle_key(s) }
 }
 
-pub(crate) unsafe fn may_trigger_cursormovedc(s: Cls) {
+pub(crate) fn may_trigger_cursormovedc(s: Cls) {
     let mut cc = Cc::current();
     if cc.cmdpos != s.prev_cmdpos {
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CursorMovedC);
@@ -468,7 +468,7 @@ pub(crate) unsafe fn may_trigger_cursormovedc(s: Cls) {
 /// something changed in the past; [`command_line_changed`] is what runs when
 /// the line itself did change.
 pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int {
-    unsafe { may_trigger_cursormovedc(s) };
+    may_trigger_cursormovedc(s);
     s.prev_cmdpos = Cc::current().cmdpos;
     if !s.is_state.incsearch_postponed {
         return 1;
@@ -541,7 +541,7 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
         };
     }
 
-    unsafe { may_trigger_cursormovedc(s) };
+    may_trigger_cursormovedc(s);
 
     if p_arshape.get() != 0 && p_tbidi.get() == 0 {
         // Always redraw the whole command line, to fix shaping and

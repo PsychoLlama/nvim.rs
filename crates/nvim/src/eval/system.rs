@@ -78,7 +78,6 @@ pub unsafe fn tv_to_argv(
         return null_mut();
     }
 
-    // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
     let argl: *mut List = tv.list_or_null();
     // SAFETY: `argl` is a live List or null.
     let argc = unsafe { tv_list_len(argl) };
@@ -213,8 +212,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // A command that does not exist reports -1 rather than a shell
         // exit status.
         if !executable {
-            // SAFETY: setting a `v:` variable only touches the vimvars.
-            unsafe { set_vim_var_nr(Vv::ShellError, -1) };
+            set_vim_var_nr(Vv::ShellError, -1);
         }
         // SAFETY: the input buffer is owned here.
         unsafe { xfree(input as *mut c_void) };
@@ -254,8 +252,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     }
     // SAFETY: the child has read it, and the buffer is owned here.
     unsafe { xfree(input as *mut c_void) };
-    // SAFETY: setting a `v:` variable only touches the vimvars.
-    unsafe { set_vim_var_nr(Vv::ShellError, status as VarNumber) };
+    set_vim_var_nr(Vv::ShellError, status as VarNumber);
 
     if res.is_null() {
         if retlist {

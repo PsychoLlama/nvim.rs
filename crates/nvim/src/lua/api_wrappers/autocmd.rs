@@ -256,8 +256,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_autocmd(lstate: *mut lua_State
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_del_autocmd(arg_1) } {
+        if let Err(e) = nvim_del_autocmd(arg_1) {
             *err = e;
         }
     }

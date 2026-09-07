@@ -232,8 +232,8 @@ unsafe fn ex_defer_inner(
 
 /// Whether a `:defer` can be recorded here, i.e. whether a function is
 /// running.  Reports the error itself when it cannot.
-pub unsafe fn can_add_defer() -> bool {
-    if unsafe { get_current_funccal() }.is_null() {
+pub fn can_add_defer() -> bool {
+    if get_current_funccal().is_null() {
         let arg0 = "defer";
         semsg!("E193: {arg0} not inside a function");
         return false;

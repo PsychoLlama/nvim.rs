@@ -420,7 +420,7 @@ pub unsafe fn apply_autocmds_group(
             patcmd.data = data;
 
             // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
-            let save_cmdbang = unsafe { get_vim_var_nr(Vv::Cmdbang) };
+            let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
             let save_cmdarg = if args.is_null() {
                 ::core::ptr::null_mut()
             } else {
@@ -462,7 +462,7 @@ pub unsafe fn apply_autocmds_group(
 
             if !args.is_null() {
                 unsafe { set_cmdarg(::core::ptr::null_mut(), save_cmdarg) };
-                unsafe { set_vim_var_nr(Vv::Cmdbang, save_cmdbang) };
+                set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
             }
             // Unlink -- guarded, because a nested walk may already
             // have taken this node off the list.

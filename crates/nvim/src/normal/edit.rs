@@ -64,7 +64,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 unsafe fn prompt_refuses(cmd_arg: *mut CmdArg) -> bool {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if buf_is_prompt(current_buf()) && !unsafe { prompt_curpos_editable() } {
+    if buf_is_prompt(current_buf()) && !prompt_curpos_editable() {
         clear_op_beep(ca.op());
         return true;
     }
@@ -108,7 +108,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
     let mut literal = NUL;
     if ca.nchar == Ctrl_V || ca.nchar == Ctrl_Q {
         literal = Ctrl_V;
-        ca.nchar = unsafe { get_literal(false) };
+        ca.nchar = get_literal(false);
         if ca.nchar > DEL {
             literal = NUL;
         }
@@ -179,7 +179,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         stuff_readbuf_char('\r' as c_int);
         stuff_readbuf_char(ESC);
         unsafe { invoke_edit(cmd_arg, 1, 'r' as c_int, 0) };
-        unsafe { fold_update_after_insert() };
+        fold_update_after_insert();
         return;
     }
 
@@ -227,7 +227,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
     Buf::current().b_op_end = Win::current().w_cursor;
     Win::current().w_set_curswant = true;
     unsafe { set_last_insert(ca.nchar) };
-    unsafe { fold_update_after_insert() };
+    fold_update_after_insert();
 }
 
 /// `R` and `gR`: replace mode, virtual with the argument set.
@@ -251,7 +251,7 @@ pub(crate) unsafe fn nv_replace_mode(cmd_arg: *mut CmdArg) {
         return;
     }
     if virtual_active(Win::current()) {
-        unsafe { coladvance(Win::current(), getviscol()) };
+        coladvance(Win::current(), getviscol());
     }
     let kind = if ca.arg != 0 {
         'V' as c_int
@@ -279,7 +279,7 @@ pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
         return;
     }
     if ca.extra_char == Ctrl_V || ca.extra_char == Ctrl_Q {
-        ca.extra_char = unsafe { get_literal(false) };
+        ca.extra_char = get_literal(false);
     }
     // Replay the character through virtual replace mode. A control
     // character needs its own CTRL-V to survive the replay.
@@ -289,7 +289,7 @@ pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
     stuff_readbuf_char(ca.extra_char);
     stuff_readbuf_char(ESC);
     if virtual_active(Win::current()) {
-        unsafe { coladvance(Win::current(), getviscol()) };
+        coladvance(Win::current(), getviscol());
     }
     unsafe { invoke_edit(cmd_arg, 1, 'v' as c_int, 0) };
 }
@@ -545,7 +545,7 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
     if Win::current().w_cursor.coladd != 0 && ca.cmdchar != 'A' as c_int {
         let save_state = State.get();
         State.set(MODE_INSERT);
-        unsafe { coladvance(Win::current(), getviscol()) };
+        coladvance(Win::current(), getviscol());
         State.set(save_state);
     }
     unsafe { invoke_edit(cmd_arg, 0, ca.cmdchar, 0) };
@@ -639,7 +639,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
         }
         return;
     }
-    if buf_is_prompt(current_buf()) && !unsafe { prompt_curpos_editable() } {
+    if buf_is_prompt(current_buf()) && !prompt_curpos_editable() {
         // On the prompt's own line, put in front of the prompt text
         // rather than refusing.
         if win.w_cursor.lnum == Buf::current().b_prompt_start.mark.lnum {
@@ -754,7 +754,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
     if emptied && unsafe { *ml_get(Buf::current().b_ml.ml_line_count) } as c_int == NUL {
         let _ =
             unsafe { ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
-        unsafe { deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1) };
+        deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
         if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
             coladvance(win, MAXCOL as c_int);

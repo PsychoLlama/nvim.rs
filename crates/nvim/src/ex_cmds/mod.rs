@@ -208,17 +208,13 @@ pub fn check_secure() -> bool {
     }
     false
 }
-pub unsafe fn prepare_tagpreview(undo_sync: bool) -> bool {
-    // SAFETY: every region below reads the live window list and the live
-    // current window, or calls a window-layout function that does; both are
-    // the editor's own and live from startup to exit.
+pub fn prepare_tagpreview(undo_sync: bool) -> bool {
     if Win::current().w_onebuf_opt.wo_pvw != 0 {
         return false;
     }
     for wp in windows() {
         if wp.w_onebuf_opt.wo_pvw != 0 {
-            // SAFETY: a window of the editor's own list.
-            unsafe { win_enter(wp, undo_sync) };
+            win_enter(wp, undo_sync);
             return false;
         }
     }
@@ -270,7 +266,7 @@ pub unsafe fn skip_vimgrep_pat(
     let bytes = unsafe { cstr::bytes_at(p) };
     let first = bytes.first().copied().unwrap_or(NUL as uint8_t);
     // SAFETY: an ASCII byte widened, which is what the ctype table indexes.
-    if unsafe { vim_is_ident_char(first as ::core::ffi::c_int) } {
+    if vim_is_ident_char(first as ::core::ffi::c_int) {
         // A bare word, ending at the first white space.
         let mut at = skip::to_white(bytes);
         if !s.is_null() {
@@ -329,8 +325,7 @@ pub unsafe fn skip_vimgrep_pat(
 pub unsafe fn ex_oldfiles(args: *mut ExArg) {
     // SAFETY: caller's contract.
     let args = unsafe { &mut *args };
-    // SAFETY: `v:oldfiles` is the editor's own list, live or NULL.
-    let list = unsafe { get_vim_var_list(Vv::Oldfiles) };
+    let list = get_vim_var_list(Vv::Oldfiles);
     if list.is_null() {
         msg(gettext(c"No old files"), 0);
         return;
@@ -447,13 +442,8 @@ impl LineCopy {
 
     /// Replace the contents with line `lnum` of the current buffer, and
     /// answer how many bytes that line held.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of the current buffer, and nothing may read
-    /// another line of it while this runs.
-    pub(crate) unsafe fn fill_line(&mut self, lnum: LineNr) -> usize {
-        // SAFETY: caller's contract.
-        let mut lines = unsafe { crate::memline::Lines::current() };
+    pub(crate) fn fill_line(&mut self, lnum: LineNr) -> usize {
+        let mut lines = crate::memline::Lines::current();
         let text = lines.line(lnum);
         let len = text.len();
         self.0.clear();
@@ -488,8 +478,7 @@ pub(crate) mod say {
 
     /// [`msg_starthere`]: put the next message where the cursor is.
     pub(crate) fn starthere() {
-        // SAFETY: as above.
-        unsafe { msg_starthere() }
+        msg_starthere()
     }
 
     /// [`msg_end`]: finish a message, prompting if it did not fit.  False

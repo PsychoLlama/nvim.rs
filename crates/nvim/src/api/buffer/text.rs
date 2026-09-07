@@ -317,22 +317,20 @@ pub unsafe fn nvim_buf_set_text(
                     )
                 };
                 set_visual_anchor(anchor);
-                unsafe { check_visual_pos() };
+                check_visual_pos();
             }
-            unsafe {
-                extmark_splice(
-                    buffer,
-                    start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    start_col as ColNr,
-                    (end_row - start_row) as ::core::ffi::c_int,
-                    col_extent,
-                    old_byte,
-                    new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    last_item.len() as ColNr,
-                    new_byte,
-                    kExtmarkUndo,
-                )
-            };
+            extmark_splice(
+                buffer,
+                start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                start_col as ColNr,
+                (end_row - start_row) as ::core::ffi::c_int,
+                col_extent,
+                old_byte,
+                new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                last_item.len() as ColNr,
+                new_byte,
+                kExtmarkUndo,
+            );
             changed_lines(
                 buffer,
                 start_row as LineNr,
@@ -372,7 +370,7 @@ pub unsafe fn nvim_buf_set_text(
     ().reported(error)
 }
 
-pub(crate) unsafe fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
+pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
     if win.w_cursor.lnum >= lo {
         if win.w_cursor.lnum >= hi {
             win.w_cursor.lnum += extra;

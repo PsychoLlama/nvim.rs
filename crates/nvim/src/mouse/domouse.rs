@@ -341,8 +341,7 @@ pub(crate) unsafe fn do_mouse(
 
     // When dragging the mouse above the window, scroll down.
     if is_drag && mouse_row.get() < 0 && !landed.status_line {
-        // SAFETY: scrolls the current window.
-        unsafe { scroll_redraw(false as c_int, 1) };
+        scroll_redraw(false as c_int, 1);
         mouse_row.set(0);
     }
 

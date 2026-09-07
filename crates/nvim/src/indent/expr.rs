@@ -44,11 +44,9 @@ pub unsafe fn get_expr_indent() -> c_int {
         unsafe { was_set_insecurely(Win::new(win), kOptIndentexpr, OptionSetFlags::LOCAL) };
     let save_sctx = current_sctx.get();
     // Saved because the expression can move the cursor via `:normal`.
-    // SAFETY: as above.
     let (save_pos, save_curswant, save_set_curswant) =
         unsafe { ((*win).w_cursor, (*win).w_curswant, (*win).w_set_curswant) };
-    // SAFETY: as above.
-    unsafe { set_vim_var_nr(Vv::Lnum, save_pos.lnum as VarNumber) };
+    set_vim_var_nr(Vv::Lnum, save_pos.lnum as VarNumber);
 
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
@@ -87,7 +85,6 @@ pub unsafe fn get_expr_indent() -> c_int {
     }
     if indent < 0 {
         // The expression failed; keep the indent the line already has.
-        // SAFETY: as above.
         indent = get_indent();
     }
     indent
@@ -408,7 +405,7 @@ pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
         return;
     }
     unsafe { change_indent(INDENT_SET as c_int, amount, 0, true) };
-    if unsafe { linewhite(Win::current().w_cursor.lnum) } {
+    if linewhite(Win::current().w_cursor.lnum) {
         // Delete the indent again if the line stays empty.
         did_ai.set(true);
     }

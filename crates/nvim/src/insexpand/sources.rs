@@ -636,8 +636,7 @@ pub(crate) unsafe fn get_next_default_completion(
             };
         }
         if ptr.is_null()
-            || (unsafe { ins_compl_has_preinsert() }
-                && unsafe { cstr::eq(ptr, ins_compl_leader()) })
+            || (ins_compl_has_preinsert() && unsafe { cstr::eq(ptr, ins_compl_leader()) })
         {
             continue;
         }

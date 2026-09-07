@@ -91,8 +91,7 @@ const UNSET_GA: GArray = GArray {
 /// # Safety
 /// `sve` must be valid.
 pub unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
-    // SAFETY: `v:event` is a live dictionary from startup to exit.
-    let v_event = unsafe { get_vim_var_dict(Vv::Event) };
+    let v_event = get_vim_var_dict(Vv::Event);
     // SAFETY: the caller's promise about `sve`, and `v_event` as above.
     let (saved, live) = unsafe { (&mut (*sve).sve_hashtab, &mut (*v_event).dv_hashtab) };
     let did_save = live.ht_used > 0 as size_t;
@@ -435,7 +434,6 @@ pub(crate) unsafe fn typval2string(tv: *mut TypVal, join_list: bool) -> *mut c_c
         let mut ga = UNSET_GA;
         // SAFETY: `ga` is this frame's.
         unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
-        // SAFETY: as above.
         let l = value.list_or_null();
         if !l.is_null() {
             // SAFETY: `l` is the typval's live List.
@@ -616,8 +614,7 @@ pub unsafe fn call_vim_function(
             if len == 0 {
                 break 'fail;
             }
-            // SAFETY: `v:lua` holds a live partial from startup to exit.
-            pt = unsafe { get_vim_var_partial(Vv::Lua) };
+            pt = get_vim_var_partial(Vv::Lua);
         }
         // SAFETY: the caller's promise about `result`.
         unsafe { (*result).v_type = VAR_UNKNOWN };
@@ -680,8 +677,7 @@ pub unsafe fn call_func_retlist(
 pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
-    // SAFETY: the caller's promise -- a live window.
-    let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL) };
+    let use_sandbox = was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL);
     // SAFETY: an option string is NUL-terminated.
     let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde) };
     current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
@@ -741,8 +737,7 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
         Object::String(String_0::from_raw_parts(null_mut(), 0 as size_t))
     }
 
-    // SAFETY: the caller's promise -- a live window.
-    let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL) };
+    let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
     // SAFETY: as above; the window outlives this call.
     let arg = window.w_onebuf_opt.wo_fdt;
     let mut funccal_entry = FuncCallEntry {

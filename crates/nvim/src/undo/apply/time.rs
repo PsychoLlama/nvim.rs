@@ -148,16 +148,13 @@ struct UndoDest {
 ///
 /// A live current buffer and window.
 pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
-    // SAFETY: nothing here holds a borrow of editor state.
-    if unsafe { text_locked() } {
-        // SAFETY: as above.
-        unsafe { text_locked_msg() };
+    if text_locked() {
+        text_locked_msg();
         return;
     }
     // The change we are navigating past has to be synced first.
     let mut buf = Buf::current();
     if !buf.b_u_synced {
-        // SAFETY: as above.
         u_sync(true);
         buf = Buf::current();
     }
@@ -460,8 +457,7 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
         let Some(fork) = buf.header(buf.b_u_curhead) else {
             break;
         };
-        // SAFETY: a live buffer, and nothing here frees a header.
-        let uhp = unsafe { take_marked_branch(buf, fork, dest.marks.mark) };
+        let uhp = take_marked_branch(buf, fork, dest.marks.mark);
 
         buf.b_u_curhead = uhp.link();
         if uhp.uh_walk != dest.marks.mark {
@@ -503,25 +499,17 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
 /// moves it to the front of the list, so that a later `u` and CTRL-R take it
 /// too. Answers the branch to take, which is `fork` itself when the marked
 /// run is only that.
-///
-/// # Safety
-///
-/// `buffer` is the buffer `fork` belongs to, and nothing frees a header while
-/// this runs.
-unsafe fn take_marked_branch(mut buffer: Buf, fork: Header, mark: c_int) -> Header {
+fn take_marked_branch(mut buffer: Buf, fork: Header, mark: c_int) -> Header {
     // The search marks a run of consecutive alternates; the far end of that
     // run along `uh_alt_next` is the branch it wants.
-    // SAFETY: a live buffer that owns these headers, by the contract above.
-    let head = unsafe { furthest_marked(buffer, fork, mark, |uh| uh.uh_alt_prev) };
-    // SAFETY: as above.
-    let mut last = unsafe { furthest_marked(buffer, head, mark, |uh| uh.uh_alt_next) };
+    let head = furthest_marked(buffer, fork, mark, |uh| uh.uh_alt_prev);
+    let mut last = furthest_marked(buffer, head, mark, |uh| uh.uh_alt_next);
     if last == head {
         return head;
     }
     // The whole list of alternates may start further back than the marked
     // run does, and that head is where the branch has to end up.
-    // SAFETY: as above.
-    let mut first = unsafe { header_chain(buffer, head.link(), |uh| uh.uh_alt_prev) }
+    let mut first = header_chain(buffer, head.link(), |uh| uh.uh_alt_prev)
         .last()
         .unwrap_or(head);
     // Unlink it from where it sits... (`last != head` means it was reached
@@ -548,20 +536,14 @@ unsafe fn take_marked_branch(mut buffer: Buf, fork: Header, mark: c_int) -> Head
 
 /// Follows `step` from `uhp` for as long as the next header carries `mark`,
 /// and answers the last header of that run.
-///
-/// # Safety
-///
-/// `buffer` is the buffer `uhp` belongs to, and nothing frees a header while
-/// this runs.
-unsafe fn furthest_marked(
+fn furthest_marked(
     buffer: Buf,
     uhp: Header,
     mark: c_int,
     step: fn(&UndoHeader) -> UndoLink,
 ) -> Header {
     // The chain always yields its start; every further hop has to be marked.
-    // SAFETY: the buffer owns these headers, by the contract above.
-    unsafe { header_chain(buffer, uhp.link(), step) }
+    header_chain(buffer, uhp.link(), step)
         .skip(1)
         .take_while(|uh| uh.uh_walk == mark)
         .last()

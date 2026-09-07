@@ -164,15 +164,13 @@ pub unsafe fn switch_win_noblock(
         switchwin.sw_visual_active = visual_active();
         set_visual_active(false);
     }
-    // SAFETY: `win_valid` re-checks the window before it is entered --
-    // entering the tab page can close it.
     if let Some(tabpage) = tabpage {
         switchwin.sw_curtab = Some(TabPage::current().id());
         if no_display {
-            unsafe { unuse_tabpage(TabPage::current()) };
-            unsafe { use_tabpage(tabpage) };
+            unuse_tabpage(TabPage::current());
+            use_tabpage(tabpage);
         } else {
-            unsafe { goto_tabpage_tp(tabpage, false, false) };
+            goto_tabpage_tp(tabpage, false, false);
         }
     }
     let Some(win) = valid_win(win.id()) else {
@@ -211,11 +209,11 @@ pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
             // the caller only half entered this one.
             let mut leaving = TabPage::current();
             let old_tp_curwin = leaving.tp_curwin;
-            unsafe { unuse_tabpage(leaving) };
+            unuse_tabpage(leaving);
             leaving.tp_curwin = old_tp_curwin;
-            unsafe { use_tabpage(back) };
+            use_tabpage(back);
         } else {
-            unsafe { goto_tabpage_tp(back, false, false) };
+            goto_tabpage_tp(back, false, false);
         }
     }
     if !switchwin.sw_same_win {

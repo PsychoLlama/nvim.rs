@@ -164,20 +164,14 @@ static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
 /// The screen row below window `window`'s last one -- `W_ENDROW`.
 ///
 /// That is where its horizontal separator or status line goes.
-///
-/// # Safety
-/// `window` must be a live window.
-pub(crate) unsafe fn win_endrow(window: Win) -> c_int {
+pub(crate) fn win_endrow(window: Win) -> c_int {
     window.w_winrow + window.w_height
 }
 
 /// The screen column right of window `window`'s last one -- `W_ENDCOL`.
 ///
 /// That is where its vertical separator goes.
-///
-/// # Safety
-/// `window` must be a live window.
-pub(crate) unsafe fn win_endcol(window: Win) -> c_int {
+pub(crate) fn win_endcol(window: Win) -> c_int {
     window.w_wincol + window.w_width
 }
 
@@ -192,10 +186,10 @@ pub unsafe fn conceal_check_cursor_line() {
         return;
     }
 
-    unsafe { redraw_win_line(wp, wp.w_cursor.lnum) };
+    redraw_win_line(wp, wp.w_cursor.lnum);
 
     // Whether the line is displayed at all may have changed with it.
-    if unsafe { decor_conceal_line(wp, wp.w_cursor.lnum - 1, true) } {
+    if decor_conceal_line(wp, wp.w_cursor.lnum - 1, true) {
         changed_window_setting(wp);
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
@@ -208,7 +202,7 @@ pub unsafe fn conceal_check_cursor_line() {
 /// `'lazyredraw'` postpones it while there is input waiting that was not typed
 /// -- i.e. inside a mapping or a script -- unless something asked for a redraw
 /// explicitly.
-pub unsafe fn redrawing() -> bool {
+pub fn redrawing() -> bool {
     RedrawingDisabled.get() == 0
         && !(p_lz.get() != 0 && char_avail() && !KeyTyped.get() && !do_redraw.get())
 }
@@ -256,12 +250,12 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
             if wp.w_floating {
                 continue;
             }
-            if unsafe { win_endrow(wp) } > valid {
+            if win_endrow(wp) > valid {
                 // Pessimistic: `redr_type` could be UPD_NOT_VALID only
                 // because of windows above the separator.
                 wp.w_redr_type = wp.w_redr_type.max(UPD_NOT_VALID);
             }
-            if !is_stl_global && unsafe { win_endrow(wp) } + wp.w_status_height > valid {
+            if !is_stl_global && win_endrow(wp) + wp.w_status_height > valid {
                 wp.w_redr_status = true;
             }
         }
@@ -340,10 +334,10 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     // May have postponed updating diffs.
     if need_diff_redraw.get() {
-        unsafe { diff_redraw(true) };
+        diff_redraw(true);
     }
 
-    if !unsafe { redrawing() } || updating_screen.get() || cmdline_number_prompt() {
+    if !redrawing() || updating_screen.get() || cmdline_number_prompt() {
         return Err(Failed);
     }
 
@@ -380,7 +374,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     unsafe { win_ui_flush(true) };
 
     // `cmdline_row` may have been moved temporarily.
-    unsafe { compute_cmdrow() };
+    compute_cmdrow();
 
     let mut hl_changed = false;
     if need_highlight_changed.get() {
@@ -455,7 +449,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     if wp.w_redr_type == UPD_INVERTED {
         // So the end of the Visual selection is right.
-        unsafe { update_curswant() };
+        update_curswant();
     }
 
     if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
@@ -644,9 +638,7 @@ pub unsafe fn setcursor() {
 ///
 /// `force` positions it even when not redrawing.
 pub unsafe fn setcursor_mayforce(window: Win, force: bool) {
-    // SAFETY: a live window; `grid_adjust` maps its coordinates onto whichever
-    // grid actually carries them.
-    if !force && !unsafe { redrawing() } {
+    if !force && !redrawing() {
         return;
     }
     validate_cursor(window);
@@ -681,9 +673,8 @@ pub unsafe fn setcursor_mayforce(window: Win, force: bool) {
 /// `'foldcolumn'` asks for a width; what it gets is bounded by the room left
 /// beside the text, which must be at least one column ('winminwidth' of 0 still
 /// leaves one for the current window).
-pub unsafe fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
-    // SAFETY: a live window, on the main thread.
-    let fdc = unsafe { win_fdccol_count(window) };
+pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
+    let fdc = win_fdccol_count(window);
     let min_width = if window.raw() == Win::current_raw() && p_wmw.get() == 0 {
         1
     } else {

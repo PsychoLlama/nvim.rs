@@ -314,7 +314,7 @@ pub(crate) unsafe fn ins_compl_add(
     if compl_get_longest.get()
         && flags & CP_ORIGINAL_TEXT == 0
         && !cot_fuzzy()
-        && !unsafe { ins_compl_preinsert_longest() }
+        && !ins_compl_preinsert_longest()
         && !ctrl_x_mode_thesaurus()
     {
         // SAFETY: `match_0` is the node just linked in.

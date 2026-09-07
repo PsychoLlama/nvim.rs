@@ -229,7 +229,7 @@ fn layout_locked(cmd: CmdIdx) -> bool {
     locked
 }
 
-pub unsafe fn window_layout_locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
+pub fn window_layout_locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
     locked_err(cmd, &mut *err)
 }
 
@@ -272,7 +272,7 @@ pub(crate) fn prevwin_curwin() -> Win {
     }
 }
 
-pub unsafe fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
+pub fn swbuf_goto_win_with_buf(buffer: Option<Buf>) -> Option<Win> {
     buffer.and_then(swbuf_goto_win)
 }
 
@@ -368,8 +368,7 @@ fn err(msg: *const ::core::ffi::c_char) {
 
 /// Mark every window on the screen for redrawing at `redraw_type`.
 fn redraw_all(redraw_type: ::core::ffi::c_int) {
-    // SAFETY: reads the window list, which is live from startup to exit.
-    unsafe { redraw_all_later(redraw_type) };
+    redraw_all_later(redraw_type);
 }
 
 /// Whether `win` is the only non-floating window of its tab page.

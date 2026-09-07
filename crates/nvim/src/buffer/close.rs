@@ -98,14 +98,12 @@ fn is_only_window(win: Win) -> bool {
 
 /// Make `win` in `tabpage` current again, without firing autocommands.
 fn goto_win(tabpage: TabPage, win: Win) {
-    // SAFETY: a live tab page and a live window.
-    unsafe { goto_tabpage_win(tabpage, win) };
+    goto_tabpage_win(tabpage, win);
 }
 
 /// Remember `win`'s cursor as the buffer's last position.
 fn remember_last_cursor(win: Win) {
-    // SAFETY: a live window.
-    unsafe { set_last_cursor(win) };
+    set_last_cursor(win);
 }
 
 /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
@@ -115,17 +113,14 @@ fn forget_file(win: Win, fnum: c_int) {
 }
 
 fn detach_updates(buffer: Buf) {
-    // SAFETY: a live buffer; `false` is upstream's `send_closing`.
-    unsafe { buf_updates_unload(buffer, false) };
+    buf_updates_unload(buffer, false);
 }
 
 fn free_update_callbacks(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { buf_free_callbacks(buffer) };
+    buf_free_callbacks(buffer);
 }
 
 fn diff_forget(buffer: Buf) {
-    // SAFETY: a live buffer.
     diff_buf_delete(buffer);
 }
 
@@ -135,8 +130,7 @@ fn diff_hidden_off() -> bool {
 }
 
 fn free_extmarks(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { extmark_free_all(buffer) };
+    extmark_free_all(buffer);
 }
 
 fn free_user_commands(buffer: Buf) {
@@ -195,7 +189,6 @@ fn forget_lines(buffer: Buf, count: LineNr) {
 }
 
 fn free_undo(buffer: Buf) {
-    // SAFETY: a live buffer.
     u_clearallandblockfree(buffer);
 }
 
@@ -545,7 +538,6 @@ fn close_buffer_inner(
             // Init the options when loaded again.
             buf.b_p_initialized = false;
         }
-        // SAFETY: a live buffer.
         buf_clear_file(buf);
         if let Some(mut wp) = clear_w_buf {
             wp.w_buffer = ptr::null_mut();
@@ -866,8 +858,7 @@ pub(crate) fn clear_wininfo(mut buffer: Buf) {
 pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
     if free_flags & kBffClearWinInfo as c_int != 0 {
         clear_wininfo(buffer); // including window-local options
-        // SAFETY: a live buffer.
-        unsafe { free_buf_options(buffer, true) };
+        free_buf_options(buffer, true);
         free_garray(&mut buffer.b_s.b_langp);
     }
     clear_buf_vars(buffer); // free all internal variables

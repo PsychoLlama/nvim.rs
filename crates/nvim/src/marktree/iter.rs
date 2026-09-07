@@ -506,12 +506,7 @@ pub unsafe fn marktree_itr_current(itr: &mut MarkTreeIter) -> MTKey {
 ///
 /// Answers false when no mark can possibly be found. True is not a promise:
 /// the first `step_overlap` may still answer false.
-///
-/// # Safety
-/// `b` must be a live tree. Nothing here dereferences it, but the iterator
-/// this leaves behind names `b`'s root, and [`marktree_itr_step_overlap`]
-/// walks from there.
-pub unsafe fn marktree_itr_get_overlap(
+pub fn marktree_itr_get_overlap(
     b: &mut MarkTree,
     row: c_int,
     col: c_int,

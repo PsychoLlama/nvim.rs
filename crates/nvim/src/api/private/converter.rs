@@ -111,10 +111,7 @@ impl ObjectSink {
     }
 
     /// The dictionary the walk is currently filling.
-    ///
-    /// # Safety
-    /// The caller must be inside a dictionary, which every use here is.
-    unsafe fn open_dict(&mut self) -> &mut ApiDict {
+    fn open_dict(&mut self) -> &mut ApiDict {
         let Object::Dict(dict) = self.stack.last_mut() else {
             unreachable!("the walk is inside a dictionary");
         };

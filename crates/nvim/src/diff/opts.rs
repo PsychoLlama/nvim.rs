@@ -270,7 +270,7 @@ pub unsafe fn diffopt_changed() -> Result<(), Failed> {
     linematch_lines.set(linematch_new);
     diff_foldcolumn.set(foldcolumn_new);
     diff_algorithm.set(algorithm_new);
-    unsafe { diff_redraw(true) };
+    diff_redraw(true);
     unsafe { check_scrollbind(0, 0) };
     Ok(())
 }

@@ -128,10 +128,10 @@ fn apply_optionset_autocmd(
         return;
     }
 
-    let mut oldval_tv = unsafe { optval_as_tv(oldval, false) };
-    let mut oldval_g_tv = unsafe { optval_as_tv(oldval_g, false) };
-    let mut oldval_l_tv = unsafe { optval_as_tv(oldval_l, false) };
-    let mut newval_tv = unsafe { optval_as_tv(newval, false) };
+    let mut oldval_tv = optval_as_tv(oldval, false);
+    let mut oldval_g_tv = optval_as_tv(oldval_g, false);
+    let mut oldval_l_tv = optval_as_tv(oldval_l, false);
+    let mut newval_tv = optval_as_tv(newval, false);
 
     unsafe { set_vim_var_tv(Vv::OptionOld, &raw mut oldval_tv) };
     unsafe { set_vim_var_tv(Vv::OptionNew, &raw mut newval_tv) };
@@ -493,7 +493,7 @@ pub(crate) unsafe fn did_set_option(
         kOptMouse => setmouse(),
         // 'formatlistpat' is what 'breakindentopt' list mode indents by.
         kOptFormatlistpat if Win::current().w_briopt_list != 0 => {
-            unsafe { redraw_all_later(UPD_NOT_VALID) };
+            redraw_all_later(UPD_NOT_VALID);
         }
         kOptWinbar => set_winbar(true),
         _ => {}
@@ -513,9 +513,9 @@ pub(crate) unsafe fn did_set_option(
     // Anything set from a modeline, from the sandbox or in secure mode
     // is insecure unless the callback vetted it; replacing a value
     // outright clears the mark again.
-    let flagsp = unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) };
-    let flagsp_local = scope_both
-        .then(|| unsafe { insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL) });
+    let flagsp = insecure_flag(Win::current_or_none(), opt_idx, opt_flags);
+    let flagsp_local =
+        scope_both.then(|| insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL));
     if !value_checked
         && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
     {
@@ -609,7 +609,7 @@ pub(crate) unsafe fn set_option(
     let saved_old_local_value = optval_copy(old_local_value);
     let saved_new_value = optval_copy(value);
 
-    let insecure = unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) }.is_set();
+    let insecure = insecure_flag(Win::current_or_none(), opt_idx, opt_flags).is_set();
     let secure_saved = secure.get();
     // Deal with the side effects of a modeline, of the sandbox, or of a
     // value amended rather than replaced, in secure mode.

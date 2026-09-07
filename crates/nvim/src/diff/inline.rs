@@ -21,7 +21,7 @@ use std::ffi::CStr;
 ///
 /// Only the `inline:char`/`inline:word` modes cache anything; the simple rule
 /// is recomputed per line.
-pub unsafe fn diff_update_line(lnum: LineNr) {
+pub fn diff_update_line(lnum: LineNr) {
     if diff_flags.get() & ALL_INLINE_DIFF == 0 {
         return;
     }

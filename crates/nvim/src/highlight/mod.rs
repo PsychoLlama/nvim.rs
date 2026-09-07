@@ -519,7 +519,7 @@ pub unsafe fn clear_hl_tables(reinit: bool) {
     // SAFETY: the editor's own tables.
     unsafe { highlight_attr_set_all() };
     unsafe { highlight_changed() };
-    unsafe { screen_invalidate_highlights() };
+    screen_invalidate_highlights();
 }
 
 /// Combines two attribute-bit masks, `prim_ae` winning.

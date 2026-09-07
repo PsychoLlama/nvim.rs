@@ -192,15 +192,15 @@ fn cursor_of(rex: Rex) -> Option<Pos> {
 /// `vim_is_ident_char`, `vim_isfilec` and `vim_isprintc` are pure tests on a code
 /// point that read only option state.
 fn is_ident_char(c: c_int) -> bool {
-    unsafe { vim_is_ident_char(c) }
+    vim_is_ident_char(c)
 }
 
 fn is_file_char(c: c_int) -> bool {
-    unsafe { vim_isfilec(c) }
+    vim_isfilec(c)
 }
 
 fn is_printable(c: c_int) -> bool {
-    unsafe { vim_isprintc(c) }
+    vim_isprintc(c)
 }
 
 fn nomatch_unless(ok: bool) -> c_int {

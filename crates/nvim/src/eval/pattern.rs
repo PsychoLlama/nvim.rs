@@ -40,9 +40,7 @@ struct QuietCpo {
 }
 
 impl QuietCpo {
-    /// # Safety
-    /// Must be dropped before anything else writes 'cpoptions'.
-    unsafe fn enter() -> Self {
+    fn enter() -> Self {
         let saved = p_cpo.get();
         p_cpo.set(empty_option());
         Self { saved }
@@ -76,9 +74,7 @@ impl Drop for QuietCpo {
 /// # Safety
 /// Both arguments must be NUL-terminated strings.
 pub unsafe fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> bool {
-    // SAFETY: the guard is dropped at the end of this body, before
-    // anything else writes 'cpoptions'.
-    let _cpo = unsafe { QuietCpo::enter() };
+    let _cpo = QuietCpo::enter();
     let mut regmatch = EMPTY_REGMATCH;
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
     regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
@@ -112,9 +108,7 @@ pub unsafe fn do_string_sub(
     flags: *const c_char,
     ret_len: *mut size_t,
 ) -> *mut c_char {
-    // SAFETY: the guard is dropped at the end of this body, before
-    // anything else writes 'cpoptions'.
-    let _cpo = unsafe { QuietCpo::enter() };
+    let _cpo = QuietCpo::enter();
     let mut out = Vec::<u8>::new();
     // Whether anything was substituted. The garray answered this by having
     // been allocated at all; a `Vec` cannot, and an empty result is a real

@@ -100,7 +100,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     for lnum in (comment.lnum + 1..line.cur_curpos.lnum).rev() {
         // SAFETY: `lnum` sits between the comment opener and the cursor, so
         // it is a line of the current buffer.
-        if unsafe { !linewhite(lnum) } {
+        if !linewhite(lnum) {
             // SAFETY: the same line number.
             return unsafe { get_indent_lnum(lnum) };
         }
@@ -227,11 +227,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
                 // The line above starting with the start leader: its
                 // indent plus the offset.  With the middle leader: its
                 // indent and nothing more.
-                // SAFETY: the test above says `prev` is at least 1, so it is
-                // a line of the current buffer. The handle's borrow is what
-                // keeps the second line below from being read while the
-                // first is still in hand.
-                let mut lines = unsafe { Lines::current() };
+                let mut lines = Lines::current();
                 let above = lines.line(prev);
                 let above = &above[skip::white(above)..];
                 if ncmp_eq(above, &lead_start, lead_start_len) {

@@ -107,7 +107,7 @@ pub(crate) unsafe fn shada_write(
     // `"` mark right on exit. It also means `:wshada` moves that mark
     // to the cursor, as `:wviminfo` did.
     for wp in tab_windows() {
-        unsafe { set_last_cursor(wp) };
+        set_last_cursor(wp);
     }
     unsafe { find_removable_bufs(&mut writing.removable_bufs) };
 
@@ -672,7 +672,7 @@ unsafe fn writable_value(vartv: &TypVal) -> bool {
         VAR_FUNC | VAR_PARTIAL => false,
         VAR_DICT => {
             let di = unsafe { vartv.vval.v_dict };
-            let copy_id = unsafe { get_copy_id() };
+            let copy_id = get_copy_id();
             unsafe {
                 set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
                     || copy_id != (*di).dv_copy_id
@@ -680,7 +680,7 @@ unsafe fn writable_value(vartv: &TypVal) -> bool {
         }
         VAR_LIST => {
             let l = unsafe { vartv.vval.v_list };
-            let copy_id = unsafe { get_copy_id() };
+            let copy_id = get_copy_id();
             unsafe {
                 set_ref_in_list_items(l, copy_id, core::ptr::null_mut())
                     || copy_id != (*l).lv_copy_id

@@ -160,11 +160,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 
 /// `bufwinid()` and `bufwinnr()`: the first window of the current tab page
 /// showing the buffer, as an id or as a `winnr()` ordinal.
-///
-/// # Safety
-/// The arguments and `result` must be live typvals.
-unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
-    // SAFETY: the caller's obligation.
+fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
     let buf = arg_buf_chk(args, 0);
     if buf.is_none() {
         result.vval.v_number = -1;
@@ -187,13 +183,11 @@ unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
 /// `bufwinid({buf})`.
 pub unsafe fn f_bufwinid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { buf_win_common(args, result, false) };
+    buf_win_common(args, result, false);
 }
 
 /// `bufwinnr({buf})`.
 pub unsafe fn f_bufwinnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { buf_win_common(args, result, true) };
+    buf_win_common(args, result, true);
 }

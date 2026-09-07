@@ -70,7 +70,6 @@ pub unsafe fn nvim_open_win(
     let mut parent: Option<Win> = (keys.win == 0).then(Win::current);
     '_cleanup: {
         if keys.win > 0 {
-            // SAFETY: `error` is this frame's slot.
             let Some(found) = find_window_by_handle(fconfig.window, &mut error) else {
                 break '_cleanup;
             };
@@ -87,8 +86,7 @@ pub unsafe fn nvim_open_win(
         }
         if is_split {
             let target = parent.unwrap_or_else(Win::current);
-            // SAFETY: `error` is this frame's slot.
-            if !unsafe { check_split_disallowed_err(target, &mut error) } {
+            if !check_split_disallowed_err(target, &mut error) {
                 break '_cleanup;
             }
             // `vertical` without `split` picks the side from 'splitright' and
@@ -121,8 +119,7 @@ pub unsafe fn nvim_open_win(
             unsafe { try_enter(&raw mut tstate) };
             match parent.filter(|p| !p.is_current()) {
                 None => {
-                    // SAFETY: a split of the current window, which is live.
-                    wp = unsafe { split_ins(size, flags) };
+                    wp = split_ins(size, flags);
                 }
                 Some(parent) => {
                     let mut switchwin = SwitchWin::default();
@@ -131,8 +128,7 @@ pub unsafe fn nvim_open_win(
                     // are the live window and tab page to split in.
                     let result = unsafe { switch_win(&raw mut switchwin, parent, Some(tp), true) };
                     debug_assert!(result.is_ok(), "the window was switched to");
-                    // SAFETY: the window switched to is live.
-                    wp = unsafe { split_ins(size, flags) };
+                    wp = split_ins(size, flags);
                     // SAFETY: the matching restore of the switch above.
                     unsafe { restore_win(&raw mut switchwin, true) };
                 }
@@ -145,11 +141,9 @@ pub unsafe fn nvim_open_win(
                 let (width, height) = (new.w_width, new.w_height);
                 if size > 0 {
                     if vertical && width != size {
-                        // SAFETY: `new` is live.
-                        unsafe { win_setwidth_win(size, new) };
+                        win_setwidth_win(size, new);
                     } else if !vertical && height != size {
-                        // SAFETY: `new` is live.
-                        unsafe { win_setheight_win(size, new) };
+                        win_setheight_win(size, new);
                     }
                 }
             }
@@ -207,8 +201,7 @@ pub unsafe fn nvim_open_win(
             unsafe { restore_win_noblock(&raw mut switchwin_0, true) };
         }
         if let (Some(at), true) = (tp, enter) {
-            // SAFETY: `at` still holds `wp`, so both are live.
-            unsafe { goto_tabpage_win(at, window) };
+            goto_tabpage_win(at, window);
             tp = win_find_tabpage(wp_id);
         }
         // `wp` is read only once its tab page still holds it, which is what
@@ -216,8 +209,7 @@ pub unsafe fn nvim_open_win(
         let other_buf = tp.is_some() && bufref.valid() && Some(b) != wp.buffer_or_none();
         if other_buf {
             let quiet = (!wp.is_current() && !noautocmd).then(Suppress::win_enter_leave_autocmds);
-            // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
-            unsafe { win_set_buf(window, b, &mut error) };
+            win_set_buf(window, b, &mut error);
             if !noautocmd {
                 tp = win_find_tabpage(wp_id);
             }
@@ -249,12 +241,8 @@ pub unsafe fn nvim_open_win(
 
 /// `win_split_ins` as this file calls it: a new window of `size`, with no
 /// window or frame to place it against.
-///
-/// # Safety
-/// The current window must be the one to split.
-unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win> {
-    // SAFETY: the caller's promise.
-    unsafe { win_split_ins(size, flags, None, 0 as ::core::ffi::c_int, None) }
+fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win> {
+    win_split_ins(size, flags, None, 0 as ::core::ffi::c_int, None)
 }
 
 /// Which side of its neighbour `win` was split off, for the `split` key.
@@ -316,7 +304,6 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
 /// `window` must be a live window, `tabpage` a live tab page and `err` the caller's
 /// error slot.
 pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Error) -> bool {
-    // SAFETY: the caller's window.
     let w = window;
     // SAFETY: the caller's error slot.
     let report = unsafe { ErrSlot::new(err) };
@@ -331,14 +318,12 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
-    // SAFETY: the caller's window.
-    if unsafe { win_locked(w) } != 0 {
+    if win_locked(w) != 0 {
         let msg = c"Cannot move window to another tabpage whilst in use";
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
-    // SAFETY: the caller's error slot.
-    if unsafe { window_layout_locked_err(CmdIdx::SIZE, err) } {
+    if window_layout_locked_err(CmdIdx::SIZE, err) {
         return false;
     }
     if textlock.get() != 0 || expr_map_locked() {
@@ -361,10 +346,7 @@ pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage, err: &mut Er
 
 /// The window that takes `win`'s place in tab page `tabpage` once it leaves: its
 /// neighbour in the layout, or the tab page's own choice for a float.
-///
-/// # Safety
-/// `win` must be a live window and `tabpage` a live tab page.
-pub(crate) unsafe fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> {
+pub(crate) fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> {
     let w = win;
     let at = (tabpage != TabPage::current()).then_some(tabpage);
     if win.w_floating {

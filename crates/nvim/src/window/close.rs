@@ -39,7 +39,7 @@ use crate::winlayer::graph::{
 };
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
-pub unsafe fn entering_window(win: Win) {
+pub fn entering_window(win: Win) {
     enter_window(win);
 }
 
@@ -88,7 +88,7 @@ fn is_prompt(win: Win) -> bool {
     buf_is_prompt(win.buffer_or_none())
 }
 
-pub unsafe fn win_init_empty(window: Win) {
+pub fn win_init_empty(window: Win) {
     init_empty(window);
 }
 
@@ -117,7 +117,7 @@ pub fn curwin_init() {
     init_empty(Win::current());
 }
 
-pub unsafe fn close_windows(buffer: Buf, keep_curwin: bool) {
+pub fn close_windows(buffer: Buf, keep_curwin: bool) {
     close_all(buffer, keep_curwin);
 }
 
@@ -183,7 +183,7 @@ fn locked(window: Win) -> bool {
     window.w_locked || window.buffer().b_locked > 0
 }
 
-pub unsafe fn last_window(win: Win) -> bool {
+pub fn last_window(win: Win) -> bool {
     is_last_window(win)
 }
 
@@ -238,7 +238,7 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
     true
 }
 
-pub unsafe fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
+pub fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
     cmdwin_allows(win, &mut *err)
 }
 
@@ -362,7 +362,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
     }
 }
 
-pub unsafe fn close_others(message: c_int, forceit: c_int) {
+pub fn close_others(message: c_int, forceit: c_int) {
     close_all_others(message != 0, forceit != 0);
 }
 

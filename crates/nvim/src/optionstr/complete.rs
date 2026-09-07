@@ -237,9 +237,7 @@ pub unsafe fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_mkspellmem(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_mkspellmem(_args: &mut OptSet) -> Option<&CStr> {
     if spell_check_msm().is_err() {
         return invalid();
     }

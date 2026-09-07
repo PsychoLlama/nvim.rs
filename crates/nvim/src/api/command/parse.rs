@@ -66,7 +66,7 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
     // `is_map_cmd` indexes the command table by `cmdidx`, so the `CmdIdx::SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
-    if ea.cmdidx != CmdIdx::SIZE && unsafe { is_map_cmd(ea.cmdidx) } && !empty {
+    if ea.cmdidx != CmdIdx::SIZE && is_map_cmd(ea.cmdidx) && !empty {
         // SAFETY: caller contract.
         return unsafe { parse_map_cmd(ea.arg, arena) };
     }

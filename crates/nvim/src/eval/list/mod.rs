@@ -835,8 +835,7 @@ pub(crate) fn set_vim_var_tv(idx: Vv, tv: TvRef) {
 /// walk, because `set_vim_var_nr` does not set one.
 #[inline(always)]
 pub(crate) fn set_key_nr(n: VarNumber) {
-    // SAFETY: `Vv::Key` names a `v:` variable.
-    unsafe { set_vim_var_nr(Vv::Key, n) };
+    set_vim_var_nr(Vv::Key, n);
 }
 
 /// Set `v:key` to the NUL-terminated string `s`.
@@ -850,8 +849,7 @@ pub(crate) fn set_key_string(s: *mut c_char) {
 /// Declare `v:key`'s type for a walk that will set Numbers into it.
 #[inline(always)]
 pub(crate) fn set_key_type(v_type: VarType) {
-    // SAFETY: `Vv::Key` names a `v:` variable.
-    unsafe { set_vim_var_type(Vv::Key, v_type) };
+    set_vim_var_type(Vv::Key, v_type);
 }
 
 /// Save the `v:` variable `idx` across a walk.
@@ -946,7 +944,6 @@ pub unsafe fn f_reverse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if unsafe { tv_check_for_string_or_list_or_blob_arg(args, 0) }.is_err() {
         return;
     }
-    // SAFETY: the caller's contract.
     let (mut args, result) = frame!(args, result);
     match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {

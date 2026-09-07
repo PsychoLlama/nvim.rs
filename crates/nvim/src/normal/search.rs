@@ -150,7 +150,7 @@ pub(crate) unsafe fn normal_search(
             && fdo_flags.get() & kOptFdoFlagSearch as c_int as c_uint != 0
             && KeyTyped.get()
         {
-            unsafe { fold_open_cursor() };
+            fold_open_cursor();
         }
     }
     if !equalpos(Win::current().w_cursor, prev_cursor) && current_match_is_distinct() {
@@ -223,7 +223,7 @@ unsafe fn may_open_fold(cmd_arg: *mut CmdArg, moved: bool, old_key_typed: bool) 
         && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
         && old_key_typed
     {
-        unsafe { fold_open_cursor() };
+        fold_open_cursor();
     }
 }
 
@@ -289,7 +289,7 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     }
 
     let fm = if ca.cmdchar == 'g' as c_int {
-        unsafe { get_changelist(Buf::current(), Win::current(), ca.count1) }
+        get_changelist(Buf::current(), Win::current(), ca.count1)
     } else {
         flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
         unsafe { get_jumplist(Win::current(), ca.count1) }

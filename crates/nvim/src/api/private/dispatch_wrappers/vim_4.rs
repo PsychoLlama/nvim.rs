@@ -42,13 +42,11 @@ pub unsafe fn handle_nvim_set_current_win(
         return Object::Nil;
     };
     // SAFETY: a wrapper runs on the main loop.
-    if unsafe { text_locked() } {
+    if text_locked() {
         text_locked_error(error);
         return Object::Nil;
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_set_current_win(arg_1) } {
+    if let Err(e) = nvim_set_current_win(arg_1) {
         return failure(error, e);
     }
     Object::Nil

@@ -99,9 +99,7 @@ const MAPARG_DICT_KEYS: size_t = 20;
 struct Filling(ApiDict);
 
 impl Filling {
-    /// # Safety
-    /// `dict`'s storage must have room for [`MAPARG_DICT_KEYS`] entries.
-    unsafe fn new(dict: ApiDict) -> Self {
+    fn new(dict: ApiDict) -> Self {
         Self(dict)
     }
 
@@ -154,8 +152,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
         (dict, lhs, mapmode)
     };
     let rhs = &mp.m_rhs;
-    // SAFETY: `arena_dict` just reserved `MAPARG_DICT_KEYS` entries.
-    let mut out = unsafe { Filling::new(dict) };
+    let mut out = Filling::new(dict);
 
     let noremap_value = if compatible {
         // Keep the old compatible behaviour, which cannot tell a

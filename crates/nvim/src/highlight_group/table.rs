@@ -426,8 +426,7 @@ pub(crate) unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int 
 fn syn_add_group(name: &[u8]) -> c_int {
     for &byte in name {
         let c = c_int::from(byte);
-        // SAFETY: main-thread message calls.
-        if !unsafe { vim_isprintc(c) } {
+        if !vim_isprintc(c) {
             emsg(gettext(c"E669: Unprintable character in group name"));
             return 0;
         }

@@ -414,9 +414,7 @@ pub unsafe fn did_set_foldexpr(args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_foldignore(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_foldignore(args: &mut OptSet) -> Option<&CStr> {
     let wp = win(args);
     if foldmethod_is_indent(wp) {
         fold_update_all(wp);
@@ -457,7 +455,7 @@ pub unsafe fn did_set_foldmethod(args: &mut OptSet) -> Option<&CStr> {
     // Diff folds are closed to whatever 'foldlevel' says as soon as
     // they exist.
     if foldmethod_is_diff(wp) {
-        unsafe { new_fold_level() };
+        new_fold_level();
     }
     None
 }

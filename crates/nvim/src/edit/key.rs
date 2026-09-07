@@ -554,14 +554,7 @@ fn do_backspace(s: &mut InsertState, mode: Backspace) {
 /// Only while nothing else is typed ahead -- autocompletion must never make
 /// a burst of keys slow.
 fn may_autocomplete_before_cursor(s: &mut InsertState) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    if !(unsafe { ins_compl_has_autocomplete() }
-        && !char_avail()
-        && Win::current().w_cursor.col > 0)
-    {
+    if !(ins_compl_has_autocomplete() && !char_avail() && Win::current().w_cursor.col > 0) {
         return;
     }
     s.c = unsafe { char_before_cursor() };
@@ -668,10 +661,10 @@ fn insert_normal_char(s: &mut InsertState) {
     autoformat(true);
 
     // The cursor line must never be in a closed fold after an insert.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
 
     // Autocompletion, on the character just inserted.
-    if unsafe { ins_compl_has_autocomplete() } && !char_avail() && printable(s.c) {
+    if ins_compl_has_autocomplete() && !char_avail() && printable(s.c) {
         start_autocomplete(s);
     }
 }
@@ -705,7 +698,6 @@ fn in_prompt_buf() -> bool {
 /// the expansion, and the key must not be inserted here.
 #[inline(always)]
 fn check_abbr(c: c_int) -> bool {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
     echeck_abbr(c)
 }
 
@@ -719,6 +711,5 @@ fn compl_option_ok(cpt_only: bool) -> bool {
 /// Is `c` a character that can be shown on the screen?
 #[inline(always)]
 fn printable(c: c_int) -> bool {
-    // SAFETY: only reads the character tables.
-    unsafe { vim_isprintc(c) }
+    vim_isprintc(c)
 }

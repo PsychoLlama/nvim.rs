@@ -619,7 +619,7 @@ pub unsafe fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, d
         let is_lines = unsafe { (*vt).flags } & kVTIsLines != 0;
         let below = is_lines && unsafe { (*vt).flags } & kVTLinesAbove == 0;
         let vt_lnum = row1 as LineNr + 1 + LineNr::from(below);
-        unsafe { redraw_buf_line_later(buffer, vt_lnum, true) };
+        redraw_buf_line_later(buffer, vt_lnum, true);
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
         if is_lines || unsafe { (*vt).pos } == kVPosInline {
@@ -638,14 +638,10 @@ pub unsafe fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, d
 }
 
 /// [`decor_redraw`] for one sign/highlight item.
-///
-/// # Safety
-/// `buffer` must be live.
-pub unsafe fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
-    // SAFETY: the caller's buffer and the editor's window list.
+pub fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
     if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
-        unsafe { redraw_buf_range_later(buffer, row1 as LineNr + 1, row2 as LineNr + 1) };
+        redraw_buf_range_later(buffer, row1 as LineNr + 1, row2 as LineNr + 1);
     }
 
     if sh.flags & kSHConcealLines != 0 {
@@ -659,7 +655,7 @@ pub unsafe fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSi
     }
 
     if sh.flags & kSHUIWatched != 0 {
-        unsafe { redraw_buf_line_later(buffer, row1 as LineNr + 1, false) };
+        redraw_buf_line_later(buffer, row1 as LineNr + 1, false);
     }
 }
 
@@ -668,7 +664,6 @@ pub unsafe fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSi
 /// # Safety
 /// `buffer` must be live and `decor` must be its mark's decoration.
 pub unsafe fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
-    // SAFETY: the caller's buffer and decoration.
     if !decor.ext || row as LineNr >= buffer.b_ml.ml_line_count {
         return;
     }

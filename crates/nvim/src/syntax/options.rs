@@ -199,7 +199,7 @@ pub(crate) unsafe fn get_syn_options(
                 // required the `=`, so the character starts at arg[6].
                 *conceal_char = unsafe { utf_ptr2char(arg.add(6)) };
                 arg = unsafe { arg.add(utfc_ptr2len(arg.add(6)) as usize - 1) };
-                if !unsafe { vim_isprintc(*conceal_char) } {
+                if !vim_isprintc(*conceal_char) {
                     emsg(gettext(E_INVALID_CCHAR_VALUE));
                     return ::core::ptr::null_mut();
                 }

@@ -78,10 +78,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     let mut extra = 0;
     let mut copy = LineCopy::new();
     for l in line1..=line2 {
-        // SAFETY: `l + extra` tracks the source line as the copies push it
-        // down, and `ml_append` unlocks the block it lives in -- so the copy
-        // is taken first, and `ml_append` takes ownership of nothing.
-        unsafe { copy.fill_line(l + extra) };
+        copy.fill_line(l + extra);
         let _ = unsafe { ml_append(dest + l - line1, copy.as_ptr(), 0, false) };
         if dest < line1 {
             extra += 1;
@@ -103,7 +100,6 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // their final destination at the new text position -- webb
 
     // The last line in the file now that the copies are in.
-    // SAFETY: `curbuf` is live.
     let last_line = Buf::current().b_ml.ml_line_count;
     // SAFETY: as above; the range is the one just copied.
     unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
@@ -122,15 +118,13 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
         // SAFETY: the lines the move stepped over are still in the buffer.
         unsafe { mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP) };
         unsafe { move_folds_in_windows(line1, line2, dest) };
-        // SAFETY: `curbuf` is live.
-        unsafe { set_op_range(dest - num_lines + 1, dest) };
+        set_op_range(dest - num_lines + 1, dest);
         (-num_lines, -extent_byte)
     } else {
         // SAFETY: as above.
         unsafe { mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP) };
         unsafe { move_folds_in_windows(dest + 1, line1 - 1, line2) };
-        // SAFETY: `curbuf` is live.
-        unsafe { set_op_range(dest + 1, dest + num_lines) };
+        set_op_range(dest + 1, dest + num_lines);
         (0, 0)
     };
 
@@ -156,8 +150,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     });
 
     // Send an update regarding the new lines that were added.
-    // SAFETY: `curbuf` is live.
-    unsafe { buf_updates_send_changes(Buf::current(), dest + 1, num_lines as int64_t, 0) };
+    buf_updates_send_changes(Buf::current(), dest + 1, num_lines as int64_t, 0);
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
@@ -172,23 +165,19 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
         let _: bool = report_msg(0, || tr_plural!(moved, num_lines as int64_t));
     }
 
-    // SAFETY: `curbuf` is live and the byte extents were measured before the
-    // move; `line_off`/`byte_off` correct the destination for the deletion.
-    unsafe {
-        extmark_move_region(
-            Buf::current(),
-            line1 - 1,
-            0,
-            start_byte,
-            line2 - line1 + 1,
-            0,
-            extent_byte,
-            dest + line_off,
-            0,
-            dest_byte + byte_off,
-            kExtmarkUndo,
-        )
-    };
+    extmark_move_region(
+        Buf::current(),
+        line1 - 1,
+        0,
+        start_byte,
+        line2 - line1 + 1,
+        0,
+        extent_byte,
+        dest + line_off,
+        0,
+        dest_byte + byte_off,
+        kExtmarkUndo,
+    );
 
     // Leave the cursor on the last of the moved lines.
     // SAFETY: `curwin` is the live current window.
@@ -203,7 +192,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
         changed_lines(Buf::current(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    unsafe { buf_updates_send_changes(Buf::current(), line1 + extra, 0, num_lines as int64_t) };
+    buf_updates_send_changes(Buf::current(), line1 + extra, 0, num_lines as int64_t);
 
     Ok(())
 }
@@ -244,15 +233,10 @@ unsafe fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
 
 /// Set the `'[` and `']` marks around what the command touched, unless
 /// `:lockmarks` asked for them to be left alone.
-///
-/// # Safety
-/// The current buffer must be live.
-pub(super) unsafe fn set_op_range(start: LineNr, end: LineNr) {
+pub(super) fn set_op_range(start: LineNr, end: LineNr) {
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         return;
     }
-    // SAFETY: caller's contract.  `coladd` is deliberately left alone, as
-    // upstream leaves it.
     Buf::current().b_op_start.lnum = start;
     Buf::current().b_op_start.col = 0;
     Buf::current().b_op_end.lnum = end;
@@ -266,8 +250,7 @@ pub(super) unsafe fn set_op_range(start: LineNr, end: LineNr) {
 /// short of its first line.
 pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     let count = line2 - line1 + 1;
-    // SAFETY: `curbuf` is live.
-    unsafe { set_op_range(n + 1, n + count) };
+    set_op_range(n + 1, n + count);
 
     // There are three situations:
     //   1. destination is above line1
@@ -288,8 +271,7 @@ pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     while line1 <= line2 {
         // Need to make a copy because the line will be unlocked within
         // `ml_append`.
-        // SAFETY: `line1` is a line of the current buffer throughout.
-        unsafe { copy.fill_line(line1) };
+        copy.fill_line(line1);
         let at = Win::current().w_cursor.lnum;
         // SAFETY: the text is this call's own NUL-terminated copy.
         let _ = unsafe { ml_append(at, copy.as_ptr(), 0, false) };

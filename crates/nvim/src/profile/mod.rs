@@ -238,16 +238,13 @@ pub unsafe fn ex_profile(args: *mut ExArg) {
         PROFILE_FNAME.set(Some(fname));
         do_profiling.set(PROF_YES);
         PROF_WAIT_TIME.set(profile_zero());
-        // SAFETY: a v: variable set to a number.
-        unsafe { set_vim_var_nr(Vv::Profiling, 1 as VarNumber) };
+        set_vim_var_nr(Vv::Profiling, 1 as VarNumber);
     } else if do_profiling.get() == PROF_NONE {
         emsg(gettext(c"E750: First use \":profile start {fname}\""));
     } else if full == b"stop" {
         profile_dump();
         do_profiling.set(PROF_NONE);
-        // SAFETY: a v: variable set to a number, then the profiling tables,
-        // which are live for as long as the editor is.
-        unsafe { set_vim_var_nr(Vv::Profiling, 0 as VarNumber) };
+        set_vim_var_nr(Vv::Profiling, 0 as VarNumber);
         unsafe { profile_reset() };
     } else if full == b"pause" {
         if do_profiling.get() == PROF_YES {
@@ -476,8 +473,7 @@ pub unsafe fn prof_child_exit(wait: ProfTime) {
 /// # Safety
 /// Main-thread editor call; the call stack is live.
 unsafe fn profiled_funccal() -> Option<*mut FuncCall> {
-    // SAFETY: the caller's contract.
-    let fc = unsafe { get_current_funccal() };
+    let fc = get_current_funccal();
     (!fc.is_null() && unsafe { (*(*fc).fc_func).uf_profiling } != 0).then_some(fc)
 }
 

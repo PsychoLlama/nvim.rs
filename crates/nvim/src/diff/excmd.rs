@@ -229,7 +229,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
     validate_cursor(old_curwin);
-    unsafe { set_fraction(old_curwin) };
+    set_fraction(old_curwin);
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
     let flags = if vertical { WSP_VERT as c_int } else { 0 };
@@ -243,7 +243,6 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     if old_curwin.is_current() {
         return;
     }
-    // SAFETY: the current window is live.
     diff_win_options(Win::current(), true);
     if win_valid(old_curwin.id()) {
         // SAFETY: the window is live, as just checked.
@@ -255,8 +254,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
         }
     }
     let height = Win::current().w_height;
-    // SAFETY: the current window is live.
-    unsafe { scroll_to_fraction(Win::current(), height) };
+    scroll_to_fraction(Win::current(), height);
 }
 
 /// `:diffthis`: put the current window in diff mode.
@@ -264,7 +262,6 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
 /// # Safety
 /// The editor must be running.
 pub unsafe fn ex_diffthis(_args: *mut ExArg) {
-    // SAFETY: the current window is live.
     diff_win_options(Win::current(), true);
 }
 
@@ -294,8 +291,7 @@ fn set_diff_option(window: Win, value: bool) {
 /// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_win_options(mut window: Win, addbuf: bool) {
     let saved = switch_window(window);
-    // SAFETY: `curwin` is `window`, which is live.
-    unsafe { new_fold_level() };
+    new_fold_level();
     saved.restore();
 
     // Each option is saved only while the window is not already in diff

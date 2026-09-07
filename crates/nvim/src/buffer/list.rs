@@ -150,7 +150,6 @@ fn regcomp(pat: &[u8], flags: c_int) -> *mut RegProg {
 }
 
 fn is_diff_mode(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
     diff_mode_buf(buffer)
 }
 
@@ -307,10 +306,8 @@ pub unsafe fn buflist_new(
     if flags & BLN_DUMMY as c_int != 0 {
         buf.b_flags |= BufFlags::DUMMY;
     }
-    // SAFETY: a live buffer.
     buf_clear_file(buf);
-    // SAFETY: a live buffer; clear its marks.
-    unsafe { clrallmarks(buf, 0 as Timestamp) };
+    clrallmarks(buf, 0 as Timestamp);
     // SAFETY: a live buffer; check the file marks for this file.
     unsafe { fmarks_check_names(buf) };
     // Init 'buflisted'.
@@ -527,7 +524,7 @@ pub unsafe fn curbuf_reusable() -> bool {
 
 /// Free the memory for a buffer's options. `free_p_ff` frees `'fileformat'`,
 /// `'buftype'` and `'fileencoding'` too.
-pub unsafe fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
+pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     if free_p_ff {
         clear_opt(&mut buffer.b_p_fenc);
         clear_opt(&mut buffer.b_p_ff);
@@ -630,8 +627,7 @@ pub unsafe fn buflist_getfile(
         return Ok(());
     }
 
-    // SAFETY: reads the command-line and textlock state.
-    if unsafe { text_or_buf_locked() } {
+    if text_or_buf_locked() {
         return Err(Failed);
     }
 
@@ -681,8 +677,7 @@ pub unsafe fn buflist_getfile(
 /// The `'switchbuf'` half of [`buflist_getfile`]: go to a window already
 /// showing `buffer`, or make one. Answers false when the split failed.
 fn goto_existing_window(buffer: Buf) -> bool {
-    // SAFETY: a live buffer; the answer is a live window or null.
-    let wp = unsafe { swbuf_goto_win_with_buf(Some(buffer)) };
+    let wp = swbuf_goto_win_with_buf(Some(buffer));
     let splits = (kOptSwbFlagVsplit as c_int
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;

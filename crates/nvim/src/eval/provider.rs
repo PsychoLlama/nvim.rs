@@ -233,8 +233,7 @@ pub unsafe fn eval_call_provider(
     let name_len = unsafe { snprintf(func.as_mut_ptr(), size, fmt, provider) };
 
     let saved_provider_caller_scope = provider_caller_scope.get();
-    // SAFETY: the frame pointer is only stashed, never read through here.
-    let funccalp = unsafe { get_current_funccal() } as *mut c_void;
+    let funccalp = get_current_funccal() as *mut c_void;
     provider_caller_scope.set(caller_scope {
         script_ctx: current_sctx.get(),
         es_entry: top_estack(),
@@ -336,7 +335,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
         return false;
     }
     // SAFETY: the check only reads the Lua scheduler's state.
-    if throw_if_fast && !unsafe { nlua_is_deferred_safe() } {
+    if throw_if_fast && !nlua_is_deferred_safe() {
         let what = c"Vimscript function".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -493,7 +492,6 @@ pub unsafe fn prompt_invoke_callback() {
         unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
         // SAFETY: the argument array and the result are this frame's.
         unsafe { tv_clear(argv.as_mut_ptr()) };
-        // SAFETY: as above.
         clear_local(&mut rettv);
     }
 

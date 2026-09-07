@@ -645,7 +645,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // Mark all undo states as changed.
                 u_unchanged(Buf::current());
             }
-            unsafe { buf_updates_unload(Buf::current(), true) };
+            buf_updates_unload(Buf::current(), true);
             Buf::current().b_mod_set = true;
         }
     }
@@ -703,7 +703,7 @@ pub unsafe fn buf_store_file_info(mut buffer: Buf, file_info: *mut FileInfo) {
 /// Adjust the line with a missing end-of-line, used for the next write.
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
-pub unsafe fn write_lnum_adjust(offset: LineNr) {
+pub fn write_lnum_adjust(offset: LineNr) {
     if Buf::current().b_no_eol_lnum != 0 {
         // Only if there is a missing end-of-line.
         Buf::current().b_no_eol_lnum += offset;

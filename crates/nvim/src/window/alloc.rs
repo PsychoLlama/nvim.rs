@@ -121,8 +121,7 @@ pub unsafe fn win_alloc_first() {
     let first = alloc_tabpage();
     first_tabpage.set(Some(first.id()));
     first.make_current();
-    // SAFETY: the tab page just allocated.
-    unsafe { unuse_tabpage(first) };
+    unuse_tabpage(first);
 }
 
 pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
@@ -165,8 +164,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
         }
         Some(oldwin) => {
             // Make the new window a copy of the old one.
-            // SAFETY: two live windows.
-            unsafe { win_init(win, oldwin, 0) };
+            win_init(win, oldwin, 0);
             win.w_onebuf_opt.wo_scb = 0;
             win.w_onebuf_opt.wo_crb = 0;
         }
@@ -396,7 +394,7 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     }
 }
 
-pub unsafe fn win_free_grid(window: Win, reinit: bool) {
+pub fn win_free_grid(window: Win, reinit: bool) {
     free_grid(window, reinit);
 }
 

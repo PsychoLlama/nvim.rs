@@ -212,7 +212,7 @@ impl Tree {
         let mut itr = zeroed_iter();
         let mut pair: MTPair = unsafe { std::mem::zeroed() };
         let mut ids = Vec::new();
-        if unsafe { marktree_itr_get_overlap(&mut self.tree, row, col, &mut itr) } {
+        if marktree_itr_get_overlap(&mut self.tree, row, col, &mut itr) {
             while unsafe { marktree_itr_step_overlap(&mut self.tree, &mut itr, &mut pair) } {
                 ids.push(pair.start.id);
             }
@@ -296,7 +296,7 @@ impl Tree {
                     id: k.id,
                     row: k.pos.row,
                     col: k.pos.col,
-                    right: unsafe { mt_right_test(k) },
+                    right: mt_right_test(k),
                 });
                 order.push(k.id);
                 if !unsafe { marktree_itr_next(&mut self.tree, &mut itr) } {

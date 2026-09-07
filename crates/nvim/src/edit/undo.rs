@@ -76,12 +76,10 @@ unsafe fn start_arrow_common(end_insert_pos: *mut Pos, end_change: bool) {
 ///
 /// It may be skipped again, so the line number is cleared first.
 pub(crate) fn check_spell_redraw() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     if spell_redraw_lnum.get() != 0 {
         let lnum = spell_redraw_lnum.get();
         spell_redraw_lnum.set(0);
-        unsafe { redraw_win_line(Win::current(), lnum) };
+        redraw_win_line(Win::current(), lnum);
     }
 }
 
@@ -121,7 +119,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
     }
 
     // Always open a fold at the cursor line when inserting something.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
 
     if arrow_used.get() || ins_need_undo.get() {
         Err(Failed)
@@ -242,7 +240,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
             // `<C-S-Right>` may have started Visual mode; adjust its
             // position for the characters just deleted.
             if visual_active() {
-                unsafe { check_visual_pos() };
+                check_visual_pos();
             }
         }
     }
@@ -269,8 +267,6 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
 pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     let tick = buf_get_changedtick(Buf::current());
     let none = ::core::ptr::null_mut();
     let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) } as c_int;

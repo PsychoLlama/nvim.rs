@@ -319,8 +319,7 @@ pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *
             // empty line `MlFlags::EMPTY` stands for.
             let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
         }
-        // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buffer, 1 as LineNr, line_count) };
+        deleted_lines_buf(buffer, 1 as LineNr, line_count);
     }
     term.old_height = 1;
     raw
@@ -526,8 +525,7 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
         && !buf.terminal.is_null()
     {
         let last = buf.line_count();
-        // SAFETY: a live buffer and a line of it.
-        unsafe { redraw_buf_line_later(buf, last, false) };
+        redraw_buf_line_later(buf, last, false);
     }
 }
 

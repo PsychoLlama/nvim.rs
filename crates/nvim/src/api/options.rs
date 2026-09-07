@@ -285,7 +285,7 @@ unsafe fn wipe_ft_buf(mut buffer: Buf) {
     // after each step that can delete it.
     unsafe { block_autocmds() };
     let bufref = BufRef::of(buffer);
-    unsafe { close_windows(buffer, false) };
+    close_windows(buffer, false);
     if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows == 0 {
         wipe_buffer(buffer, false);
     }

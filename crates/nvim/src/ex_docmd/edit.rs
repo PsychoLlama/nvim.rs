@@ -153,7 +153,7 @@ pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
 
     if Win::current().w_onebuf_opt.wo_scb != 0 {
         did_syncbind.set(true);
-        unsafe { checkpcmark() };
+        checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
         if old_linenr != Win::current().w_cursor.lnum {
             let ctrl_o: [c_char; 2] = [Ctrl_O as c_char, 0];
@@ -498,7 +498,7 @@ pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
     };
     let mut count = 0;
     let mut uhp = ::core::ptr::null_mut();
-    for header in unsafe { header_chain(Buf::current(), start, |uh| uh.uh_next) } {
+    for header in header_chain(Buf::current(), start, |uh| uh.uh_next) {
         if header.uh_seq as LineNr <= step {
             uhp = header.raw();
             break;
@@ -609,13 +609,13 @@ pub(crate) unsafe fn ex_mark(args: *mut ExArg) {
 
 /// Put the cursor and the window back in agreement after a command that
 /// moved either.
-pub unsafe fn update_topline_cursor() {
+pub fn update_topline_cursor() {
     check_cursor(Win::current());
     update_topline(Win::current());
     if Win::current().w_onebuf_opt.wo_wrap == 0 {
         validate_cursor(Win::current());
     }
-    unsafe { update_curswant() };
+    update_curswant();
 }
 
 /// Save the state `:normal` is about to disturb.
@@ -708,7 +708,7 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
             }
         }
     }
-    unsafe { update_topline_cursor() };
+    update_topline_cursor();
     unsafe { restore_current_state(&raw mut save_state) };
     drop(busy);
     setmouse();
@@ -829,7 +829,7 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
         } && c != Ctrl_C)
         && !got_int.get()
     {
-        unsafe { update_topline_cursor() };
+        update_topline_cursor();
         unsafe { normal_cmd(&raw mut oa, true) };
     }
 }
@@ -837,7 +837,7 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 /// `:fold`.
 pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    if unsafe { fold_manual_allowed(true) } != 0 {
+    if fold_manual_allowed(true) != 0 {
         unsafe { fold_create(Win::current(), range_start(args), range_end(args)) };
     }
 }
@@ -845,15 +845,13 @@ pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
 /// `:foldopen` and `:foldclose`.
 pub(crate) unsafe fn ex_foldopen(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    unsafe {
-        op_fold_range(
-            range_start(args),
-            range_end(args),
-            (args.cmdidx == CmdIdx::foldopen) as c_int,
-            args.forceit,
-            false,
-        )
-    };
+    op_fold_range(
+        range_start(args),
+        range_end(args),
+        (args.cmdidx == CmdIdx::foldopen) as c_int,
+        args.forceit,
+        false,
+    );
 }
 
 /// The range's first line, as a position in column 1.

@@ -323,7 +323,7 @@ pub unsafe fn marktree_put_test(
 }
 
 /// `mt_right` where the unit suite can reach it.
-pub unsafe fn mt_right_test(key: MTKey) -> bool {
+pub fn mt_right_test(key: MTKey) -> bool {
     mt_right(key)
 }
 

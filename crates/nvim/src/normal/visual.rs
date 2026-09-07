@@ -265,7 +265,7 @@ pub(crate) fn end_visual_mode() {
         Win::current().w_cursor.coladd = 0;
     }
     may_clear_cmdline();
-    unsafe { adjust_cursor_eol() };
+    adjust_cursor_eol();
     unsafe { may_trigger_modechanged() };
 }
 
@@ -486,7 +486,7 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
 
     if visual_mode().is_char() {
         if resel_VIsual_line_count.get() <= 1 {
-            unsafe { update_curswant_force() };
+            update_curswant_force();
             let count0 = ca.count0;
             let extra = resel_VIsual_vcol.get().wrapping_mul(count0) as ColNr;
             Win::current().w_curswant = Win::current().w_curswant.wrapping_add(extra);
@@ -507,7 +507,7 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
         // there while 'curswant' is recomputed and comes back after.
         let lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = visual_anchor().lnum;
-        unsafe { update_curswant_force() };
+        update_curswant_force();
         Win::current().w_curswant = Win::current().w_curswant.wrapping_add(
             resel_VIsual_vcol
                 .get()
@@ -802,7 +802,7 @@ pub(crate) unsafe fn nv_object(cmd_arg: *mut CmdArg) {
     if !found {
         clear_op_beep(op);
     }
-    unsafe { adjust_cursor_col() };
+    adjust_cursor_col();
     Win::current().w_set_curswant = true;
 }
 

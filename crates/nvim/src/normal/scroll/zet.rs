@@ -68,7 +68,7 @@ pub(crate) unsafe fn nv_z_get_count(cmd_arg: *mut CmdArg, nchar_arg: *mut c_int)
     }
     let mut n = unsafe { *nchar_arg } - '0' as c_int;
     loop {
-        let nchar = unsafe { read_command_char() };
+        let nchar = read_command_char();
         if nchar == Key::Del.code() || nchar == Key::Kdel.code() {
             // Rubbing out a digit.
             n /= 10;
@@ -113,7 +113,7 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
     let mut undo = false;
     if nchar == 'u' as c_int {
-        nchar = unsafe { read_command_char() };
+        nchar = read_command_char();
         if unsafe { vim_strchr(c"gGwW".as_ptr(), nchar) }.is_null() {
             clear_op_beep(ca.op());
             return Ok(());
@@ -187,13 +187,12 @@ unsafe fn scroll_sideways(cmd_arg: *mut CmdArg, right: bool) {
     } else {
         win.w_leftcol - ca.count1
     };
-    unsafe { set_leftcol(target) };
+    set_leftcol(target);
 }
 
 /// `zs` and `ze`: scroll sideways until the cursor is at the left or right
 /// edge, keeping 'sidescrolloff' columns of context.
-unsafe fn scroll_cursor_to_edge(to_left: bool) {
-    // SAFETY (throughout): reads and scrolls the current window.
+fn scroll_cursor_to_edge(to_left: bool) {
     let mut win = Win::current();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
@@ -239,7 +238,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
         // `zf`/`zF`: create a fold. `zF` folds `count1` lines, which is
         // the operator applied to itself.
         Ok(b'F' | b'f') => {
-            if unsafe { fold_manual_allowed(true) } != 0 {
+            if fold_manual_allowed(true) != 0 {
                 ca.nchar = 'f' as c_int;
                 unsafe { nv_operator(cmd_arg) };
                 win.w_onebuf_opt.wo_fen = 1;
@@ -253,7 +252,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
         }
         // `zd`/`zD`: delete a fold, recursively for `zD`.
         Ok(b'd' | b'D') => {
-            if unsafe { fold_manual_allowed(false) } != 0 {
+            if fold_manual_allowed(false) != 0 {
                 if visual_active() {
                     unsafe { nv_operator(cmd_arg) };
                 } else {
@@ -290,9 +289,9 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
         }
         Ok(b'A') => {
             if in_fold() {
-                unsafe { open_fold_recurse(win.w_cursor) };
+                open_fold_recurse(win.w_cursor);
             } else {
-                unsafe { close_fold_recurse(win.w_cursor) };
+                close_fold_recurse(win.w_cursor);
                 win.w_onebuf_opt.wo_fen = 1;
             }
         }
@@ -308,7 +307,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
             if visual_active() {
                 unsafe { nv_operator(cmd_arg) };
             } else {
-                unsafe { open_fold_recurse(win.w_cursor) };
+                open_fold_recurse(win.w_cursor);
             }
         }
         // `zc`/`zC`: close. Closing always turns 'foldenable' back on --
@@ -325,18 +324,18 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
             if visual_active() {
                 unsafe { nv_operator(cmd_arg) };
             } else {
-                unsafe { close_fold_recurse(win.w_cursor) };
+                close_fold_recurse(win.w_cursor);
             }
             win.w_onebuf_opt.wo_fen = 1;
         }
         // `zv`: open just enough to see the cursor line.
-        Ok(b'v') => unsafe { fold_open_cursor() },
+        Ok(b'v') => fold_open_cursor(),
         // `zx`/`zX`: recompute the folds. `zx` also reopens to the cursor.
         Ok(b'x') => {
             win.w_onebuf_opt.wo_fen = 1;
             win.w_foldinvalid = true;
-            unsafe { new_fold_level() };
-            unsafe { fold_open_cursor() };
+            new_fold_level();
+            fold_open_cursor();
         }
         Ok(b'X') => {
             win.w_onebuf_opt.wo_fen = 1;
@@ -485,11 +484,11 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
                 None
             }
             Ok(b's') => {
-                unsafe { scroll_cursor_to_edge(true) };
+                scroll_cursor_to_edge(true);
                 None
             }
             Ok(b'e') => {
-                unsafe { scroll_cursor_to_edge(false) };
+                scroll_cursor_to_edge(false);
                 None
             }
             // `zp`/`zP`: put a blockwise register without widening the
@@ -536,7 +535,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
             Place::Bottom => scroll_cursor_bot(win, 0, true),
         }
         redraw_later(win, UPD_VALID);
-        unsafe { set_fraction(win) };
+        set_fraction(win);
     }
 
     if old_fen != win.w_onebuf_opt.wo_fen {
@@ -553,7 +552,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
         changed_window_setting(win);
     }
     if old_fdl as OptInt != win.w_onebuf_opt.wo_fdl {
-        unsafe { new_fold_level() };
+        new_fold_level();
     }
 }
 

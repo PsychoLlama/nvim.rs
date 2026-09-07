@@ -133,8 +133,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
 
     // Only redraw when the added lines are visible, to avoid flicker.
     if qf_find_win(qi).is_some_and(|win| old_line_count < win.w_botline) {
-        // SAFETY: a live buffer.
-        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+        redraw_buf_later(buf, UPD_NOT_VALID);
     }
 
     // Always called after incr_quickfix_busy().
@@ -324,15 +323,12 @@ unsafe fn clear_qf_buffer() -> bool {
             return false;
         }
     }
-    // SAFETY: the closure only writes a field of each window it is handed.
-    unsafe {
-        find_tab_win(|mut wp| {
-            if wp.w_buffer == Buf::current_raw() {
-                wp.w_skipcol = 0;
-            }
-            false
-        })
-    };
+    find_tab_win(|mut wp| {
+        if wp.w_buffer == Buf::current_raw() {
+            wp.w_skipcol = 0;
+        }
+        false
+    });
     u_clearallandblockfree(Buf::current());
     true
 }
@@ -386,12 +382,9 @@ fn splice(buffer: Buf, at: &Splice) {
     let (orow, ocol, obytes) = at.old;
     let (nrow, ncol, nbytes) = at.new;
     let undo = kExtmarkNoUndo;
-    // SAFETY: `buffer` is the quickfix window's buffer, live for the call.
-    unsafe {
-        extmark_splice(
-            buffer, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
-        )
-    };
+    extmark_splice(
+        buffer, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
+    );
 }
 
 /// Fill the quickfix buffer with the list, replacing what it held.

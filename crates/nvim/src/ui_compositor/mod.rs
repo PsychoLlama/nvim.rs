@@ -143,9 +143,7 @@ pub fn ui_comp_init() {
     curgrid.set(Some(default_layer()));
 }
 
-/// # Safety
-/// The highlight tables must exist.
-pub unsafe fn ui_comp_syn_init() {
+pub fn ui_comp_syn_init() {
     dbghl_normal.set(syn_group(c"RedrawDebugNormal"));
     dbghl_clear.set(syn_group(c"RedrawDebugClear"));
     dbghl_composed.set(syn_group(c"RedrawDebugComposed"));

@@ -14,7 +14,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_range};
 use crate::kvec::Kvec;
 
-pub unsafe fn nvim_buf_del_extmark(
+pub fn nvim_buf_del_extmark(
     buf: BufferHandle,
     ns_id: Integer,
     id: Integer,
@@ -27,10 +27,10 @@ pub unsafe fn nvim_buf_del_extmark(
         error = err_bad_number(c"ns_id", ns_id);
         return false.reported(error);
     }
-    unsafe { extmark_del_id(b, ns_id as uint32_t, id as uint32_t) }.reported(error)
+    extmark_del_id(b, ns_id as uint32_t, id as uint32_t).reported(error)
 }
 
-pub unsafe fn nvim_buf_clear_namespace(
+pub fn nvim_buf_clear_namespace(
     buf: BufferHandle,
     ns_id: Integer,
     line_start: Integer,
@@ -55,8 +55,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     let start = line_start as ::core::ffi::c_int;
     let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     let maxcol = MAXCOL as ::core::ffi::c_int;
-    // SAFETY: `b` is the live buffer the handle named.
-    unsafe { extmark_clear(b, ns, start, 0 as ColNr, end, maxcol) };
+    extmark_clear(b, ns, start, 0 as ColNr, end, maxcol);
     ().reported(error)
 }
 
@@ -64,10 +63,10 @@ pub unsafe fn nvim_set_decoration_provider(
     ns_id: Integer,
     opts: *mut KeyDict_set_decoration_provider,
 ) {
-    let p: *mut DecorProvider = unsafe { get_decor_provider(ns_id as NS, true) };
+    let p: *mut DecorProvider = get_decor_provider(ns_id as NS, true);
     debug_assert!(!p.is_null(), "p != NULL");
     unsafe { decor_provider_clear(p) };
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
     let cbs: [DecorProviderCallback; 10] = [
         DecorProviderCallback {
             name: c"on_start".as_ptr(),

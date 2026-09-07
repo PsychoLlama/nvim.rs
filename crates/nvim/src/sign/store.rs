@@ -329,10 +329,8 @@ unsafe fn update_placements(name: *const c_char, def: SignRef) {
         if !did_redraw {
             for wp in windows() {
                 let buf = wp.buffer();
-                // SAFETY: a live window's buffer is live.
                 if buf_has_signs(buf) {
-                    // SAFETY: as above.
-                    unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+                    redraw_buf_later(buf, UPD_NOT_VALID);
                 }
             }
             did_redraw = true;

@@ -582,11 +582,7 @@ pub(crate) unsafe fn charsize_regular(
     }
 
     let mut mb_added = 0;
-    // SAFETY: `csarg`'s window is live.
-    if is_doublewidth
-        && wp.w_onebuf_opt.wo_wrap != 0
-        && unsafe { in_win_border(wp, vcol + size - 2) }
-    {
+    if is_doublewidth && wp.w_onebuf_opt.wo_wrap != 0 && in_win_border(wp, vcol + size - 2) {
         // Count the ">" in the last column.
         size += 1;
         mb_added = 1;
@@ -645,11 +641,10 @@ unsafe fn charsize_fast_impl(
 
     // A double-width char that does not fit at the end of a screen line
     // wraps to the next one, and the last column shows a '>'.
-    // SAFETY: the caller's window, on both sides of the `&&`.
     if width == 2
         && cur_char >= 0x80
         && window.w_onebuf_opt.wo_wrap != 0
-        && unsafe { in_win_border(window, vcol) }
+        && in_win_border(window, vcol)
     {
         CharSize { width: 3, head: 1 }
     } else {
@@ -720,19 +715,14 @@ pub(crate) unsafe fn charsize_nowrap(
 /// Takes the raw pointer rather than a [`Win`]: this is inlined into the
 /// per-character fast loop, and going through the wrapper there costs
 /// measurable throughput (F-P17-10).
-///
-/// # Safety
-/// `window` must be live.
 #[inline]
-unsafe fn in_win_border(window: Win, vcol: ColNr) -> bool {
-    // SAFETY: the caller's window.
+fn in_win_border(window: Win, vcol: ColNr) -> bool {
     let view_width = window.w_view_width;
     if view_width == 0 {
         // There is no border.
         return false;
     }
     // Width of the first screen line, after the line number.
-    // SAFETY: as above.
     let width1 = view_width - (window).col_off();
     if vcol < width1 - 1 {
         return false;
@@ -741,7 +731,6 @@ unsafe fn in_win_border(window: Win, vcol: ColNr) -> bool {
         return true;
     }
     // Width of the wrapped screen lines after it.
-    // SAFETY: as above.
     let width2 = width1 + win_col_off2(window);
     if width2 <= 0 {
         return false;

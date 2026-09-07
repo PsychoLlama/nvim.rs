@@ -403,12 +403,10 @@ impl VTermState {
     /// Makes one of the changes to the pen that are echoed to the consumer's
     /// raw `setpenattr` callback.
     pub(super) fn change_pen(&mut self, change: PenChange<'_>) {
-        // SAFETY: each takes this state machine, whose consumer table is
-        // what the pen is echoed through.
         match change {
-            PenChange::Sgr(args) => unsafe { apply_sgr(self, args) },
-            PenChange::Restore => unsafe { restore_pen(self) },
-            PenChange::Reset => unsafe { reset_pen(self) },
+            PenChange::Sgr(args) => apply_sgr(self, args),
+            PenChange::Restore => restore_pen(self),
+            PenChange::Reset => reset_pen(self),
         }
     }
 

@@ -57,7 +57,7 @@ pub(crate) unsafe fn qf_list_changed(qfl: *mut QfList) {
 
 /// Report that the list moved under a command that was in the middle of
 /// using it: E925 for a quickfix list, E926 for a location list.
-pub(crate) unsafe fn emsg_list_changed(qfl_type: QfListType) {
+pub(crate) fn emsg_list_changed(qfl_type: QfListType) {
     if qfl_type == QFLT_QUICKFIX {
         emsg(gettext(E_QUICKFIX_LIST_CHANGED));
     } else {
@@ -290,7 +290,6 @@ unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
 ///
 /// Both lists must be live, and `to_qfl` empty.
 unsafe fn copy_loclist_entries(from_qfl: *const QfList, to_qfl: *mut QfList) {
-    // SAFETY: forwarded from the caller.
     let mut i = 1;
     let mut from = unsafe { (*from_qfl).qf_start };
     while !got_int.get() && i <= unsafe { (*from_qfl).qf_count } && !from.is_null() {
@@ -383,7 +382,6 @@ pub(crate) unsafe fn copy_loclist(from_qfl: *mut QfList, to_qfl: *mut QfList) {
 ///
 /// `qfl` must be a live list.
 pub(crate) unsafe fn qf_free_items(qfl: *mut QfList) {
-    // SAFETY: forwarded from the caller.
     let mut stop = false;
     while unsafe { (*qfl).qf_count } != 0 && !unsafe { (*qfl).qf_start }.is_null() {
         let qfp = unsafe { (*qfl).qf_start };
@@ -453,7 +451,6 @@ pub fn qf_mark_adjust(
     amount: LineNr,
     amount_after: LineNr,
 ) -> bool {
-    // SAFETY: forwarded from the caller.
     let wanted = if window.is_none() {
         BUF_HAS_QF_ENTRY
     } else {

@@ -119,10 +119,8 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
         exitval += ex_exitval.get();
     }
 
-    // SAFETY: walks the tab pages, windows and buffers, each of which the
-    // autocommands below may free -- hence the `bufref` liveness checks.
-    unsafe { set_vim_var_type(Vv::Exiting, VAR_NUMBER) };
-    unsafe { set_vim_var_nr(Vv::Exiting, exitval as VarNumber) };
+    set_vim_var_type(Vv::Exiting, VAR_NUMBER);
+    set_vim_var_nr(Vv::Exiting, exitval as VarNumber);
 
     // `:restart` and friends set a reason of their own first.
     if unsafe { *get_vim_var_str(Vv::Exitreason) } as c_int == NUL {

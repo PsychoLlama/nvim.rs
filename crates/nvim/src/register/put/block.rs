@@ -120,7 +120,6 @@ impl Put {
     /// # Safety
     /// The cursor must be on a valid line.
     unsafe fn block_start_col(&self) -> ColNr {
-        // SAFETY: the cursor is on a valid line.
         let c = gchar_cursor();
         let mut col: ColNr;
         let mut endcol2: ColNr = 0;
@@ -277,11 +276,7 @@ impl Put {
         let buf = Buf::current();
         let at = Win::current().w_cursor.lnum - 1;
         let inserted = *totlen as c_int + lines_appended;
-        // SAFETY: a live buffer; `delcount` bytes came out at `textcol` and
-        // `inserted` went in there.
-        unsafe {
-            extmark_splice_cols(buf, at, land.textcol, land.delcount, inserted, kExtmarkUndo)
-        };
+        extmark_splice_cols(buf, at, land.textcol, land.delcount, inserted, kExtmarkUndo);
 
         Win::current().w_cursor.lnum += 1;
         if i == 0 {

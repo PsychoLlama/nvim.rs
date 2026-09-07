@@ -108,10 +108,10 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     if has_any_folding(win) != 0 {
         validate_cheight(win);
         if win.w_cline_folded {
-            unsafe { update_curswant_force() };
+            update_curswant_force();
         }
     }
-    unsafe { adjust_skipcol() };
+    adjust_skipcol();
 }
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
@@ -122,7 +122,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     win.w_curswant = MAXCOL as ColNr;
-    if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
+    if cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(ca.op());
         return;
     }
@@ -162,7 +162,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
                 i += ((win.w_virtcol - width1) / width2 + 1) * width2;
             }
             coladvance(win, i);
-            unsafe { update_curswant_force() };
+            update_curswant_force();
             // A character wider than one cell straddles the edge; step
             // back onto the last one that fits.
             if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 && win.w_virtcol > i {
@@ -174,7 +174,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
     } else {
         // Without 'wrap' the screen line is what 'sidescroll' left showing.
         if ca.count1 > 1 {
-            let _ = unsafe { cursor_down(ca.count1 - 1, false) };
+            let _ = cursor_down(ca.count1 - 1, false);
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
         coladvance(win, i);
@@ -184,7 +184,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
                 win.w_cursor.col -= 1;
             }
         }
-        unsafe { update_curswant_force() };
+        update_curswant_force();
     }
     if to_last_non_blank {
         while ascii_iswhite_or_nul(gchar_cursor()) && unsafe { oneleft() }.is_ok() {}
@@ -234,9 +234,9 @@ unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
         op.motion_type = kMTLineWise;
         let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
-            unsafe { cursor_down(ca.count1, stop_at_end).is_ok() }
+            cursor_down(ca.count1, stop_at_end).is_ok()
         } else {
-            unsafe { cursor_up(ca.count1 as LineNr, stop_at_end).is_ok() }
+            cursor_up(ca.count1 as LineNr, stop_at_end).is_ok()
         }
     } else {
         unsafe { nv_screengo(op.raw(), dir, ca.count1, false) }

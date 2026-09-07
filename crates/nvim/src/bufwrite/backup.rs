@@ -719,9 +719,9 @@ pub(crate) unsafe fn finish_write(
                 unsafe { os_setperm(wfname, target.perm) }; // may have changed
             }
         }
-        unsafe { buf_set_file_id(buffer) };
+        buf_set_file_id(buffer);
     } else if !buffer.file_id_valid {
-        unsafe { buf_set_file_id(buffer) }; // the file is new
+        buf_set_file_id(buffer); // the file is new
     }
 
     let error = unsafe { os_close(fd) };

@@ -155,8 +155,7 @@ pub unsafe fn nvim__get_runtime(
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { Live::new(opts) };
-    // SAFETY: the Lua state exists from startup to exit.
-    let deferred_safe = unsafe { nlua_is_deferred_safe() };
+    let deferred_safe = nlua_is_deferred_safe();
     if opts.do_source && !deferred_safe {
         error = Error::validation(c"'do_source' used in fast callback");
         return Array::EMPTY.reported(error);

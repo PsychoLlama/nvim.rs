@@ -150,7 +150,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
-    unsafe { decor_redraw_reset(window, decor) };
+    decor_redraw_reset(window, decor);
     unsafe { decor_providers_invoke_win(window, decor) };
 
     unsafe { add_suspended_terminal_note(Buf::new(buf), decor) };
@@ -172,7 +172,7 @@ pub(crate) unsafe fn win_update(window: Win) {
 
     unsafe { init_search_hl(window, SearchHl::current().raw()) };
 
-    unsafe { clamp_skipcol(window) };
+    clamp_skipcol(window);
 
     let nrwidth_before = win.w_nrwidth;
     let nrwidth_new = if win.w_onebuf_opt.wo_nu != 0
@@ -254,7 +254,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     win.w_old_topfill = win.w_topfill;
     win.w_old_botfill = win.w_botfill;
 
-    unsafe { send_win_extmarks(window) };
+    send_win_extmarks(window);
 
     unsafe { finish_botline(window, buf, old_botline, nrwidth_before) };
 
@@ -307,11 +307,7 @@ unsafe fn add_suspended_terminal_note(buffer: Buf, state: DecorStateRef) {
 ///
 /// It depends on the window width and on several options, any of which may have
 /// changed since it was set.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn clamp_skipcol(mut window: Win) {
-    // SAFETY: a live window.
+fn clamp_skipcol(mut window: Win) {
     if window.w_skipcol <= 0 || window.w_view_width <= window.col_off() {
         return;
     }
@@ -401,7 +397,7 @@ unsafe fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         }
     }
 
-    if rg.mod_top != 0 && unsafe { win_lines_concealed(win) } {
+    if rg.mod_top != 0 && win_lines_concealed(win) {
         unsafe { widen_over_folds(win, rg) };
     }
 
@@ -444,7 +440,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
             lnumb = unsafe { (*wl).wl_lnum };
             // A fold column may need updating on the next line as well
             // ("J" just above an open fold).
-            if unsafe { compute_foldcolumn(win, 0) } > 0 {
+            if compute_foldcolumn(win, 0) > 0 {
                 lnumb += 1;
             }
         }
@@ -484,7 +480,7 @@ unsafe fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
     while topline_conceal < buffer.b_ml.ml_line_count
-        && unsafe { decor_conceal_line(win, topline_conceal - 1, false) }
+        && decor_conceal_line(win, topline_conceal - 1, false)
     {
         topline_conceal += 1;
         has_folding(win, topline_conceal, None, Some(&mut topline_conceal));
@@ -534,11 +530,11 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
 
     // How many lines the window is off by, counting a run of folded lines
     // as one and skipping concealed ones.
-    let off = if unsafe { win_lines_concealed(win) } {
+    let off = if win_lines_concealed(win) {
         let mut count = 0;
         let mut ln = win.w_topline;
         while ln < first_lnum {
-            count += c_int::from(!unsafe { decor_conceal_line(win, ln - 1, false) });
+            count += c_int::from(!decor_conceal_line(win, ln - 1, false));
             if count >= win.w_view_height - 2 {
                 break;
             }
@@ -869,10 +865,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 
 /// Record the Visual selection this redraw drew, so the next one can tell what
 /// moved.
-///
-/// # Safety
-/// `window` must be a live window and `buffer` its buffer.
-unsafe fn remember_visual_area(mut window: Win, buffer: Buf) {
+fn remember_visual_area(mut window: Win, buffer: Buf) {
     if let Some(sel) = visual_selection().filter(|_| buffer == Win::current().buffer()) {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
         window.w_old_cursor_lnum = Win::current().w_cursor.lnum;
@@ -888,11 +881,7 @@ unsafe fn remember_visual_area(mut window: Win, buffer: Buf) {
 }
 
 /// Report the `ui_watched` extmarks this redraw passed to the UI.
-///
-/// # Safety
-/// `window` must be the window that was just drawn.
-unsafe fn send_win_extmarks(window: Win) {
-    // SAFETY: the caller's window; the list is filled by this redraw only.
+fn send_win_extmarks(window: Win) {
     win_extmark_arr.with(|marks| {
         for m in marks {
             ui_call_win_extmark(

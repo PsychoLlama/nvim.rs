@@ -392,7 +392,7 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
     let n =
         unsafe { (*Win::current().w_alist).al_ga.len() as c_int } - Win::current().w_arg_idx - 1;
     if forceit
-        || !unsafe { only_one_window() }
+        || !only_one_window()
         || unsafe { (*Win::current().w_alist).al_ga.len() as c_int } <= 1
         || arg_had_last.get()
         || n <= 0

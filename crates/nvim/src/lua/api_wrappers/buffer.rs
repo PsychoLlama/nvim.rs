@@ -331,7 +331,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_delete(lstate: *mut lua_State)
             err_param,
         } = call;
         // SAFETY: as above.
-        if unsafe { text_locked() } {
+        if text_locked() {
             text_locked_error(err);
             return;
         }
@@ -386,8 +386,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_changedtick(lstate: *mut l
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_get_changedtick(arg_1) } {
+        let ret = match nvim_buf_get_changedtick(arg_1) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;
@@ -830,8 +829,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_is_loaded(lstate: *mut lua_Sta
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_buf_is_loaded(arg_1) };
+        let ret = nvim_buf_is_loaded(arg_1);
         // SAFETY: as above.
         unsafe { nlua_push_boolean(lstate, ret, PUSH_SPECIAL) };
     }
@@ -868,8 +866,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_is_valid(lstate: *mut lua_Stat
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_buf_is_valid(arg_1) };
+        let ret = nvim_buf_is_valid(arg_1);
         // SAFETY: as above.
         unsafe { nlua_push_boolean(lstate, ret, PUSH_SPECIAL) };
     }
@@ -906,8 +903,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_line_count(lstate: *mut lua_St
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_line_count(arg_1) } {
+        let ret = match nvim_buf_line_count(arg_1) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

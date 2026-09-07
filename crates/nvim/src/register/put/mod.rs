@@ -153,7 +153,6 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
     // `".p` restores it.
     if command_start_char == 'a' as c_int {
         let lnum = Win::current().w_cursor.lnum;
-        // SAFETY: the cursor is on a valid line.
         let _ = u_save(lnum, lnum + 1);
     }
 }
@@ -275,8 +274,7 @@ impl Put {
         self.dir = FORWARD;
 
         let lnum = Win::current().w_cursor.lnum;
-        // SAFETY: a live buffer, in which one line just became two.
-        unsafe { buf_updates_send_changes(Buf::current(), lnum, 1, 1) };
+        buf_updates_send_changes(Buf::current(), lnum, 1, 1);
         true
     }
 
@@ -343,7 +341,7 @@ impl Put {
         // SAFETY (all through): the cursor is on a valid line, which is the
         // line every one of these reads, measures or moves within.
         if gchar_cursor() == TAB {
-            let viscol = unsafe { getviscol() };
+            let viscol = getviscol();
             let ts = Buf::current().b_p_ts;
             // No spaces needed for `p` on the last position of a tab, or
             // `P` on the first.
@@ -359,7 +357,7 @@ impl Put {
                 Win::current().w_cursor.coladd = 0;
             }
         } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL {
-            let to = unsafe { getviscol() } + c_int::from(self.dir == FORWARD);
+            let to = getviscol() + c_int::from(self.dir == FORWARD);
             unsafe { coladvance_force(to) };
         }
     }
@@ -387,7 +385,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
 
     // Remove any preinserted completion text (vim/vim#19329).
     // SAFETY: main thread; the completion state is its own.
-    if unsafe { ins_compl_preinsert_effect() } {
+    if ins_compl_preinsert_effect() {
         // SAFETY: as above.
         unsafe { ins_compl_delete(false) };
     }
@@ -419,7 +417,6 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         // Saving for undo can run autocommands, which would invalidate
         // `y_array`, so it happens before the register is read.
         let lnum = Win::current().w_cursor.lnum;
-        // SAFETY: the cursor is on a valid line.
         if u_save(lnum, lnum + 1).is_err() {
             return;
         }
@@ -498,8 +495,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         }
 
         if put.y_size == 0 || put.y_array.is_null() {
-            // SAFETY: `transchar` answers its own NUL-terminated buffer.
-            let display = unsafe { transchar(regname) };
+            let display = transchar(regname);
             let mut name = c"\"".as_ptr();
             if regname != 0 {
                 name = display.as_ptr();
@@ -589,6 +585,5 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         set_visual_active(false);
     }
 
-    // SAFETY: the cursor is on a line of the current buffer.
-    unsafe { adjust_cursor_eol() };
+    adjust_cursor_eol();
 }

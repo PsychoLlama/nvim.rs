@@ -78,7 +78,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
         Win::current().w_cursor.lnum -= 1;
     }
     // The cursor line must not be in a closed fold.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
 
     if op.line_count as OptInt > p_report.get() {
         // Two plural forms, nested: "line"/"lines" on the line count and

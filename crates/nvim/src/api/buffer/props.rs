@@ -26,7 +26,7 @@ pub unsafe fn nvim_buf_get_var(
     unsafe { dict_get_value(b.b_vars, name, arena, &mut error) }.reported(error)
 }
 
-pub unsafe fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
+pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (-1 as Integer).reported(error);
@@ -158,7 +158,7 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
     ().reported(error)
 }
 
-pub unsafe fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
+pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     let mut stub: Error = Error::none();
     let b = find_buffer_by_handle(buf, &mut stub);
     stub.clear();
@@ -196,7 +196,7 @@ pub unsafe fn nvim_buf_delete(
     ().reported(error)
 }
 
-pub unsafe fn nvim_buf_is_valid(buf: BufferHandle) -> Boolean {
+pub fn nvim_buf_is_valid(buf: BufferHandle) -> Boolean {
     let mut stub: Error = Error::none();
     let ret: Boolean = find_buffer_by_handle(buf, &mut stub).is_some();
     stub.clear();

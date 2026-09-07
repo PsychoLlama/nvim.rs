@@ -262,7 +262,7 @@ unsafe fn resolve_command(
     }
 
     // SAFETY: `ea.cmdidx` came out of `find_ex_command`.
-    if !range_only && unsafe { is_cmd_ni(ea.cmdidx) } {
+    if !range_only && is_cmd_ni(ea.cmdidx) {
         // SAFETY: `cmdname` is the caller's NUL-terminated name.
         let name = unsafe { c_str(cmdname) };
         *err = api_error!(kErrorTypeValidation, "Command not implemented: {name}");
@@ -292,8 +292,7 @@ unsafe fn resolve_command(
         ea.argt = ExArgt::RANGE | ExArgt::SBOXOK;
     } else if !is_user_cmd(ea.cmdidx) {
         // A user command's flags already came out of `find_ex_command`.
-        // SAFETY: `ea.cmdidx` is a valid index, checked just above.
-        ea.argt = unsafe { excmd_get_argt(ea.cmdidx) };
+        ea.argt = excmd_get_argt(ea.cmdidx);
     }
 
     Some(range_only)

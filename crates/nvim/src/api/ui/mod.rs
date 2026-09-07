@@ -437,8 +437,7 @@ unsafe fn ui_set_option(
     let named = |want: &CStr| unsafe { strequal(name.data(), want.as_ptr()) };
 
     if named(c"override") {
-        // SAFETY: the caller's promise about `err`; the name is static.
-        let Some(on) = (unsafe { want_boolean(err, c"override", value) }) else {
+        let Some(on) = want_boolean(err, c"override", value) else {
             return;
         };
         // Asks for the highest capabilities any UI requested rather
@@ -448,8 +447,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"rgb") {
-        // SAFETY: as above.
-        let Some(on) = (unsafe { want_boolean(err, c"rgb", value) }) else {
+        let Some(on) = want_boolean(err, c"rgb", value) else {
             return;
         };
         ui.rgb = on;
@@ -463,8 +461,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"term_name") {
-        // SAFETY: as above.
-        let Some(term) = (unsafe { want_string(err, c"term_name", value) }) else {
+        let Some(term) = want_string(err, c"term_name", value) else {
             return;
         };
         // 'term' is global, so the last UI to say what terminal it is
@@ -478,8 +475,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"term_colors") {
-        // SAFETY: as above.
-        let Some(colors) = (unsafe { want_integer(err, c"term_colors", value) }) else {
+        let Some(colors) = want_integer(err, c"term_colors", value) else {
             return;
         };
         t_colors.set(colors as c_int);
@@ -488,8 +484,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"stdin_fd") {
-        // SAFETY: as above.
-        let Some(fd) = (unsafe { want_integer(err, c"stdin_fd", value) }) else {
+        let Some(fd) = want_integer(err, c"stdin_fd", value) else {
             return;
         };
         if fd < 0 {
@@ -507,8 +502,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"stdin_tty") {
-        // SAFETY: as above.
-        let Some(tty) = (unsafe { want_boolean(err, c"stdin_tty", value) }) else {
+        let Some(tty) = want_boolean(err, c"stdin_tty", value) else {
             return;
         };
         // Only the stdio channel is talking about the editor's own
@@ -521,8 +515,7 @@ unsafe fn ui_set_option(
     }
 
     if named(c"stdout_tty") {
-        // SAFETY: as above.
-        let Some(tty) = (unsafe { want_boolean(err, c"stdout_tty", value) }) else {
+        let Some(tty) = want_boolean(err, c"stdout_tty", value) else {
             return;
         };
         if ui.channel_id == CHAN_STDIO {
@@ -567,11 +560,7 @@ unsafe fn ui_set_option(
 
 /// `value` as the boolean `name` takes, or `None` with `err` set to say
 /// what arrived instead.
-///
-/// # Safety
-///
-/// `name` must be a C string.
-unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
+fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
     let got = value.as_boolean();
     if got.is_none() {
         wrong_type(err, name, kObjectTypeBoolean, value);
@@ -580,11 +569,7 @@ unsafe fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Bo
 }
 
 /// [`want_boolean`] for an integer.
-///
-/// # Safety
-///
-/// As [`want_boolean`].
-unsafe fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<Integer> {
+fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<Integer> {
     let got = value.as_integer();
     if got.is_none() {
         wrong_type(err, name, kObjectTypeInteger, value);
@@ -593,11 +578,7 @@ unsafe fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<In
 }
 
 /// [`want_boolean`] for a string.
-///
-/// # Safety
-///
-/// As [`want_boolean`].
-unsafe fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<String_0> {
+fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<String_0> {
     let got = value.as_string();
     if got.is_none() {
         wrong_type(err, name, kObjectTypeString, value);

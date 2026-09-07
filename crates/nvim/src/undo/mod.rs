@@ -397,7 +397,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
             unsafe { u_freeheader(buf, oldest.raw(), &raw mut old_curhead) };
         } else {
             // The far end of the oldest header's alternate chain.
-            let far = unsafe { header_chain(buf, b.b_u_oldhead, |uh| uh.uh_alt_next) }.last();
+            let far = header_chain(buf, b.b_u_oldhead, |uh| uh.uh_alt_next).last();
             unsafe { u_freebranch(buf, far.unwrap_or(oldest).raw(), &raw mut old_curhead) };
         }
     }
@@ -435,7 +435,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
     uhp.uh_time = unsafe { time(ptr::null_mut()) };
     uhp.uh_cursor = Win::current().w_cursor;
     uhp.uh_cursor_vcol = if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
-        unsafe { getviscol() }
+        getviscol()
     } else {
         -1
     };

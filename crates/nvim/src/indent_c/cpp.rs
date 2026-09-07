@@ -301,10 +301,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> boo
         } else if let Some(word) = [&b"class"[..], &b"struct"[..]].into_iter().find(|word| {
             // SAFETY: `s` points inside a NUL-terminated line.
             let bytes = unsafe { CStr::from_ptr(s) }.to_bytes();
-            // SAFETY: `vim_is_ident_char` reads the 'isident' table, which is
-            // set up long before any buffer is indented.
-            bytes.starts_with(word)
-                && !unsafe { vim_is_ident_char(byte_at(bytes, word.len()).into()) }
+            bytes.starts_with(word) && !vim_is_ident_char(byte_at(bytes, word.len()).into())
         }) {
             class_or_struct = true;
             lookfor_ctor_init = false;
@@ -324,7 +321,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> boo
                 // Do not see the '() :' after a '?' as a constructor init.
                 return false;
             // SAFETY: `vim_is_ident_char` reads the 'isident' table.
-            } else if !unsafe { vim_is_ident_char(c_int::from(c)) } {
+            } else if !vim_is_ident_char(c_int::from(c)) {
                 // Not an identifier: we are wrong.
                 class_or_struct = false;
                 lookfor_ctor_init = false;

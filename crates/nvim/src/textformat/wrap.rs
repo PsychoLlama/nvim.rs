@@ -413,7 +413,7 @@ pub unsafe fn internal_format(
         let foundcol = search.foundcol;
 
         // The line is going to be broken; take any `$` off first.
-        unsafe { undisplay_dollar() };
+        undisplay_dollar();
 
         // The replace stack needs the offset between the cursor and the
         // break. MODE_VREPLACE does not use it -- it backspaces over the
@@ -444,7 +444,7 @@ pub unsafe fn internal_format(
             win.w_cursor.col = orig_col as ColNr;
             unsafe { *saved_text.offset(startcol as isize) = NUL as c_char };
             if !fo_white_par {
-                unsafe { backspace_until_column(foundcol) };
+                backspace_until_column(foundcol);
             }
         } else if !fo_white_par {
             // Put the cursor after the position to break at.

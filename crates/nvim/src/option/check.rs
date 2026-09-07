@@ -177,18 +177,13 @@ pub(crate) fn check_options() {
 
 /// Whether the option's current value was set from an untrusted place, so
 /// evaluating it has to run in the sandbox.
-///
-/// # Safety
-///
-/// `window` must be live for the options that keep their flag in a window.
-pub(crate) unsafe fn was_set_insecurely(
+pub(crate) fn was_set_insecurely(
     window: Win,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
-    // SAFETY: the caller's window is live.
-    unsafe { insecure_flag(Some(window), opt_idx, opt_flags).is_set() }
+    insecure_flag(Some(window), opt_idx, opt_flags).is_set()
 }
 
 /// Where an option's `kOptFlagInsecure` mark lives.
@@ -239,11 +234,7 @@ impl InsecureFlag {
 
 /// Which of the two homes above carries this option's mark, for the window
 /// the option is about to be used from.
-///
-/// # Safety
-///
-/// `window` must be live for the options that keep their own copy.
-pub(crate) unsafe fn insecure_flag(
+pub(crate) fn insecure_flag(
     window: Option<Win>,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
@@ -301,11 +292,7 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 
 /// Whether the window's grid has to be composed with what is under it —
 /// 'winblend', or a float with a shadow.
-///
-/// # Safety
-///
-/// `window` must be live.
-pub(crate) unsafe fn check_blending(mut window: Win) {
+pub(crate) fn check_blending(mut window: Win) {
     window.w_grid_alloc.blending =
         window.w_onebuf_opt.wo_winbl > 0 as OptInt || (window.w_floating && window.w_config.shadow);
 }
@@ -346,8 +333,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
         } else {
             // Reusing the namespace: bump the generation so attributes
             // cached against it are re-resolved.
-            // SAFETY: the window's own namespace, which the call registers.
-            let dp: *mut DecorProvider = unsafe { get_decor_provider(w.w_ns_hl_winhl as NS, true) };
+            let dp: *mut DecorProvider = get_decor_provider(w.w_ns_hl_winhl as NS, true);
             unsafe { (*dp).hl_valid += 1 };
         }
         ns_hl = w.w_ns_hl_winhl;
@@ -403,11 +389,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
 }
 
 /// Ask for whatever the option's redraw flags say has to be redrawn.
-///
-/// # Safety
-///
-/// `buffer` and `win` must be live.
-pub(crate) unsafe fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
+pub(crate) fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     if flags & kOptFlagRedrStat != 0 || all {
@@ -424,15 +406,14 @@ pub(crate) unsafe fn check_redraw_for(buffer: Buf, win: Win, flags: uint32_t) {
         }
     }
     if flags & kOptFlagRedrBuf != 0 {
-        unsafe { redraw_buf_later(buffer, UPD_NOT_VALID) };
+        redraw_buf_later(buffer, UPD_NOT_VALID);
     }
     if all {
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
     }
 }
 
 /// [`check_redraw_for`] for the current buffer and window.
 pub(crate) fn check_redraw(flags: uint32_t) {
-    // SAFETY: `curbuf`/`curwin` are live.
-    unsafe { check_redraw_for(Buf::current(), Win::current(), flags) }
+    check_redraw_for(Buf::current(), Win::current(), flags)
 }

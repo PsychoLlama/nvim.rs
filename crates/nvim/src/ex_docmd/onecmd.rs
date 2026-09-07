@@ -107,7 +107,7 @@ pub(crate) fn ex_func_is(func: ExFunc, f: unsafe fn(*mut ExArg)) -> bool {
 }
 
 /// Is this a command the build knows the name of but cannot run?
-pub unsafe fn is_cmd_ni(cmdidx: CmdIdx) -> bool {
+pub fn is_cmd_ni(cmdidx: CmdIdx) -> bool {
     !is_user_cmd(cmdidx)
         && (ex_func_is(cmdnames[cmdidx.index()].cmd_func, ex_ni)
             || ex_func_is(cmdnames[cmdidx.index()].cmd_func, ex_script_ni))
@@ -237,7 +237,7 @@ pub(crate) unsafe fn do_one_cmd(
         if unsafe { mods.parse(&raw mut ea, &mut errormsg) }.is_err() {
             break 'doend;
         }
-        unsafe { mods.apply() };
+        mods.apply();
         after_modifier = ea.cmd;
 
         ea.skip = (did_emsg.get() != 0
@@ -348,7 +348,7 @@ pub(crate) unsafe fn do_one_cmd(
 
         // Not implemented in this build: the argument checks below are
         // relaxed, because there is nothing to check them against.
-        let ni = unsafe { is_cmd_ni(ea.cmdidx) };
+        let ni = is_cmd_ni(ea.cmdidx);
 
         ea.forceit = unsafe { parse_bang(Ea::new(&raw mut ea), &raw mut p) } as c_int;
 
@@ -357,7 +357,7 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if ea.skip == 0 {
-            if let Some(msg) = unsafe { refuses_here(&ea) } {
+            if let Some(msg) = refuses_here(&ea) {
                 errormsg = Some(msg);
                 break 'doend;
             }
@@ -678,7 +678,7 @@ pub(crate) unsafe fn profile_cmd(
 /// The three "this command is not allowed here" checks that share an exit.
 ///
 /// Answers the message to report, or `None` when the command may run.
-unsafe fn refuses_here(ea: &ExArg) -> Option<CString> {
+fn refuses_here(ea: &ExArg) -> Option<CString> {
     if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
         return Some(ex_msg(e_sandbox.as_ptr()));
     }
@@ -694,7 +694,7 @@ unsafe fn refuses_here(ea: &ExArg) -> Option<CString> {
         if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
             return Some(ex_msg(e_cmdwin.as_ptr()));
         }
-        if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
+        if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
             return Some(ex_msg(get_text_locked_msg().as_ptr()));
         }
     }
@@ -804,8 +804,7 @@ pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
 
 /// `curbuf_locked()` as checked code.
 fn curbuf_locked() -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_getln::curbuf_locked() }
+    crate::ex_getln::curbuf_locked()
 }
 
 /// `ex_msg()` as checked code.

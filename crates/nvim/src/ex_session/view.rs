@@ -297,20 +297,16 @@ unsafe fn put_cursor(out: SessionFile, window: Win) -> bool {
             (width / 2) as int64_t,
             width as int64_t,
             virtcol + 1,
-        )) && unsafe { put_view_curpos(out, window, "  ") }
+        )) && put_view_curpos(out, window, "  ")
             && out.line(c"endif");
     }
-    unsafe { put_view_curpos(out, window, "") }
+    put_view_curpos(out, window, "")
 }
 
 /// The `normal!` command that puts the cursor on its column. `$` when the
 /// cursor was at end-of-line ('curswant' is `MAXCOL`), otherwise the virtual
 /// column, one-based.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_view_curpos(out: SessionFile, window: Win, spaces: &str) -> bool {
-    // SAFETY: caller contract.
+fn put_view_curpos(out: SessionFile, window: Win, spaces: &str) -> bool {
     if window.w_curswant == MAXCOL {
         out.write(format_args!("{spaces}normal! $\n"))
     } else {

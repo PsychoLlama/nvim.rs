@@ -265,19 +265,17 @@ pub(crate) unsafe fn ex_digraphs(args: *mut ExArg) {
 }
 
 /// Set 'no_hlsearch', keeping `v:hlsearch` in step.
-pub unsafe fn set_no_hlsearch(flag: bool) {
+pub fn set_no_hlsearch(flag: bool) {
     no_hlsearch.set(flag);
-    unsafe {
-        set_vim_var_nr(
-            Vv::Hlsearch,
-            (!no_hlsearch.get() && p_hls.get() != 0) as VarNumber,
-        )
-    };
+    set_vim_var_nr(
+        Vv::Hlsearch,
+        (!no_hlsearch.get() && p_hls.get() != 0) as VarNumber,
+    );
 }
 
 /// `:nohlsearch`.
 pub(crate) unsafe fn ex_nohlsearch(_args: *mut ExArg) {
-    unsafe { set_no_hlsearch(true) };
+    set_no_hlsearch(true);
     redraw_all_later(UPD_SOME_VALID);
 }
 
@@ -305,8 +303,7 @@ fn msg(s: *const c_char, hl_id: c_int) -> bool {
 
 /// `redraw_all_later()` as checked code.
 fn redraw_all_later(redr_type: c_int) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::drawscreen::redraw_all_later(redr_type) }
+    crate::drawscreen::redraw_all_later(redr_type)
 }
 
 /// `skipwhite()` as checked code.

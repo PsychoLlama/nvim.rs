@@ -97,8 +97,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
         return;
     };
-    // SAFETY: module contract.
-    if !unsafe { leave_winfixbuf(list, forceit) } {
+    if !leave_winfixbuf(list, forceit) {
         return;
     }
 
@@ -141,10 +140,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
 /// A walk that changes buffers cannot start in a 'winfixbuf' window: move to
 /// one without it, splitting if there is none. Answers false when the
 /// command must not run at all.
-///
-/// # Safety
-/// Module contract.
-unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
+fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
     if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return true;
@@ -155,7 +151,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
         return false;
     }
     if let Some(prev) = prev_window().filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0) {
-        unsafe { win_goto(prev) };
+        win_goto(prev);
     }
     if Win::current().w_onebuf_opt.wo_wfb != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
@@ -283,7 +279,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 };
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
                 if execute {
-                    unsafe { win_goto(cur) };
+                    win_goto(cur);
                     if Win::current_raw() != cur.raw() {
                         // Something must be wrong.
                         break;

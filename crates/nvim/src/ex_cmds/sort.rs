@@ -525,9 +525,7 @@ unsafe fn collect_sort_keys(
     regmatch: &mut RegMatch,
 ) -> Option<Vec<SortLine>> {
     let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
-    // SAFETY: caller's contract -- the scan reads one line at a time and
-    // changes nothing.
-    let mut lines = unsafe { Lines::current() };
+    let mut lines = Lines::current();
 
     for lnum in line1..=line2 {
         let text = lines.line_mut(lnum);
@@ -606,9 +604,7 @@ unsafe fn append_sorted(
 
         // Copy the line out of the memline: `ml_append` may invalidate it,
         // and "unique" needs it next time round.
-        // SAFETY: caller's contract, and the handle dies before the append.
-        // Include the EOL in the byte length.
-        let bytelen = unsafe { current.fill_line(get_lnum) } as BCount + 1;
+        let bytelen = current.fill_line(get_lnum) as BCount + 1;
         placed.old_bytes += bytelen;
 
         // SAFETY: both scratch buffers are NUL-terminated.
@@ -734,21 +730,18 @@ unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Plac
     }
 
     if placed.moved || deleted != 0 {
-        // SAFETY: as above.
-        unsafe {
-            extmark_splice(
-                Buf::current(),
-                line1 - 1,
-                0,
-                count as c_int,
-                0,
-                placed.old_bytes,
-                lnum - line2,
-                0,
-                placed.new_bytes,
-                kExtmarkUndo,
-            )
-        };
+        extmark_splice(
+            Buf::current(),
+            line1 - 1,
+            0,
+            count as c_int,
+            0,
+            placed.old_bytes,
+            lnum - line2,
+            0,
+            placed.new_bytes,
+            kExtmarkUndo,
+        );
         changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
     }
 
@@ -871,7 +864,6 @@ unsafe fn uniq_range(args: &mut ExArg) {
     let mut deleted = 0;
 
     'uniqend: {
-        // SAFETY: `args.arg` is the command's own argument.
         let Some(order) =
             (unsafe { parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) })
         else {
@@ -893,7 +885,7 @@ unsafe fn uniq_range(args: &mut ExArg) {
             // SAFETY: `get_lnum` is a line of the current buffer, and the
             // handle dies before anything else touches the memline.
             {
-                let mut lines = unsafe { Lines::current() };
+                let mut lines = Lines::current();
                 let text = lines.line_mut(get_lnum);
                 // SAFETY: a buffer line is NUL-terminated past its last byte.
                 let (start, end) = unsafe { match_range(&mut regmatch, text, use_match) };
@@ -945,7 +937,6 @@ unsafe fn uniq_range(args: &mut ExArg) {
         };
         say::more(-deleted);
         if change_occurred {
-            // SAFETY: as above.
             changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);
         }
         Win::current().w_cursor.lnum = line1;

@@ -87,18 +87,15 @@ fn last_nofloat() -> Win {
 }
 
 fn enter_win(win: Win) {
-    // SAFETY: a live window.
-    unsafe { win_enter(win, false) };
+    win_enter(win, false);
 }
 
 fn close_win(win: Win, free_buf: bool) -> c_int {
-    // SAFETY: a live window.
-    unsafe { win_close(win, free_buf, false) }
+    win_close(win, free_buf, false)
 }
 
 fn move_win_after(win: Win, after: Win) {
-    // SAFETY: two live windows.
-    unsafe { win_move_after(win, after) };
+    win_move_after(win, after);
 }
 
 fn split_below_room() -> Result<(), Failed> {
@@ -106,8 +103,7 @@ fn split_below_room() -> Result<(), Failed> {
 }
 
 fn is_locked(win: Win) -> bool {
-    // SAFETY: a live window.
-    unsafe { win_locked(win) != 0 }
+    win_locked(win) != 0
 }
 
 /// Whether `win` is still in the window list.
@@ -120,7 +116,6 @@ fn is_valid(win: Win) -> bool {
 }
 
 fn is_aucmd(win: Win) -> bool {
-    // SAFETY: a live window.
     is_aucmd_win(win)
 }
 
@@ -137,7 +132,6 @@ fn global_stl_rows() -> c_int {
 }
 
 fn buf_changed(buffer: Buf) -> bool {
-    // SAFETY: a live buffer.
     buf_is_changed(buffer)
 }
 
@@ -159,8 +153,7 @@ fn get_key() {
 /// Make `buffer` the current buffer, as `:buffer` does.
 fn goto_buf(buffer: Buf) {
     let update_jumplist = jop_flags.get() & kOptJopFlagClean as c_int as u32 == 0;
-    // SAFETY: a live buffer.
-    unsafe { set_curbuf(buffer, DOBUF_GOTO as c_int, update_jumplist) };
+    set_curbuf(buffer, DOBUF_GOTO as c_int, update_jumplist);
 }
 
 /// The swap-file dialogue's aftermath, when the user did not choose Quit.

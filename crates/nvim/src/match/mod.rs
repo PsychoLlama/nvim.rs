@@ -94,7 +94,6 @@ unsafe fn match_add(
     pos_list: *mut List,
     conceal_char: *const c_char,
 ) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
@@ -181,7 +180,7 @@ unsafe fn match_add(
     if !pos_list.is_null() {
         match unsafe { fill_pos_array(m.raw(), pos_list) } {
             Some((toplnum, botlnum)) if toplnum != 0 => {
-                unsafe { redraw_win_range_later(window, toplnum, botlnum) };
+                redraw_win_range_later(window, toplnum, botlnum);
                 m.mit_toplnum = toplnum;
                 m.mit_botlnum = botlnum;
                 rtype = UPD_VALID;
@@ -326,8 +325,6 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
 /// # Safety
 /// `window` must be live.
 unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window.
     let mut rtype = UPD_SOME_VALID;
 
     if id < 1 {
@@ -395,8 +392,6 @@ pub(crate) unsafe fn clear_matches(mut window: Win) {
 /// # Safety
 /// `window` must be live.
 unsafe fn get_match(window: Win, id: c_int) -> *mut MatchItem {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    // SAFETY: the caller's window.
     let mut cur = window.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
         cur = unsafe { (*cur).mit_next };

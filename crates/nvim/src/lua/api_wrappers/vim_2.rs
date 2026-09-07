@@ -173,8 +173,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_current_buf(lstate: *mut lua_S
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) {
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_current_buf() };
+        let ret = nvim_get_current_buf();
         // SAFETY: as above.
         unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
     }
@@ -234,8 +233,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_current_tabpage(lstate: *mut l
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) {
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_current_tabpage() };
+        let ret = nvim_get_current_tabpage();
         // SAFETY: as above.
         unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
     }
@@ -261,8 +259,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_current_win(lstate: *mut lua_S
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) {
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_current_win() };
+        let ret = nvim_get_current_win();
         // SAFETY: as above.
         unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
     }

@@ -206,8 +206,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_clear_namespace(lstate: *mut l
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4) } {
+        if let Err(e) = nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4) {
             *err = e;
         }
     }
@@ -256,8 +255,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_extmark(lstate: *mut lua_S
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_del_extmark(arg_1, arg_2, arg_3) } {
+        let ret = match nvim_buf_del_extmark(arg_1, arg_2, arg_3) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

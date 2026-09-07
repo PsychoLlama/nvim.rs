@@ -408,7 +408,6 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
         return;
     }
     let mut win = Win::current();
-    // SAFETY: as above.
     set_topline(win, topline);
     // A remembered `skipcol` is dropped when the line it names is now folded
     // away or has become too short to reach — restoring it would scroll the
@@ -427,9 +426,7 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
     win.w_skipcol = if keep { skipcol } else { 0 };
 }
 
-/// # Safety
-/// `window` must be a live window.
-pub unsafe fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
+pub fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
     mark_view_make_at(window, pos)
 }
 
@@ -594,10 +591,7 @@ pub(crate) unsafe fn mark_check_line_bounds(
 /// Does not trigger "MarkSet" event.
 ///
 /// `buffer` — Buffer to clear marks in.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
+pub fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
     for mark in buffer.named_marks() {
         mark.clear(timestamp);
     }
@@ -616,9 +610,7 @@ pub unsafe fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
     buffer.b_changelistlen = 0;
 }
 
-/// # Safety
-/// `win` must be a live window.
-pub unsafe fn set_last_cursor(win: Win) {
+pub fn set_last_cursor(win: Win) {
     let Some(buf) = win.buffer_or_none() else {
         return;
     };

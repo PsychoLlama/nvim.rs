@@ -407,9 +407,7 @@ pub unsafe fn handle_nvim__id_float(
         wrong_type(error, 1, c"nvim__id_float", c"Float");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = unsafe { nvim__id_float(arg_1) };
+    let rv = nvim__id_float(arg_1);
     Object::Float(rv)
 }
 
@@ -627,9 +625,7 @@ pub unsafe fn handle_nvim__screenshot(
         wrong_type(error, 1, c"nvim__screenshot", c"String");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    unsafe { nvim__screenshot(arg_1) };
+    nvim__screenshot(arg_1);
     Object::Nil
 }
 
@@ -799,9 +795,7 @@ pub unsafe fn handle_nvim_create_buf(
         wrong_type(error, 2, c"nvim_create_buf", c"Boolean");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_create_buf(arg_1, arg_2) } {
+    let rv = match nvim_create_buf(arg_1, arg_2) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };

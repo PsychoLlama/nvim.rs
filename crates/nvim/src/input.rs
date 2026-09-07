@@ -84,11 +84,7 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
 /// Whether `key` is one [`get_keystroke`] swallows rather than returns: a
 /// modifier, the ignore key, or any mouse event other than a left click
 /// (which the "more" prompt uses).
-///
-/// # Safety
-/// Main-thread editor call (`is_mouse_key` reads the mouse state).
-unsafe fn is_swallowed_key(first: u8, key: c_int) -> bool {
-    // SAFETY: the caller's contract.
+fn is_swallowed_key(first: u8, key: c_int) -> bool {
     c_int::from(first) == KS_MODIFIER
         || key == Key::Ignore.code()
         || (is_mouse_key(key) && key != Key::Leftmouse.code())
@@ -171,8 +167,7 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
         }
 
         let key = key_unescape(buf[1], buf[2]);
-        // SAFETY: main-thread editor call.
-        if !unsafe { is_swallowed_key(buf[1], key) } {
+        if !is_swallowed_key(buf[1], key) {
             break key;
         }
         if c_int::from(buf[1]) == KS_MODIFIER {

@@ -90,7 +90,7 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
     let worth_reporting = sub_nsubs.get() as OptInt > p_report.get()
         && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report.get() < 1 as OptInt);
     // SAFETY: message state.
-    if (worth_reporting || count_only) && unsafe { messaging() } {
+    if (worth_reporting || count_only) && messaging() {
         let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
         let buf = scratch.as_mut_ptr();
         let forms = report_forms(count_only);

@@ -741,7 +741,7 @@ unsafe fn goto_match(
         // ":psearch" uses the preview window.
         if tagpreview != 0 {
             curwin_save = Some(Win::current().id());
-            unsafe { prepare_tagpreview(true) };
+            prepare_tagpreview(true);
         }
         if action == ACTION_SPLIT {
             if win_split(0, 0).is_err() {
@@ -793,7 +793,7 @@ unsafe fn goto_match(
         // Return the cursor to where it was.
         validate_cursor(Win::current());
         redraw_later(Win::current(), UPD_VALID);
-        unsafe { win_enter(saved, true) };
+        win_enter(saved, true);
     }
     After::Stop
 }

@@ -159,7 +159,6 @@ pub(crate) unsafe fn get_lval_dict_item(
         // SAFETY: the typval now holds the reference this takes.
         unsafe { (*container.dict_or_null()).dv_refcount.retain() };
     }
-    // SAFETY: as above.
     lval.ll_dict = container.dict_or_null();
     // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
     lval.ll_di = unsafe { tv_dict_find(lval.ll_dict, key, len as ptrdiff_t) };
@@ -286,14 +285,12 @@ pub(crate) unsafe fn get_lval_blob(
         unsafe { tv_get_number(var1) as c_int }
     };
     let n1 = lval.ll_n1 as VarNumber;
-    // SAFETY: the index is checked against the length measured above.
-    unsafe { tv_blob_check_index(bloblen, n1, quiet) }?;
+    tv_blob_check_index(bloblen, n1, quiet)?;
     if lval.ll_range && !lval.ll_empty2 {
         // SAFETY: `var2` is the caller's second index expression.
         lval.ll_n2 = unsafe { tv_get_number(var2) as c_int };
         let n2 = lval.ll_n2 as VarNumber;
-        // SAFETY: as above.
-        unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }?;
+        tv_blob_check_range(bloblen, n1, n2, quiet)?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
     lval.ll_blob = unsafe { Tv::new(lval.ll_tv).blob_or_null() };

@@ -264,11 +264,7 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 /// The short name is only usable when the working directory at the moment
 /// the session is sourced is known -- so not for a view, not under 'acd',
 /// and not once a `:lcd` has been written.
-///
-/// # Safety
-/// `buffer` is a live buffer.
-unsafe fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
-    // SAFETY: caller contract.
+fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
     if !buffer.b_sfname.is_null()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
@@ -285,8 +281,7 @@ unsafe fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
 /// # Safety
 /// `buffer` is a live buffer.
 unsafe fn ses_fname(out: SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
-    // SAFETY: caller contract.
-    let name = unsafe { ses_get_fname(buffer, opts) };
+    let name = ses_get_fname(buffer, opts);
     let put = unsafe { ses_put_fname(out, name) };
     put && (!add_eol || out.eol())
 }
@@ -363,10 +358,7 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullna
 /// Whether window `window` belongs in the session at all. A floating window
 /// never does (#18432); the rest is what 'sessionoptions' says about the
 /// kind of buffer it holds.
-///
-/// # Safety
-/// `window` is a live window.
-pub(crate) unsafe fn ses_do_win(win: Win) -> bool {
+pub(crate) fn ses_do_win(win: Win) -> bool {
     if win.w_floating {
         return false;
     }

@@ -182,8 +182,7 @@ pub unsafe fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
     // A window whose 'breakindentopt' asks for list indenting affects how
     // every other window's shared buffer wraps.
     if for_window.is_some() && wp.w_briopt_list != 0 {
-        // SAFETY: marks the editor's own windows.
-        unsafe { redraw_all_later(UPD_NOT_VALID) };
+        redraw_all_later(UPD_NOT_VALID);
     }
     None
 }
@@ -245,8 +244,7 @@ pub unsafe fn did_set_guicursor(_args: &mut OptSet) -> Option<&CStr> {
     }
     // The Visual-mode cursor shape is drawn as part of the line.
     if visual_active() {
-        // SAFETY: the current window is live.
-        unsafe { redraw_win_line(Win::current(), Win::current().w_cursor.lnum) };
+        redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
     }
     None
 }

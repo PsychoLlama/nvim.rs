@@ -68,15 +68,15 @@ pub unsafe fn nvim_buf_attach(
         cb.utf_sizes = opts.utf_sizes;
         cb.preview = opts.preview;
     }
-    unsafe { buf_updates_register(b, channel_id, cb, send_buffer) }.reported(error)
+    buf_updates_register(b, channel_id, cb, send_buffer).reported(error)
 }
 
-pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
+pub fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return false.reported(error);
     };
-    unsafe { buf_updates_unregister(b, channel_id) };
+    buf_updates_unregister(b, channel_id);
     true.reported(error)
 }
 

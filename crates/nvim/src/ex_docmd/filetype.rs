@@ -171,7 +171,7 @@ unsafe fn report_filetype_state() {
 
 /// Turn the filetype plugin and indent scripts on, unless they were
 /// explicitly turned off.
-pub unsafe fn filetype_plugin_enable() {
+pub fn filetype_plugin_enable() {
     if filetype_plugin.get().is_none() {
         let _ = source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_plugin.set(Some(true));
@@ -183,7 +183,7 @@ pub unsafe fn filetype_plugin_enable() {
 }
 
 /// The same for detection.
-pub unsafe fn filetype_maybe_enable() {
+pub fn filetype_maybe_enable() {
     if filetype_detect.get().is_none() {
         let _ = source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
         filetype_detect.set(Some(true));

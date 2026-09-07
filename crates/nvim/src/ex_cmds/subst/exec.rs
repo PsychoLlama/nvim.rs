@@ -591,7 +591,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         let num_added = (st.last_line - st.first_line) as int64_t;
         let num_removed = num_added - added as int64_t;
         let buffer = Buf::current();
-        unsafe { buf_updates_send_changes(buffer, st.first_line, num_added, num_removed) };
+        buf_updates_send_changes(buffer, st.first_line, num_added, num_removed);
     }
 
     // May have to free the allocated copy of the line.
@@ -668,7 +668,6 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the current window is live.
     if subflags.with(|flags| flags.do_ask) && has_any_folding(Win::current()) != 0 {
         // The cursor position may require updating.
-        // SAFETY: as above.
         changed_window_setting(Win::current());
     }
 
@@ -809,12 +808,8 @@ pub(crate) unsafe fn do_sub(
 
 /// Required for undo to work for extmarks: save the cursor line once, before
 /// the first change of the command.
-///
-/// # Safety
-/// Main thread; the cursor must be on a line of the buffer.
-pub(super) unsafe fn save_undo_once(st: &mut Sub) {
+pub(super) fn save_undo_once(st: &mut Sub) {
     if !st.did_save {
-        // SAFETY: caller's contract.
         let _ = u_save_cursor();
         st.did_save = true;
     }

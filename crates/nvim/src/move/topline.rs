@@ -292,10 +292,7 @@ fn check_top_offset(win: Win) -> bool {
 }
 
 /// Recompute `w_curswant` from the cursor's virtual column.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn update_curswant_force() {
+pub fn update_curswant_force() {
     let mut win = Win::current();
     win.validate_virtcol();
     win.w_curswant = win.w_virtcol;
@@ -303,13 +300,9 @@ pub unsafe fn update_curswant_force() {
 }
 
 /// [`update_curswant_force`], but only when something asked for it.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn update_curswant() {
+pub fn update_curswant() {
     if Win::current().w_set_curswant {
-        // SAFETY: the caller's promise.
-        unsafe { update_curswant_force() };
+        update_curswant_force();
     }
 }
 

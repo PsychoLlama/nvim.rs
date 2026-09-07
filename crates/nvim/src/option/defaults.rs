@@ -401,11 +401,11 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // 'scroll' is half the window height, which the option table cannot
     // know.
     if opt_idx == kOptScroll {
-        unsafe { win_comp_scroll(Win::current()) };
+        win_comp_scroll(Win::current());
     }
-    unsafe { insecure_flag(Win::current_or_none(), opt_idx, opt_flags) }.set(false);
+    insecure_flag(Win::current_or_none(), opt_idx, opt_flags).set(false);
     if both {
-        unsafe { insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
+        insecure_flag(Win::current_or_none(), opt_idx, OptionSetFlags::LOCAL).set(false);
     }
 }
 
@@ -420,7 +420,7 @@ pub(crate) fn set_options_default(opt_flags: OptionSetFlags) {
     }
     // 'scroll' again, this time for every window there is.
     for wp in winlayer::tab_windows() {
-        unsafe { win_comp_scroll(wp) };
+        win_comp_scroll(wp);
     }
     unsafe { parse_cino(Buf::current()) };
 }

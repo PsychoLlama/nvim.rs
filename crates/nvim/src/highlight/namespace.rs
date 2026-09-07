@@ -484,7 +484,7 @@ pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
     }
 
     // A shadow is itself a reason to blend.
-    unsafe { check_blending(window) };
+    check_blending(window);
 
     // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
     // to 'winhl' implementation?
@@ -513,7 +513,6 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
     if ns_id <= 0 {
         return;
     }
-    // SAFETY: the editor's own tables.
     if provider_field(ns_id, |p| p.hl_cached) {
         return;
     }

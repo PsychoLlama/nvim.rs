@@ -279,7 +279,7 @@ pub unsafe fn f_has(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
         None => {
             // The provider probes run vimscript, which sets
             // `v:shell_error`; the caller's value goes back afterwards.
-            let saved = unsafe { get_vim_var_nr(Vv::ShellError) };
+            let saved = get_vim_var_nr(Vv::ShellError);
             let answer = if unsafe { same_name(name, c"clipboard_working") }
                 || unsafe { same_name(name, c"unnamedplus") }
             {
@@ -289,7 +289,7 @@ pub unsafe fn f_has(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
             } else {
                 unsafe { eval_has_provider(name, true) }
             };
-            unsafe { set_vim_var_nr(Vv::ShellError, saved) };
+            set_vim_var_nr(Vv::ShellError, saved);
             answer
         }
     } as VarNumber;
@@ -369,9 +369,7 @@ pub unsafe fn f_menu_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// is non-zero.
 pub unsafe fn f_mode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the frame is live; `get_mode` answers a NUL-padded name and
-    // `result` then owns the duplicate.
-    let mut buf = unsafe { get_mode() };
+    let mut buf = get_mode();
     if !unsafe { non_zero_arg(args.ptr(0)) } {
         buf[1] = NUL as c_char;
     }

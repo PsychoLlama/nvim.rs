@@ -304,7 +304,6 @@ pub(crate) unsafe fn do_ecmd(
         // If the file was changed we may not be allowed to abandon it:
         // - if we are going to re-edit the same file
         // - or if we are the only window on this file and EcmdFlags::HIDE is false
-        // SAFETY: `curbuf` is live.
         let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
             || (Buf::current().b_nwindows == 1
                 && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
@@ -357,10 +356,7 @@ pub(crate) unsafe fn do_ecmd(
             // SAFETY: `curwin` is live.
             Win::current().w_pcmark.lnum = 1;
             Win::current().w_pcmark.col = 0;
-        } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF)
-            // SAFETY: main thread, message state.
-            || unsafe { check_fname() }.is_err()
-        {
+        } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
             break 'theend;
         } else {
             state.oldbuf = flags.has(EcmdFlags::OLDBUF);
@@ -389,7 +385,6 @@ pub(crate) unsafe fn do_ecmd(
         // Since we are starting to edit a file, consider the filetype to be
         // unset.  Helps for when an autocommand changes files and expects
         // syntax highlighting to work in the other file.
-        // SAFETY: `curbuf` is live.
         Buf::current().b_did_filetype = false;
 
         // other_file oldbuf
@@ -441,8 +436,7 @@ pub(crate) unsafe fn do_ecmd(
         }
 
         if command.is_null() {
-            // SAFETY: `curwin`/`curbuf` are live.
-            unsafe { place_cursor(&state) };
+            place_cursor(&state);
         }
 
         // Check if cursors in other windows on the same buffer are still valid
@@ -511,7 +505,6 @@ unsafe fn resolve_target(
     free_fname: &mut *mut c_char,
 ) -> Target {
     if fnum != 0 {
-        // SAFETY: `curbuf` is live.
         if fnum == Buf::current().handle {
             // file is already being edited, nothing to do
             return Target::AlreadyHere;
@@ -559,9 +552,7 @@ unsafe fn resolve_target(
 /// # Safety
 /// `curbuf` and `curwin` must be the live current buffer and window.
 unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
-    // SAFETY: caller's contract.
-    // may set b_last_cursor
-    unsafe { set_last_cursor(Win::current()) };
+    set_last_cursor(Win::current());
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
         state.newlnum = Win::current().w_cursor.lnum;
         state.solcol = Win::current().w_cursor.col;
@@ -681,7 +672,6 @@ unsafe fn enter_new_buffer(
         // Read the modelines, but only to set window-local options.  Any
         // buffer-local options have already been set and may have been changed
         // by the user.
-        // SAFETY: `curbuf` is live.
         do_modelines(OptionSetFlags::WINONLY);
         fire_retval(AutoEvent::BufEnter, Buf::current(), retval);
         if !flags.has(EcmdFlags::NOWINENTER) {
@@ -709,17 +699,13 @@ unsafe fn enter_new_buffer(
     }
 
     // Even when the cursor didn't move we need to recompute topline.
-    unsafe { changed_line_abv_curs() };
+    changed_line_abv_curs();
     unsafe { maketitle() };
 }
 
 /// Put the cursor where the caller, the autocommands or the buffer's last
 /// known position asked for.
-///
-/// # Safety
-/// `curwin` and `curbuf` must be live.
-unsafe fn place_cursor(state: &Ecmd) {
-    // SAFETY: caller's contract.
+fn place_cursor(state: &Ecmd) {
     if state.newcol >= 0 {
         // position set by autocommands
         Win::current().w_cursor.lnum = state.newlnum;

@@ -72,7 +72,7 @@ pub unsafe fn msg_start() {
         msg_col.set(0);
     } else if (msg_didout.get() || p_ch.get() == 0) && !ui_has(kUIMessages) {
         // Start the message on the next line.
-        if p_ch.get() == 0 && !msg_didout.get() && unsafe { msg_use_printf() } != 0 {
+        if p_ch.get() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
             unsafe { msg_puts_display(c"\n".as_ptr(), 1, 0, false) };
         } else {
             unsafe { msg_putchar(NL) };
@@ -81,7 +81,7 @@ pub unsafe fn msg_start() {
         cmdline_row.set(msg_row.get());
     }
     if !msg_didany.get() || lines_left.get() < 0 {
-        unsafe { msg_starthere() };
+        msg_starthere();
     }
     if msg_silent.get() == 0 {
         // No output on the current line yet.
@@ -97,7 +97,7 @@ pub unsafe fn msg_start() {
 }
 
 /// Note that the current message position is where messages start.
-pub unsafe fn msg_starthere() {
+pub fn msg_starthere() {
     lines_left.set(cmdline_row.get());
     msg_didany.set(false);
 }
@@ -168,16 +168,14 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
     // With no valid screen, use stderr so error messages are still seen.
     // A headless process that nonetheless has a grid (`--headless` with a
     // UI attached) gets both.
-    if unsafe { msg_use_printf() } != 0 {
+    if msg_use_printf() != 0 {
         let saved_msg_col = msg_col.get();
         unsafe { msg_puts_printf(str, len) };
         if headless_mode.get() {
             msg_col.set(saved_msg_col);
         }
     }
-    if unsafe { msg_use_printf() } == 0
-        || (headless_mode.get() && default_grid_ref().is_allocated())
-    {
+    if msg_use_printf() == 0 || (headless_mode.get() && default_grid_ref().is_allocated()) {
         unsafe { msg_puts_display(str, len as c_int, hl_id, false) };
     }
 
@@ -392,7 +390,7 @@ pub(crate) unsafe fn msg_puts_display(
     }
     unsafe { msg_cursor_goto(msg_row.get(), msg_col.get()) };
     store(&mut sb_str, s, &mut sb_col, 0);
-    unsafe { msg_check() };
+    msg_check();
 }
 
 /// Whether `:filter pattern` was used and `msg` does not match it.
@@ -406,7 +404,7 @@ pub(crate) unsafe fn message_filtered(msg: *const c_char) -> bool {
 
 /// Whether messages should be printed to stdout/stderr rather than drawn:
 /// batch mode (`-es`/`-Es`/`-l`), or no UI and not embedded.
-pub unsafe fn msg_use_printf() -> c_int {
+pub fn msg_use_printf() -> c_int {
     c_int::from(!embedded_mode.get() && ui_active() == 0 && !ui_has(kUIMessages))
 }
 
@@ -491,7 +489,7 @@ pub unsafe fn msg_end() -> bool {
 
 /// If the message ran into the shown command or the ruler, a hit-enter prompt
 /// and a redraw are owed.
-pub unsafe fn msg_check() {
+pub fn msg_check() {
     if ui_has(kUIMessages) {
         return;
     }

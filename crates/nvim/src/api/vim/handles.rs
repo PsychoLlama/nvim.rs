@@ -38,19 +38,12 @@ pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
 }
 
 /// The current buffer's handle.
-///
-/// # Safety
-/// The editor must be running: there is a current buffer from startup to
-/// exit.
-pub unsafe fn nvim_get_current_buf() -> BufferHandle {
+pub fn nvim_get_current_buf() -> BufferHandle {
     Buf::current().handle
 }
 
 /// Make `buf` the current buffer, as `:buffer` does.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
+pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut err) else {
         return ().reported(err);
@@ -83,19 +76,12 @@ pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
 }
 
 /// The current window's handle.
-///
-/// # Safety
-/// The editor must be running: there is a current window from startup to
-/// exit.
-pub unsafe fn nvim_get_current_win() -> WindowHandle {
+pub fn nvim_get_current_win() -> WindowHandle {
     Win::current().handle
 }
 
 /// Make `win` the current window, entering its tab page if need be.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
+pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(w) = find_window_by_handle(win, &mut err) else {
         return ().reported(err);
@@ -105,18 +91,14 @@ pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
             reset_visual_and_resel();
         }
         let tab = win_find_tabpage(w.id()).expect("a live window is on a tab page");
-        // SAFETY: `w` is the live window just found.
-        unsafe { goto_tabpage_win(tab, w) };
+        goto_tabpage_win(tab, w);
     });
     ().reported(err)
 }
 
 /// A new empty buffer: `listed` for one `:ls` shows, `scratch` for one with
 /// `'buftype'` `nofile`, `'bufhidden'` `hide` and no swap file.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle, Error> {
+pub fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle, Error> {
     let mut err = Error::none();
     let ret = api_try(&mut err, |_| create_buf(listed, scratch));
     if ret == 0 && !err.is_set() {
@@ -184,7 +166,6 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     if wiped {
         return 0;
     }
-    // SAFETY: as above.
     let event = AutoEvent::BufAdd;
     let wiped = listed
         && unsafe { apply_autocmds(event, no_fname, no_fname_io, false, buf) }
@@ -211,26 +192,18 @@ pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
 }
 
 /// The current tab page's handle.
-///
-/// # Safety
-/// The editor must be running: there is a current tab page from startup to
-/// exit.
-pub unsafe fn nvim_get_current_tabpage() -> TabpageHandle {
+pub fn nvim_get_current_tabpage() -> TabpageHandle {
     TabPage::current().handle
 }
 
 /// Make `tabpage` the current one, as `:tabnext` does.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Error> {
+pub fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(tp) = find_tab_by_handle(tabpage, &mut err) else {
         return ().reported(err);
     };
     api_try(&mut err, |_| {
-        // SAFETY: `tp` is the live tab page just found.
-        unsafe { goto_tabpage_tp(tp, true, true) };
+        goto_tabpage_tp(tp, true, true);
     });
     ().reported(err)
 }

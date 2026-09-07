@@ -263,17 +263,14 @@ pub unsafe fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     }
 
     buffer.b_chartab = [0; 4];
-    // SAFETY: as above.
     if buffer.b_p_lisp != 0 {
         // In Lisp, `-` belongs to a word even when 'iskeyword' omits it.
-        // SAFETY: as above.
-        unsafe { set_buf_chartab(buffer, b'-' as c_int, true) };
+        set_buf_chartab(buffer, b'-' as c_int, true);
     }
 
     // The first three are the global options; the last is the buffer's own
     // 'iskeyword'. Reading all four up front is what the C's loop does one
     // at a time — none of them can move while the tables are being filled.
-    // SAFETY: as above.
     let options = [p_isi.get(), p_isp.get(), p_isf.get(), buffer.b_p_isk];
     for &option in &options[if global { 0 } else { 3 }..] {
         // SAFETY: an option value is a NUL-terminated string, and `buffer` is
@@ -296,11 +293,8 @@ pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
 }
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
-///
-/// # Safety
-/// `buffer` must be a valid buffer.
 #[inline(always)]
-unsafe fn set_buf_chartab(mut buffer: Buf, c: c_int, on: bool) {
+fn set_buf_chartab(mut buffer: Buf, c: c_int, on: bool) {
     let word = (c as c_uint >> 6) as usize;
     let bit = 1u64 << (c & 0x3f);
     buffer.b_chartab[word] = (buffer.b_chartab[word] & !bit) | if on { bit } else { 0 };
@@ -397,10 +391,7 @@ unsafe fn next_isopt_entry(cursor: &mut Bytes) -> Option<IsoptEntry> {
 }
 
 /// Apply one entry to the table it belongs to.
-///
-/// # Safety
-/// `buffer` must be a valid buffer when `table` is the keyword set.
-unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
+fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
     for c in entry.first..=entry.last {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
@@ -418,7 +409,7 @@ unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) 
                 set_chartab_flag(byte, CT_PRINT_CHAR, !entry.tilde);
             }
             IsoptTable::Print => {}
-            IsoptTable::Keyword => unsafe { set_buf_chartab(buffer, c, !entry.tilde) },
+            IsoptTable::Keyword => set_buf_chartab(buffer, c, !entry.tilde),
         }
     }
 }
@@ -457,18 +448,14 @@ unsafe fn parse_isopt(
             return Err(Failed);
         };
         if let (false, Some(buffer)) = (only_check, buffer) {
-            // SAFETY: `buffer` is valid whenever an entry is applied.
-            unsafe { apply_isopt_entry(table, &entry, buffer) };
+            apply_isopt_entry(table, &entry, buffer);
         }
     }
     Ok(())
 }
 
 /// Whether `c` may appear in an identifier ('isident').
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn vim_is_ident_char(c: c_int) -> bool {
+pub fn vim_is_ident_char(c: c_int) -> bool {
     c > 0 && c < 0x100 && chartab(c as uint8_t) & CT_ID_CHAR != 0
 }
 
@@ -542,20 +529,14 @@ pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
 
 /// Whether `c` may appear in a file name ('isfname'). Everything past
 /// U+00FF is allowed.
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn vim_isfilec(c: c_int) -> bool {
+pub fn vim_isfilec(c: c_int) -> bool {
     c >= 0x100 || (c > 0 && chartab(c as uint8_t) & CT_FNAME_CHAR != 0)
 }
 
 /// Like [`vim_isfilec`], but also accepts the separators that may appear in
 /// a file name given on a command line.
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn vim_is_fname_char(c: c_int) -> bool {
-    (unsafe { vim_isfilec(c) })
+pub fn vim_is_fname_char(c: c_int) -> bool {
+    (vim_isfilec(c))
         || c == ',' as c_int
         || c == ' ' as c_int
         || c == '@' as c_int
@@ -574,10 +555,7 @@ pub unsafe fn vim_isfilec_or_wc(c: c_int) -> bool {
 }
 
 /// Whether `c` displays as itself ('isprint').
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn vim_isprintc(c: c_int) -> bool {
+pub fn vim_isprintc(c: c_int) -> bool {
     if c >= 0x100 {
         return utf_printable(c);
     }

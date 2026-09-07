@@ -251,7 +251,7 @@ fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
 
 /// Turn syntax highlighting on unless `:syntax` has already been used one way
 /// or the other.
-pub(crate) unsafe fn syn_maybe_enable() {
+pub(crate) fn syn_maybe_enable() {
     if !did_syntax_onoff.get() {
         let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),

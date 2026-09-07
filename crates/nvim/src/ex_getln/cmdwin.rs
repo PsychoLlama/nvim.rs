@@ -19,7 +19,7 @@ use core::ffi::CStr;
 
 /// True when the text must not be changed and we cannot switch to another
 /// window or buffer — editing the command line, and the like.
-pub unsafe fn text_locked() -> bool {
+pub fn text_locked() -> bool {
     if cmdwin_type.get() != 0 {
         return true;
     }
@@ -31,7 +31,7 @@ pub unsafe fn text_locked() -> bool {
 
 /// Report a command that is not allowed while the cmdline window is open or
 /// the command line is being edited another way.
-pub unsafe fn text_locked_msg() {
+pub fn text_locked_msg() {
     emsg(gettext(get_text_locked_msg()));
 }
 
@@ -45,26 +45,26 @@ pub fn get_text_locked_msg() -> &'static CStr {
 }
 
 /// Check for text, window or buffer locked; report and answer true if it is.
-pub unsafe fn text_or_buf_locked() -> bool {
-    if unsafe { text_locked() } {
-        unsafe { text_locked_msg() };
+pub fn text_or_buf_locked() -> bool {
+    if text_locked() {
+        text_locked_msg();
         return true;
     }
-    unsafe { curbuf_locked() }
+    curbuf_locked()
 }
 
 /// Check `curbuf->b_ro_locked` and `allbuf_lock`; report and answer true if
 /// either is set.
-pub unsafe fn curbuf_locked() -> bool {
+pub fn curbuf_locked() -> bool {
     if Buf::current().b_ro_locked > 0 {
         emsg(gettext(e_cannot_edit_other_buf));
         return true;
     }
-    unsafe { allbuf_locked() }
+    allbuf_locked()
 }
 
 /// Check `allbuf_lock`; report and answer true if it is set.
-pub unsafe fn allbuf_locked() -> bool {
+pub fn allbuf_locked() -> bool {
     if allbuf_lock.get() > 0 {
         emsg(gettext(
             c"E811: Not allowed to change buffer information now",
@@ -80,7 +80,7 @@ pub fn cmdline_init() {
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
-pub unsafe fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
+pub fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
     derive_cedit_key()
 }
 
@@ -94,7 +94,7 @@ pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
         cedit_key.set(-1);
     } else {
         let n = unsafe { string_to_key(p_cedit.get()) };
-        if n == 0 || unsafe { vim_isprintc(n) } {
+        if n == 0 || vim_isprintc(n) {
             return Some(e_invarg);
         }
         cedit_key.set(n);
@@ -118,7 +118,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     // Can't do this when text or buffer is locked, can't do it
     // recursively, and can't do it when typing a password.
-    if unsafe { text_or_buf_locked() } || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
+    if text_or_buf_locked() || cmdwin_type.get() != 0 || cmdline_star.get() > 0 {
         beep_flush();
         return Key::Ignore.code();
     }
@@ -183,9 +183,9 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             bufref = BufRef::of_opt(current_buf());
         }
         if let Some(cw) = cmdwin
-            && !unsafe { last_window(cw) }
+            && !last_window(cw)
         {
-            unsafe { win_close(cw, true, false) };
+            win_close(cw, true, false);
         }
         // win_close() autocommands may have already deleted the buffer.
         if newbuf_status.is_ok()
@@ -269,7 +269,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let _ = unsafe { ml_replace(last, text, true) };
     Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
     Win::current().w_cursor.col = Cc::current().cmdpos as ColNr;
-    unsafe { changed_line_abv_curs() };
+    changed_line_abv_curs();
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
     redraw_later(Win::current(), UPD_SOME_VALID);
@@ -382,12 +382,12 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         bufref = BufRef::of_opt(current_buf());
         skip_win_fix_cursor.set(true);
         let old = old_curwin.get().expect("just checked live");
-        unsafe { win_goto(old) };
+        win_goto(old);
 
         // win_goto() may trigger an autocommand that already closes the
         // cmdline window.
         if let Some(wp) = valid_win(wp).filter(|w| !w.is_current()) {
-            unsafe { win_close(wp, true, false) };
+            win_close(wp, true, false);
         }
 
         // win_close() may have already wiped the buffer when 'bh' is set

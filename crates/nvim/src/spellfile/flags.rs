@@ -266,7 +266,7 @@ pub(super) unsafe fn process_compflags(
                 // Ids count downwards, skipping any byte that would be
                 // meaningful in the pattern this becomes.
                 let id = loop {
-                    unsafe { check_renumber(spin) };
+                    check_renumber(spin);
                     let id = spin.si_newcomp_id;
                     spin.si_newcomp_id -= 1;
                     if unsafe { vim_strchr(c"/?*+[]\\-^".as_ptr(), id) }.is_null() {
@@ -292,12 +292,7 @@ pub(super) unsafe fn process_compflags(
 /// Prefix ids count up from zero and compound ids down from 255. When both
 /// reach the same value in the lower half, the split is redrawn at 127/255
 /// so each kind keeps a range to itself.
-///
-/// # Safety
-///
-/// `spin` must be live.
-pub(super) unsafe fn check_renumber(spin: &mut SpellInfo) {
-    // SAFETY: the caller promises `spin`.
+pub(super) fn check_renumber(spin: &mut SpellInfo) {
     if spin.si_newpref_id == spin.si_newcomp_id && spin.si_newcomp_id < 128 {
         spin.si_newpref_id = 127;
         spin.si_newcomp_id = 255;

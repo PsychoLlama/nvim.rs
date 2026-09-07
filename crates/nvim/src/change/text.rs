@@ -376,7 +376,7 @@ pub unsafe fn del_bytes(
 
     // An already-allocated line can be edited in place; one that is still
     // memory-mapped has to be copied.
-    let alloc_newp = !unsafe { ml_line_alloced() };
+    let alloc_newp = !ml_line_alloced();
     let newp = if alloc_newp {
         // SAFETY: `xmallocz` aborts rather than answer null.
         let newp = unsafe { xmallocz(newlen as size_t) }.cast::<c_char>();

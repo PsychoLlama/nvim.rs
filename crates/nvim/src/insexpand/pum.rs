@@ -106,8 +106,7 @@ impl ComplMatchArray {
 pub unsafe fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     // SAFETY: neither query has a precondition left; both are still
     // `unsafe fn`s for their call sites outside this family.
-    let (preinsert, longest) =
-        unsafe { (ins_compl_has_preinsert(), ins_compl_preinsert_longest()) };
+    let (preinsert, longest) = (ins_compl_has_preinsert(), ins_compl_preinsert_longest());
     if cot_fuzzy() || (!compl_hi_on_autocompl_longest.get() && longest) {
         return -1;
     }
@@ -152,7 +151,7 @@ pub(crate) unsafe fn ins_compl_del_pum() {
 
 /// Whether a popup menu is wanted at all: `'completeopt'` has `menu` or
 /// `menuone`, or autocompletion is on.
-pub unsafe fn pum_wanted() -> bool {
+pub fn pum_wanted() -> bool {
     completeopt_flags() & (kOptCotFlagMenu | kOptCotFlagMenuone) != 0 || compl_autocomplete.get()
 }
 
@@ -351,9 +350,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
         compl_leader().free_bytes_keep_len();
     }
 
-    // SAFETY: no precondition left; still an `unsafe fn` for the call sites
-    // outside this family.
-    let has_preinsert = unsafe { ins_compl_has_preinsert() };
+    let has_preinsert = ins_compl_has_preinsert();
     let compl_no_select = completeopt_flags() & kOptCotFlagNoselect != 0
         || (compl_autocomplete.get() && !has_preinsert);
 
@@ -540,9 +537,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
 /// Show the popup menu, adjusting `compl_shown_match` to an entry that is
 /// actually displayed.
 pub unsafe fn ins_compl_show_pum() {
-    // SAFETY: no precondition left; still an `unsafe fn` for the call sites
-    // outside this family.
-    if !unsafe { pum_wanted() } || !pum_enough_matches() {
+    if !pum_wanted() || !pum_enough_matches() {
         return;
     }
 
@@ -602,7 +597,7 @@ pub unsafe fn ins_compl_show_pum() {
 }
 
 /// Is `selected` (a menu index) the match `compl_curr_match` points at?
-pub unsafe fn compl_match_curr_select(selected: c_int) -> bool {
+pub fn compl_match_curr_select(selected: c_int) -> bool {
     if selected < 0 {
         return false;
     }
@@ -685,10 +680,7 @@ pub(crate) unsafe fn ins_compl_show_filename() {
 
 /// The next match that is actually in the menu, in the direction the menu is
 /// being walked.
-/// # Safety
-/// A completion with a shown match is running: upstream walks the ring from
-/// `compl_shown_match` and dereferences each link without checking it.
-pub(crate) unsafe fn find_next_match_in_menu() -> Cm {
+pub(crate) fn find_next_match_in_menu() -> Cm {
     let is_forward = compl_shows_dir_forward();
     let mut match_0 = shown_match().expect("the menu is walked from a shown match");
     loop {

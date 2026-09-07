@@ -167,15 +167,12 @@ pub unsafe fn grid_line_start(view: GridView, mut row: c_int) {
     let mut col = 0;
     // SAFETY: the caller's promise, for both calls.
     let grid = unsafe { grid_adjust(view, &mut row, &mut col) };
-    unsafe { screengrid_line_start(grid, row, col) };
+    screengrid_line_start(grid, row, col);
 }
 
 /// [`grid_line_start`] against a `ScreenGrid` directly, for the callers that
 /// have no `GridView` (float borders, the popup menu, the statusline).
-///
-/// # Safety
-/// No other batch may be in progress.
-pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
+pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
     let mut buf = linebuf();
     let mut b = batch();
     debug_assert!(b.grid.is_none(), "grid_line_grid == NULL");
@@ -359,10 +356,7 @@ pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, cle
 }
 
 /// Move the cursor to a column of the line being rendered.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_cursor_goto(col: c_int) {
+pub fn grid_line_cursor_goto(col: c_int) {
     let b = *batch();
     let grid = b.grid.expect("a batch is in progress");
     ui_grid_cursor_goto(grid.handle, b.row, col);

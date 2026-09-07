@@ -87,7 +87,7 @@ pub unsafe fn screenclear() {
     mode_displayed.set(false);
 
     // Sets UPD_NOT_VALID on every window.
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
     cmdline_was_last_drawn.set(false);
     redraw_cmdline.set(true);
     redraw_tabline.set(true);
@@ -102,7 +102,7 @@ pub unsafe fn screenclear() {
         must_redraw.set(UPD_NOT_VALID); // no need to clear again
     }
 
-    unsafe { compute_cmdrow() };
+    compute_cmdrow();
     msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
     msg_col.set(0);
     unsafe { msg_reset_scroll() }; // can't scroll back
@@ -110,7 +110,7 @@ pub unsafe fn screenclear() {
     msg_didout.set(false);
 
     if unsafe { *hl_attr_active.get().add(HLF_MSG as usize) } > 0
-        && unsafe { msg_use_grid() }
+        && msg_use_grid()
         && msg_grid_ref().is_allocated()
     {
         msg_grid_ref().invalidate();
@@ -149,19 +149,19 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
 
     Rows.set(height);
     Columns.set(width);
-    unsafe { check_screensize() };
+    check_screensize();
 
     if !ui_has(kUIMessages) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
-        let max_p_ch = Rows.get() - unsafe { min_rows(TabPage::current()) } + 1;
+        let max_p_ch = Rows.get() - min_rows(TabPage::current()) + 1;
         if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
             p_ch.set(max_p_ch.max(1) as OptInt);
             TabPage::current().tp_ch_used = p_ch.get();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
-                let max_tp_ch = Rows.get() - unsafe { min_rows(tp) } + 1;
+                let max_tp_ch = Rows.get() - min_rows(tp) + 1;
                 if tp.tp_ch_used > 0 && tp.tp_ch_used > max_tp_ch as OptInt {
                     tp.tp_ch_used = max_tp_ch.max(1) as OptInt;
                 }
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     }
     resizing_autocmd.set(false);
 
-    unsafe { redraw_all_later(UPD_CLEAR) };
+    redraw_all_later(UPD_CLEAR);
 
     if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
         unsafe { screenclear() };
@@ -220,7 +220,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     if starting.get() != NO_SCREEN {
         unsafe { maketitle() };
 
-        unsafe { changed_line_abv_curs() };
+        changed_line_abv_curs();
         invalidate_botline_win(Win::current());
 
         // At a more prompt, running an external command, in Ex mode or at a
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                     unsafe { ins_compl_show_pum() };
                 }
                 let _ = unsafe { update_screen() };
-                if unsafe { redrawing() } {
+                if redrawing() {
                     unsafe { setcursor() };
                 }
             }
@@ -275,7 +275,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
 }
 
 /// Clamp the screen size to something the editor can lay out and index.
-pub unsafe fn check_screensize() {
+pub fn check_screensize() {
     Rows.set(Rows.get().max(min_rows_for_all_tabpages()).min(MAX_ROWS));
     Columns.set(Columns.get().max(MIN_COLUMNS as c_int).min(MAX_COLUMNS));
 }

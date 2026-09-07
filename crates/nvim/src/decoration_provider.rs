@@ -385,7 +385,6 @@ pub(crate) unsafe fn decor_providers_invoke_range(
     end_row: c_int,
     end_col: c_int,
 ) {
-    // SAFETY: the caller's window; the callbacks re-enter the editor.
     set_provider_running(true);
     for idx in 0..provider_count() {
         let p = provider(idx);
@@ -518,10 +517,7 @@ pub(crate) unsafe fn decor_provider_invalidate_hl() {
 /// and that vanishes under `NDEBUG`. A release upstream nvim reached through
 /// `nvim_set_hl(-2, …)` appends a provider with a negative id and carries on;
 /// aborting instead would be a divergence, not a fix.
-///
-/// # Safety
-/// The answer must not outlive the next registration.
-pub(crate) unsafe fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
+pub(crate) fn get_decor_provider(ns_id: NS, force: bool) -> *mut DecorProvider {
     debug_assert!(ns_id > 0);
     match provider_index(ns_id, force) {
         Some(idx) => PROVIDERS.with(|providers| providers.as_ptr().cast_mut().wrapping_add(idx)),

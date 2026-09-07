@@ -16,7 +16,7 @@ use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
 
-pub unsafe fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
+pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return (0 as Integer).reported(error);
@@ -242,22 +242,20 @@ pub unsafe fn nvim_buf_set_lines(
                 if visual_anchor().lnum >= end as LineNr {
                     with_visual_anchor(|a| a.lnum += extra as LineNr);
                 }
-                unsafe { check_visual_pos() };
+                check_visual_pos();
             }
-            unsafe {
-                extmark_splice(
-                    buffer,
-                    start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    0 as ColNr,
-                    (end - start) as ::core::ffi::c_int,
-                    0 as ColNr,
-                    deleted_bytes,
-                    new_len as ::core::ffi::c_int,
-                    0 as ColNr,
-                    inserted_bytes,
-                    kExtmarkUndo,
-                )
-            };
+            extmark_splice(
+                buffer,
+                start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
+                0 as ColNr,
+                (end - start) as ::core::ffi::c_int,
+                0 as ColNr,
+                deleted_bytes,
+                new_len as ::core::ffi::c_int,
+                0 as ColNr,
+                inserted_bytes,
+                kExtmarkUndo,
+            );
             changed_lines(
                 buffer,
                 start as LineNr,
@@ -269,8 +267,7 @@ pub unsafe fn nvim_buf_set_lines(
             for win in tab_windows() {
                 if win.w_buffer == buffer.raw() {
                     let (lo, hi) = (start as LineNr, end as LineNr);
-                    // SAFETY: a live window showing this buffer.
-                    unsafe { fix_cursor(win, lo, hi, extra as LineNr) };
+                    fix_cursor(win, lo, hi, extra as LineNr);
                 }
             }
         }

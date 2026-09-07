@@ -195,7 +195,6 @@ impl DoTag {
         forceit: c_int,
         verbose: bool,
     ) -> Self {
-        // SAFETY: the caller's promise.
         let win = Win::current_raw();
         // `:help` tags are literal, and 'tagfunc' has no business
         // answering for them.
@@ -355,7 +354,6 @@ impl DoTag {
     /// Answers `false` when the command is finished — the stack was empty,
     /// or a `:pop` has already done the jump.
     fn walk_stack(&mut self) -> bool {
-        // SAFETY: the caller's promise.
         let empty = if g_do_tagpreview.get() != 0 {
             ptag_entry_handle().tagname().is_null()
         } else {
@@ -438,7 +436,7 @@ impl DoTag {
         }
         check_cursor(Win::current());
         if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && old_key_typed {
-            unsafe { fold_open_cursor() };
+            fold_open_cursor();
         }
 
         // The remembered matches are for a tag we have left.
@@ -451,7 +449,6 @@ impl DoTag {
     ///
     /// Answers `false` when the command is finished.
     fn go_newer(&mut self) -> bool {
-        // SAFETY: the caller's promise.
         if g_do_tagpreview.get() != 0 {
             (self.cur_match, self.cur_fnum) = ptag_entry_handle().position();
             return true;
@@ -509,14 +506,12 @@ impl DoTag {
 
     /// Remember on the stack where the jump is starting from.
     fn record_position(&mut self) {
-        // SAFETY: the caller's promise.
         self.saved_fmark = self.current().fmark.clone();
         if self.save_pos {
             let cursor = Win::current().w_cursor;
             self.current().fmark.mark = cursor;
             self.current().fmark.fnum = Buf::current().handle;
-            // SAFETY: `curwin` is live and `cursor` is a position in it.
-            self.current().fmark.view = unsafe { mark_view_make(Win::current(), cursor) };
+            self.current().fmark.view = mark_view_make(Win::current(), cursor);
         }
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an
@@ -538,7 +533,6 @@ impl DoTag {
     /// Using a remembered `cur_match` only makes sense if the order the
     /// matches came out in is the same as it was then.
     fn set_priority_buffer(&mut self) {
-        // SAFETY: the caller's promise.
         if self.cur_fnum == Buf::current().handle {
             return;
         }
@@ -686,7 +680,6 @@ impl DoTag {
     /// Settle on which match to jump to, listing them and asking when the
     /// command is `:tselect` or an ambiguous `:tjump`.
     fn choose(&mut self) -> bool {
-        // SAFETY: the caller's promise.
         let found = num_matches.get();
         let mut ask = false;
         if self.kind == DT_TAG as c_int && unsafe { *self.tag } != 0 {

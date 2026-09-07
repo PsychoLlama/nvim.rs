@@ -168,12 +168,7 @@ struct PenSink {
 
 impl PenSink {
     /// The sink `state` reports its pen changes to.
-    ///
-    /// # Safety
-    ///
-    /// The state's callback table and its data pointer must stay live for as
-    /// long as the returned sink is used.
-    unsafe fn of(state: &VTermState) -> Self {
+    fn of(state: &VTermState) -> Self {
         PenSink {
             callbacks: state.callbacks,
             cbdata: state.cbdata,
@@ -218,13 +213,8 @@ fn color(col: VTermColor) -> VTermValue {
 // ------------------------------------------------------------ pen changes
 
 /// Returns the pen to its defaults, as SGR 0 does.
-///
-/// # Safety
-///
-/// The state's callback table must still be live.
-pub unsafe fn reset_pen(state: &mut VTermState) {
-    // SAFETY: forwarded to this function's own caller.
-    let sink = unsafe { PenSink::of(state) };
+pub fn reset_pen(state: &mut VTermState) {
+    let sink = PenSink::of(state);
     reset_pen_to(state, sink);
 }
 
@@ -269,13 +259,8 @@ pub fn save_pen(state: &mut VTermState) {
 
 /// Brings back the pen [`save_pen`] stashed, reporting every attribute of it,
 /// as DECRC does.
-///
-/// # Safety
-///
-/// The state's callback table must still be live.
-pub unsafe fn restore_pen(state: &mut VTermState) {
-    // SAFETY: forwarded to this function's own caller.
-    let sink = unsafe { PenSink::of(state) };
+pub fn restore_pen(state: &mut VTermState) {
+    let sink = PenSink::of(state);
     state.pen = state.saved.pen;
     let pen = state.pen;
     sink.set(VTERM_ATTR_BOLD, flag(pen.bold() != 0));
@@ -349,8 +334,7 @@ pub unsafe fn set_pen_attr(
         VTERM_ATTR_OVERLINE => state.pen.set_overline(boolean()),
         _ => return false,
     }
-    // SAFETY: forwarded to this function's own caller.
-    unsafe { PenSink::of(state) }.set(attr, *val);
+    PenSink::of(state).set(attr, *val);
     true
 }
 
@@ -402,13 +386,8 @@ fn parse_sgr_color(palette: c_long, args: &[c_long]) -> (Option<ColorValue>, usi
 
 /// Applies an SGR (Select Graphic Rendition) control sequence to the pen,
 /// reporting each attribute it touches.
-///
-/// # Safety
-///
-/// The state's callback table must still be live.
-pub unsafe fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
-    // SAFETY: forwarded to this function's own caller.
-    let sink = unsafe { PenSink::of(state) };
+pub fn apply_sgr(state: &mut VTermState, args: &[c_long]) {
+    let sink = PenSink::of(state);
     let mut argi = 0;
     while argi < args.len() {
         let raw = arg_at(args, argi);

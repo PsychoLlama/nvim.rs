@@ -525,9 +525,7 @@ pub unsafe fn handle_nvim_buf_clear_highlight(
         wrong_type(error, 4, c"nvim_buf_clear_highlight", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4) } {
+    if let Err(e) = nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4) {
         return failure(error, e);
     }
     Object::Nil
@@ -567,9 +565,7 @@ pub unsafe fn handle_nvim_buf_get_number(
         wrong_type(error, 1, c"nvim_buf_get_number", c"Buffer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_get_number(arg_1) } {
+    let rv = match nvim_buf_get_number(arg_1) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };
@@ -945,4 +941,50 @@ pub unsafe fn handle_nvim_exec(
         Err(e) => return failure(error, e),
     };
     Object::String(rv)
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_execute_lua`.
+///
+/// Decodes the argument array against the signature, refuses the call
+/// through `error` if the arity or a type is wrong, and encodes the
+/// answer as an `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
+/// the call and stays the caller's to free, and `arena` is the caller's
+/// own and live for the call.
+pub unsafe fn handle_nvim_execute_lua(
+    channel_id: uint64_t,
+    args: Array,
+    arena: *mut Arena,
+    error: &mut Error,
+) -> Object {
+    // SAFETY: the dispatcher hands over an argument array of `size`
+    // initialized objects that outlives the call.
+    let args = unsafe { args_slice(&args) };
+    log_invoke(
+        c"handle_nvim_execute_lua",
+        c"nvim_execute_lua",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 2 {
+        wrong_arity(error, 2, args.len());
+        return Object::Nil;
+    }
+    let Some(arg_1) = as_string(args[0]) else {
+        wrong_type(error, 1, c"nvim_execute_lua", c"String");
+        return Object::Nil;
+    };
+    let Some(arg_2) = as_array(args[1]) else {
+        wrong_type(error, 2, c"nvim_execute_lua", c"Array");
+        return Object::Nil;
+    };
+    // SAFETY: each argument was checked against the type the signature declares;
+    // `arena` and `error` are the dispatcher's own.
+    match unsafe { nvim_execute_lua(arg_1, arg_2, arena) } {
+        Ok(rv) => rv,
+        Err(e) => failure(error, e),
+    }
 }

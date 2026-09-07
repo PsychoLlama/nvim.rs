@@ -520,11 +520,7 @@ pub(crate) unsafe fn cmdmod_filters_out(msg: *const c_char) -> bool {
 /// borrow held across the body: the two calls out (`xstrdup` and
 /// `set_option_direct`) re-enter the editor, and `set_option_direct` runs
 /// with the new modifiers already in force, exactly as the C leaves them.
-///
-/// # Safety
-/// Main-thread editor call. `set_option_direct` runs `'eventignore'`'s
-/// side effects.
-unsafe fn apply_cmdmod() {
+fn apply_cmdmod() {
     let mods = cmdmod.with(|cm| cm.cmod_flags);
     if mods.has(CmdModFlags::SANDBOX) && cmdmod.with(|cm| cm.cmod_did_sandbox) == 0 {
         sandbox.set(sandbox.get() + 1);
@@ -558,7 +554,6 @@ unsafe fn apply_cmdmod() {
         cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
     if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
-        // SAFETY: `p_ei` is the live `'eventignore'` string.
         let save_ei = xstrdup(p_ei.get());
         cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
         set_option_direct(
@@ -650,16 +645,12 @@ impl CmdModScope {
     }
 
     /// Save the modifiers in force and put `mods` in force instead.
-    ///
-    /// # Safety
-    /// Main-thread editor call: `apply_cmdmod` sets `'eventignore'`.
-    pub(crate) unsafe fn enter(mods: CmdMod) -> Self {
+    pub(crate) fn enter(mods: CmdMod) -> Self {
         let scope = CmdModScope {
             saved: cmdmod.take(),
         };
         cmdmod.set(mods);
-        // SAFETY: the caller's contract.
-        unsafe { apply_cmdmod() };
+        apply_cmdmod();
         scope
     }
 
@@ -685,12 +676,8 @@ impl CmdModScope {
 
     /// Put the parsed modifiers in force, once [`CmdModScope::parse`] has
     /// stored them.
-    ///
-    /// # Safety
-    /// As [`CmdModScope::enter`].
-    pub(crate) unsafe fn apply(&self) {
-        // SAFETY: the caller's contract.
-        unsafe { apply_cmdmod() };
+    pub(crate) fn apply(&self) {
+        apply_cmdmod();
     }
 }
 
@@ -762,7 +749,7 @@ pub unsafe fn is_loclist_cmd(cmdidx: CmdIdx) -> bool {
 
 /// Is this one of the mapping commands? Asked by the argument scan, which
 /// must not treat a `<expr>` mapping's right-hand side as an expression.
-pub unsafe fn is_map_cmd(cmdidx: CmdIdx) -> bool {
+pub fn is_map_cmd(cmdidx: CmdIdx) -> bool {
     if is_user_cmd(cmdidx) {
         return false;
     }

@@ -89,7 +89,7 @@ pub unsafe fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
     }
     ns_hl_global.set(ns_id as NS);
     unsafe { hl_check_ns() };
-    unsafe { redraw_all_later(UPD_NOT_VALID) };
+    redraw_all_later(UPD_NOT_VALID);
     ().reported(error)
 }
 

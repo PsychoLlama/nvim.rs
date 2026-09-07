@@ -386,8 +386,7 @@ pub(crate) unsafe fn eval_method(
             } else if !lua_funcname.is_null() {
                 if evaluate {
                     rv.v_type = VAR_PARTIAL;
-                    // SAFETY: `v:lua` is a partial the editor owns.
-                    let pt = unsafe { get_vim_var_partial(Vv::Lua) };
+                    let pt = get_vim_var_partial(Vv::Lua);
                     rv.vval.v_partial = pt;
                     unsafe { (*pt).pt_refcount.retain() };
                 }

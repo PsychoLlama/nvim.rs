@@ -477,11 +477,7 @@ pub(crate) unsafe fn header_free(buffer: Buf, uhp: *mut UndoHeader) {
 /// relinks the header it was handed still steers the walk — which is what
 /// the `while` loops this replaced did. A body that *frees* the header it
 /// was handed must not use this: the step would read freed memory.
-///
-/// # Safety
-///
-/// Nothing frees a header the walk has already visited.
-pub(crate) unsafe fn header_chain(
+pub(crate) fn header_chain(
     buffer: Buf,
     start: UndoLink,
     step: fn(&UndoHeader) -> UndoLink,

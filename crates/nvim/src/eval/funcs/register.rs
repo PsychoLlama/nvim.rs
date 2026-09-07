@@ -45,7 +45,6 @@ type TypeBuf = [c_char; 67];
 /// `args.ptr(0)` is a live typval.
 unsafe fn regname(args: Args<'_>) -> Option<c_int> {
     let mut numbuf = NumBuf::new();
-    // SAFETY throughout: the caller's obligation; both sources are NUL-terminated.
     let name = if args.has(0) {
         let name = arg_string_chk(&mut numbuf, args.get(0));
         if name.is_null() {
@@ -53,7 +52,7 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
         }
         name
     } else {
-        unsafe { get_vim_var_str(Vv::Register) }
+        get_vim_var_str(Vv::Register)
     };
     Some(match unsafe { *name } {
         0 => b'"' as c_int,

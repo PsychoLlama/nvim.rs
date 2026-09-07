@@ -187,7 +187,7 @@ impl Cells {
 
         if (self.char_len == 1 && c0 >= 0x80)
             || (self.char_len >= 1 && self.char_code == 0)
-            || (self.char_len > 1 && !unsafe { vim_isprintc(self.char_code) })
+            || (self.char_len > 1 && !vim_isprintc(self.char_code))
         {
             // An illegal UTF-8 byte shows as `<xx>`; an unprintable
             // character as `?` or its fullwidth form.
@@ -250,7 +250,7 @@ impl Cells {
             unsafe { self.slow_path(wlv, window, f, &mut prev_ptr, c0) };
         }
 
-        if !unsafe { vim_isprintc(self.char_code) } {
+        if !vim_isprintc(self.char_code) {
             unsafe { self.unprintable(wlv, window) };
         }
 

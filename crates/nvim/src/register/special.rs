@@ -131,8 +131,7 @@ pub unsafe fn get_spec_reg(
         // `"%` -- the current file name.
         c if c == '%' as c_int => {
             if errmsg {
-                // SAFETY: main thread, with a current buffer; it only reports.
-                let _ = unsafe { check_fname() }; // will give an error message
+                let _ = check_fname(); // will give an error message
             }
             value = Buf::current().b_fname;
             true

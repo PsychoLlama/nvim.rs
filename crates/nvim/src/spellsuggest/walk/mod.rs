@@ -413,7 +413,7 @@ impl Walk<'_> {
             State::EndNul => unsafe { self.end_nul() },
             State::Plain => unsafe { self.plain() },
             State::Del => unsafe { self.delete() },
-            State::InsPrep => unsafe { self.ins_prep() },
+            State::InsPrep => self.ins_prep(),
             State::Ins => unsafe { self.insert() },
             State::Swap => unsafe { self.swap() },
             State::UnSwap => unsafe { self.un_swap() },
@@ -424,16 +424,12 @@ impl Walk<'_> {
             State::RepIni => unsafe { self.rep_ini() },
             State::Rep => unsafe { self.rep() },
             State::RepUndo => unsafe { self.rep_undo() },
-            State::Final => unsafe { self.leave_level() },
+            State::Final => self.leave_level(),
         }
     }
 
     /// Every edit at this level has been tried: pop it.
-    ///
-    /// # Safety
-    ///
-    /// `self.depth` must be a live level.
-    unsafe fn leave_level(&mut self) {
+    fn leave_level(&mut self) {
         self.depth -= 1;
 
         if self.depth >= 0 && self.stack[self.depth as usize].prefix_depth == PFD_PREFIXTREE {
@@ -444,8 +440,6 @@ impl Walk<'_> {
         // Checking for CTRL-C takes time, so only do it now and then.
         self.breakcheckcount -= 1;
         if self.breakcheckcount == 0 {
-            // SAFETY: reads the pending-input queue, which is main-thread
-            // editor state.
             os_breakcheck();
             self.breakcheckcount = 1000;
             if spell_suggest_timeout.get() > 0 && profile_passed_limit(self.time_limit) {

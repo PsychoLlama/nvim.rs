@@ -129,8 +129,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_clear_highlight(lstate: *mut l
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        if let Err(e) = unsafe { nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4) } {
+        if let Err(e) = nvim_buf_clear_highlight(arg_1, arg_2, arg_3, arg_4) {
             *err = e;
         }
     }
@@ -167,8 +166,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_number(lstate: *mut lua_St
             return;
         }
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let ret = match unsafe { nvim_buf_get_number(arg_1) } {
+        let ret = match nvim_buf_get_number(arg_1) {
             Ok(ret) => ret,
             Err(e) => {
                 *err = e;

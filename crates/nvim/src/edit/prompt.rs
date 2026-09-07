@@ -35,10 +35,7 @@ pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
 }
 
 /// The effective prompt for the current buffer.
-///
-/// # Safety
-/// Must run with a live `curbuf`.
-pub(crate) unsafe fn prompt_text() -> *mut c_char {
+pub(crate) fn prompt_text() -> *mut c_char {
     buf_prompt_text(Buf::current())
 }
 
@@ -50,10 +47,7 @@ pub(crate) unsafe fn prompt_text() -> *mut c_char {
 /// the prompt line.
 pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     let mut win = Win::current();
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` this mode runs
-    // with; `prompt` and `text` are NUL-terminated strings of that buffer.
-    let prompt = unsafe { prompt_text() };
+    let prompt = prompt_text();
     let prompt_len = unsafe { cstr::bytes_at(prompt) }.len() as c_int;
 
     // The mark may name a line that no longer exists.  It is read and
@@ -154,10 +148,7 @@ fn coladvance_win(win: Win, vcol: c_int) {
 }
 
 /// Is the cursor in the editable part of the prompt line?
-///
-/// # Safety
-/// Must run with a live `curbuf`/`curwin`.
-pub(crate) unsafe fn prompt_curpos_editable() -> bool {
+pub(crate) fn prompt_curpos_editable() -> bool {
     let start = start();
     let cursor = Win::current().w_cursor;
     cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)

@@ -364,7 +364,7 @@ pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview:
                 errormsg = Some(ex_msg(e_cmdwin.as_ptr()));
                 break 'end;
             }
-            if unsafe { text_locked() } && !ea.argt.has(ExArgt::LOCK_OK) {
+            if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
                 errormsg = Some(ex_msg(get_text_locked_msg().as_ptr()));
                 break 'end;
             }
@@ -377,7 +377,7 @@ pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview:
             && ea.cmdidx != CmdIdx::edit
             && !(ea.cmdidx == CmdIdx::file && byte(ea.arg) == NUL)
             && !is_user_cmd(ea.cmdidx)
-            && unsafe { curbuf_locked() }
+            && curbuf_locked()
         {
             break 'end;
         }

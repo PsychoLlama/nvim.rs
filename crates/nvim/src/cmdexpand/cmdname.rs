@@ -537,7 +537,7 @@ pub(crate) unsafe fn set_one_cmd_context(
 
     // 6. parse arguments
     if !is_user_cmd(ea.cmdidx) {
-        ea.argt = unsafe { excmd_get_argt(ea.cmdidx) };
+        ea.argt = excmd_get_argt(ea.cmdidx);
     }
 
     let mut arg = unsafe { skipwhite(p) };

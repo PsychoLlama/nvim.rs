@@ -332,7 +332,7 @@ fn tab_spaces_to_tabs() {
         // In `MODE_VREPLACE` the change was made to the copy; replay it
         // onto the real line.
         if State.get() & VREPLACE_FLAG != 0 {
-            unsafe { backspace_until_column(change_col) };
+            backspace_until_column(change_col);
             // SAFETY: `saved_line` holds the line as it now stands, and the
             // run from `change_col` to the cursor is inside it.
             let from = unsafe { saved_line.offset(change_col as isize) };
@@ -361,7 +361,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
     if stop_arrow_failed() {
         return false;
     }
-    unsafe { undisplay_dollar() };
+    undisplay_dollar();
 
     // Strange, but this is what the NL replaces in Replace mode.
     if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
@@ -371,7 +371,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
     // In 'virtualedit' past the end of the line, make the position real
     // first.
     if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
-        let vcol = unsafe { getviscol() };
+        let vcol = getviscol();
         coladvance(Win::current(), vcol);
     }
 
@@ -392,7 +392,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
     old_indent.set(0);
     can_cindent.set(true);
     // The new line may be in a closed fold.
-    unsafe { fold_open_cursor() };
+    fold_open_cursor();
     ok
 }
 

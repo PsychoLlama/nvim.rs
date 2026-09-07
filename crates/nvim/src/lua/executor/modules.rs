@@ -5,7 +5,7 @@
 //! table is what `nlua_init_packages` walks to install them as preloaded
 //! packages, in this order.  `build.rs`'s `EMBEDDED_LUA_MODULES` is the same
 //! list and the two must agree.
-
+#![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::CStr;

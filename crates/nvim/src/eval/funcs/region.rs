@@ -111,9 +111,7 @@ struct BufferSwap {
 }
 
 impl BufferSwap {
-    /// # Safety
-    /// `curbuf` and `curwin` are live.
-    unsafe fn save() -> Self {
+    fn save() -> Self {
         BufferSwap {
             buf: Buf::current(),
             virtual_op: virtual_op.get(),
@@ -355,9 +353,7 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
 /// per line.
 pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the arguments and `result` are live typvals; the buffer swap
-    // is undone when `_swap` drops, on every path out.
-    let _swap = unsafe { BufferSwap::save() };
+    let _swap = BufferSwap::save();
     let Some(r) = resolve(args, result) else {
         return;
     };
@@ -384,9 +380,7 @@ pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// positions per line.
 pub unsafe fn f_getregionpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    // SAFETY: the arguments and `result` are live typvals; the buffer swap
-    // is undone when `_swap` drops, on every path out.
-    let _swap = unsafe { BufferSwap::save() };
+    let _swap = BufferSwap::save();
     let Some(r) = resolve(args, result) else {
         return;
     };

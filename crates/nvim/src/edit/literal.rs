@@ -39,7 +39,7 @@ pub(crate) fn ins_ctrl_v() {
     unsafe { ins_redraw(false) };
 
     let mut did_putchar = false;
-    if unsafe { redrawing() } && !char_avail() {
+    if redrawing() && !char_avail() {
         unsafe { edit_putchar('^' as c_int, true) };
         did_putchar = true;
     }
@@ -47,7 +47,7 @@ pub(crate) fn ins_ctrl_v() {
     add_to_showcmd_c(Ctrl_V);
 
     // Do not fold the modifiers into the key for CTRL-SHIFT-V.
-    let c = unsafe { get_literal(mod_mask.get().has(ModMask::SHIFT)) };
+    let c = get_literal(mod_mask.get().has(ModMask::SHIFT));
     if did_putchar {
         // When the line fits in 'columns' the `^` is at the start of the
         // next line and the redraw will not have removed it.
@@ -72,14 +72,7 @@ pub(crate) fn ins_ctrl_v() {
 /// The three mode flags are deliberately *not* exclusive: `CTRL-V x o 7`
 /// sets both `hex` and `octal`, and every test below asks about `hex` first,
 /// so hex wins.  An enum here would be a behaviour change.
-///
-/// # Safety
-/// Must run on the main thread; reads from the typeahead.
-pub(crate) unsafe fn get_literal(no_simplify: bool) -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
+pub(crate) fn get_literal(no_simplify: bool) -> c_int {
     if got_int.get() {
         return Ctrl_C;
     }
@@ -246,13 +239,9 @@ pub(crate) fn redo_literal(c: c_int) {
 /// first key was a special key (which [`insert_special`] has then already
 /// inserted).
 pub(crate) fn ins_digraph() -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let mut did_putchar = false;
     pc_status.set(PutChar::Unset);
-    if unsafe { redrawing() } && !char_avail() {
+    if redrawing() && !char_avail() {
         unsafe { ins_redraw(false) };
         unsafe { edit_putchar('?' as c_int, true) };
         did_putchar = true;
@@ -277,7 +266,7 @@ pub(crate) fn ins_digraph() -> c_int {
 
     if c != ESC {
         did_putchar = false;
-        if unsafe { redrawing() } && !char_avail() {
+        if redrawing() && !char_avail() {
             unsafe { ins_redraw(false) };
             if unsafe { char2cells(c) } == 1 {
                 unsafe { ins_redraw(false) };
@@ -363,16 +352,12 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
 /// Answers the key to be recorded: the character itself when nothing was
 /// inserted, and CTRL-V when it was.
 pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     let mut c = tc;
     if ctrl_x_mode_scroll() {
         if c == Ctrl_Y {
-            unsafe { scrolldown_clamp() };
+            scrolldown_clamp();
         } else {
-            unsafe { scrollup_clamp() };
+            scrollup_clamp();
         }
         redraw_later(Win::current(), UPD_VALID);
         return c;

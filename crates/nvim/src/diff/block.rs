@@ -59,8 +59,7 @@ pub fn diff_buf_adjust(win: Win) {
     if i != DB_COUNT {
         tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
         tp.tp_diff_invalid = 1;
-        // SAFETY: nothing here holds a borrow of the tab page's block list.
-        unsafe { diff_redraw(true) };
+        diff_redraw(true);
     }
 }
 
@@ -74,8 +73,7 @@ pub fn diff_buf_add(buffer: Buf) {
         if tp.tp_diffbuf[i].is_null() {
             tp.tp_diffbuf[i] = buffer.raw();
             tp.tp_diff_invalid = 1;
-            // SAFETY: nothing here holds a borrow of the tab page's block list.
-            unsafe { diff_redraw(true) };
+            diff_redraw(true);
             return;
         }
     }
@@ -89,8 +87,7 @@ pub(crate) fn diff_buf_clear() {
         if !tp.tp_diffbuf[i].is_null() {
             tp.tp_diffbuf[i] = ::core::ptr::null_mut();
             tp.tp_diff_invalid = 1;
-            // SAFETY: nothing here holds a borrow of the tab page's block list.
-            unsafe { diff_redraw(true) };
+            diff_redraw(true);
         }
     }
 }
@@ -108,8 +105,7 @@ pub fn diff_invalidate(buffer: Buf) {
         if diff_buf_idx(buffer, tp) != DB_COUNT {
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
-                // SAFETY: nothing here holds a borrow of the block list.
-                unsafe { diff_redraw(true) };
+                diff_redraw(true);
             }
         }
     }

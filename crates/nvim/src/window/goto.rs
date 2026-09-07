@@ -46,7 +46,7 @@ use crate::undo::u_sync;
 use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
-pub unsafe fn win_goto(window: Win) {
+pub fn win_goto(window: Win) {
     goto_win(window);
 }
 
@@ -54,8 +54,7 @@ pub unsafe fn win_goto(window: Win) {
 pub(crate) fn goto_win(window: Win) {
     let mut window = window;
     let owp = Win::current();
-    // SAFETY: reads the editor's lock state.
-    if unsafe { text_or_buf_locked() } {
+    if text_or_buf_locked() {
         beep();
         return;
     }
@@ -88,8 +87,7 @@ pub(crate) fn goto_win(window: Win) {
 /// Redraw the line the cursor of `window` is on.
 fn redraw_winline(window: Win) {
     let lnum = window.w_cursor.lnum;
-    // SAFETY: a live window and a line of its own buffer.
-    unsafe { redraw_win_line(window, lnum) };
+    redraw_win_line(window, lnum);
 }
 
 /// The tab page `win` is on, or null.
@@ -150,12 +148,7 @@ impl Axis {
     }
 }
 
-pub unsafe fn win_vert_neighbor(
-    tabpage: TabPage,
-    window: Win,
-    up: bool,
-    count: c_int,
-) -> Option<Win> {
+pub fn win_vert_neighbor(tabpage: TabPage, window: Win, up: bool, count: c_int) -> Option<Win> {
     let (tp, wp) = (tabpage, window);
     neighbor(tp, wp, Axis::Vertical, up, count)
 }
@@ -173,12 +166,7 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
     }
 }
 
-pub unsafe fn win_horz_neighbor(
-    tabpage: TabPage,
-    window: Win,
-    left: bool,
-    count: c_int,
-) -> Option<Win> {
+pub fn win_horz_neighbor(tabpage: TabPage, window: Win, left: bool, count: c_int) -> Option<Win> {
     let (tp, wp) = (tabpage, window);
     neighbor(tp, wp, Axis::Horizontal, left, count)
 }
@@ -257,7 +245,7 @@ fn neighbor(
     foundfr.win()
 }
 
-pub unsafe fn win_enter(window: Win, undo_sync: bool) {
+pub fn win_enter(window: Win, undo_sync: bool) {
     enter(window, undo_sync);
 }
 
@@ -332,8 +320,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         Win::current().w_cursor.coladd = 0;
     }
     if split_keep_cursor() {
-        // SAFETY: reads the current window, which was just set.
-        unsafe { changed_line_abv_curs() }; // assume cursor position needs updating
+        changed_line_abv_curs(); // assume cursor position needs updating
     } else {
         // Make sure the cursor position is valid, either by moving the cursor
         // or by scrolling the text.
@@ -472,7 +459,7 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
+pub fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
     jump_open_win(buffer)
 }
 
@@ -488,7 +475,7 @@ pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
     Some(wp)
 }
 
-pub unsafe fn buf_jump_open_tab(buffer: Buf) -> Option<Win> {
+pub fn buf_jump_open_tab(buffer: Buf) -> Option<Win> {
     jump_open_tab(buffer)
 }
 

@@ -246,7 +246,7 @@ unsafe fn handle_mkdir_p_arg(args: &ExArg, fname: *mut c_char) -> Result<(), Fai
 /// `args` must be the live Ex-command argument.
 pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // check 'write' option
-    if unsafe { not_writing() } {
+    if not_writing() {
         return Err(Failed);
     }
 
@@ -702,7 +702,7 @@ unsafe fn write_one_buffer(
     // 2. if there is no file name (even after browsing)
     // 3. if the 'readonly' is set (even after a dialog)
     // 4. if overwriting is allowed (even after a dialog)
-    if unsafe { not_writing() } {
+    if not_writing() {
         *error += 1;
         return WriteAll::Stop;
     }
@@ -736,10 +736,7 @@ unsafe fn write_one_buffer(
 /// Check the 'write' option.
 ///
 /// Returns true and gives a message when writing is disabled.
-///
-/// # Safety
-/// Main thread, message state.
-unsafe fn not_writing() -> bool {
+fn not_writing() -> bool {
     if p_write.get() != 0 {
         return false;
     }
@@ -819,8 +816,7 @@ pub unsafe fn getfile(
     if !check_can_set_curbuf_forceit(forceit as c_int) {
         return GETFILE_ERROR;
     }
-    // SAFETY: main thread.
-    if unsafe { text_locked() } || unsafe { curbuf_locked() } {
+    if text_locked() || curbuf_locked() {
         return GETFILE_ERROR;
     }
 
@@ -854,7 +850,6 @@ pub unsafe fn getfile(
             // SAFETY: as above.
             unsafe { dialog_changed(Buf::current(), false) };
         }
-        // SAFETY: as above.
         if curbuf_is_changed() {
             drop(no_prompt.take());
             // File has been changed.
@@ -864,7 +859,6 @@ pub unsafe fn getfile(
     }
     drop(no_prompt.take());
     if setpm {
-        // SAFETY: main thread.
         setpcmark();
     }
 

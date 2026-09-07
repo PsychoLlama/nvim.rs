@@ -144,7 +144,7 @@ pub(super) unsafe fn handle_affix_header(
 
     if is_prefix && aff.af_pfxpostpone != 0 {
         if unsafe { (*st.cur_aff).ah_new_id } == 0 {
-            unsafe { check_renumber(spin) };
+            check_renumber(spin);
             spin.si_newpref_id += 1;
             unsafe { (*st.cur_aff).ah_new_id = spin.si_newpref_id };
             // Nothing has used the id yet; it is given back at the end

@@ -359,11 +359,7 @@ pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
 
 /// The `'listchars'` "extends" character for `window`, or NUL if it should not be
 /// used.
-///
-/// # Safety
-/// `window` must be a live window.
-pub(crate) unsafe fn get_lcs_ext(window: Win) -> ScreenChar {
-    // SAFETY: the caller's window.
+pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
     if window.w_onebuf_opt.wo_wrap != 0 {
         // With 'wrap' a line never continues past the right of the screen.
         return NUL as ScreenChar;
@@ -415,10 +411,7 @@ pub(crate) unsafe fn get_rightmost_vcol(
 ///
 /// Memoised on `w_virtcol` and the two widths, because `win_line` asks once
 /// per cell of the cursor line.
-///
-/// # Safety
-/// `window` must be a live window.
-pub(crate) unsafe fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ffi::c_int) {
+pub(crate) fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ffi::c_int) {
     static SAVED_W_VIRTCOL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_WP: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
     static PREV_WIDTH1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -426,7 +419,6 @@ pub(crate) unsafe fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::c
     static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    // SAFETY: the caller's window.
     let width1 = window.w_view_width - window.col_off();
     let width2 = width1 + win_col_off2(window);
     if SAVED_W_VIRTCOL.get() == window.w_virtcol
@@ -464,15 +456,10 @@ impl WinLineVars {
     /// Start a screen line at column zero: reset the write cursor and blank
     /// the whole line buffer, so anything not drawn below reads as a space
     /// with no attribute and no virtual column.
-    ///
-    /// # Safety
-    /// `window` must be live and the line buffers sized for its width.
-    pub(crate) unsafe fn start_line(&mut self, window: Win) {
+    pub(crate) fn start_line(&mut self, window: Win) {
         self.col = 0;
         self.off = 0;
         self.linebreak_armed = false;
-        // SAFETY: `grid_alloc` keeps the line buffers at least `w_view_width`
-        // wide, which is the invariant every writer here relies on.
         for i in 0..window.w_view_width {
             put_cell(i, schar_from_ascii(b' '), 0, -1);
         }

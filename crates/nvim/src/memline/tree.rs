@@ -487,7 +487,7 @@ pub(crate) unsafe fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) 
             break;
         }
 
-        let top = unsafe { ml_add_stack(buffer) };
+        let top = ml_add_stack(buffer);
         let frame = InfoPtr {
             ip_bnum: bnum,
             ip_low: low,
@@ -566,10 +566,7 @@ pub(crate) unsafe fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) 
 
 /// Push an entry onto the info-pointer stack and return its index. The
 /// entry is left blank; every caller fills it in.
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub(crate) unsafe fn ml_add_stack(mut b: Buf) -> usize {
+pub(crate) fn ml_add_stack(mut b: Buf) -> usize {
     b.b_ml.stack_push()
 }
 

@@ -133,7 +133,7 @@ pub unsafe fn grid_draw_border(
     let icol = grid.cols - unsafe { *adj.offset(1) } - unsafe { *adj.offset(3) };
 
     if side(0) {
-        unsafe { screengrid_line_start(grid, 0, 0) };
+        screengrid_line_start(grid, 0, 0);
         if side(3) {
             grid_line_put_schar(0, chars[0], unsafe { *attrs.offset(0) });
         }

@@ -314,8 +314,7 @@ pub unsafe fn mark_adjust_buf(
     }
 
     if op as c_uint != kExtmarkNOOP as c_uint {
-        // SAFETY: `buffer` is live.
-        unsafe { extmark_adjust(buffer, line1, line2, amount, amount_after, op) };
+        extmark_adjust(buffer, line1, line2, amount, amount_after, op);
     }
 
     // The context marks and the saved cursor belong to the current window
@@ -431,10 +430,7 @@ fn follows(win: Win, by_term: bool, buffer: Buf) -> bool {
 /// position.
 /// "spaces_removed" is the number of spaces that were removed, matters when the
 /// cursor is inside them.
-///
-/// # Safety
-/// The editor's globals must be live, which they are from startup to exit.
-pub unsafe fn mark_col_adjust(
+pub fn mark_col_adjust(
     lnum: LineNr,
     mincol: ColNr,
     lnum_amount: LineNr,

@@ -267,11 +267,7 @@ pub(crate) trait TypvalSink {
     const CONVERT_FN_NAME: &'static CStr;
 
     /// `TYPVAL_ENCODE_CHECK_BEFORE`, run before every value.
-    ///
-    /// # Safety
-    /// Called between values, with no borrow outstanding. An implementation
-    /// may touch its own state and nothing the walk holds.
-    unsafe fn check_before(&mut self) {}
+    fn check_before(&mut self) {}
 
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased

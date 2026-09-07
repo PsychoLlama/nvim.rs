@@ -141,7 +141,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     } else {
         1
     } != 0;
-    let extmark: MTPair = unsafe { extmark_from_id(b, ns_id as uint32_t, id as uint32_t) };
+    let extmark: MTPair = extmark_from_id(b, ns_id as uint32_t, id as uint32_t);
     if extmark.start.pos.row < 0 as int32_t {
         return rv.reported(error);
     }
@@ -229,19 +229,17 @@ pub unsafe fn nvim_buf_get_extmarks(
         ::core::mem::swap(&mut l_row, &mut u_row);
         ::core::mem::swap(&mut l_col, &mut u_col);
     }
-    let marks: ExtmarkInfoArray = unsafe {
-        extmark_get(
-            b,
-            ns_id as uint32_t,
-            l_row,
-            l_col,
-            u_row,
-            u_col,
-            limit,
-            type_0,
-            opts.overlap,
-        )
-    };
+    let marks: ExtmarkInfoArray = extmark_get(
+        b,
+        ns_id as uint32_t,
+        l_row,
+        l_col,
+        u_row,
+        u_col,
+        limit,
+        type_0,
+        opts.overlap,
+    );
     rv = arena_array(
         arena,
         if marks.size < rv_limit {
@@ -300,7 +298,7 @@ unsafe fn extmark_get_index_from_obj(
             *err = err_bad_number(c"mark id", id);
             return false;
         }
-        let extmark: MTPair = unsafe { extmark_from_id(buffer, ns_id as uint32_t, id as uint32_t) };
+        let extmark: MTPair = extmark_from_id(buffer, ns_id as uint32_t, id as uint32_t);
         if !(extmark.start.pos.row >= 0 as int32_t) {
             *err = err_bad_number(c"mark id (not found)", id);
             return false;

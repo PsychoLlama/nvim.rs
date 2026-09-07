@@ -49,7 +49,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
         // U+00AA and U+00BA are the ordinal indicators: lowercase
         // letters, but not the lower half of a case pair.
         Ok(NfaOp::ClassLower) => mb_islower(c) && c != 170 && c != 186,
-        Ok(NfaOp::ClassPrint) => unsafe { vim_isprintc(c) },
+        Ok(NfaOp::ClassPrint) => vim_isprintc(c),
         Ok(NfaOp::ClassPunct) => (1..128).contains(&c) && ctype(_ISpunct as c_int),
         Ok(NfaOp::ClassSpace) => (9..=13).contains(&c) || c == b' ' as c_int,
         Ok(NfaOp::ClassUpper) => mb_isupper(c),
@@ -58,9 +58,9 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
         Ok(NfaOp::ClassReturn) => c == b'\r' as c_int,
         Ok(NfaOp::ClassBackspace) => c == 0x08,
         Ok(NfaOp::ClassEscape) => c == ESC,
-        Ok(NfaOp::ClassIdent) => unsafe { vim_is_ident_char(c) },
+        Ok(NfaOp::ClassIdent) => vim_is_ident_char(c),
         Ok(NfaOp::ClassKeyword) => reg_iswordc(rex, c),
-        Ok(NfaOp::ClassFname) => unsafe { vim_isfilec(c) },
+        Ok(NfaOp::ClassFname) => vim_isfilec(c),
         _ => {
             siemsg!("E877: (NFA regexp) Invalid character class: {}", cls as i64);
             return Err(Failed);

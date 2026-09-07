@@ -700,7 +700,7 @@ pub(crate) unsafe fn prepare_cpt_compl_funcs() {
 }
 
 /// Advance `cpt_sources_index` by one, or report E684 and fail.
-pub(crate) unsafe fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
+pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
     let idx = cpt_sources().index();
     if idx >= 0 && idx < cpt_sources().rows().len() as c_int - 1 {
         cpt_sources().set_index(idx + 1);
@@ -830,7 +830,7 @@ pub(crate) unsafe fn cpt_compl_refresh() {
         // SAFETY: `p` walks `'complete'` and `skipped` has `IOSIZE` bytes.
         unsafe { next_cpt_part(&raw mut p, skipped.as_mut_ptr(), IOSIZE as size_t) };
         if unsafe { may_advance_cpt_index(p) } {
-            let _ = unsafe { advance_cpt_sources_index_safe() };
+            let _ = advance_cpt_sources_index_safe();
         }
     }
     cpt_sources().set_index(-1);

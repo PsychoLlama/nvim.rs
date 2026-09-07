@@ -242,7 +242,6 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         diffgetput(args.addr_count, idx_cur, idx_from, idx_to, line1, line2);
         if put {
             if KeyTyped.get() {
-                // SAFETY: the editor exists.
                 u_sync(false);
             }
             // SAFETY: `aco` was filled in by `aucmd_prepbuf` above.
@@ -256,7 +255,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
     }
     // SAFETY: the current window is live, in both calls.
     check_cursor(Win::current());
-    unsafe { changed_line_abv_curs() };
+    changed_line_abv_curs();
     if tp.tp_first_diff.is_null() {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
@@ -274,8 +273,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         diff_need_update.set(false);
     } else {
         let nul = ::core::ptr::null_mut::<c_char>();
-        // SAFETY: the editor exists; `DiffUpdated` takes no file name.
-        unsafe { diff_redraw(false) };
+        diff_redraw(false);
         let here = Buf::current_or_none();
         unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, here) };
     }
@@ -426,8 +424,7 @@ fn diffgetput(
                 }
             }
             let cb = Buf::current();
-            // SAFETY: the current buffer is live, in both calls.
-            unsafe { extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo) };
+            extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo);
             changed_lines(cb, lnum, 0 as ColNr, lnum + count, amount, true);
             if let Some((lnum, count)) = &freed {
                 diff_fold_update(lnum, count, idx_to as c_int);

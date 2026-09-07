@@ -395,11 +395,7 @@ fn mode_name(m: &ModeInputs) -> ModeName {
 }
 
 /// The current mode as `mode(1)` spells it.
-///
-/// # Safety
-/// The editor must be initialized: this reads the command line's state and
-/// the current buffer.
-pub unsafe fn get_mode() -> ModeName {
+pub fn get_mode() -> ModeName {
     let state = State.get();
     let in_cmdline = state & MODE_CMDLINE != 0;
     mode_name(&ModeInputs {
@@ -440,13 +436,11 @@ fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::
 /// # Safety
 /// The editor must be initialized.
 pub unsafe fn may_trigger_modechanged() {
-    // SAFETY: the editor is initialized.
     if !has_event(AutoEvent::ModeChanged) || got_int.get() {
         return;
     }
     let mut old_mode = last_mode.get();
-    // SAFETY: as above.
-    let mut curr_mode = unsafe { get_mode() };
+    let mut curr_mode = get_mode();
     if letters(&old_mode) == letters(&curr_mode) {
         return;
     }
@@ -477,10 +471,7 @@ pub unsafe fn may_trigger_modechanged() {
 static was_safe: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Nothing is pending that would make running arbitrary code surprising.
-///
-/// # Safety
-/// The editor must be initialized.
-unsafe fn is_safe_now() -> bool {
+fn is_safe_now() -> bool {
     stuff_empty()
         && typeahead().is_empty()
         && using_script() == 0
@@ -494,8 +485,7 @@ unsafe fn is_safe_now() -> bool {
 /// # Safety
 /// The editor must be initialized.
 pub unsafe fn may_trigger_safestate(safe: bool) {
-    // SAFETY: the editor is initialized.
-    let is_safe = safe && unsafe { is_safe_now() };
+    let is_safe = safe && is_safe_now();
     if was_safe.get() != is_safe {
         let what = if is_safe {
             c"SafeState: Start triggering"

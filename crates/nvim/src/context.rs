@@ -88,21 +88,13 @@ const CONTEXT_INIT: Context = Context {
 static CTX_STACK: GlobalCell<Vec<Context>> = GlobalCell::new(Vec::new());
 
 /// How many contexts are on the stack.
-///
-/// # Safety
-/// Main-thread editor call.
-pub unsafe fn ctx_size() -> size_t {
+pub fn ctx_size() -> size_t {
     CTX_STACK.with(Vec::len)
 }
 
 /// The context `index` places below the top of the stack, or null when the
 /// index is out of bounds.
-///
-/// # Safety
-/// Main-thread editor call. The pointer is into the stack's storage, so it
-/// is invalidated by any later push or pop — exactly as the C `kvec` one
-/// was.
-pub unsafe fn ctx_get(index: size_t) -> *mut Context {
+pub fn ctx_get(index: size_t) -> *mut Context {
     CTX_STACK.with_mut(|stack| match stack.len().checked_sub(index + 1) {
         Some(at) => &raw mut stack[at],
         None => core::ptr::null_mut(),

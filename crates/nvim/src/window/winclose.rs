@@ -38,7 +38,7 @@ use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
-pub unsafe fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
+pub fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
     close(win, free_buf, force)
 }
 
@@ -445,8 +445,7 @@ fn tabclosedpre(tabpage: TabPage) {
     goto_tab(back, false, false);
 }
 
-pub unsafe fn win_close_othertab(win: Win, free_buf: c_int, tabpage: TabPage, force: bool) -> bool {
-    // SAFETY: the caller's promise -- a live window and a live tab page.
+pub fn win_close_othertab(win: Win, free_buf: c_int, tabpage: TabPage, force: bool) -> bool {
     let (win, tp) = (win, tabpage);
     close_othertab(win, free_buf != 0, tp, force)
 }

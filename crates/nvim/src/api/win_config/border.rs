@@ -336,9 +336,7 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
     }
 }
 
-/// # Safety
-/// `window` must be null or a live window.
-pub(crate) unsafe fn generate_api_error(window: Option<Win>, attribute: &CStr, err: &mut Error) {
+pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr, err: &mut Error) {
     if let Some(window) = window.filter(|w| w.w_floating) {
         let handle = window.handle;
         let e = api_error!(
@@ -409,7 +407,6 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
         // The copy is still short-circuited by `full`: a ninth part is
         // already a failure and must not advance `p`.
         //
-        // SAFETY: as above.
         let empty =
             full || unsafe { copy_option_part(next, into, room, comma) } == 0 || part[0] == 0;
         if empty {

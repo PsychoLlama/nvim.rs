@@ -44,7 +44,7 @@ impl TypvalSink for MsgpackSink<'_> {
 
     /// msgpack is written straight into a fixed buffer, so every item starts
     /// by making sure there is room for a header.
-    unsafe fn check_before(&mut self) {
+    fn check_before(&mut self) {
         mpack_check_buffer(self.packer);
     }
 

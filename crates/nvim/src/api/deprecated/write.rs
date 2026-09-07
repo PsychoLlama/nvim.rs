@@ -18,9 +18,9 @@ use crate::message::{emsg_ptr, msg_ptr};
 use crate::types::NUL;
 use crate::types::builders::ArrayBuf;
 
-pub unsafe fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
+pub fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
 
-pub unsafe fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
+pub fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
 
 unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
     static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {

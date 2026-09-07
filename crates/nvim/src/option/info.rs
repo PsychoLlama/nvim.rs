@@ -124,19 +124,8 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
 /// buffer-local and a window-local answer can both apply — a window-local
 /// one wins — and `:set` (neither flag) falls back to the global context
 /// when the local one was never set.
-///
-/// # Safety
-///
-/// `buffer` and `win` must be live unless `opt_flags` is exactly
-/// `OptionSetFlags::GLOBAL`.
-unsafe fn last_set(
-    opt_idx: OptIndex,
-    opt_flags: OptionSetFlags,
-    buffer: Buf,
-    win: Win,
-) -> ScriptCtx {
+fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win) -> ScriptCtx {
     let opt = get_option(opt_idx);
-    // SAFETY: the caller's pointers are live for the scopes reached below.
     if opt_flags == OptionSetFlags::GLOBAL {
         return option_last_set(opt_idx);
     }
@@ -178,7 +167,7 @@ pub(crate) unsafe fn vimoption2dict(
     } else {
         c"global"
     };
-    let script_ctx = unsafe { last_set(opt_idx, opt_flags, buffer, win) };
+    let script_ctx = last_set(opt_idx, opt_flags, buffer, win);
     let type_name = optval_type_name(option_get_type(opt_idx));
 
     // The thirteen keys, in the order the API reports them. Building the

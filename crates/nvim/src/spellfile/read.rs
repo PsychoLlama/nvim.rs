@@ -751,7 +751,7 @@ pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
                 // Leave it empty rather than half-read.
                 unsafe { slang_clear(slang) };
             }
-            unsafe { redraw_all_later(UPD_SOME_VALID) };
+            redraw_all_later(UPD_SOME_VALID);
             didit = true;
         }
         slang = unsafe { (*slang).sl_next };

@@ -169,16 +169,14 @@ pub(crate) unsafe fn block_insert(
 
         let _ = unsafe { ml_replace(lnum, newp, false) };
         let splice = offset - startcol;
-        unsafe {
-            extmark_splice_cols(
-                Buf::current(),
-                lnum as c_int - 1,
-                startcol,
-                skipped,
-                splice,
-                kExtmarkUndo,
-            )
-        };
+        extmark_splice_cols(
+            Buf::current(),
+            lnum as c_int - 1,
+            startcol,
+            skipped,
+            splice,
+            kExtmarkUndo,
+        );
 
         if lnum == op.end.lnum {
             // `']` goes to the end of the block, not the end of the insert

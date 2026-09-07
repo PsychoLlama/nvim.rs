@@ -243,8 +243,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 // SAFETY: `ins_buf` is the buffer being scanned.
                 let buf = unsafe { Buf::new((*st).ins_buf) };
                 let name = if buf.b_fname.is_null() {
-                    // SAFETY: a live buffer; the special name is static.
-                    unsafe { buf_spname(buf) }
+                    buf_spname(buf)
                 } else if buf.b_sfname.is_null() {
                     buf.b_fname
                 } else {
@@ -757,7 +756,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
             }
             if status == INS_COMPL_CPT_CONT {
                 if may_advance_cpt_idx {
-                    if unsafe { advance_cpt_sources_index_safe() }.is_err() {
+                    if advance_cpt_sources_index_safe().is_err() {
                         break;
                     }
                     compl_source_start_timer(cpt_sources().index());
@@ -794,7 +793,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
         }
 
         if may_advance_cpt_idx {
-            if unsafe { advance_cpt_sources_index_safe() }.is_err() {
+            if advance_cpt_sources_index_safe().is_err() {
                 break;
             }
             compl_source_start_timer(cpt_sources().index());
@@ -880,7 +879,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
     unsafe { may_trigger_modechanged() };
 
     if match_count > 0 && !ctrl_x_mode_spell() {
-        if is_nearest_active() && !unsafe { ins_compl_has_preinsert() } {
+        if is_nearest_active() && !ins_compl_has_preinsert() {
             unsafe { sort_compl_match_list(Some(cp_compare_nearest)) };
         }
         if cot_fuzzy() && ins_compl_leader_len() > 0 {

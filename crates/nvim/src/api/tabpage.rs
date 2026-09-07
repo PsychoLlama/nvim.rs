@@ -121,8 +121,7 @@ pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Erro
         return (0 as WindowHandle).reported(err);
     };
     if tab.is_current() {
-        // SAFETY: the current window is whatever `curwin` names.
-        return Ok(unsafe { nvim_get_current_win() });
+        return Ok(nvim_get_current_win());
     }
     let curwin_of_tab = tab.current_window();
     match windows_in_tab(tab).find(|&wp| curwin_of_tab == Some(wp)) {
@@ -154,8 +153,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
         ));
     }
     if tp.is_current() {
-        // SAFETY: `wp` is live, and `err` is this frame's own.
-        api_try(&mut err, |_| unsafe { win_goto(wp) });
+        api_try(&mut err, |_| win_goto(wp));
     } else if tp.tp_curwin != Some(wp.id()) {
         let mut tp = tp;
         tp.tp_prevwin = tp.tp_curwin;
@@ -239,7 +237,7 @@ pub unsafe fn nvim_open_tabpage(
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.
         let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
-        unsafe { win_set_buf(w, b, &mut err) };
+        win_set_buf(w, b, &mut err);
         drop(quiet);
         if !valid_tabpage(tp.id()) {
             return Err(tabpage_closed(err));

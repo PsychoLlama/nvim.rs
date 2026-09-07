@@ -309,7 +309,6 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // Set the current position only once for a global command.  If
     // global_busy is set, setpcmark() will not do anything.  If there is an
     // error, global_busy will be incremented.
-    // SAFETY: main thread, live window.
     setpcmark();
 
     // When the command writes a message, don't overwrite the command.
@@ -345,8 +344,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
 
     // The cursor may not have moved in the text but a change in a previous
     // line may move it on the screen.
-    // SAFETY: main thread, live window.
-    unsafe { changed_line_abv_curs() };
+    changed_line_abv_curs();
 
     // If it looks like no message was written, allow overwriting the command
     // with the report for number of changes.

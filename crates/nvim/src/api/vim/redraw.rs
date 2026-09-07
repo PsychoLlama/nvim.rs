@@ -90,15 +90,12 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     }
     if set(KEYSET_OPTIDX_redraw__valid) {
         let type_0 = if opts.valid { UPD_VALID } else { UPD_NOT_VALID };
-        // SAFETY: `win` and `buf` are the live objects the lookups answered.
-        unsafe {
-            if let Some(win) = win {
-                redraw_later(win, type_0);
-            } else if let Some(buf) = buf {
-                redraw_buf_later(buf, type_0);
-            } else {
-                redraw_all_later(type_0);
-            }
+        if let Some(win) = win {
+            redraw_later(win, type_0);
+        } else if let Some(buf) = buf {
+            redraw_buf_later(buf, type_0);
+        } else {
+            redraw_all_later(type_0);
         }
     }
     if set(KEYSET_OPTIDX_redraw__range) {
@@ -125,8 +122,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         };
         if begin < end {
             let (first, last) = (1 + begin as LineNr, end as LineNr);
-            // SAFETY: a live buffer.
-            unsafe { redraw_buf_range_later(rbuf, first, last) };
+            redraw_buf_range_later(rbuf, first, last);
         }
     }
     // Marking lines stale flushes by default; every other key does not.

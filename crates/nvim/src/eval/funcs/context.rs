@@ -42,8 +42,7 @@ unsafe fn context_index(tv: *const TypVal, what: &str) -> Option<usize> {
 
 /// Resolve a context by index, reporting the out-of-bounds message.
 fn context_at(index: usize) -> Option<*mut Context> {
-    // SAFETY: the caller's obligation.
-    let ctx = unsafe { ctx_get(index) };
+    let ctx = ctx_get(index);
     if ctx.is_null() {
         semsg!("E475: Invalid value for argument index: out of bounds");
         return None;
@@ -168,6 +167,5 @@ pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 pub unsafe fn f_ctxsize(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     result.v_type = VAR_NUMBER;
-    // SAFETY: reads the context stack's length; main thread only.
-    result.vval.v_number = unsafe { ctx_size() } as VarNumber;
+    result.vval.v_number = ctx_size() as VarNumber;
 }

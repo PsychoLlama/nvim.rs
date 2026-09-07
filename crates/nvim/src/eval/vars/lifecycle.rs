@@ -64,9 +64,8 @@ pub unsafe fn evalvars_init() {
 
     let vim_version = min_vim_version();
     let versionlong = (vim_version * 10000 + highest_patch()) as VarNumber;
-    // SAFETY: `Vv` names a row of the `v:` table, so neither call can fail.
-    unsafe { set_vim_var_nr(Vv::Version, vim_version as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::Versionlong, versionlong) };
+    set_vim_var_nr(Vv::Version, vim_version as VarNumber);
+    set_vim_var_nr(Vv::Versionlong, versionlong);
 
     // `v:msgpack_types`: eight empty, locked lists, compared by identity
     // by the msgpack encoder and decoder rather than by name.
@@ -124,15 +123,13 @@ pub unsafe fn evalvars_init() {
         (Vv::Maxcol, MAXCOL as VarNumber),
         (Vv::Echospace, (sc_col.get() - 1) as VarNumber),
     ] {
-        // SAFETY: `Vv` names a row of the `v:` table.
-        unsafe { set_vim_var_nr(idx, n) };
+        set_vim_var_nr(idx, n);
     }
 
-    // SAFETY: as above.
-    unsafe { set_vim_var_special(Vv::Exiting, kSpecialVarNull) };
-    unsafe { set_vim_var_bool(Vv::False, kBoolVarFalse) };
-    unsafe { set_vim_var_bool(Vv::True, kBoolVarTrue) };
-    unsafe { set_vim_var_special(Vv::Null, kSpecialVarNull) };
+    set_vim_var_special(Vv::Exiting, kSpecialVarNull);
+    set_vim_var_bool(Vv::False, kBoolVarFalse);
+    set_vim_var_bool(Vv::True, kBoolVarTrue);
+    set_vim_var_special(Vv::Null, kSpecialVarNull);
 
     let vvlua_partial = unsafe { xcalloc(1, ::core::mem::size_of::<Partial>()) } as *mut Partial;
     // The name should never be printed, but do not crash if it is.

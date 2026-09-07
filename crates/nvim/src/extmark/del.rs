@@ -24,7 +24,7 @@ use crate::types::{ColNr, MTKey, MarkTreeIter, uint32_t};
 /// Remove the extmark `id` of namespace `ns_id`.
 ///
 /// Answers false when there is no such mark.
-pub unsafe fn extmark_del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
+pub fn extmark_del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
     del_id(buffer, ns_id, id)
 }
 
@@ -85,7 +85,7 @@ pub(crate) fn del(mut buffer: Buf, itr: &mut MarkTreeIter, mut key: MTKey, resto
 
 /// Free every mark of namespace `ns_id` (or of every namespace, when it is 0)
 /// between two positions.
-pub unsafe fn extmark_clear(
+pub fn extmark_clear(
     mut buffer: Buf,
     ns_id: uint32_t,
     l_row: c_int,

@@ -346,7 +346,7 @@ unsafe fn create_environment(
 
     // $NVIM points the child at this instance's server address, when
     // there is one.
-    let nvim_addr = unsafe { get_vim_var_str(Vv::Servername) };
+    let nvim_addr = get_vim_var_str(Vv::Servername);
     if unsafe { *nvim_addr } as c_int != NUL {
         let dv = unsafe { tv_dict_find(env, c"NVIM".as_ptr(), 4) };
         if !dv.is_null() {
@@ -501,8 +501,8 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut term_name = ptr::null::<c_char>();
 
     if term {
-        if unsafe { text_locked() } {
-            unsafe { text_locked_msg() };
+        if text_locked() {
+            text_locked_msg();
             bail!();
         }
         if Buf::current().b_changed != 0 {

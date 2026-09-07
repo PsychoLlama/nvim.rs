@@ -225,7 +225,7 @@ pub unsafe fn get_user_input(
             unsafe { msg_clr_eos() };
             unsafe { msg_puts_len(prompt, p.offset_from(prompt), get_echo_hl_id(), false) };
             msg_didout.set(false);
-            unsafe { msg_starthere() };
+            msg_starthere();
         }
     }
     cmdline_row.set(msg_row.get());

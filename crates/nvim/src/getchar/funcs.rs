@@ -164,10 +164,7 @@ unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
 
 /// Set `v:mouse_win`, `v:mouse_winid`, `v:mouse_lnum` and `v:mouse_col` from
 /// the position a mouse key was received at.
-///
-/// # Safety
-/// Callable at any time.
-unsafe fn set_mouse_vars() {
+fn set_mouse_vars() {
     let mut pos = MousePos::current();
     if pos.row < 0 || pos.col < 0 {
         return;
@@ -185,12 +182,10 @@ unsafe fn set_mouse_vars() {
     // before it. `win` came out of a walk of the same list, so the "not
     // in it" arm upstream walks into a null pointer on is unreachable.
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
-    // SAFETY (this body): `curwin` is set from startup to exit, and the vim
-    // variables set here are the editor's own.
-    unsafe { set_vim_var_nr(Vv::MouseWin, winnr as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::MouseWinid, win.handle as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::MouseLnum, lnum as VarNumber) };
-    unsafe { set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber) };
+    set_vim_var_nr(Vv::MouseWin, winnr as VarNumber);
+    set_vim_var_nr(Vv::MouseWinid, win.handle as VarNumber);
+    set_vim_var_nr(Vv::MouseLnum, lnum as VarNumber);
+    set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber);
 }
 
 /// `getchar()` and `getcharstr()`.
@@ -218,10 +213,10 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
         ui_busy_stop();
     }
 
-    unsafe { set_vim_var_nr(Vv::MouseWin, 0) };
-    unsafe { set_vim_var_nr(Vv::MouseWinid, 0) };
-    unsafe { set_vim_var_nr(Vv::MouseLnum, 0) };
-    unsafe { set_vim_var_nr(Vv::MouseCol, 0) };
+    set_vim_var_nr(Vv::MouseWin, 0);
+    set_vim_var_nr(Vv::MouseWinid, 0);
+    set_vim_var_nr(Vv::MouseLnum, 0);
+    set_vim_var_nr(Vv::MouseCol, 0);
 
     if n != 0 && (!opts.allow_number || n < 0 || !mod_mask.get().is_empty()) {
         // Render the key as a string: modifier prefix, then either the
@@ -249,7 +244,7 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
         unsafe { (*result).vval.v_string = xmemdupz(temp.as_ptr().cast(), i).cast() };
 
         if is_mouse_key(n as c_int) {
-            unsafe { set_mouse_vars() };
+            set_mouse_vars();
         }
     } else if !opts.allow_number {
         unsafe { (*result).v_type = VAR_STRING };

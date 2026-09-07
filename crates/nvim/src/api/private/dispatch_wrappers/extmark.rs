@@ -214,9 +214,7 @@ pub unsafe fn handle_nvim_buf_clear_namespace(
         wrong_type(error, 4, c"nvim_buf_clear_namespace", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4) } {
+    if let Err(e) = nvim_buf_clear_namespace(arg_1, arg_2, arg_3, arg_4) {
         return failure(error, e);
     }
     Object::Nil
@@ -264,9 +262,7 @@ pub unsafe fn handle_nvim_buf_del_extmark(
         wrong_type(error, 3, c"nvim_buf_del_extmark", c"Integer");
         return Object::Nil;
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_del_extmark(arg_1, arg_2, arg_3) } {
+    let rv = match nvim_buf_del_extmark(arg_1, arg_2, arg_3) {
         Ok(rv) => rv,
         Err(e) => return failure(error, e),
     };

@@ -199,8 +199,7 @@ unsafe fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
 /// # Safety
 /// `info` must be a writable NUL-terminated string owned by the caller.
 pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
-    // SAFETY: the preview helpers answer live windows or null.
-    if !pum_is_visible.get() || !unsafe { compl_match_curr_select(selected) } {
+    if !pum_is_visible.get() || !compl_match_curr_select(selected) {
         return None;
     }
     unsafe { block_autocmds() };
@@ -319,10 +318,10 @@ unsafe fn pum_show_info(
     let no_sync = Suppress::undo_sync();
 
     if !use_float {
-        resized = unsafe { prepare_tagpreview(false) };
+        resized = prepare_tagpreview(false);
     } else {
         if let Some(wp) = win_float_find_preview() {
-            unsafe { win_enter(wp, false) };
+            win_enter(wp, false);
         } else if win_float_create_preview(true, true).is_some() {
             resized = true;
         }
@@ -424,7 +423,7 @@ unsafe fn pum_fill_info(
         && !unsafe { pum_adjust_info_position(Win::current(), max_info_width) }
         && let Some(saved) = valid_win(curwin_save)
     {
-        unsafe { win_enter(saved, false) };
+        win_enter(saved, false);
     }
     resized
 }
@@ -446,7 +445,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
         return resized;
     }
     if let Some(tp) = saved_tab.filter(|_| left_tab) {
-        unsafe { goto_tabpage_tp(tp, false, false) };
+        goto_tabpage_tp(tp, false, false);
     }
 
     // On the first completion, with the preview window not resized, skip
@@ -462,7 +461,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
     // happens in the window itself.
     if resized && let Some(saved) = valid_win(curwin_save) {
         let no_sync = Suppress::undo_sync();
-        unsafe { win_enter(saved, true) };
+        win_enter(saved, true);
         drop(no_sync);
         update_topline(Win::current());
     }
@@ -477,7 +476,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
 
     if !resized && let Some(saved) = valid_win(curwin_save) {
         let _no_sync = Suppress::undo_sync();
-        unsafe { win_enter(saved, true) };
+        win_enter(saved, true);
     }
 
     // Autocommands may have changed it again.
@@ -502,7 +501,7 @@ pub(crate) unsafe fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     // SAFETY: the array outlives the menu; every window pointer is
     // re-validated after anything that can run autocommands.
     let prev_selected = pum_selected.replace(n);
-    let cot_flags = unsafe { get_cot_flags() };
+    let cot_flags = get_cot_flags();
     let use_float = cot_flags & kOptCotFlagPopup != 0;
     let info = unsafe { pum_selected_info() };
 

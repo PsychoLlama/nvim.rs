@@ -794,7 +794,7 @@ fn run_operator(
             let recursive = op.op_type == OpType::Foldopenrec || op.op_type == OpType::Foldcloserec;
             let (start, end, visual) = (op.start, op.end, op.is_visual);
             let (opening, recursive) = (c_int::from(opening), c_int::from(recursive));
-            unsafe { op_fold_range(start, end, opening, recursive, visual) };
+            op_fold_range(start, end, opening, recursive, visual);
         }
         OpType::Folddel | OpType::Folddelrec => {
             VIsual_reselect.set(0);

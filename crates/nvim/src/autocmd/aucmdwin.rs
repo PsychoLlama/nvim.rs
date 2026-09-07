@@ -235,7 +235,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
                 for wp in windows_in_tab(tp) {
                     if wp.raw() == awp {
                         if !tp.is_current() {
-                            unsafe { goto_tabpage_tp(tp, true, true) };
+                            goto_tabpage_tp(tp, true, true);
                         }
                         unsafe { win_goto(Win::new(awp)) };
                         // Nothing steps the walk after those two: the
@@ -267,7 +267,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         unsafe { (*aucmd_wins().slot(idx)).auc_win_used = false };
 
         if valid_tabpage_win(TabPage::current()) == 0 {
-            unsafe { close_tabpage(TabPage::current()) };
+            close_tabpage(TabPage::current());
         }
         unsafe { unblock_autocmds() };
 
@@ -279,7 +279,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             landing.make_current();
             landing.buffer().make_current();
         }
-        unsafe { entering_window(Win::current()) };
+        entering_window(Win::current());
         if buf_is_prompt(current_buf()) {
             Buf::current().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
         }

@@ -453,7 +453,7 @@ impl Jump {
         if opened > 0 {
             drop(redraw_off);
             if postponed_split.get() != 0 {
-                unsafe { win_close(Win::current(), false, false) };
+                win_close(Win::current(), false, false);
                 postponed_split.set(0);
             }
             return Err(Failed);
@@ -478,7 +478,7 @@ impl Jump {
                 set_topline(Win::current(), Win::current().w_cursor.lnum);
             }
             if fdo_flags.get() & kOptFdoFlagTag as c_uint != 0 && self.key_typed {
-                unsafe { fold_open_cursor() };
+                fold_open_cursor();
             }
         }
         // `getfile` above runs autocommands, so the window the jump started
@@ -494,7 +494,7 @@ impl Jump {
             // Put the cursor back where it was.
             validate_cursor(Win::current());
             redraw_later(Win::current(), UPD_VALID);
-            unsafe { win_enter(saved, true) };
+            win_enter(saved, true);
         }
         drop(redraw_off);
         retval
@@ -513,7 +513,7 @@ impl Jump {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
             self.full_fname = unsafe { full_name_save(self.fname(), false) };
-            unsafe { prepare_tagpreview(true) };
+            prepare_tagpreview(true);
         }
     }
 
@@ -530,7 +530,7 @@ impl Jump {
         {
             let existing = unsafe { buflist_findname_exp(self.fname()) };
             if let Some(existing) = existing
-                && !unsafe { swbuf_goto_win_with_buf(Some(existing)) }.is_none()
+                && !swbuf_goto_win_with_buf(Some(existing)).is_none()
             {
                 self.reused_window = true;
             }
@@ -582,7 +582,7 @@ impl Jump {
 
         magic_overruled.set(save_magic);
         if search_options != 0 {
-            unsafe { set_no_hlsearch(save_no_hlsearch) };
+            set_no_hlsearch(save_no_hlsearch);
         }
         retval
     }
