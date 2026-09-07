@@ -30,6 +30,9 @@ unsafe fn lang_loaded(name: *const ::core::ffi::c_char) -> bool {
     langs.with(|loaded| loaded.contains_key(unsafe { lang_key(name) }))
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_has_language(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
@@ -42,12 +45,20 @@ pub(crate) unsafe extern "C-unwind" fn tslua_has_language(L: *mut lua_State) -> 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
     L: *mut lua_State,
 ) -> ::core::ffi::c_int {
     unsafe { add_language(L, false) }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `path` must point at a NUL-terminated string. `lang_name` must point at a
+/// NUL-terminated string. `symbol` must point at a NUL-terminated string.
 unsafe fn load_language_from_object(
     L: *mut lua_State,
     path: *const ::core::ffi::c_char,
@@ -113,6 +124,11 @@ unsafe fn load_language_from_object(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `mut _path` must point at a NUL-terminated string. `mut _lang_name` must
+/// point at a NUL-terminated string.
 unsafe fn load_language_from_wasm(
     L: *mut lua_State,
     mut _path: *const ::core::ffi::c_char,
@@ -124,6 +140,9 @@ unsafe fn load_language_from_wasm(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe fn add_language(L: *mut lua_State, is_wasm: bool) -> ::core::ffi::c_int {
     unsafe {
         let path: *const ::core::ffi::c_char = luaL_checklstring(
@@ -176,6 +195,9 @@ unsafe fn add_language(L: *mut lua_State, is_wasm: bool) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
@@ -193,6 +215,9 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(L: *mut lua_State) -> :
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe fn lang_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSLanguage {
     unsafe {
         let lang_name: *const ::core::ffi::c_char =
@@ -207,6 +232,9 @@ pub(crate) unsafe fn lang_check(L: *mut lua_State, index: ::core::ffi::c_int) ->
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);

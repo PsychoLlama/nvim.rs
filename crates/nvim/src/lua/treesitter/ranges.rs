@@ -11,6 +11,10 @@
 
 use super::*;
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `ranges` must point at a live `TSRange`.
 pub(crate) unsafe fn push_ranges(
     L: *mut lua_State,
     ranges: *const TSRange,
@@ -62,6 +66,9 @@ pub(crate) unsafe fn push_ranges(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe fn range_err(L: *mut lua_State) {
     unsafe {
         luaL_error(
@@ -71,6 +78,9 @@ unsafe fn range_err(L: *mut lua_State) {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe fn lua_checkuint32(L: *mut lua_State, index: ::core::ffi::c_int) -> uint32_t {
     unsafe {
         let value: lua_Number = luaL_checknumber(L, index);
@@ -85,6 +95,10 @@ unsafe fn lua_checkuint32(L: *mut lua_State, index: ::core::ffi::c_int) -> uint3
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `range` must point at a live `TSRange`, unaliased for the call.
 unsafe fn range_from_lua(L: *mut lua_State, range: *mut TSRange) {
     unsafe {
         let mut node: TSNode = TSNode {
@@ -139,6 +153,9 @@ unsafe fn range_from_lua(L: *mut lua_State, range: *mut TSRange) {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 2 as ::core::ffi::c_int {
@@ -174,6 +191,9 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(L: *mut lua_State) -> :
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn parser_get_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);

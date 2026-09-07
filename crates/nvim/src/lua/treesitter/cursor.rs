@@ -23,6 +23,9 @@ pub(crate) static querycursor_meta: ConstTable<[luaL_Reg; 5]> = luaL_reg_table![
     c"__gc" => querycursor_gc,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
     L: *mut lua_State,
 ) -> ::core::ffi::c_int {
@@ -89,6 +92,9 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_querycursor(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querycursor_remove_match(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
@@ -98,6 +104,9 @@ unsafe extern "C-unwind" fn querycursor_remove_match(L: *mut lua_State) -> ::cor
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querycursor_next_capture(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
@@ -119,6 +128,9 @@ unsafe extern "C-unwind" fn querycursor_next_capture(L: *mut lua_State) -> ::cor
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querycursor_next_match(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
@@ -136,6 +148,9 @@ unsafe extern "C-unwind" fn querycursor_next_match(L: *mut lua_State) -> ::core:
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe fn querycursor_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSQueryCursor {
     unsafe {
         let ud: *mut *mut TSQueryCursor =
@@ -150,6 +165,9 @@ unsafe fn querycursor_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mu
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querycursor_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let cursor: *mut TSQueryCursor = querycursor_check(L, 1 as ::core::ffi::c_int);
@@ -163,6 +181,10 @@ pub(crate) static querymatch_meta: ConstTable<[luaL_Reg; 3]> = luaL_reg_table![
     c"captures" => querymatch_captures,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `match_0` must point at a live `TSQueryMatch`, unaliased for the call.
 unsafe fn push_querymatch(
     L: *mut lua_State,
     match_0: *mut TSQueryMatch,
@@ -179,6 +201,9 @@ unsafe fn push_querymatch(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querymatch_info(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let match_0: *mut TSQueryMatch =
@@ -194,6 +219,9 @@ unsafe extern "C-unwind" fn querymatch_info(L: *mut lua_State) -> ::core::ffi::c
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn querymatch_captures(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let match_0: *mut TSQueryMatch =

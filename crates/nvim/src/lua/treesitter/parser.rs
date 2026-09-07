@@ -29,6 +29,9 @@ pub(crate) static parser_meta: ConstTable<[luaL_Reg; 9]> = luaL_reg_table![
     c"_logger" => parser_get_logger,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
@@ -50,6 +53,9 @@ pub(crate) unsafe extern "C-unwind" fn tslua_push_parser(L: *mut lua_State) -> :
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe fn parser_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSParser {
     unsafe {
         let ud: *mut *mut TSParser =
@@ -64,6 +70,9 @@ pub(crate) unsafe fn parser_check(L: *mut lua_State, index: ::core::ffi::c_int) 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn parser_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let ud: *mut *mut TSParser =
@@ -78,6 +87,9 @@ unsafe extern "C-unwind" fn parser_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn parser_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<parser>".as_ptr());
@@ -85,6 +97,11 @@ unsafe extern "C-unwind" fn parser_tostring(L: *mut lua_State) -> ::core::ffi::c
     }
 }
 
+/// # Safety
+///
+/// `payload` must point at the `Buffer` this parse reads its lines from, live
+/// for the whole parse, and `bytes_read` at a writable `uint32_t` the caller
+/// owns; tree-sitter's `TSInput` contract.
 unsafe extern "C" fn input_cb(
     payload: *mut ::core::ffi::c_void,
     mut _byte_index: uint32_t,
@@ -134,6 +151,9 @@ unsafe extern "C" fn input_cb(
 
 pub const BUFSIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 
+/// # Safety
+///
+/// `state` must point at a live `TSParseState`, unaliased for the call.
 unsafe extern "C" fn on_parser_progress(state: *mut TSParseState) -> bool {
     unsafe {
         let payload: *mut TSLuaParserCallbackPayload =
@@ -143,6 +163,9 @@ unsafe extern "C" fn on_parser_progress(state: *mut TSParseState) -> bool {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
@@ -253,6 +276,9 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
 
 pub const BUFSIZE_0: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn parser_reset(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);

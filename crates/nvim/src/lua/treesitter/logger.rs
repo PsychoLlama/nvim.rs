@@ -11,6 +11,11 @@
 
 use super::*;
 
+/// # Safety
+///
+/// `logger` must be a `TSLogger` this module installed: its `payload` is read
+/// as a `TSLuaLoggerOpts` and freed, so a logger from anywhere else -- or one
+/// already collected -- is a use-after-free.
 pub(crate) unsafe fn logger_gc(logger: TSLogger) {
     unsafe {
         if logger.log.is_none() {
@@ -26,6 +31,11 @@ pub(crate) unsafe fn logger_gc(logger: TSLogger) {
     }
 }
 
+/// # Safety
+///
+/// `payload` must point at the `TSLuaLoggerOpts` this logger was installed
+/// with and `s` at a NUL-terminated message; tree-sitter's callback contract,
+/// which hands back exactly what it was given.
 unsafe extern "C" fn logger_cb(
     payload: *mut ::core::ffi::c_void,
     logtype: TSLogType,
@@ -67,6 +77,9 @@ unsafe extern "C" fn logger_cb(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn parser_set_logger(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
@@ -114,6 +127,9 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(L: *mut lua_State) -> :
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn parser_get_logger(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);

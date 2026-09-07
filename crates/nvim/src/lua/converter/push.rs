@@ -134,22 +134,42 @@ impl TypvalSink for LuaSink {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_lua_convert_one_value()";
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
         self.push_nil();
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
         self.pushboolean(num);
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
         self.pushnumber(num as lua_Number);
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_unsigned_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
         self.pushnumber(num as lua_Number);
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
         self.pushnumber(flt);
         Flow::Go
@@ -157,12 +177,22 @@ impl TypvalSink for LuaSink {
 
     /// A Lua string is bytes, so this is the whole of it — NULs included.  It
     /// copies, which is why the walk's buffer-owning hooks need no override.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         unsafe { self.pushlstring(buf, len) };
         Flow::Go
     }
 
     /// msgpack `ext` has no Lua image, so it comes out as nil.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
         _tv: *mut TypVal,
@@ -174,6 +204,10 @@ impl TypvalSink for LuaSink {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
         unsafe {
             let data = if blob.is_null() {
@@ -189,6 +223,11 @@ impl TypvalSink for LuaSink {
     /// same function; anything else is nil.  Either way the walk stops here,
     /// so a partial's arguments and self dictionary are never visited — which
     /// is why no `Partial` frame ever reaches [`LuaSink::backref`].
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
         _tv: *mut TypVal,
@@ -215,6 +254,10 @@ impl TypvalSink for LuaSink {
         Flow::Stop
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
         self.createtable(0, 0);
     }
@@ -222,6 +265,11 @@ impl TypvalSink for LuaSink {
     /// An empty table is ambiguous in Lua, so an empty dictionary carries a
     /// marker: the `vim.empty_dict()` metatable, or the `_TYPE` key when the
     /// caller asked for the special form.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
@@ -233,6 +281,11 @@ impl TypvalSink for LuaSink {
     }
 
     /// The table, then the index its first item will be stored under.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
@@ -243,16 +296,29 @@ impl TypvalSink for LuaSink {
     }
 
     /// Store the item just converted and push the next index.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
         let idx = unsafe { lua_tonumber(self.lstate, -2) };
         self.rawset();
         self.pushnumber(idx + 1.0);
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
         self.rawset();
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
@@ -263,10 +329,19 @@ impl TypvalSink for LuaSink {
 
     /// The key is already on the stack and the value has just landed on top of
     /// it, so one `rawset` closes the pair.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.rawset();
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.rawset();
     }
@@ -274,6 +349,11 @@ impl TypvalSink for LuaSink {
     /// Lua tables are references, so a container that references itself is not
     /// a problem here: push the half-built table again and the cycle rebuilds
     /// itself.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_recurse(
         &mut self,
         val: *mut c_void,

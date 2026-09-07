@@ -55,6 +55,9 @@ pub(crate) static node_meta: ConstTable<[luaL_Reg; 36]> = luaL_reg_table![
     c"equal" => node_equal,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe fn push_node(L: *mut lua_State, node: TSNode, uindex: ::core::ffi::c_int) {
     unsafe {
         debug_assert!(
@@ -74,6 +77,10 @@ pub(crate) unsafe fn push_node(L: *mut lua_State, node: TSNode, uindex: ::core::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `res` must point at a live `TSNode`, unaliased for the call.
 pub(crate) unsafe fn node_check_opt(
     L: *mut lua_State,
     index: ::core::ffi::c_int,
@@ -89,6 +96,9 @@ pub(crate) unsafe fn node_check_opt(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe fn node_check(L: *mut lua_State, index: ::core::ffi::c_int) -> TSNode {
     unsafe {
         let ud: *mut TSNode = luaL_checkudata(L, index, TS_META_NODE.as_ptr()) as *mut TSNode;
@@ -96,6 +106,9 @@ pub(crate) unsafe fn node_check(L: *mut lua_State, index: ::core::ffi::c_int) ->
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -107,6 +120,9 @@ unsafe extern "C-unwind" fn node_tostring(L: *mut lua_State) -> ::core::ffi::c_i
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_eq(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -116,6 +132,9 @@ unsafe extern "C-unwind" fn node_eq(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_id(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let mut node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -128,6 +147,9 @@ unsafe extern "C-unwind" fn node_id(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_range(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -152,6 +174,9 @@ unsafe extern "C-unwind" fn node_range(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_start(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -164,6 +189,9 @@ unsafe extern "C-unwind" fn node_start(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_end(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -176,6 +204,9 @@ unsafe extern "C-unwind" fn node_end(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_child_count(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -185,6 +216,9 @@ unsafe extern "C-unwind" fn node_child_count(L: *mut lua_State) -> ::core::ffi::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_named_child_count(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -194,6 +228,9 @@ unsafe extern "C-unwind" fn node_named_child_count(L: *mut lua_State) -> ::core:
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_type(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -202,6 +239,9 @@ unsafe extern "C-unwind" fn node_type(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_symbol(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -211,6 +251,9 @@ unsafe extern "C-unwind" fn node_symbol(L: *mut lua_State) -> ::core::ffi::c_int
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_field(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -236,6 +279,9 @@ unsafe extern "C-unwind" fn node_field(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_named(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -244,6 +290,9 @@ unsafe extern "C-unwind" fn node_named(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_sexpr(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -254,6 +303,9 @@ unsafe extern "C-unwind" fn node_sexpr(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_missing(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -262,6 +314,9 @@ unsafe extern "C-unwind" fn node_missing(L: *mut lua_State) -> ::core::ffi::c_in
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_extra(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -270,6 +325,9 @@ unsafe extern "C-unwind" fn node_extra(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_has_changes(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -278,6 +336,9 @@ unsafe extern "C-unwind" fn node_has_changes(L: *mut lua_State) -> ::core::ffi::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_has_error(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -286,6 +347,9 @@ unsafe extern "C-unwind" fn node_has_error(L: *mut lua_State) -> ::core::ffi::c_
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_child(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -296,6 +360,9 @@ unsafe extern "C-unwind" fn node_child(L: *mut lua_State) -> ::core::ffi::c_int 
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_named_child(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -306,6 +373,9 @@ unsafe extern "C-unwind" fn node_named_child(L: *mut lua_State) -> ::core::ffi::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_descendant_for_range(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -323,6 +393,9 @@ unsafe extern "C-unwind" fn node_descendant_for_range(L: *mut lua_State) -> ::co
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_named_descendant_for_range(
     L: *mut lua_State,
 ) -> ::core::ffi::c_int {
@@ -342,6 +415,9 @@ unsafe extern "C-unwind" fn node_named_descendant_for_range(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_next_child(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let child_index: *mut uint32_t =
@@ -363,6 +439,9 @@ unsafe extern "C-unwind" fn node_next_child(L: *mut lua_State) -> ::core::ffi::c
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_iter_children(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         node_check(L, 1 as ::core::ffi::c_int);
@@ -382,6 +461,9 @@ unsafe extern "C-unwind" fn node_iter_children(L: *mut lua_State) -> ::core::ffi
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_parent(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -391,6 +473,9 @@ unsafe extern "C-unwind" fn node_parent(L: *mut lua_State) -> ::core::ffi::c_int
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn __has_ancestor(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let descendant: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -429,6 +514,9 @@ unsafe extern "C-unwind" fn __has_ancestor(L: *mut lua_State) -> ::core::ffi::c_
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_child_with_descendant(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -439,6 +527,9 @@ unsafe extern "C-unwind" fn node_child_with_descendant(L: *mut lua_State) -> ::c
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_next_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -448,6 +539,9 @@ unsafe extern "C-unwind" fn node_next_sibling(L: *mut lua_State) -> ::core::ffi:
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_prev_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -457,6 +551,9 @@ unsafe extern "C-unwind" fn node_prev_sibling(L: *mut lua_State) -> ::core::ffi:
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_next_named_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -466,6 +563,9 @@ unsafe extern "C-unwind" fn node_next_named_sibling(L: *mut lua_State) -> ::core
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_prev_named_sibling(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -475,6 +575,9 @@ unsafe extern "C-unwind" fn node_prev_named_sibling(L: *mut lua_State) -> ::core
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_named_children(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let source: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -495,6 +598,9 @@ unsafe extern "C-unwind" fn node_named_children(L: *mut lua_State) -> ::core::ff
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_root(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -504,6 +610,9 @@ unsafe extern "C-unwind" fn node_root(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_tree(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         node_check(L, 1 as ::core::ffi::c_int);
@@ -513,6 +622,9 @@ unsafe extern "C-unwind" fn node_tree(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_byte_length(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node: TSNode = node_check(L, 1 as ::core::ffi::c_int);
@@ -523,6 +635,9 @@ unsafe extern "C-unwind" fn node_byte_length(L: *mut lua_State) -> ::core::ffi::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn node_equal(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let node1: TSNode = node_check(L, 1 as ::core::ffi::c_int);

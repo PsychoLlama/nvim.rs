@@ -24,6 +24,10 @@ pub(crate) static tree_meta: ConstTable<[luaL_Reg; 7]> = luaL_reg_table![
     c"copy" => tree_copy,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
+/// `tree` must point at a live `TSTree`.
 pub(crate) unsafe fn push_tree(L: *mut lua_State, tree: *const TSTree) {
     unsafe {
         if tree.is_null() {
@@ -38,6 +42,9 @@ pub(crate) unsafe fn push_tree(L: *mut lua_State, tree: *const TSTree) {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_copy(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let ud: *mut TSLuaTree =
@@ -48,6 +55,9 @@ unsafe extern "C-unwind" fn tree_copy(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_edit(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 10 as ::core::ffi::c_int {
@@ -90,6 +100,9 @@ unsafe extern "C-unwind" fn tree_edit(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_get_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let ud: *mut TSLuaTree =
@@ -104,6 +117,9 @@ unsafe extern "C-unwind" fn tree_get_ranges(L: *mut lua_State) -> ::core::ffi::c
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let ud: *mut TSLuaTree =
@@ -114,6 +130,9 @@ unsafe extern "C-unwind" fn tree_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<tree>".as_ptr());
@@ -121,6 +140,9 @@ unsafe extern "C-unwind" fn tree_tostring(L: *mut lua_State) -> ::core::ffi::c_i
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tree_root(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let ud: *mut TSLuaTree =

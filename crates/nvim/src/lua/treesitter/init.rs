@@ -18,6 +18,11 @@
 
 use super::*;
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on, `tname` at a NUL-
+/// terminated metatable name, and `meta` at a `luaL_Reg` array terminated by
+/// a row with a null name -- `luaL_register` walks it to that terminator.
 unsafe fn build_meta(L: *mut lua_State, tname: *const ::core::ffi::c_char, meta: *const luaL_Reg) {
     unsafe {
         if luaL_newmetatable(L, tname) != 0 {
@@ -29,6 +34,9 @@ unsafe fn build_meta(L: *mut lua_State, tname: *const ::core::ffi::c_char, meta:
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe fn tslua_init(L: *mut lua_State) {
     unsafe {
         build_meta(L, TS_META_PARSER.as_ptr(), parser_meta.as_ptr());
@@ -52,6 +60,9 @@ unsafe fn tslua_init(L: *mut lua_State) {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tslua_get_language_version(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushnumber(L, lua_Number::from(TREE_SITTER_LANGUAGE_VERSION));
@@ -59,6 +70,9 @@ unsafe extern "C-unwind" fn tslua_get_language_version(L: *mut lua_State) -> ::c
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
     L: *mut lua_State,
 ) -> ::core::ffi::c_int {
@@ -71,6 +85,10 @@ unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
 
 pub fn nlua_treesitter_free() {}
 
+/// # Safety
+///
+/// `lstate` must point at the Lua state this call runs on, unaliased for the
+/// call.
 pub unsafe fn nlua_treesitter_init(lstate: *mut lua_State) {
     unsafe {
         tslua_init(lstate);

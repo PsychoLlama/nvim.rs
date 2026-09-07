@@ -24,6 +24,9 @@ pub(crate) static query_meta: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
     c"disable_pattern" => query_disable_pattern,
 ];
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe extern "C-unwind" fn tslua_parse_query(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 2 as ::core::ffi::c_int
@@ -81,6 +84,10 @@ fn query_err_to_string(error_type: TSQueryError) -> *const ::core::ffi::c_char {
     }
 }
 
+/// # Safety
+///
+/// `src` must point at a NUL-terminated string. `mut err` must point at a
+/// NUL-terminated string, unaliased for the call.
 unsafe fn query_err_string(
     src: *const ::core::ffi::c_char,
     error_offset: ::core::ffi::c_int,
@@ -189,6 +196,9 @@ unsafe fn query_err_string(
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 pub(crate) unsafe fn query_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSQuery {
     unsafe {
         let ud: *mut *mut TSQuery =
@@ -198,6 +208,9 @@ pub(crate) unsafe fn query_check(L: *mut lua_State, index: ::core::ffi::c_int) -
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn query_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
@@ -206,6 +219,9 @@ unsafe extern "C-unwind" fn query_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn query_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<query>".as_ptr());
@@ -213,6 +229,9 @@ unsafe extern "C-unwind" fn query_tostring(L: *mut lua_State) -> ::core::ffi::c_
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn query_inspect(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
@@ -300,6 +319,9 @@ unsafe extern "C-unwind" fn query_inspect(L: *mut lua_State) -> ::core::ffi::c_i
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn query_disable_capture(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
@@ -311,6 +333,9 @@ unsafe extern "C-unwind" fn query_disable_capture(L: *mut lua_State) -> ::core::
     }
 }
 
+/// # Safety
+///
+/// `L` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn query_disable_pattern(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         let query: *mut TSQuery = query_check(L, 1 as ::core::ffi::c_int);
