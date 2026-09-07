@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.09.07-26d0ee304e]
+
 ### Changed
 
 - Rewrote how the editor refers to its own windows, buffers, tab pages and
@@ -714,7 +716,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.06-4cef5c0a5c...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.07-26d0ee304e...HEAD
+[2026.09.07-26d0ee304e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.06-4cef5c0a5c...2026.09.07-26d0ee304e
 [2026.09.06-4cef5c0a5c]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.02-bc9e0f515a...2026.09.06-4cef5c0a5c
 [2026.09.02-bc9e0f515a]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.31-2f51c2ec04...2026.09.02-bc9e0f515a
 [2026.08.31-2f51c2ec04]: https://github.com/PsychoLlama/nvim.rs/compare/2026.08.29-f6c6cf531e...2026.08.31-2f51c2ec04
