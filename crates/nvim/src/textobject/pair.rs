@@ -227,7 +227,7 @@ pub unsafe fn current_block(
         // SAFETY: on the main thread with a current window; both only mark
         // the screen dirty and reprint the mode message.
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
-        unsafe { showmode() };
+        showmode();
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing
         // reached from here reads it back through the raw pointer.
@@ -548,7 +548,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // SAFETY: on the main thread with a current window; both only mark
         // the screen dirty and reprint the mode message.
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
-        unsafe { showmode() };
+        showmode();
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing
         // reached from here reads it back through the raw pointer.

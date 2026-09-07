@@ -772,14 +772,12 @@ pub unsafe fn f_submatch(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     } else {
         false
     };
-    // SAFETY throughout: both readers answer for the match state the caller is in,
-    // returning null outside a substitution.
     if as_list {
         result.v_type = VAR_LIST;
-        result.vval.v_list = unsafe { reg_submatch_list(no) };
+        result.vval.v_list = reg_submatch_list(no);
     } else {
         result.v_type = VAR_STRING;
-        result.vval.v_string = unsafe { reg_submatch(no) };
+        result.vval.v_string = reg_submatch(no);
     }
 }
 

@@ -472,7 +472,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
     // TODO(bfredl): can simplify, get rid of the flag munging? or at
     // least eliminate the extra redraw before win_enter()?
     pum_is_visible.set(false);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
     pum_is_visible.set(true);
 
     if !resized && let Some(saved) = valid_win(curwin_save) {
@@ -482,7 +482,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
 
     // Autocommands may have changed it again.
     pum_is_visible.set(false);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
     pum_is_visible.set(true);
     resized
 }

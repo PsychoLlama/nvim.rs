@@ -157,8 +157,8 @@ unsafe fn next_key() -> c_int {
         }
         // Nothing to do but wait, so show what has been decided first.
         if must_redraw.get() != 0 && !need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
-            let _ = unsafe { update_screen() };
-            unsafe { setcursor() };
+            let _ = update_screen();
+            setcursor();
         }
         unsafe { ui_flush() };
         let (buf, maxlen, ms) = (ptr::null_mut::<uint8_t>(), 0, -1);

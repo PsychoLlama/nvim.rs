@@ -515,8 +515,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
     comp_positions();
     fix_scroll(true);
     redraw_all(UPD_SOME_VALID);
-    // SAFETY: writes the mode message to the command line, which always exists.
-    unsafe { showmode() };
+    showmode();
 }
 
 pub fn win_drag_vsep_line(dragwin: Win, offset: c_int) {

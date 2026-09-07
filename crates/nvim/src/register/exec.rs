@@ -155,8 +155,7 @@ pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
             return Err(Failed);
         }
         reg_recording.set(c);
-        // SAFETY: main thread, with the message area set up.
-        unsafe { showmode() };
+        showmode();
         regname.set(c);
         let no_fname: *mut c_char = ::core::ptr::null_mut();
         // SAFETY: the event carries no file name, and this function's own
@@ -187,8 +186,7 @@ pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
     reg_recorded.set(reg_recording.get());
     reg_recording.set(0);
     if p_ch.get() == 0 || ui_has(kUIMessages) {
-        // SAFETY: main thread, as above.
-        unsafe { showmode() };
+        showmode();
     } else {
         // Clear the "recording @a" message.
         msg(c"", 0);

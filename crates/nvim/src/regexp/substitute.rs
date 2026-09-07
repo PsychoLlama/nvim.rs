@@ -235,6 +235,10 @@ enum Outcome {
 /// With `magic` clear the tilde has to be written `\~`. Returns `source`
 /// itself when nothing was expanded and a freshly allocated string
 /// otherwise; callers tell the two apart by comparing pointers.
+///
+/// # Safety
+///
+/// `source` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char {
     // SAFETY: `source` is the caller's NUL-terminated replacement text, and
     // `reg_prev_sub` is null or a NUL-terminated string of `reg_prev_sublen`
@@ -327,6 +331,13 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 ///
 /// The match must not have changed since [`vim_regexec`](super::vim_regexec)
 /// ran: the captures point straight into the matched text.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMatch`, unaliased for the call. `source`
+/// must point at a NUL-terminated string, unaliased for the call. `expr` must
+/// point at an initialized typval, unaliased for the call. `dest` must point
+/// at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn vim_regsub(
     rmp: *mut RegMatch,
     source: *mut c_char,
@@ -352,6 +363,12 @@ pub(crate) unsafe fn vim_regsub(
 
 /// [`vim_regsub`] for a buffer match, whose captures can span lines from
 /// `lnum` on.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMMatch`, unaliased for the call. `source`
+/// must point at a NUL-terminated string, unaliased for the call. `dest` must
+/// point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn vim_regsub_multi(
     rmp: *mut RegMMatch,
     lnum: LineNr,
@@ -375,6 +392,12 @@ pub(crate) unsafe fn vim_regsub_multi(
 
 /// The expansion itself, against whatever match `rex` currently describes.
 /// Returns the size of the result including its NUL, or 0 on an error.
+///
+/// # Safety
+///
+/// `source` must point at a NUL-terminated string, unaliased for the call.
+/// `expr` must point at an initialized typval, unaliased for the call. `dest`
+/// must point at a NUL-terminated string, unaliased for the call.
 unsafe fn vim_regsub_both(
     rex: Rex,
     source: *mut c_char,
@@ -426,6 +449,11 @@ unsafe fn vim_regsub_both(
 /// Only the measuring pass evaluates. It stashes the text in `EVAL_RESULT`
 /// and the copying pass takes it from there, so the expression runs once
 /// per substitution however many passes the caller makes.
+///
+/// # Safety
+///
+/// `source` must point at a NUL-terminated string, unaliased for the call.
+/// `expr` must point at an initialized typval, unaliased for the call.
 unsafe fn eval_replacement(
     rex: Rex,
     source: *mut c_char,
@@ -503,6 +531,10 @@ unsafe fn eval_replacement(
 /// Call `expr` — a funcref or a partial — with the submatches as its one
 /// argument, and return its result as an allocated string. Null when the
 /// call failed, which has already reported itself.
+///
+/// # Safety
+///
+/// `expr` must point at an initialized typval, unaliased for the call.
 unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     // SAFETY: `expr` is the caller's live callable.
     // `fill_submatch_list` fills this in place if the function takes an
@@ -561,6 +593,10 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
 /// which is what the substitution machinery downstream reads as a line
 /// break — unless the caller came from `vim_regexec_nl`, where a newline is
 /// literal. Reports whether the text contained a backslash escape.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn line_breaks_to_cr(text: *mut c_char) -> bool {
     // SAFETY: `text` is a NUL-terminated allocation this module owns.
     let literal_nl = unsafe { Rsm::acquire() }.line_lbr();
@@ -585,6 +621,10 @@ unsafe fn line_breaks_to_cr(text: *mut c_char) -> bool {
 
 /// The ordinary replacement: copy `source` into `out`, expanding the
 /// capture references and the escapes as they come.
+///
+/// # Safety
+///
+/// `source` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn expand_replacement(
     rex: Rex,
     source: *mut c_char,
@@ -633,7 +673,7 @@ unsafe fn expand_replacement(
         }
 
         if no >= 0 {
-            match unsafe { copy_capture(rex, no, &mut case, backslash, out) } {
+            match copy_capture(rex, no, &mut case, backslash, out) {
                 Outcome::Done => continue,
                 stopped => return stopped,
             }
@@ -709,13 +749,7 @@ unsafe fn expand_replacement(
 
 /// Copy what capture `no` matched. For a buffer match that can span lines,
 /// in which case the line breaks are written as carriage returns.
-unsafe fn copy_capture(
-    rex: Rex,
-    no: c_int,
-    case: &mut Case,
-    backslash: bool,
-    out: &mut Out,
-) -> Outcome {
+fn copy_capture(rex: Rex, no: c_int, case: &mut Case, backslash: bool, out: &mut Out) -> Outcome {
     // SAFETY: `rex` describes a live match; `no` is a single digit and both
     // capture arrays hold `NSUBEXP` = 10 slots.
     let multi = rex.multi();

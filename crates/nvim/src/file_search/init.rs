@@ -300,6 +300,13 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
 /// @param rel_fname  file name to use for "."
 ///
 /// @return  the newly allocated search context, or NULL if an error occurred.
+///
+/// # Safety
+///
+/// `path`, `stopdirs` and `rel_fname` must be null or point at NUL-terminated
+/// strings, and `filename` at `filenamelen` readable bytes. `search_ctx_arg`
+/// must be null, or a context `vim_findfile_init` answered with that
+/// `vim_findfile_cleanup` has not yet freed.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn vim_findfile_init(
     path: *mut c_char,
@@ -442,6 +449,11 @@ pub(crate) unsafe fn vim_findfile_free_visited(ctx: *mut c_void) {
 }
 
 /// Clean up the given search context. Can handle a NULL pointer.
+///
+/// # Safety
+///
+/// `ctx` must be null, or a context `vim_findfile_init` answered with that
+/// nothing has freed yet; it is freed here.
 pub(crate) unsafe fn vim_findfile_cleanup(ctx: *mut c_void) {
     if ctx.is_null() {
         return;

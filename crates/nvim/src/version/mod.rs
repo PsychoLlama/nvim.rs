@@ -593,8 +593,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 /// # Safety
 /// The editor's globals must be live.
 pub(crate) unsafe fn ex_intro(_args: *mut ExArg) {
-    // SAFETY: the caller's obligation.
-    unsafe { screenclear() };
+    screenclear();
     unsafe { intro_message(true) };
     plain_vgetc();
 }

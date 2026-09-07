@@ -59,7 +59,7 @@ use crate::decoration::SCL_NUM;
 use crate::winlayer::Buf;
 /// The options whose bitmask is derived from a value the startup sequence
 /// may have installed without going through `:set`.
-pub unsafe fn didset_string_options() {
+pub fn didset_string_options() {
     for idx in [
         kOptCasemap,
         kOptBackupcopy,

@@ -338,8 +338,7 @@ pub(crate) fn did_set_ignorecase(_args: &mut OptSet) -> Option<&CStr> {
 
 /// 'iminsert': the mode message names the input method.
 pub(crate) fn did_set_iminsert(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the screen is the editor's own.
-    unsafe { showmode() };
+    showmode();
     status_redraw_curbuf();
     None
 }
@@ -403,7 +402,7 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Option<&CStr> {
         if updating_screen.get() {
             unsafe { set_option_varp(f.idx, f.varp, f.old, false) };
         } else if full_screen.get() {
-            unsafe { screen_resize(p_columns.get() as c_int, p_lines.get() as c_int) };
+            screen_resize(p_columns.get() as c_int, p_lines.get() as c_int);
         } else {
             // Before the screen exists there is nothing to resize; just
             // record the size and keep the command line on screen.
@@ -587,7 +586,7 @@ pub(crate) fn did_set_swapfile(args: &mut OptSet) -> Option<&CStr> {
     if buf.b_p_swf != 0 && p_uc.get() != 0 {
         unsafe { ml_open_file(buf) };
     } else {
-        unsafe { mf_close_file(buf, true) };
+        mf_close_file(buf, true);
     }
     None
 }

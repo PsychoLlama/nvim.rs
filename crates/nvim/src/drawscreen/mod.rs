@@ -180,9 +180,9 @@ pub(crate) fn win_endcol(window: Win) -> c_int {
 ///
 /// When the cursor also moved, both the old and the new line are redrawn
 /// anyway, so this only matters when it did not.
-pub unsafe fn conceal_check_cursor_line() {
+pub fn conceal_check_cursor_line() {
     let wp = Win::current();
-    let should_conceal = unsafe { conceal_cursor_line(wp) };
+    let should_conceal = conceal_cursor_line(wp);
     if wp.w_onebuf_opt.wo_cole <= 0 || conceal_cursor_used.get() == should_conceal {
         return;
     }
@@ -313,7 +313,7 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
 ///
 /// Answers `Err` when nothing was drawn -- the screen is not ready, redrawing
 /// is disabled, or this is a recursive call.
-pub unsafe fn update_screen() -> Result<(), Failed> {
+pub fn update_screen() -> Result<(), Failed> {
     // The intro message is shown until something else claims the screen.
     static STILL_MAY_INTRO: GlobalCell<bool> = GlobalCell::new(true);
 
@@ -385,7 +385,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     if redr_type == UPD_CLEAR {
         // Resets `clear_cmdline` and sets UPD_NOT_VALID on every window.
-        unsafe { screenclear() };
+        screenclear();
         cmdline_screen_cleared();
         if ui_has(kUIMessages) {
             ui_call_msg_clear();
@@ -439,7 +439,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
             || wp.w_onebuf_opt.wo_rnu != 0
             || unsafe { *wp.w_onebuf_opt.wo_stc } != 0
         {
-            unsafe { number_width(wp) }
+            number_width(wp)
         } else {
             0
         };
@@ -495,9 +495,9 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
         if wp.w_redr_type != 0 {
             if !did_one {
                 did_one = true;
-                unsafe { start_search_hl() };
+                start_search_hl();
             }
-            unsafe { win_update(wp) };
+            win_update(wp);
         }
 
         // The status line and window bar go after the window, to minimise
@@ -512,7 +512,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     // connector is never overwritten by a neighbour's separator.
     if did_one {
         for wp in winlayer::windows() {
-            unsafe { draw_sep_connectors_win(wp) };
+            draw_sep_connectors_win(wp);
         }
     }
 
@@ -541,7 +541,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 
     // Last, because scrolling may mess the command line up.
     if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
-        unsafe { showmode() };
+        showmode();
     }
 
     if STILL_MAY_INTRO.get() {
@@ -604,7 +604,7 @@ impl SearchHl {
 }
 
 /// Compile the `'hlsearch'` pattern for the redraw that is starting.
-pub unsafe fn start_search_hl() {
+pub fn start_search_hl() {
     if p_hls.get() == 0 || no_hlsearch.get() {
         return;
     }
@@ -630,15 +630,14 @@ pub fn end_search_hl() {
 }
 
 /// Put the terminal cursor where the cursor is in the current window.
-pub unsafe fn setcursor() {
-    // SAFETY: `curwin` is the editor's current window.
-    unsafe { setcursor_mayforce(Win::current(), false) }
+pub fn setcursor() {
+    setcursor_mayforce(Win::current(), false)
 }
 
 /// Put the terminal cursor where the cursor is in window `window`.
 ///
 /// `force` positions it even when not redrawing.
-pub unsafe fn setcursor_mayforce(window: Win, force: bool) {
+pub fn setcursor_mayforce(window: Win, force: bool) {
     if !force && !redrawing() {
         return;
     }
@@ -689,7 +688,7 @@ pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
-pub unsafe fn number_width(mut window: Win) -> c_int {
+pub fn number_width(mut window: Win) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
@@ -745,7 +744,7 @@ pub unsafe fn number_width(mut window: Win) -> c_int {
 
 /// Whether the cursor line in window `window` may be concealed, per
 /// `'concealcursor'`.
-pub unsafe fn conceal_cursor_line(window: Win) -> bool {
+pub fn conceal_cursor_line(window: Win) -> bool {
     // SAFETY: a live window, on the main thread.
     if unsafe { *window.w_onebuf_opt.wo_cocu } == 0 {
         return false;
@@ -768,14 +767,11 @@ pub unsafe fn conceal_cursor_line(window: Win) -> bool {
 ///
 /// When it is, moving the cursor within the window means redrawing both the old
 /// cursor line and the new one.
-pub unsafe fn win_cursorline_standout(window: Win) -> bool {
-    // SAFETY: a live window, on the main thread.
-    unsafe {
-        window.w_onebuf_opt.wo_cul != 0
-            || (window == Win::current()
-                && window.w_onebuf_opt.wo_cole > 0
-                && !conceal_cursor_line(window))
-    }
+pub fn win_cursorline_standout(window: Win) -> bool {
+    window.w_onebuf_opt.wo_cul != 0
+        || (window == Win::current()
+            && window.w_onebuf_opt.wo_cole > 0
+            && !conceal_cursor_line(window))
 }
 
 /// Update `w_cursorline`, and answer the cursor line's fold info through
@@ -784,14 +780,15 @@ pub unsafe fn win_cursorline_standout(window: Win) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
+///
+/// # Safety
+///
+/// `foldinfo` must point at a live `FoldInfo`, unaliased for the call.
 pub unsafe fn win_update_cursorline(mut window: Win, foldinfo: *mut FoldInfo) {
-    // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
-    unsafe {
-        window.w_cursorline = if win_cursorline_standout(window) {
-            window.w_cursor.lnum
-        } else {
-            0
-        }
+    window.w_cursorline = if win_cursorline_standout(window) {
+        window.w_cursor.lnum
+    } else {
+        0
     };
     if window.w_onebuf_opt.wo_cul != 0 {
         unsafe { *foldinfo = fold_info(window, window.w_cursor.lnum) };

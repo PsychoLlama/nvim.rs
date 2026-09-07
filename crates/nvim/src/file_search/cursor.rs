@@ -25,6 +25,10 @@ use std::ffi::CStr;
 /// The file name at the cursor, or the Visual selection when there is one.
 ///
 /// Returns the name in allocated memory, NULL for failure.
+///
+/// # Safety
+///
+/// `file_lnum` must point at a writable line number the caller owns.
 pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mut c_char {
     let options = FileNameOpts::MESS | FileNameOpts::EXP | FileNameOpts::REL | FileNameOpts::UNESC;
     if !visual_active() {
@@ -60,6 +64,10 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
 /// - `FileNameOpts::EXP`   expand to path
 /// - `FileNameOpts::HYP`   check for hypertext link
 /// - `FileNameOpts::INCL`  apply `'includeexpr'`
+///
+/// # Safety
+///
+/// `file_lnum` must point at a writable line number the caller owns.
 pub(crate) unsafe fn file_name_at_cursor(
     options: FileNameOpts,
     count: c_int,
@@ -82,6 +90,10 @@ pub(crate) unsafe fn file_name_at_cursor(
 ///
 /// Goes one character back to the `":"` before `"//"`, or to the drive letter
 /// before `":\"`, even when `":"` is not in `'isfname'`.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *mut c_char {
     // Search forward for what could be the start of a file name.
     let mut ptr = unsafe { line.offset(col as isize) };
@@ -113,6 +125,10 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *m
 /// `":"`, `"?"`, `"&"` and `"="` join the name once a `type://` prefix has
 /// been seen, so that `http://google.com:8080?q=this&that=ok` comes out
 /// whole. `"\ "` is an escaped space and counts as two.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
     let hyp = options.has(FileNameOpts::HYP);
     // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
@@ -161,6 +177,10 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
 /// The line number written after a file name, as `" line 99"` or after any
 /// single separator character. Both the English spelling and the translated
 /// one are accepted, as `last_set_msg()` writes the latter.
+///
+/// # Safety
+///
+/// `after_name` must point at a NUL-terminated string.
 unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
     let english = c" line ";
     let localized = unsafe { CStr::from_ptr(gettext(line_msg).as_ptr()) };
@@ -192,6 +212,12 @@ unsafe fn trailing_line_number(after_name: *const c_char) -> Option<c_long> {
 /// @param file_lnum  line number after the file name
 ///
 /// Otherwise like [`file_name_at_cursor`].
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
+/// `rel_fname` must point at a NUL-terminated string, unaliased for the call.
+/// `file_lnum` must point at a writable line number the caller owns.
 pub(crate) unsafe fn file_name_in_line(
     line: *mut c_char,
     col: c_int,
@@ -219,6 +245,10 @@ pub(crate) unsafe fn file_name_in_line(
 }
 
 /// Run `'includeexpr'` over `ptr[len]`, with the name in `v:fname`.
+///
+/// # Safety
+///
+/// `name` must point at `len` readable bytes.
 pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut c_char {
     unsafe { set_vim_var_string(Vv::Fname, name, len as ptrdiff_t) };
     // Errors go against the script that set `'includeexpr'`.
@@ -242,6 +272,12 @@ pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut 
 /// Otherwise like [`file_name_at_cursor`].
 ///
 /// @param rel_fname  file we are searching relative to
+///
+/// # Safety
+///
+/// `name` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
+/// unaliased for the call.
 pub(crate) unsafe fn find_file_name_in_path(
     name: *mut c_char,
     len: size_t,

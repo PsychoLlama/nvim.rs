@@ -65,7 +65,7 @@ pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
     Win::current().w_cursor.lnum = op.start.lnum;
     // SAFETY: both only touch the current buffer's windows.
     redraw_curbuf_later(UPD_INVERTED);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
 
     let mut pre = BlockInsertPre {
         ind_pre_col: 0,

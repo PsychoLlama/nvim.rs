@@ -171,9 +171,7 @@ pub(crate) fn ins_reg() {
 /// The CTRL-G commands in Insert mode.
 pub(crate) fn ins_ctrl_g() {
     // Right after CTRL-X the cursor will be after the ruler.
-    // SAFETY: `curwin` is live, which is all these editor-wide routines ask
-    // for.
-    unsafe { setcursor() };
+    setcursor();
 
     // Don't map the second key.  This also keeps the mode message from
     // being deleted when ESC is hit.
@@ -348,7 +346,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         && (got_int.get() || !skip_showmode())
         && !(p_ch.get() == 0 && !ui_has(kUIMessages))
     {
-        unsafe { unshowmode(false) };
+        unshowmode(false);
     }
 
     true // exit Insert mode
@@ -451,8 +449,7 @@ pub(crate) fn set_can_cindent(val: bool) {
 /// Show the mode message, if 'showmode' asks for one.
 #[inline(always)]
 fn show_mode() -> c_int {
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { showmode() }
+    showmode()
 }
 
 /// The character under the cursor, `NUL` at the end of the line.

@@ -549,7 +549,7 @@ pub unsafe fn os_dup(fd: c_int) -> c_int {
 
 /// The descriptor to read stdin from: the one `--` handed us if there is
 /// one, and otherwise a duplicate of the real stdin.
-pub unsafe fn os_open_stdin_fd() -> c_int {
+pub fn os_open_stdin_fd() -> c_int {
     if stdin_fd.get() > 0 {
         stdin_fd.get()
     } else {

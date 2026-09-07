@@ -169,7 +169,7 @@ pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
     if visual_active() {
         set_visual_select(!visual_select());
         unsafe { may_trigger_modechanged() };
-        unsafe { showmode() };
+        showmode();
     } else if !check_clear_op(ca.op()) {
         fileinfo(ca.count0, 0, true);
     }
@@ -226,7 +226,7 @@ pub(crate) unsafe fn nv_ctrlo(cmd_arg: *mut CmdArg) {
     if visual_active() && visual_select() {
         set_visual_select(false);
         unsafe { may_trigger_modechanged() };
-        unsafe { showmode() };
+        showmode();
         // 2 means "one command, then back to Select mode".
         restart_VIsual_select.set(2);
     } else {

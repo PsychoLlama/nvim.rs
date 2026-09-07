@@ -500,7 +500,7 @@ impl Cells {
         let wants_conceal = window.w_onebuf_opt.wo_cole > 0
             && (window.raw() != Win::current_raw()
                 || wlv.lnum != window.w_cursor.lnum
-                || unsafe { conceal_cursor_line(window) })
+                || conceal_cursor_line(window))
             && (self.syntax_flags.has(SynFlags::CONCEAL)
                 || self.has_match_conc > 0
                 || self.decor_conceal > 0)

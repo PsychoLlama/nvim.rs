@@ -585,7 +585,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             set_visual_select(true);
             VIsual_select_reg.set(0);
             unsafe { may_trigger_modechanged() };
-            unsafe { showmode() };
+            showmode();
             restart_VIsual_select.set(0);
         }
         if want_insert {

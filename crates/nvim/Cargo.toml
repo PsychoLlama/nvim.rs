@@ -151,16 +151,13 @@ non_upper_case_globals = "deny"
 # cargo) stay at their allow default.
 #
 # `style` was allowed tree-wide until phase 19 turned it on: 3 256 findings,
-# of which 855 were real and are now zero. Two members stay off, for reasons
-# that do not retire with a rewrite:
+# of which 855 were real and are now zero. One member stays off, for a reason
+# that does not retire with a rewrite:
 [lints.clippy]
-# 2 380 findings, and 2 380 `# Safety` sections is not a slice, it is a phase.
-# The debt is real, so it is not simply forgotten: scripts/ratchet.py counts it
-# per file under `missing_safety_doc` and holds it shrink-only, which is where
-# it belongs — it is documentation debt that retires as modules are rewritten,
-# not a lint a module can be clean of today. Allowed here so `just lint` still
-# reports the findings a change is answerable for.
-missing_safety_doc = "allow"
+# `missing_safety_doc` was allowed here from phase 19 (2 380 findings) until
+# phase 28 wrote the last section. It is a plain `warn` again, which `-D
+# warnings` makes a deny, so a new `unsafe fn` without a `# Safety` section
+# fails the build rather than being counted.
 # `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,
 # `viml/parser/parser.rs` and `types/types.rs` are ports of upstream's
 # `tui/tui.c`, `vterm/vterm.c`, `tui/termkey/termkey.c`,

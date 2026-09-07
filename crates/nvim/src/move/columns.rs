@@ -32,8 +32,7 @@ impl Win {
     /// Scroll the window's own grid by `lines`, so that a `w_skipcol` change
     /// does not have to redraw everything.
     fn scroll_grid_lines(self, lines: c_int) {
-        // SAFETY: a live window with a grid attached.
-        unsafe { win_scroll_lines(self, 0, lines) };
+        win_scroll_lines(self, 0, lines);
     }
 }
 

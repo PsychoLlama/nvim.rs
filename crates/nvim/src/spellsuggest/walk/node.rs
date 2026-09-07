@@ -189,9 +189,8 @@ impl Walk<'_> {
 
     /// Undo the changes a word split or a compound join made, and go back
     /// to looking for NUL bytes at this node.
-    pub(super) unsafe fn split_undo(&mut self) {
+    pub(super) fn split_undo(&mut self) {
         let level = self.depth as usize;
-        // SAFETY: `su` is the caller's suggestion state.
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
         unsafe { (*self.su).su_badflags = saved };
 

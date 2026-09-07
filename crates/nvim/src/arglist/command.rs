@@ -21,6 +21,10 @@ use crate::winlayer::{Buf, Win};
 // The Ex commands.
 
 /// `:args`, `:arglocal` and `:argglobal`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_args(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(args) };
@@ -97,6 +101,10 @@ fn copy_global_arglist() {
 }
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_previous(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -113,18 +121,30 @@ pub unsafe fn ex_previous(args: *mut ExArg) {
 }
 
 /// `:rewind`, `:first`, `:sfirst` and `:srewind`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_rewind(args: *mut ExArg) {
     // SAFETY: caller contract.
     unsafe { do_argfile(args, 0) };
 }
 
 /// `:last` and `:slast`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_last(args: *mut ExArg) {
     // SAFETY: caller contract.
     unsafe { do_argfile(args, argcount() - 1) };
 }
 
 /// `:argument` and `:sargument`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_argument(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -180,6 +200,10 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
 
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
 /// a tab page.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -249,6 +273,10 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
 }
 
 /// `:next` and the commands that behave like it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_next(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -281,7 +309,7 @@ pub unsafe fn ex_next(args: *mut ExArg) {
 }
 
 /// `:argdedupe` — drop every later argument naming the same file.
-pub unsafe fn ex_argdedupe(_args: *mut ExArg) {
+pub fn ex_argdedupe(_args: *mut ExArg) {
     let mut i = 0;
     while i < argcount() {
         // Expand each argument to a full path, to catch different paths
@@ -317,6 +345,10 @@ pub unsafe fn ex_argdedupe(_args: *mut ExArg) {
 }
 
 /// `:argedit` — add the file to the list and edit it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_argedit(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -347,6 +379,10 @@ pub unsafe fn ex_argedit(args: *mut ExArg) {
 }
 
 /// `:argadd` — add the files to the list without editing them.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_argadd(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -363,6 +399,10 @@ pub unsafe fn ex_argadd(args: *mut ExArg) {
 
 /// `:argdelete` — by range (`:2,3argdelete`, or bare for the current entry)
 /// or by file pattern.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_argdelete(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
@@ -382,6 +422,10 @@ pub unsafe fn ex_argdelete(args: *mut ExArg) {
 
 /// The range half of `:argdelete`. Without a range it deletes the current
 /// entry; a range reaching past the end is clamped to it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 unsafe fn delete_arg_range(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let mut args = unsafe { Ea::new(args) };

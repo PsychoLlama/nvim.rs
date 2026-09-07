@@ -93,7 +93,7 @@ pub(crate) fn ins_compl_new_leader() {
     if p_acl.get() > 0 {
         unsafe { pum_undisplay(true) };
         redraw_later(Win::current(), UPD_VALID);
-        let _ = unsafe { update_screen() }; // Show char (deletion) immediately
+        let _ = update_screen(); // Show char (deletion) immediately
         unsafe { ui_flush() };
     }
 
@@ -183,7 +183,7 @@ pub fn ins_compl_addleader(c: c_int) {
 pub(crate) fn ins_compl_restart() {
     // Update the screen before restarting, so that if completion is
     // blocked we stay at the last popup menu and reduce flicker.
-    let _ = unsafe { update_screen() }; // TODO(bfredl): no.
+    let _ = update_screen(); // TODO(bfredl): no.
     unsafe { ins_compl_free() };
     compl_started.set(false);
     compl_matches.set(0);
@@ -394,7 +394,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     if c == Ctrl_C && cmdwin_type.get() != 0 {
         // Avoid the popup menu remaining displayed when leaving the
         // command line window.
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.

@@ -287,7 +287,7 @@ impl Cells {
 
     /// Combine [`WinLineVars::extra_attr`] in, without overriding a Visual
     /// selection.
-    pub(super) unsafe fn apply_extra_attr(&mut self, wlv: &mut WinLineVars) {
+    pub(super) fn apply_extra_attr(&mut self, wlv: &mut WinLineVars) {
         if wlv.n_attr <= 0 || self.search_attr_from_match {
             return;
         }
@@ -337,7 +337,7 @@ impl Cells {
 
     /// Put the lowest-priority whole-line attribute underneath everything
     /// else — usually, but see the `CursorLine` exception below.
-    pub(super) unsafe fn apply_line_attr_lowprio(&mut self, wlv: &mut WinLineVars) {
+    pub(super) fn apply_line_attr_lowprio(&mut self, wlv: &mut WinLineVars) {
         if wlv.filler_todo > 0 {
             return;
         }

@@ -488,7 +488,7 @@ pub(crate) unsafe fn did_set_option(
     }
 
     // 'ruler', 'showcmd', 'columns' and 'laststatus' all move it.
-    unsafe { comp_col() };
+    comp_col();
 
     match opt_idx {
         kOptMouse => setmouse(),

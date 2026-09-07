@@ -388,7 +388,7 @@ fn read_trees(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
 ///
 /// A `.sug` is optional and best-effort: anything wrong with it is
 /// reported and the language carries on without sound-a-like suggestions.
-pub unsafe fn suggest_load_files() {
+pub fn suggest_load_files() {
     // SAFETY: `b_langp` holds `ga_len` live `LangP`s.
     let langp = unsafe { (*Win::current().w_s).b_langp };
     for lpi in 0..langp.ga_len {

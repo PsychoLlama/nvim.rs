@@ -546,7 +546,7 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
         if prev_cmdpreview {
             // TODO(bfredl): add an immediate redraw flag for cmdline mode
             // which will trigger at the next wait-for-input.
-            let _ = unsafe { update_screen() }; // clear the 'inccommand' preview
+            let _ = update_screen(); // clear the 'inccommand' preview
         }
         if s.xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
             unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };

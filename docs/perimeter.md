@@ -65,7 +65,7 @@ should move out of the module rather than be carved out of the list.
 | `memory/`                  |     2 |       141 | `xmalloc` and the arena — the floor under every owned type in the tree.                                                                           |
 | `global_cell.rs`           |     1 |         9 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                          |
 | `winlayer.rs`, `winlayer/` |     2 |        26 | The window/buffer/position handles: constructing one is the unsafe step, dereferencing it is not.                                                 |
-| `memfile.rs`               |     1 |       400 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                          |
+| `memfile/`                 |     2 |       400 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                          |
 
 Paths are relative to `crates/nvim/src/`. Counts are `unsafe_lines` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is

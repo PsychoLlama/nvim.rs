@@ -47,6 +47,12 @@ pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
+///
+/// # Safety
+///
+/// `itr` must point at a live `MarkTreeIter`, unaliased for the call. `key`
+/// must be an initialized `MTKey` whose pointer fields point at live data for
+/// the call.
 pub unsafe fn extmark_del(buffer: Buf, itr: *mut MarkTreeIter, key: MTKey, restore: bool) {
     // SAFETY: the caller's promise -- a live buffer and an iterator
     // positioned in its marktree, both of which outlive the call.

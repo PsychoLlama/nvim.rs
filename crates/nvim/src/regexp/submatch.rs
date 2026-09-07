@@ -106,6 +106,11 @@ pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
 /// function that does not take a submatches argument gets none: the list
 /// stays as the caller left it, which is what tells [`super::substitute`]
 /// there is nothing to free.
+///
+/// # Safety
+///
+/// `argv` must point at an initialized typval, unaliased for the call. `func`
+/// must point at a live `UserFunc`, unaliased for the call.
 pub(crate) unsafe fn fill_submatch_list(
     _argc: c_int,
     argv: *mut TypVal,
@@ -143,6 +148,10 @@ pub(crate) unsafe fn fill_submatch_list(
 }
 
 /// Free the strings [`fill_submatch_list`] allocated into `sl`.
+///
+/// # Safety
+///
+/// `sl` must point at a live `StaticList10`, unaliased for the call.
 pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
     // SAFETY: `sl` is the caller's list, whose items own their strings.
     let mut li = unsafe { (*sl).sl_list.lv_first };
@@ -159,7 +168,7 @@ pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
 /// back as newlines. That length is not known without walking the lines, so
 /// the walk runs twice: round 1 measures and allocates, round 2 copies.
 /// Both rounds must agree, so keep them in step.
-pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
+pub(crate) fn reg_submatch(no: c_int) -> *mut c_char {
     if !can_f_submatch.get() || no < 0 {
         return core::ptr::null_mut();
     }
@@ -257,7 +266,7 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
 /// [`reg_submatch`] as one list item per line, which is what
 /// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
 /// text apart from the line breaks, because each line is its own item.
-pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut List {
+pub(crate) fn reg_submatch_list(no: c_int) -> *mut List {
     if !can_f_submatch.get() || no < 0 {
         return core::ptr::null_mut();
     }

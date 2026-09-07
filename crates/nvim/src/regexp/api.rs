@@ -139,6 +139,10 @@ pub unsafe fn vim_regfree(prog: *mut RegProg) {
 /// Recompile the NFA program `prog` for the backtracking engine, which is
 /// what a `NFA_TOO_EXPENSIVE` result asks for. The pattern text is copied
 /// out first because compiling frees the program that holds it.
+///
+/// # Safety
+///
+/// `prog` must point at a live `RegProg`, unaliased for the call.
 unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
@@ -167,6 +171,11 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
 
 /// Run `rmp`'s program over the single line `line`, starting at `col`.
 /// `nl` allows a `$` to match at the end of the string.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMatch`, unaliased for the call. `line` must
+/// point at a NUL-terminated string.
 unsafe fn vim_regexec_string(
     rmp: *mut RegMatch,
     line: *const c_char,
@@ -215,6 +224,11 @@ unsafe fn vim_regexec_string(
 
 /// [`vim_regexec`] against a program the caller owns by pointer, so that
 /// the fall back to the backtracking engine can replace it.
+///
+/// # Safety
+///
+/// `prog` must point at a writable `*mut RegProg` slot the caller owns for
+/// the call. `line` must point at a NUL-terminated string.
 pub unsafe fn vim_regexec_prog(
     prog: *mut *mut RegProg,
     ignore_case: bool,
@@ -250,6 +264,11 @@ pub unsafe fn vim_regexec(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMatch`, unaliased for the call. `line` must
+/// point at a NUL-terminated string.
 pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, true) }
@@ -258,6 +277,12 @@ pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr
 /// Run `rmp`'s program over `buffer` starting at line `lnum`, column `col`.
 /// Returns the number of lines the match spans plus one, or 0 for no
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
+///
+/// # Safety
+///
+/// `rmp` must point at a live `RegMMatch`, unaliased for the call. `tm` must
+/// point at a live `ProfTime`, unaliased for the call. `timed_out` must point
+/// at a writable `int` the caller owns.
 pub unsafe fn vim_regexec_multi(
     rmp: *mut RegMMatch,
     win: Option<Win>,

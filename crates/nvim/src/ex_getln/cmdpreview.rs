@@ -465,7 +465,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // A nonzero answer means the screen has to be updated now.
         if cmdpreview_type != 0 {
             let _redraw = Allow::redraw();
-            let _ = unsafe { update_screen() };
+            let _ = update_screen();
         }
 
         // Close the preview window if it is open.

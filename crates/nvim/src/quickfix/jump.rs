@@ -280,13 +280,10 @@ unsafe fn qf_jump_print_msg(
     // SAFETY: as above.
     let qi = unsafe { Qi::new(qi) };
     let mut head = [0 as c_char; IOSIZE as usize];
-    // SAFETY: forwarded from the caller.
-    // Update the screen before showing the message, unless messages
-    // have scrolled.
     if msg_scrolled.get() == 0 {
         update_topline(Win::current());
         if must_redraw.get() != 0 {
-            let _ = unsafe { update_screen() };
+            let _ = update_screen();
         }
     }
     let dirc = IOSIZE as size_t;

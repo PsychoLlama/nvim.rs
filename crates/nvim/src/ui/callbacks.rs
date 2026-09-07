@@ -109,7 +109,7 @@ pub unsafe fn ui_add_cb(ns_id: u32, cb: LuaRef, ext_widgets: *mut bool) {
 ///
 /// With `checkerr`, this is the error path: the handler's error count goes
 /// up and it is only dropped once it passes [`MAX_ERRORS`].
-pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
+pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     let removed = registered.with_mut(|handlers| {
         let index = handlers.iter().position(|h| h.ns_id == ns_id)?;
         if checkerr {
@@ -212,7 +212,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         }
         if err.is_set() {
             unsafe { report_error(ns_id, name.as_ptr(), err.message_or_empty().as_ptr()) };
-            unsafe { ui_remove_cb(ns_id, true) };
+            ui_remove_cb(ns_id, true);
         }
         err.clear();
     }

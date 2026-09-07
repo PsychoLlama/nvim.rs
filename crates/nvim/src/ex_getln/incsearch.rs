@@ -474,7 +474,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     }
 
     redraw_later(Win::current(), UPD_SOME_VALID);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
     highlight_match.set(false);
     restore_last_search_pattern();
 
@@ -610,7 +610,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
     status_redraw_all();
     redraw_all_later(UPD_SOME_VALID);
     if call_update_screen {
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     }
 }
 
@@ -747,7 +747,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         highlight_match.set(true);
         s.old_viewstate = save_viewstate(Win::current());
         redraw_later(Win::current(), UPD_NOT_VALID);
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
         highlight_match.set(false);
         redrawcmdline();
         Win::current().w_cursor = s.match_end;

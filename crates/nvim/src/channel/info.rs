@@ -155,6 +155,10 @@ pub unsafe fn channel_info_changed(chan: *mut Channel, new_chan: bool) {
     unsafe { multiqueue_put_event(main_loop_events(), ev) };
 }
 
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the channel and the event id
     // `channel_info_changed` queued it with, plus one reference to drop.

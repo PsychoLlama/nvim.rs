@@ -789,6 +789,11 @@ impl FindContext {
 /// of the list).
 ///
 /// @return  a pointer to an allocated file name, or NULL if nothing found.
+///
+/// # Safety
+///
+/// `search_ctx_arg` must be null, or a context `vim_findfile_init` answered
+/// with that `vim_findfile_cleanup` has not yet freed.
 pub(crate) unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
     if search_ctx_arg.is_null() {
         return ptr::null_mut();

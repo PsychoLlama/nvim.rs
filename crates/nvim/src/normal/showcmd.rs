@@ -345,8 +345,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
 /// `add_to_showcmd`, for a caller that always wants the cursor put back.
 pub(crate) fn add_to_showcmd_c(c: c_int) {
     add_to_showcmd(c);
-    // SAFETY: moves the terminal cursor to the current window's.
-    unsafe { setcursor() };
+    setcursor();
 }
 
 /// Drop the last `len` bytes of the partial command.
@@ -393,7 +392,7 @@ pub(crate) fn display_showcmd() {
             Win::current().w_redr_status = true;
         } else {
             unsafe { win_redr_status(Win::current()) };
-            unsafe { setcursor() };
+            setcursor();
         }
         return;
     }
@@ -403,7 +402,7 @@ pub(crate) fn display_showcmd() {
         } else {
             // SAFETY: redraws the tab line and puts the cursor back.
             unsafe { draw_tabline() };
-            unsafe { setcursor() };
+            setcursor();
         }
         return;
     }

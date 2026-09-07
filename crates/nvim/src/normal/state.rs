@@ -410,14 +410,14 @@ pub(crate) fn normal_redraw_mode_message() {
         // taken out of the global for the duration and put back after.
         let kmsg = keep_msg.get();
         keep_msg.set(ptr::null_mut());
-        unsafe { setcursor() };
-        let _ = unsafe { update_screen() };
+        setcursor();
+        let _ = update_screen();
         keep_msg.set(kmsg);
         let copy = unsafe { xstrdup(keep_msg.get()) };
         unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
         unsafe { xfree(copy.cast::<c_void>()) };
     }
-    unsafe { setcursor() };
+    setcursor();
     unsafe { ui_cursor_shape() };
     unsafe { ui_flush() };
     if msg_scroll.get() != 0 || emsg_on_display.get() {
@@ -536,13 +536,13 @@ fn normal_redraw() {
     // SAFETY (throughout): all of this is the current window's and buffer's own state.
     update_topline(Win::current());
     validate_cursor(Win::current());
-    unsafe { show_cursor_info_later(false) };
+    show_cursor_info_later(false);
     if must_redraw.get() != 0 {
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     } else {
-        unsafe { redraw_statuslines() };
+        redraw_statuslines();
         if redraw_cmdline.get() || clear_cmdline.get() || redraw_mode.get() {
-            unsafe { showmode() };
+            showmode();
         }
     }
     Buf::current().b_last_used = unsafe { time(ptr::null_mut()) };
@@ -563,7 +563,7 @@ fn normal_redraw() {
     did_emsg.set(0);
     msg_didany.set(false);
     may_clear_sb_text();
-    unsafe { setcursor() };
+    setcursor();
 }
 
 /// One iteration of the state loop's check half.
@@ -596,7 +596,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 
     if skip_redraw.get() || exmode_active.get() {
         skip_redraw.set(false);
-        unsafe { setcursor() };
+        setcursor();
     } else if do_redraw.get() || stuff_empty() {
         terminal_check_refresh();
         update_topline(Win::current());

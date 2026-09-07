@@ -495,7 +495,7 @@ pub(crate) unsafe fn n_opencmd(cmd_arg: *mut CmdArg) {
     let opened = u_save(undo_first, undo_last).is_ok()
         && unsafe { open_line(dir, flags, 0, ptr::null_mut()) };
     if opened {
-        if unsafe { win_cursorline_standout(win) } {
+        if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.
             win.w_valid.clear(WinValid::CROW);
         }

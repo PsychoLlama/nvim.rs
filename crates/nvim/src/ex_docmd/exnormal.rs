@@ -239,7 +239,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
         Win::current().w_curswant = 0 as ColNr;
     }
     if visual_active() {
-        unsafe { showmode() };
+        showmode();
     }
 }
 
@@ -251,7 +251,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
 pub(crate) unsafe fn ex_stopinsert(_args: *mut ExArg) {
     restart_edit.set(0);
     stop_insert_mode.set(true);
-    unsafe { clearmode() };
+    clearmode();
 }
 
 /// Put `cmd` into the typeahead and run it as normal-mode keys.

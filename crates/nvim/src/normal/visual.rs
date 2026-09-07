@@ -571,7 +571,7 @@ pub(crate) unsafe fn nv_visual(cmd_arg: *mut CmdArg) {
             end_visual_mode();
         } else {
             set_visual_mode(VisualMode::from_raw(ca.cmdchar));
-            unsafe { showmode() };
+            showmode();
             unsafe { may_trigger_modechanged() };
         }
         redraw_curbuf_later(UPD_INVERTED);
@@ -640,7 +640,7 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
     unsafe { fold_adjust_visual() };
     unsafe { may_trigger_modechanged() };
     setmouse();
-    unsafe { conceal_check_cursor_line() };
+    conceal_check_cursor_line();
     if p_smd.get() != 0 && msg_silent.get() == 0 {
         redraw_cmdline.set(true);
     }
@@ -709,7 +709,7 @@ pub(crate) unsafe fn nv_gv_cmd(cmd_arg: *mut CmdArg) {
     }
     setmouse();
     redraw_curbuf_later(UPD_INVERTED);
-    unsafe { showmode() };
+    showmode();
 }
 
 /// Make an exclusive selection cover the character the cursor is on, so the

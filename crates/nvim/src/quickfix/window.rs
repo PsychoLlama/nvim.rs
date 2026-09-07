@@ -97,8 +97,7 @@ fn set_title_var(title: *mut c_char) {
 }
 
 fn busy_end() {
-    // SAFETY: releases the quickfix-busy count `incr_quickfix_busy` took.
-    unsafe { decr_quickfix_busy() };
+    decr_quickfix_busy();
 }
 
 /// `qf_fill_buffer()`: rewrite `buffer` from `qfl`.

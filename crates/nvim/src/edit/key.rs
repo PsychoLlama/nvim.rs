@@ -678,7 +678,7 @@ fn insert_normal_char(s: &mut InsertState) {
 fn start_autocomplete(s: &mut InsertState) {
     // SAFETY: `curwin` is live, which is all a redraw asks for.
     redraw_later(Win::current(), UPD_VALID);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
     unsafe { ui_flush() };
     ins_compl_enable_autocomplete();
     insert_do_complete(s);

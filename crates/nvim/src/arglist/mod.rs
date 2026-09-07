@@ -459,6 +459,11 @@ const ANY_NAME: ExpandFlags = ExpandFlags::DIR
     .or(ExpandFlags::ADDSLASH)
     .or(ExpandFlags::NOTFOUND);
 
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string, unaliased for the call.
+/// `fcountp` must point at a writable `int` the caller owns. `fnamesp` must
+/// point at a writable `*mut *mut c_char` slot the caller owns for the call.
 pub unsafe fn get_arglist_exp(
     str: *mut c_char,
     fcountp: *mut c_int,

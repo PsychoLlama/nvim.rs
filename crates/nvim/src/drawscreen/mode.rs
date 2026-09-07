@@ -47,7 +47,7 @@ pub fn skip_showmode() -> bool {
 /// `clear_cmdline` asks for the rest of the command line to be cleared;
 /// `redraw_mode` asks for the mode to be shown or taken away even when there is
 /// none to show.
-pub unsafe fn showmode() -> c_int {
+pub fn showmode() -> c_int {
     // Where the keymap name is wrapped in parentheses; upstream shares
     // `NameBuff`, which the message machinery writes again.
     let mut keymap = [0 as c_char; MAXPATHL as usize];
@@ -214,7 +214,7 @@ pub unsafe fn showmode() -> c_int {
 
         // The submode text already gets too long to share the line with it.
         if reg_recording.get() != 0 && edit_submode.get().is_null() {
-            unsafe { recording_mode(hl_id) };
+            recording_mode(hl_id);
             need_clear = true;
         }
 
@@ -262,17 +262,16 @@ pub(crate) fn msg_pos_mode() {
 ///
 /// Insert mode has not actually ended yet at that point, which is why this is
 /// separate from [`showmode`]. Callers check `mode_displayed` first.
-pub unsafe fn unshowmode(force: bool) {
-    // SAFETY: `char_avail` pumps the input layer on the main thread.
+pub fn unshowmode(force: bool) {
     if !redrawing() || (!force && char_avail() && !KeyTyped.get()) {
         redraw_cmdline.set(true); // delete it later
     } else {
-        unsafe { clearmode() };
+        clearmode();
     }
 }
 
 /// Clear the mode message, keeping the message cursor where it was.
-pub unsafe fn clearmode() {
+pub fn clearmode() {
     // SAFETY: the message layer on the main thread.
     let save_msg_row = msg_row.get();
     let save_msg_col = msg_col.get();
@@ -281,7 +280,7 @@ pub unsafe fn clearmode() {
     msg_pos_mode();
     // The recording indicator outlives the mode message.
     if reg_recording.get() != 0 {
-        unsafe { recording_mode(HLF_CM) };
+        recording_mode(HLF_CM);
     }
     unsafe { msg_clr_eos() };
     unsafe { msg_ext_flush_showmode() };
@@ -291,7 +290,7 @@ pub unsafe fn clearmode() {
 }
 
 /// Print `recording @x` for the register being recorded into.
-pub(crate) unsafe fn recording_mode(hl_id: c_int) {
+pub(crate) fn recording_mode(hl_id: c_int) {
     // SAFETY: the message layer on the main thread.
     if shortmess(ShmFlag::RECORDING) {
         return;
@@ -313,7 +312,7 @@ pub const COL_RULER: c_int = 17;
 /// `sc_col` also bounds how long a message on the status line may be. When the
 /// last window has a status line the ruler lives there instead, so the two are
 /// independent.
-pub unsafe fn comp_col() {
+pub fn comp_col() {
     // SAFETY: `last_stl_height` walks the window layout on the main thread.
     let last_has_status = last_stl_height(false) > 0;
 

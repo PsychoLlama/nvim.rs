@@ -562,9 +562,7 @@ unsafe fn spell_find_suggest(
 /// `su` must be valid and the current window must have its languages
 /// loaded.
 unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
-    // SAFETY: the caller guarantees `su` and the window's spell state.
-    // Load whichever `.sug` files are available and not loaded yet.
-    unsafe { suggest_load_files() };
+    suggest_load_files();
 
     // 1. Special cases, such as a repeated word: "the the" -> "the".
     unsafe { suggest_try_special(su) };

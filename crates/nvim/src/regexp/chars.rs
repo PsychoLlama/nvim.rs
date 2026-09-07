@@ -190,6 +190,9 @@ pub(crate) unsafe fn take_char_class(cursor: &mut *mut c_char) -> Option<CharCla
     Some(CHAR_CLASS_TAB[i].1)
 }
 
+/// # Safety
+///
+/// `prog` must point at a live `RegProg`.
 pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
     (unsafe { (*prog).regflags } & RF_HASNL as u32) != 0
 }

@@ -118,7 +118,7 @@ unsafe fn free_spat(spat: &SearchPattern) {
 ///
 /// `additional_data` is *not* copied — the original keeps it, exactly as
 /// upstream's struct assignment leaves it aliased. Nothing frees the copy.
-unsafe fn clone_spat(idx: c_int) -> SearchPattern {
+fn clone_spat(idx: c_int) -> SearchPattern {
     let mut copy = spat(idx);
     if !copy.pat.is_null() {
         copy.pat = unsafe { xstrnsave(copy.pat, copy.patlen) };
@@ -267,10 +267,8 @@ pub fn save_search_patterns() {
     if save_level.replace(save_level.get() + 1) != 0 {
         return;
     }
-    // SAFETY: the clones are fresh allocations; nothing else is borrowing
-    // the cells.
     for idx in [RE_SEARCH, RE_SUBST] {
-        let clone = unsafe { clone_spat(idx) };
+        let clone = clone_spat(idx);
         saved_spats.with_mut(|slots| slots[idx as usize] = clone);
     }
     if compiled_pat.get().is_null() {
@@ -313,8 +311,7 @@ pub fn save_last_search_pattern() {
     if did_save_last_search_spat.get() != 1 {
         return;
     }
-    // SAFETY: the clone is a fresh allocation.
-    saved_last_search_spat.set(unsafe { clone_spat(RE_SEARCH) });
+    saved_last_search_spat.set(clone_spat(RE_SEARCH));
     saved_last_idx.set(last_idx.get());
     saved_no_hlsearch.set(no_hlsearch.get());
 }

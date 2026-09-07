@@ -140,26 +140,22 @@ pub(super) unsafe fn write_vim_spell(
     if w.ok {
         w.byte(VIMSPELLVERSION);
 
-        // SAFETY: every string read below is one of `spin`'s own
-        // NUL-terminated arena strings, and the trees are its own.
-        unsafe {
-            put_info(&mut w, spin);
-            let regionmask = put_region(&mut w, spin);
-            put_charflags(&mut w, spin);
-            put_midword(&mut w, spin);
-            put_prefcond(&mut w, spin);
-            put_rep_and_sal(&mut w, spin);
-            put_sofo(&mut w, spin);
-            put_words(&mut w, spin);
-            put_map(&mut w, spin);
-            put_sugfile(&mut w, spin);
-            put_flag_sections(&mut w, spin);
-            put_compound(&mut w, spin);
-            put_syllable(&mut w, spin);
+        put_info(&mut w, spin);
+        let regionmask = put_region(&mut w, spin);
+        put_charflags(&mut w, spin);
+        put_midword(&mut w, spin);
+        put_prefcond(&mut w, spin);
+        put_rep_and_sal(&mut w, spin);
+        put_sofo(&mut w, spin);
+        put_words(&mut w, spin);
+        put_map(&mut w, spin);
+        put_sugfile(&mut w, spin);
+        put_flag_sections(&mut w, spin);
+        put_compound(&mut w, spin);
+        put_syllable(&mut w, spin);
 
-            w.byte(SN_END as c_int);
-            put_trees(&mut w, spin, regionmask);
-        }
+        w.byte(SN_END as c_int);
+        put_trees(&mut w, spin, regionmask);
 
         // The trailing byte the reader uses to tell a complete file
         // from a truncated one.
@@ -176,7 +172,7 @@ pub(super) unsafe fn write_vim_spell(
 }
 
 /// `SN_INFO`: the free-form text `:spellinfo` shows.
-unsafe fn put_info(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_info(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_info.is_null() {
         return;
     }
@@ -241,7 +237,7 @@ fn put_charflags(w: &mut SplWriter, spin: &SpellInfo) {
 
 /// `SN_MIDWORD`: characters that may appear inside a word without ending
 /// it, such as an apostrophe.
-unsafe fn put_midword(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_midword(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_midword.is_null() {
         return;
     }
@@ -333,7 +329,7 @@ fn put_rep_and_sal(w: &mut SplWriter, spin: &mut SpellInfo) {
 }
 
 /// `SN_SOFO`: the simple character-mapping alternative to `SAL`.
-unsafe fn put_sofo(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_sofo(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_sofofr.is_null() || spin.si_sofoto.is_null() {
         return;
     }
@@ -354,7 +350,7 @@ unsafe fn put_sofo(w: &mut SplWriter, spin: &SpellInfo) {
 
 /// `SN_WORDS`: the `COMMON` word list, which makes suggestions of everyday
 /// words score better. Counted on the first pass, written on the second.
-unsafe fn put_words(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_words(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_commonwords.ht_used == 0 {
         return;
     }
@@ -386,7 +382,7 @@ fn put_map(w: &mut SplWriter, spin: &SpellInfo) {
 
 /// `SN_SUGFILE`: a timestamp stamped into both this file and the `.sug`
 /// beside it, so a stale `.sug` can be spotted and ignored.
-unsafe fn put_sugfile(w: &mut SplWriter, spin: &mut SpellInfo) {
+fn put_sugfile(w: &mut SplWriter, spin: &mut SpellInfo) {
     let wanted =
         !spin.si_sal.is_empty() || (!spin.si_sofofr.is_null() && !spin.si_sofoto.is_null());
     if spin.si_nosugfile != 0 || !wanted {
@@ -412,7 +408,7 @@ fn put_flag_sections(w: &mut SplWriter, spin: &SpellInfo) {
 
 /// `SN_COMPOUND`: the compounding limits, the `CHECKCOMPOUNDPATTERN` pairs
 /// and the flags that say which words may join.
-unsafe fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_compflags.is_null() {
         return;
     }
@@ -443,7 +439,7 @@ unsafe fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
 
 /// `SN_SYLLABLE`: the character groups that count as one syllable, for
 /// `COMPOUNDSYLMAX`. Emitted after `SN_NOBREAK`, which shares this test.
-unsafe fn put_syllable(w: &mut SplWriter, spin: &SpellInfo) {
+fn put_syllable(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_nobreak != 0 {
         w.section(SN_NOBREAK as c_int, 0, 0);
     }
@@ -461,7 +457,7 @@ unsafe fn put_syllable(w: &mut SplWriter, spin: &SpellInfo) {
 /// The count is what [`put_node`] returns from a null-file pass, and it
 /// also feeds the "estimated runtime memory use" figure `:mkspell` prints:
 /// one byte plus one `int` per node is what the reader will allocate.
-unsafe fn put_trees(w: &mut SplWriter, spin: &mut SpellInfo, regionmask: c_int) {
+fn put_trees(w: &mut SplWriter, spin: &mut SpellInfo, regionmask: c_int) {
     // SAFETY: the three roots are live and their trees compressed.
     spin.si_memtot = 0;
     for (round, root) in [spin.si_foldroot, spin.si_keeproot, spin.si_prefroot]

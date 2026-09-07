@@ -56,7 +56,7 @@ impl WindowCorner {
 /// columns shift. `'statuscolumn'` is the second reason to answer true — the
 /// expression can read the sign count, so a change to it invalidates the cached
 /// width estimate even when the column itself did not move.
-pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
+pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     // SAFETY: the caller's live window; its buffer is live with it.
     let mut buf = window.buffer();
 
@@ -195,7 +195,7 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
 }
 
 /// Draw the vertical separator right of window `window`.
-pub(crate) unsafe fn draw_vsep_win(window: Win) {
+pub(crate) fn draw_vsep_win(window: Win) {
     // SAFETY: a live window; the grid batch is opened and flushed per row.
     if window.w_vsep_width == 0 {
         return;
@@ -211,7 +211,7 @@ pub(crate) unsafe fn draw_vsep_win(window: Win) {
 }
 
 /// Draw the horizontal separator below window `window`.
-pub(crate) unsafe fn draw_hsep_win(window: Win) {
+pub(crate) fn draw_hsep_win(window: Win) {
     // SAFETY: a live window; the grid batch is opened and flushed here.
     if window.w_hsep_height == 0 {
         return;
@@ -256,7 +256,7 @@ fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
 ///
 /// `update_screen` runs this for every window *after* all the window updates, so
 /// that a connector is never overwritten by a neighbour's separator.
-pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
+pub(crate) fn draw_sep_connectors_win(window: Win) {
     // SAFETY: a live window of the current layout; each grid batch is opened
     // and flushed here.
     if global_stl_height() == 0 || !(window.w_hsep_height == 1 || window.w_vsep_width == 1) {

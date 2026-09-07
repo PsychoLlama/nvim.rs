@@ -110,7 +110,7 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
     let mut s = inword;
     while unsafe { *s } != 0 {
         let mut c = unsafe { mb_cptr2char_adv(&raw mut s) };
-        if unsafe { utf_class(c) } == 0 {
+        if utf_class(c) == 0 {
             c = ' ' as c_int;
         } else if c < 256 {
             c = unsafe { (*slang).sl_sal_first[c as usize] };
@@ -189,7 +189,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
         let t = s;
         let mut c = unsafe { mb_cptr2char_adv(&raw mut s) };
         if unsafe { (*slang).sl_rem_accents } {
-            if unsafe { utf_class(c) } == 0 {
+            if utf_class(c) == 0 {
                 if did_white {
                     continue;
                 }

@@ -575,8 +575,7 @@ pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
         };
         new_win_height(window, text + STATUS_HEIGHT as c_int);
     }
-    // SAFETY: recomputes the column the message area starts in.
-    unsafe { comp_col() };
+    comp_col();
     free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
     window.w_status_click_defs_size = 0 as size_t;
     window.w_status_click_defs = ptr::null_mut::<StlClickDefinition>();
@@ -650,8 +649,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
             if !resize_frame_for_status(fr) {
                 return;
             }
-            // SAFETY: recomputes the column the message area starts in.
-            unsafe { comp_col() };
+            comp_col();
         }
         if (wp.w_height - wp.w_prev_height).abs() == 1 {
             wp.w_prev_height = wp.w_height;
@@ -661,8 +659,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     } else if wp.w_status_height == 0 && !is_stl_global {
         wp.w_status_height = STATUS_HEIGHT as c_int;
         wp.w_hsep_height = 0;
-        // SAFETY: recomputes the column the message area starts in.
-        unsafe { comp_col() };
+        comp_col();
     }
 }
 

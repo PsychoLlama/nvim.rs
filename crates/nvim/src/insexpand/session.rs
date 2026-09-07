@@ -600,7 +600,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
         edit_submode_extra.set(gettext(c"-- Searching...").as_ptr().cast_mut());
         edit_submode_highl.set(HLF_COUNT);
-        unsafe { showmode() };
+        showmode();
         edit_submode_extra.set(ptr::null_mut());
         unsafe { ui_flush() };
     }
@@ -701,7 +701,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         && !no_matches_found
         && elapsed_ms(compl_start_tv) < p_acl.get() as uint64_t
     {
-        unsafe { setcursor() };
+        setcursor();
         unsafe { ui_flush() };
         loop {
             if char_avail() {

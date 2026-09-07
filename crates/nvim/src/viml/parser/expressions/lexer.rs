@@ -552,6 +552,10 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
 
 /// The next token of the Vimscript expression `pstate` is reading, advancing
 /// the cursor past it unless `kELFlagPeek` is set.
+///
+/// # Safety
+///
+/// `pstate` must point at a live `ParserState`, unaliased for the call.
 pub unsafe fn viml_pexpr_next_token(pstate: *mut ParserState, flags: c_int) -> LexExprToken {
     // SAFETY: the caller hands over the parser state it is driving, and the
     // reader keeps every line it has produced alive for the parse.

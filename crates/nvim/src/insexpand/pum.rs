@@ -546,8 +546,7 @@ pub fn ins_compl_show_pum() {
     }
 
     // Update the screen before drawing the popup menu over it.
-    // SAFETY: the editor exists and this runs on its own thread.
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
 
     let mut cur = -1;
     let mut array_changed = false;
@@ -777,15 +776,10 @@ pub(crate) fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
 
     // If the cursor moved or the display scrolled, the menu has to be
     // rebuilt rather than only redrawn.
-    // SAFETY: the editor exists, a completion is running -- the caller's
-    // promise -- and this runs on its own thread.
-    unsafe { setcursor() };
+    setcursor();
     if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol {
         ins_compl_del_pum();
     }
-    // SAFETY: as above.
-    unsafe {
-        ins_compl_show_pum();
-        setcursor();
-    }
+    ins_compl_show_pum();
+    setcursor();
 }

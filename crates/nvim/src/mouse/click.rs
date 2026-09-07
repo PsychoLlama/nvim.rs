@@ -142,8 +142,8 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_
         };
         // SAFETY: all four only touch the screen and the current buffer.
         redraw_curbuf_later(redraw);
-        let _ = unsafe { update_screen() };
-        unsafe { setcursor() };
+        let _ = update_screen();
+        setcursor();
         unsafe { ui_flush() }; // Update before showing popup menu
     }
 

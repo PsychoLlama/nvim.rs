@@ -287,7 +287,7 @@ pub unsafe fn ui_refresh() {
     // told about it.
     let save_p_lz = p_lz.get();
     p_lz.set(0);
-    unsafe { screen_resize(width, height) };
+    screen_resize(width, height);
     p_lz.set(save_p_lz);
     ui_mode_info_set();
     pending_mode_update.set(true);
@@ -325,7 +325,7 @@ pub unsafe fn ui_pum_get_pos(
     true
 }
 
-unsafe extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
+extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
     unsafe { ui_refresh() };
 }
 
@@ -741,7 +741,7 @@ pub unsafe fn ui_cursor_shape_no_check_conceal() {
 /// May redraw the cursor line.
 pub unsafe fn ui_cursor_shape() {
     unsafe { ui_cursor_shape_no_check_conceal() };
-    unsafe { conceal_check_cursor_line() };
+    conceal_check_cursor_line();
 }
 
 /// # Safety
@@ -847,7 +847,7 @@ fn ext_name(widget: usize) -> *const core::ffi::c_char {
 /// that lookup rather than on anything the caller promised.
 pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mut Error) {
     if grid_handle == DEFAULT_GRID_HANDLE {
-        unsafe { screen_resize(width, height) };
+        screen_resize(width, height);
         return;
     }
     let wp = get_win_by_grid_handle(grid_handle);

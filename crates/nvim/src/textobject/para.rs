@@ -343,11 +343,8 @@ pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c
             set_visual_anchor(visual_anchor().with_lnum(start_lnum).with_col(0));
         }
         set_visual_mode(VisualMode::LINE);
-        // SAFETY: on the main thread with a current window and buffer.
-        unsafe {
-            redraw_curbuf_later(UPD_INVERTED); // update the inversion
-            showmode();
-        }
+        redraw_curbuf_later(UPD_INVERTED); // update the inversion
+        showmode();
     } else {
         // SAFETY: the caller guarantees `op` is a live operator argument.
         let op = unsafe { &mut *op };

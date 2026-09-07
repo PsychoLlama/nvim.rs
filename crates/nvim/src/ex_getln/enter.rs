@@ -377,7 +377,7 @@ pub(crate) fn command_line_enter(
                 found_one = true;
             }
             if found_one {
-                unsafe { redraw_statuslines() };
+                redraw_statuslines();
             }
         }
 

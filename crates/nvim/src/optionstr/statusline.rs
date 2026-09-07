@@ -191,8 +191,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
     }
     if rulerformat && errmsg.is_none() {
         // The ruler's width decides where the last line's columns start.
-        // SAFETY: recomputes a global from the editor's own state.
-        unsafe { comp_col() };
+        comp_col();
     }
     errmsg
 }

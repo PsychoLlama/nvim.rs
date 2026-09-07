@@ -516,7 +516,7 @@ pub unsafe fn ml_open_file(buffer: Buf) {
             break;
         }
         // Writing block zero failed: close it and try another directory.
-        unsafe { mf_close_file(buffer, false) };
+        mf_close_file(buffer, false);
     }
 
     if unsafe { *p_dir.get() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {

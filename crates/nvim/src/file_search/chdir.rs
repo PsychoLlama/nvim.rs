@@ -33,6 +33,10 @@ use std::ffi::CStr;
 /// `"window"` — except for an automatic change, which is matched by `"auto"`.
 /// The same words go into `v:event.scope`, alongside the new directory under
 /// the key the event promises (`directory` before the move, `cwd` after).
+///
+/// # Safety
+///
+/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn do_autocmd_dirchanged(
     new_dir: *mut c_char,
     scope: CdScope,
@@ -109,6 +113,10 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
 /// Caller must call `shorten_fnames()`.
 ///
 /// @return  `Ok` or `Err`
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result<(), Failed> {
     let mut cwd = [0 as c_char; MAXPATHL as usize];
     let mut dir = [0 as c_char; MAXPATHL as usize];
@@ -137,6 +145,10 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result
 }
 
 /// Change directory to `new_dir`, searching `'cdpath'` for a relative name.
+///
+/// # Safety
+///
+/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();

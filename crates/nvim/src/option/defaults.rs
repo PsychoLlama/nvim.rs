@@ -505,7 +505,7 @@ pub(crate) fn set_init_2(_headless: bool) {
     if !option_was_set(kOptScroll) {
         set_option_default(kOptScroll, OptionSetFlags::LOCAL);
     }
-    unsafe { comp_col() };
+    comp_col();
     // Same for 'window', which is one screen's worth of lines.
     if !option_was_set(kOptWindow) {
         p_window.set((Rows.get() - 1) as OptInt);

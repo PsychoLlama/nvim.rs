@@ -502,7 +502,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
         if w.row - xtra_rows >= window.w_view_height - 2 {
             rg.mod_bot = MAXLNUM;
         } else {
-            unsafe { win_scroll_lines(window, w.row, xtra_rows) };
+            win_scroll_lines(window, w.row, xtra_rows);
             rg.bot_start = window.w_view_height + xtra_rows;
             rg.bot_scroll_start = rg.bot_start;
         }
@@ -512,7 +512,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
         if w.row + xtra_rows >= window.w_view_height - 2 {
             rg.mod_bot = MAXLNUM;
         } else {
-            unsafe { win_scroll_lines(window, w.row + old_rows, xtra_rows) };
+            win_scroll_lines(window, w.row + old_rows, xtra_rows);
             rg.bot_scroll_start = 0;
             if rg.top_end > w.row + old_rows {
                 // The part of the top area that still needs updating was
@@ -710,16 +710,14 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         unsafe { grid_line_flush() };
     } else {
         // A column of "@" down the rows the line would have taken.
-        unsafe {
-            win_draw_end(
-                window,
-                window.w_p_fcs_chars.lastline,
-                true,
-                w.srow,
-                window.w_view_height,
-                HLF_AT,
-            )
-        };
+        win_draw_end(
+            window,
+            window.w_p_fcs_chars.lastline,
+            true,
+            w.srow,
+            window.w_view_height,
+            HLF_AT,
+        );
     }
     set_empty_rows(window, w.srow);
     window.w_botline = w.lnum;
@@ -745,16 +743,14 @@ unsafe fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
         lastline = 0;
     }
 
-    unsafe {
-        win_draw_end(
-            window,
-            window.w_p_fcs_chars.eob,
-            false,
-            lastline.max(w.row),
-            window.w_view_height,
-            HLF_EOB,
-        )
-    };
+    win_draw_end(
+        window,
+        window.w_p_fcs_chars.eob,
+        false,
+        lastline.max(w.row),
+        window.w_view_height,
+        HLF_EOB,
+    );
     set_empty_rows(window, w.row);
 }
 
@@ -763,7 +759,7 @@ unsafe fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
 /// Positive `line_count` scrolls down, making room at `row`; negative deletes
 /// rows there. Nothing happens when the area to move would be off the window --
 /// the caller redraws it instead.
-pub unsafe fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
+pub fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
     if !redrawing() || line_count == 0 {
         return;
     }
@@ -808,7 +804,7 @@ pub unsafe fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
 ///
 /// With `draw_margin` the fold, sign and number columns are drawn as blanks
 /// first, so the marker starts where the text would.
-pub unsafe fn win_draw_end(
+pub fn win_draw_end(
     window: Win,
     c1: ScreenChar,
     draw_margin: bool,
@@ -846,7 +842,7 @@ pub unsafe fn win_draw_end(
             if (window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
                 && !cpo_has(CpoFlag::NUMCOL)
             {
-                let width = unsafe { number_width(window) } + 1;
+                let width = number_width(window) + 1;
                 n = grid_line_fill(
                     n,
                     view_width.min(n + width),

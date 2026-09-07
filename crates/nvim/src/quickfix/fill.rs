@@ -31,7 +31,7 @@ impl CurrentDir {
 
     /// The current directory. Empty if the system would not say, in which
     /// case the next entry asks again — as upstream does.
-    unsafe fn get(&mut self) -> *mut c_char {
+    fn get(&mut self) -> *mut c_char {
         if self.0[0] == 0 {
             // SAFETY: the buffer is exactly the length passed.
             let _ = unsafe { os_dirname(self.0.as_mut_ptr(), MAXPATHL as size_t) };

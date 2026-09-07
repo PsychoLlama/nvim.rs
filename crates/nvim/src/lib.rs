@@ -1,4 +1,3 @@
-#![allow(clippy::missing_safety_doc)]
 // The crate root cannot carry `forbid(unsafe_code)` — `forbid` reaches the
 // whole subtree and cannot be lifted by a module, and the tree is still tens
 // of thousands of unchecked lines deep. `deny(unsafe_op_in_unsafe_fn)` is the

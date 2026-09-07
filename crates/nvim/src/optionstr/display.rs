@@ -395,8 +395,7 @@ pub unsafe fn did_set_showcmdloc(args: &mut OptSet) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
     if errmsg.is_none() {
         // The pending-command display shares the last line with the ruler.
-        // SAFETY: recomputes a global from the editor's own state.
-        unsafe { comp_col() };
+        comp_col();
     }
     errmsg
 }

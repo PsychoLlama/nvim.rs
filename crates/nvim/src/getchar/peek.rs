@@ -71,10 +71,7 @@ struct Partial {
 unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     let deleted = mode_displayed.get();
     if deleted {
-        // SAFETY (this body): `curwin` is set from startup to exit, and the
-        // cursor line pointer is valid for `w_cursor.col` bytes, which is
-        // where both walks stop.
-        unsafe { unshowmode(true) };
+        unshowmode(true);
     }
     validate_cursor(Win::current());
     let mut win = Win::current();
@@ -133,7 +130,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
             }
         }
     }
-    unsafe { setcursor() };
+    setcursor();
     unsafe { ui_flush() };
 
     at.wcol = win.w_wcol;
@@ -221,7 +218,7 @@ unsafe fn unshow_partial_key(partial: &Partial) {
         if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
             unputcmdline();
         } else {
-            unsafe { setcursor() }; // put the cursor back where it belongs
+            setcursor(); // put the cursor back where it belongs
         }
     }
 }
@@ -429,8 +426,8 @@ unsafe fn read_from_typeahead(
             && must_redraw.get() != 0
             && !need_wait_return.get()
         {
-            let _ = unsafe { update_screen() };
-            unsafe { setcursor() }; // put the cursor back where it belongs
+            let _ = update_screen();
+            setcursor(); // put the cursor back where it belongs
         }
 
         let partial = if !tb.is_empty() && advance && !exmode_active.get() {
@@ -557,13 +554,13 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // delete the mode later
             } else {
-                unsafe { unshowmode(false) };
+                unshowmode(false);
             }
         } else if c != ESC && mode_deleted {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // show the mode later
             } else {
-                unsafe { showmode() };
+                showmode();
             }
         }
     }

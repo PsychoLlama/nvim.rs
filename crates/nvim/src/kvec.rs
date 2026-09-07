@@ -222,6 +222,12 @@ impl<'a, T> Kvec<'a, T> {
 
 /// Copy `size` bytes from `src` to `dest`, then free `src`. klib's kvec
 /// spells this inline in every `kv_concat`-shaped macro.
+///
+/// # Safety
+///
+/// `src` must point at `size` readable bytes of an allocation `xmalloc`
+/// answered — it is freed here — and `dest` at `size` writable bytes that do
+/// not overlap it.
 pub(crate) unsafe fn _memcpy_free(
     dest: *mut ::core::ffi::c_void,
     src: *mut ::core::ffi::c_void,

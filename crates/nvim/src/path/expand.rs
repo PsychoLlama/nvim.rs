@@ -218,6 +218,9 @@ pub(crate) unsafe fn has_env_var(p: *mut c_char) -> bool {
 /// list rather than the pattern's own directory.
 const SEARCH_LIST: ExpandFlags = ExpandFlags::PATH.or(ExpandFlags::CDPATH);
 
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
     if !flags.has(SEARCH_LIST) || unsafe { path_is_absolute(p) } {
         return false;

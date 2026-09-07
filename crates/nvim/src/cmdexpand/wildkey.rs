@@ -311,7 +311,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
         p_ls.set(save_p_ls.get() as OptInt);
         p_wmh.set(save_p_wmh.get() as OptInt);
         last_status(false);
-        let _ = unsafe { update_screen() }; // redraw the screen NOW
+        let _ = update_screen(); // redraw the screen NOW
         redrawcmd();
         save_p_ls.set(-1);
     } else {
@@ -319,7 +319,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
         // Must be cleared before redraw_statuslines (#8385), which is why
         // this arm clears it itself rather than after the `if`.
         wild_menu_showing.set(0);
-        unsafe { redraw_statuslines() };
+        redraw_statuslines();
     }
     wild_menu_showing.set(0);
 

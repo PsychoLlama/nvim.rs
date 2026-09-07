@@ -64,7 +64,6 @@ unsafe fn qf_add_entry_from_dict(
     let mut numbuf = NumBuf::new();
     static DID_BUFNR_EMSG: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: forwarded from the caller.
     if first_entry {
         DID_BUFNR_EMSG.set(false);
     }
@@ -440,7 +439,6 @@ unsafe fn qf_setprop_items_from_lines(
     di: *mut DictItem,
     action: c_int,
 ) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
     let mut errorformat = p_efm.get();
     let efm_di = unsafe { find(what, "efm") };
     if !efm_di.is_null() {
@@ -622,7 +620,6 @@ pub unsafe fn set_errorlist(
     title: *mut c_char,
     what: *mut Dict,
 ) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
     let qi = match window {
         Some(wp) => ll_get_or_alloc_list(wp),
         None => QfStack::Global.raw(),
@@ -651,6 +648,6 @@ pub unsafe fn set_errorlist(
     } else {
         unsafe { qf_set_properties(qi, what, action, title) }
     };
-    unsafe { decr_quickfix_busy() };
+    decr_quickfix_busy();
     retval
 }

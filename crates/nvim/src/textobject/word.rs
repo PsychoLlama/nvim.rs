@@ -50,9 +50,7 @@ fn cls() -> c_int {
     if c == ' ' as c_int || c == '\t' as c_int || c == NUL {
         return 0;
     }
-    // SAFETY: as above -- `utf_class` only reads the current buffer's
-    // 'iskeyword' table.
-    let c = unsafe { utf_class(c) };
+    let c = utf_class(c);
     if c != 0 && cls_bigword.get() { 1 } else { c }
 }
 

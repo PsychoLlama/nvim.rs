@@ -790,9 +790,9 @@ pub unsafe fn showmatch(c: c_int) {
     Win::current().w_cursor = mpos; // move to the matching char
     so.set(0); // don't use 'scrolloff' here
     siso.set(0); // don't use 'sidescrolloff' here
-    unsafe { show_cursor_info_later(false) };
-    let _ = unsafe { update_screen() }; // show the new char
-    unsafe { setcursor() };
+    show_cursor_info_later(false);
+    let _ = update_screen(); // show the new char
+    setcursor();
     unsafe { ui_flush() };
     // Restore dollar_vcol: setcursor() may call curs_rows(), which
     // resets it when the matching position is on an earlier line and

@@ -410,7 +410,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     State.set(save_state);
     unsafe { may_trigger_modechanged() };
     setmouse();
-    unsafe { setcursor() };
+    setcursor();
 
     cmdwin_result.get()
 }

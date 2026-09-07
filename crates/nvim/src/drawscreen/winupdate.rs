@@ -106,7 +106,7 @@ impl Regions {
 /// - `UPD_INVERTED_ALL` -- redraw the whole Visual area
 /// - `UPD_VALID` -- scroll for a changed `w_topline`, redraw changed text, and
 ///   redraw the lines a scroll brought in at either end.
-pub(crate) unsafe fn win_update(window: Win) {
+pub(crate) fn win_update(window: Win) {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = window;
     // SAFETY: a live window of the current layout, during a redraw.
@@ -124,12 +124,12 @@ pub(crate) unsafe fn win_update(window: Win) {
 
     // A window with no room for text only needs its separator.
     if win.w_view_height == 0 {
-        unsafe { draw_hsep_win(window) };
+        draw_hsep_win(window);
         win.w_redr_type = 0;
         return;
     }
     if win.w_view_width == 0 {
-        unsafe { draw_vsep_win(window) };
+        draw_vsep_win(window);
         win.w_redr_type = 0;
         return;
     }
@@ -159,7 +159,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
     for win in winlayer::windows() {
-        if win.w_buffer == buf && unsafe { win_redraw_signcols(win) } {
+        if win.w_buffer == buf && win_redraw_signcols(win) {
             changed_line_abv_curs_win(win);
             redraw_later(win, UPD_NOT_VALID);
         }
@@ -180,7 +180,7 @@ pub(crate) unsafe fn win_update(window: Win) {
         || win.w_onebuf_opt.wo_rnu != 0
         || unsafe { *win.w_onebuf_opt.wo_stc } != 0
     {
-        unsafe { number_width(window) }
+        number_width(window)
     } else {
         0
     };
@@ -228,7 +228,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     let mut cursorline_fi = FoldInfo::default();
     unsafe { win_update_cursorline(window, &raw mut cursorline_fi) };
     if window.raw() == Win::current_raw() {
-        conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current()) });
+        conceal_cursor_used.set(conceal_cursor_line(Win::current()));
     }
 
     unsafe { win_check_ns_hl(Some(window)) };
@@ -245,8 +245,8 @@ pub(crate) unsafe fn win_update(window: Win) {
         unsafe { draw_window_lines(window, buf, &mut rg, cursorline_fi, &mut spv, decor) };
 
     if win.w_redr_type >= UPD_REDRAW_TOP {
-        unsafe { draw_vsep_win(window) };
-        unsafe { draw_hsep_win(window) };
+        draw_vsep_win(window);
+        draw_hsep_win(window);
     }
     unsafe { syn_set_timeout(::core::ptr::null_mut()) };
 
@@ -564,7 +564,7 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
 
     // Insert that many rows; if this is not the last window the rows at the
     // bottom are deleted. May fail if the terminal cannot do it.
-    unsafe { win_scroll_lines(win, 0, rows) };
+    win_scroll_lines(win, 0, rows);
     rg.bot_scroll_start = 0;
     if win.w_lines_valid == 0 {
         return;
@@ -622,7 +622,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
     rows -= win.w_topfill;
 
     if rows > 0 {
-        unsafe { win_scroll_lines(win, 0, -rows) };
+        win_scroll_lines(win, 0, -rows);
         rg.bot_start = win.w_view_height - rows;
         rg.bot_scroll_start = rg.bot_start;
     }
@@ -912,9 +912,6 @@ unsafe fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwi
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
-    // SAFETY: the caller's window and buffer.
-    // `dollar_vcol >= 0` means the cursor line is showing a `$` for a change
-    // command and was not fully drawn, so its height is not known here.
     if dollar_vcol.get() == -1 || window.raw() != Win::current_raw() {
         window.w_valid |= WinValid::BOTLINE;
         window.w_viewport_invalid = true;
@@ -929,7 +926,7 @@ unsafe fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwi
                 let mod_set = Buf::current().b_mod_set;
                 Buf::current().b_mod_set = false;
                 curs_columns(Win::current(), c_int::from(true));
-                unsafe { win_update(Win::current()) };
+                win_update(Win::current());
                 must_redraw.set(0);
                 Buf::current().b_mod_set = mod_set;
             }

@@ -410,7 +410,7 @@ impl Walk<'_> {
         // contract above is what supplies it.
         match self.stack[self.depth as usize].state {
             State::Start | State::NoPrefix => unsafe { self.node_start() },
-            State::SplitUndo => unsafe { self.split_undo() },
+            State::SplitUndo => self.split_undo(),
             State::EndNul => unsafe { self.end_nul() },
             State::Plain => unsafe { self.plain() },
             State::Del => unsafe { self.delete() },

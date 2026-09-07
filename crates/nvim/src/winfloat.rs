@@ -655,6 +655,12 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
 /// `qsort` comparator: sort floats by `zindex` DESCENDING, which is what makes
 /// `:fclose` close the topmost one first. Comparing `b` against `a` is
 /// upstream's `za == zb ? 0 : za < zb ? 1 : -1`.
+///
+/// # Safety
+///
+/// As `qsort`'s comparator: `a` and `b` must each point at an element of the
+/// array being sorted, and the elements must be of the type this reads them
+/// at.
 unsafe extern "C" fn float_zindex_cmp(a: *const c_void, b: *const c_void) -> c_int {
     // SAFETY: `qsort` passes pointers into the array below, whose elements are
     // live windows.
@@ -662,7 +668,7 @@ unsafe extern "C" fn float_zindex_cmp(a: *const c_void, b: *const c_void) -> c_i
     z(b).cmp(&z(a)) as c_int
 }
 
-pub(crate) unsafe fn win_float_remove(bang: bool, mut count: c_int) {
+pub(crate) fn win_float_remove(bang: bool, mut count: c_int) {
     // The whole list is collected before anything is closed: `win_close`
     // fires autocommands that can close further floats, which is what the
     // `win_valid` re-check below is for.

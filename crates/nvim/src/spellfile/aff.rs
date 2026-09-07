@@ -439,7 +439,6 @@ unsafe fn handle_line(
         if spin.si_ascii == 0
             && unsafe { convert_setup(&raw mut spin.si_conv, aff.af_enc, p_enc.get()) }.is_err()
         {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (fname, af_enc, arg2) =
                 unsafe { (c_str(fname), c_str(aff.af_enc), c_str(p_enc.get())) };
             smsg!(
@@ -771,11 +770,11 @@ unsafe fn finish_aff(
     }
 
     if st.compmax != 0 {
-        unsafe { aff_check_number(spin.si_compmax, st.compmax, c"COMPOUNDWORDMAX") };
+        aff_check_number(spin.si_compmax, st.compmax, c"COMPOUNDWORDMAX");
         spin.si_compmax = st.compmax;
     }
     if st.compminlen != 0 {
-        unsafe { aff_check_number(spin.si_compminlen, st.compminlen, c"COMPOUNDMIN") };
+        aff_check_number(spin.si_compminlen, st.compminlen, c"COMPOUNDMIN");
         spin.si_compminlen = st.compminlen;
     }
     if st.compsylmax != 0 {
@@ -785,11 +784,11 @@ unsafe fn finish_aff(
             let arg0 = unsafe { c_str(fmt.as_ptr()) };
             smsg!(0, "{arg0}");
         }
-        unsafe { aff_check_number(spin.si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX") };
+        aff_check_number(spin.si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX");
         spin.si_compsylmax = st.compsylmax;
     }
     if st.compoptions != 0 {
-        unsafe { aff_check_number(spin.si_compoptions, st.compoptions, c"COMPOUND options") };
+        aff_check_number(spin.si_compoptions, st.compoptions, c"COMPOUND options");
         spin.si_compoptions |= st.compoptions;
     }
     if !st.compflags.is_null() {
@@ -845,7 +844,7 @@ unsafe fn finish_aff(
 }
 
 /// Warn when two `.aff` files of one run disagree about a number.
-unsafe fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
+fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
     if spinval != 0 && spinval != affval {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(name.as_ptr()) };

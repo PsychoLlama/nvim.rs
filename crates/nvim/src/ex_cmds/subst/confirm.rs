@@ -110,7 +110,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     };
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if subflags.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
-        let numw = unsafe { number_width(Win::current()) } + 1 as c_int;
+        let numw = number_width(Win::current()) + 1 as c_int;
         sc += numw;
         ec += numw;
     }
@@ -206,8 +206,8 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     update_topline(Win::current());
     validate_cursor(Win::current());
     redraw_later(Win::current(), UPD_SOME_VALID);
-    unsafe { show_cursor_info_later(true) };
-    let _ = unsafe { update_screen() };
+    show_cursor_info_later(true);
+    let _ = update_screen();
     redraw_later(Win::current(), UPD_SOME_VALID);
     Win::current().w_onebuf_opt.wo_fen = save_p_fen;
 

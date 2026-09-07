@@ -236,9 +236,7 @@ pub(crate) fn qf_list_still_valid(window: Option<Win>, qf_id: c_uint) -> bool {
 
 /// [`decr_quickfix_busy`], which only ever frees stacks nothing can reach.
 pub(crate) fn qf_busy_end() {
-    // SAFETY: the deferred frees are stacks `ll_free_all` had already
-    // removed the last reachable reference to.
-    unsafe { decr_quickfix_busy() };
+    decr_quickfix_busy();
 }
 
 /// How deep the quickfix code is inside a command that holds a stack
@@ -251,6 +249,10 @@ static PENDING_FREE: GlobalCell<Vec<*mut QfInfo>> = GlobalCell::new(Vec::new());
 
 /// Whether the stack holds no lists at all. A null stack counts as empty,
 /// which is how the location list commands report "no location list".
+///
+/// # Safety
+///
+/// `qi` must point at a live `QfInfo`.
 #[inline]
 pub(crate) unsafe fn qf_stack_empty(qi: *const QfInfo) -> bool {
     // SAFETY: the caller's stack, which may be null.
@@ -488,7 +490,7 @@ pub(crate) fn incr_quickfix_busy() {
 }
 
 /// Release the hold, and free whatever asked to be freed meanwhile.
-pub(crate) unsafe fn decr_quickfix_busy() {
+pub(crate) fn decr_quickfix_busy() {
     quickfix_busy.set(quickfix_busy.get() - 1);
     if quickfix_busy.get() != 0 {
         return;

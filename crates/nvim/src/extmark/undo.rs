@@ -41,6 +41,11 @@ use crate::types::{
 /// change cannot simply be reversed for into the undo header.
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
+///
+/// # Safety
+///
+/// `uvp` must be null, or point at a live `extmark_undo_vec_t` the caller
+/// owns — the marks the splice removes are appended to it.
 pub unsafe fn extmark_splice_delete(
     buffer: Buf,
     l_row: c_int,

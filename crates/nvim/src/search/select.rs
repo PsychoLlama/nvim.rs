@@ -205,6 +205,6 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     may_start_select('c' as c_int);
     setmouse();
     redraw_curbuf_later(UPD_INVERTED);
-    unsafe { showmode() };
+    showmode();
     Ok(())
 }

@@ -114,6 +114,13 @@ unsafe extern "C" {
 /// delegates to libc — nothing more. `%g` never reaches here (vim rewrites it
 /// to `%e`/`%f` first), and neither do inf/nan (vim formats those itself).
 /// Anything unrecognized is a loud panic rather than a silent wrong answer.
+///
+/// # Safety
+///
+/// As C's `snprintf`: `__s` must point at `__maxlen` writable bytes the
+/// caller owns, `__format` at a NUL-terminated format, and the variadic
+/// arguments must be exactly the ones its conversions name, at the types they
+/// name.
 #[cfg(miri)]
 pub unsafe extern "C" fn snprintf(
     __s: *mut ::core::ffi::c_char,
@@ -222,6 +229,10 @@ unsafe fn ngettext_raw(
     (if __n == 1 { __msgid1 } else { __msgid2 }).cast_mut()
 }
 
+/// # Safety
+///
+/// As C's `memmove`: `__dest` must point at `__n` writable bytes the caller
+/// owns and `__src` at `__n` readable ones. They may overlap.
 #[cfg(miri)]
 pub unsafe fn memmove(
     __dest: *mut ::core::ffi::c_void,
@@ -232,6 +243,9 @@ pub unsafe fn memmove(
     __dest
 }
 
+/// # Safety
+///
+/// `__s` must point at a NUL-terminated string.
 #[cfg(miri)]
 pub unsafe fn strchr(
     __s: *const ::core::ffi::c_char,
@@ -251,6 +265,10 @@ pub unsafe fn strchr(
     }
 }
 
+/// # Safety
+///
+/// `__haystack` must point at a NUL-terminated string. `__needle` must point
+/// at a NUL-terminated string.
 #[cfg(miri)]
 pub unsafe fn strstr(
     __haystack: *const ::core::ffi::c_char,
@@ -269,6 +287,11 @@ pub unsafe fn strstr(
 
 /// Byte-for-byte, stopping at the first NUL — C's `strncmp`, which compares
 /// as `unsigned char` however `c_char` is signed on the target.
+///
+/// # Safety
+///
+/// `__s1` must point at a NUL-terminated string. `__s2` must point at a NUL-
+/// terminated string.
 #[cfg(miri)]
 pub unsafe extern "C" fn strncmp(
     __s1: *const ::core::ffi::c_char,
@@ -285,6 +308,10 @@ pub unsafe extern "C" fn strncmp(
     0
 }
 
+/// # Safety
+///
+/// `__s1` must point at a NUL-terminated string. `__s2` must point at a NUL-
+/// terminated string.
 #[cfg(miri)]
 pub unsafe extern "C" fn strncasecmp(
     __s1: *const ::core::ffi::c_char,

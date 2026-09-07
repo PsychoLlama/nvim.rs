@@ -354,8 +354,7 @@ pub(crate) fn terminal_enter() -> bool {
     set_terminal_winopts(s);
     s.term.pending.cursor = true;
     adjust_topline_cursor(s.term, buf, 0);
-    // SAFETY: draws the mode message.
-    unsafe { showmode() };
+    showmode();
     // SAFETY: publishes the cursor shape to every attached UI.
     unsafe { ui_cursor_shape() };
     terminal_focus(s.term, true);
@@ -396,11 +395,9 @@ pub(crate) fn terminal_enter() -> bool {
         terminal_check_cursor(s.term);
     }
     if restart_edit.get() != 0 {
-        // SAFETY: draws the mode message.
-        unsafe { showmode() };
+        showmode();
     } else {
-        // SAFETY: clears it.
-        unsafe { unshowmode(true) };
+        unshowmode(true);
     }
     // SAFETY: publishes the cursor shape to every attached UI.
     unsafe { ui_cursor_shape() };
@@ -553,21 +550,16 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     terminal_check_cursor(s.term);
     // SAFETY: a live window.
     validate_cursor(current_win());
-    // SAFETY: schedules the cursor-position report.
-    unsafe { show_cursor_info_later(false) };
+    show_cursor_info_later(false);
     if must_redraw.get() != 0 {
-        // SAFETY: redraws the screen.
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     } else {
-        // SAFETY: redraws the status lines only.
-        unsafe { redraw_statuslines() };
+        redraw_statuslines();
         if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
-            // SAFETY: draws the mode message.
-            unsafe { showmode() };
+            showmode();
         }
     }
-    // SAFETY: puts the terminal cursor where the window says.
-    unsafe { setcursor() };
+    setcursor();
     // Read out and written back: the shape goes to every attached UI, and
     // nothing of the session is borrowed while it does.
     let mut cursor_visible = s.cursor_visible;

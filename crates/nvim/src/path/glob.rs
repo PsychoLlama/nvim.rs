@@ -132,7 +132,7 @@ impl ScanWithDots {
     }
 
     /// The next entry's name, valid until the following call.
-    unsafe fn next(&mut self) -> Option<&CStr> {
+    fn next(&mut self) -> Option<&CStr> {
         self.count += 1;
         let name = match self.count {
             1 => c".".as_ptr(),
@@ -343,7 +343,7 @@ pub(crate) unsafe fn do_path_expand(
     };
     if let Some(mut scan) = unsafe { ScanWithDots::open(dirpath) } {
         while !got_int.get() {
-            let name = unsafe { scan.next() };
+            let name = scan.next();
             let Some(name) = name else { break };
             let name = name.to_bytes();
             if !name_is_wanted(name, starts_with_dot, flags)

@@ -549,7 +549,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
     if !started && ins_compl_preinsert_longest() {
         ins_compl_insert(true, true);
         if has_autocomplete_delay {
-            let _ = unsafe { update_screen() }; // Show the inserted text right away
+            let _ = update_screen(); // Show the inserted text right away
         }
     } else if compl_no_insert && !started && !compl_preinsert {
         unsafe {
@@ -583,7 +583,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
 
     if !allow_get_expansion {
         // Redraw to show the user what was inserted.
-        let _ = unsafe { update_screen() }; // TODO(bfredl): no!
+        let _ = update_screen(); // TODO(bfredl): no!
         if !has_autocomplete_delay {
             // Display the updated popup menu.
             ins_compl_show_pum();

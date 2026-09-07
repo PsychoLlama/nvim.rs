@@ -81,8 +81,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
     }
 
     // Redraw status lines (in case another window became active).
-    // SAFETY: only schedules a redraw.
-    unsafe { redraw_statuslines() };
+    redraw_statuslines();
 }
 
 /// Common mouse wheel scrolling, shared between Insert mode and NV modes.

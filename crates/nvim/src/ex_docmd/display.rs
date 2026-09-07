@@ -220,7 +220,7 @@ pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
     }
     let lazyredraw_off = suspend_lazyredraw();
     if State.get() & MODE_CMDLINE != 0 {
-        unsafe { redraw_statuslines() };
+        redraw_statuslines();
     } else {
         if visual_active() {
             redraw_curbuf_later(UPD_INVERTED);
@@ -353,8 +353,7 @@ fn ui_flush() {
 
 /// `update_screen()` as checked code.
 fn update_screen() -> Result<(), Failed> {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::drawscreen::update_screen() }
+    crate::drawscreen::update_screen()
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

@@ -426,7 +426,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
 
 /// Open up to `count` windows, one per argument. `keep_tabs` is
 /// `:tab drop`'s "leave the existing layout alone".
-unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
+fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     debug_assert!(first_window().is_some(), "firstwin != NULL");
     if cmdwin_type.get() != 0 {
         crate::semsg!("E11: Invalid in command-line window; <CR> executes, CTRL-C quits");
@@ -522,14 +522,13 @@ pub unsafe fn ex_all(args: *mut ExArg) {
     let count = args.line2 as c_int;
     let forceit = args.forceit != 0;
     let drop = args.cmdidx == CmdIdx::drop;
-    // SAFETY: no reference into the command block is held across this.
-    unsafe { do_arg_all(count, forceit, drop) };
+    do_arg_all(count, forceit, drop);
 }
 
 /// Every argument, space separated, in one owned string. Spaces,
 /// backslashes and backticks in a name are escaped with a backslash, since
 /// the result goes back through argument splitting (`##` on a command line).
-pub unsafe fn arg_all() -> *mut c_char {
+pub fn arg_all() -> *mut c_char {
     let mut out: Vec<u8> = Vec::new();
     for idx in 0..argcount() {
         let p = arg_name(idx);

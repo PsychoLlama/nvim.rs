@@ -39,6 +39,10 @@ pub(crate) fn empty_list() -> QfList {
 }
 
 /// Whether the list holds no entries. A null list counts as empty.
+///
+/// # Safety
+///
+/// `qfl` must point at a live `QfList`.
 #[inline]
 pub(crate) unsafe fn qf_list_empty(qfl: *const QfList) -> bool {
     // SAFETY: the caller's list, which may be null.
@@ -46,6 +50,10 @@ pub(crate) unsafe fn qf_list_empty(qfl: *const QfList) -> bool {
 }
 
 /// Whether the list holds at least one entry naming a real position.
+///
+/// # Safety
+///
+/// `qfl` must point at a live `QfList`.
 #[inline]
 pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const QfList) -> bool {
     // SAFETY: forwarded from the caller.

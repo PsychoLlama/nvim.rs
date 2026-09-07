@@ -323,7 +323,7 @@ impl WinLineVars {
         }
 
         let fill = if nrcol {
-            unsafe { number_width(window) + 1 }
+            number_width(window) + 1
         } else {
             SIGN_WIDTH as ::core::ffi::c_int
         };
@@ -483,7 +483,7 @@ impl WinLineVars {
             return;
         }
 
-        let width = unsafe { number_width(window) } + 1;
+        let width = number_width(window) + 1;
         let attr = unsafe { self.line_number_attr(window) };
         let both = window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0;
         if !(first_row && (window.w_skipcol == 0 || self.row > 0 || both)) {
@@ -602,12 +602,10 @@ impl WinLineVars {
             if was_reset {
                 // 'statuscolumn' was reset because the expression failed.
                 window.w_nrwidth_line_count = 0;
-                unsafe {
-                    window.w_nrwidth = (window.w_onebuf_opt.wo_nu != 0
-                        || window.w_onebuf_opt.wo_rnu != 0)
-                        as ::core::ffi::c_int
-                        * number_width(window)
-                };
+                window.w_nrwidth = (window.w_onebuf_opt.wo_nu != 0
+                    || window.w_onebuf_opt.wo_rnu != 0)
+                    as ::core::ffi::c_int
+                    * number_width(window);
             } else {
                 unsafe {
                     window.w_nrwidth += (width - (*stcp).width).min(MAX_STCWIDTH - (*stcp).width)

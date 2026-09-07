@@ -36,6 +36,12 @@ use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uin
 /// Create or update an extmark.
 ///
 /// Must not be used during iteration.
+///
+/// # Safety
+///
+/// `idp` must be null, or point at a writable `uint32_t` the caller owns: an
+/// id of zero asks for a fresh one, which is written back. The mark tree must
+/// not be under iteration.
 pub unsafe fn extmark_set(
     mut buffer: Buf,
     ns_id: uint32_t,

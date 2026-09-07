@@ -340,8 +340,7 @@ fn the_environment_block_enumerates_by_index_and_stops_at_the_end() {
 
     let mut names = Vec::new();
     for i in 0.. {
-        // SAFETY: the answer is NULL past the end, and owned otherwise.
-        let entry = unsafe { os_getenvname_at_index(i) };
+        let entry = os_getenvname_at_index(i);
         if entry.is_null() {
             break;
         }
@@ -362,8 +361,7 @@ fn the_environment_block_enumerates_by_index_and_stops_at_the_end() {
         u64::from(u32::MAX) as usize,
         18_446_744_073_709_000_000,
     ] {
-        // SAFETY: any index is accepted.
-        assert!(unsafe { os_getenvname_at_index(out_of_bounds) }.is_null());
+        assert!(os_getenvname_at_index(out_of_bounds).is_null());
     }
 }
 

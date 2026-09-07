@@ -27,7 +27,7 @@ const MAX_COLUMNS: c_int = 10000;
 /// dimensions are known: there is a window between setting `Rows`/`Columns` and
 /// getting here, at startup and on a manual resize, so everything that indexes
 /// the grid uses `default_grid.rows`/`.cols` rather than the globals.
-pub unsafe fn default_grid_alloc() -> bool {
+pub fn default_grid_alloc() -> bool {
     // An out-of-memory message from inside the allocation redraws, which lands
     // back here; break the loop rather than recursing.
     static RESIZING: GlobalCell<bool> = GlobalCell::new(false);
@@ -66,7 +66,7 @@ pub unsafe fn default_grid_alloc() -> bool {
 }
 
 /// Blank the screen and mark everything on it for redraw.
-pub unsafe fn screenclear() {
+pub fn screenclear() {
     // SAFETY: the screen grid and the message grid, on the main thread.
     unsafe { msg_check_for_delay(false) };
 
@@ -131,7 +131,7 @@ pub(crate) fn cmdline_number_prompt() -> bool {
 }
 
 /// Set the dimensions of the Nvim application "screen".
-pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
+pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     // SAFETY: the screen, the window layout and the autocommand machinery, all
     // on the main thread.
     // Setting the window size can produce another window-changed signal.
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     // changes them never terminates.
     let mut retry_count = 0;
     resizing_autocmd.set(true);
-    while unsafe { default_grid_alloc() } {
+    while default_grid_alloc() {
         // `win_new_screensize` recomputes float positions; tell the
         // compositor not to draw them yet.
         ui_comp_set_screen_valid(false);
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
 
         let redraw_off = Suppress::redraw();
         win_new_screensize(); // fit the windows in the new screen
-        unsafe { comp_col() }; // recompute the shown-command and ruler columns
+        comp_col(); // recompute the shown-command and ruler columns
         drop(redraw_off);
 
         retry_count += 1;
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     redraw_all_later(UPD_CLEAR);
 
     if State.get() != MODE_ASKMORE && State.get() != MODE_EXTERNCMD {
-        unsafe { screenclear() };
+        screenclear();
     }
 
     if starting.get() != NO_SCREEN {
@@ -233,7 +233,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             || (State.get() & MODE_CMDLINE != 0 && Cc::current().one_key());
         if deferred {
             if State.get() & MODE_CMDLINE != 0 {
-                let _ = unsafe { update_screen() };
+                let _ = update_screen();
             }
             if msg_grid_ref().is_allocated() {
                 unsafe { msg_grid_validate() };
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 // new position; keep `update_screen` from drawing it at the
                 // old one.
                 redraw_popupmenu.set(false);
-                let _ = unsafe { update_screen() };
+                let _ = update_screen();
                 redrawcmdline();
                 if pum_drawn() {
                     cmdline_pum_display(false);
@@ -263,9 +263,9 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                     redraw_popupmenu.set(false);
                     ins_compl_show_pum();
                 }
-                let _ = unsafe { update_screen() };
+                let _ = update_screen();
                 if redrawing() {
-                    unsafe { setcursor() };
+                    setcursor();
                 }
             }
         }

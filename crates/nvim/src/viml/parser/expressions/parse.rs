@@ -821,6 +821,10 @@ impl ExprParser {
 }
 
 /// Parse one Vimscript expression.
+///
+/// # Safety
+///
+/// `pstate` must point at a live `ParserState`, unaliased for the call.
 pub unsafe fn viml_pexpr_parse(pstate: *mut ParserState, flags: c_int) -> ExprAST {
     let mut ast = ExprAST {
         err: ExprASTError {

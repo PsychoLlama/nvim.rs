@@ -199,8 +199,7 @@ fn split_ins(
         msg_col.set(sc_col.get());
         // SAFETY: clears the message area.
         unsafe { msg_clr_eos_force() };
-        // SAFETY: recomputes the column it starts in.
-        unsafe { comp_col() };
+        comp_col();
         msg_row.set(Rows.get() - 1);
         msg_col.set(0);
     }

@@ -106,7 +106,7 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut SpellInfo, wfname: *mut c_cha
 
     spell_message(spin, c"Performing soundfolding...");
     let mut fname: *mut c_char = core::ptr::null_mut();
-    if unsafe { sug_filltree(spin, slang) }.is_ok() && unsafe { sug_maketable(spin) } != FAIL {
+    if unsafe { sug_filltree(spin, slang) }.is_ok() && sug_maketable(spin) != FAIL {
         let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
@@ -227,7 +227,7 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 }
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
-unsafe fn sug_maketable(spin: &mut SpellInfo) -> c_int {
+fn sug_maketable(spin: &mut SpellInfo) -> c_int {
     spin.si_spellbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };

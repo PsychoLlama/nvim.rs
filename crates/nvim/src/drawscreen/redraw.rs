@@ -46,7 +46,7 @@ pub fn redraw_custom_title_later() -> bool {
 /// Nothing is drawn here either: what this decides is whether anything the
 /// status line, the window bar or the ruler shows has *changed* since they were
 /// last drawn, and if so which of them to mark. `force` reports unconditionally.
-pub unsafe fn show_cursor_info_later(force: bool) {
+pub fn show_cursor_info_later(force: bool) {
     let mut wp = Win::current();
     let state = get_real_state();
     // "The cursor is on an empty line" is a status-line item of its own, and
@@ -269,7 +269,7 @@ pub fn status_redraw_buf(buffer: Buf) {
 
 /// Draw every status line and window bar that is marked, plus the tab line and
 /// the title.
-pub unsafe fn redraw_statuslines() {
+pub fn redraw_statuslines() {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_redr_status {

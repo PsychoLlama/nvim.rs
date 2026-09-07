@@ -491,24 +491,48 @@ unsafe fn assert_inrange(args: *mut TypVal) -> c_int {
 // ---------------------------------------------------------------------------
 
 /// `assert_beeps(cmd)`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_beeps(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_beeps(args, false) as VarNumber };
 }
 
 /// `assert_nobeep(cmd)`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_nobeep(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_beeps(args, true) as VarNumber };
 }
 
 /// `assert_equal(expected, actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_equal(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_equal_common(args, AssertType::Equal) as VarNumber };
 }
 
 /// `assert_notequal(expected, actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_notequal(
     args: *mut TypVal,
     result: *mut TypVal,
@@ -521,6 +545,12 @@ pub(crate) unsafe fn f_assert_notequal(
 }
 
 /// `assert_equalfile(fname-one, fname-two[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_equalfile(
     args: *mut TypVal,
     result: *mut TypVal,
@@ -531,6 +561,12 @@ pub(crate) unsafe fn f_assert_equalfile(
 }
 
 /// `assert_exception(string[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_exception(
     args: *mut TypVal,
     result: *mut TypVal,
@@ -563,18 +599,36 @@ pub(crate) unsafe fn f_assert_exception(
 }
 
 /// `assert_false(actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_false(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_bool(args, false) as VarNumber };
 }
 
 /// `assert_true(actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_true(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_bool(args, true) as VarNumber };
 }
 
 /// `assert_inrange(lower, upper, actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_inrange(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     if unsafe { tv_check_for_float_or_nr_arg(args, 0) }.is_err()
@@ -588,12 +642,24 @@ pub(crate) unsafe fn f_assert_inrange(args: *mut TypVal, result: *mut TypVal, _f
 }
 
 /// `assert_match(pattern, actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_match(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe { (*result).vval.v_number = assert_match_common(args, AssertType::Match) as VarNumber };
 }
 
 /// `assert_notmatch(pattern, actual[, msg])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_notmatch(
     args: *mut TypVal,
     result: *mut TypVal,
@@ -606,6 +672,12 @@ pub(crate) unsafe fn f_assert_notmatch(
 }
 
 /// `assert_report(msg)`: an unconditional failure.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_report(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
@@ -621,6 +693,11 @@ pub(crate) unsafe fn f_assert_report(args: *mut TypVal, result: *mut TypVal, _fp
 /// This is dangerous — any list or dict held only by internal C state is freed
 /// while still in use — so it is refused unless `v:testing` says the caller
 /// meant it.
+///
+/// # Safety
+///
+/// `_result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_test_garbagecollect_now(
     _args: *mut TypVal,
     _result: *mut TypVal,
@@ -640,6 +717,12 @@ pub(crate) unsafe fn f_test_garbagecollect_now(
 /// list-allocation log it wrote is only compiled in under a debug define that
 /// no shipped build sets. The argument is still read, so a bad one is still
 /// reported.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `_result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_test_write_list_log(
     args: *mut TypVal,
     _result: *mut TypVal,

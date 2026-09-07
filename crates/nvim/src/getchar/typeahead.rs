@@ -557,7 +557,7 @@ pub unsafe fn ins_typebuf(
         // Outside the borrow: `emsg` also flushes the buffers, i.e.
         // reaches the typeahead itself.
         emsg(gettext(e_toocompl));
-        unsafe { setcursor() };
+        setcursor();
         return Err(Failed);
     }
     Ok(())

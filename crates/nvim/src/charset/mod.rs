@@ -630,6 +630,13 @@ impl Scan {
     clippy::too_many_arguments,
     reason = "the C signature, kept for its callers"
 )]
+/// # Safety
+///
+/// `start` must point at a NUL-terminated string. `prep` must point at a
+/// writable `int` the caller owns. `len` must point at a writable `int` the
+/// caller owns. `nptr` must point at a live `VarNumber`, unaliased for the
+/// call. `unptr` must point at a live `UVarNumber`, unaliased for the call.
+/// `overflow` must point at a writable `bool` the caller owns.
 pub unsafe fn vim_str2nr(
     start: *const c_char,
     prep: *mut c_int,

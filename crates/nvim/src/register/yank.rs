@@ -195,8 +195,7 @@ unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) 
     //
     update_topline(Win::current());
     if must_redraw.get() != 0 {
-        // SAFETY: as above.
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     }
 
     let (one, many) = if yank_type == kMTBlockWise {
@@ -511,7 +510,6 @@ pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
     let regname = unsafe { (*op).regname };
     // SAFETY: main thread, reading the register store.
     if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
-        // SAFETY: as above.
         beep_flush();
         return false;
     }

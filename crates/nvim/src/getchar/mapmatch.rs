@@ -452,7 +452,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         if State.get() & MODE_CMDLINE != 0 {
             redrawcmdline();
         } else {
-            unsafe { setcursor() };
+            setcursor();
         }
         unsafe { flush_buffers(FLUSH_MINIMAL) };
         unsafe { *mapdepth = 0 }; // for the next one
@@ -518,7 +518,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
                 }
             } else if State.get() & (MODE_NORMAL | MODE_INSERT) != 0 {
                 // Otherwise just put the cursor back.
-                unsafe { setcursor() };
+                setcursor();
             }
         }
 

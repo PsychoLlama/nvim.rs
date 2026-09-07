@@ -54,6 +54,11 @@ pub unsafe fn channel_terminal_alloc(mut buffer: Buf, chan: *mut Channel) {
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.
+///
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     let out = unsafe { &raw mut (*data.cast::<Channel>()).stream.proc.out };
@@ -68,6 +73,11 @@ unsafe fn term_read_pause(pause: bool, data: *mut c_void) {
 }
 
 /// The user typed into the terminal; forward it to the child.
+///
+/// # Safety
+///
+/// `buf` must point at `size` readable bytes. `data` must be the payload this
+/// callback was registered with, live for the call.
 unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on, and
     // `buf` is `size` readable bytes for the duration of the call.
@@ -90,17 +100,30 @@ unsafe fn term_write(buf: *const c_char, size: size_t, data: *mut c_void) {
     unsafe { wstream_write(in_0, wbuf) };
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe fn term_resize(width: uint16_t, height: uint16_t, data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     unsafe { pty_proc_resize(channel_pty(data.cast()), width, height) };
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe fn term_resume(data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on.
     unsafe { pty_proc_resume(channel_pty(data.cast())) };
 }
 
 /// The terminal window went away: stop the child and wait for its streams.
+///
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe fn term_close(data: *mut c_void) {
     // SAFETY: `data` is the pty job channel the terminal was built on; its
     // queue outlives the event this puts on it.
@@ -113,6 +136,11 @@ unsafe fn term_close(data: *mut c_void) {
 ///
 /// Re-queues itself while either stream has a request outstanding, because
 /// those requests hold buffers the terminal owns.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn term_delayed_free(argv: *mut *mut c_void) {
     // SAFETY: the event carries the channel `term_close` queued it for, which
     // holds a reference for exactly this.

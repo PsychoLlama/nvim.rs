@@ -326,6 +326,12 @@ unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
 }
 
 /// "histadd()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
     unsafe { (*result).vval.v_number = 0 };
@@ -356,6 +362,12 @@ pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "histdel()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
@@ -385,6 +397,12 @@ pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "histget()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
@@ -417,6 +435,12 @@ pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// "histnr()" function
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let histype = unsafe { arg_histtype(args) };
@@ -431,6 +455,10 @@ pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_history(args: *mut ExArg) {
     // SAFETY: caller contract; the message kind is a static string.
     let arg = unsafe {
@@ -587,6 +615,10 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
 
 /// Completion source for `:history` arguments: the one-character names,
 /// the long names, then "all".
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn get_history_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
     let short_count = SHORT_NAMES.len() as c_int;
     if (0..short_count).contains(&idx) {

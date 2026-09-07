@@ -47,8 +47,7 @@ static CONCEAL_FILTER: MetaCount = [0, 0, 0, 0, kMTFilterSelect];
 impl Win {
     /// Whether `'concealcursor'` says the cursor line conceals too.
     fn conceals_cursor_line(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { conceal_cursor_line(self) }
+        conceal_cursor_line(self)
     }
 
     /// Asks every decoration provider to place `row`'s conceal marks, and

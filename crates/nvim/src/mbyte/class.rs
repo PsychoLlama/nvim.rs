@@ -252,7 +252,7 @@ pub unsafe fn utf_class_tab(c: c_int, chartab: *const uint64_t) -> c_int {
 }
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
-pub unsafe fn utf_class(c: c_int) -> c_int {
+pub fn utf_class(c: c_int) -> c_int {
     let buffer = Buf::current_raw();
     unsafe { utf_class_tab(c, &raw const (*buffer).b_chartab as *const uint64_t) }
 }
@@ -292,6 +292,12 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 }
 
 /// `charclass({string})` — the class of the string's first character.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_charclass(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
         || unsafe { (*args).vval.v_string }.is_null()

@@ -300,16 +300,14 @@ impl Cells {
         }
         // The window is too narrow to draw anything in: fill it with "@".
         if wlv.col <= self.left_columns_width {
-            unsafe {
-                win_draw_end(
-                    window,
-                    schar_from_ascii(b'@'),
-                    true,
-                    wlv.row,
-                    window.w_view_height,
-                    HLF_AT,
-                )
-            };
+            win_draw_end(
+                window,
+                schar_from_ascii(b'@'),
+                true,
+                wlv.row,
+                window.w_view_height,
+                HLF_AT,
+            );
             set_empty_rows(window, wlv.row);
             wlv.row = f.endrow;
         }

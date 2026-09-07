@@ -483,7 +483,7 @@ pub unsafe fn eval_vars(
             SPEC_HASH => {
                 if byte_at(src, 1) == '#' as c_int {
                     // `##` is the whole argument list, already escaped.
-                    result = unsafe { arg_all() };
+                    result = arg_all();
                     resultbuf = result;
                     unsafe { *usedlen = 2 };
                     if !escaped.is_null() {

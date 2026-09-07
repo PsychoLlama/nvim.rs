@@ -620,8 +620,7 @@ fn winsize(ea: Ex) {
     // `second` still pointing at something means there *was* a second
     // number; `arg` at the end means there was nothing after it.
     if byte(second) != NUL && byte(arg) == NUL {
-        // SAFETY: resizes the screen over the editor's own state.
-        unsafe { screen_resize(w, h) };
+        screen_resize(w, h);
     } else {
         err(c"E465: :winsize requires two number arguments".as_ptr());
     }

@@ -71,6 +71,11 @@ use super::{
 /// for the matching entry to be removed instead. `idx` selects which file:
 /// zero is the session-only internal word list, and anything else is the
 /// n-th entry of `'spellfile'`.
+///
+/// # Safety
+///
+/// `word` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 pub unsafe fn spell_add_word(
     word: *mut c_char,
     len: c_int,
@@ -103,7 +108,7 @@ pub unsafe fn spell_add_word(
     } else {
         // Give 'spellfile' a sensible default if it has none.
         if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
-            unsafe { init_spellfile() };
+            init_spellfile();
             new_spf = true;
         }
         if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
@@ -217,6 +222,12 @@ pub unsafe fn spell_add_word(
 /// Reading and writing the same handle is not portable, so each hit closes
 /// the file and reopens it for update; the scan then resumes from the
 /// position it had reached.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `word` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, undo: bool) -> bool {
     let mut shown = [0 as c_char; MAXPATHL as usize];
     let mut line = [0 as c_char; MAXWLEN * 2];
@@ -280,7 +291,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
 /// Give `'spellfile'` a default: the user's own `spell` directory, or the
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
-unsafe fn init_spellfile() {
+fn init_spellfile() {
     if unsafe { *(*Win::current().w_s).b_p_spl } == 0
         || unsafe { (*Win::current().w_s).b_langp.ga_len } <= 0
     {

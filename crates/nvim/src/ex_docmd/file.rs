@@ -663,7 +663,7 @@ pub(crate) unsafe fn ex_shada(args: *mut ExArg) {
 /// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    unsafe { win_float_remove(args.forceit != 0, args.line1 as c_int) };
+    win_float_remove(args.forceit != 0, args.line1 as c_int);
 }
 
 /// `buf_hide()` as checked code.

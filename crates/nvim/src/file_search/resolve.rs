@@ -46,6 +46,14 @@ use core::{ptr, slice};
 /// @param[in,out] search_ctx  state of the search
 ///
 /// @return  an allocated string for the file name. NULL for error.
+///
+/// # Safety
+///
+/// `name` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
+/// unaliased for the call. `file_to_find` must point at a writable `*mut
+/// c_char` slot the caller owns for the call. `search_ctx` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 pub(crate) unsafe fn find_file_in_path(
     name: *mut c_char,
     len: size_t,
@@ -84,6 +92,14 @@ pub(crate) unsafe fn find_file_in_path(
 /// @param[in,out] search_ctx  state of the search
 ///
 /// @return  an allocated string for the file name. NULL for error.
+///
+/// # Safety
+///
+/// `name` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call. `rel_fname` must point at a NUL-terminated string,
+/// unaliased for the call. `file_to_find` must point at a writable `*mut
+/// c_char` slot the caller owns for the call. `search_ctx` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 pub(crate) unsafe fn find_directory_in_path(
     name: *mut c_char,
     len: size_t,
@@ -112,6 +128,12 @@ pub(crate) unsafe fn find_directory_in_path(
 ///
 /// With `FileNameOpts::UNESC` every `"\ "` in the result becomes a plain space, so
 /// that a name escaped for the command line reaches the file system whole.
+///
+/// # Safety
+///
+/// `name` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call. `file_to_find` must point at a writable `*mut
+/// c_char` slot the caller owns for the call.
 unsafe fn prepare_name(
     name: *mut c_char,
     len: size_t,
@@ -158,6 +180,10 @@ unsafe fn prepare_name(
 
 /// Is `name` `"."`, `".."`, or something below one of them? Such a name is
 /// meant relative to the current directory and never looked for in `'path'`.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 unsafe fn rel_to_curdir(name: *const c_char) -> bool {
     let at = |i: usize| unsafe { *name.add(i) }.cast_unsigned();
     let ends_component = |i: usize| at(i) == 0 || vim_ispathsep(c_int::from(at(i)));
@@ -169,6 +195,10 @@ unsafe fn rel_to_curdir(name: *const c_char) -> bool {
 ///
 /// The candidate is built in `name_buff`, which already holds the name for
 /// `namelen` bytes.
+///
+/// # Safety
+///
+/// `suffixes` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn try_suffixes(
     name_buff: &mut [c_char; MAXPATHL as usize],
     namelen: size_t,
@@ -208,6 +238,12 @@ unsafe fn try_suffixes(
 ///
 /// `FileNameOpts::REL` asks for the directory of `rel_fname` to be tried first; the
 /// current directory is the second and last try.
+///
+/// # Safety
+///
+/// `file_to_find` must point at a NUL-terminated string. `rel_fname` must
+/// point at a NUL-terminated string. `suffixes` must point at a NUL-
+/// terminated string, unaliased for the call.
 unsafe fn find_without_path(
     file_to_find: *const c_char,
     file_to_findlen: size_t,
@@ -274,6 +310,14 @@ unsafe fn find_without_path(
 /// The position in the option and the half-finished search context are the
 /// state a repeating call resumes from — upstream keeps them in statics, so
 /// there is one such walk in the whole editor.
+///
+/// # Safety
+///
+/// `path_option` must point at a NUL-terminated string, unaliased for the
+/// call. `rel_fname` must point at a NUL-terminated string, unaliased for the
+/// call. `file_to_find` must point at a NUL-terminated string. `search_ctx`
+/// must point at a writable `*mut FindContext` slot the caller owns for the
+/// call.
 unsafe fn find_along_option(
     first: bool,
     path_option: *mut c_char,
@@ -350,6 +394,10 @@ unsafe fn find_along_option(
 
 /// Say that `file_to_find` is not there, in the wording the caller earned:
 /// a first call has not found it at all, a repeat call has run out.
+///
+/// # Safety
+///
+/// `file_to_find` must point at a NUL-terminated string.
 unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_char) {
     let message = match (first, find_what == FINDFILE_DIR as c_int) {
         (true, true) => e_cant_find_directory_str_in_cdpath,
@@ -371,6 +419,16 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
 /// @param suffixes  list of suffixes, `'suffixesadd'` option
 /// @param[in,out] file_to_find  modified copy of file name
 /// @param[in,out] search_ctx_arg  state of the search
+///
+/// # Safety
+///
+/// `name` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call. `path_option` must point at a NUL-terminated
+/// string, unaliased for the call. `rel_fname` must point at a NUL-terminated
+/// string, unaliased for the call. `suffixes` must point at a NUL-terminated
+/// string, unaliased for the call. `file_to_find` must point at a writable
+/// `*mut c_char` slot the caller owns for the call. `search_ctx_arg` must
+/// point at a writable `*mut c_char` slot the caller owns for the call.
 pub(crate) unsafe fn find_file_in_path_option(
     name: *mut c_char,
     len: size_t,

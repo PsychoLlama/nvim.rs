@@ -157,7 +157,7 @@ fn insert_enter(s: &mut InsertState) {
     // `change_warning` needs so its own message lands below it.
     s.i = 0;
     if p_smd.get() != 0 && msg_silent.get() == 0 {
-        s.i = unsafe { showmode() };
+        s.i = showmode();
     }
     if did_restart_edit.get() == 0 {
         // SAFETY: the current buffer is live, and survives FileChangedRO.

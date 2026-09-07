@@ -206,7 +206,7 @@ pub fn do_exmode() {
     drop(redraw_off);
     drop(no_prompt);
     redraw_all_later(UPD_NOT_VALID);
-    let _ = unsafe { update_screen() };
+    let _ = update_screen();
     need_wait_return.set(false);
     msg_scroll.set(save_msg_scroll);
 }

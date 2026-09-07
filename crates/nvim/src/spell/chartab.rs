@@ -210,7 +210,7 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     let c = if midword { w[1] } else { w[0] };
 
     if c > 255 {
-        return unsafe { spell_mb_isword_class(utf_class(c), window) };
+        return spell_mb_isword_class(utf_class(c), window);
     }
     spelltab_isw(c as usize)
 }

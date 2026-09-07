@@ -139,7 +139,7 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
 pub(crate) fn didset_options() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
     unsafe { init_chartab() };
-    unsafe { didset_string_options() };
+    didset_string_options();
     let _ = spell_check_msm();
     let _ = unsafe { spell_check_sps() };
     unsafe { compile_cap_prog(Win::current().w_s) };

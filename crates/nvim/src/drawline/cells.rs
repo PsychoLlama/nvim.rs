@@ -527,7 +527,7 @@ impl Cells {
                 unsafe { self.fold_text(wlv, window, f) };
                 unsafe { self.next_char(wlv, window, f) };
                 unsafe { self.correct_cursor_col(wlv, window) };
-                unsafe { self.apply_extra_attr(wlv) };
+                self.apply_extra_attr(wlv);
                 unsafe { self.draw_precedes(wlv, window) };
                 unsafe { self.highlight_at_eol(wlv, window) };
 
@@ -539,7 +539,7 @@ impl Cells {
                 unsafe { self.draw_extends(wlv, window) };
                 unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
                 unsafe { self.column_highlight(wlv, window) };
-                unsafe { self.apply_line_attr_lowprio(wlv) };
+                self.apply_line_attr_lowprio(wlv);
                 if wlv.filler_todo <= 0 {
                     self.prev_vcol = wlv.vcol;
                 }
@@ -582,7 +582,6 @@ impl Cells {
         lnum: LineNr,
         decor: DecorStateRef,
     ) {
-        // SAFETY: the caller's window and line.
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
         }
@@ -605,11 +604,10 @@ impl Cells {
     /// # Safety
     /// `window` must be a live window.
     pub(super) unsafe fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut window: Win) {
-        // SAFETY: the caller's window.
         if self.did_cursor_col
             || wlv.filler_todo > 0
             || !self.in_curline
-            || !unsafe { conceal_cursor_line(window) }
+            || !conceal_cursor_line(window)
             || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol
                 || self.cell_char == NUL as ScreenChar)
         {

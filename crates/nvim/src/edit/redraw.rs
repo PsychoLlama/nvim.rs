@@ -66,7 +66,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
         if syntax_present(Win::current()) && must_redraw.get() != 0 {
-            let _ = unsafe { update_screen() };
+            let _ = update_screen();
         }
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
@@ -140,16 +140,16 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     unsafe { may_trigger_safestate(ready && !ins_compl_active() && !pum_visible()) };
 
     unsafe { pum_check_clear() };
-    unsafe { show_cursor_info_later(false) };
+    show_cursor_info_later(false);
     if must_redraw.get() != 0 {
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     } else {
-        unsafe { redraw_statuslines() };
+        redraw_statuslines();
         if clear_cmdline.get() || redraw_cmdline.get() || redraw_mode.get() {
-            unsafe { showmode() }; // clear cmdline and show mode
+            showmode(); // clear cmdline and show mode
         }
     }
-    unsafe { setcursor() };
+    setcursor();
     emsg_on_display.set(false); // may remove error message now
 }
 

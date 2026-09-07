@@ -286,6 +286,12 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`

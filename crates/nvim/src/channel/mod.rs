@@ -373,6 +373,10 @@ pub unsafe fn channel_decref(chan: *mut Channel) {
     }
 }
 
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn free_channel_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the one remaining reference to a channel that
     // `channel_decref` dropped to zero.
@@ -443,6 +447,11 @@ fn empty_dict() -> ApiDict {
 }
 
 /// The stream layer's close callback: the channel is what owns the stream.
+///
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 pub(super) unsafe fn close_cb(_stream: *mut Stream, data: *mut c_void) {
     // SAFETY: `data` is the channel the stream was set up with, and the stream
     // held one reference to it.

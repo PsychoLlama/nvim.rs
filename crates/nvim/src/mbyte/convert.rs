@@ -199,6 +199,12 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_iconv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };

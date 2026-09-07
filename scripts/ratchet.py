@@ -54,15 +54,16 @@ unmeasured, as they were when they lived at the repo root):
               as their C callers do.
   missing_safety_doc
               `unsafe fn`s whose doc comment has no `# Safety` section — the
-              obligation the signature announces but nobody wrote down. It
-              stands in for `clippy::missing_safety_doc`, which is *allowed*
-              in Cargo.toml (2 380 findings when phase 19 switched the style
-              tier on; that is a phase of work, not a slice, and it retires as
-              modules are rewritten rather than by a sweep of stub sections).
-              The lint could not be ratcheted where it was: clippy reports it
-              at the crate lint level, so a site-level or module-level
-              `#[allow]` cannot scope it, and leaving it warning would bury
-              `just lint`'s ~20 real findings under 2 380.
+              obligation the signature announces but nobody wrote down.
+              **At zero since phase 28, and retired**: it stood in for
+              `clippy::missing_safety_doc` while that lint was *allowed* in
+              Cargo.toml (2 380 findings when phase 19 switched the style tier
+              on, which is a phase of work and not a slice), because clippy
+              reports it at the crate lint level and leaving it warning would
+              have buried `just lint`'s ~20 real findings. The allow is gone
+              and the lint is a plain `warn` again, which `-D warnings` makes
+              a deny, so a new one fails the build. The counter stays at its
+              floor of zero as the second lock.
 
               Counted here instead, from the source, which also makes it
               *broader* than the lint in the one direction that helps:
@@ -808,7 +809,7 @@ PERIMETER = {
     "crates/nvim/src/winlayer.rs": "the window/buffer/position handles: "
     "constructing one is the unsafe step, dereferencing it is not",
     "crates/nvim/src/winlayer/": "the same, split out by family",
-    "crates/nvim/src/memfile.rs": "the swap file's page store — the only thing "
+    "crates/nvim/src/memfile/": "the swap file's page store — the only thing "
     "that hands out the address of a `.swp` page",
 }
 
@@ -2535,7 +2536,8 @@ SELF_TEST_CELL_COPY_OWNER = [
 SELF_TEST_PERIMETER = [
     ("crates/nvim/src/lua/executor/exec.rs", True),
     ("crates/nvim/src/os/fs/mod.rs", True),
-    ("crates/nvim/src/memfile.rs", True),
+    ("crates/nvim/src/memfile/mod.rs", True),
+    ("crates/nvim/src/memfile/swapfile.rs", True),
     ("crates/nvim/src/winlayer/live.rs", True),
     # The editor proper, including modules that merely look raw.
     ("crates/nvim/src/memline/block0.rs", False),
@@ -2544,7 +2546,7 @@ SELF_TEST_PERIMETER = [
     # A sibling whose name starts with a directory entry is not inside it.
     ("crates/nvim/src/luaref.rs", False),
     # ... and neither is a longer path built on an exact-path entry.
-    ("crates/nvim/src/memfile.rs.orig", False),
+    ("crates/nvim/src/global_cell.rs.orig", False),
     ("crates/nvim/src/memory.rs", False),
 ]
 # (stats, expected (inside, outside)). The split is over `unsafe_lines`
@@ -2553,7 +2555,7 @@ SELF_TEST_PERIMETER_SPLIT = [
     (
         {
             "crates/nvim/src/lua/ffi.rs": {"unsafe_lines": 150},
-            "crates/nvim/src/memfile.rs": {"unsafe_lines": 400},
+            "crates/nvim/src/memfile/mod.rs": {"unsafe_lines": 400},
             "crates/nvim/src/memline/mod.rs": {"unsafe_lines": 183},
             "crates/nvim/src/types/memline.rs": {"unsafe_lines": 0},
         },

@@ -315,7 +315,7 @@ pub unsafe fn os_copy_fullenv(env: *mut *mut c_char, env_size: size_t) {
 
 /// The *name* of the environment variable at `index`, newly allocated, or
 /// NULL when there is none.
-pub unsafe fn os_getenvname_at_index(index: size_t) -> *mut c_char {
+pub fn os_getenvname_at_index(index: size_t) -> *mut c_char {
     // SAFETY: `environ` is libc's own NULL-terminated block; the bound check
     // walks it rather than trusting `index`.
     unsafe {

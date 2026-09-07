@@ -145,46 +145,82 @@ fn tab_windows() -> impl Iterator<Item = (TabPage, Win)> {
 // and lets the remote plugin host do the work.
 
 /// `:ruby`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_ruby(args: *mut ExArg) {
     unsafe { script_host_execute(c"ruby", args) }
 }
 
 /// `:rubyfile`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_rubyfile(args: *mut ExArg) {
     unsafe { script_host_execute_file(c"ruby", args) }
 }
 
 /// `:rubydo`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_rubydo(args: *mut ExArg) {
     unsafe { script_host_do_range(c"ruby", args) }
 }
 
 /// `:python3`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_python3(args: *mut ExArg) {
     unsafe { script_host_execute(c"python3", args) }
 }
 
 /// `:py3file`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_py3file(args: *mut ExArg) {
     unsafe { script_host_execute_file(c"python3", args) }
 }
 
 /// `:pydo3`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_pydo3(args: *mut ExArg) {
     unsafe { script_host_do_range(c"python3", args) }
 }
 
 /// `:perl`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_perl(args: *mut ExArg) {
     unsafe { script_host_execute(c"perl", args) }
 }
 
 /// `:perlfile`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_perlfile(args: *mut ExArg) {
     unsafe { script_host_execute_file(c"perl", args) }
 }
 
 /// `:perldo`
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn ex_perldo(args: *mut ExArg) {
     unsafe { script_host_do_range(c"perl", args) }
 }

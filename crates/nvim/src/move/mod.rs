@@ -163,8 +163,7 @@ impl Win {
         if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
             return 0;
         }
-        // SAFETY: a live window.
-        unsafe { number_width(self) + stc_empty as c_int }
+        number_width(self) + stc_empty as c_int
     }
 
     pub(super) fn fdccol_count(self) -> c_int {
@@ -258,14 +257,12 @@ impl Win {
 
     /// Whether the cursor line is drawn concealed in the current mode.
     pub(super) fn conceal_cursor_line(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { conceal_cursor_line(self) }
+        conceal_cursor_line(self)
     }
 
     /// Whether 'cursorline' would draw this window's cursor line differently.
     fn cursorline_standout(self) -> bool {
-        // SAFETY: a live window.
-        unsafe { win_cursorline_standout(self) }
+        win_cursorline_standout(self)
     }
 
     /// 'scrolloff' for this window, its window-local value preferred.

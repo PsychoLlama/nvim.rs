@@ -110,6 +110,10 @@ pub(crate) unsafe fn fetch_config(l: *mut lua_State) -> *mut Config {
 }
 
 /// `__gc` for the config userdata.
+///
+/// # Safety
+///
+/// `l` must point at the Lua state this call runs on.
 unsafe extern "C-unwind" fn destroy_config(l: *mut lua_State) -> c_int {
     let cfg = unsafe { lua_touserdata(l, 1) }.cast::<Config>();
     if !cfg.is_null() {
@@ -121,6 +125,10 @@ unsafe extern "C-unwind" fn destroy_config(l: *mut lua_State) -> c_int {
 }
 
 /// Push a fresh config userdatum, with its `__gc`, onto the stack.
+///
+/// # Safety
+///
+/// `l` must point at the Lua state this call runs on.
 unsafe fn create_config(l: *mut lua_State) {
     // SAFETY: `lua_newuserdata` answers uninitialised memory of exactly the
     // size asked for, aligned for any type, and raises rather than
@@ -168,6 +176,12 @@ fn mask_key(address: *const u8) -> *mut c_void {
 }
 
 /// Fetch `REGISTRY[key]`, leaving it on the stack.
+///
+/// # Safety
+///
+/// `l` must be the Lua state this call runs on, with room for one more stack
+/// slot. `key` is only ever compared by address — it is pushed as light
+/// userdata — so it need not point at anything live.
 pub(crate) unsafe fn push_registry(l: *mut lua_State, key: *mut c_void) {
     unsafe {
         lua_pushlightuserdata(l, key);
@@ -180,6 +194,10 @@ pub(crate) unsafe fn push_registry(l: *mut lua_State, key: *mut c_void) {
 ///
 /// This is Lua 5.2's `luaL_setfuncs` with `nup = 1`, which LuaJIT does not
 /// have. On entry the stack is `.., table, config`; on exit, `.., table`.
+///
+/// # Safety
+///
+/// `l` must point at the Lua state this call runs on.
 unsafe fn set_functions(l: *mut lua_State, functions: &[(&CStr, lua_CFunction)]) {
     unsafe {
         luaL_checkstack(l, 1, c"too many upvalues".as_ptr());

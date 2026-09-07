@@ -258,7 +258,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             unsafe { ui_cursor_shape() }; // may show a different cursor shape
             unsafe { may_trigger_modechanged() };
             status_redraw_curbuf();
-            unsafe { redraw_statuslines() };
+            redraw_statuslines();
             Some(unsafe { command_line_not_changed(s) })
         }
 

@@ -321,7 +321,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     );
     cmdline_row.set(Rows.get() - p_ch.get() as c_int);
     msg_row.set(cmdline_row.get());
-    unsafe { default_grid_alloc() };
+    default_grid_alloc();
 
     set_init_2(headless_mode.get());
     time_msg_at(c"inits 2");
@@ -351,7 +351,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     starting.set(NO_BUFFERS);
-    unsafe { screenclear() };
+    screenclear();
     win_new_screensize();
     time_msg_at(c"clear screen");
 

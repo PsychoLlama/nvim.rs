@@ -82,8 +82,7 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
     // Don't redraw and erase the message.
     redraw_cmdline.set(false);
     if msg_row.get() < Rows.get() - 1 {
-        // SAFETY: redrawing the mode message on the last line.
-        unsafe { showmode() };
+        showmode();
     }
 }
 

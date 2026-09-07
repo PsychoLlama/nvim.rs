@@ -73,6 +73,11 @@ pub(super) fn callback_reader_set(reader: &CallbackReader) -> bool {
     reader.cb.is_set() || !reader.self_0.is_null()
 }
 
+/// # Safety
+///
+/// As `RStream`'s read callback: `stream` must point at the stream this was
+/// registered on, `buf` at `count` readable bytes of it, and `data` at the
+/// payload it was registered with, live for the call.
 pub unsafe fn on_channel_data(
     stream: *mut RStream,
     buf: *const c_char,
@@ -85,6 +90,11 @@ pub unsafe fn on_channel_data(
     unsafe { on_channel_output(stream, chan, buf, count, eof, &raw mut (*chan).on_data) }
 }
 
+/// # Safety
+///
+/// As `RStream`'s read callback: `stream` must point at the stream this was
+/// registered on, `buf` at `count` readable bytes of it, and `data` at the
+/// payload it was registered with, live for the call.
 pub unsafe fn on_job_stderr(
     stream: *mut RStream,
     buf: *const c_char,
@@ -159,6 +169,10 @@ unsafe fn queue_channel_event(chan: *mut Channel) {
     unsafe { channel_incref(chan) };
 }
 
+/// # Safety
+///
+/// `args` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn on_channel_event(args: *mut *mut c_void) {
     // SAFETY: the event carries the channel `queue_channel_event` queued it
     // for, and the reference it took.

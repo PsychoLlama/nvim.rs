@@ -50,6 +50,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+mod swapfile;
+pub(crate) use swapfile::*;
+use swapfile::{mf_do_open, perror_msg};
+
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -305,6 +309,10 @@ pub struct MemFile {
 /// `fname` is the swap file to use, or null for memory only. It must be
 /// allocated, and is consumed either way — including when opening fails,
 /// which answers null.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut MemFile {
     let mfp = Box::into_raw(Box::new(MemFile {
         fname: None,
@@ -370,6 +378,11 @@ fn pages_in_file(size: FileOffset, page_size: c_uint) -> BlockNr {
 
 /// Give an existing memory file a swap file, as `'updatecount'` going from
 /// zero to non-zero does. `fname` is consumed as in [`mf_open`].
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call. `fname` must
+/// point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn mf_open_file(mfp: *mut MemFile, fname: *mut c_char) -> Result<(), SwapFailed> {
     unsafe {
         if mf_do_open(mfp, fname, O_RDWR | O_CREAT | O_EXCL) {
@@ -383,6 +396,10 @@ pub(crate) unsafe fn mf_open_file(mfp: *mut MemFile, fname: *mut c_char) -> Resu
 
 /// Close a memory file, releasing every block, and delete the swap file if
 /// `del_file`.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_close(mfp: *mut MemFile, del_file: bool) {
     if mfp.is_null() {
         return;
@@ -405,7 +422,7 @@ pub(crate) unsafe fn mf_close(mfp: *mut MemFile, del_file: bool) {
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub(crate) unsafe fn mf_close_file(buffer: Buf, getlines: bool) {
+pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
     unsafe {
         let mfp = buffer.b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fd < 0 {
@@ -432,6 +449,10 @@ pub(crate) unsafe fn mf_close_file(buffer: Buf, getlines: bool) {
 
 /// Set the page size, once block zero of an existing swap file has said what
 /// it really is.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_new_page_size(mfp: *mut MemFile, new_size: c_uint) {
     unsafe { (*mfp).mf_page_size = new_size };
 }
@@ -440,6 +461,10 @@ pub(crate) unsafe fn mf_new_page_size(mfp: *mut MemFile, new_size: c_uint) {
 ///
 /// `negative` asks for a memory-only block number, which is what data
 /// blocks get: they are written last, so their numbers are handed out last.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_new(
     mfp: *mut MemFile,
     negative: bool,
@@ -484,6 +509,10 @@ pub(crate) unsafe fn mf_new(
 /// lock it. Answers null if there is no such block.
 ///
 /// A negative `nr` must go through [`mf_trans_del`] first.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_get(mfp: *mut MemFile, nr: BlockNr, page_count: c_uint) -> *mut BlockHdr {
     unsafe {
         if nr >= (*mfp).mf_blocknr_max || nr <= (*mfp).mf_blocknr_min {
@@ -519,6 +548,10 @@ pub(crate) unsafe fn mf_get(mfp: *mut MemFile, nr: BlockNr, page_count: c_uint) 
 /// Unlike [`mf_get`] this neither reads the file, nor locks the block, nor
 /// moves it in the sync order. `ml_setflags` uses it to amend block zero
 /// where it lies.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_find(mfp: *mut MemFile, nr: BlockNr) -> *mut BlockHdr {
     unsafe { (*mfp).used.get(nr).unwrap_or(core::ptr::null_mut()) }
 }
@@ -528,6 +561,11 @@ pub(crate) unsafe fn mf_find(mfp: *mut MemFile, nr: BlockNr) -> *mut BlockHdr {
 /// `dirty` says it was changed and has to reach the file; `infile` asks for
 /// its file block number to be settled now, which recovery needs so that a
 /// block already on disk can name it.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call. `hp` must
+/// point at a live `BlockHdr`, unaliased for the call.
 pub(crate) unsafe fn mf_put(mfp: *mut MemFile, hp: *mut BlockHdr, dirty: bool, infile: bool) {
     unsafe {
         let mut flags = (*hp).bh_flags;
@@ -550,6 +588,11 @@ pub(crate) unsafe fn mf_put(mfp: *mut MemFile, hp: *mut BlockHdr, dirty: bool, i
 
 /// Give up a block for good. Its pages in the file, if it has any, go back
 /// on the free list.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call. `hp` must
+/// point at a live `BlockHdr`, unaliased for the call.
 pub(crate) unsafe fn mf_free(mfp: *mut MemFile, hp: *mut BlockHdr) {
     unsafe {
         let bnum = (*hp).bh_bnum;
@@ -574,6 +617,10 @@ pub(crate) unsafe fn mf_free(mfp: *mut MemFile, hp: *mut BlockHdr) {
 /// [`MFS_ZERO`]. Fails when there is no file or a write failed — which on a
 /// full disk is the common case, so after the first failure only blocks that
 /// already have a place in the file are attempted.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_sync(mfp: *mut MemFile, flags: c_int) -> Result<(), SwapFailed> {
     unsafe {
         let got_int_save = got_int.get();
@@ -639,6 +686,10 @@ pub(crate) unsafe fn mf_sync(mfp: *mut MemFile, flags: c_int) -> Result<(), Swap
 
 /// Mark every block that has a place in the file dirty, so a freshly
 /// created swap file gets all of them.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_set_dirty(mfp: *mut MemFile) {
     unsafe {
         for i in 0..(*mfp).used.len() {
@@ -653,7 +704,7 @@ pub(crate) unsafe fn mf_set_dirty(mfp: *mut MemFile) {
 
 /// Drop as many cached blocks as possible, for when memory has run out.
 /// Answers whether anything was released.
-pub(crate) unsafe fn mf_release_all() -> bool {
+pub(crate) fn mf_release_all() -> bool {
     let mut released = false;
     for buf in buffers() {
         let mfp = buf.b_ml.ml_mfp;
@@ -691,6 +742,10 @@ pub(crate) unsafe fn mf_release_all() -> bool {
 }
 
 /// Read a block's pages from the file.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 unsafe fn mf_read(mfp: *mut MemFile, hp: &mut BlockHdr) -> Result<(), SwapFailed> {
     unsafe {
         if (*mfp).mf_fd < 0 {
@@ -723,6 +778,11 @@ unsafe fn mf_read(mfp: *mut MemFile, hp: &mut BlockHdr) -> Result<(), SwapFailed
 /// the space in front of it — with the blocks that belong there, or, where
 /// one of those has been freed, with a copy of this block's bytes as
 /// filler.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call. `hp` must
+/// point at a live `BlockHdr`, unaliased for the call.
 unsafe fn mf_write(mfp: *mut MemFile, hp: *mut BlockHdr) -> Result<(), SwapFailed> {
     unsafe {
         if (*mfp).mf_fd < 0 && !(*mfp).mf_reopen {
@@ -814,6 +874,11 @@ unsafe fn mf_write(mfp: *mut MemFile, hp: *mut BlockHdr) -> Result<(), SwapFaile
 /// Cannot fail: a number is always available, and the page run it comes from
 /// is either recycled off the free list or taken past the end of the file.
 /// Upstream returned `OK`/`FAIL` here and never answered `FAIL`.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call. `hp` must
+/// point at a live `BlockHdr`, unaliased for the call.
 unsafe fn mf_trans_add(mfp: *mut MemFile, hp: *mut BlockHdr) {
     unsafe {
         if (*hp).bh_bnum >= 0 {
@@ -852,6 +917,10 @@ unsafe fn mf_trans_add(mfp: *mut MemFile, hp: *mut BlockHdr) {
 
 /// The file block number a memory-only block was given, consuming the
 /// record of it. Answers `old_nr` unchanged if there is none.
+///
+/// # Safety
+///
+/// `mfp` must point at a live memfile, unaliased for the call.
 pub(crate) unsafe fn mf_trans_del(mfp: *mut MemFile, old_nr: BlockNr) -> BlockNr {
     unsafe {
         match (*mfp).trans.remove(&old_nr) {
@@ -861,103 +930,5 @@ pub(crate) unsafe fn mf_trans_del(mfp: *mut MemFile, old_nr: BlockNr) -> BlockNr
             }
             None => old_nr,
         }
-    }
-}
-
-/// The swap file's name as it was given, or null when the memfile is memory
-/// only. It stays valid until the name is changed or the memfile closed.
-///
-/// # Safety
-/// `mfp` must point at a memfile.
-pub(crate) unsafe fn mf_fname(mfp: *const MemFile) -> *const c_char {
-    match unsafe { &(*mfp).fname } {
-        Some(fname) => fname.as_ptr(),
-        None => core::ptr::null(),
-    }
-}
-
-/// Take over an allocated C string, which is released.
-unsafe fn take_cstring(p: *mut c_char) -> CString {
-    unsafe {
-        let owned = CStr::from_ptr(p).to_owned();
-        xfree(p.cast::<c_void>());
-        owned
-    }
-}
-
-/// Release the swap file's names.
-pub(crate) unsafe fn mf_free_fnames(mfp: *mut MemFile) {
-    unsafe {
-        (*mfp).fname = None;
-        (*mfp).ffname = None;
-    }
-}
-
-/// Name the swap file. `fname` must be allocated, and is consumed.
-///
-/// Only called when creating or renaming it, so the full path is always
-/// worked out afresh.
-pub(crate) unsafe fn mf_set_fnames(mfp: *mut MemFile, fname: *mut c_char) {
-    unsafe {
-        let full = full_name_save(fname, false);
-        (*mfp).fname = Some(take_cstring(fname));
-        (*mfp).ffname = (!full.is_null()).then(|| take_cstring(full));
-    }
-}
-
-/// Make the swap file's name absolute — before a `:cd` makes the relative
-/// one mean something else.
-pub(crate) unsafe fn mf_fullname(mfp: *mut MemFile) {
-    unsafe {
-        if mfp.is_null() || (*mfp).fname.is_none() || (*mfp).ffname.is_none() {
-            return;
-        }
-        (*mfp).fname = (*mfp).ffname.take();
-    }
-}
-
-/// Whether any block still owes the file a number.
-pub(crate) unsafe fn mf_need_trans(mfp: *mut MemFile) -> bool {
-    unsafe { (*mfp).fname.is_some() && (*mfp).mf_neg_count > 0 }
-}
-
-/// Open the swap file. `fname` must be allocated, and is consumed — also
-/// when this fails, in which case the memfile stays memory-only.
-unsafe fn mf_do_open(mfp: *mut MemFile, fname: *mut c_char, mut flags: c_int) -> bool {
-    unsafe {
-        // `fname` has to have been allocated.
-        mf_set_fnames(mfp, fname);
-        debug_assert!(!mf_fname(mfp).is_null());
-
-        // A swap file being created really should not exist yet. If it does
-        // and it is a symlink, this is most likely an attack.
-        let mut file_info: FileInfo = core::mem::zeroed();
-        if flags & O_CREAT != 0 && os_fileinfo_link(mf_fname(mfp), &raw mut file_info) {
-            (*mfp).mf_fd = -1;
-            emsg(gettext(c"E300: Swap file already exists (symlink attack?)"));
-        } else {
-            flags |= O_NOFOLLOW;
-            (*mfp).mf_flags = flags;
-            (*mfp).mf_fd = os_open(mf_fname(mfp), flags, SWAPFILE_MODE);
-        }
-
-        if (*mfp).mf_fd < 0 {
-            mf_free_fnames(mfp);
-            return false;
-        }
-
-        os_set_cloexec((*mfp).mf_fd);
-        true
-    }
-}
-
-/// `PERROR`: an error message with the failing call's `strerror` after it.
-unsafe fn perror_msg(message: &'static CStr) {
-    unsafe {
-        semsg!(
-            "{}: {}",
-            c_str(gettext(message).as_ptr()),
-            c_str(strerror(*__errno_location()))
-        );
     }
 }

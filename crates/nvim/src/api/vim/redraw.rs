@@ -178,12 +178,10 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         let cur = Win::current();
         validate_cursor(cur);
         update_topline(cur);
-        // SAFETY: the editor's own screen.
-        let _ = unsafe { update_screen() };
+        let _ = update_screen();
     }
     if opts.cursor {
-        // SAFETY: a live window.
-        unsafe { setcursor_mayforce(cwin, true) };
+        setcursor_mayforce(cwin, true);
         flush_ui = true;
     }
     if flush_ui {

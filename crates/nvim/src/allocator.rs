@@ -78,14 +78,25 @@ fn calloc_aligned(size: usize, align: usize) -> *mut u8 {
 // SAFETY: blocks satisfy the requested size and alignment, stay valid until
 // released through this same impl, and null reports failure.
 unsafe impl GlobalAlloc for LibcAllocator {
+    /// # Safety
+    ///
+    /// As [`GlobalAlloc::alloc`]: `layout` must have a non-zero size.
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         malloc_aligned(layout.size(), layout.align())
     }
 
+    /// # Safety
+    ///
+    /// As [`GlobalAlloc::alloc_zeroed`]: `layout` must have a non-zero size.
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         calloc_aligned(layout.size(), layout.align())
     }
 
+    /// # Safety
+    ///
+    /// As [`GlobalAlloc::realloc`]: `ptr` must be a block this allocator answered
+    /// for `layout` and has not released, and `new_size` must be a valid size for
+    /// `layout`'s alignment.
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         // SAFETY: by the trait contract `ptr` came from this allocator with
         // `layout`, so from `malloc` on the fast path — and on the
@@ -106,6 +117,10 @@ unsafe impl GlobalAlloc for LibcAllocator {
         }
     }
 
+    /// # Safety
+    ///
+    /// As [`GlobalAlloc::dealloc`]: `ptr` must be a block this allocator answered
+    /// for `layout` and has not released.
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
         // SAFETY: by the trait contract `ptr` came from this allocator, so
         // from `malloc`/`calloc`/`posix_memalign`.
