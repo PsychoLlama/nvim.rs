@@ -306,6 +306,12 @@ pub(crate) fn restore_visual_mode() {
 /// Refuses -- and beeps, when it was given an operator to clear -- for a
 /// selection spanning more than one line. Leaves Visual mode either way it
 /// succeeds.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
+/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `lenp` must point at a writable `size_t` the caller owns.
 pub(crate) unsafe fn get_visual_text(
     cmd_arg: *mut CmdArg,
     cursor: *mut *mut c_char,
@@ -363,7 +369,7 @@ pub(crate) unsafe fn get_visual_text(
 /// which means moving both ends -- and the second half of this only runs when
 /// the first attempt left the cursor where it started, which happens when the
 /// two columns are the same width.
-pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
+pub(crate) fn v_swap_corners(cmdchar: c_int) {
     // Only the blockwise `O` path below reads this; the charwise path returns
     // first, having set the anchor itself.
     let mut anchor = visual_anchor();
@@ -430,6 +436,10 @@ const VISUAL_OPS: [(u8, u8); 8] = [
 ///
 /// An uppercase one forces the selection linewise -- except in blockwise
 /// mode, where `C` and `D` instead extend every line to its end.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn v_visop(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -455,6 +465,10 @@ pub(crate) unsafe fn v_visop(cmd_arg: *mut CmdArg) {
 /// Only reached with a count: `3v` means "three times whatever was selected
 /// last". The line count and the column count multiply separately, which is
 /// why the charwise and blockwise cases are spelled out.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -530,6 +544,10 @@ unsafe fn reselect_scaled(cmd_arg: *mut CmdArg) {
 ///
 /// Keeps the raw signature: this is an `nv_cmds` row's handler, so `NvFunc`
 /// fixes it.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_visual(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -563,7 +581,7 @@ pub(crate) unsafe fn nv_visual(cmd_arg: *mut CmdArg) {
         if ca.arg == 0 {
             may_start_select('c' as c_int);
         }
-        unsafe { n_start_visual_mode(ca.cmdchar) };
+        n_start_visual_mode(ca.cmdchar);
         // An exclusive selection needs one more character to cover the
         // same text, so the count is raised before it is spent.
         if !visual_mode().is_line() && sel_exclusive() {
@@ -588,8 +606,7 @@ pub(crate) unsafe fn nv_visual(cmd_arg: *mut CmdArg) {
 /// Start a charwise selection because a shifted key was pressed.
 pub(crate) fn start_selection() {
     may_start_select('k' as c_int);
-    // SAFETY: enters Visual mode on the current window.
-    unsafe { n_start_visual_mode('v' as c_int) };
+    n_start_visual_mode('v' as c_int);
 }
 
 /// Decide between Visual and Select mode for a selection about to start.
@@ -605,7 +622,7 @@ pub(crate) fn may_start_select(c: c_int) {
 }
 
 /// Enter Visual mode of kind `c` at the cursor.
-pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
+pub(crate) fn n_start_visual_mode(c: c_int) {
     set_visual_mode(VisualMode::from_raw(c));
     set_visual_active(true);
     VIsual_reselect.set(1);
@@ -640,6 +657,10 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 ///
 /// Doing it while a selection is up *swaps* the two, so `gv` twice comes back
 /// where it started.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_gv_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -693,6 +714,10 @@ pub(crate) unsafe fn nv_gv_cmd(cmd_arg: *mut CmdArg) {
 
 /// Make an exclusive selection cover the character the cursor is on, so the
 /// operator about to run sees what the highlight showed.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn adjust_for_sel(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -752,6 +777,10 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
 }
 
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_select(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -771,6 +800,10 @@ pub(crate) unsafe fn nv_select(cmd_arg: *mut CmdArg) {
 ///
 /// 'matchpairs' is forced to the four bracket pairs for the duration, because
 /// a text object's idea of a block is fixed and must not follow the option.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_object(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };

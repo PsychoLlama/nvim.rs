@@ -489,7 +489,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
         update_topline(Win::current());
-        unsafe { check_scrollbind(0 as LineNr, 0) };
+        check_scrollbind(0 as LineNr, 0);
         time_msg_at(c"diff scrollbinding");
     }
 

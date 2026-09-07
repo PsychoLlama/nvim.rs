@@ -531,7 +531,7 @@ pub(crate) unsafe fn did_set_scrollbind(args: &mut OptSet) -> Option<&CStr> {
     if win.w_onebuf_opt.wo_scb == 0 {
         return None;
     }
-    unsafe { do_check_scrollbind(false) };
+    do_check_scrollbind(false);
     win.w_scbind_pos = get_vtopline(win);
     None
 }

@@ -178,6 +178,10 @@ fn new_state() -> NormalState {
 /// Refuse a command that would change text while the text is locked.
 ///
 /// Beeps and clears the pending operator when there is one to clear.
+///
+/// # Safety
+///
+/// `op` must point at a live `OpArg`, unaliased for the call.
 pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
     if !text_locked() {
         return false;
@@ -192,6 +196,10 @@ pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
 
 /// As [`check_text_locked`], and also refuse while the current buffer is
 /// locked. A locked buffer clears the operator without a beep.
+///
+/// # Safety
+///
+/// `op` must point at a live `OpArg`, unaliased for the call.
 pub(crate) unsafe fn check_text_or_curbuf_locked(op: *mut OpArg) -> bool {
     // SAFETY (throughout): `op` is null or the caller's operator.
     if unsafe { check_text_locked(op) } {
@@ -244,6 +252,11 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
 }
 
 /// Set up `s.ca` for the command about to be read.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -285,6 +298,11 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 ///
 /// Answers whether the command was rejected outright, which happens when
 /// unshifting a special key leaves a character no table row claims.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -318,6 +336,11 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
 /// state rather than on the row: `q` only starts a recording when none is
 /// running, and `a`/`i` are text objects rather than insert commands only
 /// while an operator or Visual mode is waiting for them.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     let ns = unsafe { NormalStateRef::new(s) };
@@ -337,6 +360,11 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
 
 /// Whether the mode message the last command scrolled away has to be put
 /// back before the next key is read.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state.
     let ns = unsafe { NormalStateRef::new(s) };
@@ -421,6 +449,11 @@ fn normal_check_stuff_buffer() {
 /// A second CTRL-C while `:global` is running and Ex mode was asked for is
 /// what gets you into Ex mode; otherwise the interrupt is swallowed, along
 /// with the key that caused it when the more-prompt is not up.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 unsafe fn normal_check_interrupt(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -541,6 +574,10 @@ fn normal_redraw() {
 ///
 /// Keeps the raw signature: it is installed as a `state_check_callback` and
 /// `state_enter` calls it through that pointer.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
     // SAFETY (throughout): `state` is the `VimState` at the head of our own `NormalState`,
     // which is what we handed to `state_enter`.
@@ -575,7 +612,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
             TabPage::current().tp_diff_update = 0;
         }
         if diff_need_scrollbind.get() {
-            unsafe { check_scrollbind(0, 0) };
+            check_scrollbind(0, 0);
             diff_need_scrollbind.set(false);
         }
         normal_check_folds();
@@ -612,6 +649,10 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 ///
 /// An operator's count and the motion's multiply; a zero count reports as 1
 /// in `v:count1` and as itself in `v:count`.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut bool) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -626,6 +667,10 @@ pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut boo
 /// Run exactly one normal-mode command, from an operator the caller owns.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
+///
+/// # Safety
+///
+/// `op` must point at a live `OpArg`, unaliased for the call.
 pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
     let mut s = new_state();
     s.toplevel = toplevel;

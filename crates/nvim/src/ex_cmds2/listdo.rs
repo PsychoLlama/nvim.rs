@@ -358,7 +358,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                     validate_cursor(Win::current());
                     // Required when 'scrollbind' has been set.
                     if Win::current().w_onebuf_opt.wo_scb != 0 {
-                        unsafe { do_check_scrollbind(true) };
+                        do_check_scrollbind(true);
                     }
                 }
                 if i as LineNr + 1 > unsafe { (*args).line2 } {

@@ -42,6 +42,8 @@ mod visual;
 pub(crate) use self::visual::*;
 mod ident;
 pub(crate) use self::ident::*;
+mod identfind;
+pub(crate) use self::identfind::*;
 mod motion;
 pub(crate) use self::motion::*;
 mod search;

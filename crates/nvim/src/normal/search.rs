@@ -53,6 +53,10 @@ fn current_match_is_distinct() -> bool {
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -85,6 +89,10 @@ pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
 }
 
 /// `n` and `N`: search again for the last pattern.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -110,6 +118,12 @@ pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
 ///
 /// Answers `do_search`'s result: 0 for no match, 1 for a match, 2 for a match
 /// the offset made linewise.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `wrapped` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn normal_search(
     cmd_arg: *mut CmdArg,
     dir: c_int,
@@ -162,6 +176,10 @@ pub(crate) unsafe fn normal_search(
 }
 
 /// `m`: set a mark.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_mark(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -174,6 +192,11 @@ pub(crate) unsafe fn nv_mark(cmd_arg: *mut CmdArg) {
 }
 
 /// Jump to a mark, and describe the jump to the operator that may be pending.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
+/// `fm` must point at a live `FileMark`, unaliased for the call.
 pub(crate) unsafe fn nv_mark_move_to(
     cmd_arg: *mut CmdArg,
     flags: MarkMove,
@@ -216,6 +239,10 @@ fn view_flag() -> MarkMove {
 ///
 /// `old_KeyTyped` rather than the current value: the jump itself may have
 /// consumed the "typed" flag.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn may_open_fold(cmd_arg: *mut CmdArg, moved: bool, old_key_typed: bool) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -229,6 +256,10 @@ unsafe fn may_open_fold(cmd_arg: *mut CmdArg, moved: bool, old_key_typed: bool) 
 }
 
 /// `'` and `` ` ``, and their `g` forms.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -272,6 +303,10 @@ pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-O`, `CTRL-I` and `g;`/`g,`: step along the jump list or the change
 /// list.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };

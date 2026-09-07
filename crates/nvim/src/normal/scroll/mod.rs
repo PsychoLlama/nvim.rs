@@ -49,7 +49,7 @@ pub(crate) fn get_vtopline(window: Win) -> c_int {
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
 /// along, and remember where this one is for next time.
-pub(crate) unsafe fn do_check_scrollbind(check: bool) {
+pub(crate) fn do_check_scrollbind(check: bool) {
     // The previous call's answers. They are what makes this a *difference*
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
@@ -70,12 +70,12 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
                 && (vtopline as LineNr != old_vtopline.get() || win.w_leftcol != old_leftcol.get())
             {
                 let down = vtopline as LineNr - old_vtopline.get();
-                unsafe { check_scrollbind(down, win.w_leftcol - old_leftcol.get()) };
+                check_scrollbind(down, win.w_leftcol - old_leftcol.get());
             }
         } else if !unsafe { vim_strchr(p_sbo.get(), 'j' as c_int) }.is_null() {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
-            unsafe { check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0) };
+            check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0);
         }
         win.w_scbind_pos = vtopline;
     }
@@ -91,7 +91,7 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
 /// Each window is made current in turn, because the scrolling functions work
 /// on `curwin`. Any Visual selection is put down for the duration so that
 /// nothing extends it.
-pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
+pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // SAFETY (throughout): walks the current tab page's window list, restoring `curwin`
     // and `curbuf` before returning.
     let (old_curwin, old_curbuf) = (Win::current(), Buf::current());
@@ -153,6 +153,10 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
 
 /// `CTRL-F` and `CTRL-B`: a page forwards or backwards. With CTRL held they
 /// are a tab page instead.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_page(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -172,6 +176,10 @@ pub(crate) unsafe fn nv_page(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-E` and `CTRL-Y`: scroll one line, leaving the cursor where it is on
 /// the screen for as long as it can.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_scroll_line(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -181,6 +189,10 @@ pub(crate) unsafe fn nv_scroll_line(cmd_arg: *mut CmdArg) {
 }
 
 /// `CTRL-D` and `CTRL-U`: half a page.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_halfpage(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -196,6 +208,10 @@ pub(crate) unsafe fn nv_halfpage(cmd_arg: *mut CmdArg) {
 }
 
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_exit_command(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };

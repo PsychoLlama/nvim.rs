@@ -693,8 +693,7 @@ fn show_command_char(c: c_int) {
 
 /// `do_nv_ident()`: run the Normal-mode command `first` `second` right here.
 fn do_ident(first: c_int, second: c_int) {
-    // SAFETY: runs a Normal-mode command over the current window.
-    unsafe { do_nv_ident(first, second) };
+    do_nv_ident(first, second);
 }
 
 /// Buffer `fnum`, if there is one.

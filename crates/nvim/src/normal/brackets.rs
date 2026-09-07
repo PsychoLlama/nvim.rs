@@ -33,6 +33,10 @@ use crate::types::{CmdArg, FileMark, MarkMove, OpType, PUT_FIXINDENT, Pos, Spell
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn direction(cmd_arg: *mut CmdArg) -> c_int {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -45,6 +49,10 @@ unsafe fn direction(cmd_arg: *mut CmdArg) -> c_int {
 
 /// The same choice spelled in `findmatchlimit`'s own flags, which are not the
 /// `Direction` constants.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn match_direction(cmd_arg: *mut CmdArg) -> c_int {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -63,6 +71,11 @@ unsafe fn match_direction(cmd_arg: *mut CmdArg) -> c_int {
 /// cursor is inside; the second walks back in from there, counting the braces
 /// the count asked for. `prev_pos` carries the second-outermost block between
 /// the two, which is what makes `2[m` mean "the method one level out".
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
+/// `old_pos` must point at an initialized position.
 unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -193,6 +206,10 @@ unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
 /// jumps to it. `d`-family keys (`d`, `D`, CTRL-D) search for a `#define`
 /// rather than for any occurrence, which is what the low-nibble comparison
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -243,6 +260,10 @@ unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
 
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
 /// mark in this buffer.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -274,6 +295,10 @@ unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
 }
 
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -303,6 +328,10 @@ unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
 }
 
 /// `[` and `]`, whose second character says what kind of jump this is.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };

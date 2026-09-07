@@ -51,6 +51,10 @@ use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_ignore(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -59,9 +63,17 @@ pub(crate) unsafe fn nv_ignore(cmd_arg: *mut CmdArg) {
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
 /// counts as having run.
+///
+/// # Safety
+///
+/// `_cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_nop(_cmd_arg: *mut CmdArg) {}
 
 /// A key that is not a command: beep and drop whatever was pending.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_error(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -69,6 +81,10 @@ pub(crate) unsafe fn nv_error(cmd_arg: *mut CmdArg) {
 }
 
 /// `<Help>`: open the help window.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_help(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -79,6 +95,10 @@ pub(crate) unsafe fn nv_help(cmd_arg: *mut CmdArg) {
 
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -139,6 +159,10 @@ pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-G`: report the file's position -- or toggle between Visual and
 /// Select mode when a selection is up.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -152,6 +176,10 @@ pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
 }
 
 /// `CTRL-H`: one character left -- or delete the selection in Select mode.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_ctrlh(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -165,6 +193,10 @@ pub(crate) unsafe fn nv_ctrlh(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-L`: throw the screen away and redraw it, and let syntax highlighting
 /// that timed out try again.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_clear(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -184,6 +216,10 @@ pub(crate) unsafe fn nv_clear(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one
 /// command.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_ctrlo(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -202,6 +238,10 @@ pub(crate) unsafe fn nv_ctrlo(cmd_arg: *mut CmdArg) {
 }
 
 /// `CTRL-^`: edit the alternate file.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_hat(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -213,6 +253,10 @@ pub(crate) unsafe fn nv_hat(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
 /// dropped.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_window(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -227,6 +271,10 @@ pub(crate) unsafe fn nv_window(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-Z`: suspend, through `:stop` so that 'autowrite' and the autocommands
 /// happen.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_suspend(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -239,6 +287,10 @@ pub(crate) unsafe fn nv_suspend(cmd_arg: *mut CmdArg) {
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
 /// "back to Normal mode".
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_normal(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -262,6 +314,10 @@ pub(crate) unsafe fn nv_normal(cmd_arg: *mut CmdArg) {
 
 /// `<Esc>` and `CTRL-C`. The table's argument says which: `CTRL-C` is the one
 /// that offers the "how do I quit" hint.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -305,6 +361,10 @@ pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
 }
 
 /// The key the terminal sends to repeat a bracketed paste.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_paste(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -313,6 +373,10 @@ pub(crate) unsafe fn nv_paste(cmd_arg: *mut CmdArg) {
 
 /// The synthetic key that stands for "the event loop has work": run it, then
 /// tell the command loop whether a mode was waiting to be restarted.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };

@@ -67,6 +67,10 @@ const POUND_BYTE: u8 = 0xa3;
 /// line rather than of the buffer line.
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -123,6 +127,10 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
 }
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -149,6 +157,10 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
 }
 
 /// `g$` and `g<End>`: the end of the *screen* line.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -202,6 +214,10 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
 
 /// `gi`: insert where insert mode was left, even if the line has since got
 /// shorter.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_gi_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -224,6 +240,10 @@ pub(crate) unsafe fn nv_gi_cmd(cmd_arg: *mut CmdArg) {
 
 /// `gh`, `gH` and `g CTRL-H`: start Select mode in the matching Visual kind.
 /// `v`, `V` and CTRL-V sit exactly `'v' - 'h'` above `h`, `H` and CTRL-H.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_g_select(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -234,6 +254,10 @@ unsafe fn nv_g_select(cmd_arg: *mut CmdArg) {
 
 /// `gj` and `gk`: down and up by *screen* line -- which is the plain line move
 /// when 'wrap' is off.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -258,6 +282,10 @@ unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
 ///
 /// Answers `false` for anything else, which sends the caller on to the byte
 /// half of the tree.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn nv_g_key(cmd_arg: *mut CmdArg, nchar: c_int) -> bool {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -300,6 +328,10 @@ unsafe fn nv_g_key(cmd_arg: *mut CmdArg, nchar: c_int) -> bool {
 }
 
 /// `g`, whose second character says what the command is.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };

@@ -258,8 +258,7 @@ fn splitview(mut ea: Ex) {
         if byte(ea.arg) != NUL {
             reset_binding(Win::current());
         } else {
-            // SAFETY: reads the window list and the current window.
-            unsafe { do_check_scrollbind(false) };
+            do_check_scrollbind(false);
         }
         edit(ea, unsafe { Win::from_raw(old_curwin) });
     }

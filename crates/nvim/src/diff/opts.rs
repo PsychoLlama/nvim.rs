@@ -277,7 +277,7 @@ pub unsafe fn diffopt_changed() -> Result<(), Failed> {
     diff_foldcolumn.set(foldcolumn_new);
     diff_algorithm.set(algorithm_new);
     diff_redraw(true);
-    unsafe { check_scrollbind(0, 0) };
+    check_scrollbind(0, 0);
     Ok(())
 }
 

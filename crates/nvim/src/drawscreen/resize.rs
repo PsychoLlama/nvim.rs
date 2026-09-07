@@ -242,7 +242,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             unsafe { repeat_message() };
         } else {
             if Win::current().w_onebuf_opt.wo_scb != 0 {
-                unsafe { do_check_scrollbind(true) };
+                do_check_scrollbind(true);
             }
             if State.get() & MODE_CMDLINE != 0 {
                 // The pum is redrawn by `cmdline_pum_display` below, at the

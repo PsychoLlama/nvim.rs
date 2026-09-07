@@ -14,6 +14,7 @@
     "crates/nvim/src/file_search/resolve.rs": 1,
     "crates/nvim/src/fileio/read.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
+    "crates/nvim/src/normal/ident.rs": 1,
     "crates/nvim/src/search/command.rs": 1,
     "crates/nvim/src/search/find.rs": 1
   }

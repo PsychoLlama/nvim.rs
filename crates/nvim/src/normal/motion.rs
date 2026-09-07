@@ -58,6 +58,10 @@ use crate::r#move::{
 /// long wrapped line and a short one keep the same apparent column. A closed
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
+///
+/// # Safety
+///
+/// `op` must point at a live `OpArg`, unaliased for the call.
 pub(crate) unsafe fn nv_screengo(
     op: *mut OpArg,
     dir: c_int,
@@ -198,6 +202,10 @@ pub(crate) unsafe fn nv_screengo(
 }
 
 /// `H`, `M` and `L`: to the top, middle or bottom line of the window.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -287,6 +295,10 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
 }
 
 /// `l`, `<Space>` and `<Right>`.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -384,6 +396,10 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
 }
 
 /// `h`, `<BS>`, CTRL-H and `<Left>`.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -448,6 +464,10 @@ pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
 }
 
 /// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_up(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -466,6 +486,10 @@ pub(crate) unsafe fn nv_up(cmd_arg: *mut CmdArg) {
 }
 
 /// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -507,6 +531,10 @@ pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
 
 /// `<End>`: the end of the line -- of the last line with CTRL, which is what
 /// the argument says.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_end(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -520,6 +548,10 @@ pub(crate) unsafe fn nv_end(cmd_arg: *mut CmdArg) {
 }
 
 /// `$`: the end of the line, `count1 - 1` lines down.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_dollar(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -538,6 +570,10 @@ pub(crate) unsafe fn nv_dollar(cmd_arg: *mut CmdArg) {
 }
 
 /// `f`, `F`, `t`, `T`, `;` and `,`: search this line for a character.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_csearch(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -582,6 +618,10 @@ pub(crate) unsafe fn nv_csearch(cmd_arg: *mut CmdArg) {
 
 /// `%`: to the matching bracket, or with a count to that percentage of the
 /// file.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -633,6 +673,10 @@ pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
 }
 
 /// `(` and `)`: back and forward a sentence.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_brace(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -650,6 +694,10 @@ pub(crate) unsafe fn nv_brace(cmd_arg: *mut CmdArg) {
 }
 
 /// `{` and `}`: back and forward a paragraph.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_findpar(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -666,6 +714,10 @@ pub(crate) unsafe fn nv_findpar(cmd_arg: *mut CmdArg) {
 }
 
 /// `<Home>`: the first column -- the first line with CTRL.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_home(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -680,6 +732,10 @@ pub(crate) unsafe fn nv_home(cmd_arg: *mut CmdArg) {
 }
 
 /// `|`: to a screen column.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_pipe(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -697,6 +753,10 @@ pub(crate) unsafe fn nv_pipe(cmd_arg: *mut CmdArg) {
 }
 
 /// `b` and `B`: back a word.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -711,6 +771,10 @@ pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
 }
 
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -752,6 +816,10 @@ pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
 
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
+///
+/// # Safety
+///
+/// `op` must point at a live `OpArg`, unaliased for the call.
 pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
     // SAFETY (throughout): `op` is the caller's live operator.
     let mut op = unsafe { Op::new(op) };
@@ -769,6 +837,10 @@ pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
 
 /// `0` and `^`: the first column, or the first non-blank, which is what the
 /// argument says.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_beginline(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -780,6 +852,10 @@ pub(crate) unsafe fn nv_beginline(cmd_arg: *mut CmdArg) {
 }
 
 /// `gg` and `G`: to the first or last line, or to the count'th.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_goto(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };

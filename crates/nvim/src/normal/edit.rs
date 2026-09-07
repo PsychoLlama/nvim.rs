@@ -62,6 +62,10 @@ use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 unsafe fn prompt_refuses(cmd_arg: *mut CmdArg) -> bool {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -73,6 +77,10 @@ unsafe fn prompt_refuses(cmd_arg: *mut CmdArg) -> bool {
 }
 
 /// `CTRL-A` and `CTRL-X`: add to or subtract from the number under the cursor.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_addsub(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -97,6 +105,10 @@ pub(crate) unsafe fn nv_addsub(cmd_arg: *mut CmdArg) {
 }
 
 /// `r`: replace `count1` characters with the one that follows.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -232,6 +244,10 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
 }
 
 /// `R` and `gR`: replace mode, virtual with the argument set.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_replace_mode(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -263,6 +279,10 @@ pub(crate) unsafe fn nv_replace_mode(cmd_arg: *mut CmdArg) {
 }
 
 /// `gr`: replace one character virtually -- the following text does not move.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -296,6 +316,10 @@ pub(crate) unsafe fn nv_vreplace(cmd_arg: *mut CmdArg) {
 }
 
 /// `~` when 'tildeop' is off: swap the case of `count1` characters.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -350,6 +374,10 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
 }
 
 /// `s` and `S`: substitute a character or a line.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_subst(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -371,6 +399,10 @@ pub(crate) unsafe fn nv_subst(cmd_arg: *mut CmdArg) {
 }
 
 /// `x`, `X`, `D`, `C`, `Y`: the one-key spellings of an operator and a motion.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_abbrev(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -385,6 +417,10 @@ pub(crate) unsafe fn nv_abbrev(cmd_arg: *mut CmdArg) {
 }
 
 /// Replay a one-key command as the operator and motion it stands for.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_optrans(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -420,6 +456,10 @@ pub(crate) unsafe fn nv_optrans(cmd_arg: *mut CmdArg) {
 }
 
 /// `o` and `O`: open a line below or above and start inserting on it.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn n_opencmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -464,6 +504,10 @@ pub(crate) unsafe fn n_opencmd(cmd_arg: *mut CmdArg) {
 }
 
 /// `~`: swap case, or the `g~` operator when 'tildeop' is on.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_tilde(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -479,7 +523,7 @@ pub(crate) unsafe fn nv_tilde(cmd_arg: *mut CmdArg) {
 
 /// Put the cursor where `A` starts inserting: past the last character, or
 /// past the last *cell* when 'virtualedit' is "all".
-pub(crate) unsafe fn set_cursor_for_append_to_line() {
+pub(crate) fn set_cursor_for_append_to_line() {
     // SAFETY (throughout): reads and writes the current window's cursor.
     Win::current().w_set_curswant = true;
     if get_ve_flags(Win::current()) == kOptVeFlagAll as c_uint {
@@ -496,6 +540,10 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
 }
 
 /// `a`, `A`, `i` and `I`: enter insert mode.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -524,7 +572,7 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
         return;
     }
     match u8::try_from(ca.cmdchar) {
-        Ok(b'A') => unsafe { set_cursor_for_append_to_line() },
+        Ok(b'A') => set_cursor_for_append_to_line(),
         Ok(b'I') => beginline(BeginlineOpts::WHITE),
         Ok(b'a') => {
             // `a` steps one right first. Under 'virtualedit' a position
@@ -557,6 +605,10 @@ pub(crate) unsafe fn nv_edit(cmd_arg: *mut CmdArg) {
 ///
 /// 'restart_edit' is put back afterwards only if insert mode did not set one
 /// itself: whatever it asked for wins over what was pending before.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn invoke_edit(cmd_arg: *mut CmdArg, repl: c_int, cmd: c_int, startln: c_int) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -581,6 +633,10 @@ pub(crate) unsafe fn invoke_edit(cmd_arg: *mut CmdArg, repl: c_int, cmd: c_int, 
 }
 
 /// `J`: join lines.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_join(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -617,6 +673,10 @@ pub(crate) unsafe fn nv_join(cmd_arg: *mut CmdArg) {
 }
 
 /// `p` and `P`.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_put(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     unsafe { nv_put_opt(cmd_arg, false) };
@@ -624,6 +684,10 @@ pub(crate) unsafe fn nv_put(cmd_arg: *mut CmdArg) {
 
 /// The put commands. `fix_indent` is the `]p`/`[p` family, which reindents the
 /// text to the current line.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -766,6 +830,10 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
 
 /// `o` and `O` -- or, with a pending delete, the diff command, and with a
 /// selection, "swap to the other corner".
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn nv_open(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -775,7 +843,7 @@ pub(crate) unsafe fn nv_open(cmd_arg: *mut CmdArg) {
         debug_assert!(ca.opcount >= 0);
         unsafe { nv_diffgetput(false, ca.opcount as size_t) };
     } else if visual_active() {
-        unsafe { v_swap_corners(ca.cmdchar) };
+        v_swap_corners(ca.cmdchar);
     } else if buf_is_prompt(current_buf())
         && Win::current().w_cursor.lnum < Buf::current().b_prompt_start.mark.lnum
     {

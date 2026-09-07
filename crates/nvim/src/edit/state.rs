@@ -352,7 +352,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     unsafe { ins_redraw(true) };
 
     if Win::current().w_onebuf_opt.wo_scb != 0 {
-        unsafe { do_check_scrollbind(true) };
+        do_check_scrollbind(true);
     }
     if Win::current().w_onebuf_opt.wo_crb != 0 {
         unsafe { do_check_cursorbind() };

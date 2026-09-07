@@ -217,7 +217,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
         if Win::current().w_cursor.lnum == 0 {
             Win::current().w_cursor.lnum = 1;
         }
-        unsafe { set_cursor_for_append_to_line() };
+        set_cursor_for_append_to_line();
     }
     if State.get() & MODE_INSERT != 0 {
         return;

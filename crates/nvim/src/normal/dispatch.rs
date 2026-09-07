@@ -223,6 +223,11 @@ enum Slot {
 /// Answers `(slot, literal, replace)`. `literal` suppresses digraphs and
 /// 'langmap'; `replace` puts the editor in Replace mode while waiting, so the
 /// cursor shape says what is about to happen.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -245,6 +250,11 @@ unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
 ///
 /// `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` are commands of their own; anything
 /// else is put back for the next command to read.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -278,6 +288,11 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
 ///
 /// Only for a command flagged `NV_LANG` -- `f`, `t`, `r` and friends, where
 /// the argument is a real character rather than a command key.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 unsafe fn read_composing_tail(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state; every write to
     // `nchar_composing` is bounded by its own length below.
@@ -316,6 +331,11 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
 }
 
 /// Read the second (and sometimes third) character of a command.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     // Nothing read here is a mapping or a command; it is an argument.
@@ -396,6 +416,11 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
 }
 
 /// Mirror a horizontal command for a right-to-left window.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -421,6 +446,11 @@ pub(crate) unsafe fn normal_invert_horizontal(s: *mut NormalState) {
 ///
 /// Answers whether a CTRL-W was consumed, in which case the caller loops:
 /// `CTRL-W` takes a count of its own after it.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
     // SAFETY: `s` is the caller's live normal-mode state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -475,6 +505,11 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
 }
 
 /// Everything that happens after the handler has run.
+///
+/// # Safety
+///
+/// `s` must point at the Normal-mode state machine's state, unaliased for the
+/// call.
 pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     // SAFETY: `s` is the caller's live normal-mode state.
     let mut ns = unsafe { NormalStateRef::new(s) };
@@ -530,7 +565,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 
     if Win::current().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
         validate_cursor(Win::current());
-        unsafe { do_check_scrollbind(true) };
+        do_check_scrollbind(true);
     }
     if Win::current().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
         validate_cursor(Win::current());
@@ -568,6 +603,10 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 ///
 /// Keeps the raw signature: it is installed as a `state_execute_callback` and
 /// `state_enter` calls it through that pointer.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     // SAFETY: `state` is the `VimState` at the head of the `NormalState` the
     // caller handed to `state_enter`.
@@ -710,6 +749,10 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 }
 
 /// Record a command for `.`, taking its second character from `cmd_arg`.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn prep_redo_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -850,6 +893,10 @@ pub(crate) fn read_command_char() -> c_int {
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
@@ -859,6 +906,10 @@ pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
 }
 
 /// Turn a shifted special key into its unshifted self.
+///
+/// # Safety
+///
+/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
 pub(crate) unsafe fn unshift_special(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
