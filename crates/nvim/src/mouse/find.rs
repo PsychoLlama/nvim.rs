@@ -26,8 +26,7 @@ use crate::plines::{init_charsize_arg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
-use crate::winlayer::graph::topframe;
-use crate::winlayer::{FrameRef, first_window, windows};
+use crate::winlayer::{current_topframe, first_window, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
 pub(crate) fn first_window_row() -> c_int {
@@ -49,8 +48,7 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
         return None;
     }
 
-    // SAFETY: the layout tree is live from startup to exit.
-    let mut fp = unsafe { FrameRef::new(topframe.get()) };
+    let mut fp = current_topframe();
     pos.row -= first_window_row();
     while fp.fr_layout as c_int != FR_LEAF {
         // Upstream dereferences `fr_child` unchecked: a non-leaf frame always
@@ -78,7 +76,7 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
     // When using a timer that closes a window the window might not actually
     // exist.
-    let win = windows().find(|wp| wp.raw() == fp.fr_win)?;
+    let win = windows().find(|wp| Some(wp.id()) == fp.fr_win)?;
     pos.row -= win.w_winbar_height;
     Some(win)
 }

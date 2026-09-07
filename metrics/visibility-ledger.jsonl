@@ -541,7 +541,6 @@
 {"path":"neovim::types::FileDescriptor","kind":"struct","file":"crates/nvim/src/types/fileio.rs","tests":["crates/nvim/tests/unit/fileio.rs"]}
 {"path":"neovim::types::FileID","kind":"struct","file":"crates/nvim/src/types/fs.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::FileInfo","kind":"struct","file":"crates/nvim/src/types/fs.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
-{"path":"neovim::types::Frame","kind":"struct","file":"crates/nvim/src/types/buffer.rs","tests":["crates/nvim/tests/unit/window.rs"]}
 {"path":"neovim::types::GArray","kind":"struct","file":"crates/nvim/src/types/garray.rs","tests":["crates/nvim/tests/unit/fold.rs","crates/nvim/tests/unit/garray.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/users.rs"]}
 {"path":"neovim::types::GridLineEvent","kind":"struct","file":"crates/nvim/src/types/grid.rs","tests":["crates/nvim/tests/unit/msgpack.rs"]}
 {"path":"neovim::types::HashTab","kind":"struct","file":"crates/nvim/src/types/hashtab.rs","tests":["crates/nvim/tests/unit/hashtab.rs"]}
@@ -604,7 +603,6 @@
 {"path":"neovim::types::VarLock","kind":"enum","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/eval_decode.rs","crates/nvim/tests/unit/eval_encode.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::VarType","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::VimConv","kind":"struct","file":"crates/nvim/src/types/mbyte.rs","tests":["crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs"]}
-{"path":"neovim::types::Window","kind":"struct","file":"crates/nvim/src/types/buffer.rs","tests":["crates/nvim/tests/unit/window.rs"]}
 {"path":"neovim::types::iovec","kind":"use","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::kBoolVarFalse","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::types::kBoolVarTrue","kind":"const","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_value.rs"]}
@@ -677,20 +675,7 @@
 {"path":"neovim::viml::parser::parser::viml_parser_get_remaining_line","kind":"fn","file":"crates/nvim/src/viml/parser/parser.rs","tests":["crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::viml::parser::parser::viml_parser_highlight","kind":"fn","file":"crates/nvim/src/viml/parser/parser.rs","tests":["crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::viml::parser::parser::viml_parser_init","kind":"fn","file":"crates/nvim/src/viml/parser/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}
-{"path":"neovim::window::arith::MinSize","kind":"struct","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::NextCurwin","kind":"enum","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::cursor_fraction","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::fraction_row","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::frame_check_height","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::frame_check_width","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::frame_minheight","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::frame_minwidth","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::height_with_chrome","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::parent_target","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::sort_columns","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::window::arith::width_with_chrome","kind":"fn","file":"crates/nvim/src/window/arith.rs","tests":["crates/nvim/tests/unit/window.rs"]}
 {"path":"neovim::winlayer::Buf","kind":"struct","file":"crates/nvim/src/winlayer.rs","tests":["crates/nvim/tests/unit/buffer.rs","crates/nvim/tests/unit/indent.rs","crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/statusline.rs","crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::winlayer::BufId","kind":"struct","file":"crates/nvim/src/winlayer/handles.rs","tests":["crates/nvim/tests/unit/buffer.rs"]}
-{"path":"neovim::winlayer::FrameRef","kind":"struct","file":"crates/nvim/src/winlayer.rs","tests":["crates/nvim/tests/unit/window.rs"]}
 {"path":"neovim::winlayer::Win","kind":"struct","file":"crates/nvim/src/winlayer.rs","tests":["crates/nvim/tests/unit/spellfile.rs","crates/nvim/tests/unit/statusline.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::winlayer::graph::curwin","kind":"static","file":"crates/nvim/src/winlayer/graph.rs","tests":["crates/nvim/tests/unit/search.rs","crates/nvim/tests/unit/spellfile.rs","crates/nvim/tests/unit/statusline.rs"]}

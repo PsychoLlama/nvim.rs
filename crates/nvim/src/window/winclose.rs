@@ -32,7 +32,7 @@ use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Frame, Integer, OK, size_t};
+use crate::types::{FAIL, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
@@ -48,8 +48,10 @@ pub unsafe fn win_close(win: Win, free_buf: bool, force: bool) -> c_int {
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let prev_curtab = TabPage::current();
+    // The frame the closing window hung off, held as an identity because
+    // `win` and its whole subtree are freed before the check below.
     let win_frame = if win.w_floating {
-        ptr::null_mut::<Frame>()
+        None
     } else {
         win.frame().fr_parent
     };

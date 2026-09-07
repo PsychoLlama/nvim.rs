@@ -46,13 +46,15 @@ use crate::os::env::home_replace_save;
 use crate::os::state::globaldir;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    DictItem, Frame, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType,
-    Window, int64_t,
+    DictItem, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
+    int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;
-use crate::winlayer::graph::{firstwin, topframe};
-use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
+use crate::winlayer::graph::firstwin;
+use crate::winlayer::{
+    Buf, FrameRef, TabPage, Win, WinId, buffers, current_topframe, first_tab, tabs, windows_in_tab,
+};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -299,13 +301,13 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         let (tab_firstwin, tab_topframe) = if with_tabs {
             need_tabnext = Some(tab) != first_tab();
             if tab.is_current() {
-                (firstwin.get(), topframe.get())
+                (firstwin.get(), current_topframe())
             } else {
-                (tab.tp_firstwin, tab.tp_topframe)
+                (tab.tp_firstwin, tab.topframe())
             }
         } else {
             tab = TabPage::current();
-            (firstwin.get(), topframe.get())
+            (firstwin.get(), current_topframe())
         };
 
         // Before creating the layout, try loading one file: if that is
@@ -337,7 +339,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             return false;
         }
 
-        if unsafe { (*tab_topframe).fr_layout } != FR_LEAF
+        if tab_topframe.fr_layout != FR_LEAF
             && (!out.line(c"let s:save_splitbelow = &splitbelow")
                 || !out.line(c"let s:save_splitright = &splitright")
                 || !out.line(c"set splitbelow splitright")
@@ -448,7 +450,8 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
     if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
         return out.line(c"wincmd =");
     }
-    // SAFETY: caller contract; `topframe` is the current tab's frame tree.
+    // `topframe` is the current tab's frame tree.
+    let top = current_topframe();
     let mut n = 0;
     for wp in windows_in_tab(tab).map(Win::raw) {
         if unsafe { ses_do_win(Win::new(wp)) } {
@@ -457,7 +460,7 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
             if unsafe { (*wp).w_height }
                 + unsafe { (*wp).w_hsep_height }
                 + unsafe { (*wp).w_status_height }
-                < unsafe { (*topframe.get()).fr_height }
+                < top.fr_height
                 && !out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
                     unsafe { (*wp).w_height } as int64_t,
@@ -487,33 +490,32 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
 /// Afterwards the last window in the frame is the current one.
 ///
 /// # Safety
-/// `fr` is a live frame.
-unsafe fn ses_win_rec(out: SessionFile, fr: *mut Frame) -> bool {
-    // SAFETY: caller contract; the frame tree is live.
-    if unsafe { (*fr).fr_layout } == FR_LEAF {
+/// Main thread; the buffers of `fr`'s windows are live.
+unsafe fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
+    if fr.fr_layout == FR_LEAF {
         return true;
     }
-    let column = unsafe { (*fr).fr_layout } == FR_COL;
+    let column = fr.fr_layout == FR_COL;
 
     // Find the first frame that is not skipped, then create a window for
     // each one after it -- the first window is already there.
     let mut count = 0;
-    let mut frc = unsafe { ses_skipframe((*fr).fr_child) };
-    if !frc.is_null() {
-        loop {
-            frc = unsafe { ses_skipframe((*frc).fr_next) };
-            if frc.is_null() {
-                break;
-            }
-            // Make the window as big as possible, for room to split.
-            if !out.puts(c"wincmd _ | wincmd |")
-                || !out.eol()
-                || !out.line(if column { c"split" } else { c"vsplit" })
-            {
-                return false;
-            }
-            count += 1;
+    // SAFETY: caller contract, for every `ses_do_frame` below.
+    let mut frc = unsafe { ses_skipframe(fr.child()) };
+    while let Some(current) = frc {
+        // SAFETY: as above.
+        frc = unsafe { ses_skipframe(current.next()) };
+        if frc.is_none() {
+            break;
         }
+        // Make the window as big as possible, for room to split.
+        if !out.puts(c"wincmd _ | wincmd |")
+            || !out.eol()
+            || !out.line(if column { c"split" } else { c"vsplit" })
+        {
+            return false;
+        }
+        count += 1;
     }
 
     // Go back to the first window.
@@ -525,26 +527,30 @@ unsafe fn ses_win_rec(out: SessionFile, fr: *mut Frame) -> bool {
     }
 
     // Then recurse into each window of this column or row.
-    frc = unsafe { ses_skipframe((*fr).fr_child) };
-    while !frc.is_null() {
-        unsafe { ses_win_rec(out, frc) };
-        frc = unsafe { ses_skipframe((*frc).fr_next) };
-        if !frc.is_null() && !out.line(c"wincmd w") {
+    // SAFETY: as above.
+    frc = unsafe { ses_skipframe(fr.child()) };
+    while let Some(current) = frc {
+        // SAFETY: as above.
+        unsafe {
+            ses_win_rec(out, current);
+            frc = ses_skipframe(current.next());
+        }
+        if frc.is_some() && !out.line(c"wincmd w") {
             return false;
         }
     }
     true
 }
 
-/// The first frame at or after `fr` holding a window worth saving, or null.
+/// The first frame at or after `fr` holding a window worth saving.
 ///
 /// # Safety
-/// `fr` is null or a live frame.
-unsafe fn ses_skipframe(fr: *mut Frame) -> *mut Frame {
-    // SAFETY: caller contract.
+/// Main thread; the buffers of `fr`'s windows are live.
+unsafe fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
     let mut frc = fr;
-    while !frc.is_null() && !unsafe { ses_do_frame(frc) } {
-        frc = unsafe { (*frc).fr_next };
+    // SAFETY: caller contract.
+    while let Some(current) = frc.filter(|frc| !unsafe { ses_do_frame(*frc) }) {
+        frc = current.next();
     }
     frc
 }
@@ -552,21 +558,14 @@ unsafe fn ses_skipframe(fr: *mut Frame) -> *mut Frame {
 /// Whether frame `fr` holds a window worth saving anywhere below it.
 ///
 /// # Safety
-/// `fr` is a live frame.
-unsafe fn ses_do_frame(fr: *const Frame) -> bool {
-    // SAFETY: caller contract.
-    if unsafe { (*fr).fr_layout } == FR_LEAF {
-        // SAFETY: a leaf frame's window is live.
-        return unsafe { ses_do_win(Win::new((*fr).fr_win)) };
+/// Main thread; the buffers of `fr`'s windows are live.
+unsafe fn ses_do_frame(fr: FrameRef) -> bool {
+    match fr.win() {
+        // SAFETY: caller contract.
+        Some(win) => unsafe { ses_do_win(win) },
+        // SAFETY: as above.
+        None => fr.children().any(|child| unsafe { ses_do_frame(child) }),
     }
-    let mut frc = unsafe { (*fr).fr_child };
-    while !frc.is_null() {
-        if unsafe { ses_do_frame(frc) } {
-            return true;
-        }
-        frc = unsafe { (*frc).fr_next };
-    }
-    false
 }
 
 /// Write the `g:` variables 'sessionoptions' calls sessionable: the Number,

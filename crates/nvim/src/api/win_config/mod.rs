@@ -26,8 +26,8 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
-    FloatRelative, Frame, Integer, KeyDict_win_config, LPos, LineNr, Object, OptionalKeys,
-    String_0, SwitchWin, Tabpage, TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle,
+    FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, OptionalKeys, String_0,
+    SwitchWin, Tabpage, TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle,
     WindowHandle, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFloatAnchorEast,
     kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
     kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow, size_t,
@@ -36,11 +36,11 @@ use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::window::{
     WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_NOENTER, WSP_TOP, WSP_VERT,
-    check_split_disallowed_err, clear_float_config, goto_tabpage_win, last_status,
+    check_split_disallowed_err, clear_float_config, find_altwin, goto_tabpage_win, last_status,
     lastwin_nofloating, merge_win_config, one_window, win_append, win_comp_pos, win_find_tabpage,
     win_goto, win_locked, win_remove, win_set_buf, win_setheight_win, win_setwidth_win,
-    win_split_ins, win_valid, win_valid_any_tab, window_layout_locked_err, winframe_find_altwin,
-    winframe_remove, winframe_restore,
+    win_split_ins, win_valid, win_valid_any_tab, window_layout_locked_err, winframe_remove,
+    winframe_restore,
 };
 use crate::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,

@@ -22,7 +22,7 @@ use crate::winlayer::{TabId, WinId};
 
 use crate::types::Failed;
 use crate::window::{WSP_BELOW, WSP_ROOM, goto_tab};
-use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, windows};
+use crate::winlayer::{FrameRef, TabPage, Win, first_tab, first_window, last_window, windows};
 
 /// What the two passes of `:all` share. A stack local of [`do_arg_all`],
 /// never handed to C, so the passes take it by reference and its fields
@@ -324,9 +324,11 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
         aall.new_curtab = Some(TabPage::current().id());
         return false;
     }
-    // SAFETY: `wp` is a live window with a frame, as is `curwin`.
-    let moved =
-        wp.w_floating || unsafe { (*wp.w_frame).fr_parent == (*Win::current().w_frame).fr_parent };
+    // A window that changed parents is a layout change; a float has no parent
+    // to change, and answers "not moved".
+    let moved = wp.w_floating
+        || wp.frame().parent().map(FrameRef::id)
+            == Win::current().frame().parent().map(FrameRef::id);
     if !moved {
         crate::semsg!("E249: Window layout changed unexpectedly");
         return true;

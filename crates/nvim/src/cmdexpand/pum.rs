@@ -418,7 +418,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         unsafe { grid_line_flush() };
     }
 
-    unsafe { win_redraw_last_status(topframe.get()) };
+    win_redraw_last_status(current_topframe());
     unsafe { xfree(buf as *mut c_void) };
 }
 

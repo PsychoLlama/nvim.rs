@@ -254,15 +254,7 @@ pub unsafe fn nvim_open_win(
 /// The current window must be the one to split.
 unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Option<Win> {
     // SAFETY: the caller's promise.
-    unsafe {
-        win_split_ins(
-            size,
-            flags,
-            None,
-            0 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<Frame>(),
-        )
-    }
+    unsafe { win_split_ins(size, flags, None, 0 as ::core::ffi::c_int, None) }
 }
 
 /// Which side of its neighbour `win` was split off, for the `split` key.
@@ -270,10 +262,9 @@ unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> Opti
 /// A window with no frame, or one whose frame is the tab page's `topframe`,
 /// answers the default rather than naming a side.
 pub(crate) fn win_split_dir(win: Win) -> WinSplit {
-    if win.w_frame.is_null() {
+    let Some(frame) = win.frame_or_none() else {
         return kWinSplitLeft;
-    }
-    let frame = win.frame();
+    };
     let Some(parent) = frame.parent() else {
         return kWinSplitLeft;
     };
@@ -380,8 +371,6 @@ pub(crate) unsafe fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> 
         // SAFETY: the caller's window, and `at` names the tab page to look in.
         unsafe { win_float_find_altwin(win, at) }
     } else {
-        let mut dir: ::core::ffi::c_int = 0;
-        // SAFETY: as above; `dir` is this frame's own.
-        unsafe { winframe_find_altwin(w, &raw mut dir, at, ::core::ptr::null_mut()) }
+        find_altwin(w, at).map(|alt| alt.win)
     }
 }

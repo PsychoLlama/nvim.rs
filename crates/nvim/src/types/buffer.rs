@@ -24,7 +24,7 @@ use crate::syntax::{SynCluster, SynPat};
 pub(crate) type ExtmarkNs = IdMap<uint32_t, uint32_t>;
 use crate::r#move::WinValid;
 use crate::undo::store::UndoStore;
-use crate::winlayer::{BufId, TabId, WinId};
+use crate::winlayer::{BufId, FrameId, TabId, WinId};
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -486,27 +486,28 @@ pub struct file_buffer_update_channels {
     pub capacity: size_t,
     pub items: *mut uint64_t,
 }
-/// Neither `Copy` nor `Clone`. A frame is a *node* of the window layout
-/// tree: its `fr_parent`/`fr_next`/`fr_prev`/`fr_child` links and its
-/// `fr_win` back-edge are all owned by the tree's shape, and duplicating one
-/// would put a second node into a structure the editor walks by pointer.
-/// Frames are allocated one at a time and freed with the window; nothing in
-/// the tree may copy one, and the absence of the derives is what says so.
+/// Neither `Copy` nor `Clone`: a frame is a *node* of the window layout
+/// tree, and duplicating one would put a second node into a structure the
+/// editor walks. They are allocated one at a time by `winlayer::new_frame`
+/// and freed by `free_frame`; the absence of the derives is what says so.
 pub struct Frame {
+    /// This frame's key in the frame registry; `winlayer::FrameId` names it.
+    pub handle: Handle,
     pub fr_layout: ::core::ffi::c_char,
     pub fr_width: ::core::ffi::c_int,
     pub fr_newwidth: ::core::ffi::c_int,
     pub fr_height: ::core::ffi::c_int,
     pub fr_newheight: ::core::ffi::c_int,
-    pub fr_parent: *mut Frame,
-    pub fr_next: *mut Frame,
-    pub fr_prev: *mut Frame,
-    pub fr_child: *mut Frame,
-    /// The window a leaf frame holds; null for a row or a column. Still an
-    /// address, not a handle: `window::arith`'s unit tests build frame trees
-    /// over `Window`s that were never registered. `winlayer::window_at` is
-    /// how a saved tree's copy is compared safely.
-    pub fr_win: *mut Window,
+    /// The four edges of the layout tree, as identities: the frame this one
+    /// hangs off, its neighbours in that row or column, and its first child.
+    /// `winlayer::FrameRef` resolves them; a freed frame's link reads `None`.
+    pub(crate) fr_parent: Option<FrameId>,
+    pub(crate) fr_next: Option<FrameId>,
+    pub(crate) fr_prev: Option<FrameId>,
+    pub(crate) fr_child: Option<FrameId>,
+    /// The window a leaf frame holds, `None` for a row or a column. An
+    /// identity: a layout snapshot outlives the windows it remembers.
+    pub(crate) fr_win: Option<WinId>,
 }
 pub type GetFileRet = ::core::ffi::c_int;
 pub type GetFileFlags = ::core::ffi::c_uint;
@@ -659,7 +660,7 @@ pub struct Tabpage {
     /// list's links are — `winlayer::TabPage::next` and `winlayer::tabs`
     /// are how it is walked.
     pub(crate) tp_next: Option<TabId>,
-    pub tp_topframe: *mut Frame,
+    pub(crate) tp_topframe: Option<FrameId>,
     /// The window this tab page was last working in, and the one before it.
     /// Handles, as its window list's ends are: both are read *after* a call
     /// that can close a window. **Stale while the tab page is current**,
@@ -681,7 +682,7 @@ pub struct Tabpage {
     pub tp_diffbuf: [*mut Buffer; 8],
     pub tp_diff_invalid: ::core::ffi::c_int,
     pub tp_diff_update: ::core::ffi::c_int,
-    pub tp_snapshot: [*mut Frame; 3],
+    pub(crate) tp_snapshot: [Option<FrameId>; 3],
     pub tp_winvar: ScopeDictDictItem,
     pub tp_vars: *mut Dict,
     pub tp_localdir: *mut ::core::ffi::c_char,
@@ -728,7 +729,9 @@ pub struct Window {
     pub(crate) w_prev: Option<WinId>,
     pub(crate) w_next: Option<WinId>,
     pub w_locked: bool,
-    pub w_frame: *mut Frame,
+    /// The leaf frame this window sits in. An identity: `winframe_remove`
+    /// frees a frame under whoever held it. `winlayer::Win::frame` resolves it.
+    pub(crate) w_frame: Option<FrameId>,
     pub w_cursor: Pos,
     pub w_curswant: ColNr,
     /// Whether the next cursor move should recompute `w_curswant` — the

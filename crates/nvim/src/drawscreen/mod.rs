@@ -107,7 +107,7 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame, Handle, Hlf,
+    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Handle, Hlf,
     Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg, ScreenChar, SpellVars,
     VarNumber, VirtText, VirtTextChunk, WindowHandle, int64_t, size_t, uint16_t,
 };

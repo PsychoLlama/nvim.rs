@@ -62,4 +62,3 @@ mod typval_value;
 mod undo;
 mod unpacker;
 mod users;
-mod window;

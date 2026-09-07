@@ -24,7 +24,7 @@ use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::ex_docmd::state::cmdmod;
 use crate::fold::copy_folding_state;
 use crate::mark::copy_jumplist;
-use crate::memory::{xcalloc, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::e_noroom;
 use crate::message::msg_clr_eos_force;
 use crate::message::state::{msg_col, msg_row};
@@ -33,7 +33,7 @@ use crate::option::vars::{p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_w
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Frame, Integer, OptInt, QfInfo};
+use crate::types::{FAIL, Failed, Integer, OptInt, QfInfo};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -86,10 +86,8 @@ pub unsafe fn win_split_ins(
     flags: c_int,
     new_wp: Option<Win>,
     dir: c_int,
-    to_flatten: *mut Frame,
+    to_flatten: Option<FrameRef>,
 ) -> Option<Win> {
-    // SAFETY: the caller's promise -- a live frame or null.
-    let to_flatten = unsafe { FrameRef::from_raw(to_flatten) };
     split_ins(size, flags, new_wp, dir, to_flatten)
 }
 
@@ -551,21 +549,21 @@ fn split_frame(
         let mut inner = new_frame_like(curfrp);
         let mut outer = curfrp;
         outer.fr_layout = layout as c_char;
-        inner.fr_parent = outer.raw();
-        inner.fr_next = ptr::null_mut::<Frame>();
-        inner.fr_prev = ptr::null_mut::<Frame>();
-        outer.fr_child = inner.raw();
-        outer.fr_win = ptr::null_mut::<Window>();
+        inner.fr_parent = Some(outer.id());
+        inner.fr_next = None;
+        inner.fr_prev = None;
+        outer.fr_child = Some(inner.id());
+        outer.fr_win = None;
         curfrp = inner;
         match inner.win() {
             // `oldwin`'s frame moved: it now lives one level down.
             Some(_) => {
                 let mut oldwin = oldwin;
-                oldwin.w_frame = inner.raw();
+                oldwin.w_frame = Some(inner.id());
             }
             None => {
                 for mut child in inner.children() {
-                    child.fr_parent = curfrp.raw();
+                    child.fr_parent = Some(curfrp.id());
                 }
             }
         }
@@ -590,7 +588,7 @@ fn split_frame(
 /// the rest, exactly as the struct assignment copied them, and the caller
 /// rewires them straight afterwards.
 fn new_frame_like(frame: FrameRef) -> FrameRef {
-    let mut copy = attach_frame_raw();
+    let mut copy = new_frame();
     copy.fr_layout = frame.fr_layout;
     copy.fr_width = frame.fr_width;
     copy.fr_newwidth = frame.fr_newwidth;
@@ -602,13 +600,6 @@ fn new_frame_like(frame: FrameRef) -> FrameRef {
     copy.fr_child = frame.fr_child;
     copy.fr_win = frame.fr_win;
     copy
-}
-
-/// A fresh zeroed frame with no window attached.
-fn attach_frame_raw() -> FrameRef {
-    // SAFETY: `xcalloc` aborts rather than answering null; the frame is live
-    // from here on.
-    unsafe { FrameRef::new(xcalloc(1, size_of::<Frame>()).cast::<Frame>()) }
 }
 
 /// Hand out the columns for a `:vsplit`.

@@ -34,7 +34,7 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::e_cmdwin;
 use crate::message::emsg_ptr;
 use crate::mouse::{MousePos, find_win_inner};
@@ -60,7 +60,8 @@ use crate::window::{
 };
 use crate::winlayer::graph::cmdwin_win;
 use crate::winlayer::{
-    Buf, TabPage, Win, WinId, first_window, last_window, windows, windows_back, windows_in_tab,
+    Buf, TabPage, Win, WinId, first_window, free_frame, last_window, windows, windows_back,
+    windows_in_tab,
 };
 use ::libc::qsort;
 
@@ -223,16 +224,13 @@ fn init_window(win: Win) {
 /// Take `win` out of `tabpage`'s frame tree, handing its space to a neighbour. The
 /// direction it answers is unused here, as it is upstream.
 fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
-    let mut dir: c_int = 0;
-
-    unsafe { winframe_remove(win, &raw mut dir, tabpage, ptr::null_mut()) };
+    winframe_remove(win, tabpage, false);
 }
 
 /// `XFREE_CLEAR(wp->w_frame)`.
-fn free_frame(win: &mut Win) {
-    // SAFETY: the frame `remove_from_frame` has just detached.
-    unsafe { xfree(win.w_frame.cast::<c_void>()) };
-    win.w_frame = ptr::null_mut();
+fn release_frame(win: &mut Win) {
+    free_frame(win.frame());
+    win.w_frame = None;
 }
 fn remove_window(win: Win, tabpage: Option<TabPage>) {
     win_remove(win, tabpage);
@@ -438,7 +436,7 @@ fn unfloat_to_float(win: Win, err: &mut Error) -> Option<Win> {
     let tp = win_tp.into_other();
     let mut win = win;
     remove_from_frame(win, tp);
-    free_frame(&mut win);
+    release_frame(&mut win);
     remove_window(win, tp);
     if win_tp.is_current() {
         update_last_status(false); // may need to remove last status line

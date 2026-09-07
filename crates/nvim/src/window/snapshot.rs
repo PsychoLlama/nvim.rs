@@ -12,7 +12,6 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::window_at;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
@@ -21,17 +20,17 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::memory::{xcalloc, xmalloc};
+use crate::memory::xmalloc;
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt};
+use crate::types::{Handle, Integer, LineNr, NUL, OptInt};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
-    Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+    Buf, FrameId, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
 
 // ---------------------------------------------------------------------------
@@ -108,16 +107,9 @@ pub fn reset_lnums() {
 // A snapshot is a frame tree of its own: the same shape, only the sizes and
 // which leaf held `curwin`, and none of its frames is linked into the layout.
 
-/// `tabpage.tp_snapshot[idx]`, borrowed as one slot.
-fn snapshot_slot(tabpage: TabPage, idx: c_int) -> *mut *mut Frame {
-    let mut tabpage = tabpage;
-    &raw mut tabpage.tp_snapshot[idx as usize]
-}
-
 /// The saved frame tree in slot `idx` of `tabpage`, if there is one.
 fn snapshot_of(tabpage: TabPage, idx: c_int) -> Option<FrameRef> {
-    // SAFETY: a saved tree is live until `drop_snapshot` frees it.
-    unsafe { FrameRef::from_raw(tabpage.tp_snapshot[idx as usize]) }
+    tabpage.tp_snapshot[idx as usize].and_then(FrameId::get)
 }
 
 pub fn make_snapshot(idx: c_int) {
@@ -126,33 +118,28 @@ pub fn make_snapshot(idx: c_int) {
 
 /// Save the current layout in slot `idx` of the current tab page.
 pub(crate) fn take_snapshot(idx: c_int) {
-    let tp = TabPage::current();
+    let mut tp = TabPage::current();
     drop_snapshot(tp, idx);
-    make_snapshot_rec(current_topframe(), snapshot_slot(tp, idx));
+    tp.tp_snapshot[idx as usize] = Some(make_snapshot_rec(current_topframe()));
 }
 
-/// Copy `fr` and everything hanging off it into a freshly allocated tree at
-/// `slot`.
-fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut Frame) {
-    // SAFETY: `xcalloc` aborts rather than answering null; `slot` is a field of
-    // a live tab page or of a frame this walk has just allocated.
-    let mut copy = unsafe {
-        let frp = xcalloc(1, size_of::<Frame>()).cast::<Frame>();
-        *slot = frp;
-        FrameRef::new(frp)
-    };
+/// Copy `fr` and everything hanging off it into a freshly allocated tree,
+/// and answer that tree's root.
+///
+/// The copies are registered frames like any other, so a snapshot's links
+/// are the same identities the live tree's are -- which is what lets
+/// [`snapshot_matches`] walk one that a `:diffsplit` later freed.
+fn make_snapshot_rec(fr: FrameRef) -> FrameId {
+    let mut copy = new_frame();
     copy.fr_layout = fr.fr_layout;
     copy.fr_width = fr.fr_width;
     copy.fr_height = fr.fr_height;
-    if let Some(next) = fr.next() {
-        make_snapshot_rec(next, &raw mut copy.fr_next);
-    }
-    if let Some(child) = fr.child() {
-        make_snapshot_rec(child, &raw mut copy.fr_child);
-    }
+    copy.fr_next = fr.next().map(make_snapshot_rec);
+    copy.fr_child = fr.child().map(make_snapshot_rec);
     if fr.fr_layout as c_int == FR_LEAF && fr.win().is_some_and(Win::is_current) {
-        copy.fr_win = Win::current_raw();
+        copy.fr_win = Some(Win::current().id());
     }
+    copy.id()
 }
 
 /// Free the saved tree in slot `idx` of `tabpage`, if there is one.
@@ -161,7 +148,7 @@ pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
     if let Some(fr) = snapshot_of(tabpage, idx) {
         clear_snapshot_rec(fr);
     }
-    tabpage.tp_snapshot[idx as usize] = ptr::null_mut::<Frame>();
+    tabpage.tp_snapshot[idx as usize] = None;
 }
 
 /// Free `fr` and everything hanging off it.
@@ -172,7 +159,7 @@ fn clear_snapshot_rec(fr: FrameRef) {
     if let Some(child) = fr.child() {
         clear_snapshot_rec(child);
     }
-    free(fr.raw());
+    free_frame(fr);
 }
 
 /// The window a saved tree remembers as the current one: the last leaf that
@@ -188,7 +175,7 @@ fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
     {
         return Some(wp);
     }
-    window_at(ft.fr_win)
+    ft.win()
 }
 
 /// The window the snapshot in slot `idx` of the current tab page remembers as
@@ -239,8 +226,10 @@ fn snapshot_matches(sn: FrameRef, fr: FrameRef) -> bool {
     {
         return false;
     }
-    // SAFETY: `win_valid` only compares the saved pointer against the list.
-    sn.fr_win.is_null() || window_at(sn.fr_win).is_some()
+    // The window a saved leaf remembers is still there. An identity, so
+    // this asks about the window rather than about whatever the allocator
+    // has since put at its address -- which is what `window_at` had to do.
+    sn.fr_win.is_none_or(|win| win.get().is_some())
 }
 
 /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
@@ -253,7 +242,7 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
     if fr.fr_layout as c_int == FR_LEAF {
         new_height(fr, fr.fr_height, false, false, false);
         new_width(fr, fr.fr_width, false, false);
-        wp = window_at(sn.fr_win);
+        wp = sn.win();
     }
     if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next()) {
         wp = restore_snapshot_rec(sn_next, fr_next).or(wp);

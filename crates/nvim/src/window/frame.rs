@@ -19,10 +19,9 @@ use super::*;
 use crate::guard::Lock;
 use crate::option::vars::{p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
-use crate::types::Frame;
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::graph::{cmdline_win, first_tabpage};
-use crate::winlayer::{FrameRef, TabPage, Win, tabs};
+use crate::winlayer::{FrameId, FrameRef, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
 /// the C's `wp`, `*altfr` and `*dirp` out-parameters as one value.
@@ -44,9 +43,9 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
         (unsafe { win_float_find_altwin(win, tabpage) }, 'h' as c_int)
     } else {
         let frp = win.frame();
-        let (wp, dir) = remove(win, tabpage, None);
-        free(frp.raw());
-        (wp, dir)
+        let removed = winframe_remove(win, tabpage, false);
+        free_frame(frp);
+        (removed.win, removed.dir)
     };
     win_free(win, tabpage);
     // `win` is gone, but the handle carries its identity, so the two
@@ -60,37 +59,32 @@ pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_in
     (wp, dir)
 }
 
-pub unsafe fn winframe_remove(
-    win: Win,
-    dirp: *mut c_int,
-    tabpage: Option<TabPage>,
-    unflat_altfr: *mut *mut Frame,
-) -> Option<Win> {
-    // SAFETY: the caller's promise -- a live window, a live tab page or null,
-    // and writable out-parameters (`unflat_altfr` may be null).
-    unsafe {
-        // `then_some` would form the reference before testing the pointer.
-        let unflat = unflat_altfr.as_mut();
-        let (wp, dir) = remove(win, tabpage, unflat);
-        *dirp = dir;
-        wp
-    }
+/// What taking a window's frame out of the tree left behind: the C's
+/// `wp` return, `*dirp` and `*unflat_altfr` as one value.
+pub(crate) struct Removed {
+    /// The window the caller should go to, `None` when `win` was the only one.
+    pub win: Option<Win>,
+    /// `'v'` when the room was given away vertically, `'h'` horizontally.
+    pub dir: c_int,
+    /// The frame that grew, left *unflattened* so [`winframe_restore`] can
+    /// undo the whole thing. Only when the caller asked to keep it — and an
+    /// identity, because the caller holds it across a `win_split_ins` that
+    /// can free frames.
+    pub unflat: Option<FrameId>,
 }
 
 /// Take `win`'s frame out of the layout tree and give its room to a
 /// neighbour, from `winframe_remove()`.
 ///
-/// With `unflat_altfr` the frame that grew is handed back *unflattened*, so
-/// [`winframe_restore`] can undo the whole thing; without it the tree is
-/// tidied here. Answers the window the caller should go to, and by which axis
-/// the room moved.
-fn remove(
-    win: Win,
-    tabpage: Option<TabPage>,
-    unflat_altfr: Option<&mut *mut Frame>,
-) -> (Option<Win>, c_int) {
+/// With `keep_unflat` the frame that grew is handed back unflattened;
+/// without it the tree is tidied here.
+pub(crate) fn winframe_remove(win: Win, tabpage: Option<TabPage>, keep_unflat: bool) -> Removed {
     let Some(alt) = find_altwin(win, tabpage) else {
-        return (None, 0);
+        return Removed {
+            win: None,
+            dir: 0,
+            unflat: None,
+        };
     };
     let frp_close = win.frame();
     let _locked = Lock::held(&frame_locked);
@@ -122,28 +116,16 @@ fn remove(
     if Some(altfr) != frp_close.prev() {
         comp_pos(parent, &mut row, &mut col);
     }
-    match unflat_altfr {
-        None => flatten(altfr),
-        Some(slot) => *slot = altfr.raw(),
-    }
-    (Some(alt.win), alt.dir)
-}
-
-pub unsafe fn winframe_find_altwin(
-    win: Win,
-    dirp: *mut c_int,
-    tabpage: Option<TabPage>,
-    altfr: *mut *mut Frame,
-) -> Option<Win> {
-    // SAFETY: the caller's promise -- a live window, a live tab page or null,
-    // and writable out-parameters (`altfr` may be null).
-    unsafe {
-        let alt = find_altwin(win, tabpage)?;
-        *dirp = alt.dir;
-        if !altfr.is_null() {
-            *altfr = alt.frame.raw();
-        }
-        Some(alt.win)
+    let unflat = if keep_unflat {
+        Some(altfr.id())
+    } else {
+        flatten(altfr);
+        None
+    };
+    Removed {
+        win: Some(alt.win),
+        dir: alt.dir,
+        unflat,
     }
 }
 
@@ -236,17 +218,17 @@ pub(crate) fn flatten(frp: FrameRef) {
     parent.fr_layout = frp.fr_layout;
     parent.fr_child = frp.fr_child;
     for mut child in frp.children() {
-        child.fr_parent = parent.raw();
+        child.fr_parent = Some(parent.id());
     }
     parent.fr_win = frp.fr_win;
     if let Some(mut win) = frp.win() {
-        win.w_frame = parent.raw();
+        win.w_frame = Some(parent.id());
     }
     let mut top = current_topframe();
-    if top.fr_child == frp.raw() {
-        top.fr_child = parent.raw();
+    if top.fr_child == Some(frp.id()) {
+        top.fr_child = Some(parent.id());
     }
-    free(frp.raw());
+    free_frame(frp);
 
     // Now `parent` may have the same layout as *its* parent, in which case its
     // children move up a level and it goes too.
@@ -256,42 +238,36 @@ pub(crate) fn flatten(frp: FrameRef) {
     if grand.fr_layout != parent.fr_layout {
         return;
     }
-    if grand.fr_child == parent.raw() {
+    if grand.fr_child == Some(parent.id()) {
         grand.fr_child = parent.fr_child;
     }
     let first = parent.child().expect("frp2->fr_child");
     let mut first = first;
     first.fr_prev = parent.fr_prev;
     if let Some(mut before) = parent.prev() {
-        before.fr_next = first.raw();
+        before.fr_next = Some(first.id());
     }
     let mut child = first;
     loop {
-        child.fr_parent = grand.raw();
+        child.fr_parent = Some(grand.id());
         let Some(next) = child.next() else {
             child.fr_next = parent.fr_next;
             if let Some(mut after) = parent.next() {
-                after.fr_prev = child.raw();
+                after.fr_prev = Some(child.id());
             }
             break;
         };
         child = next;
     }
-    if top.fr_child == parent.raw() {
-        top.fr_child = grand.raw();
+    if top.fr_child == Some(parent.id()) {
+        top.fr_child = Some(grand.id());
     }
-    free(parent.raw());
+    free_frame(parent);
 }
 
-pub unsafe fn winframe_restore(window: Win, dir: c_int, unflat_altfr: *mut Frame) {
-    // SAFETY: the caller's promise -- a live window and the live frame
-    // `winframe_remove` handed back unflattened.
-    unsafe { restore(window, dir, FrameRef::new(unflat_altfr)) };
-}
-
-/// Undo a [`remove`] that was told to leave the tree unflattened: link `window`'s
-/// frame back in and take its room off the frame that grew into it.
-fn restore(window: Win, dir: c_int, unflat_altfr: FrameRef) {
+/// Undo a [`winframe_remove`] that was told to leave the tree unflattened:
+/// link `window`'s frame back in and take its room off the frame that grew.
+pub(crate) fn winframe_restore(window: Win, dir: c_int, unflat_altfr: FrameRef) {
     let frp = window.frame();
     // Restore the lists of frames the window was in.
     match frp.prev() {

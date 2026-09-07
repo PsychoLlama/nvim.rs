@@ -70,11 +70,12 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
-    check_colorcolumn, command_height, frame_new_height, global_stl_height, last_status, min_rows,
+    check_colorcolumn, command_height, global_stl_height, last_status, min_rows, new_height,
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
-use crate::winlayer::graph::{firstwin, lastwin, topframe};
+use crate::winlayer::current_topframe;
+use crate::winlayer::graph::{firstwin, lastwin};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,
@@ -247,7 +248,7 @@ pub(crate) unsafe fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
         p_ch.set(room);
     }
     let laid_out =
-        (tabline_height() + global_stl_height() + unsafe { (*topframe.get()).fr_height }) as OptInt;
+        (tabline_height() + global_stl_height() + current_topframe().fr_height) as OptInt;
     if (p_ch.get() != old_value || laid_out != Rows.get() as OptInt - p_ch.get())
         && full_screen.get()
     {
@@ -364,15 +365,26 @@ pub(crate) unsafe fn did_set_laststatus(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest is the window layout.
     let f = unsafe { Frame::read(args) };
     let (old_value, value) = (f.old_number(), f.new_number());
+    let top = current_topframe();
     if value == 3 && old_value != 3 {
-        let height = unsafe { (*topframe.get()).fr_height } - STATUS_HEIGHT as c_int;
-        unsafe { frame_new_height(topframe.get(), height, false, false, false) };
+        new_height(
+            top,
+            top.fr_height - STATUS_HEIGHT as c_int,
+            false,
+            false,
+            false,
+        );
         win_comp_pos();
         clear_cmdline.set(true);
     }
     if old_value == 3 && value != 3 {
-        let height = unsafe { (*topframe.get()).fr_height } + STATUS_HEIGHT as c_int;
-        unsafe { frame_new_height(topframe.get(), height, false, false, false) };
+        new_height(
+            top,
+            top.fr_height + STATUS_HEIGHT as c_int,
+            false,
+            false,
+            false,
+        );
         win_comp_pos();
     }
     status_redraw_curbuf();

@@ -16,7 +16,7 @@ use super::*;
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::kOptCmdheight;
-use crate::types::{Frame, OptInt, OptVal, OptionSetFlags};
+use crate::types::{OptInt, OptVal, OptionSetFlags};
 use crate::ui::state::Rows;
 use crate::winlayer::{FrameRef, Win};
 
@@ -34,7 +34,7 @@ fn height_opts() -> MinSize {
     MinSize {
         wanted: p_wh.get() as ::core::ffi::c_int,
         minimum: p_wmh.get() as ::core::ffi::c_int,
-        curwin: Win::current_raw(),
+        curwin: Win::current_or_none().map(Win::id),
     }
 }
 
@@ -43,7 +43,7 @@ fn width_opts() -> MinSize {
     MinSize {
         wanted: p_wiw.get() as ::core::ffi::c_int,
         minimum: p_wmw.get() as ::core::ffi::c_int,
-        curwin: Win::current_raw(),
+        curwin: Win::current_or_none().map(Win::id),
     }
 }
 
@@ -172,23 +172,6 @@ fn step_over_fixed(frp: FrameRef, topfirst: bool, wfh: bool) -> Option<FrameRef>
         next = if topfirst { next?.next() } else { next?.prev() };
     }
     next
-}
-
-pub unsafe fn frame_new_height(
-    topfrp: *mut Frame,
-    height: ::core::ffi::c_int,
-    topfirst: bool,
-    wfh: bool,
-    set_ch: bool,
-) {
-    // SAFETY: the caller's promise -- a live frame.
-    new_height(
-        unsafe { FrameRef::new(topfrp) },
-        height,
-        topfirst,
-        wfh,
-        set_ch,
-    );
 }
 
 /// Whether `frp` may not be given a new height: a leaf whose window has

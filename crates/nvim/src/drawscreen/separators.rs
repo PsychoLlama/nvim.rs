@@ -101,22 +101,16 @@ pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
 ///
 /// Answers `None` when the walk reaches the root without finding a sibling, i.e.
 /// when there is no neighbour on that side.
-///
-/// # Safety
-/// `window` must be a live window of the current layout.
-unsafe fn neighbour_frame(window: Win, layout: c_int, before: bool) -> Option<*mut Frame> {
-    // SAFETY: walking the window layout tree on the main thread.
-    let mut fr = window.w_frame;
-    while !unsafe { (*fr).fr_parent }.is_null() {
-        let sibling = if before {
-            unsafe { (*fr).fr_prev }
-        } else {
-            unsafe { (*fr).fr_next }
-        };
-        if unsafe { (*(*fr).fr_parent).fr_layout } as c_int == layout && !sibling.is_null() {
+fn neighbour_frame(window: Win, layout: c_int, before: bool) -> Option<FrameRef> {
+    let mut fr = window.frame();
+    while let Some(parent) = fr.parent() {
+        let sibling = if before { fr.prev() } else { fr.next() };
+        if c_int::from(parent.fr_layout) == layout
+            && let Some(sibling) = sibling
+        {
             return Some(sibling);
         }
-        fr = unsafe { (*fr).fr_parent };
+        fr = parent;
     }
     None
 }
@@ -135,9 +129,7 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
         unsafe { win_endrow(window) }
     };
 
-    // SAFETY: walking the layout tree of the caller's live window.
-    let neighbour = unsafe { neighbour_frame(window, FR_ROW, before) };
-    let Some(mut fr) = neighbour else {
+    let Some(mut fr) = neighbour_frame(window, FR_ROW, before) else {
         return false;
     };
 
@@ -145,24 +137,20 @@ pub(crate) unsafe fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     // left, the frame that touches it is the LAST child of every row frame
     // on the way down; otherwise it is the first child whose bottom edge
     // reaches the row.
-    while unsafe { (*fr).fr_layout } as c_int != FR_LEAF {
-        fr = unsafe { (*fr).fr_child };
-        if unsafe { (*(*fr).fr_parent).fr_layout } as c_int == FR_ROW && before {
-            while !unsafe { (*fr).fr_next }.is_null() {
-                fr = unsafe { (*fr).fr_next };
+    while c_int::from(fr.fr_layout) != FR_LEAF {
+        fr = fr.child().expect("a frame that is not a leaf has a child");
+        let rowwise = fr
+            .parent()
+            .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_ROW);
+        while let Some(next) = fr.next() {
+            if !(rowwise && before) && frame2window(fr).w_winrow + fr.fr_height >= sep_row {
+                break;
             }
-        } else {
-            while !unsafe { (*fr).fr_next }.is_null()
-                && unsafe { frame2window(FrameRef::new(fr)) }.w_winrow + unsafe { (*fr).fr_height }
-                    < sep_row
-            {
-                fr = unsafe { (*fr).fr_next };
-            }
+            fr = next;
         }
     }
 
-    // SAFETY: a leaf frame's window is live.
-    let other = unsafe { Win::new((*fr).fr_win) };
+    let other = fr.win().expect("a leaf frame holds a window");
     sep_row == other.w_winrow - 1 || sep_row == unsafe { win_endrow(other) }
 }
 
@@ -179,30 +167,24 @@ pub(crate) unsafe fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
         unsafe { win_endcol(window) }
     };
 
-    // SAFETY: walking the layout tree of the caller's live window.
-    let neighbour = unsafe { neighbour_frame(window, FR_COL, before) };
-    let Some(mut fr) = neighbour else {
+    let Some(mut fr) = neighbour_frame(window, FR_COL, before) else {
         return false;
     };
 
-    while unsafe { (*fr).fr_layout } as c_int != FR_LEAF {
-        fr = unsafe { (*fr).fr_child };
-        if unsafe { (*(*fr).fr_parent).fr_layout } as c_int == FR_COL && before {
-            while !unsafe { (*fr).fr_next }.is_null() {
-                fr = unsafe { (*fr).fr_next };
+    while c_int::from(fr.fr_layout) != FR_LEAF {
+        fr = fr.child().expect("a frame that is not a leaf has a child");
+        let colwise = fr
+            .parent()
+            .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_COL);
+        while let Some(next) = fr.next() {
+            if !(colwise && before) && frame2window(fr).w_wincol + fr.fr_width >= sep_col {
+                break;
             }
-        } else {
-            while !unsafe { (*fr).fr_next }.is_null()
-                && unsafe { frame2window(FrameRef::new(fr)) }.w_wincol + unsafe { (*fr).fr_width }
-                    < sep_col
-            {
-                fr = unsafe { (*fr).fr_next };
-            }
+            fr = next;
         }
     }
 
-    // SAFETY: a leaf frame's window is live.
-    let other = unsafe { Win::new((*fr).fr_win) };
+    let other = fr.win().expect("a leaf frame holds a window");
     sep_col == other.w_wincol - 1 || sep_col == unsafe { win_endcol(other) }
 }
 
@@ -283,8 +265,8 @@ pub(crate) unsafe fn draw_sep_connectors_win(window: Win) {
     // relevant direction; right and bottom are simply "no separator there".
     let at_bottom = window.w_hsep_height == 0;
     let at_right = window.w_vsep_width == 0;
-    let at_top = unsafe { neighbour_frame(window, FR_COL, true) }.is_none();
-    let at_left = unsafe { neighbour_frame(window, FR_ROW, true) }.is_none();
+    let at_top = neighbour_frame(window, FR_COL, true).is_none();
+    let at_left = neighbour_frame(window, FR_ROW, true).is_none();
 
     let top = window.w_winrow - 1;
     let bottom = unsafe { win_endrow(window) };

@@ -68,12 +68,15 @@ use crate::types::{
     Handle, MotionType, OptInt, WinSplit, WinStyle, Window, kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
-use crate::winlayer::graph::{first_tabpage, firstwin, lastwin, topframe};
-use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
+use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
+use crate::winlayer::{
+    Buf, FrameRef, TabPage, Win, current_topframe, free_frame, new_frame, tab_windows, windows,
+    windows_in_tab,
+};
 
 // The carve of the transpiled module; see each child's docs.
 mod alloc;
-pub mod arith;
+pub(crate) mod arith;
 mod close;
 mod cmd;
 mod config;
@@ -95,8 +98,8 @@ pub use self::close::*;
 pub use self::cmd::*;
 pub use self::config::*;
 pub use self::equal::*;
-pub use self::frame::*;
-pub use self::framesize::*;
+pub(crate) use self::frame::*;
+pub(crate) use self::framesize::*;
 pub use self::goto::*;
 pub use self::order::*;
 pub use self::resize::*;
@@ -397,12 +400,6 @@ fn is_autocmd_window(win: Option<Win>) -> bool {
 fn free<T>(raw: *mut T) {
     // SAFETY: every caller passes a pointer from the `xmalloc` family, or null.
     unsafe { xfree(raw as *mut ::core::ffi::c_void) };
-}
-
-/// The root of the current tab page's layout tree.
-fn current_topframe() -> FrameRef {
-    // SAFETY: `topframe` is set from startup to exit.
-    unsafe { FrameRef::new(topframe.get()) }
 }
 
 /// The first window of the current tab page.

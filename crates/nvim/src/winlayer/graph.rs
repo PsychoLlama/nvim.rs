@@ -33,9 +33,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{Buf, BufId, TabId, TabPage, Win, WinId};
+use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::global_cell::GlobalCell;
-use crate::types::{Buffer, Frame, Tabpage, Window};
+use crate::types::{Buffer, Tabpage, Window};
 use core::ffi::c_int;
 
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -50,8 +50,9 @@ pub(crate) static prevwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 /// registry lookup. Nothing but the funnel below writes it.
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub(crate) static topframe: GlobalCell<*mut Frame> =
-    GlobalCell::new(::core::ptr::null_mut::<Frame>());
+/// The root of the current tab page's layout tree, mirroring
+/// `tp_topframe`. An identity, as the tree's own links are.
+pub(crate) static topframe: GlobalCell<Option<FrameId>> = GlobalCell::new(None);
 pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 /// The current tab page's address, mirroring [`CURRENT_TAB`]. [`curwin`],
 /// minus the symbol: only [`TabPage::is_current`] reads it.

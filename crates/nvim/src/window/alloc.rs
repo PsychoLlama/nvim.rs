@@ -39,8 +39,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Frame, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig,
-    WinInfo, WinOpt, Window,
+    Error, Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo,
+    WinOpt, Window,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
@@ -78,6 +78,30 @@ fn zeroed_window() -> Win {
         (&raw mut (*wp).w_ns_set).write(id_set());
         Win::new(wp)
     }
+}
+
+/// A registered window with nothing in it but zeroed fields: [`win_alloc`]'s
+/// first three lines and none of its body.
+///
+/// For `arith`'s tests, which build layout trees of their own. A window that
+/// is registered is one a [`FrameRef`] can name, and `fr_win` is a handle —
+/// so a frame tree over unregistered windows would read as a tree of empty
+/// leaves. Nothing here allocates a dictionary, a fold array or a grid
+/// handle, so [`free_bare_window`] is a `forget` and an `xfree`.
+#[cfg(test)]
+pub(crate) fn bare_window() -> Win {
+    let mut win = zeroed_window();
+    last_win_id.set(last_win_id.get() + 1);
+    win.set_handle(last_win_id.get() as Handle);
+    register_window(win);
+    win
+}
+
+/// Give back what [`bare_window`] made.
+#[cfg(test)]
+pub(crate) fn free_bare_window(win: Win) {
+    forget_window(win.handle());
+    free(win.raw());
 }
 
 /// Free a window's option block and the folds saved with it.
@@ -148,7 +172,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
         }
     }
     let mut frame = attach_frame(win);
-    topframe.set(frame.raw());
+    topframe.set(Some(frame.id()));
     frame.fr_width = Columns.get();
     frame.fr_height = Rows.get() - p_ch.get() as c_int - global_stl_rows();
     Ok(())
@@ -157,11 +181,10 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 /// Give `window` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(window: Win) -> FrameRef {
     let mut window = window;
-    // SAFETY: a fresh zeroed `Frame`, which is live from here on.
-    let mut frp = unsafe { FrameRef::new(zeroed::<Frame>()) };
-    window.w_frame = frp.raw();
+    let mut frp = new_frame();
+    window.w_frame = Some(frp.id());
     frp.fr_layout = FR_LEAF as c_char;
-    frp.fr_win = window.raw();
+    frp.fr_win = Some(window.id());
     frp
 }
 
@@ -484,24 +507,24 @@ fn sync_tab_last(tabpage: Option<TabPage>, window: Option<WinId>) {
 pub(crate) fn frame_append(after: FrameRef, frp: FrameRef) {
     let (mut after, mut frp) = (after, frp);
     frp.fr_next = after.fr_next;
-    after.fr_next = frp.raw();
+    after.fr_next = Some(frp.id());
     if let Some(mut next) = frp.next() {
-        next.fr_prev = frp.raw();
+        next.fr_prev = Some(frp.id());
     }
-    frp.fr_prev = after.raw();
+    frp.fr_prev = Some(after.id());
 }
 
 /// Link `frp` in before `before` in its row or column.
 pub(crate) fn frame_insert(before: FrameRef, frp: FrameRef) {
     let (mut before, mut frp) = (before, frp);
-    frp.fr_next = before.raw();
+    frp.fr_next = Some(before.id());
     frp.fr_prev = before.fr_prev;
-    before.fr_prev = frp.raw();
+    before.fr_prev = Some(frp.id());
     match frp.prev() {
-        Some(mut prev) => prev.fr_next = frp.raw(),
+        Some(mut prev) => prev.fr_next = Some(frp.id()),
         None => {
             let mut parent = frp.parent().expect("a linked frame has a parent");
-            parent.fr_child = frp.raw();
+            parent.fr_child = Some(frp.id());
         }
     }
 }

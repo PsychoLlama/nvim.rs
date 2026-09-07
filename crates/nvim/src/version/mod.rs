@@ -38,8 +38,8 @@ use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
+use crate::winlayer::current_topframe;
 use crate::winlayer::first_window;
-use crate::winlayer::graph::topframe;
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
@@ -468,7 +468,7 @@ pub(crate) unsafe fn intro_message(colon: bool) {
     // above the version costs.
     let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
     if p_ls.get() > 1 as OptInt {
-        blanklines -= Rows.get() - unsafe { (*topframe.get()).fr_height };
+        blanklines -= Rows.get() - current_topframe().fr_height;
     }
     let top = blanklines.max(0) / 2;
     if !(top >= 2 && Columns.get() >= 50 || colon) {

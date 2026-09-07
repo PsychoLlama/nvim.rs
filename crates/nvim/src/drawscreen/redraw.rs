@@ -17,6 +17,7 @@ use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::types::StlSyntax;
 use crate::winlayer::Buf;
+use crate::winlayer::FrameRef;
 use crate::winlayer::Win;
 
 /// Mark the title and icon for redraw if either of them uses statusline format.
@@ -290,24 +291,21 @@ pub unsafe fn redraw_statuslines() {
 /// Mark the status lines at the bottom of frame `frp`.
 ///
 /// One per column of a row frame; the last one of a column frame.
-pub unsafe fn win_redraw_last_status(frp: *const Frame) {
-    // SAFETY: a live frame of the window layout tree, walked on the main thread.
-    match unsafe { (*frp).fr_layout } as c_int {
-        FR_LEAF => unsafe { (*(*frp).fr_win).w_redr_status = true },
+pub fn win_redraw_last_status(frp: FrameRef) {
+    match c_int::from(frp.fr_layout) {
+        FR_LEAF => {
+            let mut win = frp.win().expect("a leaf frame holds a window");
+            win.w_redr_status = true;
+        }
         FR_ROW => {
-            let mut child = unsafe { (*frp).fr_child };
-            while !child.is_null() {
-                unsafe { win_redraw_last_status(child) };
-                child = unsafe { (*child).fr_next };
+            for child in frp.children() {
+                win_redraw_last_status(child);
             }
         }
         layout => {
             debug_assert!(layout == FR_COL, "frp->fr_layout == FR_COL");
-            let mut last = unsafe { (*frp).fr_child };
-            while !unsafe { (*last).fr_next }.is_null() {
-                last = unsafe { (*last).fr_next };
-            }
-            unsafe { win_redraw_last_status(last) };
+            let last = frp.children().last().expect("a column frame has a child");
+            win_redraw_last_status(last);
         }
     }
 }

@@ -29,7 +29,6 @@ use crate::os::env::home_replace;
 use crate::types::MAXPATHL;
 use crate::types::ui::kUIWildmenu;
 use crate::ui::ui_has;
-use crate::winlayer::FrameRef;
 
 /// Redraw the status line of window `window`.
 ///
@@ -94,8 +93,7 @@ pub unsafe fn win_redr_status(window: Win) {
 /// # Safety
 /// `window` must be a live window.
 pub unsafe fn stl_connected(window: Win) -> bool {
-    // SAFETY: the caller's promise; a live window has a live frame.
-    let mut fr = unsafe { FrameRef::new(window.w_frame) };
+    let mut fr = window.frame();
     while let Some(parent) = fr.parent() {
         if c_int::from(parent.fr_layout) == FR_COL {
             // A row below this one ends the run.

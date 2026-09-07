@@ -14,7 +14,6 @@
 
 use crate::winlayer::Buf;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
@@ -25,9 +24,9 @@ use crate::message::e_floatexchange;
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
-use crate::types::{FAIL, Failed, Frame, OptInt};
+use crate::types::{FAIL, Failed, OptInt};
 use crate::winlayer::graph::lastwin;
-use crate::winlayer::{FrameRef, Win, frames};
+use crate::winlayer::{FrameId, FrameRef, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     let cur = Win::current();
@@ -260,28 +259,29 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     }
 
     let mut dir = 0;
-    let mut unflat_altfr = ptr::null_mut::<Frame>();
+    let mut unflat_altfr = None;
     if window.w_floating {
         win_remove(window, None);
     } else {
         // Remove the window and frame from the tree of frames, but leave the
         // altframe unflattened so a failure can be undone.
-        let (d, alt) = (&raw mut dir, &raw mut unflat_altfr);
-        // SAFETY: a live window, and two out-parameters we own.
-        unsafe { winframe_remove(window, d, TabPage::from_raw(ptr::null_mut()), alt) };
-        debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
+        let removed = winframe_remove(window, None, true);
+        (dir, unflat_altfr) = (removed.dir, removed.unflat);
+        debug_assert!(unflat_altfr.is_some(), "unflat_altfr != NULL");
         win_remove(window, None);
         last_status(false);
         comp_positions();
     }
 
-    // SAFETY: a live window and the unflattened frame from above.
-    if unsafe { win_split_ins(size, flags, Some(window), dir, unflat_altfr) }.is_none() {
+    // The unflattened frame from above, still there: nothing between the two
+    // can free it.
+    let unflat = unflat_altfr.and_then(FrameId::get);
+    // SAFETY: a live window.
+    if unsafe { win_split_ins(size, flags, Some(window), dir, unflat) }.is_none() {
         // Restore the window to its original position.
         if !window.w_floating {
-            debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
-            // SAFETY: as above.
-            unsafe { winframe_restore(window, dir, unflat_altfr) };
+            let unflat = unflat.expect("unflat_altfr != NULL");
+            winframe_restore(window, dir, unflat);
         }
         win_append(window.prev(), window, None);
         return Err(Failed);

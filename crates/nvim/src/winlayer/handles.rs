@@ -40,8 +40,8 @@ use crate::allocator::Owned;
 use crate::buffer::free;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
-use crate::types::{Buffer, Handle, Tabpage, Window};
-use crate::winlayer::{Buf, TabPage, Win};
+use crate::types::{Buffer, Frame, Handle, Tabpage, Window};
+use crate::winlayer::{Buf, FrameRef, TabPage, Win};
 
 /// Every live window, by handle.
 static WINDOWS: GlobalCell<HandleRegistry<Window>> = GlobalCell::new(HandleRegistry::new());
@@ -51,6 +51,16 @@ static BUFFERS: GlobalCell<OwnedRegistry<Buffer>> = GlobalCell::new(OwnedRegistr
 
 /// Every live tab page, by handle. The registry **owns** them.
 static TABPAGES: GlobalCell<OwnedRegistry<Tabpage>> = GlobalCell::new(OwnedRegistry::new());
+
+/// Every live frame, by handle. The registry **owns** them.
+///
+/// Frames have no handle of their own upstream -- they are reached only by
+/// pointer, out of `w_frame`, `tp_topframe`, `tp_snapshot` and each other --
+/// and that is exactly why they needed one: `winframe_remove` frees a frame
+/// under whoever was holding it, and `close_windows` frees the whole subtree.
+/// The registry also holds the *snapshot* trees, which are frames by every
+/// other measure and are freed a `:diffsplit` later.
+static FRAMES: GlobalCell<OwnedRegistry<Frame>> = GlobalCell::new(OwnedRegistry::new());
 
 /// The window `handle` names, `None` once it has been closed.
 #[inline]
@@ -79,6 +89,15 @@ pub(crate) fn tabpage(handle: Handle) -> Option<TabPage> {
     TABPAGES
         .with(|reg| reg.get(handle))
         .map(|raw| TabPage::at(raw, handle))
+}
+
+/// The frame `handle` names, `None` once it has been freed.
+#[inline]
+pub(crate) fn frame(handle: Handle) -> Option<FrameRef> {
+    // As [`window`].
+    FRAMES
+        .with(|reg| reg.get(handle))
+        .map(|raw| FrameRef::at(raw, handle))
 }
 
 /// Record `win` as the live window its handle names.
@@ -129,6 +148,18 @@ pub(crate) fn register_tabpage(handle: Handle, tabpage: Owned<Tabpage>) -> TabPa
 #[must_use = "dropping the answer is the free; ignoring it leaks the tab page"]
 pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<Tabpage>> {
     TABPAGES.with_mut(|reg| reg.forget(handle))
+}
+
+/// [`register_buffer`] for a frame. `handle` is the number
+/// `window::new_frame` took from the frame counter and wrote into it.
+pub(crate) fn register_frame(handle: Handle, frame: Owned<Frame>) -> FrameRef {
+    FrameRef::at(FRAMES.with_mut(|reg| reg.register(handle, frame)), handle)
+}
+
+/// [`forget_buffer`] for a frame.
+#[must_use = "dropping the answer is the free; ignoring it leaks the frame"]
+pub(crate) fn forget_frame(handle: Handle) -> Option<Owned<Frame>> {
+    FRAMES.with_mut(|reg| reg.forget(handle))
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +263,17 @@ pub struct BufId(pub(super) NonZero<Handle>);
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct TabId(pub(super) NonZero<Handle>);
 
+/// A frame's identity, taken from a live frame. [`WinId`].
+///
+/// This is what the layout tree's own links are made of. A frame is freed
+/// under its holders all the time -- `winframe_remove` frees the leaf whose
+/// window is closing and `flatten` frees the parent it collapses -- so the
+/// links, `w_frame`, `tp_topframe` and `tp_snapshot` all name a frame by
+/// identity, and a walk that arrives at a freed one reads `None` rather than
+/// whatever the allocator has since put there.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct FrameId(pub(super) NonZero<Handle>);
+
 impl WinId {
     /// The window again, `None` once it has been freed.
     ///
@@ -294,6 +336,14 @@ impl TabId {
     }
 }
 
+impl FrameId {
+    /// The frame again, `None` once it has been freed. [`WinId::get`].
+    #[inline(always)]
+    pub(crate) fn get(self) -> Option<FrameRef> {
+        frame(self.0.get())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +361,6 @@ mod tests {
         assert_eq!(size_of::<Option<WinId>>(), size_of::<Handle>());
         assert_eq!(size_of::<Option<BufId>>(), size_of::<Handle>());
         assert_eq!(size_of::<Option<TabId>>(), size_of::<Handle>());
+        assert_eq!(size_of::<Option<FrameId>>(), size_of::<Handle>());
     }
 }

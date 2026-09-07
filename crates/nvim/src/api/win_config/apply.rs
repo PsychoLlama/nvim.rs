@@ -11,7 +11,7 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::winlayer::{TabPage, Win};
+use crate::winlayer::{FrameId, FrameRef, TabPage, Win};
 
 /// `None` for "the current tab page", which is how the window family spells
 /// it throughout.
@@ -27,21 +27,12 @@ fn expect_tab(tabpage: Option<TabPage>) -> TabPage {
 }
 
 /// How many frames sit in `frame`'s row or column, `frame` included.
-///
-/// # Safety
-/// `frame` must be a live frame.
-unsafe fn sibling_count(frame: *mut Frame) -> ::core::ffi::c_int {
-    // SAFETY: the caller's frame, whose `fr_child`/`fr_next` links are live
-    // frames or null.
-    let first = unsafe { (*frame).fr_child };
-    let mut n = 0;
-    let mut fr = first;
-    while !fr.is_null() {
-        n += 1;
-        // SAFETY: as above.
-        fr = unsafe { (*fr).fr_next };
-    }
-    n
+fn sibling_count(frame: FrameRef) -> ::core::ffi::c_int {
+    frame
+        .children()
+        .count()
+        .try_into()
+        .expect("a row holds fewer frames than an int can count")
 }
 
 /// Apply the split half of `fconfig` to `win`: make it a split, move it to
@@ -124,7 +115,9 @@ unsafe fn win_config_split(
         let to_split_ok;
         let curwin_moving_tp = win == Win::current() && parent.is_some() && win_tp != parent_tp;
         let mut dir: ::core::ffi::c_int = 0;
-        let mut unflat_altfr: *mut Frame = ::core::ptr::null_mut::<Frame>();
+        // The frame `winframe_remove` left unflattened, as an identity: it is
+        // held across the `win_split_ins` below, which can free frames.
+        let mut unflat_altfr: Option<FrameId> = None;
         let altwin_0: Option<Win>;
         '_restore_curwin: {
             if curwin_moving_tp {
@@ -157,24 +150,20 @@ unsafe fn win_config_split(
                 }
             }
             if was_split {
-                // SAFETY: a non-floating window sits in a frame of the layout
-                // tree.
-                let frame = win.w_frame;
-                // SAFETY: as above.
-                if unsafe { (*frame).fr_parent }.is_null() {
+                // A non-floating window sits in a frame of the layout tree.
+                let frame = win.frame();
+                let Some(parent_frame) = frame.parent() else {
                     let msg = c"Cannot move last non-floating window";
                     err_msg(err, kErrorTypeException, msg);
                     break '_restore_curwin;
-                }
+                };
                 // SAFETY: both windows are live.
                 let into_itself = parent.is_some_and(|p| p.handle == win.handle);
                 if into_itself {
-                    // SAFETY: the frame's parent is live -- checked above.
-                    let n_frames = unsafe { sibling_count((*frame).fr_parent) };
+                    let n_frames = sibling_count(parent_frame);
                     let mut neighbor: Option<Win> = None;
                     if n_frames > 2 {
-                        // SAFETY: as above.
-                        let nested = !unsafe { (*(*frame).fr_parent).fr_parent }.is_null();
+                        let nested = parent_frame.parent().is_some();
                         let win_tp = expect_tab(win_tp);
                         if nested {
                             let ahead =
@@ -182,27 +171,12 @@ unsafe fn win_config_split(
                             let live = w;
                             neighbor = if ahead { live.next() } else { live.prev() };
                         }
-                        // SAFETY: the caller's window, and `dir`/`unflat_altfr`
-                        // are this frame's own.
-                        altwin_0 = unsafe {
-                            winframe_remove(
-                                w,
-                                &raw mut dir,
-                                other_tab(win_tp),
-                                &raw mut unflat_altfr,
-                            )
-                        };
+                        let removed = winframe_remove(w, other_tab(win_tp), true);
+                        (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
                     } else if n_frames == 2 {
                         let win_tp = expect_tab(win_tp);
-                        // SAFETY: as above.
-                        altwin_0 = unsafe {
-                            winframe_remove(
-                                w,
-                                &raw mut dir,
-                                other_tab(win_tp),
-                                &raw mut unflat_altfr,
-                            )
-                        };
+                        let removed = winframe_remove(w, other_tab(win_tp), true);
+                        (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
                         neighbor = altwin_0;
                     } else {
                         let msg = c"Cannot split window into itself";
@@ -215,10 +189,8 @@ unsafe fn win_config_split(
                     parent_id = neighbor.map(Win::id);
                 } else {
                     let win_tp = expect_tab(win_tp);
-                    // SAFETY: `dir` and `unflat_altfr` are this frame's own.
-                    altwin_0 = unsafe {
-                        winframe_remove(w, &raw mut dir, other_tab(win_tp), &raw mut unflat_altfr)
-                    };
+                    let removed = winframe_remove(w, other_tab(win_tp), true);
+                    (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
                 }
             } else {
                 // SAFETY: the caller's window and its tab page.
@@ -254,15 +226,15 @@ unsafe fn win_config_split(
                     unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
                 debug_assert!(result.is_ok(), "the window was switched to");
             }
-            // SAFETY: the caller's window, and `unflat_altfr` the frame the
-            // removal above left behind.
+            // SAFETY: the caller's window; `unflat_altfr` is the frame the
+            // removal above left behind, `None` if it has since been freed.
             to_split_ok = unsafe {
                 win_split_ins(
                     0 as ::core::ffi::c_int,
                     flags,
                     Some(win),
                     0 as ::core::ffi::c_int,
-                    unflat_altfr,
+                    unflat_altfr.and_then(FrameId::get),
                 )
             }
             .is_some();
@@ -283,9 +255,8 @@ unsafe fn win_config_split(
                 }
                 break '_resize;
             }
-            if was_split {
-                // SAFETY: the caller's window and the frame the removal left.
-                unsafe { winframe_restore(w, dir, unflat_altfr) };
+            if was_split && let Some(unflat) = unflat_altfr.and_then(FrameId::get) {
+                winframe_restore(w, dir, unflat);
             }
             if !err.is_set() {
                 // SAFETY: the caller's window.

@@ -280,7 +280,7 @@ pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
         unsafe { redrawcmd() };
         save_p_ls.set(-1);
     } else {
-        unsafe { win_redraw_last_status(topframe.get()) };
+        win_redraw_last_status(current_topframe());
         // Must be cleared before redraw_statuslines (#8385), which is why
         // this arm clears it itself rather than after the `if`.
         wild_menu_showing.set(0);

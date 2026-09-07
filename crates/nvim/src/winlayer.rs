@@ -121,19 +121,21 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod frame;
 pub mod graph;
 mod handles;
 mod live;
 mod walk;
 
+pub(crate) use frame::{current_topframe, free_frame, new_frame};
 pub(crate) use live::{Cc, Ea, Live};
 
 pub use handles::BufId;
 
 pub(crate) use handles::{
-    TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer, forget_tabpage,
-    forget_window, free_deferred, register_buffer, register_tabpage, register_window, tabpage,
-    window,
+    FrameId, TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer,
+    forget_frame, forget_tabpage, forget_window, free_deferred, register_buffer, register_frame,
+    register_tabpage, register_window, tabpage, window,
 };
 
 pub(crate) use walk::{
@@ -201,12 +203,17 @@ pub struct Buf {
 }
 
 /// A frame of the window layout tree the caller has promised is live.
+/// [`Win`]'s shape.
 ///
 /// A frame is either a leaf holding one window (`fr_win`) or a row or column
 /// of child frames (`fr_child`, chained through `fr_next`); `fr_parent` walks
 /// back up. Which of the two a frame is, `fr_layout` says.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct FrameRef(*mut Frame);
+#[derive(Clone, Copy)]
+pub struct FrameRef {
+    ptr: *mut Frame,
+    /// The frame's handle, read while it was live. [`Win`]'s `id`.
+    id: Handle,
+}
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
 #[derive(Clone, Copy)]
@@ -233,7 +240,7 @@ macro_rules! address_eq {
     )+ };
 }
 
-address_eq!(Win, Buf, TabPage);
+address_eq!(Win, Buf, FrameRef, TabPage);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -286,7 +293,7 @@ impl Deref for FrameRef {
     #[inline(always)]
     fn deref(&self) -> &Frame {
         // SAFETY: the constructor's promise — a live frame.
-        unsafe { &*self.0 }
+        unsafe { &*self.ptr }
     }
 }
 
@@ -294,7 +301,7 @@ impl DerefMut for FrameRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Frame {
         // SAFETY: the constructor's promise — a live frame.
-        unsafe { &mut *self.0 }
+        unsafe { &mut *self.ptr }
     }
 }
 
@@ -375,14 +382,6 @@ impl Win {
             ptr: raw,
             id: handle,
         }
-    }
-
-    /// The window a live frame's `fr_win` names, or a null [`Win`]. The
-    /// frame promised it, so reading it is sound.
-    #[inline(always)]
-    fn at_field(raw: *mut Window) -> Self {
-        // SAFETY: a live frame's `fr_win` is a live window or null.
-        unsafe { Self::new(raw) }
     }
 
     /// The window the editor is working in.
@@ -498,8 +497,15 @@ impl Win {
     /// included — a float's frame is simply not linked into the layout tree.
     #[inline(always)]
     pub fn frame(self) -> FrameRef {
-        // A live window's `w_frame` is a live frame.
-        FrameRef(self.w_frame)
+        self.frame_or_none()
+            .expect("a live window has a frame: `win_alloc` gives it one")
+    }
+
+    /// The leaf frame this window sits in, `None` for a float whose frame
+    /// `win_float_split` has already given back.
+    #[inline(always)]
+    pub fn frame_or_none(self) -> Option<FrameRef> {
+        self.w_frame.and_then(FrameId::get)
     }
 
     /// The window's cursor, which lives inside the window.
@@ -697,79 +703,6 @@ impl Buf {
     }
 }
 
-impl FrameRef {
-    /// # Safety
-    /// `raw` must stay a live frame for as long as the value is used.
-    #[inline(always)]
-    pub const unsafe fn new(raw: *mut Frame) -> Self {
-        Self(raw)
-    }
-
-    /// The frame `raw` names, `None` for null.
-    ///
-    /// # Safety
-    /// `raw` must be null, or stay a live frame for as long as the value is
-    /// used.
-    #[inline(always)]
-    pub const unsafe fn from_raw(raw: *mut Frame) -> Option<Self> {
-        if raw.is_null() { None } else { Some(Self(raw)) }
-    }
-
-    #[inline(always)]
-    pub fn raw(self) -> *mut Frame {
-        self.0
-    }
-
-    /// The window this frame holds — `Some` exactly for a leaf.
-    #[inline(always)]
-    pub fn win(self) -> Option<Win> {
-        // A live leaf frame's `fr_win` is a live window; a row or column's is
-        // null.
-        let win = self.fr_win;
-        (!win.is_null()).then(|| Win::at_field(win))
-    }
-
-    /// The frame this one is a child of — `None` only for the tab page's
-    /// `topframe`, the one frame with no parent.
-    #[inline(always)]
-    pub fn parent(self) -> Option<Self> {
-        // A live frame's `fr_parent` is a live frame or null.
-        let parent = self.fr_parent;
-        (!parent.is_null()).then_some(Self(parent))
-    }
-
-    /// This frame's first child, which every non-leaf frame has.
-    #[inline(always)]
-    pub fn child(self) -> Option<Self> {
-        // A live frame's `fr_child` is a live frame or null.
-        let child = self.fr_child;
-        (!child.is_null()).then_some(Self(child))
-    }
-
-    /// The frame beside this one, if it is not the last of its row or column.
-    #[inline(always)]
-    pub fn next(self) -> Option<Self> {
-        // A live frame's `fr_next` is a live frame or null.
-        let next = self.fr_next;
-        (!next.is_null()).then_some(Self(next))
-    }
-
-    /// The frame before this one, if it is not the first of its row or column.
-    #[inline(always)]
-    pub fn prev(self) -> Option<Self> {
-        // A live frame's `fr_prev` is a live frame or null.
-        let prev = self.fr_prev;
-        (!prev.is_null()).then_some(Self(prev))
-    }
-
-    /// This frame's children, first to last: the C's
-    /// `FOR_ALL_FRAMES(frp, topfrp->fr_child)`, which is empty for a leaf.
-    #[inline(always)]
-    pub fn children(self) -> impl Iterator<Item = Self> {
-        frames(self.child())
-    }
-}
-
 impl TabPage {
     /// The tab page at `raw`, with its handle taken from it. [`Win::new`].
     ///
@@ -907,8 +840,9 @@ impl TabPage {
     /// `topframe` global the way [`windows_in_tab`] switches to `firstwin`.
     #[inline(always)]
     pub fn topframe(self) -> FrameRef {
-        // A live tab page's top frame is live.
-        FrameRef(self.tp_topframe)
+        self.tp_topframe
+            .and_then(FrameId::get)
+            .expect("a live tab page has a layout tree")
     }
 
     /// The window this tab page is working in — the one it goes back to when
