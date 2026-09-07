@@ -212,7 +212,13 @@ pub const WC_KEY_OFF: usize = ::core::mem::offset_of!(crate::types::WordCount, w
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
-pub struct MatchInf {
+///
+/// Four of its fields are positions *inside* the word being checked and one
+/// names the window the language came from; the tree walk reads through all
+/// five without checking any of them, which is why the only way to start one
+/// is [`MatchInf::new`], an `unsafe fn` that says what they have to be. The
+/// walk then moves them within the word it was given, and that is safe.
+pub(crate) struct MatchInf {
     /// The language being tried.
     pub mi_lp: *mut LangP,
     /// The word as written, at its first character.
@@ -248,6 +254,31 @@ pub struct MatchInf {
     /// following, kept as a fall-back.
     pub mi_result2: SpellResult,
     pub mi_end2: *mut c_char,
+}
+
+impl MatchInf {
+    /// The state for checking `word` in `win`, with the walk at the word's
+    /// first character and nothing accepted yet.
+    ///
+    /// # Safety
+    ///
+    /// `word` must point at a NUL-terminated string that outlives the
+    /// lookup and is not written while it runs: `mi_end`/`mi_fend`/`mi_cend`
+    /// are positions inside it, and every step of the walk dereferences them
+    /// without a bound of its own. `win` must be the window whose
+    /// `'spelllang'` the languages tried came from -- the walk reads its
+    /// buffer's spell settings and its `w_s` synblock.
+    pub(crate) unsafe fn new(word: *mut c_char, win: Win) -> Self {
+        // The remaining forty-odd fields are counters, flags and the
+        // case-folded scratch word, all of which start at zero; upstream
+        // built this state with `memset`.
+        let mut mi: MatchInf = unsafe { ::core::mem::zeroed() };
+        mi.mi_word = word;
+        mi.mi_end = word;
+        mi.mi_fend = word;
+        mi.mi_win = win.raw();
+        mi
+    }
 }
 
 /// One `SYLLABLE` item: a short sequence of characters counting as one

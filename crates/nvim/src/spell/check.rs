@@ -108,7 +108,9 @@ pub unsafe fn spell_check(
 
     // Nearly everything lives in "mi" so that it can be handed to the
     // lookup functions in one go.
-    let mut mi: MatchInf = unsafe { mem::zeroed() };
+    // SAFETY: the caller's promise -- `text` is a NUL-terminated line of
+    // `window`'s buffer, which nothing writes while the lookup runs.
+    let mut mi = unsafe { MatchInf::new(text, window) };
 
     // A number is always fine, including hex and binary literals. The
     // word is still checked, so that "3GPP" and "11 julifeest" are
@@ -131,8 +133,6 @@ pub unsafe fn spell_check(
     }
 
     // Find the end of the word: the next non-word character.
-    mi.mi_word = text;
-    mi.mi_fend = text;
     if unsafe { spell_iswordp(mi.mi_fend, window) } {
         if use_camel_case {
             mi.mi_fend = unsafe { advance_camelcase_word(text, window, &mut is_camel_case) };
@@ -166,7 +166,6 @@ pub unsafe fn spell_check(
     // The caps type is worked out later, on demand.
     mi.mi_capflags = WordFlags::NONE;
     mi.mi_cend = core::ptr::null_mut();
-    mi.mi_win = window.raw();
 
     // Fold one character past the word, so the lookup can see where the
     // word ends.

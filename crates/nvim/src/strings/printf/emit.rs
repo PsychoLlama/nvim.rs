@@ -64,7 +64,15 @@ struct Sink {
 }
 
 impl Sink {
-    fn new(buf: *mut c_char, capacity: size_t) -> Self {
+    /// A sink over the `capacity` bytes at `buf`.
+    ///
+    /// # Safety
+    ///
+    /// `buf` must point at `capacity` writable bytes the caller owns,
+    /// unaliased for the sink's lifetime. Nothing below checks the buffer --
+    /// only the count it was given -- so this pair *is* the bound, and the
+    /// safe writers below are safe only because it was established here.
+    unsafe fn new(buf: *mut c_char, capacity: size_t) -> Self {
         Sink {
             buf,
             capacity,
@@ -105,15 +113,11 @@ impl Sink {
     }
 
     /// Append `n` copies of `byte`, truncating at the end of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be a `Sink` built by `Sink::new` from `capacity` writable
-    /// bytes the caller owns, unaliased for the call: nothing checks the buffer,
-    /// only the count it was given.
-    unsafe fn fill(&mut self, byte: u8, n: size_t) {
+    fn fill(&mut self, byte: u8, n: size_t) {
         if self.fits {
             let avail = self.avail();
+            // SAFETY: `fits` holds, so `produced <= capacity` and the write
+            // stops at `avail` -- inside the window `Sink::new` was given.
             unsafe { ptr::write_bytes(self.buf.add(self.produced), byte, n.min(avail)) };
             self.fits = n < avail;
         }
@@ -121,14 +125,10 @@ impl Sink {
     }
 
     /// NUL-terminate, at the end of the output or of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be a `Sink` built by `Sink::new` from `capacity` writable
-    /// bytes the caller owns, unaliased for the call: nothing checks the buffer,
-    /// only the count it was given.
-    unsafe fn terminate(&self) {
+    fn terminate(&self) {
         if self.capacity > 0 {
+            // SAFETY: the offset is clamped to the last byte of the window
+            // `Sink::new` was given.
             unsafe { *self.buf.add(self.produced.min(self.capacity - 1)) = 0 };
         }
     }
@@ -145,18 +145,46 @@ impl Sink {
 /// it is a C `va_list`, which can only be read forwards -- hence `position`,
 /// `ap_start` and the recorded `ap_types`.
 pub(super) struct Args<'f> {
-    pub(super) tvs: *mut TypVal,
-    pub(super) ap: VaList<'f>,
-    pub(super) ap_start: VaList<'f>,
-    pub(super) ap_types: *mut *const c_char,
+    tvs: *mut TypVal,
+    ap: VaList<'f>,
+    ap_start: VaList<'f>,
+    ap_types: *mut *const c_char,
     /// One-based index of the argument to read next.
-    pub(super) arg_idx: c_int,
+    arg_idx: c_int,
     /// Where the `va_list` actually is.
-    pub(super) arg_cur: c_int,
-    pub(super) fmt: *const c_char,
+    arg_cur: c_int,
+    fmt: *const c_char,
 }
 
 impl<'f> Args<'f> {
+    /// The arguments of one `printf`, ready to be walked against `fmt`.
+    ///
+    /// # Safety
+    ///
+    /// `fmt` must be NUL-terminated, and `ap_types` the table
+    /// `parse_fmt_types` filled in for exactly that format. Either `tvs`
+    /// points at a `VAR_UNKNOWN`-terminated array of initialized typvals
+    /// long enough for the conversions `fmt` names, or it is null and
+    /// `ap_start` holds exactly those arguments at exactly those types --
+    /// neither list carries its own length, so reading one against the wrong
+    /// format is what this constructor exists to make visible.
+    unsafe fn new(
+        tvs: *mut TypVal,
+        ap_start: VaList<'f>,
+        ap_types: *mut *const c_char,
+        fmt: *const c_char,
+    ) -> Self {
+        Args {
+            tvs,
+            ap: ap_start.clone(),
+            ap_start,
+            ap_types,
+            arg_idx: 1,
+            arg_cur: 0,
+            fmt,
+        }
+    }
+
     fn reads_typvals(&self) -> bool {
         !self.tvs.is_null()
     }
@@ -718,7 +746,7 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
     };
 
     if !c.justify_left {
-        unsafe { sink.fill(if c.zero_padding { b'0' } else { b' ' }, padding()) };
+        sink.fill(if c.zero_padding { b'0' } else { b' ' }, padding());
     }
 
     // Without zeros to insert there is no split, so the whole body is
@@ -729,7 +757,7 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
         if c.zero_insertion_ind > 0 {
             unsafe { sink.copy(body, c.zero_insertion_ind) };
         }
-        unsafe { sink.fill(b'0', c.zeros_to_pad) };
+        sink.fill(b'0', c.zeros_to_pad);
         c.zero_insertion_ind
     };
 
@@ -738,7 +766,7 @@ unsafe fn emit_conversion(sink: &mut Sink, c: &Conversion, body: *const c_char, 
     }
 
     if c.justify_left {
-        unsafe { sink.fill(b' ', padding()) };
+        sink.fill(b' ', padding());
     }
 }
 
@@ -767,16 +795,11 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
         return 0;
     }
 
-    let mut args = Args {
-        tvs,
-        ap: ap_start.clone(),
-        ap_start,
-        ap_types,
-        arg_idx: 1,
-        arg_cur: 0,
-        fmt,
-    };
-    let mut sink = Sink::new(str, str_m);
+    // SAFETY: the caller's promise about `fmt`/`tvs`/`ap_start`, and
+    // `ap_types` is the table `parse_fmt_types` just filled in for `fmt`.
+    let mut args = unsafe { Args::new(tvs, ap_start, ap_types, fmt) };
+    // SAFETY: the caller's promise -- `str_m` writable bytes at `str`.
+    let mut sink = unsafe { Sink::new(str, str_m) };
     let mut p = if fmt.is_null() { c"".as_ptr() } else { fmt };
     let tvs_present = !tvs.is_null();
 
@@ -827,7 +850,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
             unsafe { xfree(tofree.cast()) };
         }
 
-        unsafe { sink.terminate() };
+        sink.terminate();
         // `printf()` complains about arguments it was not asked for.
         let unused = if num_posarg != 0 {
             num_posarg

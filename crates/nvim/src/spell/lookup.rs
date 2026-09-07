@@ -89,10 +89,9 @@ macro_rules! mb_ptr_adv {
 ///
 /// # Safety
 ///
-/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
-/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
-/// language being tried and `mi_win` at a live window. `MatchInf` has public
-/// fields and no constructor that checks any of that.
+/// `mip` must be a `MatchInf` from [`MatchInf::new`], still describing the
+/// word it was built for, with `mi_lp` set to the language being tried:
+/// that field is the one the constructor cannot fill in.
 pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
 
@@ -770,10 +769,9 @@ pub unsafe fn valid_word_prefix(
 ///
 /// # Safety
 ///
-/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
-/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
-/// language being tried and `mi_win` at a live window. `MatchInf` has public
-/// fields and no constructor that checks any of that.
+/// `mip` must be a `MatchInf` from [`MatchInf::new`], still describing the
+/// word it was built for, with `mi_lp` set to the language being tried:
+/// that field is the one the constructor cannot fill in.
 pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
     let tree = unsafe { (*slang).sl_prefix_tree.view() };
@@ -854,10 +852,9 @@ pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
 ///
 /// # Safety
 ///
-/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
-/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
-/// language being tried and `mi_win` at a live window. `MatchInf` has public
-/// fields and no constructor that checks any of that.
+/// `mip` must be a `MatchInf` from [`MatchInf::new`], still describing the
+/// word it was built for, with `mi_lp` set to the language being tried:
+/// that field is the one the constructor cannot fill in.
 unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
     loop {
