@@ -372,7 +372,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
         unsafe { restore_scrolled_messages(redr_type, is_stl_global) };
     }
 
-    unsafe { win_ui_flush(true) };
+    win_ui_flush(true);
 
     // `cmdline_row` may have been moved temporarily.
     compute_cmdrow();

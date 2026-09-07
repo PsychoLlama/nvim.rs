@@ -475,8 +475,7 @@ unsafe fn normal_check_interrupt(s: *mut NormalState) {
 
 fn normal_check_window_scrolled() {
     if !finish_op.get() {
-        // SAFETY: fires autocommands for the current window.
-        unsafe { may_trigger_win_scrolled_resized() };
+        may_trigger_win_scrolled_resized();
     }
 }
 

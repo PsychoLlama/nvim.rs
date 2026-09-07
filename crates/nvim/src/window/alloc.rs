@@ -114,7 +114,7 @@ fn clear_options(opt: *mut WinOpt) {
 // ---------------------------------------------------------------------------
 // The first window, and the one autocommands run in
 
-pub unsafe fn win_alloc_first() {
+pub fn win_alloc_first() {
     if win_alloc_firstwin(None).is_err() {
         // SAFETY: aborts the process; nothing comes back.
         unsafe { abort() };
@@ -125,7 +125,7 @@ pub unsafe fn win_alloc_first() {
     unuse_tabpage(first);
 }
 
-pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
+pub fn win_alloc_aucmd_win(idx: c_int) {
     let mut err = Error::none();
     let fconfig = WinConfig {
         width: Columns.get(),
@@ -265,6 +265,9 @@ fn win_tabpage(win: Win) -> Option<TabPage> {
     win_find_tabpage(win.id())
 }
 
+/// # Safety
+///
+/// `wip` must point at a live `WinInfo`, unaliased for the call.
 pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     // SAFETY: the caller's promise -- a live entry, which this consumes.
     if unsafe { (*wip).wi_optset } {

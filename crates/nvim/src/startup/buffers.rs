@@ -243,11 +243,11 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             parm.window_layout = WIN_HOR as c_int;
         }
         if parm.window_layout == WIN_TABS as c_int {
-            unsafe { parm.window_count = make_tabpages(parm.window_count) };
+            parm.window_count = make_tabpages(parm.window_count);
             time_msg_at(c"making tab pages");
         } else if first_win().next().is_none_or(|next| next.w_floating) {
             let (count, vertical) = (parm.window_count, parm.window_layout == WIN_VER as c_int);
-            parm.window_count = unsafe { make_windows(count, vertical) };
+            parm.window_count = make_windows(count, vertical);
             time_msg_at(c"making windows");
         } else {
             parm.window_count = win_count();

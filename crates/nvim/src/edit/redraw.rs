@@ -120,7 +120,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     }
 
     if ready {
-        unsafe { may_trigger_win_scrolled_resized() };
+        may_trigger_win_scrolled_resized();
     }
 
     // BufModified, if b_changed_invalid is set.

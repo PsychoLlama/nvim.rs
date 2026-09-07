@@ -140,6 +140,10 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     drop(owned);
 }
 
+/// # Safety
+///
+/// `filename` must be null, or point at a NUL-terminated name that stays live
+/// across the `TabNew` autocommand this passes it to.
 pub unsafe fn win_new_tabpage(
     after: c_int,
     filename: *mut c_char,
@@ -320,7 +324,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
     status
 }
 
-pub unsafe fn make_tabpages(maxcount: c_int) -> c_int {
+pub fn make_tabpages(maxcount: c_int) -> c_int {
     let count = maxcount.min(p_tpm.get() as c_int);
 
     // Don't execute autocommands while creating the tab pages: `curwin` and

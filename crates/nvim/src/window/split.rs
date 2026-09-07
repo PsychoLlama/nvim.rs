@@ -49,8 +49,7 @@ pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
 /// window takes, whether it is vertical, and whether it is entered.
 pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     let cur = Win::current();
-    // SAFETY: a live window.
-    if unsafe { check_split_disallowed(cur) } == FAIL {
+    if check_split_disallowed(cur) == FAIL {
         return Err(Failed);
     }
     // When the ":tab" modifier was used, open a new tab page instead.

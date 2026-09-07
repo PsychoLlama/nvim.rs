@@ -169,7 +169,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
 
     init_locale();
     set_init_tablocal();
-    unsafe { win_alloc_first() };
+    win_alloc_first();
     time_msg_at(c"init first window");
 
     unsafe { alist_init(global_arglist()) };

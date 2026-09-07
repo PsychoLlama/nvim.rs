@@ -253,7 +253,7 @@ pub(crate) unsafe fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
     if (p_ch.get() != old_value || laid_out != Rows.get() as OptInt - p_ch.get())
         && full_screen.get()
     {
-        unsafe { command_height() };
+        command_height();
     }
     None
 }

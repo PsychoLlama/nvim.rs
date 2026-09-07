@@ -29,7 +29,7 @@ use crate::types::{FAIL, Failed, OptInt};
 use crate::winlayer::graph::lastwin;
 use crate::winlayer::{FrameId, FrameRef, Win, frames};
 
-pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
+pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     let cur = Win::current();
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
@@ -252,8 +252,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     if is_only_window(window, None) {
         return Ok(());
     }
-    // SAFETY: a live window.
-    if is_autocmd_window(Some(window)) || unsafe { check_split_disallowed(window) } == FAIL {
+    if is_autocmd_window(Some(window)) || check_split_disallowed(window) == FAIL {
         return Err(Failed);
     }
 

@@ -265,6 +265,9 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
+/// # Safety
+///
+/// `cc` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<&'static CStr> {
     // The caller's promise: a NUL-terminated string or null.
     let win = window;
@@ -384,6 +387,10 @@ pub fn win_locked(window: Win) -> c_int {
     window.w_locked as c_int
 }
 
+/// # Safety
+///
+/// `tabnr` must point at a writable `int` the caller owns. `winnr` must point
+/// at a writable `int` the caller owns.
 pub unsafe fn win_get_tabwin(id: Handle, tabnr: *mut c_int, winnr: *mut c_int) {
     let found = tab_and_win_number(id);
     // SAFETY: the caller's promise -- two writable `int`s.
@@ -411,7 +418,7 @@ fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
     None
 }
 
-pub unsafe fn win_ui_flush(validate: bool) {
+pub fn win_ui_flush(validate: bool) {
     for tp in tabs() {
         for mut wp in windows_in_tab(tp) {
             let moved = wp.w_pos_changed || wp.w_grid_alloc.pending_comp_index_update;

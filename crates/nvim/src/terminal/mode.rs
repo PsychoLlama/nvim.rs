@@ -360,7 +360,6 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     unsafe { ui_cursor_shape() };
     terminal_focus(s.term, true);
     let mut buf = current_buf();
-    // SAFETY: a live buffer's own change counter.
     buf.b_last_changedtick_i = buf_get_changedtick(buf);
 
     s.term.refcount.retain();
@@ -392,7 +391,6 @@ pub(crate) unsafe fn terminal_enter() -> bool {
     unset_terminal_winopts(s);
     terminal_focus(s.term, false);
     let mut buf = current_buf();
-    // SAFETY: a live buffer's own change counter.
     buf.b_last_changedtick = buf_get_changedtick(buf);
     if buf.terminal == s.term.raw() && !s.close {
         terminal_check_cursor(s.term);
@@ -537,11 +535,9 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
         // terminal or the session is borrowed across it.
         unsafe { apply_autocmds(AutoEvent::TextChangedT, none, none, false, Some(buf)) };
         let mut buf = current_buf();
-        // SAFETY: as above.
         buf.b_last_changedtick_i = buf_get_changedtick(buf);
     }
-    // SAFETY: reports scrolls and resizes, which run autocommands.
-    unsafe { may_trigger_win_scrolled_resized() };
+    may_trigger_win_scrolled_resized();
     s.term.refcount.release();
     if s.term.buf_handle == 0 {
         s.close = true;

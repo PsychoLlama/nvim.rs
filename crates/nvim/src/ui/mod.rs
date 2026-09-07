@@ -654,7 +654,7 @@ pub unsafe fn ui_flush() {
         was_busy.set(false);
     }
 
-    unsafe { win_ui_flush(false) };
+    win_ui_flush(false);
     if textlock.get() == 0 && expr_map_lock.get() == 0 {
         // Both can run Lua handlers, which the locks exist to keep out.
         cmdline_ui_flush();
@@ -670,7 +670,7 @@ pub unsafe fn ui_flush() {
         );
         pending_cursor_update.set(false);
         // Moving the cursor can uncover a window whose viewport changed.
-        unsafe { win_ui_flush(false) };
+        win_ui_flush(false);
     }
 
     if pending_mode_info_update.get() {

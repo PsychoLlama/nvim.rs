@@ -471,7 +471,7 @@ pub(crate) fn comp_scroll(window: Win) {
 // ---------------------------------------------------------------------------
 // The rows that are not text
 
-pub unsafe fn command_height() {
+pub fn command_height() {
     let mut old_p_ch = TabPage::current().tp_ch_used as c_int;
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.

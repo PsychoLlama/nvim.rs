@@ -186,7 +186,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     } else {
         (0, 0)
     };
-    if is_aucmd_win(wp) || text_or_buf_locked() || unsafe { check_split_disallowed(wp) } == FAIL {
+    if is_aucmd_win(wp) || text_or_buf_locked() || check_split_disallowed(wp) == FAIL {
         return;
     }
     if !targetwin.is_current() {

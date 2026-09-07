@@ -148,7 +148,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         // The slot may have been pushed empty either just now or by an
         // earlier nesting level that has since given it back.
         if unsafe { (*entry(auc_idx)).auc_win.is_null() } {
-            unsafe { win_alloc_aucmd_win(auc_idx as ::core::ffi::c_int) };
+            win_alloc_aucmd_win(auc_idx as ::core::ffi::c_int);
             need_append = false;
         }
         auc_win = unsafe { (*entry(auc_idx)).auc_win };

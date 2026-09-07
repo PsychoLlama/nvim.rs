@@ -136,6 +136,9 @@ fn fdccol_count(window: Win) -> c_int {
     fdccol.min(deepest_fold_nesting(window))
 }
 
+/// # Safety
+///
+/// `dst` must point at a live `WinConfig`, unaliased for the call.
 pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
     // SAFETY: the caller's promise -- a live config to overwrite.
     unsafe { merge(&mut *dst, src) };
@@ -155,6 +158,9 @@ fn merge(dst: &mut WinConfig, src: WinConfig) {
     *dst = src;
 }
 
+/// # Safety
+///
+/// `fconfig` must point at a live `WinConfig`, unaliased for the call.
 pub unsafe fn clear_float_config(fconfig: *mut WinConfig, free_fields: bool) {
     // SAFETY: the caller's promise -- a live config.
     unsafe { clear_float(&mut *fconfig, free_fields) };
@@ -473,7 +479,7 @@ fn text_height(
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub unsafe fn check_split_disallowed(window: Win) -> c_int {
+pub fn check_split_disallowed(window: Win) -> c_int {
     let mut err = Error::none();
     let ok = check_split_disallowed_err(window, &mut err);
     if err.is_set() {
