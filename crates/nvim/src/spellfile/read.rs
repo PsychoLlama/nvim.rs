@@ -480,8 +480,7 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
 unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_sound_tree, false, 0)?;
 
-    // SAFETY: the scratch buffer the suggestion search indexes by line.
-    slang.sl_sugbuf = unsafe { open_spellbuf() }.map_or(core::ptr::null_mut(), Buf::raw);
+    slang.sl_sugbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);
     let wcount = spl.get4c()?;
     if wcount < 0 {
         return Err(SpellReadError::Format);
@@ -761,6 +760,6 @@ pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
     // A word was added to a file no window had loaded; re-resolving
     // 'spelllang' is what picks it up.
     if added_word && !didit {
-        unsafe { parse_spelllang(Win::current()) };
+        parse_spelllang(Win::current());
     }
 }

@@ -280,8 +280,7 @@ pub unsafe fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
     if !unsafe { valid_spellfile(*varp(args)) } {
         return invalid();
     }
-    // SAFETY: re-reads the spelling options.
-    unsafe { did_set_spell_option() }
+    did_set_spell_option()
 }
 
 /// # Safety
@@ -291,8 +290,7 @@ pub unsafe fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
     if !valid_spelllang(unsafe { CStr::from_ptr(*varp(args)) }) {
         return invalid();
     }
-    // SAFETY: re-reads the spelling options.
-    unsafe { did_set_spell_option() }
+    did_set_spell_option()
 }
 
 /// 'spelloptions' keeps a mask at both scopes, and a `:set` writes both.

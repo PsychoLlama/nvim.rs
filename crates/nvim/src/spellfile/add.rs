@@ -344,7 +344,7 @@ unsafe fn init_spellfile() {
     {
         c"ascii".as_ptr()
     } else {
-        unsafe { spell_enc() as *const c_char }
+        spell_enc() as *const c_char
     };
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };

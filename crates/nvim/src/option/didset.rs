@@ -575,7 +575,7 @@ pub(crate) unsafe fn did_set_spell(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_spell != 0 {
-        return unsafe { parse_spelllang(win) };
+        return parse_spelllang(win);
     }
     None
 }

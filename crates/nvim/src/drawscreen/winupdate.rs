@@ -236,7 +236,7 @@ pub(crate) unsafe fn win_update(window: Win) {
     let mut spv = SpellVars::default();
     // SAFETY: a live buffer.
     let buf = unsafe { Buf::new(buf) };
-    if unsafe { spell_check_window(window) } {
+    if spell_check_window(window) {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;
     }

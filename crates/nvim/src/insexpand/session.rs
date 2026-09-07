@@ -364,13 +364,13 @@ pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(
         debug_assert!(spell_bad_len.get() <= c_int::MAX as size_t);
         compl_col.set(curs_col - spell_bad_len.get() as c_int);
     } else {
-        compl_col.set(unsafe { spell_word_start(startcol) } as ColNr);
+        compl_col.set(spell_word_start(startcol) as ColNr);
     }
     if compl_col.get() >= startcol {
         compl_length.set(0);
         compl_col.set(curs_col);
     } else {
-        unsafe { spell_expand_check_cap(compl_col.get()) };
+        spell_expand_check_cap(compl_col.get());
         compl_length.set(curs_col - compl_col.get());
     }
     // Need to obtain "line" again, it may have become invalid.

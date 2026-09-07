@@ -78,6 +78,12 @@ fn is_upper(c: c_int) -> bool {
 ///
 /// Returns the length of the word in bytes, good or bad, so the caller can
 /// skip over it.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
+/// `attrp` must point at a live `Hlf`, unaliased for the call. `capcol` must
+/// point at a writable `int` the caller owns.
 pub unsafe fn spell_check(
     mut window: Win,
     text: *mut c_char,
@@ -306,6 +312,10 @@ fn get_char_type(c: c_int) -> c_int {
 /// word boundary explains: `fooBar`, `fooA1`, `1a`, and — looking two
 /// characters back — `HTTPServer`, which splits before the `S` rather than
 /// after it.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn advance_camelcase_word(
     str: *mut c_char,
     window: Win,
@@ -358,14 +368,14 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 }
 
 /// Whether spell checking is on for `window` and a language is actually loaded.
-pub unsafe fn spell_check_window(window: Win) -> bool {
+pub fn spell_check_window(window: Win) -> bool {
     let on = unsafe { window.w_onebuf_opt.wo_spell != 0 && *(*window.w_s).b_p_spl != 0 };
     on && unsafe { (*window.w_s).b_langp.ga_len } > 0
         && !unsafe { *((*window.w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
 }
 
 /// Whether spell checking is *off* for `window`, giving an error if so.
-pub unsafe fn no_spell_checking(window: Win) -> bool {
+pub fn no_spell_checking(window: Win) -> bool {
     if window.w_onebuf_opt.wo_spell == 0
         || unsafe { *(*window.w_s).b_p_spl } == 0
         || unsafe { (*window.w_s).b_langp.ga_len } <= 0
@@ -382,7 +392,7 @@ pub unsafe fn no_spell_checking(window: Win) -> bool {
 /// The question is whether a sentence ends just before it. At the start of
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
-pub unsafe fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
+pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
     if unsafe { (*window.w_s).b_cap_prog }.is_null() {
         return false;
     }
@@ -441,6 +451,10 @@ pub unsafe fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool 
 }
 
 /// The end of the word starting at `start`, by the spell word characters.
+///
+/// # Safety
+///
+/// `start` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn spell_to_word_end(start: *mut c_char, win: Win) -> *mut c_char {
     let mut p = start;
     while unsafe { *p } != 0 && unsafe { spell_iswordp(p, win) } {
@@ -454,8 +468,8 @@ pub unsafe fn spell_to_word_end(start: *mut c_char, win: Win) -> *mut c_char {
 ///
 /// Whether it is misspelled is not checked — completion can only replace
 /// the word before the cursor anyway.
-pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
-    if unsafe { no_spell_checking(Win::current()) } {
+pub fn spell_word_start(startcol: c_int) -> c_int {
+    if no_spell_checking(Win::current()) {
         return startcol;
     }
 
@@ -493,13 +507,22 @@ static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Record, before the word is removed, whether its replacement will need a
 /// capital.
-pub unsafe fn spell_expand_check_cap(col: ColNr) {
-    spell_expand_need_cap
-        .set(unsafe { check_need_cap(Win::current(), Win::current().w_cursor.lnum, col) });
+pub fn spell_expand_check_cap(col: ColNr) {
+    spell_expand_need_cap.set(check_need_cap(
+        Win::current(),
+        Win::current().w_cursor.lnum,
+        col,
+    ));
 }
 
 /// Insert-mode completion `CTRL-X ?`: fill `matchp` with suggestions for
 /// `pat` and return how many there are.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `matchp` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call.
 pub unsafe fn expand_spelling(
     _lnum: LineNr,
     pat: *mut c_char,

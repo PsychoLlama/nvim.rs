@@ -228,8 +228,7 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
 unsafe fn sug_maketable(spin: &mut SpellInfo) -> c_int {
-    // SAFETY: the sound-fold tree is built and compressed by now.
-    spin.si_spellbuf = unsafe { open_spellbuf() }.map_or(core::ptr::null_mut(), Buf::raw);
+    spin.si_spellbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, 1, 100) };

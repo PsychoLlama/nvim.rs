@@ -82,7 +82,7 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// The encoding spell files are named after: `'encoding'`, except that
 /// `latin9` uses `latin1`'s files, and anything implausibly long falls back
 /// to `latin1`.
-pub unsafe fn spell_enc() -> *mut c_char {
+pub fn spell_enc() -> *mut c_char {
     if unsafe { cstr::bytes_at(p_enc.get()) }.len() < 60
         && unsafe { !cstr::eq_bytes(p_enc.get(), b"iso-8859-15") }
     {
@@ -92,9 +92,13 @@ pub unsafe fn spell_enc() -> *mut c_char {
 }
 
 /// The `.spl` file name for the internal word list, into `fname[MAXPATHL]`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn int_wordlist_spl(fname: *mut c_char) {
     let fmt = SPL_FNAME_TMPL.as_ptr();
-    let (list, enc) = (int_wordlist.get(), unsafe { spell_enc() });
+    let (list, enc) = (int_wordlist.get(), spell_enc());
     unsafe { vim_snprintf(fname, MAXPATHL as size_t, fmt, list, enc) };
 }
 
@@ -105,6 +109,10 @@ unsafe fn int_wordlist_spl(fname: *mut c_char) {
 /// to produce the file, and the whole search is retried. Failing that, at
 /// startup an autocommand is queued to offer downloading it, and otherwise
 /// a warning is printed.
+///
+/// # Safety
+///
+/// `lang` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn spell_load_lang(lang: *mut c_char) {
     let mut fname_enc = [0 as c_char; 85];
     let mut sl: SpellLoad = unsafe { core::mem::zeroed() };
@@ -123,7 +131,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
     for round in 1..=2 {
         let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
         let fmt = c"spell/%s.%s.spl".as_ptr();
-        let enc = unsafe { spell_enc() };
+        let enc = spell_enc();
         unsafe { vim_snprintf(buf, room, fmt, lang, enc) };
         r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
 
@@ -179,6 +187,11 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
 }
 
 /// `do_in_runtimepath` with [`spell_load_cb`] as the callback.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call. `sl`
+/// must point at a live `SpellLoad`, unaliased for the call.
 unsafe fn do_in_runtimepath_cb(
     name: *mut c_char,
     flags: RuntimeOpts,
@@ -194,6 +207,12 @@ unsafe fn do_in_runtimepath_cb(
 ///
 /// NOBREAK is sticky in both directions: a `.add` file inherits it from the
 /// base language, and a base language that declares it passes it on.
+///
+/// # Safety
+///
+/// As `do_in_runtimepath`'s callback: `fnames` must point at `num_fnames`
+/// NUL-terminated file names, and `cookie` at the `SpellLoad` it was
+/// registered with, live for the call.
 unsafe fn spell_load_cb(
     num_fnames: c_int,
     fnames: *mut *mut c_char,
@@ -233,7 +252,7 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// Parse `'spelllang'` and fill `window.w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub unsafe fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
+pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
     if recursive.get() {
         return None;
     }
@@ -555,6 +574,11 @@ fn clear_midword(mut window: Win) {
 
 /// The index of region `region[..2]` in `rp` (which is `sl_regions`, two
 /// characters per region), or `REGION_ALL` when it is not there.
+///
+/// # Safety
+///
+/// `rp` must point at a NUL-terminated string. `region` must point at a NUL-
+/// terminated string.
 unsafe fn find_region(rp: *const c_char, region: *const c_char) -> c_int {
     let mut i = 0;
     loop {
@@ -571,7 +595,7 @@ unsafe fn find_region(rp: *const c_char, region: *const c_char) -> c_int {
 }
 
 /// Delete the internal word list and its compiled `.spl`.
-pub unsafe fn spell_delete_wordlist() {
+pub fn spell_delete_wordlist() {
     if int_wordlist.get().is_null() {
         return;
     }
@@ -585,7 +609,7 @@ pub unsafe fn spell_delete_wordlist() {
 }
 
 /// Free every loaded language and everything derived from them.
-pub unsafe fn spell_free_all() {
+pub fn spell_free_all() {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and its own
         // growarray. The address is taken from the raw pointer rather than
@@ -599,7 +623,7 @@ pub unsafe fn spell_free_all() {
         unsafe { slang_free(slang) };
     }
 
-    unsafe { spell_delete_wordlist() };
+    spell_delete_wordlist();
 
     unsafe { xfree(repl_to.get() as *mut c_void) };
     repl_to.set(core::ptr::null_mut());
@@ -609,10 +633,10 @@ pub unsafe fn spell_free_all() {
 
 /// Drop every spelling table and load them again, after `'encoding'`
 /// changed or `:mkspell` ran.
-pub unsafe fn spell_reload() {
+pub fn spell_reload() {
     // SAFETY: on the main thread, as every caller of this is.
     init_spell_chartab();
-    unsafe { spell_free_all() };
+    spell_free_all();
 
     // Only load word lists where 'spelllang' is set and some window on
     // the buffer has 'spell' on. The walk is over the current tab, which
@@ -621,7 +645,7 @@ pub unsafe fn spell_reload() {
         // SAFETY: a live window of the current tab page, and the synblock it
         // points at.
         if unsafe { *(*wp.w_s).b_p_spl } != 0 && wp.w_onebuf_opt.wo_spell != 0 {
-            unsafe { parse_spelllang(wp) };
+            parse_spelllang(wp);
             break;
         }
     }
@@ -634,6 +658,10 @@ pub fn valid_spelllang(val: &CStr) -> bool {
 
 /// Whether `val` is a usable `'spellfile'` value: a comma-separated list of
 /// file names, each ending in `.add` and made of file-name characters.
+///
+/// # Safety
+///
+/// `val` must point at a NUL-terminated string.
 pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
     let mut spf_name = [0 as c_char; MAXPATHL as usize];
     let mut spf = val as *mut c_char;
@@ -660,12 +688,11 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 
 /// Re-parse `'spelllang'` for the current buffer after a spell option
 /// changed.
-pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
+pub fn did_set_spell_option() -> Option<&'static CStr> {
     let mut errmsg = None;
     for wp in windows() {
         if wp.w_buffer == Buf::current_raw() && wp.w_onebuf_opt.wo_spell != 0 {
-            // SAFETY: a live window of the current tab page.
-            errmsg = unsafe { parse_spelllang(wp) };
+            errmsg = parse_spelllang(wp);
             break;
         }
     }
@@ -677,6 +704,10 @@ pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
 ///
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
+///
+/// # Safety
+///
+/// `synblock` must point at a live `SynBlock`, unaliased for the call.
 pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr> {
     let rp: *mut RegProg = unsafe { (*synblock).b_cap_prog };
 
@@ -704,6 +735,10 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 unsafe fn use_midword(slang: *mut SpellLang, mut window: Win) {
     if unsafe { (*slang).sl_midword }.is_null() {
         return;

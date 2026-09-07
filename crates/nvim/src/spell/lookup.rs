@@ -86,6 +86,13 @@ macro_rules! mb_ptr_adv {
 ///   already matched.
 /// * `FIND_COMPOUND` / `FIND_KEEPCOMPOUND` — either tree, after the
 ///   compound parts found so far.
+///
+/// # Safety
+///
+/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
+/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
+/// language being tried and `mi_win` at a live window. `MatchInf` has public
+/// fields and no constructor that checks any of that.
 pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
 
@@ -435,6 +442,10 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
 /// Split out of [`find_word`] only to keep that function readable; it is
 /// the body of its `FIND_COMPOUND` arm and updates `mi_compflags` on the
 /// way through.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string, unaliased for the call.
 #[inline]
 unsafe fn compound_part_allowed(
     mip: &mut MatchInf,
@@ -572,6 +583,12 @@ unsafe fn compound_part_allowed(
 ///
 /// A rule is a pair: the first part has to match at the end of the word so
 /// far, the second at the start of what follows.
+///
+/// # Safety
+///
+/// `word` must point at `wlen` readable bytes followed by a NUL-terminated
+/// remainder: a rule's first half is compared against the bytes ending at
+/// `wlen` and its second half against what follows.
 pub unsafe fn match_checkcompoundpattern(
     word: *mut c_char,
     wlen: c_int,
@@ -602,6 +619,13 @@ pub unsafe fn match_checkcompoundpattern(
 /// counting is much slower, so it is left until last, and a word over
 /// COMPOUNDSYLMAX is still accepted while it has fewer parts than
 /// COMPOUNDWORDMAX.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, and `word` at a NUL-terminated
+/// word. `flags` must point at the compound flags collected so far, NUL-
+/// terminated and no more than `MAXWLEN` of them — nothing bounds the
+/// widening but that terminator.
 pub unsafe fn can_compound(
     slang: *mut SpellLang,
     word: *const c_char,
@@ -639,6 +663,12 @@ pub unsafe fn can_compound(
 /// The caller must have checked that `sl_comprules` is not null. A rule is
 /// a sequence of flags, `[abc]` standing for any one of them, with `/`
 /// separating rules.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang` whose `sl_comprules` is not null,
+/// which the caller has already checked, and `compflags` at the NUL-
+/// terminated compound flags collected so far.
 pub unsafe fn match_compoundrule(slang: *mut SpellLang, compflags: *const uint8_t) -> bool {
     let mut p = unsafe { (*slang).sl_comprules } as *mut c_char;
     while unsafe { *p } != 0 {
@@ -689,6 +719,11 @@ pub unsafe fn match_compoundrule(slang: *mut SpellLang, compflags: *const uint8_
 ///
 /// A prefix entry packs its ID in the low byte and the index of its
 /// condition regexp in the two bytes above.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string, unaliased for the call.
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 pub unsafe fn valid_word_prefix(
     totprefcnt: c_int,
     arridx: usize,
@@ -732,6 +767,13 @@ pub unsafe fn valid_word_prefix(
 /// if so look the remainder up with [`find_word`].
 ///
 /// `FIND_COMPOUND` does the same after the compound parts found so far.
+///
+/// # Safety
+///
+/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
+/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
+/// language being tried and `mi_win` at a live window. `MatchInf` has public
+/// fields and no constructor that checks any of that.
 pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
     let tree = unsafe { (*slang).sl_prefix_tree.view() };
@@ -809,6 +851,13 @@ pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
 /// Folding runs to the next non-word character rather than one character at
 /// a time, and includes that character, so that the caller can see where
 /// the word ends.
+///
+/// # Safety
+///
+/// `mip` must point at a `MatchInf` the caller has set up: `mi_word` at the
+/// word as written, `mi_end`/`mi_fend`/`mi_cend` inside it, `mi_lp` at the
+/// language being tried and `mi_win` at a live window. `MatchInf` has public
+/// fields and no constructor that checks any of that.
 unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
     loop {

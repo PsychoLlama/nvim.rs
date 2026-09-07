@@ -153,8 +153,7 @@ fn init_keymap() {
 
 /// Work out the spell-checking languages for `win`.
 fn set_spelllang(win: Win) {
-    // SAFETY: a live window with a syntax block.
-    unsafe { parse_spelllang(win) };
+    parse_spelllang(win);
 }
 
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block

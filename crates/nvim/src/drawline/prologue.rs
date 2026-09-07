@@ -604,7 +604,7 @@ impl LineSetup {
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if unsafe { (*spv).spv_capcol_lnum } == 0 && unsafe { check_need_cap(window, lnum, 0) } {
+        if unsafe { (*spv).spv_capcol_lnum } == 0 && check_need_cap(window, lnum, 0) {
             unsafe { (*spv).spv_cap_col = 0 };
         } else if lnum != unsafe { (*spv).spv_capcol_lnum } {
             unsafe { (*spv).spv_cap_col = -1 };

@@ -330,8 +330,7 @@ unsafe fn apply_entry(
         changed_lines(buffer, top + 1, 0, bot, newsize - oldsize, do_buf_event);
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
-        // SAFETY: a live current window.
-        if unsafe { spell_check_window(Win::current()) } && bot <= buffer.b_ml.ml_line_count {
+        if spell_check_window(Win::current()) && bot <= buffer.b_ml.ml_line_count {
             redraw_win_line(Win::current(), bot);
         }
     }

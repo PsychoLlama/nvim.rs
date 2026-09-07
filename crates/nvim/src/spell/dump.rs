@@ -73,8 +73,8 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
-pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
-    if unsafe { no_spell_checking(Win::current()) } {
+pub fn ex_spellinfo(_args: *mut ExArg) {
+    if no_spell_checking(Win::current()) {
         return;
     }
 
@@ -105,8 +105,12 @@ pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
 /// `:spelldump` — open a new window holding every word of the current
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_spelldump(args: *mut ExArg) {
-    if unsafe { no_spell_checking(Win::current()) } {
+    if no_spell_checking(Win::current()) {
         return;
     }
     let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
@@ -144,6 +148,11 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
 /// those starting with `pat` as Insert-mode completions, honouring `ic`
 /// and adding them in `dir` (which is set to `FORWARD` after the first, so
 /// a `BACKWARD` request applies only once).
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call. `dir`
+/// must point at a live `Direction`, unaliased for the call.
 pub unsafe fn spell_dump_compl(
     pat: *mut c_char,
     ic: c_int,
@@ -320,6 +329,13 @@ pub unsafe fn spell_dump_compl(
 /// When dumping, flags that `:mkspell` would need are written after a `/`:
 /// `=` to keep the case as written, `!` for banned, `?` for rare, and the
 /// region numbers.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
+/// must point at a NUL-terminated string, unaliased for the call. `pat` must
+/// point at a NUL-terminated string, unaliased for the call. `dir` must point
+/// at a live `Direction`, unaliased for the call.
 unsafe fn dump_word(
     slang: *mut SpellLang,
     word: *mut c_char,
@@ -420,6 +436,13 @@ unsafe fn dump_word(
 /// A prefix with a condition is also tried against the word with its first
 /// letter upper-cased, which is how "Un-" style prefixes reach words that
 /// are stored lower-case.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
+/// must point at a NUL-terminated string, unaliased for the call. `pat` must
+/// point at a NUL-terminated string, unaliased for the call. `dir` must point
+/// at a live `Direction`, unaliased for the call.
 unsafe fn dump_prefixes(
     slang: *mut SpellLang,
     word: *mut c_char,

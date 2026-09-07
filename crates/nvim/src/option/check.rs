@@ -144,7 +144,7 @@ pub(crate) fn didset_options() {
     let _ = spell_check_msm();
     let _ = unsafe { spell_check_sps() };
     unsafe { compile_cap_prog(Win::current().w_s) };
-    unsafe { did_set_spell_option() };
+    did_set_spell_option();
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.
     let _ = derive_cedit_key();

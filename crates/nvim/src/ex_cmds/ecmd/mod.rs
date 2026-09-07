@@ -433,7 +433,7 @@ pub(crate) unsafe fn do_ecmd(
             && Win::current().w_onebuf_opt.wo_spell != 0
             && unsafe { *(*Win::current().w_s).b_p_spl } as c_int != NUL
         {
-            unsafe { parse_spelllang(Win::current()) };
+            parse_spelllang(Win::current());
         }
 
         if command.is_null() {

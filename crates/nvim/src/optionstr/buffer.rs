@@ -347,7 +347,7 @@ pub unsafe fn did_set_encoding(args: &mut OptSet) -> Option<&CStr> {
         if unsafe { !cstr::eq_bytes(p_enc.get(), b"utf-8") } {
             return Some(e_unsupportedoption);
         }
-        unsafe { spell_reload() };
+        spell_reload();
     }
     None
 }

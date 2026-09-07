@@ -40,6 +40,10 @@ use crate::types::{HashValue, NUL, OK, RegProg, SpellLang, WordCount, size_t, ui
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WC_KEY_OFF, WordTree};
 
 /// Free `*p` and null it.
+///
+/// # Safety
+///
+/// `p` must point at a writable `*mut T` slot the caller owns for the call.
 unsafe fn xfree_clear<T>(p: *mut *mut T) {
     unsafe { xfree(*p as *mut c_void) };
     unsafe { *p = core::ptr::null_mut() };
@@ -47,6 +51,10 @@ unsafe fn xfree_clear<T>(p: *mut *mut T) {
 
 /// Allocate an empty language named `lang` (which may be null). The caller
 /// fills in `sl_next`.
+///
+/// # Safety
+///
+/// `lang` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
     let lp = unsafe { xcalloc(1, size_of::<SpellLang>()) } as *mut SpellLang;
 
@@ -85,6 +93,10 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
 }
 
 /// Free a language and everything it owns.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 pub unsafe fn slang_free(slang: *mut SpellLang) {
     unsafe { xfree((*slang).sl_name as *mut c_void) };
     unsafe { xfree((*slang).sl_fname as *mut c_void) };
@@ -94,6 +106,10 @@ pub unsafe fn slang_free(slang: *mut SpellLang) {
 
 /// Empty a language so its file can be read again, leaving the struct
 /// itself usable and its name and chain link intact.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 pub unsafe fn slang_clear(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe {
@@ -148,6 +164,10 @@ pub unsafe fn slang_clear(slang: *mut SpellLang) {
 }
 
 /// Drop what the `.sug` file contributed, so it can be read again.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe { (*slang).sl_sound_tree = WordTree::default() };
@@ -163,6 +183,12 @@ pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
 /// `len` is the word's length, or -1 when it is NUL terminated. `count` is
 /// 1 to count one use and 10 to seed a word the `.spl` file declared
 /// common. The count saturates rather than wrapping.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
+/// must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 pub unsafe fn count_common_word(
     slang: *mut SpellLang,
     word: *mut c_char,
@@ -209,6 +235,10 @@ pub unsafe fn count_common_word(
 /// entry in `sl_syl_items`.
 ///
 /// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call.
 pub unsafe fn init_syl_tab(slang: *mut SpellLang) -> c_int {
     // SAFETY: the caller's language, whose `sl_syllable` is a live
     // NUL-terminated string this splits in place.
@@ -250,6 +280,11 @@ pub unsafe fn init_syl_tab(slang: *mut SpellLang) -> c_int {
 ///
 /// A space resets the count, so what is returned is the count after the
 /// last space. Zero means the language defines no syllables.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `word`
+/// must point at a NUL-terminated string.
 pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char) -> c_int {
     if unsafe { (*slang).sl_syllable }.is_null() {
         return 0;
@@ -302,7 +337,7 @@ pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char)
 ///
 /// Most of its fields are invalid: string options are null and there is no
 /// undo information.
-pub unsafe fn open_spellbuf() -> Option<Buf> {
+pub fn open_spellbuf() -> Option<Buf> {
     // Never registered and never on the buffer list -- see
     // `alloc_unregistered_buffer`.
     // The allocation travels as a bare address: it is stored in a
@@ -325,7 +360,7 @@ pub unsafe fn open_spellbuf() -> Option<Buf> {
 }
 
 /// Close a buffer from [`open_spellbuf`].
-pub unsafe fn close_spellbuf(buffer: Option<Buf>) {
+pub fn close_spellbuf(buffer: Option<Buf>) {
     let Some(buffer) = buffer else {
         return;
     };

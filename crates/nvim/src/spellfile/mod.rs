@@ -603,7 +603,7 @@ unsafe fn output_name(
     let enc = if ascii {
         c"ascii".as_ptr()
     } else {
-        unsafe { spell_enc() }.cast::<::core::ffi::c_char>()
+        spell_enc().cast::<::core::ffi::c_char>()
     };
 
     if fcount == 1 {

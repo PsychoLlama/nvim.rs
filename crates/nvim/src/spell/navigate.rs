@@ -89,7 +89,7 @@ unsafe fn decor_spell_nav_col(
 
 /// Whether the syntax at this position is one that gets spell-checked.
 #[inline]
-unsafe fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
+fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
     unsafe { syn_get_id(window, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
     can_spell
@@ -104,6 +104,10 @@ unsafe fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
 /// forward, receives the highlight of the word found.
 ///
 /// Returns the length of the bad word, or 0 if none was found.
+///
+/// # Safety
+///
+/// `attrp` must point at a live `Hlf`, unaliased for the call.
 pub unsafe fn spell_move_to(
     mut window: Win,
     dir: c_int,
@@ -111,7 +115,7 @@ pub unsafe fn spell_move_to(
     curline: bool,
     attrp: *mut Hlf,
 ) -> size_t {
-    if unsafe { no_spell_checking(window) } {
+    if no_spell_checking(window) {
         return 0;
     }
 
@@ -159,7 +163,7 @@ pub unsafe fn spell_move_to(
         } else if curline && window == Win::current() {
             // For spellbadword(): does the first word need a capital?
             let col = unsafe { getwhitecols(line) } as ColNr;
-            if unsafe { check_need_cap(Win::current(), lnum, col) } {
+            if check_need_cap(Win::current(), lnum, col) {
                 capcol = col;
             }
             // check_need_cap() looked at the previous line, so the line
@@ -225,7 +229,7 @@ pub unsafe fn spell_move_to(
                     } else if decor_says == Some(false) {
                         can_spell = false;
                     } else if has_syntax {
-                        can_spell = unsafe { can_syn_spell(window, lnum, col) };
+                        can_spell = can_syn_spell(window, lnum, col);
                     }
 
                     if !can_spell {
@@ -349,6 +353,12 @@ pub unsafe fn spell_move_to(
 ///
 /// The blanks are kept rather than dropped so that the caller's columns
 /// still refer to the same places.
+///
+/// # Safety
+///
+/// `buf` must point at a NUL-terminated string, unaliased for the call.
+/// `line` must point at `maxlen` bytes the caller owns, readable and
+/// writable, unaliased for the call.
 pub unsafe fn spell_cat_line(buf: *mut c_char, line: *mut c_char, maxlen: c_int) {
     let mut p = unsafe { skipwhite(line) };
     while !unsafe { vim_strchr(c"*#/\"\t".as_ptr(), *p as uint8_t as c_int) }.is_null() {

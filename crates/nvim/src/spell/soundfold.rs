@@ -37,6 +37,10 @@ use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself
 /// when spell checking is off or no language defines one.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string.
 pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
     let win = Win::current_raw();
     if unsafe { (*win).w_onebuf_opt.wo_spell } != 0 && unsafe { *(*(*win).w_s).b_p_spl } != 0 {
@@ -62,6 +66,12 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
 /// rules are written against folded text, so an unfolded word is folded
 /// here first. The SOFO scheme folds case as part of its mapping and does
 /// not care.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
+/// must point at a NUL-terminated string, unaliased for the call. `res` must
+/// point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn spell_soundfold(
     slang: *mut SpellLang,
     inword: *mut c_char,
@@ -88,6 +98,12 @@ pub unsafe fn spell_soundfold(
 /// Characters below 256 are looked up in the flat `sl_sal_first` table.
 /// Wider ones select a list by their low byte, where the reader left a
 /// zero-terminated run of from/to pairs to scan.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
+/// must point at a NUL-terminated string. `res` must point at a NUL-
+/// terminated string, unaliased for the call.
 unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
     let mut ri = 0;
     let mut prevc = 0;
@@ -153,6 +169,12 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
 /// that many *bytes*. Every index derived from a rule match names a
 /// character the match already compared against the word and found
 /// non-NUL, or the NUL that terminates it, so no index passes `wordlen`.
+///
+/// # Safety
+///
+/// `slang` must point at a live `SpellLang`, unaliased for the call. `inword`
+/// must point at a NUL-terminated string. `res` must point at a NUL-
+/// terminated string, unaliased for the call.
 unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
     // `spell_iswordp*` answer for a window's `'iskeyword'`, and this whole
     // body runs in one: read the current one once.

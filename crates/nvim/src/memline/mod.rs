@@ -587,7 +587,7 @@ pub unsafe fn ml_close_all(del_file: bool) {
         // the buffer, so the link the walk reads next stays good.
         unsafe { ml_close(buf, del_file as ::core::ffi::c_int) };
     }
-    unsafe { spell_delete_wordlist() }; // delete the internal wordlist
+    spell_delete_wordlist(); // delete the internal wordlist
     unsafe { vim_deltempdir() }; // delete the temp directory that was created
 }
 

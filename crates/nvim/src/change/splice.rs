@@ -375,8 +375,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
     // Changing the end of a line can add or remove SpellCap on the start of
     // the next one, so schedule that line too -- but not when a `$` is
     // being displayed at the end of the changed text.
-    // SAFETY: the current window is live; the short circuit is upstream's.
-    let spell_next = unsafe { spell_check_window(Win::current()) }
+    let spell_next = spell_check_window(Win::current())
         && lnum < Buf::current().b_ml.ml_line_count
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {

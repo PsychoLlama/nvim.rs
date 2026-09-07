@@ -132,6 +132,10 @@ pub fn init_spell_chartab() {
 /// as a word character when a word character follows it, so that
 /// `they're` is one word but `they there` is two. That only works past the
 /// first character of a word, which is all the callers need.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub unsafe fn spell_iswordp(p: *const c_char, window: Win) -> bool {
     // SAFETY: the caller promised a live window, which owns its syntax block.
     let syn = unsafe { &*window.w_s };
@@ -163,6 +167,10 @@ pub unsafe fn spell_iswordp(p: *const c_char, window: Win) -> bool {
 }
 
 /// Whether `p` points at a word character, ignoring midword characters.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub unsafe fn spell_iswordp_nmw(p: *const c_char, window: Win) -> bool {
     let c = unsafe { utf_ptr2char(p) };
     if c > 255 {
@@ -175,7 +183,7 @@ pub unsafe fn spell_iswordp_nmw(p: *const c_char, window: Win) -> bool {
 ///
 /// Only meaningful above 255. Unicode sub- and superscripts are excluded;
 /// with `'spelloptions'` containing `cjk` the East Asian scripts are too.
-unsafe fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
+fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
     if unsafe { (*window.w_s).b_cjk } != 0 {
         return cl == 2 || cl == 0x2800;
     }
@@ -184,6 +192,12 @@ unsafe fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
 
 /// Wide-character [`spell_iswordp`]: `w` is the tail of a character array
 /// starting at the position of interest.
+///
+/// # Safety
+///
+/// `w` must hold at least two characters: it is the tail of a wide character
+/// array standing at the position of interest, and the one *after* the
+/// position is read when the first is a mid-word character.
 pub(super) unsafe fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     // SAFETY: the caller promised a live window, which owns its syntax block.
     let syn = unsafe { &*window.w_s };
@@ -206,6 +220,11 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
 ///
 /// Answers `Err` when the result does not fit, having still terminated
 /// what was written.
+///
+/// # Safety
+///
+/// `str` must point at `len` readable bytes. `buf` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn spell_casefold(
     window: Win,
     str: *const c_char,
@@ -252,6 +271,11 @@ pub unsafe fn spell_casefold(
 ///
 /// `WordFlags::KEEPCAP` means the pattern is neither of the simple ones — "MacBeth"
 /// — so the word tree has to store it spelled out.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string. `end` must point at a NUL-
+/// terminated string.
 pub unsafe fn captype(word: *const c_char, end: *const c_char) -> WordFlags {
     // Skip over any leading non-word characters.
     let at_end = |p: *const c_char| {
@@ -322,6 +346,11 @@ pub(super) fn spell_toupper(c: c_int) -> c_int {
 
 /// Copy `word` into `wcopy`, upper-casing (or folding) the first character.
 /// `wcopy` must hold [`MAXWLEN`] bytes.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string. `wcopy` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) {
     let mut p = word;
     let mut c = unsafe { mb_cptr2char_adv(&raw mut p) };
@@ -342,6 +371,11 @@ pub unsafe fn onecap_copy(word: *const c_char, wcopy: *mut c_char, upper: bool) 
 
 /// Copy `word` into `wcopy` with every character upper-cased. `wcopy` must
 /// hold [`MAXWLEN`] bytes; the copy stops short rather than overflow.
+///
+/// # Safety
+///
+/// `word` must point at a NUL-terminated string. `wcopy` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn allcap_copy(word: *const c_char, wcopy: *mut c_char) {
     let mut d = wcopy;
     let mut s = word;
@@ -375,6 +409,11 @@ pub unsafe fn allcap_copy(word: *const c_char, wcopy: *mut c_char) {
 ///
 /// Folding can change how many bytes a character takes, so a length into
 /// the folded word has to be converted before it can index the original.
+///
+/// # Safety
+///
+/// `fword` must point at a NUL-terminated string, unaliased for the call.
+/// `word` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn nofold_len(fword: *mut c_char, flen: c_int, word: *mut c_char) -> c_int {
     let mut i = 0;
     let mut p = fword;
@@ -394,6 +433,11 @@ pub unsafe fn nofold_len(fword: *mut c_char, flen: c_int, word: *mut c_char) -> 
 
 /// Write the folded word `fword` into `cword` with the capitalisation that
 /// `flags` (as produced by [`captype`]) describes.
+///
+/// # Safety
+///
+/// `fword` must point at a NUL-terminated string, unaliased for the call.
+/// `cword` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn make_case_word(fword: *mut c_char, cword: *mut c_char, flags: WordFlags) {
     if flags.has(WordFlags::ALLCAP) {
         unsafe { allcap_copy(fword, cword) };
@@ -406,6 +450,11 @@ pub unsafe fn make_case_word(fword: *mut c_char, cword: *mut c_char, flags: Word
 
 /// Whether byte `n` appears in the NUL-terminated `str`. Like `strchr()`
 /// but independent of the locale.
+///
+/// # Safety
+///
+/// `str` must point at `n` consecutive values, each live `uint8_t`, unaliased
+/// for the call.
 pub unsafe fn byte_in_str(str: *mut uint8_t, n: c_int) -> bool {
     let mut p = str;
     while unsafe { *p } != 0 {

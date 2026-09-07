@@ -95,7 +95,7 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
     // for it, which is what turning the option on does.
     let wo_spell_save = Win::current().w_onebuf_opt.wo_spell;
     if Win::current().w_onebuf_opt.wo_spell == 0 {
-        unsafe { parse_spelllang(Win::current()) };
+        parse_spelllang(Win::current());
         Win::current().w_onebuf_opt.wo_spell = 1;
     }
 
@@ -128,7 +128,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     // it, and the caller guarantees its spell state.
     let lnum = Win::current().w_cursor.lnum;
     let col = Win::current().w_cursor.col;
-    let need_cap = unsafe { check_need_cap(Win::current(), lnum, col) };
+    let need_cap = check_need_cap(Win::current(), lnum, col);
 
     // Autocommands may free the line, so work from a copy.
     let line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize) };
