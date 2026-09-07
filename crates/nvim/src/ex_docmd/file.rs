@@ -73,6 +73,10 @@ use crate::winlayer::{Buf, Ea, Win};
 /// A buffer whose file could not be stat'ed is compared by its *short*
 /// name, because the full name may have been resolved against a directory
 /// that no longer exists.
+///
+/// # Safety
+///
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
     if fnum != 0 {
         return fnum != Buf::current().handle;
@@ -94,6 +98,10 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
 }
 
 /// `:buffer`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_buffer(args: *mut ExArg) {
     do_exbuffer(unsafe { Ea::new(args) });
 }
@@ -127,6 +135,10 @@ fn run_ecmd_cmd(args: Ea) {
 }
 
 /// `:bmodified`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_bmodified(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     goto_buffer(
@@ -139,6 +151,10 @@ pub(crate) unsafe fn ex_bmodified(args: *mut ExArg) {
 }
 
 /// `:bnext`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_bnext(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     goto_buffer(
@@ -151,6 +167,10 @@ pub(crate) unsafe fn ex_bnext(args: *mut ExArg) {
 }
 
 /// `:bprevious` and `:bNext`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_bprevious(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     goto_buffer(
@@ -163,23 +183,39 @@ pub(crate) unsafe fn ex_bprevious(args: *mut ExArg) {
 }
 
 /// `:brewind` and `:bfirst`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_brewind(args: *mut ExArg) {
     goto_buffer(args, DOBUF_FIRST as c_int, FORWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(args) });
 }
 
 /// `:blast`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_blast(args: *mut ExArg) {
     goto_buffer(args, DOBUF_LAST as c_int, BACKWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(args) });
 }
 
 /// `:preserve` — flush the swap file to disk now.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_preserve(_args: *mut ExArg) {
     unsafe { ml_preserve(Buf::current(), true, true) };
 }
 
 /// `:recover` — read the buffer back out of a swap file.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     // The flag changes what the swap-file machinery does with what it
@@ -211,6 +247,10 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
 }
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_find(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     if !check_can_set_curbuf_forceit(args.forceit) {
@@ -239,6 +279,10 @@ pub(crate) unsafe fn ex_find(args: *mut ExArg) {
 /// The search context is what makes the second and later matches cheap:
 /// each `find_file_in_path(NULL, …)` resumes the walk the first one
 /// started.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
@@ -278,6 +322,10 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
 }
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_edit(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let ffname = if args.cmdidx == CmdIdx::enew {
@@ -307,6 +355,10 @@ pub(crate) unsafe fn ex_edit(args: *mut ExArg) {
 /// `:edit`. It is what tells the failure path that there is a new window
 /// to close again, and what makes the alternate file be set on the window
 /// left behind.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
     let mut ea = unsafe { Ea::new(args) };
     // `:visual` and `:view` with no argument leave Ex mode.
@@ -429,6 +481,10 @@ pub(crate) unsafe fn do_exedit(args: *mut ExArg, old_curwin: Option<WinId>) {
 }
 
 /// `:swapname`.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_swapname(_args: *mut ExArg) {
     let mfp = Buf::current().b_ml.ml_mfp;
     if mfp.is_null() || mf_fname(mfp).is_null() {
@@ -439,6 +495,10 @@ pub(crate) unsafe fn ex_swapname(_args: *mut ExArg) {
 }
 
 /// `:read` — insert a file, or the output of a command.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     let was_empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
@@ -509,6 +569,10 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
 }
 
 /// `:!cmd`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_bang(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     let (addr_count, forceit) = (args.addr_count, args.forceit != 0);
@@ -517,6 +581,10 @@ pub(crate) unsafe fn ex_bang(args: *mut ExArg) {
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
@@ -527,6 +595,10 @@ pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
 }
 
 /// `:rundo`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_rundo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
@@ -535,6 +607,10 @@ pub(crate) unsafe fn ex_rundo(args: *mut ExArg) {
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     unsafe {
@@ -560,6 +636,10 @@ pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
 }
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_shada(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     // An empty 'shada' would mean "save nothing", which is not what an
@@ -577,6 +657,10 @@ pub(crate) unsafe fn ex_shada(args: *mut ExArg) {
 }
 
 /// `:fclose` — close a floating window by its handle.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     unsafe { win_float_remove(args.forceit != 0, args.line1 as c_int) };

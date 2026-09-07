@@ -76,8 +76,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
         p_menc.get()
     };
 
-    // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(Win::current);
+    let wp = is_loclist_cmd(args.cmdidx).then(Win::current);
 
     incr_quickfix_busy();
 

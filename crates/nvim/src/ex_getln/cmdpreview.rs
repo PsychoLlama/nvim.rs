@@ -382,7 +382,7 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         // Is the command previewable? If not, don't attempt a preview.
         if !ea.argt.has(ExArgt::PREVIEW) {
-            unsafe { undo_cmdmod(&mut cmdinfo.cmdmod) };
+            undo_cmdmod(&mut cmdinfo.cmdmod);
             break 'end;
         }
 

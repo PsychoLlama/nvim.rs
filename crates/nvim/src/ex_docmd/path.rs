@@ -62,7 +62,7 @@ fn global_findfunc() -> *mut Callback {
 }
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
-pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
+pub(crate) fn get_findfunc_callback() -> *mut Callback {
     if byte(Buf::current().b_p_ffu) != NUL {
         // SAFETY: `curbuf` is set from startup to exit, and the address
         // of a field is not a read of the buffer.
@@ -93,7 +93,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     // Errors are reported against the script that *set* the option, not
     // against whatever is running now.
     current_sctx.set(option_last_set(kOptFindfunc));
-    let cb = unsafe { get_findfunc_callback() };
+    let cb = get_findfunc_callback();
     let mut rettv: TypVal = unsafe { core::mem::zeroed() };
     rettv.v_type = VAR_UNKNOWN;
     let called = unsafe { callback_call(cb, 2, &raw mut args as *mut TypVal, &raw mut rettv) };
@@ -113,6 +113,13 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
 }
 
 /// Complete a `:find` argument through 'findfunc'.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `files` must point at a writable `*mut *mut c_char` slot the caller owns
+/// for the call. `num_matches` must point at a writable `int` the caller
+/// owns.
 pub unsafe fn expand_findfunc(
     pat: *mut c_char,
     files: *mut *mut *mut c_char,
@@ -150,6 +157,10 @@ pub unsafe fn expand_findfunc(
 ///
 /// `findarg` is not NUL-terminated at `findarg_len`; the byte there is
 /// saved, overwritten and put back, because the caller owns a longer line.
+///
+/// # Safety
+///
+/// `findarg` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn findfunc_find_file(
     findarg: *mut c_char,
     findarg_len: size_t,
@@ -186,7 +197,7 @@ pub(crate) unsafe fn findfunc_find_file(
 /// script-local function name to its `<SNR>` form.
 ///
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
-pub unsafe fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
     let buf = args.os_buf as *mut Buffer;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb) }
@@ -212,7 +223,7 @@ pub unsafe fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
 
 /// Mark what the global 'findfunc' callback holds, for the garbage
 /// collector.
-pub unsafe fn set_ref_in_findfunc(copy_id: c_int) -> bool {
+pub fn set_ref_in_findfunc(copy_id: c_int) -> bool {
     unsafe { set_ref_in_callback(global_findfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
 }
 
@@ -232,7 +243,7 @@ pub(crate) fn get_prevdir(scope: CdScope) -> *mut c_char {
 /// the change that has just happened, so both are cleared. `globaldir`
 /// remembers what the global directory was, so that leaving a local
 /// directory can go back to it.
-pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
+pub(crate) fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
     xfree(Win::current().w_localdir as *mut c_void);
     Win::current().w_localdir = ptr::null_mut();
     if scope as c_int >= kCdScopeTabpage as c_int {
@@ -278,6 +289,10 @@ pub(crate) unsafe fn post_chdir(scope: CdScope, trigger_dirchanged: bool) {
 /// The DirChangedPre autocommand fires *before* the change and may cancel
 /// it by failing; that is why the `chdir` and the event are only reached
 /// when the directory really differs.
+///
+/// # Safety
+///
+/// `new_dir` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     let mut new_dir = new_dir;
     // The DirChangedPre autocommand below runs while `new_dir` may point in
@@ -334,11 +349,15 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     unsafe { *pp = pdir };
     prev_dir.set(global_prevdir);
 
-    unsafe { post_chdir(scope, dir_differs) };
+    post_chdir(scope, dir_differs);
     true
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn ex_cd(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let new_dir = args.arg;
@@ -364,6 +383,10 @@ pub unsafe fn ex_cd(args: *mut ExArg) {
 }
 
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_pwd(_args: *mut ExArg) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {

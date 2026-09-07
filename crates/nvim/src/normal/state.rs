@@ -598,7 +598,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         if ns.noexmode {
             return 0;
         }
-        unsafe { do_exmode() };
+        do_exmode();
         return -1;
     }
     if ns.cmdwin && cmdwin_result.get() != 0 {

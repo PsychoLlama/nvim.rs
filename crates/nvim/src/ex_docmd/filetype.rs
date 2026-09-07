@@ -51,6 +51,10 @@ use crate::winlayer::{Buf, Ea};
 ///
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_autocmd(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     if secure.get() != 0 {
@@ -66,6 +70,10 @@ pub(crate) unsafe fn ex_autocmd(args: *mut ExArg) {
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut arg = args.arg;
@@ -78,10 +86,14 @@ pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_filetype(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if byte(args.arg) == NUL {
-        unsafe { report_filetype_state() };
+        report_filetype_state();
         return;
     }
 
@@ -151,7 +163,7 @@ pub(crate) unsafe fn ex_filetype(args: *mut ExArg) {
 ///
 /// Plugin and indent report `(on)` rather than `ON` when detection itself
 /// is off, because nothing will ever ask them to run.
-unsafe fn report_filetype_state() {
+fn report_filetype_state() {
     let detecting = filetype_detect.get() == Some(true);
     let state = |on: bool| -> *const c_char {
         if !on {
@@ -203,6 +215,10 @@ pub fn filetype_maybe_enable() {
 /// A `FALLBACK ` prefix means "only if nothing better is found later", and
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if Buf::current().b_did_filetype {
@@ -224,6 +240,10 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut env = env_buf();

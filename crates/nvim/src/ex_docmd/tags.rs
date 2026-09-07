@@ -38,6 +38,10 @@ use crate::winlayer::Ea;
 /// The third letter of the name says what to do with what is found, and
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
     let mut ea = unsafe { Ea::new(args) };
     let name = cmdnames[ea.cmdidx.index()].cmd_name;
@@ -106,6 +110,10 @@ pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
 }
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_ptag(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     g_do_tagpreview.set(p_pvh.get() as c_int);
@@ -113,6 +121,10 @@ pub(crate) unsafe fn ex_ptag(args: *mut ExArg) {
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_stag(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     // `-1` means "split, and let the tag code choose the size".
@@ -125,6 +137,10 @@ pub(crate) unsafe fn ex_stag(args: *mut ExArg) {
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tag(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     unsafe { ex_tag_cmd(args, cmdnames[args.cmdidx.index()].cmd_name) };
@@ -136,6 +152,10 @@ pub(crate) unsafe fn ex_tag(args: *mut ExArg) {
 /// `ex_ptag` and `ex_stag` pass the name one byte in, so that `:ptnext`
 /// and `:stselect` read the same letter `:tnext` and `:tselect` do. A
 /// leading `l` overrides everything: it is the location-list form.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 unsafe fn ex_tag_cmd(args: Ea, name: *const c_char) {
     let mut cmd = match ubyte_at(name, 1) {
         b'j' => DT_JUMP,

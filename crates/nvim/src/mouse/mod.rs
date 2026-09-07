@@ -435,8 +435,7 @@ fn mouse_tab_close(c1: c_int) {
     };
     if tp == TabPage::current_raw() {
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
-            // SAFETY: as above.
-            unsafe { tabpage_close(false as c_int) };
+            tabpage_close(false as c_int);
         }
     } else if !tp.is_null() {
         // SAFETY: as above.

@@ -95,6 +95,10 @@ fn empty_cstack() -> CondStack {
 
 /// Free every line a `:while`/`:for` body stored, and the array holding
 /// them.
+///
+/// # Safety
+///
+/// `gap` must point at a live growable array, unaliased for the call.
 unsafe fn clear_loop_lines(gap: *mut GArray) {
     if !unsafe { (*gap).ga_data }.is_null() {
         for i in 0..unsafe { (*gap).ga_len } {
@@ -106,6 +110,10 @@ unsafe fn clear_loop_lines(gap: *mut GArray) {
 }
 
 /// Run one Ex command line, as if the user had typed it.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string.
 pub unsafe fn do_cmdline_cmd(cmd: *const c_char) -> Result<(), Failed> {
     unsafe {
         do_cmdline(
@@ -140,6 +148,12 @@ crate::flag_set! {
 ///
 /// May be called recursively. Answers `Err` when the line could not be
 /// run, `Ok` otherwise.
+///
+/// # Safety
+///
+/// `cmdline` must point at a NUL-terminated string, unaliased for the call.
+/// `cookie` must be the payload `fgetline` was registered with, live for the
+/// call.
 pub unsafe fn do_cmdline(
     cmdline: *mut c_char,
     fgetline: LineGetter,
@@ -674,7 +688,7 @@ pub unsafe fn do_cmdline(
             // An exception thrown out of the outermost try conditional:
             // discard it, stop converting errors and interrupts to
             // exceptions, and run nothing more.
-            unsafe { handle_did_throw() };
+            handle_did_throw();
         } else if got_int.get() || did_emsg.get() != 0 && force_abort.get() {
             // An interrupt, or an aborting error that did not become an
             // exception. Errors stop being converted — which is also

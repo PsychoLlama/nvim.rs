@@ -169,6 +169,10 @@ const SMILE: &[&CStr] = &[
 ///
 /// Every command name `find_ex_command` failed to resolve reaches here, so
 /// the name test comes first and is exact.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn verify_command(cmd: *mut c_char) {
     if unsafe { CStr::from_ptr(cmd) } != c"smile" {
         return;

@@ -116,6 +116,10 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
 ///
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
 /// and evaluate nothing.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn parse_command_modifiers(
     args: *mut ExArg,
     errormsg: &mut Option<CString>,
@@ -389,6 +393,11 @@ pub(crate) unsafe fn parse_command_modifiers(
 /// the range occupies and the range is written into the gap. Ex mode's
 /// substituted `+` command is not in the buffer at all, so it takes the
 /// other branch and the range is prefixed rather than moved.
+///
+/// # Safety
+///
+/// `orig_cmd` must point at a NUL-terminated string, unaliased for the call.
+/// `cmd_start` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn restore_visual_range(
     mut ea: Ea,
     orig_cmd: *mut c_char,
@@ -572,7 +581,7 @@ fn eventignore_all() -> OptVal {
 }
 
 /// Take the modifiers back out of force.
-pub(crate) unsafe fn undo_cmdmod(cm: &mut CmdMod) {
+pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     if cm.cmod_verbose_save > 0 {
         p_verbose.set(cm.cmod_verbose_save - 1);
         cm.cmod_verbose_save = 0;
@@ -688,8 +697,7 @@ impl Drop for CmdModScope {
         // which is what lets `undo_cmdmod` free them while the cell still
         // answers `message_filtered` for anything it says on the way out.
         let mut live = cmdmod.with(Clone::clone);
-        // SAFETY: `live` names the modifiers this guard put in force.
-        unsafe { undo_cmdmod(&mut live) };
+        undo_cmdmod(&mut live);
         cmdmod.set(core::mem::take(&mut self.saved));
     }
 }
@@ -698,6 +706,10 @@ impl Drop for CmdModScope {
 ///
 /// Used by the command-line completion to decide what the word after a
 /// modifier should complete as.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn modifier_len(cmd: *mut c_char) -> c_int {
     // A count may precede a modifier, and only the two that accept one
     // match when it does.
@@ -721,6 +733,10 @@ pub unsafe fn modifier_len(cmd: *mut c_char) -> c_int {
 /// The walk is over `p`, not over `name`: it stops at the end of the
 /// *typed* word, so a full name and an abbreviation both come back with
 /// the length that was typed.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
     let name = name.to_bytes_with_nul();
     let mut j = 0usize;
@@ -741,7 +757,7 @@ pub fn expr_map_locked() -> bool {
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells
 /// them apart by the leading `l` of the name and nothing else.
-pub unsafe fn is_loclist_cmd(cmdidx: CmdIdx) -> bool {
+pub fn is_loclist_cmd(cmdidx: CmdIdx) -> bool {
     if is_user_cmd(cmdidx) || cmdidx == CmdIdx::SIZE {
         return false;
     }

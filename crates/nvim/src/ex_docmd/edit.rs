@@ -3,67 +3,50 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
-use crate::guard::Depth;
 use crate::memline::MlFlags;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::cursor::{check_cursor, check_cursor_col};
 
-use crate::drawscreen::{UPD_VALID, clearmode, redraw_later, setcursor_mayforce, showmode};
+use crate::drawscreen::{UPD_VALID, redraw_later, setcursor_mayforce};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::event::r#loop::process_events_until;
 use crate::ex_cmds::{do_move, ex_copy, ex_substitute, ex_substitute_preview, global_exe};
 
 use crate::ex_docmd::address::get_address;
 use crate::ex_docmd::cmdline::do_cmdline;
-use crate::ex_docmd::modifier::expr_map_locked;
 use crate::ex_docmd::scan::{find_nextcmd, get_flags};
 use crate::ex_docmd::{
-    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, KS_SPECIAL, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE,
-    REMAP_YES, kMTLineWise,
+    DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, kMTLineWise,
 };
 use crate::ex_getln::getexline;
 use crate::fold::{fold_create, fold_manual_allowed, has_folding, op_fold_range};
-use crate::getchar::{
-    beep_flush, restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc,
-};
+use crate::getchar::{beep_flush, stuff_empty, typeahead, vpeekc};
 
-use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, exec_from_reg};
-use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
-use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
+use crate::ex_docmd::state::{ex_no_reprint, exec_from_reg};
+use crate::getchar::state::got_int;
+use crate::keycodes::Ctrl_O;
 use crate::lua::executor::ex_lua;
 use crate::mark::{checkpcmark, setmark, setpcmark};
-use crate::message::state::{msg_didout, msg_scroll};
-use crate::message::{
-    e_argreq, e_empty_buffer, e_invrange, e_secure, e_undobang_cannot_redo_or_move_branch,
-};
-use crate::option::vars::p_mmd;
+use crate::message::{e_argreq, e_empty_buffer, e_invrange, e_undobang_cannot_redo_or_move_branch};
 use crate::search::state::magic_overruled;
 use crate::startup::main_loop;
-use crate::state::mode::{
-    State, did_syncbind, finish_op, force_restart_edit, opcount, restart_edit, stop_insert_mode,
-    virtual_op,
-};
+use crate::state::mode::{did_syncbind, virtual_op};
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
-use crate::memory::{xfree, xmalloc};
 
-use crate::mouse::setmouse;
 use crate::r#move::{
-    check_cursor_moved, cursor_correct, cursor_valid, scrolldown, scrollup, update_curswant,
-    update_topline, validate_cursor,
+    cursor_correct, cursor_valid, scrolldown, scrollup, update_curswant, update_topline,
+    validate_cursor,
 };
-use crate::normal::{
-    end_visual_mode, get_vtopline, normal_cmd, set_cursor_for_append_to_line, visual_active,
-};
+use crate::normal::{end_visual_mode, get_vtopline, visual_active};
 use crate::ops::{do_join, op_delete, op_shift};
 
 use crate::option::{cpo_has, get_scrolloff_value};
@@ -73,10 +56,9 @@ use crate::plines::plines_m_win_fill;
 use crate::pos::MAXLNUM;
 use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
-use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
     ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OpArg, OpType, OptMagic, PUT_CURSLINE,
-    PUT_FIXINDENT, PUT_LINE, Pos, SaveState, int64_t, size_t, ssize_t,
+    PUT_FIXINDENT, PUT_LINE, Pos, int64_t, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -86,6 +68,10 @@ use crate::undo::{u_clearline, u_redo, u_undo};
 use crate::winlayer::{Buf, Ea, Win, windows};
 
 /// `:print`, `:number` and `:list`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_print(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -110,6 +96,10 @@ pub(crate) unsafe fn ex_print(args: *mut ExArg) {
 }
 
 /// `:goto` — the range is a byte offset, not a line number.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_goto(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     unsafe { goto_byte(args.line2 as c_int) };
@@ -117,6 +107,10 @@ pub(crate) unsafe fn ex_goto(args: *mut ExArg) {
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
 /// position.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
     let old_linenr = Win::current().w_cursor.lnum;
     setpcmark();
@@ -171,6 +165,10 @@ pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
 
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     if byte(args.arg) != NUL && byte(args.arg) != '|' as c_int {
@@ -182,6 +180,10 @@ pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
 }
 
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cursor_valid(Win::current()) != 0 {
@@ -198,12 +200,12 @@ pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
             return;
         }
     }
-    unsafe { do_sleep(len, args.forceit != 0) };
+    do_sleep(len, args.forceit != 0);
 }
 
 /// Wait `msec` milliseconds, still serving events, and stop early on an
 /// interrupt.
-pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
+pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
     if hide_cursor {
         ui_busy_start();
     }
@@ -224,6 +226,10 @@ pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
 
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut oa: OpArg = unsafe { core::mem::zeroed() };
@@ -275,12 +281,20 @@ pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
 }
 
 /// `:put`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_put(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     put_lines(args, PUT_LINE as c_int | PUT_CURSLINE as c_int);
 }
 
 /// `:iput` — the same, re-indenting what is put.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_iput(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     put_lines(
@@ -314,6 +328,10 @@ fn put_lines(mut args: Ea, flags: c_int) {
 
 /// `:copy` and `:move` — both take a destination address after the
 /// command, which is why they parse one more address here.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     let mut errormsg = None;
@@ -357,6 +375,10 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
 }
 
 /// Print the current line, if the command carried an `l`, `p` or `#` flag.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn ex_may_print(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.flags != 0 {
@@ -372,6 +394,10 @@ pub unsafe fn ex_may_print(args: *mut ExArg) {
 
 /// `:smagic` and `:snomagic` — `:substitute` with 'magic' forced either
 /// way for the duration.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_submagic(args: *mut ExArg) {
     let saved = force_magic(unsafe { Ea::new(args) });
     unsafe { ex_substitute(args) };
@@ -379,6 +405,10 @@ pub(crate) unsafe fn ex_submagic(args: *mut ExArg) {
 }
 
 /// The 'inccommand' preview of the same.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_submagic_preview(
     args: *mut ExArg,
     cmdpreview_ns: c_int,
@@ -402,6 +432,10 @@ fn force_magic(args: Ea) -> OptMagic {
 }
 
 /// `:join`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_join(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     Win::current().w_cursor.lnum = args.line1;
@@ -435,6 +469,10 @@ pub(crate) unsafe fn ex_join(args: *mut ExArg) {
 /// The register's text goes into the typeahead, and command lines are read
 /// out of it until it is empty. `prev_len` is what tells "empty" from
 /// "there was already typeahead before this".
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_at(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let prev_len = typeahead().len();
@@ -471,6 +509,10 @@ pub(crate) unsafe fn ex_at(args: *mut ExArg) {
 /// `:undo! N` is different again: it *forgets* the states between here and
 /// N rather than moving to it, so it can only go backwards along the
 /// current branch.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.addr_count != 1 {
@@ -517,12 +559,20 @@ pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
 }
 
 /// `:redo`.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redo(_args: *mut ExArg) {
     unsafe { u_redo(1) };
 }
 
 /// `:earlier` and `:later` — a count of changes, of seconds (`s`, `m`,
 /// `h`, `d`) or of file writes (`f`).
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_later(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut count = 0;
@@ -583,6 +633,10 @@ pub(crate) unsafe fn ex_later(args: *mut ExArg) {
 }
 
 /// `:mark` and `:k`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_mark(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if byte(args.arg) == NUL {
@@ -619,223 +673,11 @@ pub fn update_topline_cursor() {
     update_curswant();
 }
 
-/// Save the state `:normal` is about to disturb.
-///
-/// Answers whether the typeahead could be saved; when it could not, the
-/// caller must not run anything, because there would be nowhere to put the
-/// user's own pending keys back.
-pub unsafe fn save_current_state(sst: *mut SaveState) -> bool {
-    // SAFETY: the caller's own `SaveState`, live for the call.
-    let s = unsafe { &mut *sst };
-    s.save_msg_scroll = msg_scroll.get();
-    s.save_restart_edit = restart_edit.get();
-    s.save_msg_didout = msg_didout.get();
-    s.save_state = State.get();
-    s.save_finish_op = finish_op.get();
-    s.save_opcount = opcount.get();
-    s.save_reg_executing = reg_executing.get();
-    s.save_pending_end_reg_executing = pending_end_reg_executing.get();
-    msg_scroll.set(0);
-    // Not entering Insert mode from here.
-    restart_edit.set(0);
-    unsafe { save_typeahead(&raw mut s.tabuf) };
-    s.tabuf.typebuf_valid
-}
-
-/// Put it all back.
-pub unsafe fn restore_current_state(sst: *mut SaveState) {
-    // SAFETY: as `save_current_state`.
-    let s = unsafe { &*sst };
-    unsafe { restore_typeahead(&raw mut (*sst).tabuf) };
-    msg_scroll.set(s.save_msg_scroll);
-    // A command that asked to enter Insert mode *after* `:normal`
-    // finishes keeps that request; anything else is put back.
-    if force_restart_edit.get() {
-        force_restart_edit.set(false);
-    } else {
-        restart_edit.set(s.save_restart_edit);
-    }
-    finish_op.set(s.save_finish_op);
-    opcount.set(s.save_opcount);
-    reg_executing.set(s.save_reg_executing);
-    pending_end_reg_executing.set(s.save_pending_end_reg_executing);
-    msg_didout.set(msg_didout.get() || s.save_msg_didout);
-    State.set(s.save_state);
-    ui_cursor_shape();
-}
-
-/// `:normal` — run the argument as normal-mode keys.
-pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
-    let mut args = unsafe { Ea::new(args) };
-    if !Buf::current().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
-        emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
-        return;
-    }
-    if expr_map_locked() {
-        emsg(gettext(e_secure.as_ptr()));
-        return;
-    }
-    if ex_normal_busy.get() as crate::types::OptInt >= p_mmd.get() {
-        emsg(gettext(c"E192: Recursive use of :normal too deep".as_ptr()));
-        return;
-    }
-
-    let arg = unsafe { escape_k_special(args.arg) };
-    let busy = Depth::of(&ex_normal_busy);
-    let mut save_state = SaveState::default();
-    if unsafe { save_current_state(&raw mut save_state) } {
-        loop {
-            // With a range, the keys are run once per line, from the
-            // first column.
-            if args.addr_count != 0 {
-                Win::current().w_cursor.lnum = args.line1;
-                args.line1 += 1;
-                Win::current().w_cursor.col = 0 as ColNr;
-                check_cursor_moved(Win::current());
-            }
-            unsafe {
-                exec_normal_cmd(
-                    if arg.is_null() { args.arg } else { arg },
-                    if args.forceit != 0 {
-                        REMAP_NONE as c_int
-                    } else {
-                        REMAP_YES as c_int
-                    },
-                    false,
-                )
-            };
-            if !(args.addr_count > 0 && args.line1 <= args.line2 && !got_int.get()) {
-                break;
-            }
-        }
-    }
-    update_topline_cursor();
-    unsafe { restore_current_state(&raw mut save_state) };
-    drop(busy);
-    setmouse();
-    ui_cursor_shape();
-    unsafe { xfree(arg as *mut c_void) };
-}
-
-/// Escape any 0x80 byte inside a multibyte character, so that the
-/// typeahead does not read it as the start of a special key.
-///
-/// Answers null — not a copy — when there is nothing to escape, which is
-/// the common case; the caller then uses the original.
-unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
-    // Count the extra bytes first, so the copy can be sized exactly.
-    let mut extra = 0;
-    let mut p = src;
-    while byte(p) != NUL {
-        let mut l = utfc_ptr2len(p) - 1;
-        while l > 0 {
-            p = unsafe { p.add(1) };
-            if byte(p) == K_SPECIAL as c_char as c_int {
-                extra += 2;
-            }
-            l -= 1;
-        }
-        p = unsafe { p.add(1) };
-    }
-    if extra == 0 {
-        return ptr::null_mut();
-    }
-
-    let out = unsafe { xmalloc(cstr::bytes_at(src).len() + extra as size_t + 1) } as *mut c_char;
-    let mut len = 0;
-    let mut p = src;
-    while byte(p) != NUL {
-        unsafe { *out.offset(len) = *p };
-        len += 1;
-        let mut l = utfc_ptr2len(p) - 1;
-        while l > 0 {
-            p = unsafe { p.add(1) };
-            unsafe { *out.offset(len) = *p };
-            len += 1;
-            if byte(p) == K_SPECIAL as c_char as c_int {
-                unsafe { *out.offset(len) = KS_SPECIAL as c_char };
-                len += 1;
-                unsafe { *out.offset(len) = KE_FILLER as c_char };
-                len += 1;
-            }
-            l -= 1;
-        }
-        // Terminated inside the loop, so that a `break` on a bad
-        // sequence still leaves a valid string.
-        unsafe { *out.offset(len) = NUL as c_char };
-        p = unsafe { p.add(1) };
-    }
-    out
-}
-
-/// `:startinsert`, `:startreplace` and `:startgreplace`.
-pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if args.forceit != 0 {
-        if Win::current().w_cursor.lnum == 0 {
-            Win::current().w_cursor.lnum = 1;
-        }
-        unsafe { set_cursor_for_append_to_line() };
-    }
-    if State.get() & MODE_INSERT != 0 {
-        return;
-    }
-    let idx = args.cmdidx;
-    // The upper-case forms are what `edit()` reads as "started from
-    // here" rather than "restarted".
-    restart_edit.set(if idx == CmdIdx::startinsert {
-        'a' as c_int
-    } else if idx == CmdIdx::startreplace {
-        'R' as c_int
-    } else {
-        'V' as c_int
-    });
-    if args.forceit == 0 {
-        if idx == CmdIdx::startinsert {
-            restart_edit.set('i' as c_int);
-        }
-        Win::current().w_curswant = 0 as ColNr;
-    }
-    if visual_active() {
-        unsafe { showmode() };
-    }
-}
-
-/// `:stopinsert`.
-pub(crate) unsafe fn ex_stopinsert(_args: *mut ExArg) {
-    restart_edit.set(0);
-    stop_insert_mode.set(true);
-    unsafe { clearmode() };
-}
-
-/// Put `cmd` into the typeahead and run it as normal-mode keys.
-pub unsafe fn exec_normal_cmd(cmd: *mut c_char, remap: c_int, silent: bool) {
-    let _ = ins_typebuf(cmd, remap, 0, true, silent);
-    unsafe { exec_normal(false, false) };
-}
-
-/// Run normal-mode commands until the typeahead is spent.
-pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
-    let mut oa: OpArg = unsafe { core::mem::zeroed() };
-    clear_oparg(&raw mut oa);
-    finish_op.set(false);
-    let mut c: c_int;
-    while (!stuff_empty()
-        || (was_typed || typeahead().maplen() != 0) && !typeahead().is_empty()
-        // `use_vpeekc` also runs whatever the *user* has typed, but
-        // stops at a CTRL-C rather than swallowing it.
-        || use_vpeekc && {
-            c = vpeekc();
-            c != NUL
-        } && c != Ctrl_C)
-        && !got_int.get()
-    {
-        update_topline_cursor();
-        unsafe { normal_cmd(&raw mut oa, true) };
-    }
-}
-
 /// `:fold`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if fold_manual_allowed(true) != 0 {
@@ -844,6 +686,10 @@ pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
 }
 
 /// `:foldopen` and `:foldclose`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_foldopen(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     op_fold_range(
@@ -875,6 +721,10 @@ fn range_end(args: Ea) -> Pos {
 
 /// `:folddoopen` and `:folddoclosed` — run a command on every line that is
 /// (or is not) inside a closed fold.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_folddo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let want_closed = (args.cmdidx == CmdIdx::folddoclosed) as c_int;
@@ -890,25 +740,25 @@ pub(crate) unsafe fn ex_folddo(args: *mut ExArg) {
 }
 
 /// `clear_oparg()` as checked code.
-fn clear_oparg(op: *mut OpArg) {
+pub(super) fn clear_oparg(op: *mut OpArg) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ops::clear_oparg(op) }
 }
 
 /// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
+pub(super) fn emsg(s: *const c_char) -> bool {
     // SAFETY: a NUL-terminated message.
     unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
+pub(super) fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
     unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `ins_typebuf()` as checked code.
-fn ins_typebuf(
+pub(super) fn ins_typebuf(
     str: *mut c_char,
     noremap: c_int,
     offset: c_int,
@@ -932,7 +782,7 @@ fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
 }
 
 /// `ui_cursor_shape()` as checked code.
-fn ui_cursor_shape() {
+pub(super) fn ui_cursor_shape() {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::ui::ui_cursor_shape() }
 }
@@ -944,13 +794,13 @@ fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
 }
 
 /// `utfc_ptr2len()` as checked code.
-fn utfc_ptr2len(p: *const c_char) -> c_int {
+pub(super) fn utfc_ptr2len(p: *const c_char) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mbyte::utfc_ptr2len(p) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
+pub(super) fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
 }

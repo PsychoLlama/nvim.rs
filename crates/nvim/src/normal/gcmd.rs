@@ -398,7 +398,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             unsafe { nv_gomark(cmd_arg) };
         }
         Ok(b'`') => unsafe { nv_gomark(cmd_arg) },
-        Ok(b's') => unsafe { do_sleep(int64_t::from(ca.count1 * 1000), false) },
+        Ok(b's') => do_sleep(int64_t::from(ca.count1 * 1000), false),
         // `ga`: describe the character under the cursor.
         Ok(b'a') => unsafe { do_ascii(ptr::null_mut()) },
         // `g8` shows the byte sequence; `8g8` finds an illegal one.
@@ -436,7 +436,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // `gQ`: Ex mode.
         Ok(b'Q') => {
             if !unsafe { check_text_locked(op.raw()) } && !check_clear_op_quit(op) {
-                unsafe { do_exmode() };
+                do_exmode();
             }
         }
         // `g,` and `g;`: forwards and backwards through the change list.

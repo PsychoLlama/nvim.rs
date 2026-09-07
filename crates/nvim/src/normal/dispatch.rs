@@ -258,7 +258,7 @@ unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
         if !(ns.c <= 0 && towait > 0) {
             break;
         }
-        unsafe { do_sleep(towait.min(50) as int64_t, false) };
+        do_sleep(towait.min(50) as int64_t, false);
         towait -= 50;
     }
     if ns.c > 0 {

@@ -68,6 +68,13 @@ use ::libc::{strcat, strcpy, strpbrk, strrchr};
 ///
 /// Answers where the argument now starts, which is the whole new line for
 /// a program that had no `$*`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call. `mut
+/// arg` must point at a NUL-terminated string, unaliased for the call.
+/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub unsafe fn replace_makeprg(
     args: *mut ExArg,
     mut arg: *mut c_char,
@@ -117,6 +124,12 @@ pub unsafe fn replace_makeprg(
 
 /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
 /// argument, then expand wildcards if the command takes exactly one name.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
+/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn expand_filename(
     args: *mut ExArg,
     cmdlinep: *mut *mut c_char,
@@ -374,6 +387,11 @@ const SPEC_SID: ssize_t = 14;
 
 /// Does `src` start with one of the special items? Answers its index and
 /// sets `*usedlen` to its length, or answers −1.
+///
+/// # Safety
+///
+/// `src` must point at a NUL-terminated string. `usedlen` must point at a
+/// writable `size_t` the caller owns.
 pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssize_t {
     for (i, spec) in SPECIALS.iter().enumerate() {
         let len = spec.to_bytes().len() as size_t;
@@ -393,6 +411,15 @@ pub unsafe fn find_cmdline_var(src: *const c_char, usedlen: *mut size_t) -> ssiz
 ///
 /// `empty_is_error` is what tells an expansion that produced nothing from
 /// one that is not allowed to.
+///
+/// # Safety
+///
+/// `src` must point at a NUL-terminated string, unaliased for the call.
+/// `srcstart` must point at a NUL-terminated string. `usedlen` must point at
+/// a writable `size_t` the caller owns. `lnump` must point at a writable line
+/// number the caller owns. `errormsg` must point at a writable `*const
+/// c_char` slot the caller owns for the call. `escaped` must point at a
+/// writable `int` the caller owns.
 pub unsafe fn eval_vars(
     src: *mut c_char,
     srcstart: *const c_char,
@@ -696,6 +723,10 @@ pub unsafe fn eval_vars(
 /// Expand every `<sfile>` in `arg`, in a fresh copy.
 ///
 /// Answers null after reporting, when an expansion failed.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn expand_sfile(arg: *mut c_char) -> *mut c_char {
     let mut result = unsafe { xstrdup(arg) };
     let mut p = result;

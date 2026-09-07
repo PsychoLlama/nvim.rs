@@ -63,6 +63,10 @@ const fn special_key(code: c_int) -> c_int {
 }
 
 /// `:bdelete`, `:bwipeout` and `:bunload`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     let idx = args.cmdidx;
@@ -150,6 +154,10 @@ fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
 }
 
 /// `:quit`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -236,6 +244,10 @@ fn first_win() -> Win {
 ///
 /// The signature still says `()` because the command table holds one fn
 /// pointer type and a `-> !` fn item does not coerce to it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_cquit(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let status = if args.addr_count > 0 {
@@ -250,6 +262,10 @@ pub(crate) unsafe fn ex_cquit(args: *mut ExArg) {
 
 /// The checks `:qall`, `:xall` and `:wqall` share before any of them
 /// starts writing.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
     let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -272,6 +288,10 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
 }
 
 /// `:qall`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_quitall(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if unsafe { before_quit_all(args.raw()) }.is_err() {
@@ -286,6 +306,10 @@ pub(crate) unsafe fn ex_quitall(args: *mut ExArg) {
 }
 
 /// `:close`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_close(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -300,7 +324,7 @@ pub(crate) unsafe fn ex_close(args: *mut ExArg) {
     } else {
         numbered_window(args.line2)
     };
-    unsafe { ex_win_close(args.forceit, win, None) };
+    ex_win_close(args.forceit, win, None);
 }
 
 /// The window with this number in the current tab page, or the last one.
@@ -319,11 +343,15 @@ fn numbered_window(nr: LineNr) -> Win {
 }
 
 /// `:pclose` — close the preview window, wherever it is.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     for win in windows() {
         if win.w_onebuf_opt.wo_pvw != 0 {
-            unsafe { ex_win_close(args.forceit, win, None) };
+            ex_win_close(args.forceit, win, None);
             return;
         }
     }
@@ -334,7 +362,7 @@ pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
 /// `tabpage` is the tab page the window belongs to, or null for this one; a
 /// window in another tab page cannot simply be entered, so it takes the
 /// other close path.
-pub(crate) unsafe fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
+pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     let w = win;
     if is_aucmd_win(win) {
         emsg(gettext(e_autocmd_close.as_ptr()));
@@ -377,6 +405,10 @@ pub(crate) unsafe fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabP
 }
 
 /// `:tabclose`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -400,13 +432,17 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
         return;
     }
     if tp != TabPage::current_or_none() {
-        unsafe { tabpage_close_other(tp.expect("a live handle"), args.forceit) };
+        tabpage_close_other(tp.expect("a live handle"), args.forceit);
     } else if !text_locked() && !curbuf_locked() {
-        unsafe { tabpage_close(args.forceit) };
+        tabpage_close(args.forceit);
     }
 }
 
 /// `:tabonly`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -434,7 +470,7 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     while done < 1000 {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
-                unsafe { tabpage_close_other(tp, args.forceit) };
+                tabpage_close_other(tp, args.forceit);
                 if valid_tabpage(tp.id()) {
                     done = 1000;
                 }
@@ -450,7 +486,7 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
 }
 
 /// Close the current tab page, by closing every window in it.
-pub unsafe fn tabpage_close(forceit: c_int) {
+pub fn tabpage_close(forceit: c_int) {
     if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
@@ -462,13 +498,13 @@ pub unsafe fn tabpage_close(forceit: c_int) {
     let save_curtab = TabPage::current_raw();
 
     while Win::current().w_floating {
-        unsafe { ex_win_close(forceit, Win::current(), None) };
+        ex_win_close(forceit, Win::current(), None);
     }
     if firstwin.get() != lastwin.get() {
         close_others(1, forceit);
     }
     if firstwin.get() == lastwin.get() {
-        unsafe { ex_win_close(forceit, Win::current(), None) };
+        ex_win_close(forceit, Win::current(), None);
     }
     if TabPage::current_raw() == save_curtab {
         TabPage::current().tp_did_tabclosedpre = false;
@@ -479,7 +515,7 @@ pub unsafe fn tabpage_close(forceit: c_int) {
 ///
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
-pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
+pub fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
     if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
@@ -505,7 +541,7 @@ pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
         };
         let wp = tabpage.tp_lastwin;
         if let Some(last) = wp.and_then(WinId::get) {
-            unsafe { ex_win_close(forceit, last, Some(tabpage)) };
+            ex_win_close(forceit, last, Some(tabpage));
         }
         if !valid_tabpage(tabpage.id()) {
             break;
@@ -522,6 +558,10 @@ pub unsafe fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
 }
 
 /// `:only`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_only(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if window_layout_locked(CmdIdx::only) {
@@ -554,6 +594,10 @@ fn window_at_stepwise(nr: LineNr) -> Option<Win> {
 }
 
 /// `:hide` used as a command rather than as a modifier.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.skip != 0 {
@@ -571,6 +615,10 @@ pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
 }
 
 /// `:stop` and `:suspend`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.forceit == 0 {
@@ -582,6 +630,10 @@ pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
 }
 
 /// `:xit` and `:wq` — write, then quit.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
@@ -650,8 +702,7 @@ fn check_changed_any(hidden: bool, unload: bool) -> bool {
 
 /// `check_more()` as checked code.
 fn check_more(message: bool, forceit: bool) -> c_int {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_docmd::argopt::check_more(message, forceit) }
+    crate::ex_docmd::argopt::check_more(message, forceit)
 }
 
 /// `close_others()` as checked code.
@@ -684,8 +735,7 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 
 /// `not_exiting()` as checked code.
 fn not_exiting(save_exiting: bool) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_docmd::source::not_exiting(save_exiting) }
+    crate::ex_docmd::source::not_exiting(save_exiting)
 }
 
 /// `only_one_window()` as checked code.

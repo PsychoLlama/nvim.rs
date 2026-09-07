@@ -38,6 +38,10 @@ use crate::winlayer::{Buf, Ea};
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
 /// `::::print` both reach the command name.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) -> *mut c_char {
     let mut p = if skipleadingwhite {
         skipwhite(p)
@@ -56,6 +60,10 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 /// command accepts one, a user command (a negative `cmdidx`) does not take
 /// `=`, and a digit belongs to the *count* rather than to a register when
 /// the command takes both.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn parse_register(args: *mut ExArg) {
     let mut ea = unsafe { Ea::new(args) };
     let is_user_command = is_user_cmd(ea.cmdidx);
@@ -87,6 +95,10 @@ pub(crate) unsafe fn parse_register(args: *mut ExArg) {
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn set_cmd_count(args: *mut ExArg, count: LineNr, validate: bool) {
     let mut ea = unsafe { Ea::new(args) };
     if ea.addr_type != CmdAddr::Lines {
@@ -115,6 +127,10 @@ pub unsafe fn set_cmd_count(args: *mut ExArg, count: LineNr, validate: bool) {
 
 /// Take the count a command such as `:delete 3` may carry, and fold it into
 /// the range.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn parse_count(
     args: *mut ExArg,
     errormsg: &mut Option<CString>,
@@ -158,6 +174,11 @@ pub(crate) unsafe fn parse_count(
 
 /// Take the `!` a command may carry. `:substitute` and its two magic
 /// spellings are the exception: there a `!` belongs to the pattern.
+///
+/// # Safety
+///
+/// `p` must point at a writable `*mut c_char` slot the caller owns for the
+/// call.
 pub(crate) unsafe fn parse_bang(args: Ea, p: *mut *mut c_char) -> bool {
     let cmdidx = args.cmdidx;
     if byte(unsafe { *p }) == '!' as c_int
@@ -215,6 +236,10 @@ pub(crate) fn skip_grep_pat(ea: Ea) -> *mut c_char {
 ///
 /// A backslash before one of them escapes it — but only while 'cpoptions'
 /// does not contain `b`, or the command does not take CTRL-V escapes.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn separate_nextcmd(args: *mut ExArg) {
     let mut ea = unsafe { Ea::new(args) };
     let mut p = skip_grep_pat(ea);
@@ -264,6 +289,10 @@ pub unsafe fn separate_nextcmd(args: *mut ExArg) {
 /// A named predicate rather than an inline condition, but deliberately
 /// *inside* the loop: the `"` half compares `p` against `eap->arg`, so it
 /// depends on where the walk has got to and cannot be hoisted.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn ends_argument(ea: Ea, p: *mut c_char) -> bool {
     let c = byte(p);
     let cmdidx = ea.cmdidx;
@@ -289,6 +318,10 @@ fn drop_one_byte(p: *mut c_char) {
 
 /// Step to the end of a whitespace-delimited argument, optionally removing
 /// the backslashes that escaped whitespace inside it.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
     let mut p = p;
     while byte(p) != 0 && !ascii_isspace(byte(p)) {
@@ -312,6 +345,10 @@ pub fn ends_excmd(c: c_int) -> c_int {
 
 /// The command after the next `|` or newline, or null if there is none.
 /// Unlike `check_nextcmd` this searches rather than only looking ahead.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
     let mut p = p;
     while byte(p) != '|' as c_int && byte(p) != '\n' as c_int {
@@ -324,6 +361,10 @@ pub unsafe fn find_nextcmd(p: *const c_char) -> *mut c_char {
 }
 
 /// The command after `p`, if `p` is at the separator that introduces one.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn check_nextcmd(p: *mut c_char) -> *mut c_char {
     let s = skipwhite(p);
     if byte(s) == '|' as c_int || byte(s) == '\n' as c_int {

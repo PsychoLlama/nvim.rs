@@ -86,6 +86,10 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// UIs to. Only then does this server try to quit — and if it *cannot*
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut numbuf = NumBuf::new();
@@ -343,6 +347,10 @@ fn blank_callback() -> Callback {
 ///
 /// Called with a null `args` by `:connect`, which has already attached
 /// somewhere else.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if !args.raw().is_null() && args.forceit != 0 {
@@ -391,6 +399,10 @@ pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
 ///
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_connect(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let stop_server = args.forceit != 0 && ui_active() == 1;

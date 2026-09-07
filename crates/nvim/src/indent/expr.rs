@@ -80,8 +80,7 @@ pub unsafe fn get_expr_indent() -> c_int {
     // SAFETY: 'debug' is a NUL-terminated option string.
     let debug_throw = !unsafe { vim_strchr(p_debug.get(), 't' as c_int) }.is_null();
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
-        // SAFETY: as above.
-        unsafe { handle_did_throw() };
+        handle_did_throw();
         did_throw.set(false);
     }
     if indent < 0 {

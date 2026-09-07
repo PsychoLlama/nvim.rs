@@ -217,7 +217,7 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
     p_cpo.set(empty_option());
 
     let mut new_qi = false;
-    if unsafe { is_loclist_cmd(args.cmdidx) } {
+    if is_loclist_cmd(args.cmdidx) {
         qi = unsafe { hgr_get_ll(&mut new_qi) };
     }
 

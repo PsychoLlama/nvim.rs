@@ -658,8 +658,7 @@ pub unsafe fn do_wqall(args: *mut ExArg) {
             // SAFETY: main thread; this does not return.
             unsafe { getout(0) };
         }
-        // SAFETY: main thread.
-        unsafe { not_exiting(save_exiting) };
+        not_exiting(save_exiting);
     }
 }
 

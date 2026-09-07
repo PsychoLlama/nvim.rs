@@ -25,10 +25,8 @@ use crate::cstr;
 use crate::debugger::dbg_check_breakpoint;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::userfunc::{current_func_returned, do_return, get_func_line};
-use crate::ex_docmd::address::{
-    correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
-    set_cmd_dflall_range,
-};
+use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
+use crate::ex_docmd::addrtype::{set_cmd_addr_type, set_cmd_dflall_range};
 use crate::ex_docmd::xfree;
 
 use crate::ex_docmd::api::execute_cmd0;
@@ -193,6 +191,13 @@ pub(crate) fn skip_cmd(args: Ea) -> bool {
 /// `fgetline`/`cookie` are the line source the command may read further
 /// lines from (`:append`, a `:function` body, a sourced file); either may be
 /// null. Re-entrant: a command that calls `do_cmdline` lands back here.
+///
+/// # Safety
+///
+/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `cstack` must point at a live `CondStack`, unaliased for the
+/// call. `cookie` must be the payload `fgetline` was registered with, live
+/// for the call.
 pub(crate) unsafe fn do_one_cmd(
     cmdlinep: *mut *mut c_char,
     flags: DoCmdOpts,
@@ -632,6 +637,12 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// to be entered, an `:else` whose branch is about to be taken and a
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`. `cstack` must point at a live
+/// `CondStack`, unaliased for the call. `cookie` must be the payload
+/// `fgetline` was registered with, live for the call.
 pub(crate) unsafe fn profile_cmd(
     args: *const ExArg,
     cstack: *mut CondStack,
@@ -709,6 +720,10 @@ fn refuses_here(ea: &ExArg) -> Option<CString> {
 /// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
 /// mode substitutes for a bare `+`; it is recognised by *address*, not by
 /// content.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_range_without_command(args: *mut ExArg) -> Option<CString> {
     let mut ea = unsafe { Ea::new(args) };
     let mut errormsg: Option<CString> = None;
@@ -744,6 +759,10 @@ pub(crate) unsafe fn ex_range_without_command(args: *mut ExArg) -> Option<CStrin
 /// Truncates to fit, and spells U+00A0 as `<a0>` — it is white space that
 /// would otherwise be invisible in the report, and it is a common paste
 /// accident.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string.
 pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
     let mut buf = [0 as c_char; IOSIZE as usize];
     let iobuff = buf.as_mut_ptr();
@@ -783,6 +802,10 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 ///
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn ex_ni(args: *mut ExArg) {
     let mut args = unsafe { Ea::new(args) };
     if args.skip == 0 {
@@ -793,6 +816,10 @@ pub unsafe fn ex_ni(args: *mut ExArg) {
 /// The same, for a command whose argument may be a here-document
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.skip == 0 {

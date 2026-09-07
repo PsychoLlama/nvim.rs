@@ -57,6 +57,11 @@ use crate::window::{only_one_window, tabpage_index};
 /// argument unless a space that is not backslash-escaped ends it, which is
 /// what `skip_cmd_arg` finds; the byte after it is overwritten with a
 /// terminator, so the answer borrows the command line.
+///
+/// # Safety
+///
+/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
+/// call.
 pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
     let mut arg = unsafe { *argp };
     if byte(arg) != '+' as c_int {
@@ -80,6 +85,10 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string.
 pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut args: Ea) -> Result<(), Failed> {
     if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
         args.bad_char = BAD_KEEP;
@@ -110,6 +119,10 @@ pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn getargopt(args: *mut ExArg) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(args) };
     let mut arg = unsafe { ea.arg.add(2) };
@@ -208,6 +221,14 @@ pub(crate) fn get_argopt_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 
 /// Complete a `++opt` argument: the option names, or the values of the one
 /// already typed.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string, unaliased for the call.
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `rmp` must point at a live `RegMatch`, unaliased for the call. `matches`
+/// must point at a writable `*mut *mut c_char` slot the caller owns for the
+/// call. `num_matches` must point at a writable `int` the caller owns.
 pub unsafe fn expand_argopt(
     pat: *mut c_char,
     expand: *mut Expand,
@@ -389,7 +410,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
 ///
 /// Answers `OK` when quitting is allowed. `quitmore` is what makes the
 /// second `:q` work: the refusal sets it, and `do_one_cmd` counts it down.
-pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
+pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
     let n =
         unsafe { (*Win::current().w_alist).al_ga.len() as c_int } - Win::current().w_arg_idx - 1;
     if forceit
@@ -443,6 +464,10 @@ pub(crate) unsafe fn check_more(message: bool, forceit: bool) -> c_int {
 }
 
 /// `mkdir`, reporting the reason it failed.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> Result<(), Failed> {
     let ret = unsafe { os_mkdir(name, prot as int32_t) };
     if ret != 0 {
@@ -458,6 +483,11 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> Result<(), Fai
 ///
 /// Appending is always allowed; creating over an existing file needs the
 /// command's `!`.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `mode` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
     if unsafe { os_isdir(fname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -481,6 +511,12 @@ pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char)
 }
 
 /// Fill in a dialog message with the file name it is about, or `Untitled`.
+///
+/// # Safety
+///
+/// `buff` must point at a NUL-terminated string, unaliased for the call.
+/// `format` must point at a NUL-terminated string, unaliased for the call.
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_char) {
     let fname = if fname.is_null() {
         gettext(c"Untitled".as_ptr())

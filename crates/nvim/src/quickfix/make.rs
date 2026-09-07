@@ -124,8 +124,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
         }
     }
 
-    // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(Win::current);
+    let wp = is_loclist_cmd(args.cmdidx).then(Win::current);
 
     unsafe { autowrite_all() };
     let fname = unsafe { get_mef_name() };

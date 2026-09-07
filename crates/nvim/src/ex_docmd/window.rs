@@ -205,6 +205,10 @@ pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
 
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_wrongmodifier(args: *mut ExArg) {
     let mut ea = Ex(args);
     ea.errmsg = err_msg(e_invcmd.as_ptr());
@@ -212,6 +216,10 @@ pub(crate) unsafe fn ex_wrongmodifier(args: *mut ExArg) {
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
 /// `:tabfind` — open a window or a tab page, then edit into it.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn ex_splitview(args: *mut ExArg) {
     splitview(Ex(args));
 }
@@ -345,6 +353,10 @@ pub fn tabpage_new() {
 /// `:tabprevious`/`:tabNext` count *backwards*, which `goto_tab_number`
 /// spells as a negative argument; the rest go to an absolute number that
 /// `get_tabpage_arg` works out.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tabnext(args: *mut ExArg) {
     tabnext(Ex(args));
 }
@@ -401,6 +413,10 @@ fn tabnext(mut ea: Ex) {
 }
 
 /// `:tabmove`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tabmove(args: *mut ExArg) {
     tabmove(Ex(args));
 }
@@ -413,6 +429,10 @@ fn tabmove(ea: Ex) {
 }
 
 /// `:tabs` — every tab page, with its windows.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
     // SAFETY: writes the message area.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
@@ -514,6 +534,10 @@ fn is_changed(buffer: Buf) -> bool {
 
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_mode(args: *mut ExArg) {
     let ea = Ex(args);
     if byte(ea.arg) == NUL {
@@ -530,6 +554,10 @@ pub(crate) unsafe fn ex_mode(args: *mut ExArg) {
 /// A leading `-` or `+` makes the argument relative — `atol` already read
 /// the sign, so the current size is simply added. No argument at all means
 /// "as large as possible".
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_resize(args: *mut ExArg) {
     resize(Ex(args));
 }
@@ -572,6 +600,10 @@ fn resize(ea: Ex) {
 }
 
 /// `:winsize` — two numbers, and nothing else.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_winsize(args: *mut ExArg) {
     winsize(Ex(args));
 }
@@ -605,6 +637,10 @@ fn digits(cursor: *mut *mut c_char) -> c_int {
 }
 
 /// `:wincmd` — one window command, spelled as a command line.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_wincmd(args: *mut ExArg) {
     wincmd(Ex(args));
 }
@@ -646,12 +682,20 @@ fn wincmd(mut ea: Ex) {
 // The commands with no window of their own.
 
 /// The Vim commands that only make sense with a built-in GUI.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_nogui(args: *mut ExArg) {
     let mut ea = Ex(args);
     ea.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
 }
 
 /// `:popup`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_popup(args: *mut ExArg) {
     let ea = Ex(args);
     let (name, use_mouse_pos) = (ea.arg, ea.forceit);
@@ -663,6 +707,10 @@ pub(crate) unsafe fn ex_popup(args: *mut ExArg) {
 // The preview window.
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
     g_do_tagpreview.set(p_pvh.get() as c_int);
     // SAFETY: the caller's promise -- a live command.
@@ -671,6 +719,10 @@ pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
 }
 
 /// `:pedit`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
     let ea = Ex(args);
     let curwin_save = Win::current().id();
@@ -680,6 +732,10 @@ pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
 }
 
 /// `:pbuffer`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_pbuffer(args: *mut ExArg) {
     let curwin_save = Win::current().id();
     prepare_preview_window();

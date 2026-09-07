@@ -78,6 +78,10 @@ type Lc = Live<LoopCookie>;
 ///
 /// Used only by the debugger: a `>quit` at a breakpoint must not be
 /// swallowed by whatever `:try` the script had open.
+///
+/// # Safety
+///
+/// `dsp` must point at a live `SavedDebugState`, unaliased for the call.
 pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
     // SAFETY: the caller's own `SavedDebugState`, live for the call.
     let mut d = unsafe { Dbg::new(dsp) };
@@ -105,6 +109,10 @@ pub(crate) unsafe fn save_dbg_stuff(dsp: *mut SavedDebugState) {
 }
 
 /// Put it all back.
+///
+/// # Safety
+///
+/// `dsp` must point at a live `SavedDebugState`, unaliased for the call.
 pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
     // SAFETY: as `save_dbg_stuff`.
     let d = unsafe { Dbg::new(dsp) };
@@ -124,7 +132,7 @@ pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
 
 /// Ex mode: read and run one command line at a time, printing the current
 /// line after each one that moved the cursor or changed the buffer.
-pub unsafe fn do_exmode() {
+pub fn do_exmode() {
     exmode_active.set(true);
     State.set(MODE_NORMAL);
     unsafe { may_trigger_modechanged() };
@@ -205,6 +213,10 @@ pub unsafe fn do_exmode() {
 
 /// `:verbose` >= 15: report the command about to run, and which line of
 /// which script it is.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
     unsafe { verbose_enter_scroll() };
@@ -252,7 +264,7 @@ pub(crate) fn do_cmdline_end() {
 /// replays the messages it was built from, so that the original error text
 /// is what the user sees; an interrupt says nothing, because the interrupt
 /// message is given elsewhere.
-pub unsafe fn handle_did_throw() {
+pub fn handle_did_throw() {
     debug_assert!(!current_exception.get().is_null());
     // SAFETY: non-null by the assert above, and live until
     // `discard_current_exception` below.
@@ -323,6 +335,12 @@ pub unsafe fn handle_did_throw() {
 /// and replayed with everything else.
 ///
 /// Keeps the raw signature: it is stored as a `LineGetter`.
+///
+/// # Safety
+///
+/// `cookie` must point at the `LoopCookie` the `:while`/`:for` frame set up,
+/// live for as long as the loop it drives -- this is stored as a `LineGetter`
+/// and gets back whatever was registered beside it.
 pub(crate) unsafe fn get_loop_line(
     c: c_int,
     cookie: *mut c_void,
@@ -357,6 +375,11 @@ pub(crate) unsafe fn get_loop_line(
 }
 
 /// Remember a line, with the source line number it came from.
+///
+/// # Safety
+///
+/// `gap` must point at a live growable array, unaliased for the call. `line`
+/// must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn store_loop_line(gap: *mut GArray, line: *mut c_char) {
     let p = unsafe { ga_append_via_ptr(gap, size_of::<WhileCmd>()) } as *mut WhileCmd;
     unsafe { (*p).line = xstrdup(line) };
@@ -378,6 +401,11 @@ pub(crate) fn line_getter_eq(a: LineGetter, b: LineGetter) -> bool {
 /// `get_loop_line` wraps another getter, and a loop inside a loop wraps it
 /// again, so the chain has to be walked before the comparison means
 /// anything.
+///
+/// # Safety
+///
+/// `cookie` must be the payload `fgetline` was registered with, live for the
+/// call.
 pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
     let (gp, _) = unwrap_loop_getter(fgetline, cookie);
     line_getter_eq(gp, func)
@@ -385,6 +413,11 @@ pub unsafe fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: Lin
 
 /// The cookie at the bottom of that chain — the function or script the
 /// lines really come from.
+///
+/// # Safety
+///
+/// `cookie` must be the payload `fgetline` was registered with, live for the
+/// call.
 pub unsafe fn getline_cookie(fgetline: LineGetter, cookie: *mut c_void) -> *mut c_void {
     let (_, cp) = unwrap_loop_getter(fgetline, cookie);
     cp as *mut c_void
@@ -433,7 +466,7 @@ pub(crate) unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CStr
 }
 
 /// Cancel an exit that a QuitPre or ExitPre autocommand called off.
-pub unsafe fn not_exiting(save_exiting: bool) {
+pub fn not_exiting(save_exiting: bool) {
     exiting.set(save_exiting);
     unsafe { set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t) };
 }

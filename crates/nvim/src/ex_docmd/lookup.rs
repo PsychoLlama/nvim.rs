@@ -49,6 +49,11 @@ const ROWS: usize = command_count as usize;
 /// **Advances `*pp` past the word on a match**, which is why the modifier
 /// scan's arms are ordered the way they are: a failed `checkforcmd` leaves
 /// the cursor alone, a successful one does not.
+///
+/// # Safety
+///
+/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `cmd` must point at `len` readable bytes.
 pub unsafe fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
     let p = unsafe { *cursor };
     let mut i = 0isize;
@@ -105,6 +110,11 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
 /// `args.cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
 /// when the name was spelled out in full rather than abbreviated.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call. `full`
+/// must point at a writable `int` the caller owns.
 pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char {
     let mut ea = unsafe { Ea::new(args) };
     let mut p = ea.cmd;
@@ -198,6 +208,10 @@ pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char
 /// has been reordered without regenerating them sends the scan to the wrong
 /// place — hence the `command_count` check, which is upstream's own guard
 /// against a stale generated header.
+///
+/// # Safety
+///
+/// `cmd` must point at `len` readable bytes.
 unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
     let c1 = ubyte(cmd);
     if !c1.is_ascii_lowercase() {
@@ -227,6 +241,10 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
 
 /// `exists(":cmd")`: 0 for no, 1 for an abbreviation, 2 for a full name,
 /// 3 for a name that is ambiguous between user commands.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
     // A modifier is a command as far as `exists()` is concerned.
     for md in &CMDMODS {
@@ -268,6 +286,12 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// The generated builtin-function table holds it as a `VimLFunc` fn
 /// pointer, and apigen's line-based scan needs the declaration spelled out
 /// literally.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn f_fullcommand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut name = unsafe { numbuf.string(args) } as *mut c_char;
@@ -309,6 +333,10 @@ fn blank_exarg() -> ExArg {
 
 /// The command index for a name of a known length, without the rest of
 /// `find_ex_command`'s bookkeeping. Used by the API's command parser.
+///
+/// # Safety
+///
+/// `cmd` must point at `len` readable bytes.
 pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
     if len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3) {
         return CmdIdx::SIZE;
@@ -339,6 +367,10 @@ pub fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
 ///
 /// Keeps the raw signature: cmdexpand's generator table holds it as an
 /// `ItemGetter`.
+///
+/// # Safety
+///
+/// `_expand` must point at a live `Expand` context, unaliased for the call.
 pub unsafe fn get_command_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= CmdIdx::SIZE.code() {
         return unsafe { expand_user_command_name(idx) };

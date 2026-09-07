@@ -28,10 +28,8 @@ use crate::ascii::ascii_iswhite;
 use crate::charset::skiptowhite_esc;
 
 use crate::eval::skip_expr;
-use crate::ex_docmd::address::{
-    correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
-    set_cmd_dflall_range,
-};
+use crate::ex_docmd::address::{correct_range, find_excmd_after_range, parse_cmd_address};
+use crate::ex_docmd::addrtype::{set_cmd_addr_type, set_cmd_dflall_range};
 
 use crate::ex_docmd::filename::expand_filename;
 use crate::ex_docmd::lookup::is_user_cmd;
@@ -77,6 +75,13 @@ use crate::winlayer::{Buf, Ea, Win};
 /// On success the caller owns `cmdinfo->cmdmod`'s filter pattern and
 /// regexp program, and must free them with `undo_cmdmod` or by running the
 /// command through `execute_cmd`.
+///
+/// # Safety
+///
+/// `cmdline` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `args` must point at the command's `ExArg`, unaliased for the
+/// call. `cmdinfo` must point at the caller's `CmdParseInfo`, unaliased for
+/// the call.
 pub unsafe fn parse_cmdline(
     cmdline: *mut *mut c_char,
     args: *mut ExArg,
@@ -239,6 +244,11 @@ pub unsafe fn parse_cmdline(
 ///
 /// The last stage both `do_one_cmd` and `execute_cmd` share: everything
 /// before it is validation, everything after it is error reporting.
+///
+/// # Safety
+///
+/// `retv` must point at a writable `int` the caller owns. `args` must point
+/// at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn execute_cmd0(
     retv: *mut c_int,
     args: *mut ExArg,
@@ -342,6 +352,12 @@ pub(crate) unsafe fn execute_cmd0(
 /// checks about where a command may run (a locked buffer, the command-line
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
+/// `cmdinfo` must point at the caller's `CmdParseInfo`, unaliased for the
+/// call.
 pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
     let mut ea = unsafe { Ea::new(args) };
     let mut retv: c_int = 0;

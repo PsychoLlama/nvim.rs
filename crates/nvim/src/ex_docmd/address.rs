@@ -13,6 +13,8 @@
 //! takes one `unsafe` block for its whole body — see `scan.rs`.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+
+use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
@@ -23,7 +25,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::buffer::{buf_is_quickfix, current_buf, get_highest_fnum};
+use crate::buffer::get_highest_fnum;
 use crate::charset::{getdigits, getdigits_int32};
 
 use crate::cursor::{check_cursor, check_cursor_col};
@@ -32,16 +34,14 @@ use crate::ex_docmd::lookup::find_ex_command;
 use crate::ex_docmd::scan::skip_colon_white;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
-    INT32_MAX, cmdnames, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors,
-    e_norange, kMarkAll, kMarkBufLocal, searchcmdlen,
+    INT32_MAX, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
+    kMarkAll, kMarkBufLocal, searchcmdlen,
 };
 
 use crate::fold::has_folding;
 use crate::mark::{mark_check, mark_get, mark_move_to};
 
-use crate::message::iemsg;
 use crate::option::magic_isset;
-use crate::os::cshim::gettext;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::quickfix::qf_get_size;
 
@@ -96,160 +96,13 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
 /// The head of the buffer list, which upstream dereferences here without
 /// checking: the editor has a buffer from startup to exit, and everything
 /// below runs from a command line.
-fn head() -> Buf {
+pub(super) fn head() -> Buf {
     first_buffer().expect("the editor always has a buffer")
 }
 
 /// The tail of the buffer list. [`head`].
-fn tail() -> Buf {
+pub(super) fn tail() -> Buf {
     last_buffer().expect("the editor always has a buffer")
-}
-
-/// `:wincmd`'s address kind depends on the window command it is given: `w`
-/// counts windows, `^` counts buffers, most of the tree counts something
-/// the window code names itself, and the rest take no address at all.
-///
-/// Upstream spells the four sets as one `switch` with 68 labels. They are
-/// four tables here, which is the same thing said once.
-#[rustfmt::skip]
-const WINCMD_OTHER: &[u8] = b"SsnjkTrRKJ+-_|]gvhlHL><}fFid\x13\x0e\x0a\x0b\x12\x1f\x1d\x07\x16\x08\x0c\x06\x09\x04";
-const WINCMD_BUFFERS: &[u8] = b"^\x1e";
-const WINCMD_WINDOWS: &[u8] = b"qcowWx\x11\x03\x0f\x17\x18";
-const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
-
-pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut args: Ea) {
-    let c = ubyte(arg);
-    args.addr_type = if WINCMD_OTHER.contains(&c) {
-        CmdAddr::Other
-    } else if WINCMD_BUFFERS.contains(&c) {
-        CmdAddr::Buffers
-    } else if WINCMD_WINDOWS.contains(&c) {
-        CmdAddr::Windows
-    } else if WINCMD_NONE.contains(&c) {
-        CmdAddr::NoRange
-    } else {
-        // Anything else keeps whatever the command table said.
-        return;
-    };
-}
-
-/// Take the address kind from the command table, with the three exceptions
-/// the table cannot express.
-pub unsafe fn set_cmd_addr_type(args: *mut ExArg, p: *mut c_char) {
-    let mut ea = unsafe { Ea::new(args) };
-    if is_user_cmd(ea.cmdidx) {
-        return;
-    }
-    ea.addr_type = if ea.cmdidx != CmdIdx::SIZE {
-        cmdnames[ea.cmdidx.index()].cmd_addr_type
-    } else {
-        CmdAddr::Lines
-    };
-    if ea.cmdidx == CmdIdx::wincmd && !p.is_null() {
-        unsafe { get_wincmd_addr_type(skipwhite(p), ea) };
-    }
-    // `:cc`/`:ll` in a quickfix window address the window's entries.
-    if (ea.cmdidx == CmdIdx::cc || ea.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf()) {
-        ea.addr_type = CmdAddr::Other;
-    }
-}
-
-/// The address `.` stands for, which is also what a bare `+N`/`-N` counts
-/// from.
-pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
-    let args = unsafe { Ea::new(args) };
-    match args.addr_type {
-        CmdAddr::Lines | CmdAddr::Other => {
-            // Not the cursor line but the *last* line when the cursor is
-            // past it, which a buffer shrinking under a command allows.
-            Win::current()
-                .w_cursor
-                .lnum
-                .min(Buf::current().b_ml.ml_line_count)
-        }
-        CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
-        CmdAddr::Arguments => {
-            let len = arglist_len();
-            if Win::current().w_arg_idx + 1 < len {
-                Win::current().w_arg_idx as LineNr + 1
-            } else {
-                len as LineNr
-            }
-        }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
-        CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
-        _ => 0,
-    }
-}
-
-/// The range an `ExArgt::DFLALL` command means by "no range": everything.
-pub unsafe fn set_cmd_dflall_range(args: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(args) };
-    ea.line1 = 1;
-    match ea.addr_type {
-        CmdAddr::Lines | CmdAddr::Other => {
-            ea.line2 = Buf::current().b_ml.ml_line_count;
-        }
-        CmdAddr::LoadedBuffers => {
-            let (first, last) = loaded_buffer_range();
-            ea.line1 = first;
-            ea.line2 = last;
-        }
-        CmdAddr::Buffers => {
-            ea.line1 = head().handle as LineNr;
-            ea.line2 = tail().handle as LineNr;
-        }
-        CmdAddr::Windows => {
-            ea.line2 = current_win_nr(None) as LineNr;
-        }
-        CmdAddr::Tabs => {
-            ea.line2 = current_tab_nr(None) as LineNr;
-        }
-        CmdAddr::TabsRelative => ea.line2 = 1,
-        CmdAddr::Arguments => {
-            let len = arglist_len();
-            if len == 0 {
-                ea.line2 = 0;
-                ea.line1 = 0;
-            } else {
-                ea.line2 = len as LineNr;
-            }
-        }
-        CmdAddr::QuickfixValid => {
-            ea.line2 = qf_get_valid_size(args) as LineNr;
-            if ea.line2 == 0 {
-                ea.line2 = 1;
-            }
-        }
-        t if t == CmdAddr::NoRange || t == CmdAddr::Unsigned || t == CmdAddr::Quickfix => {
-            iemsg(gettext(c"INTERNAL: Cannot use ExArgt::DFLALL with CmdAddr::NoRange, CmdAddr::Unsigned or CmdAddr::Quickfix"));
-        }
-        _ => {}
-    }
-}
-
-/// How many files are in the current window's argument list.
-fn arglist_len() -> c_int {
-    unsafe { (*Win::current().w_alist).al_ga.len() as c_int }
-}
-
-/// The handles of the first and last *loaded* buffers.
-fn loaded_buffer_range() -> (LineNr, LineNr) {
-    let mut buf = head();
-    while buf.b_ml.ml_mfp.is_null() {
-        let Some(next) = buf.next() else { break };
-        buf = next;
-    }
-    let first = buf.handle as LineNr;
-    let mut buf = tail();
-    while buf.b_ml.ml_mfp.is_null() {
-        let Some(prev) = buf.prev() else { break };
-        buf = prev;
-    }
-    (first, buf.handle as LineNr)
 }
 
 /// Where the command word starts, without consuming the range.
@@ -268,6 +121,10 @@ pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
 /// `;` differs from `,` in moving the cursor to the first address before
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub unsafe fn parse_cmd_address(
     args: *mut ExArg,
     errormsg: &mut Option<CString>,
@@ -436,6 +293,11 @@ fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
 /// Step over a range without resolving it. Used wherever the command word
 /// has to be found before the range can mean anything — the modifier scan,
 /// completion, and `find_excmd_after_range`.
+///
+/// # Safety
+///
+/// `cmd` must point at a NUL-terminated string. `ctx` must point at a live
+/// `ExpandContext`, unaliased for the call.
 pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_char {
     let mut cmd = cmd;
     while !unsafe { vim_strchr(c" \t0123456789.$%'/?-+,;\\".as_ptr(), *cmd as u8 as c_int) }
@@ -494,6 +356,12 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// Answers `MAXLNUM` for "there was no address here", which is not the same
 /// as an address that resolved to nothing, and writes null through `cursor` to
 /// report an error (the message goes to `errormsg`).
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
+/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
+/// the call.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn get_address(
     args: *mut ExArg,
@@ -833,6 +701,10 @@ fn offset_base(args: Ea, addr_type: CmdAddr) -> Addr {
 
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
     let ea = unsafe { Ea::new(args) };
     let invrange = || Some(ex_msg(e_invrange.as_ptr()));
@@ -945,19 +817,19 @@ fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMar
 }
 
 /// `qf_get_cur_idx()` as checked code.
-fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
+pub(super) fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_cur_idx(args) }
 }
 
 /// `qf_get_cur_valid_idx()` as checked code.
-fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
+pub(super) fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_cur_valid_idx(args) }
 }
 
 /// `qf_get_valid_size()` as checked code.
-fn qf_get_valid_size(args: *mut ExArg) -> size_t {
+pub(super) fn qf_get_valid_size(args: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_valid_size(args) }
 }
@@ -975,7 +847,7 @@ fn byte(p: *const c_char) -> c_int {
 }
 
 /// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
+pub(super) fn ubyte(p: *const c_char) -> u8 {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as u8 }
 }

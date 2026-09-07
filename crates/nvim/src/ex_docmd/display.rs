@@ -48,6 +48,10 @@ use crate::winlayer::{Ea, Win};
 use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if byte(args.arg) != NUL {
@@ -76,6 +80,10 @@ pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
 }
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if byte(args.arg) == NUL && byte_at(args.cmd, 2) == '!' as c_int {
@@ -89,6 +97,10 @@ pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
 ///
 /// Only one destination at a time: every form closes whatever was open
 /// first.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut arg = args.arg;
@@ -160,6 +172,10 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
 
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdpreview.get() {
@@ -188,6 +204,10 @@ pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
 
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cmdpreview.get() {
@@ -212,6 +232,10 @@ pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
 }
 
 /// `:redrawtabline`.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redrawtabline(_args: *mut ExArg) {
     let lazyredraw_off = suspend_lazyredraw();
     unsafe { draw_tabline() };
@@ -256,6 +280,10 @@ pub(crate) fn close_redir() {
 }
 
 /// `:digraphs` — define digraphs, or list them.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_digraphs(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if byte(args.arg) != NUL {
@@ -275,6 +303,10 @@ pub fn set_no_hlsearch(flag: bool) {
 }
 
 /// `:nohlsearch`.
+///
+/// # Safety
+///
+/// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_nohlsearch(_args: *mut ExArg) {
     set_no_hlsearch(true);
     redraw_all_later(UPD_SOME_VALID);

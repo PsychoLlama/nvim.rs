@@ -322,8 +322,7 @@ pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
     // `ex_win_close` reads an absent tab page as "the current one", which is
     // the only case where it may close the window the user is in.
     let other_tab = (!tabpage.is_current()).then_some(tabpage);
-    // SAFETY: as `nvim_win_hide`.
-    api_try(&mut err, |_| unsafe {
+    api_try(&mut err, |_| {
         ex_win_close(::core::ffi::c_int::from(force), w, other_tab);
     });
     ().reported(err)

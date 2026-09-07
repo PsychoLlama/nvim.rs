@@ -242,7 +242,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         } else {
             c = CAR;
             // Wait to allow the user to verify the output.
-            unsafe { do_sleep(int64_t::from(msg_wait.get()), true) };
+            do_sleep(int64_t::from(msg_wait.get()), true);
         }
     }
     redir_off.set(false);

@@ -212,7 +212,6 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
 /// # Safety
 /// `l` heads a message list this owns.
 unsafe fn free_msglist(l: *mut MsgList) {
-    // SAFETY: caller contract.
     let mut messages = l;
     while !messages.is_null() {
         let next = unsafe { (*messages).next };
@@ -474,7 +473,6 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     if p_verbose.get() < 13 && debug_break_level.get() <= 0 {
         return;
     }
-    // SAFETY: caller contract.
     let debugging = debug_break_level.get() > 0;
     // While debugging the messages have to be displayed.
     let loud = debugging.then(Allow::messages);
@@ -647,9 +645,8 @@ pub(crate) unsafe fn exception_state_save(estate: *mut ExceptionState) {
 /// # Safety
 /// Module contract; `estate` was filled by [`exception_state_save`].
 pub(crate) unsafe fn exception_state_restore(estate: *mut ExceptionState) {
-    // SAFETY: caller contract.
     if did_throw.get() {
-        unsafe { handle_did_throw() };
+        handle_did_throw();
     }
     current_exception.set(unsafe { (*estate).estate_current_exception });
     did_throw.set(unsafe { (*estate).estate_did_throw });

@@ -169,8 +169,7 @@ pub(crate) fn qf_cmd_stack(args: Ea, print_emsg: bool) -> Option<Qi> {
 /// current window's stack and the caller has to know whose it was, while a
 /// quickfix command works on the global one and answers `None`.
 pub(crate) fn qf_cmd_stack_or_alloc(args: Ea) -> (Qi, Option<Win>) {
-    // SAFETY: a command's `cmdidx` is one of the table's.
-    if !unsafe { is_loclist_cmd(args.cmdidx) } {
+    if !is_loclist_cmd(args.cmdidx) {
         return (QfStack::Global.qi(), None);
     }
     let wp = Win::current();
@@ -388,7 +387,6 @@ pub fn qf_stack_get_bufnr() -> c_int {
 unsafe fn wipe_qf_buffer(qi: *mut QfInfo) {
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
     if qi.qf_bufnr == INVALID_QFBUFNR {
         return;
     }
@@ -430,7 +428,6 @@ unsafe fn qf_free_list_stack_items(qi: *mut QfInfo) {
 /// `qi` must be a boxed stack with no references left — never the quickfix
 /// stack, which is a static.
 pub(crate) unsafe fn qf_free_lists(qi: *mut QfInfo) {
-    // SAFETY: forwarded from the caller.
     debug_assert!(matches!(QfStack::of(qi), QfStack::Local(_)));
     unsafe { qf_free_list_stack_items(qi) };
     drop(unsafe { Box::from_raw(qi) });
@@ -567,7 +564,6 @@ pub fn ll_resize_stack(window: Win, n: c_int) {
 unsafe fn qf_resize_stack_base(qi: *mut QfInfo, n: c_int) {
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
     let max = (*qi).max_count();
     if n == max {
         return;
@@ -628,8 +624,7 @@ pub(crate) fn ll_get_or_alloc_list(mut window: Win) -> *mut QfInfo {
 pub(crate) unsafe fn qf_cmd_get_stack(args: *mut ExArg, print_emsg: bool) -> *mut QfInfo {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
-    // SAFETY: forwarded from the caller.
-    if !unsafe { is_loclist_cmd(args.cmdidx) } {
+    if !is_loclist_cmd(args.cmdidx) {
         return QfStack::Global.raw();
     }
     let qi = win_loclist(Win::current());
@@ -647,7 +642,6 @@ pub(crate) unsafe fn qf_cmd_get_stack(args: *mut ExArg, print_emsg: bool) -> *mu
 pub(crate) unsafe fn qf_id2nr(qi: *const QfInfo, qfid: ::core::ffi::c_uint) -> c_int {
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi.cast_mut()) };
-    // SAFETY: forwarded from the caller.
     let count = qi.qf_listcount as usize;
     // SAFETY: as above; the borrow is dropped before the caller can touch
     // the stack again.
