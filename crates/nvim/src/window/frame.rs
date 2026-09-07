@@ -10,7 +10,10 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+// Nothing here dereferences anything: the tree is walked by identity, and
+// `win_float_find_altwin` — the float's answer to the same question — is safe
+// too.
+#![forbid(unsafe_code)]
 
 use crate::winlayer::last_used_tab;
 use core::ffi::c_int;
@@ -39,8 +42,7 @@ pub(crate) struct AltWin {
 pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_int) {
     let mut win_tp = tabpage.unwrap_or_else(TabPage::current);
     let (wp, dir) = if win.w_floating {
-        // SAFETY: `win` is only compared, never read.
-        (unsafe { win_float_find_altwin(win, tabpage) }, 'h' as c_int)
+        (win_float_find_altwin(win, tabpage), 'h' as c_int)
     } else {
         let frp = win.frame();
         let removed = winframe_remove(win, tabpage, false);

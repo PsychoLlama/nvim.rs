@@ -193,8 +193,7 @@ unsafe fn win_config_split(
                     (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
                 }
             } else {
-                // SAFETY: the caller's window and its tab page.
-                altwin_0 = unsafe { win_float_find_altwin(win, other_tab(expect_tab(win_tp))) };
+                altwin_0 = win_float_find_altwin(win, other_tab(expect_tab(win_tp)));
             }
             win_remove(w, other_tab(expect_tab(win_tp)));
             if win_tp == Some(TabPage::current()) {

@@ -9,7 +9,10 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
+// The whole file is frame arithmetic over identities now that
+// `frame_new_height`'s raw-pointer shim is gone, so nothing here needs a
+// dereference. (The cast deny is not ready: 24 `fr_layout as c_int`s.)
+#![forbid(unsafe_code)]
 
 use super::arith::{MinSize, NextCurwin};
 use super::*;

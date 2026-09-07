@@ -333,9 +333,8 @@ fn leave_closing_window(win: Win) -> Leave {
     // Guess which window is going to be the new current one. This may change
     // because of the autocommands (sigh).
     let wp = if win.w_floating {
-        // SAFETY: `win` is only compared, never read; `None` means the
-        // current tab page.
-        unsafe { win_float_find_altwin(win, None) }
+        // `None` means the current tab page.
+        win_float_find_altwin(win, None)
             .expect("a float being closed always has a window to fall back to")
     } else {
         frame2window(alt_frame(win, None))

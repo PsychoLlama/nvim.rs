@@ -234,8 +234,8 @@ mod tests {
     //! fixtures were boxed `MaybeUninit<Window>`s in no registry at all.
     //! Registering them from an integration test would have meant a `pub`
     //! constructor whose only caller was that test; in here the registries'
-    //! own crate-internal entry points are reachable, and four `pub` items
-    //! left the crate's surface with the move.
+    //! own crate-internal entry points are reachable, and fifteen items left
+    //! the crate's public surface with the move.
 
     use core::ffi::c_char;
     use std::sync::{Mutex, MutexGuard};

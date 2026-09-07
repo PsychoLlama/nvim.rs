@@ -120,8 +120,13 @@ impl FrameRef {
         FrameId(NonZero::new(self.id).expect("a live frame has a handle"))
     }
 
-    /// The window this frame holds — `Some` exactly for a leaf, and for a
-    /// snapshot's leaf only while the window it remembers is still there.
+    /// The window this frame holds — `Some` exactly for a leaf.
+    ///
+    /// A registry probe, which is the right question for the live tree: a
+    /// leaf of it holds a window that is on a tab page's list. It is *not*
+    /// the right question for a saved layout, whose leaf may name a window
+    /// that has since moved to another tab page — see
+    /// `window::snapshot::snapshot_win`.
     #[inline(always)]
     pub fn win(self) -> Option<Win> {
         self.fr_win.and_then(WinId::get)

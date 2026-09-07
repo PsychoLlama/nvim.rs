@@ -368,8 +368,8 @@ pub(crate) unsafe fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> 
     let w = win;
     let at = (tabpage != TabPage::current()).then_some(tabpage);
     if win.w_floating {
-        // SAFETY: the caller's window, and `at` names the tab page to look in.
-        unsafe { win_float_find_altwin(win, at) }
+        // `at` names the tab page to look in.
+        win_float_find_altwin(win, at)
     } else {
         find_altwin(w, at).map(|alt| alt.win)
     }

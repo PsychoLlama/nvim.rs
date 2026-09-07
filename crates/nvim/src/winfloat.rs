@@ -753,7 +753,7 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
 ///
 /// # Safety
 /// `win` must be a live window.
-pub(crate) unsafe fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<Win> {
+pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<Win> {
     let Some(tp) = tabpage else {
         return prev_window()
             .and_then(|w| valid_window(w.id()))

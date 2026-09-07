@@ -273,14 +273,16 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
         comp_positions();
     }
 
-    // The unflattened frame from above, still there: nothing between the two
-    // can free it.
+    // The unflattened frame from above, resolved at each use rather than
+    // held: `win_split_ins` flattens it on the way through, so the frame the
+    // failure path wants back may be gone by the time it looks.
     let unflat = unflat_altfr.and_then(FrameId::get);
     // SAFETY: a live window.
     if unsafe { win_split_ins(size, flags, Some(window), dir, unflat) }.is_none() {
         // Restore the window to its original position.
-        if !window.w_floating {
-            let unflat = unflat.expect("unflat_altfr != NULL");
+        if !window.w_floating
+            && let Some(unflat) = unflat_altfr.and_then(FrameId::get)
+        {
             winframe_restore(window, dir, unflat);
         }
         win_append(window.prev(), window, None);
