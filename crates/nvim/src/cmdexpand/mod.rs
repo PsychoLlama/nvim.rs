@@ -337,13 +337,13 @@ pub(crate) unsafe fn fuzzymatches_to_strmatches(
     funcsort: bool,
 ) {
     if count > 0 {
-        let count = count as usize;
+        let count = usize::try_from(count).expect("the guard above rejected a negative count");
         let found = unsafe { core::slice::from_raw_parts_mut(fuzmatch, count) };
         // Best score first, `idx` breaking ties — and with `funcsort`,
         // `<SNR>` functions after everything else whatever they scored.
         // Callers number `idx` as they fill the array, so no two entries
         // compare equal and the sort needs no stability of its own.
-        let snr = |m: &FuzMatchStr| funcsort && unsafe { *m.str } == b'<' as c_char;
+        let snr = |m: &FuzMatchStr| funcsort && unsafe { *m.str } == b'<'.cast_signed();
         found.sort_by(|a, b| {
             snr(a)
                 .cmp(&snr(b))

@@ -9,6 +9,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -24,6 +31,7 @@ use crate::lua::ffi::{
     lua_pushnil, lua_pushvalue, lua_toboolean, lua_tostring, lua_type, luaL_argcheck,
     luaL_checkinteger,
 };
+use crate::narrow::number_as_int;
 use crate::types::{
     AcoSave, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, lua_State,
 };
@@ -90,11 +98,11 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
             if lua_type(lstate, -2) == LUA_TSTRING {
                 let k = CStr::from_ptr(lua_tostring(lstate, -2));
                 if k == c"buf" {
-                    buf = winlayer::buffer(luaL_checkinteger(lstate, -1) as c_int);
+                    buf = winlayer::buffer(number_as_int(luaL_checkinteger(lstate, -1) as i64));
                 } else if k == c"win" {
-                    win = winlayer::window(luaL_checkinteger(lstate, -1) as c_int);
+                    win = winlayer::window(number_as_int(luaL_checkinteger(lstate, -1) as i64));
                 } else if k == c"log_level" {
-                    log_level = luaL_checkinteger(lstate, -1) as c_int;
+                    log_level = number_as_int(luaL_checkinteger(lstate, -1) as i64);
                 } else if lua_toboolean(lstate, -1) != 0 {
                     for (name, flag) in FLAG_KEYS {
                         if k == name {

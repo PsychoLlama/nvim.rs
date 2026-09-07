@@ -6,12 +6,19 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -212,12 +219,12 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
 
     // SAFETY: `chan` is a live channel; the transport reads below are guarded
     // by its `streamtype`.
-    push(c"id", Object::Integer(unsafe { (*chan).id } as Integer));
+    push(c"id", Object::Integer(unsafe { (*chan).id }.cast_signed()));
 
     let stream_desc = match unsafe { (*chan).streamtype } {
         kChannelStreamProc => {
             let proc = unsafe { channel_proc(chan) };
-            if unsafe { (*proc).type_0 } as c_int == kProcTypePty {
+            if unsafe { (*proc).type_0 }.cast_signed() == kProcTypePty {
                 let name = unsafe { cstr_as_string(pty_proc_tty_name(channel_pty(chan))) };
                 push(c"pty", Object::String(unsafe { arena_string(arena, name) }));
             }

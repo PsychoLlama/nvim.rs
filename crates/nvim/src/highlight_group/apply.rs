@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -65,7 +72,7 @@ pub(crate) unsafe fn set_hl_group(
             entry.script_ctx = current_sctx.get();
             entry.script_ctx.sc_lnum += sourcing_lnum();
             unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
-            entry.set |= SG_LINK as c_int;
+            entry.set |= SG_LINK.cast_signed();
             if is_default {
                 entry.deflink = link_id;
                 entry.deflink_sctx = current_sctx.get();

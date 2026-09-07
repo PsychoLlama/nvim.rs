@@ -11,6 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{NL, PROFILE_FNAME, func_line, profile_cmp, profile_msg_str, profiled_functions};
 use crate::fileio::vim_fgets;
@@ -55,7 +62,7 @@ unsafe fn write_func_name(fd: &mut dyn Write, func: *mut UserFunc) -> io::Result
     // SAFETY: `uf_name` is the flexible NUL-terminated name at the end of the
     // entry, alive for as long as `func` is.
     let name = unsafe { CStr::from_ptr((&raw const (*func).uf_name).cast::<c_char>()).to_bytes() };
-    if name.first().copied() == Some(K_SPECIAL as u8) {
+    if name.first().is_some_and(|&b| c_int::from(b) == K_SPECIAL) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;
     } else {
@@ -210,7 +217,7 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<
         return writeln!(fd, "Cannot open file!");
     }
     let mut buf = [0 as c_char; IOSIZE as usize];
-    let mut i = 0;
+    let mut i: usize = 0;
     // SAFETY: `buf` is `IOSIZE` chars, which is the bound handed over, and
     // `sfd` is the handle just opened; it is closed below.
     while !unsafe { vim_fgets(buf.as_mut_ptr(), IOSIZE, sfd) } {
@@ -219,14 +226,14 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<
         if buf[IOSIZE as usize - 2] != 0 && buf[IOSIZE as usize - 2] != NL {
             let mut n = IOSIZE as usize - 2;
             // Move back to the first byte of the char.
-            while n > 0 && (buf[n] as u8 & 0xc0) == 0x80 {
+            while n > 0 && (buf[n].cast_unsigned() & 0xc0) == 0x80 {
                 n -= 1;
             }
             buf[n] = NL;
             buf[n + 1] = 0;
         }
         // SAFETY: `buf` was NUL-terminated by `vim_fgets`.
-        let counters = si.sn_prl_ga.get(i as usize).copied();
+        let counters = si.sn_prl_ga.get(i).copied();
         let line = unsafe { CStr::from_ptr(buf.as_ptr()) };
         match counters.filter(|pp| pp.snp_count > 0) {
             Some(pp) => {

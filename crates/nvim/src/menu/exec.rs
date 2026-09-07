@@ -11,6 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::guard::Depth;
 use crate::message_fmt::msg_cstr;
@@ -89,7 +96,7 @@ fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
     if idx == MENU_INDEX_INVALID || !from_command {
         idx = MENU_INDEX_NORMAL;
     }
-    let bit = idx as usize;
+    let bit = usize::try_from(idx).expect("a menu mode index is never negative");
 
     if !menu.strings[bit].is_null() && menu.modes & (1 << idx) != 0 {
         if !from_command || script_id() != 0 {
@@ -342,5 +349,5 @@ fn char_at_cursor() -> c_int {
 /// `'selection'`'s first letter: `i`nclusive, `e`xclusive or `o`ld.
 fn selection_style() -> u8 {
     // SAFETY: the option always holds a non-empty NUL-terminated string.
-    unsafe { *p_sel.get() as u8 }
+    unsafe { *p_sel.get() }.cast_unsigned()
 }

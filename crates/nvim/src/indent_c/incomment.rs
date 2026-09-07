@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::charset::skip;
@@ -121,7 +128,8 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
         let look = unsafe { start.offset(comment.col as isize).add(2) }; // skip / and *
         nothing_after_opener = unsafe { *look } == 0;
         if !nothing_after_opener {
-            comment.col = unsafe { skipwhite(look).offset_from(start) } as ColNr;
+            let at = unsafe { skipwhite(look).offset_from(start) };
+            comment.col = ColNr::try_from(at).expect("a column within a line fits a ColNr");
         }
     }
     // SAFETY: `comment` is still a position in the current buffer -- the
@@ -175,8 +183,8 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
         let mut off = 0;
         let mut what = 0;
         // SAFETY: as above -- `p` is inside the option string throughout.
-        while unsafe { *p != 0 && *p as u8 != b':' } {
-            let c = c_int::from(unsafe { *p } as u8);
+        while unsafe { *p != 0 && (*p).cast_unsigned() != b':' } {
+            let c = c_int::from(unsafe { *p }.cast_unsigned());
             if c == COM_START || c == COM_END || c == COM_MIDDLE {
                 what = c;
                 p = unsafe { p.add(1) };
@@ -190,7 +198,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
             }
         }
         // SAFETY: the loop above left `p` on the NUL or on the ':'.
-        if unsafe { *p as u8 == b':' } {
+        if unsafe { *p }.cast_unsigned() == b':' {
             p = unsafe { p.add(1) };
         }
 

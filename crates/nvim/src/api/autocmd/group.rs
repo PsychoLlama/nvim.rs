@@ -8,10 +8,18 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
+use crate::narrow::number_as_int;
 use crate::winlayer::Live;
 
 pub unsafe fn nvim_create_augroup(
@@ -64,7 +72,7 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let name: *mut ::core::ffi::c_char = if id == 0 as Integer {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     } else {
-        augroup_name(id as ::core::ffi::c_int)
+        augroup_name(number_as_int(id))
     };
     unsafe { augroup_del(name, false) };
     unsafe { try_leave(&raw mut tstate, &mut error) };
@@ -104,7 +112,7 @@ pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> 
             return au_group;
         }
         Object::Integer(n) => {
-            au_group = n as ::core::ffi::c_int;
+            au_group = number_as_int(n);
             name = if au_group == 0 as ::core::ffi::c_int {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {

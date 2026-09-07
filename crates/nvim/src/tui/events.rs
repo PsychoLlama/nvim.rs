@@ -11,6 +11,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
@@ -130,12 +137,13 @@ pub fn tui_mode_change(tui: &mut TUIData, _mode: String_0, mode_idx: Integer) {
             }
         }
     }
-    cursor_set_mode(tui, mode_idx as usize);
+    let mode_idx = usize::try_from(mode_idx).expect("the editor names a mode by index");
+    cursor_set_mode(tui, mode_idx);
     if tui.is_starting && tui.verbose >= 3 {
         show_verbose_terminfo(tui);
     }
     tui.is_starting = false;
-    tui.showing_mode = mode_idx as usize;
+    tui.showing_mode = mode_idx;
 }
 
 /// Ring the terminal's bell.

@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -205,7 +212,8 @@ unsafe fn read_file_header(bi: *mut BufInfo, file_name: *const c_char) -> Option
         return None;
     }
     let line_ptr = if str_len > 0 {
-        unsafe { undo_read_string(bi, str_len as size_t) }
+        let len = usize::try_from(str_len).expect("the branch above proves it positive");
+        unsafe { undo_read_string(bi, len) }
     } else {
         ptr::null_mut()
     };

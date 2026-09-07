@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_void};
@@ -19,7 +26,7 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{pty_proc_resize, pty_proc_resume};
 use crate::terminal::{terminal_alloc, terminal_destroy};
-use crate::types::{Channel, OptInt, TerminalOptions, size_t, uint16_t};
+use crate::types::{Channel, TerminalOptions, size_t, uint16_t};
 
 use super::{channel_decref, channel_incref, channel_proc, channel_pty};
 
@@ -41,7 +48,7 @@ pub unsafe fn channel_terminal_alloc(mut buffer: Buf, chan: *mut Channel) {
         close_cb: Some(term_close),
         force_crlf: false,
     };
-    unsafe { buffer.b_p_channel = (*chan).id as OptInt };
+    unsafe { buffer.b_p_channel = (*chan).id.cast_signed() };
     unsafe { channel_incref(chan) };
     unsafe { (*chan).term = terminal_alloc(buffer, topts) };
 }

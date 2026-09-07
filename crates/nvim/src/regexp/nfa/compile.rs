@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::regexp::NfaOp;
@@ -18,7 +25,7 @@ use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
 use crate::regexp::{NfaState, Rex, istate, nstate, regcomp_start, wants_nfa};
-use crate::types::{NUL, uint8_t};
+use crate::types::uint8_t;
 
 /// Reset the compile-time state and reserve the postfix program.
 ///
@@ -152,14 +159,15 @@ pub(crate) unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut uint8_t {
     // `len` counted the first character too, and the write below skips
     // it (it is reported separately as the program's `regstart`), so
     // there is always at least one spare byte for the terminator.
-    let text = unsafe { xmalloc(len as usize) }.cast::<uint8_t>();
+    let bytes = usize::try_from(len).expect("a character length is never negative");
+    let text = unsafe { xmalloc(bytes) }.cast::<uint8_t>();
     let mut out = text;
     let mut p = unsafe { (*(*start).out).out };
     while unsafe { (*p).c } > 0 {
         out = unsafe { out.offset(utf_char2bytes((*p).c, out.cast()) as isize) };
         p = unsafe { (*p).out };
     }
-    unsafe { *out = NUL as uint8_t };
+    unsafe { *out = b'\0' };
     text
 }
 

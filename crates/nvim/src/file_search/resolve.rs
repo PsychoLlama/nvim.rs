@@ -9,10 +9,18 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
+use crate::narrow::len_as_int;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
@@ -151,7 +159,7 @@ unsafe fn prepare_name(
 /// Is `name` `"."`, `".."`, or something below one of them? Such a name is
 /// meant relative to the current directory and never looked for in `'path'`.
 unsafe fn rel_to_curdir(name: *const c_char) -> bool {
-    let at = |i: usize| unsafe { *name.add(i) } as u8;
+    let at = |i: usize| unsafe { *name.add(i) }.cast_unsigned();
     let ends_component = |i: usize| at(i) == 0 || vim_ispathsep(c_int::from(at(i)));
     at(0) == b'.' && (ends_component(1) || (at(1) == b'.' && ends_component(2)))
 }
@@ -231,16 +239,18 @@ unsafe fn find_without_path(
     // apply.
     for run in 1..=2 {
         let len = if run == 1 && relative {
-            let len = unsafe {
+            let written = unsafe {
                 vim_snprintf(
                     name_buff,
                     MAXPATHL as usize,
                     c"%.*s%s".as_ptr(),
-                    path_tail(rel_fname.cast_mut()).offset_from(rel_fname) as c_int,
+                    len_as_int(path_tail(rel_fname).offset_from_unsigned(rel_fname)),
                     rel_fname,
                     file_to_find,
                 )
-            } as size_t;
+            };
+            let len =
+                usize::try_from(written).expect("vim_snprintf never answers a negative length");
             debug_assert!(len < MAXPATHL as usize);
             len
         } else if run == 1 {

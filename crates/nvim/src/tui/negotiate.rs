@@ -13,6 +13,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
@@ -226,10 +233,15 @@ pub unsafe fn tui_query_bg_color(tui: *mut TUIData) {
 /// storage, immutable, and index 0 is the empty string the caller tests for.
 static ONE_CHAR_STRINGS: [[c_char; 2]; 256] = {
     let mut table = [[0 as c_char; 2]; 256];
-    let mut byte = 0usize;
-    while byte < 256 {
-        table[byte][0] = byte as u8 as c_char;
-        byte += 1;
+    // The two counters step together rather than converting one into the
+    // other, which a `const` initialiser has no fallible conversion for.
+    // The wrap on the last round is never read.
+    let mut at = 0usize;
+    let mut byte = 0u8;
+    while at < 256 {
+        table[at][0] = byte.cast_signed();
+        byte = byte.wrapping_add(1);
+        at += 1;
     }
     table
 };

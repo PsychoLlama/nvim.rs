@@ -76,7 +76,7 @@ pub const kMarkBufLocal: MarkGet = 0;
 pub const DOBUF_DEL: DoBufAction = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
+pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
     << ::core::mem::size_of::<uint64_t>()
         .wrapping_mul(8_usize)
         .wrapping_sub(1_usize);

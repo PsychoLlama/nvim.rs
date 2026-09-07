@@ -14,10 +14,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
-use crate::types::NUL;
 
 /// Free `watcher` and the callback and pattern it owns.
 pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
@@ -163,7 +169,8 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
             let name = (**partial).pt_name;
             snprintf(msg, msglen, c"<vim partial: %s>".as_ptr(), name);
         },
-        _ => unsafe { *msg = NUL as ::core::ffi::c_char },
+        // Anything else leaves the message an empty string.
+        _ => unsafe { *msg = 0 },
     }
     msg
 }

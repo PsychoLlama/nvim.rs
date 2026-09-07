@@ -15,9 +15,17 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::narrow::number_as_int;
 use core::ffi::{c_char, c_int};
 use core::slice;
 
@@ -49,10 +57,8 @@ fn current_buf() -> Buf {
 fn buffer_line(lnum: LineNr) -> &'static [u8] {
     // SAFETY: `ml_get` answers a live, NUL-terminated line of `ml_get_len`
     // bytes; the line stays put for as long as this function's caller runs.
-    unsafe {
-        let len = ml_get_len(lnum) as usize;
-        slice::from_raw_parts(ml_get(lnum).cast::<u8>(), len + 1)
-    }
+    let len = usize::try_from(ml_get_len(lnum)).expect("a line length is never negative");
+    unsafe { slice::from_raw_parts(ml_get(lnum).cast::<u8>(), len + 1) }
 }
 
 /// `try_getdigits`: the decimal number at `line[off]`, and the offset past
@@ -113,7 +119,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
     if current_buf().b_p_ml == 0 {
         return;
     }
-    let mut nmlines = p_mls.get() as c_int;
+    let mut nmlines = number_as_int(p_mls.get());
     if nmlines == 0 {
         return;
     }

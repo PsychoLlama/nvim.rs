@@ -8,6 +8,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -28,6 +35,7 @@ use crate::lua::ffi::{
 use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
+use crate::narrow::number_as_int;
 use crate::types::{Handle, LineNr, lua_State};
 use crate::winlayer::{self};
 
@@ -44,15 +52,15 @@ unsafe extern "C-unwind" {
 /// `lstate` must be a live Lua state holding this function's arguments.
 unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let window = luaL_checkinteger(lstate, 1) as Handle;
+        let window: Handle = number_as_int(luaL_checkinteger(lstate, 1) as i64);
         let Some(win) = winlayer::window(window) else {
             return luaL_error(lstate, c"invalid window".as_ptr());
         };
-        let top = luaL_checkinteger(lstate, 2) as LineNr + 1;
+        let top: LineNr = number_as_int(luaL_checkinteger(lstate, 2) as i64) + 1;
         if top < 1 {
             return luaL_error(lstate, c"invalid top".as_ptr());
         }
-        let bot = luaL_checkinteger(lstate, 3) as LineNr;
+        let bot: LineNr = number_as_int(luaL_checkinteger(lstate, 3) as i64);
         if top > bot {
             return luaL_error(lstate, c"invalid bot".as_ptr());
         }

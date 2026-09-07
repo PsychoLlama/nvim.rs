@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
@@ -22,6 +29,7 @@ use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
 use crate::getchar::state::mod_mask;
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
+use crate::narrow::number_as_int;
 use crate::normal::nv_scroll_line;
 use crate::ops::clear_oparg;
 use crate::option::vars::{p_mousem, p_mousescroll_hor, p_mousescroll_vert};
@@ -108,7 +116,7 @@ pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
         let count = if shift_or_ctrl {
             win.w_botline - win.w_topline
         } else {
-            p_mousescroll_vert.get() as c_int
+            number_as_int(p_mousescroll_vert.get())
         };
         // The count is written even when it is zero, as the C is.
         // SAFETY: the caller's promise, and `nv_scroll_line` reads the counts
@@ -125,7 +133,7 @@ pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
     let step = if shift_or_ctrl {
         win.w_view_width
     } else {
-        p_mousescroll_hor.get() as c_int
+        number_as_int(p_mousescroll_hor.get())
     };
     do_mousescroll_horiz(win, wheel_leftcol(win.w_leftcol, step, arg));
 }

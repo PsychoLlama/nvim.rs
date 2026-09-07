@@ -5,10 +5,18 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
+use crate::narrow::number_as_int;
 
 pub unsafe fn nvim_get_hl_by_id(
     hl_id: Integer,
@@ -17,13 +25,13 @@ pub unsafe fn nvim_get_hl_by_id(
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: these take a highlight-group id rather than a pointer.
-    let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
+    let known = unsafe { syn_get_final_id(number_as_int(hl_id)) } != 0;
     if !known {
         error = err_bad_number(c"highlight id", hl_id);
         return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: as above.
-    let attrcode = unsafe { syn_id2attr(hl_id as ::core::ffi::c_int) };
+    let attrcode = unsafe { syn_id2attr(number_as_int(hl_id)) };
     // SAFETY: `arena` is the caller's and `error` this frame's slot.
     unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena, &mut error) }.reported(error)
 }

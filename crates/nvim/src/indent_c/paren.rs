@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
@@ -32,7 +39,8 @@ pub(crate) unsafe fn cin_skip2pos(trypos: Pos) -> c_int {
     // region around the whole walk is as tight as this gets.
     let line = ml_get(trypos.lnum);
     let mut p = line.cast_const();
-    while unsafe { *p } != 0 && (unsafe { p.offset_from(line) } as ColNr) < trypos.col {
+    let limit = isize::try_from(trypos.col).expect("a paren column is never negative");
+    while unsafe { *p } != 0 && unsafe { p.offset_from(line) } < limit {
         if unsafe { cin_iscomment(p) } {
             p = unsafe { cin_skipcomment(p) };
         } else {
@@ -44,7 +52,8 @@ pub(crate) unsafe fn cin_skip2pos(trypos: Pos) -> c_int {
             };
         }
     }
-    unsafe { p.offset_from(line) as c_int }
+    let at = unsafe { p.offset_from(line) };
+    c_int::try_from(at).expect("a column within a line fits an int")
 }
 
 /// The `{` opening the block the cursor is in, or null.
@@ -208,7 +217,7 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
             }
             i = cin_skipcomment(l.offset(i)).offset_from(l); // brackets in comments
             i = skip_string(l.offset(i)).offset_from(l); // ... and in quotes
-            *l.offset(i) as u8
+            (*l.offset(i)).cast_unsigned()
         };
         if c == start {
             open_count += 1;
@@ -216,7 +225,8 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
             if open_count > 0 {
                 open_count -= 1;
             } else {
-                Win::current().w_cursor.col = i as ColNr;
+                Win::current().w_cursor.col =
+                    ColNr::try_from(i).expect("a column within a line fits a ColNr");
                 retval = true;
             }
         }

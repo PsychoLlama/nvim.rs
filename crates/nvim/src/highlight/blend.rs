@@ -1,5 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Blending one attribute set through another: `'winblend'`, `'pumblend'`.
 //!
@@ -170,7 +177,7 @@ fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
 unsafe fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     // SAFETY: the editor's own globals; `p_bg` is a NUL-terminated option
     // string, never empty.
-    let dark = unsafe { *p_bg.get() == b'd' as ::core::ffi::c_char };
+    let dark = unsafe { *p_bg.get() == b'd'.cast_signed() };
     if attrs.rgb_bg_color == -1 {
         attrs.rgb_bg_color = normal_bg.get();
     }
@@ -214,7 +221,8 @@ fn rgb_blend(ratio: c_int, rgb1: RgbValue, rgb2: RgbValue) -> RgbValue {
 fn cterm_blend(ratio: c_int, c1: int16_t, c2: int16_t) -> int16_t {
     let rgb1 = cterm2rgb(c_int::from(c1));
     let rgb2 = cterm2rgb(c_int::from(c2));
-    rgb2cterm(rgb_blend(ratio, rgb1, rgb2)) as int16_t
+    let blended = rgb2cterm(rgb_blend(ratio, rgb1, rgb2));
+    int16_t::try_from(blended).expect("a cube colour number is under 216")
 }
 
 /// The nearest colour-cube number to an RGB colour. Only the 216-colour cube
@@ -255,13 +263,14 @@ fn cterm2rgb(nr: c_int) -> RgbValue {
         [255, 255, 255],
     ];
 
+    let nr = usize::try_from(nr).expect("a cterm colour number is never negative");
     let [r, g, b] = if nr < 16 {
-        ANSI[nr as usize]
+        ANSI[nr]
     } else if nr < 232 {
-        let idx = (nr - 16) as usize;
+        let idx = nr - 16;
         [CUBE[idx / 36 % 6], CUBE[idx / 6 % 6], CUBE[idx % 6]]
     } else if nr < 256 {
-        let level = GREY[(nr - 232) as usize];
+        let level = GREY[nr - 232];
         [level, level, level]
     } else {
         // Out of range: upstream leaves the channels at zero.

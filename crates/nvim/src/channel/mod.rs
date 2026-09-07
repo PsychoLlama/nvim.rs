@@ -28,10 +28,17 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::{mem, ptr};
 
 use crate::eval::typval::callback_free;
@@ -188,7 +195,7 @@ pub unsafe fn channel_proc(chan: *mut Channel) -> *mut Proc {
 /// `chan` points at a live channel whose transport is a *pty* job.
 pub unsafe fn channel_pty(chan: *mut Channel) -> *mut PtyProc {
     debug_assert!(unsafe { (*chan).streamtype } == kChannelStreamProc);
-    debug_assert!(unsafe { (*chan).stream.proc.type_0 } as c_int == kProcTypePty);
+    debug_assert!(unsafe { (*chan).stream.proc.type_0 }.cast_signed() == kProcTypePty);
     // SAFETY: as `channel_proc`, with the caller's stronger promise.
     unsafe { &raw mut (*chan).stream.pty }
 }
@@ -568,7 +575,7 @@ unsafe fn close_job_parts(chan: *mut Channel, part: ChannelPart, close_main: boo
     if part == kChannelPartStderr || part == kChannelPartAll {
         unsafe { rstream_may_close(&raw mut (*proc).err) };
     }
-    if unsafe { (*proc).type_0 } as c_int == kProcTypePty && part == kChannelPartAll {
+    if unsafe { (*proc).type_0 }.cast_signed() == kProcTypePty && part == kChannelPartAll {
         unsafe { pty_proc_close_master(channel_pty(chan)) };
     }
 }
@@ -711,7 +718,11 @@ unsafe fn send_to_channel(
             // stderr is not on the event loop; it is written synchronously
             // and a short write is reported as such.
             let wres = unsafe { os_write(STDERR_FILENO, data, len, false) };
-            Ok(Sent::Bytes(if wres >= 0 { wres as size_t } else { 0 }))
+            Ok(Sent::Bytes(if wres >= 0 {
+                wres.cast_unsigned()
+            } else {
+                0
+            }))
         }
         kChannelStreamInternal => {
             if unsafe { (*chan).is_rpc } {

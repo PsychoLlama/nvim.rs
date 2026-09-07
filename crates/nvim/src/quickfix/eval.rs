@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::eval::typval::NumBuf;
@@ -233,7 +240,10 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
         // Never null: the value is a string, which is what
         // `tv_get_string_chk` fails on anything else for.
         let act = unsafe { numbuf.string_chk(action_arg) };
-        let known = matches!(unsafe { *act } as u8, b'a' | b'r' | b'u' | b' ' | b'f');
+        let known = matches!(
+            unsafe { *act }.cast_unsigned(),
+            b'a' | b'r' | b'u' | b' ' | b'f'
+        );
         if !known || c_int::from(unsafe { *act.add(1) }) != NUL {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let act = unsafe { c_str(act) };

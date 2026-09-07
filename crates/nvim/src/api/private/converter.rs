@@ -18,6 +18,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -38,7 +45,7 @@ use crate::types::{
     ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair, List,
     LuaRef, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN, VarLock, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, ptrdiff_t, size_t, typval_vval_union,
+    kSpecialVarNull, size_t, typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -138,7 +145,7 @@ impl TypvalSink for ObjectSink {
     }
 
     unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
-        self.stack.push(Object::Integer(num as Integer));
+        self.stack.push(Object::Integer(num.cast_signed()));
     }
 
     unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
@@ -169,7 +176,7 @@ impl TypvalSink for ObjectSink {
 
     /// A blob is bytes, and so is a `String` object.
     unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
-        let len = len as size_t;
+        let len = usize::try_from(len).expect("a blob length is never negative");
         // SAFETY: a non-empty blob has a `bv_ga` holding `len` bytes.
         let obj = unsafe {
             let data = if len != 0 {
@@ -222,8 +229,8 @@ impl TypvalSink for ObjectSink {
 
     /// Reserve the whole array now; the items fill it in place.
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
-        self.stack
-            .push(Object::Array(arena_array(self.arena, len as size_t)));
+        let len = usize::try_from(len).expect("a list length is never negative");
+        self.stack.push(Object::Array(arena_array(self.arena, len)));
         Flow::Go
     }
 
@@ -377,7 +384,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
         }
         Object::Array(array) => {
             // SAFETY: the list is this call's until it is handed to `tv`.
-            let list: *mut List = unsafe { tv_list_alloc(array.size as ptrdiff_t) };
+            let list: *mut List = unsafe { tv_list_alloc(array.size.cast_signed()) };
             for i in 0..array.size {
                 let mut li_tv: TypVal = TypVal {
                     v_type: VAR_UNKNOWN,

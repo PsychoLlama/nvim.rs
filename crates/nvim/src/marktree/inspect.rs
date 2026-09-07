@@ -1,5 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Rendering a tree for a human: `:lua vim.api.nvim__buf_debug_extmarks()`.
 //!
@@ -132,7 +139,7 @@ fn dotfile_node(out: &mut String, n: Node, off: MTPos, parent: Option<&str>) {
         }
         // The C printed this one with `%d`, so a namespace-less id wide enough
         // to set the top bit comes out negative. Kept, for identical dumps.
-        let _ = write!(out, "{}", k.id as i32);
+        let _ = write!(out, "{}", k.id.cast_signed());
         if mt_paired(k) {
             out.push(if mt_end(k) { 'e' } else { 's' });
         }
@@ -159,7 +166,8 @@ fn dot_name(parent: Option<&str>, level: usize, parent_index: usize) -> String {
     let Some(parent) = parent else {
         return String::from("MTNode");
     };
-    let letter = char::from(b'a' + level as u8);
+    let level = u8::try_from(level).expect("a marktree is only a few levels deep");
+    let letter = char::from(b'a' + level);
     let mut name = format!("{parent}_{letter}{parent_index}");
     // Every byte of a name is ASCII, so this cannot split a character.
     name.truncate(DOT_NAME_MAX);

@@ -16,6 +16,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -112,7 +119,7 @@ impl RtpParts<'_> {
     /// already end in one (C's `after_pathsep`, which on this platform is
     /// exactly "the previous byte is a [`PATHSEP`]").
     fn push_components(&self, out: &mut Vec<u8>, sufs: &[&[u8]]) {
-        let sep = PATHSEP as u8;
+        let sep = u8::try_from(PATHSEP).expect("`PATHSEP` is an ASCII byte");
         if out.last() != Some(&sep) {
             out.push(sep);
         }
@@ -137,9 +144,8 @@ enum Order {
 /// skip a zero-length component, so both are a `split` with the empties
 /// filtered out.
 fn entries(val: &[u8], order: Order) -> impl Iterator<Item = &[u8]> {
-    let mut fwd = val
-        .split(|&b| b == ENV_SEPCHAR as u8)
-        .filter(|d| !d.is_empty());
+    let sep = u8::try_from(ENV_SEPCHAR).expect("`ENV_SEPCHAR` is an ASCII byte");
+    let mut fwd = val.split(move |&b| b == sep).filter(|d| !d.is_empty());
     let mut rev = fwd.clone();
     core::iter::from_fn(move || match order {
         Order::Forward => fwd.next(),

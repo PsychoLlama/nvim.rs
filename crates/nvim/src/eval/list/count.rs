@@ -11,8 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
-
-use core::ffi::c_int;
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{
     Container, DictRef, ListRef, char_len, check_lock, copy_tv, cstr_of_chk, err,
@@ -20,7 +25,8 @@ use super::{
 };
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
-use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, uint8_t};
+use crate::narrow::number_as_int;
+use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 ///
@@ -44,7 +50,9 @@ pub unsafe fn f_add(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
                 let mut error = false;
                 let n = number_of(args.get_mut(1), &mut error);
                 if !error {
-                    b.push(n as uint8_t);
+                    // Upstream's `(uint8_t)n`: a Number wider than a byte
+                    // wraps, and `add(0z, 300)` appending 0x2C is observable.
+                    b.push(n.to_le_bytes()[0]);
                     copy_tv(args.get_mut(0), result);
                 }
             }
@@ -97,7 +105,7 @@ fn count_list(l: ListRef, needle: &mut TypVal, idx: int64_t, ic: bool) -> VarNum
     if l.len() == 0 {
         return 0;
     }
-    let Some(first) = l.find(idx as c_int) else {
+    let Some(first) = l.find(number_as_int(idx)) else {
         err_nr(e_list_index_out_of_range_nr, idx);
         return 0;
     };

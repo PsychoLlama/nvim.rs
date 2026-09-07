@@ -2,6 +2,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! The border drawn around a floating window.
 //!
@@ -12,7 +19,6 @@
 
 use super::*;
 use crate::highlight_group::{HLF_BFOOTER, HLF_BTITLE};
-use crate::types::NUL;
 
 /// Draw one of the two border texts into the batch in progress.
 ///
@@ -58,7 +64,8 @@ unsafe fn grid_draw_bordertext(
 
         // Skip characters from the beginning when the text overflows.
         if overflow > 0 {
-            let cells = unsafe { mb_string2cells(text) } as c_int;
+            let cells = unsafe { mb_string2cells(text) };
+            let cells = c_int::try_from(cells).expect("a chunk is never wider than an int");
             if overflow >= cells {
                 // The whole chunk is off the left edge.
                 overflow -= cells;
@@ -66,7 +73,7 @@ unsafe fn grid_draw_bordertext(
             }
             // Skip partial characters within the chunk.
             let mut p = text;
-            while unsafe { *p } != NUL as c_char && overflow > 0 {
+            while unsafe { *p } != 0 && overflow > 0 {
                 overflow -= unsafe { utf_ptr2cells(p) };
                 p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
             }
@@ -177,17 +184,14 @@ pub unsafe fn grid_draw_border(
         }
         if side(1) {
             // With no top edge, the first row's right cell is the corner.
-            let ic: isize = if i == 0 && !side(0) && chars[2] != 0 {
+            let ic: usize = if i == 0 && !side(0) && chars[2] != 0 {
                 2
             } else {
                 3
             };
             unsafe { screengrid_line_start(grid, i + *adj.offset(0), 0) };
-            grid_line_put_schar(
-                icol + unsafe { *adj.offset(3) },
-                chars[ic as usize],
-                unsafe { *attrs.offset(ic) },
-            );
+            let attr = unsafe { *attrs.add(ic) };
+            grid_line_put_schar(icol + unsafe { *adj.offset(3) }, chars[ic], attr);
             unsafe { grid_line_flush() };
         }
         i += 1;
@@ -201,14 +205,13 @@ pub unsafe fn grid_draw_border(
         let mut i = 0;
         while i < icol {
             // With no left edge, the first column is the corner.
-            let ic: isize = if i == 0 && !side(3) && chars[6] != 0 {
+            let ic: usize = if i == 0 && !side(3) && chars[6] != 0 {
                 6
             } else {
                 5
             };
-            grid_line_put_schar(i + unsafe { *adj.offset(3) }, chars[ic as usize], unsafe {
-                *attrs.offset(ic)
-            });
+            let attr = unsafe { *attrs.add(ic) };
+            grid_line_put_schar(i + unsafe { *adj.offset(3) }, chars[ic], attr);
             i += 1;
         }
         if unsafe { (*config).footer } {

@@ -122,6 +122,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `winlayer.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 mod frame;
 pub mod graph;
@@ -928,6 +935,7 @@ impl Line {
     /// How many bytes into the line `ci` sits.
     #[inline(always)]
     pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
-        ci.ptr.addr().wrapping_sub(self.0.addr()) as ::core::ffi::c_int
+        let offset = ci.ptr.addr().wrapping_sub(self.0.addr());
+        ::core::ffi::c_int::try_from(offset).expect("`ci` is a character of this line")
     }
 }

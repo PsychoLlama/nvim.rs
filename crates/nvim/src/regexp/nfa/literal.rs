@@ -5,6 +5,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::NfaOp;
 use crate::semsg;
@@ -125,13 +132,15 @@ pub(crate) fn previous_substitute() -> Parsed {
     }
     let mut p = sub;
     while c_int::from(unsafe { *p }) != NUL {
-        postfix::emit(unsafe { utf_ptr2char(p) });
+        let (c, len) = unsafe { (utf_ptr2char(p), utf_ptr2len(p)) };
+        let len = usize::try_from(len).expect("a character is at least one byte");
+        postfix::emit(c);
         // The join goes after the second and every later character, so
         // the run reads as `a b CONCAT c CONCAT …`.
         if p != sub {
             postfix::emit_op(NfaOp::Concat);
         }
-        p = unsafe { p.add(utf_ptr2len(p) as usize) };
+        p = unsafe { p.add(len) };
     }
     postfix::emit_op(NfaOp::Nopen);
     Ok(())

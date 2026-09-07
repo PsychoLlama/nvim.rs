@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};
@@ -31,7 +38,7 @@ unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
     }
     // SAFETY: the caller's promise -- `name` has the one byte read here.
     let mark = unsafe { *name.data() };
-    if !((mark as u8).is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
+    if !(mark.cast_unsigned().is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
         // SAFETY: as above.
         unsafe { reject(err, c"mark name (must be file/uppercase)", name) };
         return None;

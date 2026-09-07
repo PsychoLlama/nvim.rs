@@ -21,6 +21,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -186,7 +193,9 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         }
         // Room for "0z", two hex digits a byte, and a "." after every eight
         // digits: "0z00112233.44556677.8899".
-        self.gap.reserve((2 + 2 * len + (len - 1) / 4) as usize);
+        let room =
+            usize::try_from(2 + 2 * len + (len - 1) / 4).expect("a blob length is never negative");
+        self.gap.reserve(room);
         self.gap.extend_from_slice(b"0z");
         for i in 0..len {
             if i > 0 && (i & 3) == 0 {

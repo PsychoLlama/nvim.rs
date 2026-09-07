@@ -12,6 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::list::{op, out_of, out1_of};
 use crate::regexp::NfaOp;
@@ -191,7 +198,7 @@ fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
             // collection continues past its `NFA_END_COLL`, which is
             // where `out1` points.
             Ok(c @ (NfaOp::Any | NfaOp::StartColl | NfaOp::StartNegColl)) => {
-                len += MB_MAXBYTES as c_int;
+                len += c_int::try_from(MB_MAXBYTES).expect("`MB_MAXBYTES` is 21");
                 if c != NfaOp::Any {
                     if out1_of(state).is_null() || out_of(out1_of(state)).is_null() {
                         return -1;
@@ -278,7 +285,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
     let cap = if counting {
         0
     } else {
-        nstate.get() as usize + 1
+        usize::try_from(nstate.get()).expect("the state count is never negative") + 1
     };
     let mut stack = Stack {
         frags: Vec::with_capacity(cap),

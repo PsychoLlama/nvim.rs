@@ -11,6 +11,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::CStr;
 
@@ -24,8 +31,9 @@ use crate::lua::ffi::{
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
 use crate::lua::state::nlua_global_refs;
+use crate::narrow::{float_as_i64, len_as_int};
 use crate::types::{
-    ApiDict, Arena, Array, Error, Integer, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    ApiDict, Arena, Array, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
@@ -126,7 +134,7 @@ pub unsafe fn nlua_pop_object(
                         }
                         let idx = array.size;
                         array.size = idx.wrapping_add(1);
-                        lua_rawgeti(lstate, -1, idx as ::core::ffi::c_int + 1);
+                        lua_rawgeti(lstate, -1, len_as_int(idx) + 1);
                         stack.push(cur);
                         cur = ObjPopStackItem::leaf(array.items.add(idx));
                     }
@@ -157,11 +165,11 @@ pub unsafe fn nlua_pop_object(
                         let n = lua_tonumber(lstate, -1);
                         *cur.obj = if n > API_INTEGER_MAX as lua_Number
                             || n < API_INTEGER_MIN as lua_Number
-                            || (n as Integer) as lua_Number != n
+                            || float_as_i64(n) as lua_Number != n
                         {
                             Object::float(n)
                         } else {
-                            Object::integer(n as Integer)
+                            Object::integer(float_as_i64(n))
                         };
                         break 'converted;
                     }

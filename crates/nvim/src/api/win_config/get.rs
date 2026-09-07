@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, find_window_by_handle, set_key};
@@ -174,7 +181,8 @@ pub unsafe fn nvim_win_get_config(
                 }
             }
             set(&mut rv, KEYSET_OPTIDX_win_config__anchor);
-            rv.anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[config.anchor as usize]);
+            let anchor = usize::try_from(config.anchor).expect("an anchor is one of four");
+            rv.anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[anchor]);
             set(&mut rv, KEYSET_OPTIDX_win_config__row);
             rv.row = config.row;
             set(&mut rv, KEYSET_OPTIDX_win_config__col);

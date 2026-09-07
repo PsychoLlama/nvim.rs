@@ -20,6 +20,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::Ui;
 use super::events::{count, linegrid, send};
@@ -27,6 +34,7 @@ use super::packer::push_call;
 use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
 use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::narrow::number_as_int;
 use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};
 use crate::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use crate::types::{ApiDict, Arena, Array, HlAttrs, Integer, KeyValuePair, Object, RemoteUI};
@@ -63,7 +71,7 @@ pub unsafe fn remote_ui_hl_attr_define(
         hlattrs2dict(&mut rgb, None, rgb_attrs, true, false);
         hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
         if rgb_attrs.url >= 0 {
-            let url = hl_get_url(rgb_attrs.url as u32);
+            let url = hl_get_url(rgb_attrs.url.cast_unsigned());
             *rgb.items.add(rgb.size) = KeyValuePair {
                 key: static_cstring(c"url"),
                 value: Object::string(cstr_as_string(url)),
@@ -269,10 +277,11 @@ unsafe fn translate_contents(ui: *mut RemoteUI, contents: Array, arena: *mut Are
         let item = unsafe { *contents.items.add(i) }
             .as_array()
             .expect("a chunk is an [attr, text] pair");
-        let attr = unsafe { *item.items }
-            .as_integer()
-            .expect("a chunk's first element is its attribute id")
-            as core::ffi::c_int;
+        let attr = number_as_int(
+            unsafe { *item.items }
+                .as_integer()
+                .expect("a chunk's first element is its attribute id"),
+        );
         let mut new_item = arena_array(arena, 2);
         let attrs = if attr != 0 {
             let mut dict = arena_dict(arena, HLATTRS_DICT_SIZE);

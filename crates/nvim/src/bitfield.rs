@@ -14,6 +14,13 @@
 //! - Only unsigned value types are supported. No signed bitfield exists in
 //!   the tree; add the sign-extension here if one ever appears.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 /// Marker for types a bitfield range can be read as / written from.
 pub(crate) trait FieldValue: Copy {
@@ -25,16 +32,39 @@ macro_rules! impl_field_value {
     ($($ty:ty),+) => {
         $(impl FieldValue for $ty {
             fn from_bits(bits: u64) -> Self {
-                bits as Self
+                // A range wider than the value type keeps its low bits, the
+                // way assigning to a narrower C bitfield does.
+                let mask = u64::MAX >> (u64::BITS - <$ty>::BITS);
+                Self::try_from(bits & mask).expect("masked to the type's width")
             }
             fn to_bits(self) -> u64 {
-                self as u64
+                u64::from(self)
             }
         })+
     };
 }
 
-impl_field_value! {u8, u16, u32, u64, usize}
+impl_field_value! {u8, u16, u32}
+
+impl FieldValue for u64 {
+    fn from_bits(bits: u64) -> Self {
+        bits
+    }
+    fn to_bits(self) -> u64 {
+        self
+    }
+}
+
+impl FieldValue for usize {
+    fn from_bits(bits: u64) -> Self {
+        // No bitfield range is wider than a pointer on any target the editor
+        // builds for, so nothing is dropped here.
+        Self::try_from(bits).expect("a bit range fits a usize")
+    }
+    fn to_bits(self) -> u64 {
+        u64::try_from(self).expect("a usize fits in 64 bits")
+    }
+}
 
 impl FieldValue for bool {
     fn from_bits(bits: u64) -> Self {

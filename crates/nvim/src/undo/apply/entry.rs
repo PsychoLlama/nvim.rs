@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::super::store::Header;
 use super::super::*;
@@ -266,9 +273,10 @@ unsafe fn apply_entry(
     let mut emptied = false;
     let mut taken: *mut *mut c_char = ptr::null_mut();
     if oldsize > 0 {
-        let bytes = size_of::<*mut c_char>() * oldsize as size_t;
+        let count = usize::try_from(oldsize).expect("the branch above proves it positive");
+        let bytes = size_of::<*mut c_char>() * count;
         // SAFETY: an allocation of `oldsize` pointers.
-        taken = unsafe { xmalloc(bytes) } as *mut *mut c_char;
+        taken = unsafe { xmalloc(bytes) }.cast::<*mut c_char>();
         for i in (0..oldsize).rev() {
             // SAFETY: `taken` is `oldsize` slots long, and every line between
             // `top + 1` and `bot - 1` exists, by the bounds check above.
@@ -299,10 +307,10 @@ unsafe fn apply_entry(
                 let _ = unsafe { ml_append_flags(top + i, line, 0, 0) };
             }
             // SAFETY: the entry's own allocation, which the buffer copied.
-            unsafe { xfree(line as *mut c_void) };
+            unsafe { xfree(line.cast::<c_void>()) };
         }
         // SAFETY: the array the entry is giving up here.
-        unsafe { xfree((*uep).ue_array as *mut c_void) };
+        unsafe { xfree((*uep).ue_array.cast::<c_void>()) };
     }
 
     if oldsize != newsize {

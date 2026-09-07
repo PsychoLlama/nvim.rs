@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, has_key};
@@ -15,6 +22,7 @@ use crate::api::private::validate::{
     err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
 use crate::cstr;
+use crate::narrow::len_as_int;
 use crate::types::Failed;
 use crate::winlayer::Live;
 
@@ -174,12 +182,13 @@ pub unsafe fn nvim_create_autocmd(
                                                  Strings only",
                                             );
                                             let sctx = api_set_sctx(channel_id);
+                                            let patlen = len_as_int(pat.len());
                                             retval = unsafe {
                                                 autocmd_register(
                                                     autocmd_id,
                                                     event_nr,
                                                     pat.data(),
-                                                    pat.len() as ::core::ffi::c_int,
+                                                    patlen,
                                                     au_group,
                                                     opts.once,
                                                     opts.nested,

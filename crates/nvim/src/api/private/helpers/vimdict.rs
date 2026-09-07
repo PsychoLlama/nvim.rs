@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
@@ -18,8 +25,7 @@ use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::message_fmt::c_str;
 use crate::types::{
     Arena, Dict, DictItem, Error, Object, String_0, TypVal, VAR_UNKNOWN, VarLock,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t,
-    typval_vval_union,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, size_t, typval_vval_union,
 };
 use core::ffi::c_int;
 use core::ptr;
@@ -36,7 +42,7 @@ pub(crate) unsafe fn dict_get_value(
 ) -> Object {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
-    let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
+    let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
     if di.is_null() {
         // SAFETY: `key` borrows the caller's NUL-terminated text.
         let key = unsafe { c_str(key.data()) };
@@ -59,7 +65,7 @@ pub(crate) unsafe fn dict_check_writable(
     err: &mut Error,
 ) -> *mut DictItem {
     // SAFETY: as `dict_get_value`.
-    let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
+    let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
     if !di.is_null() {
         // SAFETY: the lookup answered a live item.
         let flags = c_int::from(unsafe { (*di).di_flags });

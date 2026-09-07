@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::{TabPage, Win, buffer_at, windows};
@@ -124,7 +131,7 @@ pub unsafe fn diff_check_with_linestatus(
     if idx == DB_COUNT {
         return 0;
     }
-    let idx = idx as usize;
+    let idx = usize::try_from(idx).expect("a diff-buffer index is never negative");
     // A line inside a closed fold or concealed away has no status of its
     // own to report.
     //
@@ -276,9 +283,11 @@ pub(crate) fn diff_fold_update(
     skip_idx: c_int,
 ) {
     let tp = TabPage::current();
+    // A negative `skip_idx` names no slot, which `usize::MAX` reproduces.
+    let skip = usize::try_from(skip_idx).unwrap_or(usize::MAX);
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
-            if tp.tp_diffbuf[i] == wp.w_buffer && i as c_int != skip_idx {
+            if tp.tp_diffbuf[i] == wp.w_buffer && i != skip {
                 fold_update(wp, lnum[i], lnum[i] + count[i]);
             }
         }

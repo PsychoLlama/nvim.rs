@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
@@ -191,7 +198,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         // Both put the current line at column 0.
         // SAFETY: `l` is a NUL-terminated line, so `skipwhite` stops at its
         // NUL at the latest.
-        if unsafe { *skipwhite(l) as u8 == b'}' || cin_ends_in(l, b"};") } {
+        if unsafe { (*skipwhite(l)).cast_unsigned() == b'}' || cin_ends_in(l, b"};") } {
             return amount;
         }
 
@@ -210,7 +217,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         // at the latest, so `look.add(1)` is at worst one past the end,
         // which `cin_nocode` only compares.
         let mut look = unsafe { skipwhite(l) }.cast_const();
-        if unsafe { *look as u8 == b';' && cin_nocode(look.add(1)) } {
+        if unsafe { (*look).cast_unsigned() == b';' && cin_nocode(look.add(1)) } {
             let curpos_save = Win::current().w_cursor;
             while Win::current().w_cursor.lnum > 1 {
                 Win::current().w_cursor.lnum -= 1;

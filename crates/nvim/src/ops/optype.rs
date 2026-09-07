@@ -15,12 +15,25 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::keycodes::{Ctrl_A, Ctrl_X};
 use crate::message::internal_error;
 use crate::types::OpType;
 
 use core::ffi::c_int;
+
+/// [`Ctrl_A`] and [`Ctrl_X`] as the single bytes the table stores them as.
+/// The keycode constants are `int`s, and `to_le_bytes` takes the low byte a
+/// `(char)` cast would, in a form a `const` can evaluate.
+const CTRL_A: u8 = Ctrl_A.to_le_bytes()[0];
+const CTRL_X: u8 = Ctrl_X.to_le_bytes()[0];
 
 /// The operator always works on whole lines, whatever the motion said.
 const OPF_LINES: u8 = 1;
@@ -86,8 +99,8 @@ static OPCHARS: [OpChar; 30] = {
         two(b'z', b'D', OPF_LINES),              // OpType::Folddelrec
         two(b'g', b'w', OPF_LINES | OPF_CHANGE), // OpType::Format2
         two(b'g', b'@', OPF_CHANGE),             // OpType::Function
-        one(Ctrl_A as u8, OPF_CHANGE),           // OpType::NrAdd
-        one(Ctrl_X as u8, OPF_CHANGE),           // OpType::NrSub
+        one(CTRL_A, OPF_CHANGE),                 // OpType::NrAdd
+        one(CTRL_X, OPF_CHANGE),                 // OpType::NrSub
     ]
 };
 
@@ -179,8 +192,8 @@ mod tests {
             (OpType::Folddelrec, (b'z', b'D')),
             (OpType::Format2, (b'g', b'w')),
             (OpType::Function, (b'g', b'@')),
-            (OpType::NrAdd, (Ctrl_A as u8, b'\0')),
-            (OpType::NrSub, (Ctrl_X as u8, b'\0')),
+            (OpType::NrAdd, (CTRL_A, b'\0')),
+            (OpType::NrSub, (CTRL_X, b'\0')),
         ] {
             let row = &OPCHARS[op as usize];
             assert_eq!((row.first, row.second), keys, "row {op:?}");

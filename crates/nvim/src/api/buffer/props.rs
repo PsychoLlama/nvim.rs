@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -180,11 +187,11 @@ pub unsafe fn nvim_buf_delete(
     let unload: bool = unsafe { (*opts).unload };
     let result: Result<(), Failed> = do_buffer(
         if ::core::ffi::c_int::from(unload) != 0 {
-            DOBUF_UNLOAD as ::core::ffi::c_int
+            DOBUF_UNLOAD.cast_signed()
         } else {
-            DOBUF_WIPE as ::core::ffi::c_int
+            DOBUF_WIPE.cast_signed()
         },
-        DOBUF_FIRST as ::core::ffi::c_int,
+        DOBUF_FIRST.cast_signed(),
         FORWARD as ::core::ffi::c_int,
         b.handle as ::core::ffi::c_int,
         ::core::ffi::c_int::from(force),

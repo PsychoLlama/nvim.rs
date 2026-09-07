@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -210,9 +217,9 @@ pub(crate) unsafe fn clear_syn_state(p: *mut SynState) {
             unsafe { (*p).sst_union.sst_heap = ::core::ptr::null_mut() };
             // SAFETY: as above -- this is the box `fill_entry` leaked, and
             // nothing else holds it.
-            let states = unsafe {
-                Box::from_raw(::core::ptr::slice_from_raw_parts_mut(states, size as usize))
-            };
+            let len = usize::try_from(size).expect("a state stack size is never negative");
+            let states =
+                unsafe { Box::from_raw(::core::ptr::slice_from_raw_parts_mut(states, len)) };
             for state in &states {
                 // SAFETY: the item's own reference.
                 unsafe { unref_extmatch(state.bs_extmatch) };
@@ -221,7 +228,8 @@ pub(crate) unsafe fn clear_syn_state(p: *mut SynState) {
     } else {
         let mut i = 0;
         while i < size {
-            unsafe { unref_extmatch((*p).sst_union.sst_stack[i as usize].bs_extmatch) };
+            let at = usize::try_from(i).expect("the loop counts up from zero");
+            unsafe { unref_extmatch((*p).sst_union.sst_stack[at].bs_extmatch) };
             i += 1;
         }
     }

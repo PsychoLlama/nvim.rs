@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};
@@ -72,7 +79,8 @@ impl Ln {
     /// How far into `start` the cursor is.
     fn col_in(self, start: Ln) -> ColNr {
         // SAFETY: both cursors are inside the same line.
-        unsafe { self.0.offset_from(start.0) as ColNr }
+        let off = unsafe { self.0.offset_from(start.0) };
+        ColNr::try_from(off).expect("a cursor's column is inside its own line")
     }
 }
 

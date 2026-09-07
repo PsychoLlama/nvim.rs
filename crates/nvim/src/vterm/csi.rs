@@ -8,6 +8,13 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_int, c_long};
 use core::fmt::Write;
@@ -37,7 +44,8 @@ pub(super) enum Outcome {
 /// sub-parameter flag is not part of the value.
 fn param(args: &[c_long], n: usize) -> Option<c_int> {
     let raw = args.get(n).copied().unwrap_or(CSI_ARG_MISSING) & c_long::from(CSI_ARG_MASK);
-    (raw != CSI_ARG_MISSING).then_some(raw as c_int)
+    let value = c_int::try_from(raw).expect("`CSI_ARG_MASK` leaves at most `INT_MAX`");
+    (raw != CSI_ARG_MISSING).then_some(value)
 }
 
 /// The `n`th parameter, or `default` when it was omitted.
@@ -212,7 +220,7 @@ pub(super) fn dispatch(
                 let text: Vec<u8> = attr
                     .iter()
                     .take_while(|&&byte| byte != 0)
-                    .map(|&byte| byte as u8)
+                    .map(|&byte| byte.cast_unsigned())
                     .collect();
                 let mut seq = EscapeSeq::csi(state.ctrl8bit());
                 seq.push(b'?');
@@ -290,7 +298,9 @@ pub(super) fn dispatch(
         (0, 0, 0x6e) | (0, b'?', 0x6e) => device_status(state, param_or(args, 0, 0), leader),
         (b'!', 0, 0x70) => mode::reset(state, false), // DECSTR - soft terminal reset
         (b'$', b'?', 0x70) => {
-            mode::request_dec_mode(state, param_or(args, 0, CSI_ARG_MISSING as _))
+            // `c_int::MAX` is `CSI_ARG_MISSING` in the width a parameter
+            // is answered in.
+            mode::request_dec_mode(state, param_or(args, 0, c_int::MAX))
         }
         (0, b'>', 0x71) => mode::request_version_string(state), // XTVERSION
         (b' ', 0, 0x71) => {

@@ -39,6 +39,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_int, c_void};
 use core::ptr;
@@ -126,9 +133,10 @@ fn current_buf() -> Buf {
 /// Only valid while the iterator is positioned on a key, which every caller
 /// here has just established with a lookup or a `marktree_itr_current`.
 fn itr_rawkey(itr: &mut MarkTreeIter) -> &mut MTKey {
+    let slot = usize::try_from(itr.i).expect("an iterator's slot is never negative");
     // SAFETY: a positioned iterator points at a live node, and `i` is the
     // slot within it the tree itself put there.
-    unsafe { &mut (*itr.x).key[itr.i as usize] }
+    unsafe { &mut (*itr.x).key[slot] }
 }
 
 fn tree_put(tree: &mut MarkTree, key: MTKey, end_row: c_int, end_col: c_int, end_right: bool) {

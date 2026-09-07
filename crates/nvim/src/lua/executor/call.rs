@@ -8,8 +8,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
+use crate::narrow::len_as_int;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -72,7 +80,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
         }
 
         let nargs = lua_gettop(lstate) - 1;
-        if nargs > MAX_FUNC_ARGS as c_int {
+        if nargs > MAX_FUNC_ARGS.cast_signed() {
             return luaL_error(lstate, c"Function called with too many arguments".as_ptr());
         }
 
@@ -107,7 +115,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             try_enter(&raw mut tstate);
             let _ = call_func(
                 name,
-                name_len as c_int,
+                len_as_int(name_len),
                 &raw mut rettv,
                 nargs,
                 vim_args.as_mut_ptr(),
@@ -163,15 +171,16 @@ pub(crate) unsafe extern "C-unwind" fn nlua_rpcnotify(lstate: *mut lua_State) ->
 /// # Safety
 /// As [`nlua_rpcrequest`].
 unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
+    let mut name_len: size_t = 0;
     unsafe {
-        let mut name_len: size_t = 0;
-        let chan_id = luaL_checkinteger(lstate, 1) as uint64_t;
+        let chan_id = luaL_checkinteger(lstate, 1).cast_unsigned() as uint64_t;
         let name = luaL_checklstring(lstate, 2, &raw mut name_len);
         let nargs = lua_gettop(lstate) - 2;
 
         let mut err = Error::none();
         let mut arena: Arena = ARENA_EMPTY;
-        let mut args: Array = arena_array(&raw mut arena, nargs as size_t);
+        let count = size_t::try_from(nargs).expect("two arguments precede the rpc arguments");
+        let mut args: Array = arena_array(&raw mut arena, count);
 
         'check_err: {
             for i in 0..nargs {

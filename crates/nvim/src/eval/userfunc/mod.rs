@@ -321,6 +321,7 @@ pub(crate) fn ga_strings(gap: &GArray) -> &[*mut c_char] {
     if gap.ga_data.is_null() {
         return &[];
     }
+    let len = usize::try_from(gap.ga_len).expect("a garray length is never negative");
     // SAFETY: a `char *` garray's data is `ga_len` initialised pointers.
-    unsafe { slice::from_raw_parts(gap.ga_data as *const *mut c_char, gap.ga_len as usize) }
+    unsafe { slice::from_raw_parts(gap.ga_data as *const *mut c_char, len) }
 }

@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -127,7 +134,7 @@ pub unsafe fn channel_job_start(
 
     // A pty multiplexes both directions onto the master, so it always
     // reads and never has a separate stderr.
-    let (has_out, has_err) = if unsafe { (*proc).type_0 } as c_int == kProcTypePty {
+    let (has_out, has_err) = if unsafe { (*proc).type_0 }.cast_signed() == kProcTypePty {
         (true, false)
     } else {
         unsafe { (*proc).fwd_err = (*chan).on_stderr.fwd_err };
@@ -158,7 +165,7 @@ pub unsafe fn channel_job_start(
     }
 
     unsafe { start_job_streams(chan, rpc, has_in, has_out, has_err) };
-    unsafe { *status_out = (*chan).id as VarNumber };
+    unsafe { *status_out = (*chan).id.cast_signed() };
     chan
 }
 

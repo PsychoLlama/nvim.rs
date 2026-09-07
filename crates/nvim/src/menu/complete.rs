@@ -12,6 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -115,7 +122,8 @@ fn menu_context(cmd: &CStr, arg: CText, forceit: bool) -> Context {
     let mut after_dot = start;
     let mut i = 0;
     while start.byte(i) != 0 && !white(start.byte(i)) {
-        if (start.byte(i) == b'\\' || start.byte(i) == Ctrl_V as u8) && start.byte(i + 1) != 0 {
+        let escaped = start.byte(i) == b'\\' || c_int::from(start.byte(i)) == Ctrl_V;
+        if escaped && start.byte(i + 1) != 0 {
             i += 1;
         } else if start.byte(i) == b'.' {
             after_dot = start.at(i + 1);
@@ -286,9 +294,9 @@ pub(crate) unsafe fn get_menu_names(expand: *mut Expand, idx: c_int) -> *mut c_c
         // SAFETY: the caller's live expansion context.
         let out = unsafe { &mut (*expand).xp_buf };
         for (dst, src) in out.iter_mut().zip(&bytes[..kept]) {
-            *dst = *src as c_char;
+            *dst = src.cast_signed();
         }
-        out[kept] = SUBMENU_MARK as c_char;
+        out[kept] = SUBMENU_MARK.cast_signed();
         out[kept + 1] = 0;
         out.as_mut_ptr()
     } else {

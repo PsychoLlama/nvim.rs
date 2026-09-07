@@ -4,6 +4,7 @@
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::memline::MlFlags;
+use crate::narrow::len_as_int;
 use crate::semsg;
 use crate::tr_plural;
 use crate::types::CAR;
@@ -629,7 +630,7 @@ pub unsafe fn buf_write(
                             // *after* the flush, where it is zero:
                             // the BOM does not count towards the
                             // character total.
-                            bom_chars += writer.staged() as ::core::ffi::c_int;
+                            bom_chars += len_as_int(writer.staged());
                         }
                     }
 

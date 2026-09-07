@@ -14,6 +14,13 @@
 //! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::xdiff::ffi::{Emit, is_space};
 use crate::xdiff::xdiffi::do_diff;
@@ -66,11 +73,12 @@ pub(crate) fn guess_lines(text: &[u8], sample: i64) -> i64 {
             None => text.len(),
         };
     }
-    let tsize = cur as i64;
+    let tsize = i64::try_from(cur).expect("a sampled length fits an i64");
     if nl != 0 && tsize != 0 {
         // `tsize / nl` is at least 1: every line counted consumed at least
         // its own byte, so this cannot divide by zero.
-        nl = text.len() as i64 / (tsize / nl);
+        let len = i64::try_from(text.len()).expect("a text length fits an i64");
+        nl = len / (tsize / nl);
     }
     nl + 1
 }
@@ -213,7 +221,7 @@ pub(crate) fn hash_record(text: &[u8], flags: u64) -> (u64, usize) {
 /// fifty-seven bits set — which is load-bearing, because it is what a
 /// multibyte line's hash is built out of.
 fn fold(ha: u64, byte: u8) -> u64 {
-    ha.wrapping_add(ha << 5) ^ (byte as i8 as u64)
+    ha.wrapping_add(ha << 5) ^ i64::from(byte.cast_signed()).cast_unsigned()
 }
 
 /// The whitespace flavours, over one line with its newline already removed.

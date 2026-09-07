@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -21,6 +28,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::lua::executor::api_free_luaref;
 use crate::message_fmt::c_str_len;
+use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
     Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeNone, kErrorTypeValidation,
@@ -59,7 +67,7 @@ pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const K
         // which type lives there.
         unsafe {
             let mem = dict.cast::<c_char>().add(field.ptr_off);
-            match field.type_0 as ObjectType {
+            match field.type_0.cast_unsigned() {
                 kObjectTypeNil => api_luarefs_free_object(*mem.cast::<Object>()),
                 kObjectTypeLuaRef => api_free_luaref(*mem.cast::<LuaRef>()),
                 kObjectTypeDict => api_luarefs_free_dict(*mem.cast::<ApiDict>()),
@@ -131,7 +139,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
 
         // SAFETY: the row's offset names a field of `retval`.
         let mem = unsafe { retval.cast::<c_char>().add(field.ptr_off) };
-        let expected = field.type_0 as ObjectType;
+        let expected: ObjectType = field.type_0.cast_unsigned();
         // A mismatch reports the field's name, not the key's: they are
         // the same string.
         let mut wrong_type = |want: ObjectType| {
@@ -228,7 +236,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     }
                 };
                 // SAFETY: the row says a handle lives at `mem`.
-                unsafe { *mem.cast::<Handle>() = handle as Handle };
+                unsafe { *mem.cast::<Handle>() = number_as_int(handle) };
             }
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
@@ -273,7 +281,7 @@ pub(crate) unsafe fn api_keydict_to_dict(
         // with a nil value, because it means nothing outside the Lua state.
         let val = unsafe {
             let mem = value.cast::<c_char>().add(field.ptr_off);
-            match field.type_0 as ObjectType {
+            match field.type_0.cast_unsigned() {
                 kObjectTypeNil => *mem.cast::<Object>(),
                 kObjectTypeInteger => Object::integer(*mem.cast::<Integer>()),
                 kObjectTypeFloat => Object::float(*mem.cast::<Float>()),

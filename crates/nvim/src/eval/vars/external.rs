@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::eval::Parsed;
 use core::ffi::{c_char, c_int};
@@ -21,6 +28,7 @@ use core::ptr;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Suppress;
+use crate::narrow::number_as_int;
 use crate::types::{FAIL, OK};
 
 /// Publish the `v:` strings an expression is meant to read.
@@ -205,5 +213,5 @@ pub unsafe fn get_spellword(
     if unsafe { (*ret_word).is_null() } {
         return -1;
     }
-    unsafe { tv_list_find_nr(list, -1, ptr::null_mut()) as c_int }
+    number_as_int(unsafe { tv_list_find_nr(list, -1, ptr::null_mut()) })
 }

@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -29,7 +36,7 @@ use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS};
+use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode};
 use crate::ui::state::ui_event_ns_id;
 use core::ffi::{CStr, c_char};
 
@@ -120,7 +127,7 @@ pub unsafe fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     update_ext();
     unsafe { ui_refresh() };
     if checkerr {
-        let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
+        let ns = describe_ns(ns_id.cast_signed(), c"(UNKNOWN PLUGIN)".as_ptr());
         // SAFETY: the one `%s` spends the namespace name.
         let ns = unsafe { c_str(ns) };
         msg_schedule_semsg!("Excessive errors in vim.ui_attach() callback (ns={ns})");
@@ -259,13 +266,13 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
 ///
 /// `name` and `msg` must be valid C strings.
 unsafe fn report_error(ns_id: u32, name: *const c_char, msg: *const c_char) {
-    let ns = describe_ns(ns_id as NS, c"(UNKNOWN PLUGIN)".as_ptr());
+    let ns = describe_ns(ns_id.cast_signed(), c"(UNKNOWN PLUGIN)".as_ptr());
     // SAFETY: the caller's two strings and the namespace name just built.
     let (shown_name, shown_ns, shown_msg) = unsafe { (c_str(name), c_str(ns), c_str(msg)) };
     logmsg!(
         LOGLVL_ERR,
         c"report_error",
-        line!() as ::core::ffi::c_int,
+        line!().cast_signed(),
         "Error in \"{shown_name}\" UI event handler (ns={shown_ns}):\n{shown_msg}"
     );
     msg_schedule_semsg_multiline!(

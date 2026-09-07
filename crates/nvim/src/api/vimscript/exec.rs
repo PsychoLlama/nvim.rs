@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, api_try, dict_put_str};
@@ -92,17 +99,18 @@ pub unsafe fn exec_impl(
     // message from whatever was on screen; drop it. A one-byte capture is
     // that newline alone, i.e. nothing was printed.
     if !caught && capture && capture_local.ga_len > 1 {
-        let mut s: String_0 = String_0::from_raw_parts(
-            capture_local.ga_data.cast::<c_char>(),
-            capture_local.ga_len as size_t,
-        );
+        let captured =
+            usize::try_from(capture_local.ga_len).expect("a garray length is never negative");
+        let mut s: String_0 =
+            String_0::from_raw_parts(capture_local.ga_data.cast::<c_char>(), captured);
+        let nul = c_char::try_from(NUL).expect("NUL is zero");
         // SAFETY: the capture holds `ga_len` bytes, at least two of them.
         unsafe {
             if *s.data() == '\n' as c_char {
                 s.data()
                     .cast::<u8>()
                     .copy_from(s.data().add(1).cast(), s.len() - 1);
-                *s.data().add(s.len() - 1) = NUL as c_char;
+                *s.data().add(s.len() - 1) = nul;
                 s.set_len(s.len() - 1);
             }
         }

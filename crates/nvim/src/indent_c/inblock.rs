@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
@@ -87,10 +94,10 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     // and add the "imaginary indent" below.
     // SAFETY: `start` is that NUL-terminated line, so `skipwhite` stops
     // inside it and the byte it stops on is readable.
-    let brace_at_line_start = unsafe { *skipwhite(start) as u8 == b'{' };
+    let brace_at_line_start = unsafe { *skipwhite(start) }.cast_unsigned() == b'{';
     let (mut amount, start_brace) = if brace_at_line_start {
         // SAFETY: the same line; a NUL-terminated string has a first byte.
-        let at_col0 = unsafe { *start as u8 == b'{' };
+        let at_col0 = unsafe { *start }.cast_unsigned() == b'{';
         (
             // SAFETY: `brace` came from a paren search over this buffer.
             unsafe { line_vcol(brace.lnum, brace.col) },

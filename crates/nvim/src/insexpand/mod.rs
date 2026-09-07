@@ -364,7 +364,9 @@ pub(crate) const CTRL_X_MODE_NAMES: [Option<&CStr>; 20] = [
 /// rows answer a null pointer here rather than panicking; no caller reaches
 /// one (the three modes without a message never take these paths).
 pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
-    match CTRL_X_MSGS[(mode & !CTRL_X_WANT_IDENT) as usize] {
+    let row =
+        usize::try_from(mode & !CTRL_X_WANT_IDENT).expect("a CTRL-X mode number is never negative");
+    match CTRL_X_MSGS[row] {
         Some(msg) => gettext(msg).as_ptr().cast_mut(),
         None => ptr::null_mut(),
     }

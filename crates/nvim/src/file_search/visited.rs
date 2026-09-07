@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::memory::xmalloc;
@@ -58,7 +65,7 @@ impl FileList {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.len.max(0) as usize
+        usize::try_from(self.len).unwrap_or(0)
     }
 
     /// # Safety
@@ -272,8 +279,10 @@ pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
         }
         prev2 = prev1;
         prev1 = c1;
-        i += unsafe { utfc_ptr2len(s1.add(i)) } as usize;
-        j += unsafe { utfc_ptr2len(s2.add(j)) } as usize;
+        let len1 = unsafe { utfc_ptr2len(s1.add(i)) };
+        i += usize::try_from(len1).expect("a character length is never negative");
+        let len2 = unsafe { utfc_ptr2len(s2.add(j)) };
+        j += usize::try_from(len2).expect("a character length is never negative");
     }
     unsafe { *s1.add(i) == *s2.add(j) }
 }

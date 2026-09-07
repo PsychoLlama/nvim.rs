@@ -9,6 +9,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::message_fmt::c_str;
@@ -35,7 +42,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     // The expanded name; upstream shares `NameBuff`, which the error path
     // below reaches the message machinery through.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
-    if curscript.get() + 1 == NSCRIPT as c_int {
+    if curscript.get() + 1 == NSCRIPT.cast_signed() {
         // SAFETY (this body): `expanded` is this frame's own `MAXPATHL`
         // buffer, and `curscript` was just checked to be in range of the
         // stack.
@@ -58,7 +65,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         file_open(
             script_at(curscript.get()),
             expanded.as_ptr(),
-            kFileReadOnly as c_int,
+            kFileReadOnly.cast_signed(),
             0,
         )
     };
@@ -138,7 +145,7 @@ pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
             file_open(
                 script_at(0),
                 scriptin_name,
-                kFileReadOnly as c_int | kFileNonBlocking as c_int,
+                kFileReadOnly.cast_signed() | kFileNonBlocking.cast_signed(),
                 0,
             )
         }

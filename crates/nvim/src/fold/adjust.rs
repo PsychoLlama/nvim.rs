@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;
@@ -170,7 +177,7 @@ pub unsafe fn fold_adjust_visual() {
         }
         end.col = ml_get_len(end.lnum);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if end.col > 0 && unsafe { *p_sel.get() } as c_int == 'o' as c_int {
+        if end.col > 0 && c_int::from(unsafe { *p_sel.get() }) == 'o' as c_int {
             end.col -= 1;
         }
         if anchor_first {
@@ -333,13 +340,15 @@ pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
     if !folds.is_empty() && i < folds.len() {
         // SAFETY: `ga_grow` just made room for one more entry, so the tail
         // has somewhere to slide to.
-        let tail = (folds.len() - i) as usize;
+        let tail = usize::try_from(folds.len() - i)
+            .expect("the guard keeps the sliding tail non-negative");
         unsafe { ptr::copy(fold.entry(), fold.entry().add(1), tail) };
     }
     folds.set_len(folds.len() + 1);
+    let item_size = c_int::try_from(size_of::<Fold>()).expect("a fold is smaller than an int");
     // SAFETY: the entry is the zeroed storage `ga_grow` handed out; this is
     // the call that makes its `fd_nested` a fold list.
-    unsafe { ga_init(fold.nested().gap(), size_of::<Fold>() as c_int, 10) };
+    unsafe { ga_init(fold.nested().gap(), item_size, 10) };
 }
 
 /// Split the "i"th fold in `folds`, which starts before "top" and ends below

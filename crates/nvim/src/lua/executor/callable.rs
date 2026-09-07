@@ -10,6 +10,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
@@ -183,7 +190,7 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char 
                 // source it was defined in.
                 let mut ar = LUA_DEBUG_INIT;
                 if lua_getinfo(lstate, c">S".as_ptr(), &raw mut ar) != 0
-                    && *ar.source == b'@' as c_char
+                    && *ar.source == b'@'.cast_signed()
                     && ar.linedefined >= 0
                 {
                     let src = home_replace_save(None, ar.source.add(1));

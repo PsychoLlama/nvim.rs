@@ -10,6 +10,13 @@
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -41,6 +48,9 @@ pub fn extmark_get(
 ) -> ExtmarkInfoArray {
     let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
     let mut itr = MarkTreeIter::default();
+    let under_limit = |array: &ExtmarkInfoArray| {
+        int64_t::try_from(array.size).expect("a mark answer never outgrows an i64") < amount
+    };
 
     if overlap {
         // Every mark overlapping the start position.
@@ -48,7 +58,7 @@ pub fn extmark_get(
             return array;
         }
 
-        while (array.size as int64_t) < amount {
+        while under_limit(&array) {
             // Invalid until `itr_step_overlap` writes it, which it does
             // whenever it answers true (upstream leaves it uninitialised).
             let mut pair = mtpair_from(MT_INVALID_KEY, MT_INVALID_KEY);
@@ -66,7 +76,7 @@ pub fn extmark_get(
         itr_get_ext(buffer.marktree(), start, &mut itr);
     }
 
-    while (array.size as int64_t) < amount {
+    while under_limit(&array) {
         let mark = itr_current(&mut itr);
         if mark.pos.row < 0
             || mark.pos.row > u_row

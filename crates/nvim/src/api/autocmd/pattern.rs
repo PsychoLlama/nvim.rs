@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::array_add;
@@ -72,10 +79,10 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     };
     patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(::core::ffi::c_int::from(
+        .wrapping_div(usize::from(
             ::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
                 == 0,
-        ) as usize) as size_t;
+        )) as size_t;
     patterns.size = 0 as size_t;
     patterns.items = (&raw mut patterns.init_array).cast::<Object>();
     if !pattern.is_nil() {

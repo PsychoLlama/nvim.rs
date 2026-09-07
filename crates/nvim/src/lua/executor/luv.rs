@@ -10,6 +10,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -33,7 +40,7 @@ use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
 use crate::runtime::runtime_get_named_thread;
 use crate::startup::{main_loop, preserve_exit};
-use crate::types::{Arena, Array, Error, Event, intptr_t, lua_CFunction, lua_State, size_t};
+use crate::types::{Arena, Array, Error, Event, lua_CFunction, lua_State, size_t};
 use ::libc::{fprintf, pthread_exit};
 
 /// `lua_pcall`'s "out of memory" status, the one failure that is not a
@@ -176,7 +183,7 @@ unsafe fn nlua_luv_thread_common_cfpcall(
                     Some(nlua_luv_error_event),
                     [
                         dup_error(error),
-                        ptr::with_exposed_provenance_mut::<c_void>(kind as intptr_t as usize),
+                        ptr::with_exposed_provenance_mut::<c_void>(kind as usize),
                     ],
                 ),
             );

@@ -334,7 +334,7 @@ pub fn decor_put_sh(item: DecorSignHighlight) -> uint32_t {
     }
     DECOR_ITEMS.with_mut(|items| {
         items.push(item);
-        (items.len() - 1) as uint32_t
+        u32::try_from(items.len() - 1).expect("the store is indexed by a u32")
     })
 }
 
@@ -589,7 +589,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
             (1, 0)
         };
 
-        let ns = src_id as uint32_t;
+        let ns = u32::try_from(src_id).expect("a namespace id fits its own handle type");
         let no_id = ptr::null_mut();
         let (row, end_row) = (lnum as c_int - 1, lnum as c_int - 1 + end_off);
         let flags = MtFlags::DECOR_HL;

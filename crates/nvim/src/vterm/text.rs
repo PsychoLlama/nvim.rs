@@ -5,6 +5,13 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -63,7 +70,7 @@ pub(super) fn print(state: &mut VTermState, codepoints: &[u32]) {
             state.linefeed();
             state.pos.col = 0;
             state.at_phantom = 0;
-            let row = state.pos.row as usize;
+            let row = usize::try_from(state.pos.row).expect("a row is never negative");
             state.lineinfo_mut()[row].set_continuation(1);
         }
 
@@ -196,7 +203,7 @@ pub(super) fn escape(state: &mut VTermState, seq: &[u8]) -> c_int {
             if seq.len() != 2 {
                 return 0;
             }
-            state.designate_charset(usize::from(first - 0x28), seq[1] as _);
+            state.designate_charset(usize::from(first - 0x28), seq[1].cast_signed());
             2
         }
         b'7' => {
@@ -289,7 +296,7 @@ pub(super) fn save_cursor(state: &mut VTermState, save: bool) {
         let (visible, blink, shape) = (
             state.saved.mode.cursor_visible() != 0,
             state.saved.mode.cursor_blink() != 0,
-            state.saved.mode.cursor_shape() as c_int,
+            state.saved.mode.cursor_shape().cast_signed(),
         );
         state.set_termprop_bool(VTERM_PROP_CURSORVISIBLE, visible);
         state.set_termprop_bool(VTERM_PROP_CURSORBLINK, blink);

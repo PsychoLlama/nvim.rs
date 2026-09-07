@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};
@@ -123,10 +130,11 @@ pub unsafe fn nvim_call_atomic(
         unsafe { array_add(&mut rv, Object::array(results)) };
         if nested_error.is_set() {
             let mut errval: Array = arena_array(arena, 3 as size_t);
+            let failed_at = Integer::try_from(i).expect("a call index fits an Integer");
             // SAFETY: `errval` was sized for these three, and the message is
             // `nested_error`'s own NUL-terminated string.
             unsafe {
-                array_add(&mut errval, Object::integer(i as Integer));
+                array_add(&mut errval, Object::integer(failed_at));
                 array_add(&mut errval, Object::integer(nested_error.kind().into()));
                 let why = nested_error.message_or_empty().as_ptr();
                 let msg = copy_string(cstr_as_string(why), arena);

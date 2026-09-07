@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -163,7 +170,8 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
                 }
                 // A cluster cannot be deleted without changing the ids of
                 // the ones after it, so the next best thing: empty it.
-                let at = (id - SYNID_CLUSTER) as usize;
+                let at = usize::try_from(id - SYNID_CLUSTER)
+                    .expect("a non-zero cluster id is at least `SYNID_CLUSTER`");
                 cur_syn_block().clusters_mut()[at].scl_list = IdList::NONE;
             } else {
                 let id = unsafe { syn_name2id_len(arg, word.len()) };

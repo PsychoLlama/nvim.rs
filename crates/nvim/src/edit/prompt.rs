@@ -16,6 +16,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::winlayer::{Buf, Win};
@@ -49,7 +56,9 @@ pub(crate) fn prompt_text() -> *mut c_char {
 pub(crate) fn init_prompt(cmdchar_todo: c_int) {
     let mut win = Win::current();
     let prompt = prompt_text();
-    let prompt_len = unsafe { cstr::bytes_at(prompt) }.len() as c_int;
+    let prompt_bytes = unsafe { cstr::bytes_at(prompt) }.len();
+    let prompt_len =
+        c_int::try_from(prompt_bytes).expect("a prompt string is never longer than an int");
 
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust
@@ -74,7 +83,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
                 strnequal(
                     text.offset((start_col - prompt_len) as isize),
                     prompt,
-                    prompt_len as size_t,
+                    prompt_bytes,
                 )
             }
     };

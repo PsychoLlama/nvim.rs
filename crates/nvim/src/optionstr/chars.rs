@@ -27,6 +27,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -39,6 +46,7 @@ use crate::grid::{schar_from_char, schar_from_str};
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
+use crate::narrow::number_as_int;
 use crate::option::option_var;
 use crate::option::vars::{p_fcs, p_lcs};
 use crate::options::kOptListchars as kOptListcharsIdx;
@@ -317,17 +325,17 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
             num = num * 256 + int64_t::from(digits);
         }
         *at += 2;
-        return if unsafe { char2cells(num as c_int) } > 1 {
+        return if unsafe { char2cells(number_as_int(num)) } > 1 {
             0
         } else {
-            schar_from_char(num as c_int)
+            schar_from_char(number_as_int(num))
         };
     }
 
     let clen = unsafe { utfc_ptr2len(start) };
     let mut firstc: c_int = 0;
     let c = unsafe { utfc_ptr2schar(start, &raw mut firstc) };
-    *at += clen as usize;
+    *at += usize::try_from(clen).expect("a character is at least one byte");
     // An invalid UTF-8 byte, or a double-width character.
     if (clen == 1 && firstc > 127) || unsafe { char2cells(firstc) } > 1 {
         0
@@ -653,11 +661,12 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
     if len <= 0 {
         return ptr::null_mut();
     }
-    let count = len as size_t + 1;
+    let len = usize::try_from(len).expect("the guard above leaves a positive length");
+    let count = len + 1;
     // SAFETY: `xmalloc` returns an allocation of that size or aborts.
     let run = unsafe { xmalloc(count * size_of::<ScreenChar>()) }.cast::<ScreenChar>();
     // SAFETY: the last element of the allocation just made.
-    unsafe { *run.add(len as usize) = NUL as ScreenChar };
+    unsafe { *run.add(len) = NUL as ScreenChar };
     run
 }
 

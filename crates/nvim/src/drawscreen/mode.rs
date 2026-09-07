@@ -11,6 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -292,7 +299,8 @@ pub(crate) unsafe fn recording_mode(hl_id: c_int) {
     unsafe { msg_puts_hl(gettext(c"recording").as_ptr(), hl_id, false) };
     // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
     // which is exactly three bytes and the terminator.
-    let suffix = [b' ', b'@', reg_recording.get() as u8, 0];
+    let reg = u8::try_from(reg_recording.get()).expect("a register name is a single byte");
+    let suffix = [b' ', b'@', reg, 0];
     unsafe { msg_puts_hl(suffix.as_ptr().cast(), hl_id, false) };
 }
 
@@ -332,7 +340,7 @@ pub unsafe fn comp_col() {
             sc_width = ru_width;
         }
     }
-    if p_sc.get() != 0 && unsafe { *p_sloc.get() } == b'l' as c_char {
+    if p_sc.get() != 0 && unsafe { *p_sloc.get() } == b'l'.cast_signed() {
         sc_width = sc_width.saturating_add(SHOWCMD_COLS as c_int);
         // A separating space, unless the ruler is not beside it anyway.
         if p_ru.get() == 0 || last_has_status {

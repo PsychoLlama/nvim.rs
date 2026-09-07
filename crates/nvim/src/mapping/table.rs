@@ -21,6 +21,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -119,11 +126,12 @@ const NORMAL_SIDE: c_int =
 /// flipped, which keeps them mostly out of the Normal-side buckets.  `c1` is
 /// always a single byte at every call site, so both answers are in range.
 pub(crate) fn map_hash(mode: c_int, c1: c_int) -> usize {
-    (if mode & NORMAL_SIDE != 0 {
+    let bucket = if mode & NORMAL_SIDE != 0 {
         c1
     } else {
         c1 ^ 0x80
-    }) as usize
+    };
+    usize::try_from(bucket).expect("a mapping's first byte is in range")
 }
 
 /// Get the start of the hashed map list for `state` and first character `c`.
@@ -451,7 +459,7 @@ pub(crate) unsafe fn map_to_exists(
     let mut buf: *mut c_char = ptr::null_mut();
     let out = &raw mut buf;
     let cpo = p_cpo.get();
-    let dolt = REPTERM_DO_LT as c_int;
+    let dolt = REPTERM_DO_LT.cast_signed();
     let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
     // allocation `replace_termcodes` may leave in `buf` is the guard's.

@@ -12,6 +12,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::semsg;
 use core::ffi::{CStr, c_int};
@@ -34,12 +41,12 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::memory::xstrdup;
 use crate::message::emsg;
+use crate::narrow::float_as_i64;
 use crate::os::cshim::gettext;
 use crate::types::{
     LuaRef, TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VarLock, VarNumber, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict,
-    kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t,
-    typval_vval_union,
+    VarLock, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, size_t, typval_vval_union,
 };
 use ::libc::abort;
 
@@ -157,18 +164,18 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                     }
                 } else {
                     debug_assert!((*cur.tv).v_type == VAR_LIST);
-                    if tv_list_len((*cur.tv).vval.v_list) as size_t == cur.list_len {
+                    let list = (*cur.tv).vval.v_list;
+                    if usize::try_from(tv_list_len(list)).is_ok_and(|n| n == cur.list_len) {
                         lua_pop(lstate, 1);
                         continue;
                     }
-                    lua_rawgeti(lstate, -1, tv_list_len((*cur.tv).vval.v_list) + 1);
+                    lua_rawgeti(lstate, -1, tv_list_len(list) + 1);
                     // Not populated yet; append a list item to fill.
-                    tv_list_append_owned_tv((*cur.tv).vval.v_list, TV_INITIAL_VALUE);
+                    tv_list_append_owned_tv(list, TV_INITIAL_VALUE);
                     stack.push(cur);
                     // TODO(ZyX-I): use indexes, the list item *will* be
                     // reallocated here.
-                    cur =
-                        TVPopStackItem::leaf(&raw mut (*tv_list_last((*cur.tv).vval.v_list)).li_tv);
+                    cur = TVPopStackItem::leaf(&raw mut (*tv_list_last(list)).li_tv);
                 }
             }
             debug_assert!(!cur.container);
@@ -200,13 +207,13 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         let n = lua_tonumber(lstate, -1);
                         if n > VARNUMBER_MAX as lua_Number
                             || n < VARNUMBER_MIN as lua_Number
-                            || (n as VarNumber) as lua_Number != n
+                            || float_as_i64(n) as lua_Number != n
                         {
                             (*cur.tv).v_type = VAR_FLOAT;
                             (*cur.tv).vval.v_float = n;
                         } else {
                             (*cur.tv).v_type = VAR_NUMBER;
-                            (*cur.tv).vval.v_number = n as VarNumber;
+                            (*cur.tv).vval.v_number = float_as_i64(n);
                         }
                     }
                     LUA_TTABLE => {
@@ -234,7 +241,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                             kObjectTypeArray => {
                                 (*cur.tv).v_type = VAR_LIST;
                                 (*cur.tv).vval.v_list =
-                                    tv_list_alloc(table_props.maxidx as ptrdiff_t);
+                                    tv_list_alloc(table_props.maxidx.cast_signed());
                                 (*(*cur.tv).vval.v_list).lua_table_ref = table_ref;
                                 tv_list_ref((*cur.tv).vval.v_list);
                                 cur.list_len = table_props.maxidx;
@@ -257,7 +264,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                         // form and `cur` descends into `_VAL`.
                                         decode_create_map_special_dict(
                                             cur.tv,
-                                            table_props.string_keys_num as ptrdiff_t,
+                                            table_props.string_keys_num.cast_signed(),
                                         );
                                         debug_assert!((*cur.tv).v_type == VAR_DICT);
                                         let val_di = tv_dict_find(

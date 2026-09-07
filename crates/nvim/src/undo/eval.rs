@@ -5,6 +5,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -139,7 +146,7 @@ pub unsafe fn f_undofile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // SAFETY: as above.
     let fname: *const c_char = unsafe { numbuf.string(args) };
     // SAFETY: a NUL-terminated name.
-    if unsafe { *fname } == NUL as c_char {
+    if unsafe { *fname } == 0 {
         // SAFETY: the return value to fill in.
         unsafe { (*result).vval.v_string = ptr::null_mut() };
         return;

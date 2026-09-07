@@ -1,4 +1,11 @@
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! The sizing arithmetic of the khash-derived index: how many buckets a
 //! request rounds up to, when the table has to grow rather than just shed its
@@ -10,6 +17,7 @@
 //! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
 //! reproduced in licenses/klib-LICENSE.txt.
 
+use crate::narrow::float_as_i64;
 use crate::types::uint32_t;
 
 mod limits {
@@ -42,7 +50,8 @@ pub(super) fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
 
 /// How many buckets may be occupied before the table is resized.
 pub(super) fn upper_bound(n_buckets: uint32_t) -> uint32_t {
-    (f64::from(n_buckets) * limits::UPPER_FILL + 0.5) as uint32_t
+    let bound = float_as_i64(f64::from(n_buckets) * limits::UPPER_FILL + 0.5);
+    uint32_t::try_from(bound).expect("the fill fraction keeps the bound inside a u32")
 }
 
 /// At the upper bound: grow the table, or just drop the tombstones and rehash

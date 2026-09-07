@@ -8,6 +8,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use core::ffi::{c_char, c_int, c_uint};
@@ -50,7 +57,7 @@ pub(crate) unsafe fn store_sb_text(
         unsafe { msg_sb_eol() }; // prevent messages from overlapping
         if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
             && s > unsafe { *sb_str }
-            && unsafe { **sb_str } == b'\n' as c_char
+            && unsafe { **sb_str } == b'\n'.cast_signed()
         {
             unsafe { *sb_str = (*sb_str).add(1) };
         }
@@ -58,10 +65,11 @@ pub(crate) unsafe fn store_sb_text(
     }
 
     if s > unsafe { *sb_str } {
-        let len = unsafe { s.offset_from(*sb_str) as size_t };
+        let len = unsafe { s.offset_from(*sb_str) }.cast_unsigned();
         let mp: *mut MsgChunk =
             unsafe { xmalloc(mem::offset_of!(MsgChunk, sb_text) + len + 1) }.cast();
-        unsafe { (*mp).sb_eol = finish as c_char };
+        let eol = c_char::try_from(finish).expect("a finish flag is 0 or 1");
+        unsafe { (*mp).sb_eol = eol };
         unsafe { (*mp).sb_msg_col = *sb_col };
         unsafe { (*mp).sb_hl_id = hl_id };
         unsafe { ptr::copy_nonoverlapping(*sb_str, sb_text(mp), len) };

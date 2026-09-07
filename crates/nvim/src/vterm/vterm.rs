@@ -12,6 +12,13 @@
 // The exports here are metrics/abi-ledger.jsonl rows (`vterm_new`, `vterm_output_set_callback`, `vterm_set_size`, `vterm_set_utf8`), and
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -297,7 +304,7 @@ pub unsafe extern "C" fn vterm_set_size(vt: *mut VTerm, rows: c_int, cols: c_int
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_utf8(vt: *mut VTerm, is_utf8: c_int) {
     // SAFETY: the caller hands over a live terminal.
-    unsafe { &mut *vt }.mode.set_utf8(is_utf8 as c_uint);
+    unsafe { &mut *vt }.mode.set_utf8(is_utf8.cast_unsigned());
 }
 
 /// Installs the sink replies are written to. Without one they collect in the

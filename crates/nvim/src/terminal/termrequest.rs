@@ -19,6 +19,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `terminal/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::autocmd::{apply_autocmds_group, has_event};
 use crate::channel::main_loop_events;
@@ -29,7 +36,7 @@ use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     Event, ExArg, Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
-    VTermTerminator, VTermValue, Vv, ptrdiff_t, size_t,
+    VTermTerminator, VTermValue, Vv, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
 use crate::winlayer::Buf;
@@ -105,14 +112,15 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
         request.sequence.as_ptr().cast::<c_char>().cast_mut(),
         request.sequence.len(),
     );
-    let (data, size) = (sequence.data(), sequence.len() as ptrdiff_t);
+    let (data, size) = (sequence.data(), sequence.len().cast_signed());
     // SAFETY: `v:termrequest` takes a string of `size` readable bytes,
     // which it copies.
     unsafe { set_vim_var_string(Vv::Termrequest, data, size) };
 
     // Rows evicted since the sequence arrived have shifted every buffer
     // line up by one.
-    let scrolled = (term.sb.deleted() - request.sb_deleted) as i64;
+    let scrolled = i64::try_from(term.sb.deleted() - request.sb_deleted)
+        .expect("a scrollback row count fits an i64");
     let mut cursor = ArrayBuf::<2>::new();
     cursor.push(Object::integer(i64::from(request.line) - scrolled));
     cursor.push(Object::integer(i64::from(request.col)));

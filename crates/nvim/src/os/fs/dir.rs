@@ -9,6 +9,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::os::uv_error::UV_EOF;
 use core::ffi::{CStr, c_char, c_int};
@@ -89,7 +96,8 @@ pub unsafe fn os_mkdir_recurse(
     // `get_past_head` answers a pointer inside it.
     let past_head = unsafe {
         get_past_head(curdir.as_ptr().cast()).offset_from(curdir.as_ptr().cast::<c_char>())
-    } as usize;
+    }
+    .cast_unsigned();
     let past_head_save = curdir[past_head];
 
     let mut e = real_end;
@@ -100,7 +108,8 @@ pub unsafe fn os_mkdir_recurse(
         e = unsafe {
             path_tail_with_sep(curdir.as_mut_ptr().cast())
                 .offset_from(curdir.as_ptr().cast::<c_char>())
-        } as usize;
+        }
+        .cast_unsigned();
         if e <= past_head {
             curdir[past_head] = 0;
             break;

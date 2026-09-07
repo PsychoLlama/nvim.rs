@@ -12,6 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -474,7 +481,7 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
         while !got_int.get() {
             let next = unsafe { strstr(cur, c"..".as_ptr()) };
             if !next.is_null() {
-                unsafe { *next = NUL as c_char };
+                unsafe { *next = c_char::try_from(NUL).expect("NUL is zero") };
             }
             // SAFETY: `cur` walks the NUL-terminated stack name.
             let (at, frame) = (max - i, unsafe { c_str(cur) });

@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
@@ -151,7 +158,7 @@ impl TagFiles {
                 // Keep the visited list: an entry must not answer a file
                 // an earlier entry already did.
                 false,
-                FINDFILE_FILE as c_int,
+                FINDFILE_FILE.cast_signed(),
                 self.search.ctx,
                 true,
                 Buf::current().b_ffname,
@@ -186,7 +193,7 @@ impl Entry {
         let maxlen = MAXPATHL as usize - 1;
         let sep_chars = c" ,".as_ptr().cast_mut();
         unsafe { copy_option_part(option2, buf.as_mut_ptr(), maxlen, sep_chars) };
-        *at = unsafe { read.offset_from(tags.as_ptr()) } as usize;
+        *at = unsafe { read.offset_from(tags.as_ptr()) }.cast_unsigned();
         let stop = unsafe { vim_findfile_stopdir(buf.as_mut_ptr()) };
         let stop = (!stop.is_null()).then(|| unsafe { Name::from_ptr(stop) });
 
@@ -254,7 +261,8 @@ unsafe fn found_tagfile_cb(
     cookie: *mut c_void,
 ) -> bool {
     let found = unsafe { &mut *cookie.cast::<Vec<Name>>() };
-    for i in 0..num_fnames as usize {
+    let count = usize::try_from(num_fnames).expect("the caller counts the names");
+    for i in 0..count {
         let mut name = unsafe { Name::from_ptr(*fnames.add(i)) };
         simplify(&mut name);
         found.push(name);

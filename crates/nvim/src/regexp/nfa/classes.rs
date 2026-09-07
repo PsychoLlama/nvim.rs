@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::NfaOp;
 use core::ffi::{c_char, c_int};
@@ -19,7 +26,7 @@ use crate::types::NUL;
 /// Is `c` in the Latin-1 class `flag` names? The table only covers the
 /// first 256 code points, so anything above them is out by construction.
 fn ri(c: c_int, flag: ByteClass) -> bool {
-    (0..0x100).contains(&c) && RI_FLAGS[c as usize].has(flag)
+    usize::try_from(c).is_ok_and(|c| c < 0x100 && RI_FLAGS[c].has(flag))
 }
 
 /// The character at the input, which for the keyword and file-name classes

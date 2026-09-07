@@ -18,6 +18,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -324,7 +331,7 @@ pub unsafe fn stacktrace_create() -> *mut List {
     // allocation and it is not worth holding the cell's borrow across it.
     let stack = exestack.with(|stack| stack.clone());
     // SAFETY: a fresh list sized for the frames about to go into it.
-    let l = unsafe { tv_list_alloc(stack.len() as ptrdiff_t) };
+    let l = unsafe { tv_list_alloc(stack.len().cast_signed()) };
 
     for entry in &stack {
         match entry.es_type {

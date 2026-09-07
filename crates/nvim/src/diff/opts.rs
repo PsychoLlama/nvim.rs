@@ -9,13 +9,20 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::semsg;
 use crate::types::Failed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, tabs, windows};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use std::ffi::CStr;
 
 /// The `'diffopt'` items that are nothing but a flag bit.
@@ -110,7 +117,7 @@ pub(crate) unsafe fn parse_diffanchors(
     while i < MAX_DIFF_ANCHORS && unsafe { *dia } != 0 {
         // An empty item -- a leading or doubled comma -- is not an
         // address, and `get_address` would answer the cursor line.
-        if unsafe { *dia } == b',' as c_char {
+        if unsafe { *dia } == b','.cast_signed() {
             return Err(Failed);
         }
         let saved_buf = switch_buffer(buffer);
@@ -138,7 +145,7 @@ pub(crate) unsafe fn parse_diffanchors(
         if dia.is_null() {
             return Err(Failed);
         }
-        if unsafe { *dia } != b',' as c_char && unsafe { *dia } != 0 {
+        if unsafe { *dia } != b','.cast_signed() && unsafe { *dia } != 0 {
             return Err(Failed);
         }
         // The validator accepts an address it cannot resolve yet; only
@@ -150,7 +157,7 @@ pub(crate) unsafe fn parse_diffanchors(
         if !anchors.is_null() {
             unsafe { *anchors.offset(i as isize) = lnum };
         }
-        if unsafe { *dia } == b',' as c_char {
+        if unsafe { *dia } == b','.cast_signed() {
             dia = unsafe { dia.offset(1) };
         }
         i += 1;
@@ -208,7 +215,7 @@ pub unsafe fn diffopt_changed() -> Result<(), Failed> {
     let number_at = |at: usize, default| {
         let mut p = unsafe { base.add(at) };
         let n = unsafe { getdigits_int(&raw mut p, false, default) };
-        (n, unsafe { p.offset_from(base) } as usize)
+        (n, unsafe { p.offset_from(base) }.cast_unsigned())
     };
 
     let mut at = 0;

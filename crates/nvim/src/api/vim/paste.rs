@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -156,6 +163,8 @@ pub unsafe fn nvim_put(
             error = err_expected(c"line", want, Some(got));
             return ().reported(error);
         };
+        let nul = ::core::ffi::c_char::try_from(NUL).expect("NUL is zero");
+        let nl = ::core::ffi::c_char::try_from(NL).expect("NL is an ASCII byte");
         // SAFETY: `reg.y_array` is the `size`-slot block just allocated. A NUL
         // in an API string stands for a newline, as it does in every buffer
         // line.
@@ -163,12 +172,7 @@ pub unsafe fn nvim_put(
             let copy = copy_string(line, arena);
             *reg.y_array.add(i) = copy;
             let text = copy.data().cast::<::core::ffi::c_void>();
-            memchrsub(
-                text,
-                NUL as ::core::ffi::c_char,
-                NL as ::core::ffi::c_char,
-                line.len(),
-            );
+            memchrsub(text, nul, nl, line.len());
         }
     }
     // SAFETY: `reg` is this frame's own, now holding `y_size` lines.
@@ -179,7 +183,7 @@ pub unsafe fn nvim_put(
         BACKWARD as ::core::ffi::c_int
     };
     let flags = if follow {
-        PUT_CURSEND as ::core::ffi::c_int
+        PUT_CURSEND.cast_signed()
     } else {
         0 as ::core::ffi::c_int
     };

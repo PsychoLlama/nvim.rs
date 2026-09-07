@@ -11,6 +11,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -19,6 +26,12 @@ use crate::message_fmt::{c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::tr_plural;
+
+/// `TV_TRANSLATE`: the `name_len` sentinel that asks a lock error to run the
+/// name through `gettext` and measure it itself.
+const TV_TRANSLATE: size_t = size_t::MAX;
+/// `TV_CSTRING`: the `name_len` sentinel that asks it to measure the name.
+const TV_CSTRING: size_t = size_t::MAX - 1;
 
 /// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
 ///
@@ -257,17 +270,17 @@ pub unsafe fn value_check_lock(
     if name.is_null() {
         emsg(error_message);
     } else {
-        if name_len == TV_TRANSLATE as size_t {
+        if name_len == TV_TRANSLATE {
             name = unsafe { gettext_ptr(name) }.as_ptr();
             name_len = unsafe { cstr::bytes_at(name) }.len();
-        } else if name_len == TV_CSTRING as size_t {
+        } else if name_len == TV_CSTRING {
             name_len = unsafe { cstr::bytes_at(name) }.len();
         }
         // SAFETY: `name` is readable for `name_len` bytes.
         let shown = unsafe { c_str_len(name, name_len) };
         emsg_text(tr_plural!(
             error_message,
-            name_len as ::core::ffi::c_int,
+            crate::narrow::len_as_int(name_len),
             shown
         ));
     }

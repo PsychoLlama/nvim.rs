@@ -23,6 +23,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_int, c_void};
 use core::mem::offset_of;
@@ -161,7 +168,9 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         let add = if buffer.b_changelistlen == 0 {
             true
         } else {
-            let p = buffer.b_changelist[(buffer.b_changelistlen - 1) as usize].mark;
+            let last = usize::try_from(buffer.b_changelistlen - 1)
+                .expect("a non-empty changelist has a last entry");
+            let p = buffer.b_changelist[last].mark;
             if p.lnum != lnum {
                 true
             } else {
@@ -210,7 +219,8 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         }
     }
     let last = buffer.b_last_change.clone();
-    let at = (buffer.b_changelistlen - 1) as usize;
+    let at = usize::try_from(buffer.b_changelistlen - 1)
+        .expect("the changelist has at least the entry just added");
     buffer.b_changelist[at] = last;
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.

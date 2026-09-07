@@ -80,13 +80,15 @@ pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
     flags: 0 as uint16_t,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
+    // `DECOR_PRIORITY_BASE`, in the width the field carries it.
+    priority: 0x1000,
     hl_id: 0 as ::core::ffi::c_int,
     conceal_char: 0 as ScreenChar,
 };
 pub const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
     flags: 0 as uint16_t,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
+    // `DECOR_PRIORITY_BASE`, in the width the field carries it.
+    priority: 0x1000,
     hl_id: 0 as ::core::ffi::c_int,
     text: [0 as ScreenChar, 0 as ScreenChar],
     sign_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),

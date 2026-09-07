@@ -4,6 +4,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -138,9 +145,8 @@ fn emit_combining_marks() {
     // `utf_composinglike` stops the walk at its end.
     loop {
         let len = unsafe { utf_ptr2len(regparse.get()) };
-        if !unsafe {
-            utf_composinglike(regparse.get(), regparse.get().add(len as usize), &mut state)
-        } {
+        let len = usize::try_from(len).expect("a character is at least one byte");
+        if !unsafe { utf_composinglike(regparse.get(), regparse.get().add(len), &mut state) } {
             break;
         }
         regmbc(unsafe { utf_ptr2char(regparse.get()) });

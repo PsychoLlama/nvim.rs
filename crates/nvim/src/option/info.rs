@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_char;
@@ -15,7 +22,7 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::options::*;
 use crate::types::{
     ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, ScriptCtx,
-    String_0, int64_t, key_value_pair, size_t,
+    String_0, key_value_pair, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -132,10 +139,12 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
     }
     let mut script_ctx = ScriptCtx::NONE;
     if option_has_scope(opt_idx, kOptScopeBuf) {
-        script_ctx = buffer.b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize];
+        let idx = opt.scope_idx[kOptScopeBuf as usize].cast_unsigned();
+        script_ctx = buffer.b_p_script_ctx[idx];
     }
     if option_has_scope(opt_idx, kOptScopeWin) {
-        script_ctx = win.w_onebuf_opt.wo_script_ctx[opt.scope_idx[kOptScopeWin as usize] as usize];
+        let idx = opt.scope_idx[kOptScopeWin as usize].cast_unsigned();
+        script_ctx = win.w_onebuf_opt.wo_script_ctx[idx];
     }
     if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
         script_ctx = option_last_set(opt_idx);
@@ -187,7 +196,10 @@ pub(crate) unsafe fn vimoption2dict(
             c"last_set_linenr",
             int_value(Integer::from(script_ctx.sc_lnum)),
         ),
-        (c"last_set_chan", int_value(script_ctx.sc_chan as int64_t)),
+        (
+            c"last_set_chan",
+            int_value(script_ctx.sc_chan.cast_signed()),
+        ),
         (c"type", name_value(type_name.as_ptr())),
         (c"default", optval_as_object(option_default(opt_idx))),
         (

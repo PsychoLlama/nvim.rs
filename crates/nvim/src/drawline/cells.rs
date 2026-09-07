@@ -35,6 +35,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::r#move::WinValid;
@@ -408,7 +415,8 @@ impl Cells {
     #[inline(always)]
     pub(super) fn byte_col(&self) -> ::core::ffi::c_int {
         // SAFETY: `ptr` always points into `line`.
-        unsafe { self.ptr.offset_from(self.line) as ::core::ffi::c_int }
+        let at = unsafe { self.ptr.offset_from(self.line) };
+        ::core::ffi::c_int::try_from(at).expect("a buffer line is never longer than an int")
     }
 
     /// Re-fetch the line after something that could have freed it, keeping the

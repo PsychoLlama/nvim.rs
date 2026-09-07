@@ -13,6 +13,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::global_cell::GlobalCell;
 use crate::tui::termkey::driver_csi::termkey_interpret_mouse;
@@ -27,9 +34,9 @@ use core::ffi::{c_char, c_int};
 use core::fmt::Write;
 
 /// The modifiers termkey reports, as the bits a key carries them in.
-const MOD_SHIFT: c_int = TERMKEY_KEYMOD_SHIFT as c_int;
-const MOD_ALT: c_int = TERMKEY_KEYMOD_ALT as c_int;
-const MOD_CTRL: c_int = TERMKEY_KEYMOD_CTRL as c_int;
+const MOD_SHIFT: c_int = TERMKEY_KEYMOD_SHIFT.cast_signed();
+const MOD_ALT: c_int = TERMKEY_KEYMOD_ALT.cast_signed();
+const MOD_CTRL: c_int = TERMKEY_KEYMOD_CTRL.cast_signed();
 
 /// The modifiers termkey does not report, in the same bits the kitty
 /// keyboard protocol sends them.
@@ -257,7 +264,7 @@ pub(super) fn simple_utf8(key: &TermKeyKey) -> KeyText {
     }
     let mut text = KeyText::new();
     for &byte in &key.utf8 {
-        match byte as u8 {
+        match byte.cast_unsigned() {
             0 => break,
             b'<' => text.push_str("<lt>"),
             byte => text.push(byte),

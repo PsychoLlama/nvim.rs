@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::message_fmt::c_str;
@@ -245,7 +252,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 
     // SAFETY: the caller's live channel and reader. The list built for a
     // reader is owned by `argv[1]` until it is unreferenced below.
-    argv[0].vval.v_number = unsafe { (*chan).id } as VarNumber;
+    argv[0].vval.v_number = unsafe { (*chan).id }.cast_signed();
     let cb = if reader.is_null() {
         argv[1].v_type = VAR_NUMBER as _;
         argv[1].vval.v_number = VarNumber::from(unsafe { (*chan).exit_status });

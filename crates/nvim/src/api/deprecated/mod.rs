@@ -60,10 +60,10 @@ pub const LINE_BUFFER_MIN_SIZE: ::core::ffi::c_uint = 4096;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
+pub const DECOR_PRIORITY_BASE: u16 = 0x1000;
 pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
     flags: 0 as uint16_t,
-    priority: DECOR_PRIORITY_BASE as DecorPriority,
+    priority: DECOR_PRIORITY_BASE,
     hl_id: 0 as ::core::ffi::c_int,
     conceal_char: 0 as ScreenChar,
 };

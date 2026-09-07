@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::Win;
 use core::ptr;
@@ -217,12 +224,10 @@ pub(crate) fn set_op_var(optype: OpType) {
     // its second, and the length handed over is 2 either way.
     let mut opchars: [c_char; 3] = [0; 3];
     // SAFETY: both answers are single bytes of an operator's spelling.
-    let opchar0 = get_op_char(optype);
-    debug_assert!((0..=255).contains(&opchar0));
-    opchars[0] = opchar0 as c_char;
-    let opchar1 = get_extra_op_char(optype);
-    debug_assert!((0..=255).contains(&opchar1));
-    opchars[1] = opchar1 as c_char;
+    let opchar0 = u8::try_from(get_op_char(optype)).expect("an operator's char is one byte");
+    opchars[0] = opchar0.cast_signed();
+    let opchar1 = u8::try_from(get_extra_op_char(optype)).expect("an operator's char is one byte");
+    opchars[1] = opchar1.cast_signed();
     unsafe { set_vim_var_string(Vv::Operator, opchars.as_mut_ptr(), 2) };
 }
 
@@ -267,7 +272,7 @@ pub(crate) unsafe fn nv_record(cmd_arg: *mut CmdArg) {
             return;
         }
         stuff_readbuf_char(ca.nchar);
-        stuff_readbuf_char(-(253 + ((KE_CMDWIN as c_int) << 8)));
+        stuff_readbuf_char(-(253 + (KE_CMDWIN.cast_signed() << 8)));
     } else if reg_executing.get() == 0 && unsafe { do_record(ca.nchar) }.is_err() {
         clear_op_beep(ca.op());
     }

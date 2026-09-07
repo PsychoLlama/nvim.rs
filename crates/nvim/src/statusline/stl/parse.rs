@@ -8,6 +8,13 @@
 //! Original: `src/nvim/statusline.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 
@@ -98,7 +105,7 @@ pub(super) fn digits(fmt: &[u8], p: &mut usize, def: c_int) -> c_int {
             return def;
         }
     }
-    value as c_int
+    c_int::try_from(value).expect("the loop above returns early past `INT_MAX`")
 }
 
 /// How a number item prints: the `vim_snprintf` template, the value, and the
@@ -162,9 +169,9 @@ pub(super) fn number_plan(
     // How many characters the number takes when printed.
     let mut num_chars = 1;
     let mut n = num;
-    while n >= base as c_int {
+    while n >= base.cast_signed() {
         num_chars += 1;
-        n /= base as c_int;
+        n /= base.cast_signed();
     }
     if alt_virtcol {
         // The `-` added above takes one more.
@@ -189,7 +196,7 @@ pub(super) fn number_plan(
         num_chars -= 1;
         before > maxwid
     } {
-        num /= base as c_int;
+        num /= base.cast_signed();
     }
     push(&mut template, b'>');
     push(&mut template, b'%');

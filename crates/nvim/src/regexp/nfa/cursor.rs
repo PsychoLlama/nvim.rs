@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int};
 
@@ -45,7 +52,7 @@ pub(crate) fn collection_end() -> *mut c_char {
 /// The byte at `p`.
 pub(crate) fn byte_at(p: *mut c_char) -> u8 {
     // SAFETY: `p` is a position inside the pattern being parsed.
-    unsafe { *p as u8 }
+    unsafe { *p }.cast_unsigned()
 }
 
 /// The encoded length of the whole character at `p` — its base character
@@ -66,8 +73,10 @@ pub(crate) fn char_at(p: *mut c_char, off: c_int) -> c_int {
 pub(crate) fn step_back(anchor: *mut c_char) {
     // SAFETY: the cursor is past `anchor`, which is where this atom began,
     // and `utf_head_off` walks back no further than `anchor`.
-    let prev = unsafe { regparse.get().sub(1) };
-    regparse.set(unsafe { prev.sub(utf_head_off(anchor, prev) as usize) });
+    let cursor = regparse.get();
+    let back = unsafe { utf_head_off(anchor, cursor.sub(1)) };
+    let back = usize::try_from(back).expect("a head offset is never negative") + 1;
+    regparse.set(unsafe { cursor.sub(back) });
 }
 
 /// Is `c` a combining character?

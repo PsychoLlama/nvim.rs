@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::buffer::BufFlags;
@@ -22,7 +29,7 @@ use crate::cstr;
 use crate::types::CmdIdx;
 use crate::types::{MAXPATHL, OK};
 use crate::winlayer::{Buf, windows};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_char;
 use core::ptr;
 
 /// Change back to `dirname_start` if an autocommand moved somewhere else.
@@ -68,14 +75,14 @@ pub(crate) unsafe fn load_dummy_buffer(
     // SAFETY: forwarded from the caller.
     // Allocate a buffer without putting it in the buffer list.
     let mut newbuf =
-        unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) }?;
+        unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY.cast_signed()) }?;
 
     let mut failed = true;
     // SAFETY: `buflist_new` answered this buffer a moment ago.
     let newbufref = BufRef::of(newbuf);
 
     // Init the options.
-    unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP) as c_int) };
+    unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP).cast_signed()) };
 
     // Need to open the memfile before putting the buffer in a window.
     if unsafe { ml_open(newbuf) }.is_ok() {
@@ -99,7 +106,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         let sfname = ptr::null_mut();
         let lines_to_read = MAXLNUM;
         let eap = ptr::null_mut();
-        let flags = (READ_NEW | READ_DUMMY) as c_int;
+        let flags = (READ_NEW | READ_DUMMY).cast_signed();
         let readfile_result =
             unsafe { readfile(fname, sfname, 0, 0, lines_to_read, eap, flags, false) };
         newbuf.b_locked -= 1;
@@ -205,7 +212,7 @@ pub(crate) unsafe fn unload_dummy_buffer(buffer: Buf, dirname_start: *const c_ch
     if ptr::eq(Buf::current_raw(), buffer.raw()) {
         return;
     }
-    close_buffer(None, buffer, DOBUF_UNLOAD as c_int, false, true);
+    close_buffer(None, buffer, DOBUF_UNLOAD.cast_signed(), false, true);
 
     // When autocommands/'autochdir' option changed directory: go back.
     unsafe { restore_start_dir(dirname_start) };

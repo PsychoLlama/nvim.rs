@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
@@ -76,7 +83,7 @@ pub unsafe fn save_redobuff(save_redo: *mut SaveRedo) {
     if copy.is_null() {
         return;
     }
-    unsafe { redobuff().add(copy, len as ptrdiff_t) };
+    unsafe { redobuff().add(copy, len.cast_signed()) };
     unsafe { xfree(copy.cast()) };
 }
 
@@ -187,7 +194,7 @@ pub unsafe fn append_to_redobuff_keys(mut s: *const c_char) {
     // SAFETY (this body): `buf` is this frame's own array, sized for the
     // longest key escape.
     while c_int::from(unsafe { *s }) != NUL {
-        if c_int::from(unsafe { *s } as u8) == K_SPECIAL
+        if c_int::from(unsafe { *s }.cast_unsigned()) == K_SPECIAL
             && c_int::from(unsafe { *s.add(1) }) != NUL
             && c_int::from(unsafe { *s.add(2) }) != NUL
         {
@@ -276,7 +283,9 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
             REDO_AT.set(unsafe { block_str(next) }.cast());
         }
 
-        buf[i] = c as u8;
+        // Upstream's `(uint8_t)c`: a key code wider than a byte truncates
+        // here, and the bytes are read back as one character below.
+        buf[i] = c.to_le_bytes()[0];
         if i == n - 1 {
             // Last byte of the character.
             if n != 1 {
@@ -299,7 +308,8 @@ pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
     if !(0..=255).contains(&b) {
         1
     } else {
-        utf8len_tab[b as usize] as usize
+        let b = usize::try_from(b).expect("the guard above bounds `b` to a byte");
+        utf8len_tab[b] as usize
     }
 }
 

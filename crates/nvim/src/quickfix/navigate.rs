@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::CmdIdx;
@@ -57,15 +64,13 @@ pub unsafe fn ex_cc(args: *mut ExArg) {
     );
     if is_do {
         let n = if args.addr_count > 0 {
-            debug_assert!(args.line1 >= 0);
-            args.line1 as size_t
+            size_t::try_from(args.line1).expect("an ex range line is never negative")
         } else {
             1
         };
         let per_file = matches!(args.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
         let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
-        debug_assert!(valid_entry <= c_int::MAX as size_t);
-        errornr = valid_entry as c_int;
+        errornr = c_int::try_from(valid_entry).expect("a quickfix list is shorter than INT_MAX");
     }
 
     qf_goto(qi, 0, errornr, args.forceit);

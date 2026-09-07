@@ -11,6 +11,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cmdexpand::{BUF_DIFF_FILTER, WildOpts};
 use core::ffi::{c_char, c_int, c_void};
@@ -26,7 +33,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
+use crate::types::{ColNr, Failed, FuzMatchStr, RegMatch, RegProg};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -55,16 +62,18 @@ fn dup(p: *const c_char) -> *mut c_char {
 /// `xmalloc` of `n` elements, for the arrays this file hands back to the
 /// completion machinery (which frees them with `xfree`).
 fn alloc_array<T>(n: c_int) -> *mut T {
+    let n = usize::try_from(n).expect("a completion count is never negative");
     // SAFETY: `xmalloc` aborts rather than answering null.
-    unsafe { xmalloc(n as size_t * size_of::<T>()) }.cast::<T>()
+    unsafe { xmalloc(n * size_of::<T>()) }.cast::<T>()
 }
 
 /// `array[i] = value`, for the three arrays filled in round two. Each index
 /// is below the count round one measured, which is what the array was sized
 /// from.
 fn set_at<T>(array: *mut T, i: c_int, value: T) {
+    let i = usize::try_from(i).expect("a completion index is never negative");
     // SAFETY: `i` is inside the array `alloc_array` sized for `count`.
-    unsafe { array.add(i as usize).write(value) };
+    unsafe { array.add(i).write(value) };
 }
 
 /// Whether the pattern asks for fuzzy matching (`'wildoptions'`).
@@ -147,7 +156,7 @@ pub unsafe fn expand_buf_names(
     // with a regular expression).
     if !fuzzy {
         // SAFETY: a NUL-terminated pattern.
-        let anchored = unsafe { *pat } == b'^' as c_char;
+        let anchored = unsafe { *pat } == b'^'.cast_signed();
         // SAFETY: past a byte that is not the terminator, so there is a
         // second one -- which is why upstream reads it only here.
         let next = if anchored { unsafe { *pat.add(1) } } else { 0 };
@@ -262,7 +271,8 @@ pub unsafe fn expand_buf_names(
         if !matches.is_null() {
             // SAFETY: the out-parameter holds the `count` slots allocated
             // above.
-            let files = unsafe { slice::from_raw_parts_mut(*file, count as usize) };
+            let n = usize::try_from(count).expect("a match count is never negative");
+            let files = unsafe { slice::from_raw_parts_mut(*file, n) };
             order_by_last_used(matches, files);
             // SAFETY: this function's own array.
             unsafe { xfree(matches.cast::<c_void>()) };

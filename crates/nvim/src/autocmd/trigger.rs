@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -49,7 +56,7 @@ pub unsafe fn do_doautocmd(
     let group = unsafe { arg_augroup_get(&raw mut arg) };
 
     // SAFETY: still inside the caller's NUL-terminated argument.
-    if unsafe { *arg } == b'*' as ::core::ffi::c_char {
+    if unsafe { *arg } == b'*'.cast_signed() {
         emsg(gettext(c"E217: Can't execute autocommands for ALL events"));
         return Err(Failed);
     }
@@ -382,7 +389,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     debug_assert!(chanid < VarNumber::MAX as uint64_t);
     // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
     // literal of the length given.
-    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as VarNumber) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid.cast_signed()) };
     // SAFETY: as above.
     unsafe { tv_dict_set_keys_readonly(dict) };
 

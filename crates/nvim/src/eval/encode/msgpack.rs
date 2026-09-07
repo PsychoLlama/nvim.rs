@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -100,7 +107,8 @@ impl TypvalSink for MsgpackSink<'_> {
         } else {
             unsafe { (*blob).bv_ga.ga_data }.cast::<c_char>()
         };
-        unsafe { mpack_bin(Self::buf(data, len as size_t), self.packer) };
+        let len = usize::try_from(len).expect("a blob length is never negative");
+        unsafe { mpack_bin(Self::buf(data, len), self.packer) };
     }
 
     unsafe fn conv_func_start(
@@ -122,12 +130,14 @@ impl TypvalSink for MsgpackSink<'_> {
     }
 
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
-        mpack_array(&mut self.packer.ptr, len as u32);
+        let len = u32::try_from(len).expect("a list length is never negative");
+        mpack_array(&mut self.packer.ptr, len);
         Flow::Go
     }
 
     unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
-        mpack_map(&mut self.packer.ptr, len as u32);
+        let len = u32::try_from(len).expect("a dict never holds four billion keys");
+        mpack_map(&mut self.packer.ptr, len);
         Flow::Go
     }
 

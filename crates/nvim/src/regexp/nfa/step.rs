@@ -6,6 +6,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
@@ -140,7 +147,7 @@ pub(crate) unsafe fn step(
     clen: &mut c_int,
     go_to_nextline: &mut bool,
 ) -> Step {
-    let idx = *listidx as usize;
+    let idx = usize::try_from(*listidx).expect("the thread index counts up from zero");
     let state = thislist.thread(idx).state;
     let out = out_of(state);
     let code = op(state);

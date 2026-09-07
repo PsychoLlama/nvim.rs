@@ -10,6 +10,13 @@
 //! license; the notice is reproduced in licenses/libvterm-LICENSE.txt.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::fmt;
 
@@ -94,8 +101,13 @@ impl EscapeSeq {
     /// the historical six-byte UTF-8, with no surrogate or U+10FFFF ceiling,
     /// and a negative value truncated into a single byte.
     pub fn push_utf8(&mut self, codepoint: i32) {
+        /// The low byte, which is the byte an `as u8` keeps.
+        fn low(bits: u32) -> u8 {
+            bits.to_le_bytes()[0]
+        }
+
         if codepoint < 0x80 {
-            self.push(codepoint as u8);
+            self.push(low(codepoint.cast_unsigned()));
             return;
         }
         let (lead, trailing) = match codepoint {
@@ -105,10 +117,10 @@ impl EscapeSeq {
             0x20_0000..0x400_0000 => (0xf8, 4),
             _ => (0xfc, 5),
         };
-        let cp = codepoint as u32;
-        self.push(lead | (cp >> (6 * trailing)) as u8);
+        let cp = codepoint.cast_unsigned();
+        self.push(lead | low(cp >> (6 * trailing)));
         for shift in (0..trailing).rev() {
-            self.push(0x80 | (cp >> (6 * shift)) as u8 & 0x3f);
+            self.push(0x80 | low(cp >> (6 * shift)) & 0x3f);
         }
     }
 

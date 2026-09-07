@@ -25,6 +25,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -337,7 +344,8 @@ unsafe fn expand_rtp_entry(
     {
         return;
     }
-    for i in 0..num_files as usize {
+    let found = usize::try_from(num_files).expect("`expand_wildcards` answers a count");
+    for i in 0..found {
         // Reusing the position is fine: it only has to be monotonic, not
         // strictly increasing.
         unsafe { push_path(search_path, rtp_used, *files.add(i), after, pos_in_rtp) };
@@ -470,7 +478,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
             break;
         }
         // SAFETY: `cur_entry` points into 'runtimepath'.
-        let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) } as size_t;
+        let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) }.cast_unsigned();
         // Fact: 'runtimepath' entries can contain wildcards.
         // SAFETY: the frame's own vectors, and `buf` is NUL-terminated.
         unsafe {
@@ -503,7 +511,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
     // What follows was not spelled in 'runtimepath'.  Keeping `pos_in_rtp`
     // monotonic means giving it the comma between the two halves.
     // SAFETY: `rtp_entry` points into 'runtimepath'.
-    let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(p_rtp.get()) } as size_t;
+    let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(p_rtp.get()) }.cast_unsigned();
     sentinel_pos_in_rtp -= usize::from(sentinel_pos_in_rtp > 0);
 
     for &item in &pack_entries {
@@ -554,7 +562,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
                 c",".as_ptr().cast_mut(),
             )
         };
-        let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) } as size_t;
+        let pos_in_rtp = unsafe { cur_entry.offset_from(p_rtp.get()) }.cast_unsigned();
         unsafe {
             expand_rtp_entry(
                 &mut search_path,

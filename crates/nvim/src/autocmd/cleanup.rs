@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::cstr;
@@ -164,9 +171,13 @@ pub unsafe fn aupat_is_buflocal(
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,
 ) -> bool {
-    patlen >= 8
+    let Ok(len) = usize::try_from(patlen) else {
+        // A negative length names no pattern at all.
+        return false;
+    };
+    len >= 8
         && unsafe { cstr::starts_with(pat, b"<buffer") }
-        && unsafe { *pat.add(patlen as usize - 1) } == b'>' as ::core::ffi::c_char
+        && unsafe { *pat.add(len - 1) } == b'>'.cast_signed()
 }
 
 /// The buffer number a buffer-local pattern names, or 0 when it names one
@@ -182,13 +193,14 @@ pub unsafe fn aupat_get_buflocal_nr(
         return Buf::current().handle;
     }
 
-    if patlen > 9 && unsafe { *pat.add(7) } == b'=' as ::core::ffi::c_char {
+    if patlen > 9 && unsafe { *pat.add(7) } == b'='.cast_signed() {
         // "<buffer=abuf>"
         if patlen == 13 && unsafe { strncasecmp(pat, c"<buffer=abuf>".as_ptr(), 13) } == 0 {
             return autocmd_bufnr.get();
         }
         // "<buffer=123>": digits, and nothing but digits, up to the '>'.
-        if unsafe { skipdigits(pat.add(8)) } == unsafe { pat.add(patlen as usize - 1) }.cast_mut() {
+        let last = usize::try_from(patlen).expect("a length past nine is not negative") - 1;
+        if unsafe { skipdigits(pat.add(8)) } == unsafe { pat.add(last) }.cast_mut() {
             return unsafe { atoi(pat.add(8)) };
         }
     }

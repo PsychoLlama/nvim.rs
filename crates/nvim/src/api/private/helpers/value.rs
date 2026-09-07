@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -24,6 +31,7 @@ use crate::memory::{
 };
 use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
+use crate::narrow::number_as_int;
 use crate::types::builders::static_cstring;
 use crate::types::{
     ApiDict, Arena, ArenaMem, Array, ArrayBuilder, ConsumedBlk, Error, HlMessage, HlMessageChunk,
@@ -374,7 +382,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut
     }
     if let Some(number) = obj.as_integer() {
         let known = highlight_num_groups();
-        let id = number as c_int;
+        let id = number_as_int(number);
         return if (1..=known).contains(&id) { id } else { 0 };
     }
     // SAFETY: the names and values are NUL-terminated strings.

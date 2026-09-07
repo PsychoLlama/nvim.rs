@@ -219,7 +219,7 @@ pub const NOTDONE: c_int = 2;
 pub const CHAN_STDERR: c_int = 2;
 pub const FNE_INCL_BR: c_int = 1;
 pub const FNE_CHECK_START: c_int = 2;
-pub const AUTOLOAD_CHAR: c_char = b'#' as c_char;
+pub const AUTOLOAD_CHAR: c_char = b'#'.cast_signed();
 
 /// The two `name_len` sentinels the `var_check_*` family accepts in place of
 /// a real length: translate the name and measure it, or just measure it.
@@ -319,7 +319,9 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
             di_flags: 0,
             di_key: [0; 17],
         },
-        vv_flags: vv_flags.bits() as c_char,
+        // The row keeps the flag word in a byte, and the family only ever
+        // sets its bottom three bits.
+        vv_flags: vv_flags.bits().to_le_bytes()[0].cast_signed(),
     }
 }
 

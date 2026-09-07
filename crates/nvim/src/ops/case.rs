@@ -15,6 +15,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::report_msg;
@@ -101,7 +108,8 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
     }
 
     if OptInt::from(op.line_count) > p_report.get() {
-        let n = op.line_count as ::core::ffi::c_ulong;
+        let n = ::core::ffi::c_ulong::try_from(op.line_count)
+            .expect("an operator's line count is never negative");
         let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);
         let _: bool = report_msg(0, || tr_plural!(fmt, int64_t::from(op.line_count)));
     }

@@ -576,8 +576,8 @@ unsafe fn record_entry(
     // SAFETY: the entry just built, and its own array.
     unsafe { set_entry_bottom(b, &mut newhead, uep, bot, newbot) };
     if size > 0 {
-        let array: *mut *mut c_char =
-            unsafe { xmalloc(size_of::<*mut c_char>() * size as size_t) }.cast();
+        let count = usize::try_from(size).expect("the branch above proves it positive");
+        let array: *mut *mut c_char = unsafe { xmalloc(size_of::<*mut c_char>() * count) }.cast();
         unsafe { (*uep).ue_array = array };
         for i in 0..size {
             fast_breakcheck();
@@ -586,7 +586,8 @@ unsafe fn record_entry(
                 unsafe { u_freeentry(uep, i) };
                 return Err(Failed);
             }
-            unsafe { *array.add(i as size_t) = u_save_line_buf(b, top + 1 + i) };
+            let at = usize::try_from(i).expect("the loop counts up from zero");
+            unsafe { *array.add(at) = u_save_line_buf(b, top + 1 + i) };
         }
     }
     unsafe { (*uep).ue_next = newhead.uh_entry };
@@ -618,7 +619,7 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
                 ngettext(
                     c"%ld second ago",
                     c"%ld seconds ago",
-                    c_ulong::from(seconds as uint32_t),
+                    c_ulong::try_from(seconds).expect("an age in seconds is never negative"),
                 )
                 .as_ptr(),
                 seconds,
@@ -634,7 +635,7 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
         c"%Y/%m/%d %H:%M:%S".as_ptr()
     };
     if unsafe { strftime(buf, buflen, format, &raw mut when) } == 0 {
-        unsafe { *buf = NUL as c_char };
+        unsafe { *buf = 0 };
     }
 }
 

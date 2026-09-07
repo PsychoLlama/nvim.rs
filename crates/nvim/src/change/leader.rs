@@ -15,8 +15,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
+use crate::narrow::len_as_int;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -68,7 +76,7 @@ impl Scan {
     /// The string's length, `strlen`.
     fn len(self) -> c_int {
         // SAFETY: the constructor's promise.
-        unsafe { cstr::bytes_at(self.0).len() as c_int }
+        len_as_int(unsafe { cstr::bytes_at(self.0) }.len())
     }
 }
 
@@ -120,7 +128,7 @@ impl ComItem {
         }
         // SAFETY: `colon` points at the `:` inside `buf`, so the byte after
         // it is inside `buf` too.
-        unsafe { *colon = NUL as c_char };
+        unsafe { *colon = c_char::try_from(NUL).expect("NUL is zero") };
         Some(unsafe { colon.add(1) })
     }
 
@@ -404,7 +412,7 @@ pub unsafe fn get_last_leader_offset(line: *mut c_char, flags: *mut *mut c_char)
             while off > 0 && off + len1 > len2 {
                 off -= 1;
                 let tail = leader.from(off);
-                let n = (len2 - off) as size_t;
+                let n = usize::try_from(len2 - off).expect("`off` is at most `len2`");
                 // SAFETY: `tail` is `off` bytes into a string of `len2`, and
                 // `n` is the rest of it; `com_leader` is NUL-terminated.
                 if unsafe { cstr::prefix_eq(tail, com_leader.from(0), n) } {

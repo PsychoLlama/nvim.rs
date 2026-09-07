@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
@@ -544,7 +551,7 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
         return;
     }
 
-    let table = if unsafe { *p_bg.get() } == b'l' as c_char {
+    let table = if unsafe { *p_bg.get() } == b'l'.cast_signed() {
         &HIGHLIGHT_INIT_LIGHT
     } else {
         &HIGHLIGHT_INIT_DARK

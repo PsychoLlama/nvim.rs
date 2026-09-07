@@ -19,6 +19,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -49,8 +56,8 @@ use super::{
 /// guaranteed layout, so the two copies need be neither adjacent nor in
 /// declaration order.
 const ALLBUF_OFFSET: isize = {
-    let one = offset_of!(Window, w_onebuf_opt) as isize;
-    let all = offset_of!(Window, w_allbuf_opt) as isize;
+    let one = offset_of!(Window, w_onebuf_opt).cast_signed();
+    let all = offset_of!(Window, w_allbuf_opt).cast_signed();
     all - one
 };
 

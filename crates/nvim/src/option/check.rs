@@ -10,6 +10,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -42,7 +49,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::startup::starting;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, size_t, uint32_t,
+    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, uint32_t,
 };
 use crate::winlayer::Win;
 
@@ -330,7 +337,8 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
     if let Some(mut w) = window {
         if w.w_ns_hl_winhl == 0 {
             // SAFETY: a namespace with no name.
-            w.w_ns_hl_winhl = unsafe { nvim_create_namespace(String_0::NULL) } as c_int;
+            let ns = unsafe { nvim_create_namespace(String_0::NULL) };
+            w.w_ns_hl_winhl = c_int::try_from(ns).expect("a namespace id fits an int");
         } else {
             // Reusing the namespace: bump the generation so attributes
             // cached against it are re-resolved.
@@ -348,10 +356,10 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
         if colon.is_null() {
             return false;
         }
-        let from_len = unsafe { colon.offset_from(p) } as size_t;
+        let from_len = unsafe { colon.offset_from(p) }.cast_unsigned();
         let to = unsafe { colon.add(1) };
         let comma = unsafe { xstrchrnul(to, ',' as c_char) };
-        let to_len = unsafe { comma.offset_from(to) } as size_t;
+        let to_len = unsafe { comma.offset_from(to) }.cast_unsigned();
 
         // An empty target means "no highlight at all", spelled -1.
         let hl_id = if to_len != 0 {

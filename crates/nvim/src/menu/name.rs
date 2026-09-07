@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
@@ -44,7 +51,7 @@ fn at(bytes: &[u8], i: usize) -> u8 {
 pub(crate) fn skip_component(name: CText) -> CText {
     let mut i = 0;
     while name.byte(i) != 0 && name.byte(i) != b'.' {
-        if name.byte(i) == b'\\' || name.byte(i) == Ctrl_V as u8 {
+        if name.byte(i) == b'\\' || c_int::from(name.byte(i)) == Ctrl_V {
             name.squeeze(i, 1);
             if name.byte(i) == 0 {
                 break;
@@ -183,7 +190,8 @@ pub(crate) fn menu_mode_str(modes: c_int) -> &'static CStr {
 /// are there to split after.
 pub(crate) fn popup_mode_name(name: &CStr, idx: c_int) -> CString {
     let (head, tail) = name.to_bytes().split_at(5);
-    let mode = MODE_CHARS[idx as usize].to_bytes();
+    let idx = usize::try_from(idx).expect("a menu mode index is never negative");
+    let mode = MODE_CHARS[idx].to_bytes();
     let mut out = Vec::with_capacity(head.len() + mode.len() + tail.len());
     out.extend_from_slice(head);
     out.extend_from_slice(mode);

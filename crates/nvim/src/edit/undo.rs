@@ -21,6 +21,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -152,7 +159,8 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
     let added = if inserted.data().is_null() {
         0
     } else {
-        inserted.len() as c_int - new_insert_skip.get()
+        c_int::try_from(inserted.len()).expect("inserted text is never longer than an int")
+            - new_insert_skip.get()
     };
     if did_restart_edit.get() == 0 || added > 0 {
         unsafe { last_insert_slot().replace(inserted) };

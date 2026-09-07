@@ -10,6 +10,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
@@ -185,7 +192,7 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 pub fn save_file_ff(mut buffer: Buf) {
     // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    buffer.b_start_ffc = c_int::from(unsafe { *buffer.b_p_ff } as u8);
+    buffer.b_start_ffc = c_int::from(unsafe { *buffer.b_p_ff }.cast_unsigned());
     buffer.b_start_eof = buffer.b_p_eof;
     buffer.b_start_eol = buffer.b_p_eol;
     buffer.b_start_bomb = buffer.b_p_bomb;

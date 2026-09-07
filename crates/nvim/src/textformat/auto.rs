@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -26,7 +33,7 @@ use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, saved_cursor};
 use crate::strings::xstrnsave;
-use crate::types::{NUL, size_t};
+use crate::types::NUL;
 use crate::undo::u_save_cursor;
 
 /// `auto_format` added an extra space under the cursor, and it has to come
@@ -140,9 +147,10 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         let linep = get_cursor_line_ptr();
         let len = get_cursor_line_len();
         if Win::current().w_cursor.col == len {
-            let plinep = unsafe { xstrnsave(linep, len as size_t + 2) };
-            unsafe { *plinep.offset(len as isize) = ' ' as c_char };
-            unsafe { *plinep.offset(len as isize + 1) = NUL as c_char };
+            let bytes = usize::try_from(len).expect("a line length is never negative");
+            let plinep = unsafe { xstrnsave(linep, bytes + 2) };
+            unsafe { *plinep.add(bytes) = ' ' as c_char };
+            unsafe { *plinep.add(bytes + 1) = 0 };
             let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, plinep, false) };
             // Remove the space later.
             did_add_space.set(true);

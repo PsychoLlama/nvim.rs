@@ -17,6 +17,13 @@
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 
@@ -53,7 +60,7 @@ pub(crate) fn adjust(
     if amount == MAXLNUM {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
-        old_byte = buffer.deleted_bytes2 as BCount;
+        old_byte = buffer.deleted_bytes2.cast_signed();
         new_row = amount_after + old_row;
     } else {
         // A region is either deleted (amount == MAXLNUM) or added

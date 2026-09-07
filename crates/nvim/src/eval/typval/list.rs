@@ -11,6 +11,13 @@
 // The exports here are metrics/abi-ledger.jsonl rows (`tv_list_alloc`, `tv_list_free`), and
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::types::Refcount;
@@ -104,7 +111,7 @@ pub unsafe fn tv_list_init_static10(sl: *mut StaticList10) {
 
     unsafe { (*l).lv_first = items };
     unsafe { (*l).lv_last = items.add(SL_SIZE - 1) };
-    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT as ::core::ffi::c_int) };
+    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT.cast_signed()) };
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
     unsafe { (*l).lv_len = 10 };
 
@@ -123,7 +130,7 @@ pub unsafe fn tv_list_init_static10(sl: *mut StaticList10) {
 /// Initialise a stack-allocated empty list that nothing may free.
 pub unsafe fn tv_list_init_static(l: *mut List) {
     unsafe { l.write_bytes(0, 1) };
-    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT as ::core::ffi::c_int) };
+    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT.cast_signed()) };
 }
 
 /// Free every item in `l`, leaving the list itself allocated and empty.

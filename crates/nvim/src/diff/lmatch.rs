@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::TabPage;
@@ -108,8 +115,8 @@ pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     let mut blocks: [&[u8]; DB_COUNT as usize] = [&[]; DB_COUNT as usize];
     for (block, image) in blocks.iter_mut().zip(&images[..ndiffs]) {
         if !image.ptr.is_null() {
-            *block =
-                unsafe { ::core::slice::from_raw_parts(image.ptr.cast(), image.size as usize) };
+            let size = usize::try_from(image.size).expect("a diff image length is never negative");
+            *block = unsafe { ::core::slice::from_raw_parts(image.ptr.cast(), size) };
         }
     }
     let decisions = linematch_nbuffers(&blocks[..ndiffs], &lengths[..ndiffs], iwhite);

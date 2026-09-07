@@ -1,5 +1,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Keeping the tree balanced across an insertion or a deletion.
 //!
@@ -67,9 +74,10 @@ use sizes::T;
 
 /// Record that `x` now holds the key at `i`, so a lookup by id finds it.
 fn rekey(b: &mut MarkTree, x: Node, i: usize) {
+    let i = c_int::try_from(i).expect("a node holds at most MAX_KEYS keys");
     // SAFETY: `b` is a live tree and `x` one of its live nodes; every caller
     // has just written the key at `i`.
-    unsafe { refkey(b, x.as_ptr(), i as c_int) };
+    unsafe { refkey(b, x.as_ptr(), i) };
 }
 
 /// Where the mark `id` sits, to within a leaf — see [`pseudo_index_for_id`].
@@ -466,7 +474,7 @@ fn bubble_up(x: Node) {
 pub fn marktree_putp_aux(b: &mut MarkTree, x: Node, mut k: MTKey, meta_inc: &MetaCount) {
     // TODO(bfredl): ugh, make sure this is the _last_ valid (pos, gravity)
     // position, to minimize movement
-    let mut i = (find_key(x.keys(), k).0 + 1) as usize;
+    let mut i = usize::try_from(find_key(x.keys(), k).0 + 1).expect("find_key answers -1 or more");
     if x.is_leaf() {
         let n = x.key_count();
         if i != n {

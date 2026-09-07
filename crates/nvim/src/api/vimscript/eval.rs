@@ -12,6 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -22,6 +29,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
+use crate::narrow::len_as_int;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -126,8 +134,8 @@ unsafe fn call_function_with(
         // SAFETY: `tstate` is this frame's, live until the `try_leave`
         // below.
         unsafe { try_enter(&raw mut tstate) };
-        let (name, name_len) = (fn_0.data(), fn_0.len() as c_int);
-        let (argc, argv) = (args.size as c_int, vim_args.as_mut_ptr());
+        let (name, name_len) = (fn_0.data(), len_as_int(fn_0.len()));
+        let (argc, argv) = (len_as_int(args.size), vim_args.as_mut_ptr());
         let (ret, fe) = (&raw mut rettv, &raw mut funcexe);
         // SAFETY: `name` names `name_len` bytes, `argv` holds `argc`
         // converted arguments, and `rettv`/`funcexe` are this frame's.
@@ -248,8 +256,8 @@ unsafe fn call_in_dict(
     // already `fn_0`; a String argument named a dictionary to look in.
     if !fn_0.data().is_null() && !fn_0.is_empty() && !matches!(dict, Object::Dict(_)) {
         // SAFETY: `self_dict` is live and `fn_0` names its own bytes.
-        let di: *mut DictItem =
-            unsafe { tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t) };
+        let len: ptrdiff_t = fn_0.len().cast_signed();
+        let di: *mut DictItem = unsafe { tv_dict_find(self_dict, fn_0.data(), len) };
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };

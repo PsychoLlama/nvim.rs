@@ -19,6 +19,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -279,7 +286,7 @@ pub(crate) unsafe fn expand_set_opt_listflag(
         // it has a second byte (its terminator at worst).
         if original.is_some()
             && unsafe { c_int::from(*option_val.add(1)) } == NUL
-            && unsafe { *option_val } as u8 == flag
+            && unsafe { *option_val }.cast_unsigned() == flag
         {
             continue;
         }
@@ -379,11 +386,10 @@ pub unsafe fn expand_set_whichwrap(
 /// `at` points into the C string starting at `start`.
 unsafe fn directly_after(at: *const c_char, start: *const c_char, prefix: &CStr) -> bool {
     let len = prefix.to_bytes().len();
+    let room = len.cast_signed();
     // SAFETY: both point into the same string, as documented above, and the
     // length test is what puts the `sub` in range.
-    unsafe {
-        at.offset_from(start) >= len as isize && cstr::prefix_eq(at.sub(len), prefix.as_ptr(), len)
-    }
+    unsafe { at.offset_from(start) >= room && cstr::prefix_eq(at.sub(len), prefix.as_ptr(), len) }
 }
 
 /// Complete 'diffopt', whose "algorithm:" and "inline:" fields each have
@@ -400,7 +406,7 @@ pub unsafe fn expand_set_diffopt(
     // SAFETY: the caller's frame; `xp_pattern` points into `oe_set_arg`.
     let (expand, start) = unsafe { ((*args).oe_xp, (*args).oe_set_arg) };
     let at = unsafe { (*expand).xp_pattern };
-    if at <= start || unsafe { *at.sub(1) } != b':' as c_char {
+    if at <= start || unsafe { *at.sub(1) } != b':'.cast_signed() {
         return unsafe { expand_set_str_generic(args, num_matches, matches) };
     }
     let field =
@@ -446,7 +452,7 @@ static WINDOW_EVENTS: GlobalCell<bool> = GlobalCell::new(false);
 /// Called by `expand_generic` with its expansion context.
 pub(crate) unsafe fn get_eventignore_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: the expansion context's pattern is a C string.
-    let subtract = unsafe { *(*expand).xp_pattern } == b'-' as c_char;
+    let subtract = unsafe { *(*expand).xp_pattern } == b'-'.cast_signed();
     if !subtract && idx == 0 {
         return c"all".as_ptr().cast_mut();
     }

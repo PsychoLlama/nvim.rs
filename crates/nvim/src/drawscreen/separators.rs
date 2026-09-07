@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::decoration::SignCountHalf;
@@ -67,7 +74,12 @@ pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
 
     // `b_signcols.max` is a high-water mark that nothing lowers as signs go
     // away, so trim the empty top buckets here.
-    while buf.b_signcols.max > 0 && buf.b_signcols.count[(buf.b_signcols.max - 1) as usize] == 0 {
+    while buf.b_signcols.max > 0 {
+        let top = usize::try_from(buf.b_signcols.max - 1)
+            .expect("the loop guard keeps the top bucket index non-negative");
+        if buf.b_signcols.count[top] != 0 {
+            break;
+        }
         buf.b_signcols.max -= 1;
     }
 

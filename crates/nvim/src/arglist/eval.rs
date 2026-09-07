@@ -5,8 +5,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
+use crate::narrow::number_as_int;
 use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
 use crate::winlayer::Win;
 
@@ -115,7 +123,7 @@ pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         unsafe { selected_arglist(args.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ptr::null_mut() };
-    let idx = unsafe { tv_get_number_chk(args.offset(0), ptr::null_mut()) } as c_int;
+    let idx = number_as_int(unsafe { tv_get_number_chk(args.offset(0), ptr::null_mut()) });
     if !entries.is_null() && idx >= 0 && idx < count {
         unsafe { (*result).vval.v_string = xstrdup(alist_name(entries.offset(idx as isize))) };
     } else if idx == -1 {

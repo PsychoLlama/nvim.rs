@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -87,8 +94,8 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
     };
 
     let no_prompt = Suppress::wait_return();
-    let mut i: uint32_t = 0 as uint32_t;
-    while (i as size_t) < message.len() {
+    let mut i: size_t = 0;
+    while i < message.len() {
         if got_int.get() {
             break;
         }
@@ -97,7 +104,7 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
             reserve();
         }
         // SAFETY: `i` is below the length, so the byte is in the message.
-        let byte = unsafe { *message.data().offset(i as isize) };
+        let byte = unsafe { *message.data().add(i) };
         if ::core::ffi::c_int::from(byte) == NL {
             flush();
         } else if ::core::ffi::c_int::from(byte) == NUL {
@@ -107,7 +114,7 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
         } else {
             push(byte);
         }
-        i = i.wrapping_add(1);
+        i += 1;
     }
     if writeln {
         // SAFETY: as `push`.

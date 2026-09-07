@@ -7,6 +7,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 #[cfg(not(miri))]
@@ -122,7 +129,7 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
     // argument; os_input_ready accepts a null queue.
     unsafe {
         logmsg!(LOGLVL_DBG, c"os_delay", 76, "{} ms", ms);
-        let ms = ms.min(c_int::MAX as u64) as i64;
+        let ms = ms.min(u64::from(c_int::MAX.cast_unsigned())).cast_signed();
         process_events_until(main_loop.ptr(), ptr::null_mut(), ms, || {
             if ignoreinput {
                 got_int.get()
@@ -137,8 +144,9 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
 ///
 /// This blocks even "fast" events, which is disruptive; prefer [`os_delay`].
 pub fn os_sleep(ms: u64) {
+    let ms = u32::try_from(ms.min(u64::from(u32::MAX))).expect("clamped to a u32 above");
     // SAFETY: uv_sleep has no preconditions.
-    unsafe { uv_sleep(ms.min(u64::from(u32::MAX)) as u32) }
+    unsafe { uv_sleep(ms) }
 }
 
 /// The TZ value `tzset` was last called for. POSIX does not require
@@ -224,7 +232,7 @@ pub fn os_strptime(str: &CStr, format: &CStr, tm: &mut tm) -> *mut c_char {
 
 /// Seconds since the UNIX epoch.
 pub fn os_time() -> Timestamp {
-    os_time_raw() as Timestamp
+    os_time_raw().cast_unsigned()
 }
 
 fn os_time_raw() -> time_t {

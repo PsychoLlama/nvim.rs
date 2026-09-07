@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::{mark_virt_chain, ns_in_win};
 use crate::decoration::{kMTMetaConcealLines, kMTMetaLines};
@@ -24,6 +31,7 @@ use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::xrealloc;
+use crate::narrow::len_as_int;
 use crate::types::{
     DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, size_t, uint64_t, virt_line,
 };
@@ -226,14 +234,14 @@ pub unsafe fn decor_virt_lines(
                         || !(wp.fold_span(mrow as LineNr + 1).0 || wp.conceal_line(mrow, false)))
                 {
                     let block = vt.lines();
-                    virt_lines += block.size as c_int;
+                    virt_lines += len_as_int(block.size);
                     if let Some(lines) = lines.as_deref_mut() {
                         // SAFETY: a live growable vector, and `block` is the
                         // decoration's own live one.
                         unsafe { append_virt_lines(lines, block) };
                     }
                     if let (false, Some(num_below)) = (above, num_below.as_deref_mut()) {
-                        *num_below += block.size as c_int;
+                        *num_below += len_as_int(block.size);
                     }
                 }
             }

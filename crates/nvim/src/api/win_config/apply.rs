@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -198,8 +205,8 @@ unsafe fn win_config_split(
                 last_status(false);
                 win_comp_pos();
             }
-            let flags = win_split_flags(fconfig.split, parent.is_none())
-                | WSP_NOENTER as ::core::ffi::c_int;
+            let flags =
+                win_split_flags(fconfig.split, parent.is_none()) | WSP_NOENTER.cast_signed();
             parent_tp = match parent_id {
                 None => Some(TabPage::current()),
                 Some(p) => win_find_tabpage(p),

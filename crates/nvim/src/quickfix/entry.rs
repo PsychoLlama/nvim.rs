@@ -12,6 +12,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::buffer::BufRef;
@@ -48,7 +55,7 @@ unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
     if cached && LAST_BUFREF.get().valid() {
         return LAST_BUFREF.get().get();
     }
-    let buf = unsafe { buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int) };
+    let buf = unsafe { buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT.cast_signed()) };
     let name = unsafe { Name::from_ptr(bufname) };
     LAST_BUFNAME.with_mut(|slot| *slot = Some(name));
     LAST_BUFREF.set(BufRef::of_opt(buf));
@@ -436,7 +443,8 @@ pub unsafe fn qf_get_size(args: *mut ExArg) -> size_t {
     if qi.is_null() {
         return 0;
     }
-    unsafe { (*qf_get_curlist(qi)).qf_count as size_t }
+    let count = unsafe { (*qf_get_curlist(qi)).qf_count };
+    size_t::try_from(count).expect("a quickfix list never holds fewer than no entries")
 }
 
 /// How many entries `:cdo`/`:ldo` would visit, or how many files
@@ -484,7 +492,8 @@ pub unsafe fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
     if qi.is_null() {
         return 0;
     }
-    unsafe { (*qf_get_curlist(qi)).qf_index as size_t }
+    let index = unsafe { (*qf_get_curlist(qi)).qf_index };
+    size_t::try_from(index).expect("the current entry is numbered from one")
 }
 
 /// Which entry is current, counting only the entries `:cdo` would visit —
@@ -553,5 +562,9 @@ pub(crate) fn qf_get_nth_valid_entry(qfl: Qfl, n: size_t, fdo: bool) -> size_t {
         i += 1;
         qfp = entry_opt(this.qf_next);
     }
-    if i <= qfl.qf_count { i as size_t } else { 1 }
+    if i <= qfl.qf_count {
+        size_t::try_from(i).expect("the entry counter starts at one and only goes up")
+    } else {
+        1
+    }
 }

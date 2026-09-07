@@ -3,6 +3,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::keycodes::{Ctrl_C, Ctrl_G, Ctrl_N, Key};
 use crate::winlayer::{Buf, Win, windows};
@@ -47,7 +54,7 @@ use core::ffi::{c_int, c_uint};
 pub(crate) unsafe fn nv_ignore(cmd_arg: *mut CmdArg) {
     // SAFETY: `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    ca.retval |= CA_COMMAND_BUSY as c_int;
+    ca.retval |= CA_COMMAND_BUSY.cast_signed();
 }
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
@@ -199,7 +206,7 @@ pub(crate) unsafe fn nv_hat(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op_quit(ca.op()) {
-        let flags = GETF_SETMARK as c_int | GETF_ALT as c_int;
+        let flags = GETF_SETMARK.cast_signed() | GETF_ALT.cast_signed();
         let _ = unsafe { buflist_getfile(ca.count0, 0 as LineNr, flags, 0) };
     }
 }
@@ -320,6 +327,6 @@ pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
         // The callback may have left insert or Select mode pending, and
         // the command loop must not treat this key as having finished a
         // command.
-        ca.retval |= CA_COMMAND_BUSY as c_int;
+        ca.retval |= CA_COMMAND_BUSY.cast_signed();
     }
 }

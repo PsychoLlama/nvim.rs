@@ -6,14 +6,22 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
+use crate::narrow::number_as_int;
 use crate::types::{
-    ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone, size_t,
+    ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone,
 };
 use crate::ui::ui_rgb_attached;
 
@@ -130,7 +138,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
             return NO_DICT;
         }
     } else if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__id) } {
-        id = unsafe { (*opts).id } as c_int;
+        id = number_as_int(unsafe { (*opts).id });
     }
 
     if id != -1 {
@@ -154,7 +162,9 @@ pub(crate) unsafe fn ns_get_hl_defs(
         return NO_DICT;
     }
 
-    let mut rv = arena_dict(arena, highlight_num_groups() as size_t);
+    let groups = usize::try_from(highlight_num_groups())
+        .expect("the highlight group count is never negative");
+    let mut rv = arena_dict(arena, groups);
     for id in 1..=highlight_num_groups() {
         let mut attrs = NO_DICT;
         if !unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) } {

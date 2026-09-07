@@ -9,6 +9,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use core::ffi::{c_char, c_int};
@@ -134,14 +141,14 @@ pub unsafe fn msg_ext_ui_flush() {
                 .expect("a chunk this module emitted is an array")
                 .items;
             // `msg_ext_emit_chunk` pushed [attr, text, hl_id] in that order.
+            let hl_id = unsafe { *chunk.add(2) }
+                .as_integer()
+                .expect("a chunk's third element is its highlight id");
             let moved = HlMessageChunk {
                 text: unsafe { *chunk.add(1) }
                     .as_string()
                     .expect("a chunk's second element is its text"),
-                hl_id: unsafe { *chunk.add(2) }
-                    .as_integer()
-                    .expect("a chunk's third element is its highlight id")
-                    as c_int,
+                hl_id: c_int::try_from(hl_id).expect("this module only emits c_int ids"),
             };
             unsafe { hl_msg_push(&mut msg, moved) };
             unsafe { xfree(chunk.cast()) };

@@ -9,6 +9,13 @@
 //! with `do_one_cmd`.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::types::CmdIdx;
@@ -183,7 +190,7 @@ pub unsafe fn parse_cmdline(
             }
             if byte(arg) == '|' as c_int || byte(arg) == '\n' as c_int {
                 ea.nextcmd = unsafe { check_nextcmd(arg) };
-                unsafe { *arg = NUL as c_char };
+                unsafe { *arg = 0 };
             }
         }
 

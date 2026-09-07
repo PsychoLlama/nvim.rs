@@ -8,6 +8,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, dict_put};
@@ -19,7 +26,7 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Arra
         channel_id <= 9223372036854775807 as uint64_t,
         "channel_id <= INT64_MAX"
     );
-    unsafe { array_add(&mut rv, Object::integer(channel_id as int64_t)) };
+    unsafe { array_add(&mut rv, Object::integer(channel_id.cast_signed())) };
     unsafe { array_add(&mut rv, api_metadata()) };
     rv
 }
@@ -113,9 +120,9 @@ pub unsafe fn nvim_get_chan_info(
             channel_id <= 9223372036854775807 as uint64_t,
             "channel_id <= INT64_MAX"
         );
-        chan = channel_id as Integer;
+        chan = channel_id.cast_signed();
     }
-    unsafe { channel_info(chan as uint64_t, arena) }
+    unsafe { channel_info(chan.cast_unsigned(), arena) }
 }
 
 pub unsafe fn nvim_list_chans(arena: *mut Arena) -> Array {

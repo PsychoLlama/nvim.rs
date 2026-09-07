@@ -11,8 +11,15 @@
 
 // The whole file is frame arithmetic over identities now that
 // `frame_new_height`'s raw-pointer shim is gone, so nothing here needs a
-// dereference. (The cast deny is not ready: 24 `fr_layout as c_int`s.)
+// dereference.
 #![forbid(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::arith::{MinSize, NextCurwin};
 use super::*;
@@ -35,8 +42,8 @@ use crate::winlayer::{FrameRef, Win};
 /// [`arith::frame_minheight`] wants them.
 fn height_opts() -> MinSize {
     MinSize {
-        wanted: p_wh.get() as ::core::ffi::c_int,
-        minimum: p_wmh.get() as ::core::ffi::c_int,
+        wanted: ::core::ffi::c_int::try_from(p_wh.get()).unwrap_or(::core::ffi::c_int::MAX),
+        minimum: ::core::ffi::c_int::try_from(p_wmh.get()).unwrap_or(::core::ffi::c_int::MAX),
         curwin: Win::current_or_none().map(Win::id),
     }
 }
@@ -44,8 +51,8 @@ fn height_opts() -> MinSize {
 /// `'winwidth'`, `'winminwidth'` and the current window.
 fn width_opts() -> MinSize {
     MinSize {
-        wanted: p_wiw.get() as ::core::ffi::c_int,
-        minimum: p_wmw.get() as ::core::ffi::c_int,
+        wanted: ::core::ffi::c_int::try_from(p_wiw.get()).unwrap_or(::core::ffi::c_int::MAX),
+        minimum: ::core::ffi::c_int::try_from(p_wmw.get()).unwrap_or(::core::ffi::c_int::MAX),
         curwin: Win::current_or_none().map(Win::id),
     }
 }
@@ -90,7 +97,8 @@ pub(crate) fn new_height(
             - p_ch.get()
             - OptInt::from(tabline_rows())
             - OptInt::from(global_stl_rows());
-        height = room.min(OptInt::from(height)) as ::core::ffi::c_int;
+        let room = room.clamp(OptInt::from(::core::ffi::c_int::MIN), OptInt::from(height));
+        height = ::core::ffi::c_int::try_from(room).expect("room was just clamped into c_int");
     }
     if let Some(mut wp) = topfrp.win() {
         if is_bottom_window(wp) {
@@ -207,7 +215,7 @@ pub(crate) fn frame_fixed_width(frp: FrameRef) -> bool {
 /// any height: the caller has already made room.
 pub(crate) fn add_statusline(frp: FrameRef) {
     if let Some(mut win) = frp.win() {
-        win.w_status_height = STATUS_HEIGHT as ::core::ffi::c_int;
+        win.w_status_height = STATUS_HEIGHT.cast_signed();
     } else if ::core::ffi::c_int::from(frp.fr_layout) == FR_ROW {
         // Handle all the frames in the row.
         frp.children().for_each(add_statusline);

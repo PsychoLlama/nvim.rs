@@ -8,6 +8,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -27,10 +34,11 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_error, lua_gettop, lua_pushvalue, lua_type, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
+use crate::narrow::number_as_int;
 use crate::runtime::script_autoload;
 use crate::types::{
     BufferHandle, Dict, DictItem, Error, Handle, String_0, TabpageHandle, WindowHandle, lua_State,
-    ptrdiff_t, size_t,
+    size_t,
 };
 
 /// The dictionary the `(scope, handle)` pair at stack slots 1 and 2 names.
@@ -44,7 +52,7 @@ use crate::types::{
 unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
-        let handle = luaL_checkinteger(lstate, 2) as Handle;
+        let handle: Handle = number_as_int(luaL_checkinteger(lstate, 2) as i64);
         let mut err = Error::none();
         let dict = match scope.to_bytes() {
             b"g" => get_globvar_dict(),
@@ -171,12 +179,12 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         let dict = nlua_get_var_scope(lstate);
         let mut len: size_t = 0;
         let name: *const c_char = luaL_checklstring(lstate, 3, &raw mut len);
-        let mut di = tv_dict_find(dict, name, len as ptrdiff_t);
+        let mut di = tv_dict_find(dict, name, len.cast_signed());
         if di.is_null() && dict == get_globvar_dict() {
             if !script_autoload(name, len, false) || aborting() {
                 return 0; // nil
             }
-            di = tv_dict_find(dict, name, len as ptrdiff_t);
+            di = tv_dict_find(dict, name, len.cast_signed());
         }
         if di.is_null() {
             return 0; // nil

@@ -17,6 +17,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::packer::{push_call, ui_flush_buf};
 use crate::api::private::helpers::cstr_as_string;
@@ -374,7 +381,7 @@ pub unsafe fn remote_ui_default_colors_set(
     // to fall back on, so "unset" has to be resolved to something, and
     // 'background' is the only hint there is.
     if !unsafe { (*ui).ui_ext[kUITermColors as usize] } {
-        let dark = unsafe { *p_bg.get() } == b'd' as c_char;
+        let dark = unsafe { *p_bg.get() } == b'd'.cast_signed();
         if rgb_fg == -1 {
             rgb_fg = if dark { 0xffffff } else { 0 };
         }

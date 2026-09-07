@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
@@ -54,7 +61,8 @@ pub(crate) fn nfa_regmatch(
 
     // SAFETY: `prog` and `start` are the running program; the two thread
     // lists below are owned by this call.
-    let capacity = (unsafe { (*prog).nstate } + 1) as usize;
+    let nstate = unsafe { (*prog).nstate };
+    let capacity = usize::try_from(nstate + 1).expect("a program's state count is never negative");
     let mut list = [
         ThreadList::new(rex, capacity),
         ThreadList::new(rex, capacity),
@@ -165,7 +173,7 @@ unsafe fn scan(
 
         let mut matched = false;
         let mut listidx: c_int = 0;
-        while (listidx as usize) < thislist.len() {
+        while usize::try_from(listidx).is_ok_and(|idx| idx < thislist.len()) {
             reg_breakcheck(rex);
             if got_int.get() || out_of_time() {
                 break;
@@ -274,7 +282,7 @@ unsafe fn deliver(
         _ => return true,
     };
 
-    let idx = *listidx as usize;
+    let idx = usize::try_from(*listidx).expect("the thread index counts up from zero");
     let mut carries_pim = thislist.thread(idx).pim.result != PimResult::Unused;
 
     // The lookaround was postponed to here: settle it now, either

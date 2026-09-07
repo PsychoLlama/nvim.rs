@@ -17,6 +17,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -704,7 +711,8 @@ pub(super) fn east_set_error(
     let (err, reader) = unsafe { (&mut (*ast).err, &(*pstate).reader) };
     let pline = reader_line(reader, start.line);
     err.msg = msg;
-    err.arg_len = pline.size.wrapping_sub(start.col) as c_int;
+    err.arg_len = c_int::try_from(pline.size.wrapping_sub(start.col))
+        .expect("`start.col` is a position within the line");
     // `wrapping_add` because the C did: `start.col` is a position within the
     // line, so this is exact.
     err.arg = if pline.data.is_null() {

@@ -14,6 +14,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::buffer::BufRef;
@@ -149,7 +156,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             }
             cmdmod_set_tab(0);
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
-            let flags = if vertical { WSP_VERT as c_int } else { 0 };
+            let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
             if win_split(0, flags).is_ok() {
                 args.cmdidx = CmdIdx::split;
                 args.arg = tmp_new;
@@ -203,7 +210,7 @@ fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
     // told, and `os_chdir` gets the NUL-terminated name it wrote there.
     let ok = unsafe { os_dirname(at, MAXPATHL as size_t).is_ok() && os_chdir(at) == 0 };
     if !ok {
-        dirbuf[0] = NUL as c_char;
+        dirbuf[0] = c_char::try_from(NUL).expect("NUL is zero");
     }
     ok
 }
@@ -233,7 +240,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     set_fraction(old_curwin);
     cmdmod_set_tab(0);
     let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
-    let flags = if vertical { WSP_VERT as c_int } else { 0 };
+    let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
     if win_split(0, flags).is_err() {
         return;
     }

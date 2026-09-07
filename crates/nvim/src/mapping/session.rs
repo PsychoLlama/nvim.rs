@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::keycodes::ModMask;
@@ -51,10 +58,12 @@ const MODE_COMMANDS: [(c_int, &[u8]); 20] = [
     (MODE_TERMINAL, b"t"),
 ];
 
-/// The bytes that force `'cpoptions'` to be reset around the written
+/// Whether `b` forces `'cpoptions'` to be reset around the written
 /// mappings: `K_SPECIAL` and a newline both read back differently under a
 /// non-default `'cpo'`.
-const CPO_FORCING: [u8; 2] = [K_SPECIAL as u8, NL as u8];
+fn is_cpo_forcing(b: u8) -> bool {
+    c_int::from(b) == K_SPECIAL || c_int::from(b) == NL
+}
 
 /// Whether `mp` is a mapping `:mkexrc` can write out at all.
 ///
@@ -70,7 +79,7 @@ fn is_writable_map(mp: Mb) -> bool {
     !mp.rhs().windows(3).any(|at| {
         c_int::from(at[0]) == K_SPECIAL
             && c_int::from(at[1]) == KS_EXTRA
-            && c_int::from(at[2] as c_char) == KE_SNR as c_int
+            && c_int::from(at[2].cast_signed()) == KE_SNR.cast_signed()
     })
 }
 
@@ -175,7 +184,7 @@ pub unsafe fn makemap(fd: *mut FILE, buffer: Option<Buf>) -> Result<(), Failed> 
                 // When writing the <> form, 'cpo' has to be the Vim
                 // default; say so once, the first time it can matter.
                 if !did_cpo {
-                    let forcing = |bytes: &[u8]| bytes.iter().any(|b| CPO_FORCING.contains(b));
+                    let forcing = |bytes: &[u8]| bytes.iter().copied().any(is_cpo_forcing);
                     if mp.rhs().is_empty() {
                         did_cpo = true; // will use <Nop>
                     } else if forcing(mp.rhs()) || forcing(mp.keys()) {

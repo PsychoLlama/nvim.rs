@@ -142,7 +142,7 @@ pub const KV_INITIAL_VALUE: Array = Array {
     items: ::core::ptr::null_mut::<Object>(),
 };
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
+pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
     << ::core::mem::size_of::<uint64_t>()
         .wrapping_mul(8_usize)
         .wrapping_sub(1_usize);

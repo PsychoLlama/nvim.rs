@@ -97,9 +97,10 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// There must be a current window and buffer.
 pub unsafe fn comp_textwidth(ff: bool) -> c_int {
     let win = Win::current_raw();
-    let mut textwidth = Buf::current().b_p_tw as c_int;
+    let mut textwidth = c_int::try_from(Buf::current().b_p_tw).unwrap_or(c_int::MAX);
     if textwidth == 0 && Buf::current().b_p_wm != 0 {
-        textwidth = unsafe { (*win).w_view_width } - Buf::current().b_p_wm as c_int;
+        let margin = c_int::try_from(Buf::current().b_p_wm).unwrap_or(c_int::MAX);
+        textwidth = unsafe { (*win).w_view_width } - margin;
         if cmdwin_buf.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;
         }

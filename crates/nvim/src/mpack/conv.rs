@@ -16,6 +16,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_double, c_int, c_uint};
 
@@ -58,7 +65,7 @@ pub fn mpack_pack_map(l: mpack_uint32_t) -> mpack_token_t {
 /// An `ext` header. The type code shares its four bytes with the value's low
 /// half, so this is [`header`] with `lo` set.
 pub fn mpack_pack_ext(t: c_int, l: mpack_uint32_t) -> mpack_token_t {
-    from_tok(&Tok::new(Kind::Ext, l, t as mpack_uint32_t, 0))
+    from_tok(&Tok::new(Kind::Ext, l, t.cast_unsigned(), 0))
 }
 
 /// A slice of a `str`/`bin`/`ext` body, borrowed from the caller.

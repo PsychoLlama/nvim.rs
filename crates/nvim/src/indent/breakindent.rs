@@ -3,6 +3,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use core::ffi::CStr;
@@ -14,6 +21,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xstrdup};
 use crate::r#move::win_col_off2;
+use crate::narrow::number_as_int;
 use crate::option::vars::dy_flags;
 use crate::option::{get_flp_value, get_showbreak_value};
 use crate::plines::win_chartabsize;
@@ -69,9 +77,9 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
         let n = if strict {
             unsafe { getdigits_int(&raw mut p, true, 0) }
         } else {
-            unsafe { getdigits(&raw mut p, false, 0) as c_int }
+            number_as_int(unsafe { getdigits(&raw mut p, false, 0) })
         };
-        *at = unsafe { p.offset_from(value) } as usize;
+        *at = unsafe { p.offset_from(value) }.cast_unsigned();
         n
     };
     let mut i = 0;

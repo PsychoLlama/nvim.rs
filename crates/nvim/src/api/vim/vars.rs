@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::Reported;
@@ -88,7 +95,8 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
 unsafe fn find_globvar(name: String_0) -> *mut DictItem {
     // SAFETY: the caller's promise; the global dictionary is live from
     // startup to exit.
-    unsafe { tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t) }
+    let len: ptrdiff_t = name.len().cast_signed();
+    unsafe { tv_dict_find(get_globvar_dict(), name.data(), len) }
 }
 
 /// "Key not found: `name`".

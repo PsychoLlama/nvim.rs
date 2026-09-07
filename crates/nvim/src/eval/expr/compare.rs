@@ -7,9 +7,16 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
-use core::ffi::{CStr, c_char, c_int, c_ushort};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
     tv_blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
@@ -36,7 +43,8 @@ const NUMBUFLEN: usize = 65;
 /// startup, so this is deliberately not the ASCII test.
 fn isalnum_locale(c: u8) -> bool {
     // SAFETY: `__ctype_b_loc` yields a table valid over the whole byte range.
-    unsafe { *(*__ctype_b_loc()).offset(c as isize) & _ISalnum as c_ushort != 0 }
+    let flags = unsafe { *(*__ctype_b_loc()).offset(c as isize) };
+    c_uint::from(flags) & _ISalnum != 0
 }
 
 /// Recognise a comparison operator, answering it and how many bytes it took.
@@ -65,15 +73,11 @@ pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
         b'<' if next() == b'=' => (EXPR_SEQUAL, 2),
         b'<' => (EXPR_SMALLER, 1),
         b'i' if next() == b's' => {
-            let len = if cur.at(2) == b'n' && cur.at(3) == b'o' && cur.at(4) == b't' {
-                5
-            } else {
-                2
-            };
+            let isnot = cur.at(2) == b'n' && cur.at(3) == b'o' && cur.at(4) == b't';
             // `isnothing` is a name, not `isnot` followed by `hing`.
-            let after = cur.at(len as usize);
+            let after = cur.at(if isnot { 5 } else { 2 });
             if !isalnum_locale(after) && after != b'_' {
-                (if len == 2 { EXPR_IS } else { EXPR_ISNOT }, len)
+                if isnot { (EXPR_ISNOT, 5) } else { (EXPR_IS, 2) }
             } else {
                 (EXPR_UNKNOWN, 2)
             }

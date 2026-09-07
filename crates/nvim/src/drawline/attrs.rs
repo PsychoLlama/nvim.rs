@@ -15,6 +15,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::decoration::kHlModeReplace;
@@ -234,6 +241,8 @@ impl Cells {
     pub(super) unsafe fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the diff answer for this line.
         let at = unsafe { self.ptr.offset_from(self.line) };
+        let bufidx = usize::try_from(self.line_changes.bufidx)
+            .expect("a diff buffer index is never negative");
         if self.line_changes.num_changes > 0
             && self.change_index >= 0
             && self.change_index < self.line_changes.num_changes - 1
@@ -244,7 +253,7 @@ impl Cells {
                         .changes
                         .offset(self.change_index as isize + 1)
                 }
-                .dc_start[self.line_changes.bufidx as usize] as isize
+                .dc_start[bufidx] as isize
         {
             self.change_index += 1;
         }

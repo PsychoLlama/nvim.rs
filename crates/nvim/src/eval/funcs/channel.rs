@@ -258,16 +258,21 @@ impl ProviderScope {
         };
         unsafe { save_funccal(&raw mut saved.funccal) };
 
-        let scope = provider_caller_scope.ptr();
-        current_sctx.set(unsafe { (*scope).script_ctx });
-        // Push the caller's execution-stack entry so that any message
-        // names the caller's script, not the provider's.
-        exestack.with_mut(|stack| stack.push(unsafe { (*scope).es_entry }));
-        autocmd_fname.set(unsafe { (*scope).autocmd_fname });
-        autocmd_match.set(unsafe { (*scope).autocmd_match });
-        autocmd_fname_full.set(unsafe { (*scope).autocmd_fname_full });
-        autocmd_bufnr.set(unsafe { (*scope).autocmd_bufnr });
-        unsafe { set_current_funccal((*scope).funccalp as *mut FuncCall) };
+        // The scope is *read*, field by field, and nothing here writes it
+        // back -- `exestack` is a different cell and `set_current_funccal`
+        // touches neither -- so a shared borrow reaches every field and the
+        // cell's address is not needed.
+        provider_caller_scope.with(|scope| {
+            current_sctx.set(scope.script_ctx);
+            // Push the caller's execution-stack entry so that any message
+            // names the caller's script, not the provider's.
+            exestack.with_mut(|stack| stack.push(scope.es_entry));
+            autocmd_fname.set(scope.autocmd_fname);
+            autocmd_match.set(scope.autocmd_match);
+            autocmd_fname_full.set(scope.autocmd_fname_full);
+            autocmd_bufnr.set(scope.autocmd_bufnr);
+            unsafe { set_current_funccal(scope.funccalp.cast::<FuncCall>()) };
+        });
         saved
     }
 

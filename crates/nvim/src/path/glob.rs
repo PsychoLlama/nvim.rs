@@ -9,6 +9,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
@@ -18,6 +25,12 @@ use crate::guard::{Depth, Suppress};
 use crate::mbyte::{char_at, cluster_len};
 use crate::regexp::{RE_MAGIC, RE_NOBREAK};
 use crate::types::MAXPATHL;
+
+/// A `GArray` length as an index into it: the array set the length itself,
+/// so it is never negative.
+fn ga_index(n: c_int) -> usize {
+    usize::try_from(n).expect("a garray length is never negative")
+}
 
 /// How deep a `**` may recurse. Upstream's limit, and the reason a pattern
 /// over a symlink loop terminates.
@@ -388,15 +401,12 @@ pub(crate) unsafe fn do_path_expand(
 
     // When interrupted the matches probably won't be used, and sorting
     // can be slow.
-    let matches = (unsafe { (*gap).ga_len } - start_len) as usize;
+    let start = ga_index(start_len);
+    let matches = ga_index(unsafe { (*gap).ga_len }) - start;
     if matches > 0 && !got_int.get() {
         unsafe {
             qsort(
-                (*gap)
-                    .ga_data
-                    .cast::<*mut c_char>()
-                    .add(start_len as usize)
-                    .cast(),
+                (*gap).ga_data.cast::<*mut c_char>().add(start).cast(),
                 matches,
                 size_of::<*mut c_char>(),
                 Some(pstrcmp),
@@ -521,12 +531,8 @@ pub unsafe fn addfile(gap: *mut GArray, f: *mut c_char, flags: ExpandFlags) {
         unsafe { add_pathsep(p) };
     }
     unsafe { ga_grow(gap, 1) };
-    unsafe {
-        *(*gap)
-            .ga_data
-            .cast::<*mut c_char>()
-            .add((*gap).ga_len as usize) = p
-    };
+    let len = ga_index(unsafe { (*gap).ga_len });
+    unsafe { *(*gap).ga_data.cast::<*mut c_char>().add(len) = p };
     unsafe { (*gap).ga_len += 1 };
 }
 

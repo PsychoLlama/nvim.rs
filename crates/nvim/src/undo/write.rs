@@ -2,6 +2,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::file::*;
 use super::format::*;
@@ -173,7 +180,7 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
     let len = unsafe { read_eintr(fd, magic.as_mut_ptr().cast(), magic.len()) };
     // SAFETY: our own descriptor.
     unsafe { close(fd) };
-    if len == magic.len() as ssize_t && magic == UF_START_MAGIC {
+    if len == magic.len().cast_signed() && magic == UF_START_MAGIC {
         return true;
     }
     verbosely(automatic, || {
@@ -194,6 +201,11 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
 ///
 /// `fd` is open on `file_name` and `buffer` points at a live buffer.
 unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Buf) {
+    /// The group of a stat record, as libuv spells one.
+    fn group_of(info: &FileInfo) -> uv_gid_t {
+        uv_gid_t::try_from(info.stat.st_gid).expect("a group id fits a `uv_gid_t`")
+    }
+
     if buffer.b_ffname.is_null() {
         return;
     }
@@ -206,7 +218,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
         os_fileinfo(buffer.b_ffname, &raw mut edited)
             && os_fileinfo(file_name, &raw mut written)
             && edited.stat.st_gid != written.stat.st_gid
-            && os_fchown(fd, u32::MAX as uv_uid_t, edited.stat.st_gid as uv_gid_t) != 0
+            && os_fchown(fd, u32::MAX as uv_uid_t, group_of(&edited)) != 0
     };
     if group_stuck {
         // The group could not be changed: make sure it cannot read the

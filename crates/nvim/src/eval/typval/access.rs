@@ -15,6 +15,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::winlayer::Live;
@@ -547,7 +554,10 @@ pub unsafe fn tv_dict_set_ret(tv: *mut TypVal, d: *mut Dict) {
 /// `d` is null or points at a live dictionary.
 #[inline]
 pub unsafe fn tv_dict_len(d: *const Dict) -> ::core::ffi::c_long {
-    unsafe { d.as_ref() }.map_or(0, |d| d.dv_hashtab.ht_used as ::core::ffi::c_long)
+    unsafe { d.as_ref() }.map_or(0, |d| {
+        ::core::ffi::c_long::try_from(d.dv_hashtab.ht_used)
+            .expect("a dictionary never holds more items than a long counts")
+    })
 }
 
 /// Whether at least one watcher is registered on `d`.

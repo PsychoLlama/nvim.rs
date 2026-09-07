@@ -7,6 +7,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::api::private::helpers::{Reported, has_key};
@@ -122,7 +129,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             end_raw.max(begin).min(line_count)
         };
         if begin < end {
-            let (first, last) = (1 + begin as LineNr, end as LineNr);
+            let first = 1 + LineNr::try_from(begin).expect("the range is clamped to the buffer");
+            let last = LineNr::try_from(end).expect("the range is clamped to the buffer");
             redraw_buf_range_later(rbuf, first, last);
         }
     }

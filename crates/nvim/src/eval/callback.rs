@@ -2,6 +2,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::cstr;
 use crate::guard::Depth;
@@ -158,7 +165,7 @@ pub unsafe fn callback_call(
             // A funcref holds a NUL-terminated name.
             name = *funcref;
             // SAFETY: as above.
-            let len = unsafe { cstr::bytes_at(name) }.len() as c_int;
+            let len = unsafe { cstr::bytes_at(name) }.len();
             // SAFETY: `len >= 6` promises six readable bytes.
             if len >= 6 && unsafe { cstr::starts_with(name, VLUA.to_bytes()) } {
                 // SAFETY: the six bytes just compared are behind us, so what

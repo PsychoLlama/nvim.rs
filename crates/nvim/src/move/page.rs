@@ -14,6 +14,13 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::c_int;
 use core::ptr;
@@ -26,6 +33,7 @@ use crate::edit::{BeginlineOpts, beginline, cursor_down_inner, cursor_up_inner};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::mb_adjust_cursor;
+use crate::narrow::number_as_int;
 use crate::normal::{
     nv_g_home_m_cmd, nv_screengo, set_visual_active, set_visual_select, visual_active,
     visual_select,
@@ -134,7 +142,9 @@ unsafe fn half_page(
     if count != 0 {
         win.w_onebuf_opt.wo_scr = OptInt::from(win.w_view_height.min(count));
     }
-    count = win.w_view_height.min(win.w_onebuf_opt.wo_scr as c_int);
+    count = win
+        .w_view_height
+        .min(number_as_int(win.w_onebuf_opt.wo_scr));
 
     let mut curscount = count;
     // Adjust the count so as not to reveal lines past the end of the buffer.
@@ -184,7 +194,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
         && p_window.get() > 0
         && p_window.get() < OptInt::from(Rows.get() - 1)
     {
-        (p_window.get() as c_int - 2).max(1)
+        (number_as_int(p_window.get()) - 2).max(1)
     } else {
         get_scroll_overlap(win, dir)
     };

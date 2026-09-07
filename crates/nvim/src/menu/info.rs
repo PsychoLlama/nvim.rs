@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
@@ -94,7 +101,8 @@ pub(crate) unsafe fn ex_menutranslate(args: *mut ExArg) {
 fn menu_skip_part(p: CText) -> CText {
     let mut i = 0;
     while p.byte(i) != 0 && p.byte(i) != b'.' && !ascii_iswhite(c_int::from(p.byte(i))) {
-        if (p.byte(i) == b'\\' || p.byte(i) == Ctrl_V as u8) && p.byte(i + 1) != 0 {
+        let escaped = p.byte(i) == b'\\' || c_int::from(p.byte(i)) == Ctrl_V;
+        if escaped && p.byte(i + 1) != 0 {
             i += 1;
         }
         i += 1;
@@ -152,7 +160,7 @@ fn menu_unescape_name(name: CText) {
 pub(crate) fn menu_translate_tab_and_shift(arg_start: CText) -> CText {
     let mut i = 0;
     while arg_start.byte(i) != 0 && !ascii_iswhite(c_int::from(arg_start.byte(i))) {
-        let escaped = arg_start.byte(i) == b'\\' || arg_start.byte(i) == Ctrl_V as u8;
+        let escaped = arg_start.byte(i) == b'\\' || c_int::from(arg_start.byte(i)) == Ctrl_V;
         if escaped && arg_start.byte(i + 1) != 0 {
             i += 1;
         } else if arg_start

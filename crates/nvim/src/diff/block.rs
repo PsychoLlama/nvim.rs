@@ -13,6 +13,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use super::*;
 use crate::semsg;
@@ -33,7 +40,8 @@ pub fn diff_buf_delete(buffer: Buf) {
     for mut tp in tabs() {
         let i = diff_buf_idx(buffer, tp);
         if i != DB_COUNT {
-            tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
+            let i = usize::try_from(i).expect("a diff-buffer index is never negative");
+            tp.tp_diffbuf[i] = ::core::ptr::null_mut();
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
                 need_diff_redraw.set(true);
@@ -58,7 +66,8 @@ pub fn diff_buf_adjust(win: Win) {
     let mut tp = TabPage::current();
     let i = diff_buf_idx(win.buffer(), tp);
     if i != DB_COUNT {
-        tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
+        let i = usize::try_from(i).expect("a diff-buffer index is never negative");
+        tp.tp_diffbuf[i] = ::core::ptr::null_mut();
         tp.tp_diff_invalid = 1;
         diff_redraw(true);
     }
@@ -96,7 +105,10 @@ pub(crate) fn diff_buf_clear() {
 /// `buffer`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
 pub(crate) fn diff_buf_idx(buffer: Buf, tabpage: TabPage) -> c_int {
     (0..DB_COUNT)
-        .find(|&i| tabpage.tp_diffbuf[i as usize] == buffer.raw())
+        .find(|&i| {
+            let i = usize::try_from(i).expect("a diff-buffer index is never negative");
+            tabpage.tp_diffbuf[i] == buffer.raw()
+        })
         .unwrap_or(DB_COUNT)
 }
 
@@ -167,7 +179,7 @@ unsafe fn diff_mark_adjust_tp(
         tabpage.tp_diff_invalid = 1;
         tabpage.tp_diff_update = 1;
     }
-    let idx = idx as usize;
+    let idx = usize::try_from(idx).expect("a diff-buffer index is never negative");
     let (inserted, mut deleted) = inserted_deleted(line2, amount, amount_after);
 
     // Both of these are closures rather than functions because each has

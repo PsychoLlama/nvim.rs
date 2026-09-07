@@ -1,6 +1,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! `vim.spell`: the Lua binding over the spell checker.
 //!
@@ -20,7 +27,7 @@ use crate::message::e_no_spell;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
-use crate::types::{Hlf, lua_Integer, lua_State, luaL_Reg, size_t};
+use crate::types::{Hlf, lua_State, luaL_Reg, size_t};
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -100,7 +107,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
                 lua_pushstring(lstate, kind.as_ptr());
                 lua_rawseti(lstate, -2, 2);
                 // +1 for Lua's 1-based indexing.
-                lua_pushinteger(lstate, pos as lua_Integer + 1);
+                lua_pushinteger(lstate, pos.cast_signed() + 1);
                 lua_rawseti(lstate, -2, 3);
                 lua_rawseti(lstate, -2, nresults);
             }
@@ -108,7 +115,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
         // SAFETY: as above.
         word = unsafe { word.add(len) };
         pos += len;
-        capcol -= len as c_int;
+        capcol -= c_int::try_from(len).expect("a spell_check length fits an int");
     }
 
     // SAFETY: as above; 'spell' goes back to what it was.
