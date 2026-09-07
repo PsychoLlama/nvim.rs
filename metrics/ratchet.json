@@ -1275,7 +1275,7 @@
     "crates/nvim/src/window/winclose.rs": {"pub_items": 3, "unsafe_lines": 3},
     "crates/nvim/src/winfloat.rs": {"extern_abi": 1, "unsafe_lines": 15},
     "crates/nvim/src/winlayer.rs": {"pub_items": 8, "unsafe_lines": 25},
-    "crates/nvim/src/winlayer/graph.rs": {"extern_abi": 1, "no_mangle": 2, "pub_items": 2, "unsafe_lines": 3},
+    "crates/nvim/src/winlayer/graph.rs": {"extern_abi": 1, "no_mangle": 2, "pub_items": 2, "unsafe_lines": 1},
     "crates/nvim/src/winlayer/handles.rs": {"pub_items": 1},
     "crates/nvim/src/winlayer/live.rs": {"unsafe_lines": 2},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_lines": 40}

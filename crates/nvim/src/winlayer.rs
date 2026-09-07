@@ -421,7 +421,7 @@ impl Win {
     /// that means to cope with having no window asks this one.
     #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
-        graph::CURRENT_WIN.get().and_then(WinId::get)
+        graph::current_win()
     }
 
     /// [`Win::current_or_none`] as the pointer the C compared against: the
@@ -625,7 +625,7 @@ impl Buf {
     /// [`Win::current_or_none`].
     #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
-        graph::CURRENT_BUF.get().and_then(BufId::get)
+        graph::current_buf()
     }
 
     /// The buffer's address, or null where there is none.
@@ -766,7 +766,7 @@ impl TabPage {
     /// [`Win::current_or_none`].
     #[inline(always)]
     pub fn current_or_none() -> Option<Self> {
-        graph::CURRENT_TAB.get().and_then(TabId::get)
+        graph::current_tab()
     }
 
     /// The tab page's address, or null where there is none.

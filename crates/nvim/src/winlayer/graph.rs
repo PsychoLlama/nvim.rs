@@ -185,25 +185,71 @@ pub(crate) fn leave_curbuf() {
     curbuf.set(::core::ptr::null_mut::<Buffer>());
 }
 
+// ---------------------------------------------------------------------------
+// Reading which one is current
+//
+// A handle is `(address, identity)` and the funnel above writes **both**
+// halves of it, together, under one call. So the current window is already
+// stored: `curwin` is the address and `CURRENT_WIN` is the identity, and the
+// reader below is two static loads and a move, with no registry probe and no
+// dereference of the window itself.
+//
+// It did probe, until p28-16 measured what that cost. `Win::current()` is
+// inlined at 2,551 sites and `Buf::current()` at 1,539, and a probe is a
+// `HandleMap` bounds check plus two dependent loads at every one of them:
+// 1.7-2.5 % of the instructions the spell and screen benches retire
+// (p28-15 §6). The probe answered a question no caller here asks -- "is the
+// current window still registered" -- because the funnel is the only writer
+// and it writes a handle the caller had already promised was live.
+//
+// What that gives up, deliberately: between a window leaving the registry
+// and something else being made current, this hands back the window that
+// left rather than `None`. `aucmd_restbuf` is the one place that happens,
+// and it holds the address in a local across exactly that gap rather than
+// reading it back (p28-3 §2). A caller who wants "is it still there" asks
+// `WinId::get`, which is what that is for.
+
+/// The current window: the mirror's address with the identity beside it.
+///
+/// `None` before `win_alloc_first` and after the last window goes.
+#[inline(always)]
+pub(super) fn current_win() -> Option<Win> {
+    CURRENT_WIN
+        .get()
+        .map(|id| Win::at(curwin.get(), id.0.get()))
+}
+
+/// [`current_win`] for the buffer. `None` where [`leave_curbuf`] left it.
+#[inline(always)]
+pub(super) fn current_buf() -> Option<Buf> {
+    CURRENT_BUF
+        .get()
+        .map(|id| Buf::at(curbuf.get(), id.0.get()))
+}
+
+/// [`current_win`] for the tab page.
+#[inline(always)]
+pub(super) fn current_tab() -> Option<TabPage> {
+    CURRENT_TAB
+        .get()
+        .map(|id| TabPage::at(curtab.get(), id.0.get()))
+}
+
 /// The window the mirror names, whatever its identity.
 ///
 /// The switch pair below saves what it displaces as a value rather than as an
 /// identity, exactly as the C saved the pointer: it is put back a few
-/// statements later with nothing in between that can free it. Reading the
-/// handle out of it is sound for the same reason.
+/// statements later with nothing in between that can free it. A null one is
+/// the editor between windows, which `Saved::restore` puts back as it found.
 #[inline(always)]
 fn current_window() -> Win {
-    // SAFETY: the mirror is written only by the funnel above, beside the
-    // identity it mirrors, so it names the live current window or is null --
-    // and `Win::new` tolerates null.
-    unsafe { Win::new(curwin.get()) }
+    current_win().unwrap_or(Win::at(::core::ptr::null_mut::<Window>(), 0))
 }
 
 /// [`current_window`] for the buffer mirror.
 #[inline(always)]
 fn current_buffer() -> Buf {
-    // SAFETY: as [`current_window`]; `leave_curbuf` spells "none" as null.
-    unsafe { Buf::new(curbuf.get()) }
+    current_buf().unwrap_or(Buf::at(::core::ptr::null_mut::<Buffer>(), 0))
 }
 
 /// Stand in `win` and the buffer it shows, until [`Saved::restore`].
