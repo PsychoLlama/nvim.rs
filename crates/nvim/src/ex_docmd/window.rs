@@ -225,7 +225,12 @@ pub unsafe fn ex_splitview(args: *mut ExArg) {
 }
 
 fn splitview(mut ea: Ex) {
-    let old_curwin = Win::current_raw();
+    // Taken as a handle here, while the window is certainly live: `split`
+    // below fires `WinEnter`, and 'findfunc' runs before it, either of which
+    // can close this window. Holding the handle across that is safe -- the id
+    // is what `open_tabpage` and `do_exedit` vet -- but *building* one from
+    // the address afterwards would read a freed window.
+    let old_curwin = Win::current();
     let use_tab = ea.is(CmdIdx::tabedit) || ea.is(CmdIdx::tabfind) || ea.is(CmdIdx::tabnew);
 
     // Splitting a quickfix window gives a plain window, not a second
@@ -251,7 +256,7 @@ fn splitview(mut ea: Ex) {
     }
 
     if use_tab {
-        open_tabpage(ea, unsafe { Win::new(old_curwin) });
+        open_tabpage(ea, old_curwin);
     } else if split(ea.count(0), vertical_flag(ea.cmd)).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
@@ -260,7 +265,7 @@ fn splitview(mut ea: Ex) {
         } else {
             do_check_scrollbind(false);
         }
-        edit(ea, unsafe { Win::from_raw(old_curwin) });
+        edit(ea, Some(old_curwin));
     }
     free(fname);
 }

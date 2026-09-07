@@ -224,10 +224,14 @@ pub(crate) unsafe fn process_next_cpt_value(
             && !unsafe { vim_strchr(c"buwU".as_ptr(), (*st).cpt.at() as uint8_t as c_int) }
                 .is_null()
             && {
-                unsafe {
-                    (*st).ins_buf =
-                        ins_compl_next_buf(Buf::new((*st).ins_buf), (*st).cpt.at() as c_int).raw()
-                };
+                // The scan's buffer outlives every autocommand and user
+                // function a pass through this loop runs, so it may have been
+                // wiped since it was stored; `buffer_at` answers that from the
+                // buffer list without reading the address. Restarting the walk
+                // at the current buffer is what `ins_compl_get_exp` does for
+                // the same case one level up.
+                let from = buffer_at(unsafe { (*st).ins_buf }).unwrap_or_else(Buf::current);
+                unsafe { (*st).ins_buf = ins_compl_next_buf(from, (*st).cpt.at() as c_int).raw() };
                 unsafe { (*st).ins_buf != Buf::current_raw() }
             }
         {
