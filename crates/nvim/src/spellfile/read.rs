@@ -490,6 +490,9 @@ unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     // numbers. They go into a scratch buffer so the suggestion search
     // can index them by line.
     let mut line: Vec<u8> = Vec::with_capacity(100);
+    // SAFETY: `open_spellbuf` above returned it, and nothing in the loop
+    // closes it. Built once: `Buf::new` reads the buffer's number out of it.
+    let sugbuf = unsafe { Buf::new(slang.sl_sugbuf) };
     for wordnr in 0..wcount {
         line.clear();
         loop {
@@ -499,10 +502,7 @@ unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
                 break;
             }
         }
-        let sugbuf = slang.sl_sugbuf;
         let (at, len) = (wordnr as LineNr, line.len() as ColNr);
-        // SAFETY: a live buffer.
-        let sugbuf = unsafe { Buf::new(sugbuf) };
         // SAFETY: the buffer was just opened and the line is this frame's.
         let appended =
             unsafe { ml_append_buf(sugbuf, at, line.as_mut_ptr().cast::<c_char>(), len, true) };

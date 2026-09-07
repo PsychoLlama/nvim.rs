@@ -265,6 +265,9 @@ unsafe fn sug_filltable(
     // covers the at-most-five bytes each iteration appends.
     let mut wordnr = startwordnr;
     let mut p = node;
+    // SAFETY: `si_spellbuf` is the scratch buffer `spell_make_sugfile` opened
+    // and nothing here closes it. Built once: `Buf::new` reads its number.
+    let spellbuf = unsafe { Buf::new(spin.si_spellbuf) };
     while !p.is_null() {
         if unsafe { (*p).wn_byte } as c_int != NUL {
             wordnr = unsafe { sug_filltable(spin, (*p).wn_child, wordnr, gap) };
@@ -301,7 +304,7 @@ unsafe fn sug_filltable(
 
         let at = wordnr as LineNr;
         let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as ColNr) };
-        if unsafe { ml_append_buf(Buf::new(spin.si_spellbuf), at, text, len, true) }.is_err() {
+        if unsafe { ml_append_buf(spellbuf, at, text, len, true) }.is_err() {
             return -1;
         }
         wordnr += 1;
@@ -393,6 +396,9 @@ unsafe fn sug_write(spin: &mut SpellInfo, fname: *mut c_char) {
     // SAFETY: as above.
     unsafe { put_node(Some(&mut w), tree, 0, 0, false) };
 
+    // SAFETY: `si_spellbuf` is the scratch buffer opened above; the loop
+    // below only reads lines out of it, so one handle serves all of them.
+    let spellbuf = unsafe { Buf::new(spin.si_spellbuf) };
     // SAFETY: the scratch buffer holds one line per word end.
     let wcount = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count };
     debug_assert!(wcount >= 0);
@@ -402,8 +408,8 @@ unsafe fn sug_write(spin: &mut SpellInfo, fname: *mut c_char) {
         // SAFETY: `lnum` is inside the buffer, and the line is
         // NUL-terminated: the stored terminator goes out with it.
         let line = unsafe {
-            let at = ml_get_buf(Buf::new(spin.si_spellbuf), lnum);
-            let len = ml_get_buf_len(Buf::new(spin.si_spellbuf), lnum) + 1;
+            let at = ml_get_buf(spellbuf, lnum);
+            let len = ml_get_buf_len(spellbuf, lnum) + 1;
             core::slice::from_raw_parts(at.cast::<u8>(), len as usize)
         };
         w.bytes(line);

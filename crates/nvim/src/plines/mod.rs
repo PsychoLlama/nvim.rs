@@ -791,20 +791,24 @@ pub(crate) unsafe fn linesize_regular(
 /// # Safety
 /// `csarg` must be initialised.
 pub(crate) unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr) -> c_int {
-    let wp = csarg.win;
     let use_tabstop = csarg.use_tabstop;
     let line = csarg.line;
     let mut vcol = vcol_arg as int64_t;
 
+    // Built once: `Win::new` reads the window's handle out of the object, and
+    // the loop below runs it per *character* of the line. Nothing it calls can
+    // close a window, so the handle `csarg` promises is good for all of it --
+    // p28-16 measured the per-character build at 8.8% of `scrbench`.
+    //
+    // SAFETY: `csarg` is initialised, so `csarg.win` is a live window.
+    let wp = unsafe { Win::new(csarg.win) };
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
     while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL as c_char
     {
-        // SAFETY: a live window.
-        let wp = unsafe { Win::new(wp) };
-        // SAFETY: as above, plus the live window `csarg` was built from.
+        // SAFETY: the live window above, and the line `ci` walks.
         vcol += unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) }.width
             as int64_t;
         // SAFETY: as above.

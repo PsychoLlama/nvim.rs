@@ -200,6 +200,12 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
     }
 
     // Now try the endings, longest first.
+    //
+    // `mi_win` is written once, by `MatchInf::new`, so the handle is built
+    // once here rather than per ending: `Win::new` reads the window's handle
+    // out of the object.
+    // SAFETY: `mip`'s promise -- `mi_win` is the window the match is for.
+    let win = unsafe { Win::new(mip.mi_win) };
     while endidxcnt > 0 {
         endidxcnt -= 1;
         arridx = endidx[endidxcnt] as usize;
@@ -213,8 +219,7 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
         // end of a word — unless the language compounds or does not
         // break, in which case what follows may continue it.
 
-        let word_ends = if unsafe { spell_iswordp(ptr.offset(wlen as isize), Win::new(mip.mi_win)) }
-        {
+        let word_ends = if unsafe { spell_iswordp(ptr.offset(wlen as isize), win) } {
             if unsafe { (*slang).sl_compprog }.is_null() && !unsafe { (*slang).sl_nobreak } {
                 continue;
             }
@@ -857,11 +862,13 @@ pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
 /// that field is the one the constructor cannot fill in.
 unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
+    // Once, not once per character: `Win::new` reads the handle out of the
+    // window, and `mi_win` is written only by `MatchInf::new`.
+    // SAFETY: `mip`'s promise -- `mi_win` is the window the match is for.
+    let win = unsafe { Win::new(mip.mi_win) };
     loop {
         mb_ptr_adv!(mip.mi_fend);
-        if unsafe { *mip.mi_fend } == 0
-            || !unsafe { spell_iswordp(mip.mi_fend, Win::new(mip.mi_win)) }
-        {
+        if unsafe { *mip.mi_fend } == 0 || !unsafe { spell_iswordp(mip.mi_fend, win) } {
             break;
         }
     }
