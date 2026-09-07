@@ -7,6 +7,14 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Flipped the crate's default posture on `unsafe`: `unsafe_code` is denied at
+  the root, and the 1,009 files that still need it say so in their own source
+  with a reason. Nothing about the editor changes; what changes is that
+  permission to write `unsafe` is now something a file asks for and the
+  ratchet counts, rather than something it inherits by saying nothing.
+
 ## [2026.09.06-4cef5c0a5c]
 
 ### Changed

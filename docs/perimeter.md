@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_lines_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **13,523** unchecked lines inside the perimeter (136 files),
-**57,918** outside it (873 files, of 1,230 measured). It was 138,877 when
+Today: **13,201** unchecked lines inside the perimeter (135 files),
+**48,358** outside it (866 files, of 1,342 measured). It was 138,877 when
 this file was written, at the end of phase 23's slice 15.
 
 ## What qualifies
@@ -74,7 +74,7 @@ the contract.
 ## How the ratchet enforces it
 
 `PERIMETER` in `scripts/ratchet.py` is the list, one entry per row above, each
-carrying its reason. Three things follow from it:
+carrying its reason. Four things follow from it:
 
 - **`unsafe_lines_outside_perimeter`** — the tree's unchecked lines minus the
   perimeter's — is recorded in `metrics/ratchet.json` and may only shrink.
@@ -87,11 +87,58 @@ carrying its reason. Three things follow from it:
   brand-new file included, so unchecked code appearing inside the perimeter is
   a violation exactly as it is outside — and moving an unsafe file into a
   perimeter module shows up as a new path at full size.
+- **A file on the list says so in its own source.** See below.
 
 To add an entry: put the path and its reason in `PERIMETER`, add the row here,
 run `just refresh`, and justify it in the commit message. The number this
 lowers is the number the migration is judged by, so the bar is the criteria
 above and nothing softer.
+
+## The default, and what a file has to say
+
+`unsafe_code` is allow-by-default in rustc, so for most of the migration
+nothing in the tree said where unsafe was _permitted_ to live: the answer was
+the absence of `#![forbid(unsafe_code)]`, which is not a claim a file makes but
+one it fails to make, and a new file inherited permission by saying nothing.
+Phase 28 flipped that. `crates/nvim/Cargo.toml` now has
+
+    [lints.rust]
+    unsafe_code = "deny"
+
+which governs the library, the `nvim` binary and the test and bench roots
+alike. A file that needs unsafe — a block, an `unsafe fn`, an `unsafe trait`
+or `impl`, an `unsafe extern` block, an `#[unsafe(no_mangle)]` export — carries
+an inner
+
+    #![allow(unsafe_code)]
+
+with its other inner attributes, and `scripts/ratchet.py` holds the count of
+files doing so as `files_allowing_unsafe_code`, shrink-only like everything
+else. Three rules about that line:
+
+- **A file inside a perimeter module names its row**, in a one-line comment
+  directly above the attribute — "Unsafe perimeter: the `os/` row in
+  docs/perimeter.md." That allow is permanent — the module is on the list
+  precisely because its unsafe does not retire — and the comment is what makes
+  the difference visible while reading the file rather than the list.
+- **Every other file carries it bare.** There is no reason to write, because
+  the count is the reason: those files are the migration's debt, the same
+  population `unsafe_lines_outside_perimeter` measures, and each one that
+  finishes drops the allow for a `forbid` and the total falls by one. The
+  exception is the dozen non-perimeter files exporting a C symbol somebody
+  else resolves: they name their `metrics/abi-ledger.jsonl` rows, because the
+  export is the whole reason the file cannot be finished.
+- **A generated file takes it from the generator.** A hand-written attribute
+  under `crates/nvim/src/api/private/dispatch*/` or `src/lua/api_wrappers/` is
+  gone at the next `just apigen`, so `tools/apigen` emits it — and only for a
+  chunk that actually holds unsafe, which is what keeps the count honest.
+
+`forbid` still overrides the deny and still cannot be lifted by a module
+underneath it, so it remains the stronger claim and the one a finished module
+takes. What retired with the flip is the metric that used to stand in for
+this: `files_without_forbid_unsafe` counted files that had not made a claim,
+where `files_allowing_unsafe_code` counts the ones that have made the opposite
+claim, deliberately, in a line a reviewer can see.
 
 ## The types the perimeter cannot hold
 

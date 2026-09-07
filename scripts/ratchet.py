@@ -464,13 +464,6 @@ plus these whole-tree metrics, which are not per-file:
                         the home are the implementation, the ones outside are
                         the debt.
 
-  files_without_forbid_unsafe  the number of source files not carrying
-                    #![forbid(unsafe_code)]. The shrink-only trick inverted:
-                    fully safe modules take the attribute — which makes
-                    "safe module" a compiler-enforced status instead of a
-                    grep result — and the count of files still lacking it
-                    may only fall. New files are expected to be born safe.
-
   files_without_deny_casts  the number of source files that have not adopted
                     the cast lints. `as` is the transpile's universal
                     conversion — ~21k of them, ~5k infallible widenings that
@@ -482,7 +475,7 @@ plus these whole-tree metrics, which are not per-file:
                     is a big-bang sweep nobody can review; the migration adopts
                     it per module, as the roadmap's phase 19 item 6 asks.
 
-                    So the same inverted trick as the two attributes above: a
+                    So the same inverted trick as `forbid(unsafe_code)`: a
                     module that has finished its casts writes
 
                         #![deny(
@@ -518,12 +511,12 @@ plus these whole-tree metrics, which are not per-file:
 
   files_allowing_<lint>  one per entry in FILE_ALLOWS: the number of source
                     files carrying that lint's blanket `#![allow]`. The same
-                    shape as the three above, one step further along. Each of
-                    these lints was allowed at the crate root for the whole
-                    transpile, because every name c2rust emitted was the C's;
-                    a phase-27 lift renames what the port owns, deletes the
-                    root allow and denies the lint in Cargo.toml, and what is
-                    left carries a per-file allow with a one-line reason.
+                    shape as the one above, one step further along. Each of
+                    these lints was allowed by default -- three of them at the
+                    crate root, because every name c2rust emitted was the C's,
+                    and `unsafe_code` by rustc itself -- and each lift denies
+                    it in Cargo.toml, so what is left carries a per-file allow
+                    with a one-line reason.
 
                     files_allowing_non_camel_case_types  what still needs it
                     is a file whose *type* names are a foreign library's --
@@ -549,9 +542,31 @@ plus these whole-tree metrics, which are not per-file:
                     rewritten to Rust's spelling for a global. Eight of the
                     files carrying it are generated and take it from apigen.
 
-                    All three may only fall, and a new file has no business
+                    files_allowing_unsafe_code  the migration's own posture,
+                    and the one entry here that is not about names. rustc
+                    allows `unsafe_code` by default, so for the whole
+                    transpile nothing said where unsafe was permitted to live:
+                    the tree's answer was the *absence* of
+                    #![forbid(unsafe_code)], which is not a claim a file makes
+                    but one it fails to make. Phase 28 denied the lint in
+                    crates/nvim/Cargo.toml, so a file that needs unsafe -- a
+                    block, an `unsafe fn`, an `unsafe trait` or `impl`, an
+                    `unsafe extern` block, an `#[unsafe(no_mangle)]` export --
+                    now says so with an inner allow. A file inside the
+                    perimeter (PERIMETER, docs/perimeter.md) names its row in
+                    a comment above the attribute and keeps it for good; every
+                    other one carries it bare, because there the count *is*
+                    the reason and it is debt. `forbid` still overrides the
+                    deny and cannot itself be lifted, so a module that
+                    finishes drops the allow and takes the forbid instead --
+                    which is what retired `files_without_forbid_unsafe`, this
+                    metric's complement, when the default flipped. The
+                    generated files take theirs from apigen, emitted only for
+                    a chunk that holds unsafe.
+
+                    All four may only fall, and a new file has no business
                     taking any of them unless it is describing someone else's
-                    names.
+                    names or standing on the perimeter.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -1054,6 +1069,7 @@ FILE_ALLOWS = {
     "non_camel_case_types": "#![allow(non_camel_case_types)]",
     "non_snake_case": "#![allow(non_snake_case)]",
     "non_upper_case_globals": "#![allow(non_upper_case_globals)]",
+    "unsafe_code": "#![allow(unsafe_code)]",
 }
 # A `# Safety` heading in a doc comment. Any heading level, any case, because
 # what is being counted is whether the obligation is written down.
@@ -1704,14 +1720,12 @@ def missing_safety_doc(text, masked):
 
 def measure():
     """(repo-relative file -> {metric: count} with zeros included,
-    number of files not carrying the forbid attribute,
     number of files carrying neither forbid nor the unsafe-op deny,
     number of files not carrying the cast deny,
     lint name -> number of files carrying its blanket allow,
     repo-relative file -> its masked source, for the whole-tree checks)."""
     stats = {}
     tree = {}
-    without_forbid = 0
     without_deny = 0
     without_casts = 0
     allowing = dict.fromkeys(FILE_ALLOWS, 0)
@@ -1732,12 +1746,11 @@ def measure():
         counts["lines"] = len(text.splitlines()) - len(test_module_lines(masked))
         stats[str(path.relative_to(ROOT))] = counts
         tree[str(path.relative_to(ROOT))] = masked
-        without_forbid += FORBID not in masked
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
         without_casts += DENY_CASTS.search(masked) is None
         for lint, needle in FILE_ALLOWS.items():
             allowing[lint] += needle in masked
-    return stats, without_forbid, without_deny, without_casts, allowing, tree
+    return stats, without_deny, without_casts, allowing, tree
 
 
 def ledgers():
@@ -2019,7 +2032,6 @@ def check_names(tree):
 def render(
     stats,
     ledger_counts,
-    without_forbid,
     without_deny,
     without_casts,
     allowing,
@@ -2046,7 +2058,6 @@ def render(
     return (
         "{\n"
         f"{head}"
-        f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
         f"{allows}"
@@ -2106,7 +2117,6 @@ VOCABULARY_KEYS = (
 def violations(
     stats,
     counts,
-    without_forbid,
     without_deny,
     without_casts,
     allowing,
@@ -2119,10 +2129,6 @@ def violations(
         base = baseline.get(name, counts[name])
         if counts[name] > base:
             found.append(f"{label}: {base} -> {counts[name]}")
-    # .get: absent from baselines committed before the metric existed.
-    base_forbid = baseline.get("files_without_forbid_unsafe", without_forbid)
-    if without_forbid > base_forbid:
-        found.append(f"files without {FORBID}: {base_forbid} -> {without_forbid}")
     base_deny = baseline.get("files_without_deny_unsafe_op", without_deny)
     if without_deny > base_deny:
         found.append(
@@ -2151,7 +2157,7 @@ def violations(
     return found
 
 
-def summary(stats, counts, without_forbid, without_deny, without_casts, allowing):
+def summary(stats, counts, without_deny, without_casts, allowing):
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
@@ -2165,8 +2171,8 @@ def summary(stats, counts, without_forbid, without_deny, without_casts, allowing
         f"{counts['cell_copy_owner']} Copy-owner get()s",
         f"{counts['unsafe_lines_outside_perimeter']} unchecked lines outside the "
         f"perimeter ({perimeter_lines(stats)[0]} inside)",
-        f"{without_forbid} files without forbid(unsafe_code)",
-        f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
+        f"{without_deny} files without forbid(unsafe_code) or "
+        "deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
     ]
     parts += [f"{n} files allowing {lint}" for lint, n in allowing.items()]
@@ -2275,6 +2281,7 @@ SELF_TEST_FILE_ALLOWS = [
     ("#![allow(non_camel_case_types)]\n", {"non_camel_case_types"}),
     ("#![allow(non_snake_case)]\n", {"non_snake_case"}),
     ("#![allow(non_upper_case_globals)]\n", {"non_upper_case_globals"}),
+    ("#![allow(unsafe_code)]\n", {"unsafe_code"}),
     (
         "#![allow(non_camel_case_types)]\n#![allow(non_snake_case)]\n",
         {"non_camel_case_types", "non_snake_case"},
@@ -2284,8 +2291,10 @@ SELF_TEST_FILE_ALLOWS = [
     ("#[allow(non_camel_case_types)]\nstruct uv_loop_t;\n", set()),
     ("#[allow(non_snake_case)]\npub fn nvim__id() {}\n", set()),
     ("#[allow(non_upper_case_globals)]\nunsafe fn apply_opts() {}\n", set()),
+    ("#[allow(unsafe_code)]\nfn f() { unsafe { g() } }\n", set()),
     # Prose about the attribute does not switch it on.
     ("//! `#![allow(non_camel_case_types)]` is what libuv's names need.\n", set()),
+    ("// Not `#![allow(unsafe_code)]`: this module is finished.\n", set()),
 ]
 # (source, expected number of lines exempted from the line cap)
 SELF_TEST_TEST_MODULE = [
@@ -2939,7 +2948,7 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_forbid, without_deny, without_casts, allowing, tree = measure()
+    stats, without_deny, without_casts, allowing, tree = measure()
     check_place_writes(tree)
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
@@ -2950,9 +2959,7 @@ def main():
     check_names(tree)
     check_perimeter(stats)
     counts = {**ledgers(), **whole_tree(stats, tree)}
-    content = render(
-        stats, counts, without_forbid, without_deny, without_casts, allowing
-    )
+    content = render(stats, counts, without_deny, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -2963,7 +2970,6 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_forbid,
             without_deny,
             without_casts,
             allowing,
@@ -2986,7 +2992,6 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_forbid,
             without_deny,
             without_casts,
             allowing,
@@ -3000,7 +3005,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, counts, without_forbid, without_deny, without_casts, allowing)}"
+        f"{summary(stats, counts, without_deny, without_casts, allowing)}"
     )
 
 
