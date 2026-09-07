@@ -52,11 +52,35 @@ const SHADA_LAST_ENTRY: u64 = kSDItemChange as u64;
 /// reference and advance both; this keeps that pair together so the callers
 /// below read as "take an array, take a string, take an integer".
 pub(crate) struct Cursor {
-    pub(crate) at: *const c_char,
-    pub(crate) left: size_t,
+    at: *const c_char,
+    left: size_t,
 }
 
 impl Cursor {
+    /// A cursor over `left` bytes at `at`.
+    ///
+    /// # Safety
+    ///
+    /// `at` must point at `left` readable bytes that outlive the cursor, and
+    /// nothing else may write them while it walks: every method below reads
+    /// through the pair without checking it, because the pair *is* the
+    /// bound. Building one out of a pointer and a length that do not
+    /// describe the same live allocation is what makes those methods --
+    /// which are safe -- unsound.
+    pub(crate) unsafe fn new(at: *const c_char, left: size_t) -> Self {
+        Cursor { at, left }
+    }
+
+    /// Where the cursor stands, for measuring how far a parse advanced.
+    pub(crate) fn at(&self) -> *const c_char {
+        self.at
+    }
+
+    /// How many bytes of the entry are still unread.
+    pub(crate) fn left(&self) -> size_t {
+        self.left
+    }
+
     /// The element count of an array, or −1 if the next token is not one.
     pub(crate) fn array(&mut self) -> ssize_t {
         // SAFETY: `at`/`left` describe a live buffer of that many bytes, and
@@ -151,10 +175,9 @@ impl Body {
     }
 
     fn cursor(&self) -> Cursor {
-        Cursor {
-            at: self.ptr,
-            left: self.len,
-        }
+        // SAFETY: `ptr`/`len` are this body's own buffer, filled by
+        // `Body::read` and released no earlier than the cursor's `&self`.
+        unsafe { Cursor::new(self.ptr, self.len) }
     }
 
     /// The bytes, as something the entry can own and `xfree` later.
@@ -453,7 +476,7 @@ pub(crate) unsafe fn shada_read_next_item(
 
         if let Disposition::VerifyOnly = disposition {
             let status = cursor.skip();
-            match shada_check_status(parse_pos, status, cursor.left) {
+            match shada_check_status(parse_pos, status, cursor.left()) {
                 kSDReadStatusSuccess => continue,
                 status => return status,
             }
@@ -502,7 +525,7 @@ unsafe fn read_unknown(
     // before the file is believed to be ShaDa at all.
     if header.fpos == 0 {
         let status = cursor.skip();
-        let checked = shada_check_status(parse_pos, status, cursor.left);
+        let checked = shada_check_status(parse_pos, status, cursor.left());
         if checked != kSDReadStatusSuccess {
             unsafe { (*entry).data = ShadaEntryData::Missing };
             return checked;

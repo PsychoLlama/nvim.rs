@@ -147,7 +147,7 @@ pub unsafe fn f_msgpackdump(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         let b: *mut Blob = blob_alloc_ret(result);
         unsafe { (*b).bv_ga.ga_data = data.data() as *mut c_void };
         unsafe { (*b).bv_ga.ga_len = data.len() as c_int };
-        unsafe { (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int };
+        unsafe { (*b).bv_ga.ga_maxlen = packer.capacity() as c_int };
     } else {
         let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };

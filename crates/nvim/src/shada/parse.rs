@@ -84,17 +84,17 @@ pub(crate) unsafe fn parse_known(
 
     let finish = trailing.and_then(|trailing| {
         for _ in 0..trailing {
-            let item_start = cursor.at;
+            let item_start = cursor.at();
             if cursor.skip() != 0 {
                 return Err(Malformed);
             }
             unsafe { push_additional_data(
                 &mut extra,
                 item_start,
-                cursor.at.offset_from_unsigned(item_start),
+                cursor.at().offset_from_unsigned(item_start),
             ) };
         }
-        if cursor.left != 0 {
+        if cursor.left() != 0 {
             malformed_entry(c"E575: Error while reading ShaDa file: item entry at position %lu additional bytes", pos);
             return Err(Malformed);
         }

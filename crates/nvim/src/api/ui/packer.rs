@@ -92,15 +92,12 @@ unsafe fn flush_event(ui: *mut RemoteUI) {
 pub(super) unsafe fn ui_alloc_buf(ui: *mut RemoteUI) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };
-    // SAFETY: the allocator hands out a block nothing else names, and it is
-    // `UI_BUF_SIZE` bytes, so its end is one past it.
-    let (start, end) = unsafe {
-        let start = alloc_block().cast::<c_char>();
-        (start, start.add(UI_BUF_SIZE))
+    // SAFETY: the allocator hands out a `UI_BUF_SIZE` block nothing else
+    // names, and the UI owns it until `ui_flush_buf` gives it away.
+    unsafe {
+        live.packer
+            .adopt(alloc_block().cast::<c_char>(), UI_BUF_SIZE)
     };
-    live.packer.startptr = start;
-    live.packer.ptr = start;
-    live.packer.endptr = end;
 }
 
 /// Makes room for one more call to `name`, opening a new event unless the
@@ -113,14 +110,14 @@ pub(super) unsafe fn ui_alloc_buf(ui: *mut RemoteUI) {
 pub(super) unsafe fn prepare_call(ui: *mut RemoteUI, name: &'static CStr) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };
-    if !live.packer.startptr.is_null() {
-        let used = live.packer.ptr.addr() - live.packer.startptr.addr();
+    if !live.packer.is_detached() {
+        let used = live.packer.used();
         if used > UI_BUF_SIZE - EVENT_BUF_SIZE || live.ncells_pending >= MAX_CELLS_PENDING {
             // SAFETY: as above.
             unsafe { ui_flush_buf(ui, false) };
         }
     }
-    if live.packer.startptr.is_null() {
+    if live.packer.is_detached() {
         // SAFETY: as above -- there is no block, whether or not one was
         // just handed away.
         unsafe { ui_alloc_buf(ui) };
@@ -137,19 +134,19 @@ pub(super) unsafe fn prepare_call(ui: *mut RemoteUI, name: &'static CStr) {
     if live.nevents_pos.is_null() {
         // The notification header, once per batch. The block has room --
         // `EVENT_BUF_SIZE` bytes are kept free for exactly this.
-        mpack_array(&mut live.packer.ptr, 3);
-        mpack_uint(&mut live.packer.ptr, 2);
-        mpack_str_small(&mut live.packer.ptr, b"redraw");
-        let pos = mpack_array_dyn16(&mut live.packer.ptr);
+        mpack_array(live.packer.cursor_mut(), 3);
+        mpack_uint(live.packer.cursor_mut(), 2);
+        mpack_str_small(live.packer.cursor_mut(), b"redraw");
+        let pos = mpack_array_dyn16(live.packer.cursor_mut());
         live.nevents_pos = pos;
         debug_assert!(live.cur_event.is_null());
     }
     // SAFETY: as above.
     unsafe { flush_event(ui) };
     live.cur_event = name.as_ptr();
-    let pos = mpack_array_dyn16(&mut live.packer.ptr);
+    let pos = mpack_array_dyn16(live.packer.cursor_mut());
     live.ncalls_pos = pos;
-    mpack_str_small(&mut live.packer.ptr, name.to_bytes());
+    mpack_str_small(live.packer.cursor_mut(), name.to_bytes());
     live.nevents += 1;
     live.ncalls = 1;
 }
@@ -200,7 +197,7 @@ pub(super) unsafe fn ui_flush_callback(packer: *mut PackerBuffer) {
 pub(super) unsafe fn ui_flush_buf(ui: *mut RemoteUI, incomplete_event: bool) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };
-    if live.packer.startptr.is_null() || live.packer.ptr == live.packer.startptr {
+    if live.packer.is_detached() || live.packer.used() == 0 {
         return;
     }
     live.incomplete_event = incomplete_event;
@@ -214,8 +211,8 @@ pub(super) unsafe fn ui_flush_buf(ui: *mut RemoteUI, incomplete_event: bool) {
         live.nevents_pos = core::ptr::null_mut();
     }
 
-    let start = live.packer.startptr;
-    let size = live.packer.ptr.addr() - start.addr();
+    let start = live.packer.start();
+    let size = live.packer.used();
     let channel_id = live.channel_id;
     // `start` is the block, whose first `size` bytes are packed; the write
     // stream owns it from here and frees it with `free_block`.
@@ -225,8 +222,7 @@ pub(super) unsafe fn ui_flush_buf(ui: *mut RemoteUI, incomplete_event: bool) {
 
     // The block belongs to the write stream now; the next event will
     // allocate another.
-    live.packer.startptr = core::ptr::null_mut();
-    live.packer.ptr = core::ptr::null_mut();
+    live.packer.release();
     live.flushed_events = true;
     live.ncells_pending = 0;
 }

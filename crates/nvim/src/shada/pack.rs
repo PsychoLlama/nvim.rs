@@ -101,7 +101,7 @@ impl Drop for Payload {
     fn drop(&mut self) {
         // SAFETY: ours, from `packer_string_buffer`, and `flush` only ever
         // reallocates it in place of this field.
-        unsafe { xfree(self.buf.startptr.cast::<c_void>()) };
+        unsafe { xfree(self.buf.start().cast::<c_void>()) };
     }
 }
 
@@ -200,15 +200,15 @@ pub(crate) unsafe fn shada_pack_entry(
     unsafe { shada_check_buffer(packer) };
     // An unknown entry keeps the type it arrived with.
     mpack_uint64(
-        unsafe { &mut (*packer).ptr },
+        unsafe { (*packer).cursor_mut() },
         match entry.data {
             ShadaEntryData::Unknown(item) => item.type_0,
             data => data.kind() as uint64_t,
         },
     );
-    mpack_uint64(unsafe { &mut (*packer).ptr }, entry.timestamp);
+    mpack_uint64(unsafe { (*packer).cursor_mut() }, entry.timestamp);
     if !packed.is_empty() {
-        mpack_uint64(unsafe { &mut (*packer).ptr }, packed.len() as uint64_t);
+        mpack_uint64(unsafe { (*packer).cursor_mut() }, packed.len() as uint64_t);
         unsafe { mpack_raw(packed.data(), packed.len(), &mut *packer) };
     }
 
@@ -227,13 +227,13 @@ pub(crate) unsafe fn shada_pack_entry(
 /// `header` must be a well-formed API dictionary, its `size` entries
 /// initialized.
 unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
-    mpack_map(&mut sbuf.ptr, header.size as uint32_t);
+    mpack_map(sbuf.cursor_mut(), header.size as uint32_t);
     for i in 0..header.size {
         let item = unsafe { *header.items.add(i) };
         unsafe { mpack_str(item.key, sbuf) };
         match item.value {
             Object::String(s) => unsafe { mpack_bin(s, sbuf) },
-            Object::Integer(n) => mpack_integer(&mut sbuf.ptr, n),
+            Object::Integer(n) => mpack_integer(sbuf.cursor_mut(), n),
             other => unreachable!("shada: header holds an object of type {}", other.kind()),
         }
     }
@@ -249,13 +249,13 @@ unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
 unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut PackerBuffer) {
     let is_search = history.histtype as c_int == HIST_SEARCH;
     mpack_array(
-        &mut sbuf.ptr,
+        sbuf.cursor_mut(),
         2 + is_search as uint32_t + unsafe { additional_data_len(entry.additional_data) },
     );
-    mpack_uint(&mut sbuf.ptr, history.histtype as uint32_t);
+    mpack_uint(sbuf.cursor_mut(), history.histtype as uint32_t);
     unsafe { mpack_bin(cstr_as_string(history.string), sbuf) };
     if is_search {
-        mpack_uint(&mut sbuf.ptr, history.sep as uint8_t as uint32_t);
+        mpack_uint(sbuf.cursor_mut(), history.sep as uint8_t as uint32_t);
     }
     unsafe { dump_additional_data(entry.additional_data, sbuf) };
 }
@@ -274,7 +274,7 @@ unsafe fn pack_variable(
 ) -> Result<(), ShaDaWriteResult> {
     let is_blob = global_var.value.v_type == VAR_BLOB;
     mpack_array(
-        &mut sbuf.ptr,
+        sbuf.cursor_mut(),
         2 + is_blob as uint32_t + unsafe { additional_data_len(entry.additional_data) },
     );
     let varname = unsafe { cstr_as_string(global_var.name) };
@@ -304,7 +304,7 @@ unsafe fn pack_variable(
     }
     if is_blob {
         mpack_check_buffer(sbuf);
-        mpack_integer(&mut sbuf.ptr, VAR_TYPE_BLOB as Integer);
+        mpack_integer(sbuf.cursor_mut(), VAR_TYPE_BLOB as Integer);
     }
     unsafe { dump_additional_data(entry.additional_data, sbuf) };
     Ok(())
@@ -318,7 +318,7 @@ unsafe fn pack_variable(
 /// at live data for the call.
 unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut PackerBuffer) {
     mpack_array(
-        &mut sbuf.ptr,
+        sbuf.cursor_mut(),
         1 + unsafe { additional_data_len(entry.additional_data) },
     );
     unsafe { mpack_bin(cstr_as_string(sub.sub), sbuf) };
@@ -364,17 +364,17 @@ unsafe fn pack_search_pattern(
         + flags.iter().filter(|(_, value, d)| value != d).count() as uint32_t
         + written(pattern.offset, default.offset)
         + unsafe { additional_data_len(entry.additional_data) };
-    mpack_map(&mut payload.buf.ptr, size);
+    mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"sp");
     unsafe { mpack_bin(pattern.pat, &mut payload.buf) };
     for (name, _, default) in flags.iter().filter(|(_, value, d)| value != d) {
         payload.key(name);
-        mpack_bool(&mut payload.buf.ptr, !default);
+        mpack_bool(payload.buf.cursor_mut(), !default);
     }
     if pattern.offset != default.offset {
         payload.key(c"so");
-        mpack_integer(&mut payload.buf.ptr, pattern.offset);
+        mpack_integer(payload.buf.cursor_mut(), pattern.offset);
     }
     unsafe { dump_additional_data(entry.additional_data, &mut payload.buf) };
 }
@@ -394,17 +394,17 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
         + written(mark.mark.col, default.mark.col)
         + written(mark.name, default.name)
         + unsafe { additional_data_len(entry.additional_data) };
-    mpack_map(&mut payload.buf.ptr, size);
+    mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"f");
     unsafe { mpack_bin(cstr_as_string(mark.fname), &mut payload.buf) };
     if mark.mark.lnum != default.mark.lnum {
         payload.key(c"l");
-        mpack_integer(&mut payload.buf.ptr, mark.mark.lnum as Integer);
+        mpack_integer(payload.buf.cursor_mut(), mark.mark.lnum as Integer);
     }
     if mark.mark.col != default.mark.col {
         payload.key(c"c");
-        mpack_integer(&mut payload.buf.ptr, mark.mark.col as Integer);
+        mpack_integer(payload.buf.cursor_mut(), mark.mark.col as Integer);
     }
     debug_assert!(
         !matches!(
@@ -415,7 +415,7 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
     );
     if mark.name != default.name {
         payload.key(c"n");
-        mpack_uint(&mut payload.buf.ptr, mark.name as uint8_t as uint32_t);
+        mpack_uint(payload.buf.cursor_mut(), mark.name as uint8_t as uint32_t);
     }
     unsafe { dump_additional_data(entry.additional_data, &mut payload.buf) };
 }
@@ -434,26 +434,26 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Pa
         + written(reg.width, default.width)
         + written(reg.is_unnamed, default.is_unnamed)
         + unsafe { additional_data_len(entry.additional_data) };
-    mpack_map(&mut payload.buf.ptr, size);
+    mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"rc");
-    mpack_array(&mut payload.buf.ptr, reg.contents_size as uint32_t);
+    mpack_array(payload.buf.cursor_mut(), reg.contents_size as uint32_t);
     for i in 0..reg.contents_size {
         unsafe { mpack_bin(*reg.contents.add(i), &mut payload.buf) };
     }
     payload.key(c"n");
-    mpack_uint(&mut payload.buf.ptr, reg.name as uint8_t as uint32_t);
+    mpack_uint(payload.buf.cursor_mut(), reg.name as uint8_t as uint32_t);
     if reg.type_0 != default.type_0 {
         payload.key(c"rt");
-        mpack_uint(&mut payload.buf.ptr, reg.type_0 as uint8_t as uint32_t);
+        mpack_uint(payload.buf.cursor_mut(), reg.type_0 as uint8_t as uint32_t);
     }
     if reg.width != default.width {
         payload.key(c"rw");
-        mpack_uint64(&mut payload.buf.ptr, reg.width as uint64_t);
+        mpack_uint64(payload.buf.cursor_mut(), reg.width as uint64_t);
     }
     if reg.is_unnamed != default.is_unnamed {
         payload.key(c"ru");
-        mpack_bool(&mut payload.buf.ptr, reg.is_unnamed);
+        mpack_bool(payload.buf.cursor_mut(), reg.is_unnamed);
     }
     unsafe { dump_additional_data(entry.additional_data, &mut payload.buf) };
 }
@@ -468,24 +468,24 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Pa
 /// at live data for the call.
 unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
     let default = DEFAULT_POS;
-    mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
+    mpack_array(payload.buf.cursor_mut(), list.size as uint32_t);
     for i in 0..list.size {
         let buffer = unsafe { *list.buffers.add(i) };
         let size = 1 // the file name is always there
             + written(buffer.pos.lnum, default.lnum)
             + written(buffer.pos.col, default.col)
             + unsafe { additional_data_len(buffer.additional_data) };
-        mpack_map(&mut payload.buf.ptr, size);
+        mpack_map(payload.buf.cursor_mut(), size);
 
         payload.key(c"f");
         unsafe { mpack_bin(cstr_as_string(buffer.fname), &mut payload.buf) };
         if buffer.pos.lnum != default.lnum {
             payload.key(c"l");
-            mpack_uint64(&mut payload.buf.ptr, buffer.pos.lnum as uint64_t);
+            mpack_uint64(payload.buf.cursor_mut(), buffer.pos.lnum as uint64_t);
         }
         if buffer.pos.col != default.col {
             payload.key(c"c");
-            mpack_uint64(&mut payload.buf.ptr, buffer.pos.col as uint64_t);
+            mpack_uint64(payload.buf.cursor_mut(), buffer.pos.col as uint64_t);
         }
         unsafe { dump_additional_data(buffer.additional_data, &mut payload.buf) };
     }
@@ -503,14 +503,15 @@ pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> Packer
     if unsafe { file_space(file) } < FREE_SPACE {
         unsafe { file_flush(file) };
     }
-    PackerBuffer {
-        startptr: unsafe { (*file).buffer },
-        ptr: unsafe { (*file).write_pos },
-        endptr: unsafe { (*file).buffer.add(ARENA_BLOCK_SIZE as usize) },
-        anydata: file.cast::<c_void>(),
-        anyint: 0,
-        packer_flush: Some(flush_file_buffer),
-    }
+    // SAFETY: the caller's file is open, so its buffer is the
+    // `ARENA_BLOCK_SIZE` block the descriptor owns for as long as it lives,
+    // and `write_pos` is a position inside it.
+    let (buffer, write_pos) = unsafe { ((*file).buffer, (*file).write_pos) };
+    let block = ARENA_BLOCK_SIZE as usize;
+    let mut packer = unsafe { PackerBuffer::new(buffer, block, Some(flush_file_buffer)) };
+    packer.anydata = file.cast::<c_void>();
+    packer.set_cursor(write_pos);
+    packer
 }
 
 /// Hand what has been packed to the file, and start again at whatever it
@@ -521,7 +522,7 @@ pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> Packer
 /// `buffer` must point at a live `PackerBuffer`, unaliased for the call.
 unsafe fn flush_file_buffer(buffer: *mut PackerBuffer) {
     let fd = unsafe { (*buffer).anydata.cast::<FileDescriptor>() };
-    unsafe { (*fd).write_pos = (*buffer).ptr };
+    unsafe { (*fd).write_pos = (*buffer).cursor() };
     unsafe { (*buffer).anyint = file_flush(fd) as int64_t };
-    unsafe { (*buffer).ptr = (*fd).write_pos };
+    unsafe { (*buffer).set_cursor((*fd).write_pos) };
 }

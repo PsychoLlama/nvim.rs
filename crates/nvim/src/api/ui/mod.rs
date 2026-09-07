@@ -115,7 +115,7 @@ unsafe fn remote_ui_destroy(ui: *mut RemoteUI) {
     // The pending block, if the UI went away mid-batch, and the terminal
     // name an option set: the two allocations the struct itself owns.
     // SAFETY: both are this UI's own, and it is about to be dropped.
-    unsafe { xfree(ui.packer.startptr.cast()) };
+    unsafe { xfree(ui.packer.start().cast()) };
     // SAFETY: as above.
     unsafe { xfree(ui.term_name.cast()) };
 }
@@ -273,14 +273,7 @@ impl RemoteUI {
             stdin_tty: false,
             stdout_tty: false,
             channel_id,
-            packer: PackerBuffer {
-                startptr: core::ptr::null_mut(),
-                ptr: core::ptr::null_mut(),
-                endptr: core::ptr::null_mut(),
-                anydata: core::ptr::null_mut(),
-                anyint: 0,
-                packer_flush: Some(packer::ui_flush_callback),
-            },
+            packer: PackerBuffer::detached(core::ptr::null_mut(), Some(packer::ui_flush_callback)),
             cur_event: core::ptr::null(),
             nevents_pos: core::ptr::null_mut(),
             ncalls_pos: core::ptr::null_mut(),

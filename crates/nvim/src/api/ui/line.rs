@@ -143,7 +143,7 @@ unsafe fn raw_line_linegrid(
         // Saturating because an overfull buffer must flush rather
         // than wrap to "plenty of room", which is what C's unsigned
         // subtraction would have done.
-        let used = live.packer.ptr.addr() - live.packer.startptr.addr();
+        let used = live.packer.used();
         if UI_BUF_SIZE.saturating_sub(used) < 2 * MAX_CELL_SIZE + 1
             || live.ncells_pending >= MAX_CELLS_PENDING
         {
@@ -162,7 +162,7 @@ unsafe fn raw_line_linegrid(
             // `lenpos` is this event's placeholder, in the block still
             // being packed into.
             mpack_be16(&mut lenpos, nelem);
-            mpack_bool(&mut live.packer.ptr, false);
+            mpack_bool(live.packer.cursor_mut(), false);
             // SAFETY: `ui` is live.
             unsafe { ui_flush_buf(ui, false) };
             // SAFETY: as above.
@@ -183,20 +183,21 @@ unsafe fn raw_line_linegrid(
         };
         nelem += 1;
         // The check above left room for a whole cell.
-        mpack_array(&mut live.packer.ptr, fields);
+        mpack_array(live.packer.cursor_mut(), fields);
         // The text's length is only known once it is written, so the
         // fixstr header goes down first and is patched in place.
-        let size_byte = live.packer.ptr;
+        let size_byte = live.packer.cursor();
         // SAFETY: as above -- the reserve covers the header and the text.
         unsafe {
-            live.packer.ptr = live.packer.ptr.add(1);
-            let len = schar_get_adv(&raw mut live.packer.ptr, text);
+            let after_header = live.packer.cursor().add(1);
+            live.packer.set_cursor(after_header);
+            let len = schar_get_adv(live.packer.cursor_mut(), text);
             *size_byte = (0xa0 | len) as c_char;
         }
         if fields >= 2 {
-            mpack_uint(&mut live.packer.ptr, hl as u32);
+            mpack_uint(live.packer.cursor_mut(), hl as u32);
             if fields >= 3 {
-                mpack_uint(&mut live.packer.ptr, repeat);
+                mpack_uint(live.packer.cursor_mut(), repeat);
             }
         }
 
@@ -221,7 +222,7 @@ unsafe fn raw_line_linegrid(
     // `lenpos` is the last event's placeholder, and the reserve covers the
     // closing byte.
     mpack_be16(&mut lenpos, nelem);
-    mpack_bool(&mut live.packer.ptr, flags & kLineFlagWrap != 0);
+    mpack_bool(live.packer.cursor_mut(), flags & kLineFlagWrap != 0);
 }
 
 /// Writes a `grid_line` argument list up to its cell array, returning where
@@ -238,11 +239,11 @@ unsafe fn open_line(
 ) -> *mut c_char {
     // SAFETY: the caller's promise -- `ui` is live with room for this.
     let mut live = unsafe { Ui::new(ui) };
-    mpack_array(&mut live.packer.ptr, 5);
+    mpack_array(live.packer.cursor_mut(), 5);
     for value in [grid, row, startcol] {
-        mpack_uint(&mut live.packer.ptr, value as u32);
+        mpack_uint(live.packer.cursor_mut(), value as u32);
     }
-    mpack_array_dyn16(&mut live.packer.ptr)
+    mpack_array_dyn16(live.packer.cursor_mut())
 }
 
 /// Writes a cell that clears `repeat` columns with `attr`.
@@ -253,10 +254,10 @@ unsafe fn open_line(
 unsafe fn push_clear(ui: *mut RemoteUI, attr: Integer, repeat: u32) {
     // SAFETY: the caller's promise -- `ui` is live with room for this.
     let mut live = unsafe { Ui::new(ui) };
-    mpack_array(&mut live.packer.ptr, 3);
-    mpack_str_small(&mut live.packer.ptr, b" ");
-    mpack_uint(&mut live.packer.ptr, attr as u32);
-    mpack_uint(&mut live.packer.ptr, repeat);
+    mpack_array(live.packer.cursor_mut(), 3);
+    mpack_str_small(live.packer.cursor_mut(), b" ");
+    mpack_uint(live.packer.cursor_mut(), attr as u32);
+    mpack_uint(live.packer.cursor_mut(), repeat);
 }
 
 /// [`remote_ui_raw_line`] for a UI on the pre-`ext_linegrid` protocol.

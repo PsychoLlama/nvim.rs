@@ -49,7 +49,7 @@ pub unsafe fn serialize_request(
     // SAFETY: the caller's channels, method name and argument array.
     let mut packer = unsafe { packer_buffer_init(chans) };
     let is_request = request_id != 0;
-    mpack_array(&mut packer.ptr, if is_request { 4 } else { 3 });
+    mpack_array(packer.cursor_mut(), if is_request { 4 } else { 3 });
     let kind = if is_request {
         kMessageTypeRequest
     } else {
@@ -57,7 +57,7 @@ pub unsafe fn serialize_request(
     };
     unsafe { put_byte(&mut packer, kind.to_le_bytes()[0].cast_signed()) };
     if is_request {
-        mpack_uint(&mut packer.ptr, request_id);
+        mpack_uint(packer.cursor_mut(), request_id);
     }
     unsafe { mpack_str(cstr_as_string(method), &mut packer) };
     unsafe { mpack_object_array(args, &mut packer) };
@@ -95,13 +95,13 @@ pub unsafe fn serialize_response(
     // SAFETY: the caller's channel, error message and result object; the
     // packer writes into a block it owns.
     let mut packer = unsafe { packer_buffer_init(slice::from_mut(&mut chan)) };
-    mpack_array(&mut packer.ptr, 4);
+    mpack_array(packer.cursor_mut(), 4);
     let kind = kMessageTypeResponse.to_le_bytes()[0].cast_signed();
     unsafe { put_byte(&mut packer, kind) };
-    mpack_uint(&mut packer.ptr, response_id);
+    mpack_uint(packer.cursor_mut(), response_id);
     if errored {
-        mpack_array(&mut packer.ptr, 2);
-        mpack_integer(&mut packer.ptr, Integer::from(err_type));
+        mpack_array(packer.cursor_mut(), 2);
+        mpack_integer(packer.cursor_mut(), Integer::from(err_type));
         // SAFETY: the caller's error slot, whose message is a live string.
         let why = unsafe { cstr_as_string(err.message_or_empty().as_ptr()) };
         // SAFETY: `packer` is this frame's own.
@@ -173,8 +173,8 @@ mod wire {
 /// guarantees.
 unsafe fn put_byte(packer: &mut PackerBuffer, byte: c_char) {
     // SAFETY: the caller's guarantee of room.
-    unsafe { *packer.ptr = byte };
-    packer.ptr = unsafe { packer.ptr.add(1) };
+    unsafe { *packer.cursor() = byte };
+    packer.set_cursor(unsafe { packer.cursor().add(1) });
 }
 
 /// Opens a packer buffer whose flush hook writes to every channel in `chans`.
@@ -197,14 +197,13 @@ unsafe fn packer_buffer_init(chans: &mut [*mut Channel]) -> PackerBuffer {
     // SAFETY: the block allocator takes no arguments and hands back a fresh
     // `ARENA_BLOCK_SIZE` block.
     let startptr = unsafe { alloc_block() }.cast::<c_char>();
-    PackerBuffer {
-        startptr,
-        ptr: startptr,
-        endptr: startptr.wrapping_add(ARENA_BLOCK_SIZE),
-        anydata: chans.as_mut_ptr().cast::<c_void>(),
-        anyint: i64::try_from(chans.len()).expect("addressee count fits an i64"),
-        packer_flush: Some(channel_flush_callback),
-    }
+    // SAFETY: the block is `ARENA_BLOCK_SIZE` bytes nothing else names, and
+    // the caller's promise keeps `chans` alive for the packer's lifetime.
+    let mut packer =
+        unsafe { PackerBuffer::new(startptr, ARENA_BLOCK_SIZE, Some(channel_flush_callback)) };
+    packer.anydata = chans.as_mut_ptr().cast::<c_void>();
+    packer.anyint = i64::try_from(chans.len()).expect("addressee count fits an i64");
+    packer
 }
 
 /// The channels a packer was opened for, as [`packer_buffer_init`] stashed
@@ -228,16 +227,16 @@ unsafe fn packer_channels<'a>(packer: &PackerBuffer) -> &'a mut [*mut Channel] {
 /// # Safety
 /// [`packer_channels`]'s contract.
 unsafe fn packer_buffer_finish(packer: &mut PackerBuffer) {
-    let len = packer.ptr.addr() - packer.startptr.addr();
+    let len = packer.used();
     if len == 0 {
         // SAFETY: the block `packer_buffer_init` allocated, never written to.
-        unsafe { free_block(packer.startptr.cast::<c_void>()) };
+        unsafe { free_block(packer.start().cast::<c_void>()) };
         return;
     }
     // SAFETY: `startptr..ptr` is the block this packer filled, and the write
     // buffer takes one reference per addressee.
     let chans = unsafe { packer_channels(packer) };
-    let buf = wstream_new_buffer(packer.startptr, len, chans.len(), Some(free_block));
+    let buf = wstream_new_buffer(packer.start(), len, chans.len(), Some(free_block));
     for &chan in chans.iter() {
         unsafe { channel_write(Chan::new(chan), buf) };
     }

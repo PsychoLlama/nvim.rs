@@ -565,7 +565,7 @@
 {"path":"neovim::types::OK","kind":"const","file":"crates/nvim/src/types/vim.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::types::Object","kind":"enum","file":"crates/nvim/src/types/api.rs","tests":["crates/nvim/tests/unit/packer.rs","crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::types::OptInt","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/indent.rs"]}
-{"path":"neovim::types::PackerBuffer","kind":"type","file":"crates/nvim/src/types/packer.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
+{"path":"neovim::types::PackerBuffer","kind":"struct","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::types::ParserHighlight","kind":"struct","file":"crates/nvim/src/types/misc.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::types::ParserHighlightChunk","kind":"struct","file":"crates/nvim/src/types/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}
 {"path":"neovim::types::ParserLine","kind":"struct","file":"crates/nvim/src/types/parser.rs","tests":["crates/nvim/tests/unit/expressions.rs","crates/nvim/tests/unit/parser.rs"]}

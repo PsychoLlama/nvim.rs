@@ -6,20 +6,12 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// the msgpack packer's buffer type, named as the codec names it.
-#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
-use super::*;
-
-pub type PackerBuffer = packer_buffer_t;
-pub type PackerBufferFlush = Option<unsafe fn(*mut PackerBuffer) -> ()>;
-pub struct packer_buffer_t {
-    pub startptr: *mut ::core::ffi::c_char,
-    pub ptr: *mut ::core::ffi::c_char,
-    pub endptr: *mut ::core::ffi::c_char,
-    pub anydata: *mut ::core::ffi::c_void,
-    pub anyint: int64_t,
-    pub packer_flush: PackerBufferFlush,
-}
+//
+// The packer's buffer is the exception: building one is an unsafe step
+// (three raw pointers that have to describe one live allocation), so the
+// type lives next to the codec that establishes and trusts that invariant,
+// and this module only names it.
+pub use crate::msgpack_rpc::packer::{PackerBuffer, PackerBufferFlush};
