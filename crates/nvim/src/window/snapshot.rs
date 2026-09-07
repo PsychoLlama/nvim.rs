@@ -162,6 +162,17 @@ fn clear_snapshot_rec(fr: FrameRef) {
     free_frame(fr);
 }
 
+/// The window a saved leaf remembers, if it is **still on this tab page's
+/// window list**.
+///
+/// The C's `win_valid(sn->fr_win)`, and deliberately not `FrameRef::win`: a
+/// snapshot's leaf names a window that may since have been closed *or moved
+/// to another tab page*, and only the list walk refuses the second. The live
+/// tree's leaves cannot be either, which is why they use the plain accessor.
+fn snapshot_win(sn: FrameRef) -> Option<Win> {
+    sn.fr_win.filter(|&win| win_valid(win)).and_then(WinId::get)
+}
+
 /// The window a saved tree remembers as the current one: the last leaf that
 /// named one, searching `fr_next` before `fr_child`.
 fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
@@ -175,7 +186,7 @@ fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
     {
         return Some(wp);
     }
-    ft.win()
+    snapshot_win(ft)
 }
 
 /// The window the snapshot in slot `idx` of the current tab page remembers as
@@ -226,10 +237,7 @@ fn snapshot_matches(sn: FrameRef, fr: FrameRef) -> bool {
     {
         return false;
     }
-    // The window a saved leaf remembers is still there. An identity, so
-    // this asks about the window rather than about whatever the allocator
-    // has since put at its address -- which is what `window_at` had to do.
-    sn.fr_win.is_none_or(|win| win.get().is_some())
+    sn.fr_win.is_none() || snapshot_win(sn).is_some()
 }
 
 /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
@@ -242,7 +250,7 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
     if fr.fr_layout as c_int == FR_LEAF {
         new_height(fr, fr.fr_height, false, false, false);
         new_width(fr, fr.fr_width, false, false);
-        wp = sn.win();
+        wp = snapshot_win(sn);
     }
     if let (Some(sn_next), Some(fr_next)) = (sn.next(), fr.next()) {
         wp = restore_snapshot_rec(sn_next, fr_next).or(wp);
