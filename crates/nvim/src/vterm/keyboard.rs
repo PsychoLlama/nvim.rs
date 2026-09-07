@@ -352,6 +352,9 @@ unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
     unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod_0: VTermModifier) {
     // SAFETY: the caller hands over a live terminal that has a state.
@@ -360,6 +363,9 @@ pub unsafe extern "C" fn vterm_keyboard_unichar(vt: *mut VTerm, c: uint32_t, mod
     unsafe { send(vt, encode_unichar(c, mod_0, modes)) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_key(vt: *mut VTerm, key: VTermKey, mod_0: VTermModifier) {
     if key == VTERM_KEY_NONE {
@@ -393,12 +399,18 @@ unsafe fn push_paste_marker(vt: *mut VTerm, body: &[u8]) {
     unsafe { send(vt, report) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_start_paste(vt: *mut VTerm) {
     // SAFETY: forwarded to this function's own caller.
     unsafe { push_paste_marker(vt, b"200~") };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_keyboard_end_paste(vt: *mut VTerm) {
     // SAFETY: forwarded to this function's own caller.

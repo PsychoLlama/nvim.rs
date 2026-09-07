@@ -402,6 +402,11 @@ impl Screen {
     }
 }
 
+/// # Safety
+///
+/// `fields` must point at a live `VTermStateFields`, unaliased for the call.
+/// `user` must be the payload this callback was registered with, live for the
+/// call.
 pub(super) unsafe extern "C" fn resize(
     new_rows: c_int,
     new_cols: c_int,

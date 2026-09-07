@@ -157,6 +157,10 @@ pub unsafe fn vterm_state_free(state: *mut VTermState) {
 }
 
 /// The terminal's state machine, created and wired to the parser on first ask.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_obtain_state(vt: *mut VTerm) -> *mut VTermState {
     // SAFETY: the caller promises `vt` is a live terminal. Nothing is
@@ -193,6 +197,11 @@ static PARSER_CALLBACKS: VTermParserCallbacks = VTermParserCallbacks {
 /// Decodes a run of input bytes through the live character set and prints the
 /// graphemes it yields. Returns how many input bytes were consumed, which is
 /// short of `len` when the run ends part-way through a sequence.
+///
+/// # Safety
+///
+/// `bytes` must point at `len` readable bytes. `user` must be the payload
+/// this callback was registered with, live for the call.
 unsafe extern "C" fn on_text(bytes: *const c_char, len: size_t, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -262,6 +271,10 @@ unsafe extern "C" fn on_text(bytes: *const c_char, len: size_t, user: *mut c_voi
     eaten as c_int
 }
 
+/// # Safety
+///
+/// `user` must be the payload this callback was registered with, live for the
+/// call.
 unsafe extern "C" fn on_control(control: uint8_t, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -276,6 +289,10 @@ unsafe extern "C" fn on_control(control: uint8_t, user: *mut c_void) -> c_int {
     }
 }
 
+/// # Safety
+///
+/// `bytes` must point at `len` readable bytes. `user` must be the payload
+/// this callback was registered with, live for the call.
 unsafe extern "C" fn on_escape(bytes: *const c_char, len: size_t, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed, and
     // `bytes`/`len` is the sequence it gathered.
@@ -284,6 +301,12 @@ unsafe extern "C" fn on_escape(bytes: *const c_char, len: size_t, user: *mut c_v
     text::escape(state, sequence)
 }
 
+/// # Safety
+///
+/// `leader` must point at a NUL-terminated string. `args` must point at a
+/// writable `long` the caller owns. `intermed` must point at a NUL-terminated
+/// string. `user` must be the payload this callback was registered with, live
+/// for the call.
 unsafe extern "C" fn on_csi(
     leader: *const c_char,
     args: *const c_long,
@@ -324,6 +347,12 @@ unsafe extern "C" fn on_csi(
 
 /// Upstream offers every OSC to the fallback, even the ones it handled
 /// itself, and reports only what the fallback made of it.
+///
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 unsafe extern "C" fn on_osc(command: c_int, frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -336,6 +365,12 @@ unsafe extern "C" fn on_osc(command: c_int, frag: VTermStringFragment, user: *mu
     }
 }
 
+/// # Safety
+///
+/// `command` must point at a NUL-terminated string. `frag` must be an
+/// initialized `VTermStringFragment` whose pointer fields point at live data
+/// for the call. `user` must be the payload this callback was registered
+/// with, live for the call.
 unsafe extern "C" fn on_dcs(
     command: *const c_char,
     commandlen: size_t,
@@ -358,6 +393,11 @@ unsafe extern "C" fn on_dcs(
     }
 }
 
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 // APC, PM and SOS carry nothing this terminal understands, so each only
 // reaches for its own fallback.
 unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
@@ -371,6 +411,11 @@ unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_i
     }
 }
 
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 unsafe extern "C" fn on_pm(frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -382,6 +427,11 @@ unsafe extern "C" fn on_pm(frag: VTermStringFragment, user: *mut c_void) -> c_in
     }
 }
 
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 unsafe extern "C" fn on_sos(frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -393,6 +443,10 @@ unsafe extern "C" fn on_sos(frag: VTermStringFragment, user: *mut c_void) -> c_i
     }
 }
 
+/// # Safety
+///
+/// `user` must be the payload this callback was registered with, live for the
+/// call.
 unsafe extern "C" fn on_resize(rows: c_int, cols: c_int, user: *mut c_void) -> c_int {
     // SAFETY: the parser hands back what `vterm_obtain_state` installed.
     let state = unsafe { state_of(user) };
@@ -429,12 +483,20 @@ unsafe extern "C" fn on_resize(rows: c_int, cols: c_int, user: *mut c_void) -> c
 
 // ---------------------------------------------------------------- public API
 
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_reset(state: *mut VTermState, hard: c_int) {
     // SAFETY: the caller promises `state` is a live state machine.
     mode::reset(unsafe { &mut *state }, hard != 0);
 }
 
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
+/// `callbacks` must point at a live `VTermStateCallbacks`. `user` must be the
+/// payload this callback was registered with, live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_callbacks(
     state: *mut VTermState,
@@ -456,6 +518,11 @@ pub unsafe extern "C" fn vterm_state_set_callbacks(
     }
 }
 
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
+/// `fallbacks` must point at a live `VTermStateFallbacks`. `user` must be the
+/// payload this callback was registered with, live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_unrecognised_fallbacks(
     state: *mut VTermState,
@@ -475,6 +542,11 @@ pub unsafe extern "C" fn vterm_state_set_unrecognised_fallbacks(
 /// Applies a terminal property, offering it to the consumer first, which may
 /// refuse it. Refusal matters most for the alternate screen: the state must
 /// not believe it switched if the screen did not.
+///
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call. `val`
+/// must point at a live `VTermValue`, unaliased for the call.
 pub unsafe fn vterm_state_set_termprop(
     state: *mut VTermState,
     prop: VTermProp,
@@ -538,6 +610,10 @@ pub unsafe fn vterm_state_set_termprop(
 }
 
 /// Reports that the terminal window gained focus, if the host asked to hear.
+///
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_focus_in(state: *mut VTermState) {
     // SAFETY: the caller promises `state` is a live state machine.
@@ -545,12 +621,19 @@ pub unsafe extern "C" fn vterm_state_focus_in(state: *mut VTermState) {
 }
 
 /// Reports that the terminal window lost focus, if the host asked to hear.
+///
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_focus_out(state: *mut VTermState) {
     // SAFETY: the caller promises `state` is a live state machine.
     unsafe { &mut *state }.report_focus(b'O');
 }
 
+/// # Safety
+///
+/// `state` must point at a live `VTermState`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_get_lineinfo(
     state: *const VTermState,
@@ -563,6 +646,13 @@ pub unsafe extern "C" fn vterm_state_get_lineinfo(
 
 /// Installs the consumer's selection handling, allocating the staging buffer
 /// the decoder chunks through when the consumer did not supply one.
+///
+/// # Safety
+///
+/// `state` must point at a live `VTermState`, unaliased for the call.
+/// `callbacks` must point at a live `VTermSelectionCallbacks`. `user` must be
+/// the payload this callback was registered with, live for the call. `buffer`
+/// must point at a NUL-terminated string, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_state_set_selection_callbacks(
     state: *mut VTermState,

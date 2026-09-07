@@ -372,6 +372,10 @@ fn pending(input: &[u8], start: Option<usize>, pos: usize) -> &[u8] {
     }
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call. `bytes` must
+/// point at `len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_input_write(
     vt: *mut VTerm,
@@ -693,6 +697,11 @@ pub unsafe extern "C" fn vterm_input_write(
     len
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call. `callbacks`
+/// must point at a live `VTermParserCallbacks`. `user` must be the payload
+/// this callback was registered with, live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_parser_set_callbacks(
     vt: *mut VTerm,

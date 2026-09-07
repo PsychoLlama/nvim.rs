@@ -57,7 +57,7 @@ should move out of the module rather than be carved out of the list.
 | `cjson/lua_cjson/`         |     3 |       292 | lua-cjson: a Lua C module, same stack.                                                                                                            |
 | `event/`                   |    11 |       969 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                      |
 | `os/`                      |    21 |     2,419 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                               |
-| `vterm/`                   |    10 |       292 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                          |
+| `vterm/`                   |    11 |       292 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                          |
 | `terminal/`                |     7 |       254 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                           |
 | `tui/`                     |    14 |     1,236 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                       |
 | `xdiff/`                   |     1 |        40 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                    |

@@ -25,16 +25,17 @@
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
 
+mod callbacks;
 pub mod resize;
 
 use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
-use self::resize::{realloc_sb_buffer, resize};
+use self::resize::realloc_sb_buffer;
 use crate::types::{
     ScreenCell, ScreenPen, VTerm, VTermAttr, VTermColor, VTermDamageSize, VTermGlyphInfo,
     VTermLineInfo, VTermPos, VTermProp, VTermRect, VTermScreen, VTermScreenCallbacks,
-    VTermScreenCell, VTermStateCallbacks, VTermStateFallbacks, VTermValue, size_t,
+    VTermScreenCell, VTermStateFallbacks, VTermValue, size_t,
 };
 use crate::vterm::cell::{SCHAR_CONTINUATION, blank_cells, erased_pen, export_pen};
 use crate::vterm::damage::{Damage, NO_RECT, follow_scroll, intersects, merge_damage};
@@ -195,6 +196,10 @@ impl Screen {
 // ------------------------------------------------------------ the cell grid
 
 /// The cell at `row`/`col`, or null outside the grid.
+///
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn getcell(
     screen: *const VTermScreen,
@@ -291,7 +296,8 @@ impl Screen {
         if self.pending_scrollrect.start_row != NO_RECT {
             let (region, downward) = (self.pending_scrollrect, self.pending_scroll_downward);
             let (rightward, user) = (self.pending_scroll_rightward, self.0.cast::<c_void>());
-            let (moved, erased): Handlers = (Some(moverect_user), Some(erase_user));
+            let (moved, erased): Handlers =
+                (Some(callbacks::moverect_user), Some(callbacks::erase_user));
             // SAFETY: the scroll only calls back into those two handlers,
             // which take the `user` pointer this screen is.
             unsafe { vterm_scroll_rect(region, downward, rightward, moved, erased, user) };
@@ -306,157 +312,6 @@ impl Screen {
 }
 
 // -------------------------------------------------------- state callbacks
-
-unsafe extern "C" fn putglyph(
-    info: *mut VTermGlyphInfo,
-    pos: VTermPos,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed and
-    // owns the glyph for the length of the call.
-    let (mut screen, info) = unsafe { (Screen::of(user), &*info) };
-    screen.put_glyph(info, pos)
-}
-
-unsafe extern "C" fn movecursor(
-    pos: VTermPos,
-    oldpos: VTermPos,
-    visible: c_int,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.report(
-        |host| host.movecursor,
-        // SAFETY: the host's own callback, reached with nothing borrowed.
-        |movecursor, data| unsafe { movecursor(pos, oldpos, visible, data) },
-        0,
-    )
-}
-
-unsafe extern "C" fn setpenattr(attr: VTermAttr, val: *mut VTermValue, user: *mut c_void) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed and
-    // owns the value for the length of the call.
-    let (mut screen, val) = unsafe { (Screen::of(user), &*val) };
-    screen.set_pen_attr(attr, val)
-}
-
-unsafe extern "C" fn settermprop(
-    prop: VTermProp,
-    val: *mut VTermValue,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: as for `setpenattr`; the raw value is passed on to the host,
-    // which is why it is kept alongside the boolean arm.
-    let (mut screen, boolean) = unsafe { (Screen::of(user), (*val).boolean) };
-    screen.set_termprop(prop, boolean, val)
-}
-
-unsafe extern "C" fn bell(user: *mut c_void) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.report(
-        |host| host.bell,
-        // SAFETY: the host's own callback, reached with nothing borrowed.
-        |bell, data| unsafe { bell(data) },
-        0,
-    )
-}
-
-unsafe extern "C" fn theme(dark: *mut bool, user: *mut c_void) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed and
-    // owns the flag for the length of the call.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.report(
-        |host| host.theme,
-        // SAFETY: the host's own callback, reached with nothing borrowed.
-        |theme, data| unsafe { theme(dark, data) },
-        1,
-    )
-}
-
-unsafe extern "C" fn sb_clear(user: *mut c_void) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed.
-    let mut screen = unsafe { Screen::of(user) };
-    let cleared = screen.report(
-        |host| host.sb_clear,
-        // SAFETY: the host's own callback, reached with nothing borrowed.
-        |sb_clear, data| unsafe { sb_clear(data) },
-        0,
-    );
-    (cleared != 0) as c_int
-}
-
-unsafe extern "C" fn setlineinfo(
-    row: c_int,
-    newinfo: *const VTermLineInfo,
-    oldinfo: *const VTermLineInfo,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed and
-    // owns both line infos for the length of the call.
-    let (mut screen, new, old) = unsafe { (Screen::of(user), &*newinfo, &*oldinfo) };
-    screen.set_lineinfo(row, new, old)
-}
-
-unsafe extern "C" fn moverect_internal(
-    dest: VTermRect,
-    src: VTermRect,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: `vterm_scroll_rect` passes on the pointer it was handed, which
-    // is the screen this callback was installed for.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.move_cells(dest, src);
-    1
-}
-
-/// Tells the host about a move it may be able to perform itself, falling back
-/// to reporting the destination as damaged.
-unsafe extern "C" fn moverect_user(dest: VTermRect, src: VTermRect, user: *mut c_void) -> c_int {
-    // SAFETY: as for `moverect_internal`.
-    let mut screen = unsafe { Screen::of(user) };
-    if !screen.report_moverect(dest, src) {
-        screen.damage(dest);
-    }
-    1
-}
-
-unsafe extern "C" fn erase_internal(rect: VTermRect, selective: c_int, user: *mut c_void) -> c_int {
-    // SAFETY: as for `moverect_internal`.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.erase_cells(rect, selective != 0);
-    1
-}
-
-/// The reporting half of an erase: the cells themselves are another pass.
-unsafe extern "C" fn erase_user(rect: VTermRect, _selective: c_int, user: *mut c_void) -> c_int {
-    // SAFETY: as for `moverect_internal`.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.damage(rect);
-    1
-}
-
-unsafe extern "C" fn erase(rect: VTermRect, selective: c_int, user: *mut c_void) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.erase_cells(rect, selective != 0);
-    screen.damage(rect);
-    1
-}
-
-unsafe extern "C" fn scrollrect(
-    region: VTermRect,
-    downward: c_int,
-    rightward: c_int,
-    user: *mut c_void,
-) -> c_int {
-    // SAFETY: the state hands back the pointer `screen_new` installed.
-    let mut screen = unsafe { Screen::of(user) };
-    screen.scroll_rect(region, downward, rightward);
-    1
-}
-
 // ------------------------------------------------- painting, moving, erasing
 
 impl Screen {
@@ -685,13 +540,17 @@ impl Screen {
     /// already pending.
     fn scroll_rect(&mut self, region: VTermRect, downward: c_int, rightward: c_int) {
         let user = self.0.cast::<c_void>();
-        let (moved, erased): Handlers = (Some(moverect_internal), Some(erase_internal));
+        let (moved, erased): Handlers = (
+            Some(callbacks::moverect_internal),
+            Some(callbacks::erase_internal),
+        );
         if self.damage_merge != VTERM_DAMAGE_SCROLL {
             // SAFETY: the scroll only calls back into the handlers it is
             // given, which take the `user` pointer this screen is.
             unsafe { vterm_scroll_rect(region, downward, rightward, moved, erased, user) };
             self.flush_damage();
-            let (moved, erased): Handlers = (Some(moverect_user), Some(erase_user));
+            let (moved, erased): Handlers =
+                (Some(callbacks::moverect_user), Some(callbacks::erase_user));
             // SAFETY: as above, for the reporting pass.
             unsafe { vterm_scroll_rect(region, downward, rightward, moved, erased, user) };
             return;
@@ -720,22 +579,6 @@ impl Screen {
         }
     }
 }
-
-static STATE_CALLBACKS: VTermStateCallbacks = VTermStateCallbacks {
-    putglyph: Some(putglyph),
-    movecursor: Some(movecursor),
-    scrollrect: Some(scrollrect),
-    moverect: None,
-    erase: Some(erase),
-    initpen: None,
-    setpenattr: Some(setpenattr),
-    settermprop: Some(settermprop),
-    bell: Some(bell),
-    resize: Some(resize),
-    theme: Some(theme),
-    setlineinfo: Some(setlineinfo),
-    sb_clear: Some(sb_clear),
-};
 
 // ------------------------------------------------------------ the interface
 
@@ -775,11 +618,15 @@ unsafe fn screen_new(vt: *mut VTerm) -> *mut VTermScreen {
     realloc_sb_buffer(&mut screen, cols);
     // SAFETY: the table is static and the data pointer is the screen just
     // built, which outlives the state it is installed in.
-    unsafe { vterm_state_set_callbacks(state, &raw const STATE_CALLBACKS, raw.cast()) };
+    unsafe { vterm_state_set_callbacks(state, &raw const callbacks::STATE_CALLBACKS, raw.cast()) };
     raw
 }
 
 /// The terminal's screen, creating it on first use.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_obtain_screen(vt: *mut VTerm) -> *mut VTermScreen {
     // SAFETY: the caller promised a live terminal. The read and the write are
@@ -817,6 +664,9 @@ pub unsafe fn vterm_screen_free(screen: *mut VTermScreen) {
     }
 }
 
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_reset(screen: *mut VTermScreen, hard: c_int) {
     // SAFETY: the caller promised a live screen.
@@ -832,6 +682,11 @@ pub unsafe extern "C" fn vterm_screen_reset(screen: *mut VTermScreen, hard: c_in
 
 /// Copies the cell at `pos` into its reported form. Returns 0 for a position
 /// outside the screen.
+///
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`. `cell` must point at a live
+/// `VTermScreenCell`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_get_cell(
     screen: *const VTermScreen,
@@ -866,6 +721,9 @@ impl Screen {
     }
 }
 
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_enable_reflow(screen: *mut VTermScreen, reflow: bool) {
     // SAFETY: the caller promised a live screen.
@@ -874,6 +732,10 @@ pub unsafe extern "C" fn vterm_screen_enable_reflow(screen: *mut VTermScreen, re
 }
 
 /// Allocates the alternate screen buffer, which the terminal starts without.
+///
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_enable_altscreen(screen: *mut VTermScreen, altscreen: c_int) {
     // SAFETY: the caller promised a live screen.
@@ -888,6 +750,11 @@ pub unsafe extern "C" fn vterm_screen_enable_altscreen(screen: *mut VTermScreen,
     }
 }
 
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`, unaliased for the call.
+/// `callbacks` must point at a live `VTermScreenCallbacks`. `user` must be
+/// the payload this callback was registered with, live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_set_callbacks(
     screen: *mut VTermScreen,
@@ -938,6 +805,11 @@ pub unsafe fn vterm_screen_set_damage_merge(screen: *mut VTermScreen, size: VTer
 }
 
 /// [`convert_color_to_rgb`] against a screen rather than a state.
+///
+/// # Safety
+///
+/// `screen` must point at a live `VTermScreen`. `col` must point at a live
+/// `VTermColor`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_screen_convert_color_to_rgb(
     screen: *const VTermScreen,

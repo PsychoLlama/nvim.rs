@@ -145,6 +145,9 @@ unsafe fn send(vt: *mut VTerm, report: Option<EscapeSeq>) {
     unsafe { vterm_push_output_bytes(vt, bytes.as_ptr().cast::<c_char>(), bytes.len()) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_mouse_move(
     vt: *mut VTerm,
@@ -174,6 +177,9 @@ pub unsafe extern "C" fn vterm_mouse_move(
     unsafe { send(vt, report) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_mouse_button(
     vt: *mut VTerm,

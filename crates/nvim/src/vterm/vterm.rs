@@ -201,6 +201,11 @@ pub unsafe fn vterm_alloc(size: size_t) -> *mut c_void {
 }
 
 /// Releases storage from [`vterm_alloc`].
+///
+/// # Safety
+///
+/// `ptr` must be null, or a live allocation `vterm_alloc` answered with that
+/// nothing has freed yet; it is freed here.
 pub unsafe fn vterm_dealloc(ptr: *mut c_void) {
     // SAFETY: forwarded to this function's own caller.
     unsafe { xfree(ptr) };
@@ -209,7 +214,7 @@ pub unsafe fn vterm_dealloc(ptr: *mut c_void) {
 /// A terminal `rows` by `cols`, with no state machine or screen yet — those
 /// are built on first ask by `vterm_obtain_state` and `vterm_obtain_screen`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
+pub extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
     // SAFETY: the allocator answers a zeroed `VTerm`-sized run, and all-zero
     // is a valid `VTerm` -- every field is a scalar, a raw pointer, or a
     // nullable function pointer -- so a reference to it is sound and the
@@ -235,6 +240,9 @@ pub unsafe extern "C" fn vterm_new(rows: c_int, cols: c_int) -> *mut VTerm {
     vt
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 pub unsafe fn vterm_free(vt: *mut VTerm) {
     // Everything the terminal owns is read out before anything is freed, so
     // that the last release -- the terminal itself -- has nothing left to
@@ -260,6 +268,10 @@ pub unsafe fn vterm_free(vt: *mut VTerm) {
     unsafe { vterm_dealloc(vt.cast::<c_void>()) };
 }
 
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`. `rowsp` must point at a writable `int`
+/// the caller owns. `colsp` must point at a writable `int` the caller owns.
 pub unsafe fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_int) {
     // SAFETY: the caller hands over a live terminal.
     let (rows, cols) = unsafe { ((*vt).rows, (*vt).cols) };
@@ -277,6 +289,10 @@ pub unsafe fn vterm_get_size(vt: *const VTerm, rowsp: *mut c_int, colsp: *mut c_
 
 /// Resizes the terminal, telling the parser's consumer so that it can move
 /// the cursor and the screen contents. A degenerate size is refused.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_size(vt: *mut VTerm, rows: c_int, cols: c_int) {
     if rows < 1 || cols < 1 {
@@ -301,6 +317,10 @@ pub unsafe extern "C" fn vterm_set_size(vt: *mut VTerm, rows: c_int, cols: c_int
 }
 
 /// Selects whether input bytes are decoded as UTF-8.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_set_utf8(vt: *mut VTerm, is_utf8: c_int) {
     // SAFETY: the caller hands over a live terminal.
@@ -309,6 +329,11 @@ pub unsafe extern "C" fn vterm_set_utf8(vt: *mut VTerm, is_utf8: c_int) {
 
 /// Installs the sink replies are written to. Without one they collect in the
 /// terminal's own buffer until it is full.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call. `user` must be
+/// the payload this callback was registered with, live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vterm_output_set_callback(
     vt: *mut VTerm,
@@ -323,6 +348,11 @@ pub unsafe extern "C" fn vterm_output_set_callback(
 
 /// Writes a reply back to the host. With no sink installed and no room left
 /// in the buffer, the reply is dropped whole rather than truncated.
+///
+/// # Safety
+///
+/// `vt` must point at a live `VTerm`, unaliased for the call. `bytes` must
+/// point at `len` readable bytes.
 pub unsafe fn vterm_push_output_bytes(vt: *mut VTerm, bytes: *const c_char, len: size_t) {
     // The consumer's sink is free to re-enter the terminal, so it is reached
     // with nothing borrowed.
@@ -430,6 +460,13 @@ fn scroll_vacated(mut rect: VTermRect, downward: c_int, rightward: c_int) -> VTe
 
 /// Drives a scroll out of a consumer's move and erase primitives, for a
 /// consumer that did not want to take the whole scroll itself.
+///
+/// # Safety
+///
+/// `moverect` and `eraserect` must be the consumer's own primitives, and
+/// `user` the payload they were handed alongside — both are called with it.
+/// `eraserect` must be `Some`: a scroll cannot be driven without a way to
+/// erase.
 pub unsafe fn vterm_scroll_rect(
     rect: VTermRect,
     downward: c_int,
