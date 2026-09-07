@@ -180,7 +180,8 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
 /// # Safety
 ///
 /// `cb` must point at an initialized callback, unaliased for the call.
-/// `arena` must point at a live arena, unaliased for the call.
+/// `arena` must point at a live arena, which the string this answers with
+/// is allocated in and must outlive.
 pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char {
     // SAFETY: the caller's promise: a live callback.
     // SAFETY: the caller's promise: a live callback.

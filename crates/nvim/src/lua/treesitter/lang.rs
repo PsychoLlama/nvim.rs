@@ -127,8 +127,7 @@ unsafe fn load_language_from_object(
 /// # Safety
 ///
 /// `L` must point at the Lua state this call runs on.
-/// `mut _path` must point at a NUL-terminated string. `mut _lang_name` must
-/// point at a NUL-terminated string.
+/// `_path` and `_lang_name` must each point at a NUL-terminated string.
 unsafe fn load_language_from_wasm(
     L: *mut lua_State,
     mut _path: *const ::core::ffi::c_char,

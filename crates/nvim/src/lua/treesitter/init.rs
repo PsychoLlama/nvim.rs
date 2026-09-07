@@ -87,8 +87,7 @@ pub fn nlua_treesitter_free() {}
 
 /// # Safety
 ///
-/// `lstate` must point at the Lua state this call runs on, unaliased for the
-/// call.
+/// `lstate` must point at the Lua state this call runs on.
 pub unsafe fn nlua_treesitter_init(lstate: *mut lua_State) {
     unsafe {
         tslua_init(lstate);

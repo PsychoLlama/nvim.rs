@@ -18,7 +18,7 @@ use crate::winlayer::{Buf, PosRef, Win, tab_windows};
 
 /// # Safety
 ///
-/// `mut replacement` must be a well-formed API array, its `size` elements
+/// `replacement` must be a well-formed API array, its `size` elements
 /// initialized. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
 pub unsafe fn nvim_buf_set_text(

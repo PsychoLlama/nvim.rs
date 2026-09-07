@@ -32,7 +32,7 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive. `lstate` must point at the Lua state this
-/// call runs on, unaliased for the call.
+/// call runs on.
 pub unsafe fn nvim_buf_get_lines(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -292,7 +292,7 @@ pub unsafe fn nvim_buf_set_lines(
 /// `_opts` must point at the `KeyDict_empty` the dispatcher filled in, live
 /// for the call. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive. `lstate` must point at the
-/// Lua state this call runs on, unaliased for the call.
+/// Lua state this call runs on.
 pub unsafe fn nvim_buf_get_text(
     channel_id: uint64_t,
     buf: BufferHandle,
@@ -399,10 +399,10 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
 
 /// # Safety
 ///
-/// `lstate` must point at the Lua state this call runs on, unaliased for the
-/// call. `a` must point at an API array the caller owns, unaliased for the
-/// call. `arena` must point at a live arena, which the memory this answers
-/// with is taken from and must outlive.
+/// `lstate` must point at the Lua state this call runs on. `a` must point at
+/// an API array the caller owns, unaliased for the call. `arena` must point
+/// at a live arena, which the memory this answers with is taken from and must
+/// outlive.
 #[inline]
 unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t, arena: *mut Arena) {
     if !lstate.is_null() {
@@ -414,11 +414,10 @@ unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t, a
 
 /// # Safety
 ///
-/// `lstate` must point at the Lua state this call runs on, unaliased for the
-/// call. `a` must point at an API array the caller owns, unaliased for the
-/// call. `s` must point at `len` readable bytes. `arena` must point at a
-/// live arena, which the memory this answers with is taken from and must
-/// outlive.
+/// `lstate` must point at the Lua state this call runs on. `a` must point at
+/// an API array the caller owns, unaliased for the call. `s` must point at
+/// `len` readable bytes. `arena` must point at a live arena, which the memory
+/// this answers with is taken from and must outlive.
 unsafe fn push_linestr(
     lstate: *mut lua_State,
     a: *mut Array,
@@ -465,9 +464,9 @@ unsafe fn push_linestr(
 /// # Safety
 ///
 /// `l` must point at an API array the caller owns, unaliased for the call.
-/// `lstate` must point at the Lua state this call runs on, unaliased for the
-/// call. `arena` must point at a live arena, which the memory this answers
-/// with is taken from and must outlive.
+/// `lstate` must point at the Lua state this call runs on. `arena` must point
+/// at a live arena, which the memory this answers with is taken from and must
+/// outlive.
 pub unsafe fn buf_collect_lines(
     buffer: Buf,
     n: size_t,
