@@ -137,7 +137,16 @@ struct Out {
 }
 
 impl Out {
-    fn new(dest: *mut c_char, destlen: c_int, copy: bool) -> Self {
+    /// The destination for one substitution pass.
+    ///
+    /// # Safety
+    ///
+    /// When `copy` is set, `dest` must point at `destlen` writable bytes the
+    /// caller owns and keeps alive for the pass: `push`, `push_char` and
+    /// `push_composing` are safe `fn`s that write through the cursor and
+    /// bound themselves on `dest + destlen` and nothing else. The measuring
+    /// pass (`copy` unset) writes nothing, so `dest` may be null there.
+    unsafe fn new(dest: *mut c_char, destlen: c_int, copy: bool) -> Self {
         Out {
             dest,
             at: dest,
@@ -336,8 +345,9 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 ///
 /// `rmp` must point at a live `RegMatch`, unaliased for the call. `source`
 /// must point at a NUL-terminated string, unaliased for the call. `expr` must
-/// point at an initialized typval, unaliased for the call. `dest` must point
-/// at a NUL-terminated string, unaliased for the call.
+/// point at an initialized typval, unaliased for the call. `dest` must point at
+/// `destlen` writable bytes, unaliased for the call, whenever `flags` sets
+/// `REGSUB_COPY`; the measuring pass writes nothing and takes a null.
 pub(crate) unsafe fn vim_regsub(
     rmp: *mut RegMatch,
     source: *mut c_char,
@@ -367,8 +377,9 @@ pub(crate) unsafe fn vim_regsub(
 /// # Safety
 ///
 /// `rmp` must point at a live `RegMMatch`, unaliased for the call. `source`
-/// must point at a NUL-terminated string, unaliased for the call. `dest` must
-/// point at a NUL-terminated string, unaliased for the call.
+/// must point at a NUL-terminated string, unaliased for the call. `dest` must point
+/// at `destlen` writable bytes, unaliased for the call, whenever `flags` sets
+/// `REGSUB_COPY`; the measuring pass writes nothing and takes a null.
 pub(crate) unsafe fn vim_regsub_multi(
     rmp: *mut RegMMatch,
     lnum: LineNr,
@@ -397,7 +408,8 @@ pub(crate) unsafe fn vim_regsub_multi(
 ///
 /// `source` must point at a NUL-terminated string, unaliased for the call.
 /// `expr` must point at an initialized typval, unaliased for the call. `dest`
-/// must point at a NUL-terminated string, unaliased for the call.
+/// must point at `destlen` writable bytes, unaliased for the call, whenever
+/// `flags` sets `REGSUB_COPY`.
 unsafe fn vim_regsub_both(
     rex: Rex,
     source: *mut c_char,
@@ -418,7 +430,9 @@ unsafe fn vim_regsub_both(
         return 0;
     }
 
-    let mut out = Out::new(dest, destlen, flags & REGSUB_COPY as c_int != 0);
+    // SAFETY: the caller's promise -- on a copying pass `dest` holds
+    // `destlen` writable bytes.
+    let mut out = unsafe { Out::new(dest, destlen, flags & REGSUB_COPY as c_int != 0) };
     // A caller-supplied function, or a replacement that starts `\=`, is
     // a Vimscript expression rather than replacement text.
     let outcome = if !expr.is_null()
