@@ -292,8 +292,7 @@ pub unsafe fn did_set_shada(args: &mut OptSet) -> Option<&CStr> {
         }
     }
     // The ' item, how many files to remember marks for, is required.
-    // SAFETY: reads the option's own parsed value.
-    if !value.is_empty() && unsafe { get_shada_parameter(c_int::from(b'\'')) } < 0 {
+    if !value.is_empty() && get_shada_parameter(c_int::from(b'\'')) < 0 {
         return Some(c"E528: Must specify a ' value");
     }
     None

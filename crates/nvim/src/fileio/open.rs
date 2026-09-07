@@ -313,7 +313,7 @@ pub(crate) unsafe fn open_source(
             }
             // Even though this is a new file, it might have been
             // edited before and deleted. Get the old marks.
-            unsafe { check_marks_read() };
+            check_marks_read();
             // Set the forced 'fileencoding'.
             if !args.is_null() {
                 unsafe { set_forced_fenc(args) };

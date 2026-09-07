@@ -45,7 +45,7 @@ pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) ->
 }
 
 /// Collect the buffers whose files are on removable media.
-pub(crate) unsafe fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
+pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, whose name is
         // only read, and the caller's set.
@@ -60,8 +60,8 @@ pub(crate) unsafe fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
 ///
 /// `'shada'`'s `%` entry caps how many are kept; a negative cap means all
 /// of them.
-pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
-    let max_bufs = unsafe { get_shada_parameter('%' as c_int) };
+pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
+    let max_bufs = get_shada_parameter('%' as c_int);
     let mut wanted = Vec::new();
     for buf in buffers() {
         if !ignore_buf(Some(buf), removable_bufs)
@@ -100,6 +100,12 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaE
 ///
 /// `search_last_used` says which of the two was used most recently, so
 /// exactly one of the pair is written with `is_last_used` set.
+///
+/// # Safety
+///
+/// `ret_pse` must point at an initialized ShaDa entry, unaliased for the
+/// call. `get_pattern` must be an initialized `SearchPatternGetter` whose
+/// pointer fields point at live data for the call.
 pub(crate) unsafe fn add_search_pattern(
     ret_pse: *mut ShadaEntry,
     get_pattern: SearchPatternGetter,
@@ -151,6 +157,10 @@ pub(crate) unsafe fn add_search_pattern(
 /// `max_reg_lines` is `'shada'`'s `<` (or `"`) entry: a register with more
 /// lines than that is not remembered at all. A negative value means no
 /// limit.
+///
+/// # Safety
+///
+/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
 pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_reg_lines: c_int) {
     let mut reg_iter = core::ptr::null::<c_void>();
     loop {
@@ -196,6 +206,12 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
 ///
 /// The ten numbered marks are just the ten most recent, so their *names*
 /// are their positions in the list: moving one renames all of them.
+///
+/// # Safety
+///
+/// `wms` must point at a live `WriteMergerState`, unaliased for the call.
+/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn replace_numbered_mark(
     wms: *mut WriteMergerState,
     idx: size_t,
@@ -277,6 +293,12 @@ pub(crate) unsafe fn var_shada_iter(
 ///
 /// The current position is pushed onto the jump list first, so that where
 /// Nvim was when it exited is remembered too.
+///
+/// # Safety
+///
+/// `jumps` must point at `JUMPLISTSIZE` initialized ShaDa entries the caller
+/// owns, unaliased for the call: the answer says how many of them were
+/// written.
 pub(crate) unsafe fn shada_init_jumps(
     jumps: *mut ShadaEntry,
     removable_bufs: &RemovableBufs,
@@ -312,6 +334,12 @@ pub(crate) unsafe fn shada_init_jumps(
 /// The file name to remember one jump under, or `None` if it is not worth
 /// remembering: no line number, a buffer whose marks are ignored, a buffer
 /// number that names no buffer, or no file name at all.
+///
+/// # Safety
+///
+/// `jump_iter` is only reported as an address and need not point at anything;
+/// `fm.fname`, when it is set, must point at a NUL-terminated name that
+/// outlives the answer, which borrows it.
 unsafe fn jump_target(
     fm: &XFileMark,
     jump_iter: *const c_void,
@@ -342,7 +370,7 @@ unsafe fn jump_target(
 }
 
 /// Every register, as msgpack.
-pub unsafe fn shada_encode_regs() -> String_0 {
+pub fn shada_encode_regs() -> String_0 {
     let wms = shada_heap(WriteMergerState::EMPTY);
     unsafe { shada_initialize_registers(wms, -1) };
     let mut packer = packer_string_buffer();
@@ -358,9 +386,9 @@ pub unsafe fn shada_encode_regs() -> String_0 {
 }
 
 /// The jump list, as msgpack.
-pub unsafe fn shada_encode_jumps() -> String_0 {
+pub fn shada_encode_jumps() -> String_0 {
     let mut removable_bufs = id_set();
-    unsafe { find_removable_bufs(&mut removable_bufs) };
+    find_removable_bufs(&mut removable_bufs);
     let mut jumps = [ShadaEntry::MISSING; JUMPLISTSIZE as usize];
     let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &removable_bufs) };
     let mut packer = packer_string_buffer();
@@ -372,10 +400,10 @@ pub unsafe fn shada_encode_jumps() -> String_0 {
 }
 
 /// The buffer list, as msgpack.
-pub unsafe fn shada_encode_buflist() -> String_0 {
+pub fn shada_encode_buflist() -> String_0 {
     let mut removable_bufs = id_set();
-    unsafe { find_removable_bufs(&mut removable_bufs) };
-    let buflist_entry = unsafe { shada_get_buflist(&removable_bufs) };
+    find_removable_bufs(&mut removable_bufs);
+    let buflist_entry = shada_get_buflist(&removable_bufs);
     let mut packer = packer_string_buffer();
     let written = unsafe { shada_pack_entry(&raw mut packer, buflist_entry, 0) };
     assert!(
@@ -387,7 +415,7 @@ pub unsafe fn shada_encode_buflist() -> String_0 {
 }
 
 /// Every global variable `'shada'` says to remember, as msgpack.
-pub unsafe fn shada_encode_gvars() -> String_0 {
+pub fn shada_encode_gvars() -> String_0 {
     let mut packer = packer_string_buffer();
     let mut var_iter: Option<usize> = None;
     let cur_timestamp = os_time();

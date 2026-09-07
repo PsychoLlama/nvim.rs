@@ -27,6 +27,10 @@ use crate::types::{FAIL, Object, VAR_BLOB, VAR_TYPE_BLOB};
 const FREE_SPACE: size_t = 4 * MPACK_ITEM_SIZE as size_t;
 
 /// Make room for the next few tokens, flushing the buffer if it is short.
+///
+/// # Safety
+///
+/// `packer` must point at a live `PackerBuffer`, unaliased for the call.
 pub(crate) unsafe fn shada_check_buffer(packer: *mut PackerBuffer) {
     if mpack_remaining(unsafe { &*packer }) < FREE_SPACE {
         unsafe { (*packer).packer_flush.expect("non-null function pointer")(packer) };
@@ -35,6 +39,10 @@ pub(crate) unsafe fn shada_check_buffer(packer: *mut PackerBuffer) {
 
 /// How many map keys or array elements an entry carries that this Nvim has
 /// no field for, and therefore stored verbatim.
+///
+/// # Safety
+///
+/// `src` must point at a live `AdditionalData`, unaliased for the call.
 unsafe fn additional_data_len(src: *mut AdditionalData) -> uint32_t {
     if src.is_null() {
         0
@@ -44,6 +52,10 @@ unsafe fn additional_data_len(src: *mut AdditionalData) -> uint32_t {
 }
 
 /// Write those keys or elements back out, exactly as they were read.
+///
+/// # Safety
+///
+/// `src` must point at a live `AdditionalData`, unaliased for the call.
 unsafe fn dump_additional_data(src: *mut AdditionalData, sbuf: &mut PackerBuffer) {
     if !src.is_null() {
         unsafe {
@@ -102,6 +114,12 @@ fn written<T: PartialEq>(value: T, default: T) -> uint32_t {
 ///
 /// Only used where the entry was built for the occasion; an entry that came
 /// out of the merger is still owned by it.
+///
+/// # Safety
+///
+/// `packer` must point at a live `PackerBuffer`, unaliased for the call.
+/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn shada_pack_pfreed_entry(
     packer: *mut PackerBuffer,
     mut entry: ShadaEntry,
@@ -117,6 +135,12 @@ pub(crate) unsafe fn shada_pack_pfreed_entry(
 /// `max_kbyte`, if non-zero, drops an entry whose payload comes out longer
 /// than that many kilobytes — quietly, since the file is still valid
 /// without it.
+///
+/// # Safety
+///
+/// `packer` must point at a live `PackerBuffer`, unaliased for the call.
+/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+/// live data for the call.
 pub(crate) unsafe fn shada_pack_entry(
     packer: *mut PackerBuffer,
     entry: ShadaEntry,
@@ -197,6 +221,11 @@ pub(crate) unsafe fn shada_pack_entry(
 /// The file header: whatever `shada_write` chose to record about the Nvim
 /// that wrote it. Nvim has never read it back — it is there for anyone
 /// looking at the file by hand.
+///
+/// # Safety
+///
+/// `header` must be a well-formed API dictionary, its `size` entries
+/// initialized.
 unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
     mpack_map(&mut sbuf.ptr, header.size as uint32_t);
     for i in 0..header.size {
@@ -212,6 +241,11 @@ unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
 
 /// One history line: the history it belongs to, its text, and — for search
 /// history only — the character the search was started with.
+///
+/// # Safety
+///
+/// `history` must be an initialized `ShadaHistoryItem` whose pointer fields
+/// point at live data for the call.
 unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut PackerBuffer) {
     let is_search = history.histtype as c_int == HIST_SEARCH;
     mpack_array(
@@ -228,6 +262,11 @@ unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut
 
 /// One global variable. A Blob is packed as binary like a String, so it
 /// carries a trailing type tag to tell the two apart when read back.
+///
+/// # Safety
+///
+/// `global_var` must be an initialized `ShadaGlobalVar` whose pointer fields
+/// point at live data for the call.
 unsafe fn pack_variable(
     entry: &ShadaEntry,
     mut global_var: ShadaGlobalVar,
@@ -272,6 +311,11 @@ unsafe fn pack_variable(
 }
 
 /// The last `:substitute` replacement string.
+///
+/// # Safety
+///
+/// `sub` must be an initialized `ShadaSubString` whose pointer fields point
+/// at live data for the call.
 unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut PackerBuffer) {
     mpack_array(
         &mut sbuf.ptr,
@@ -285,6 +329,11 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut Pa
 /// written only when it differs from the default, and then always as the
 /// *negation* of that default — a flag that is present is by definition not
 /// the default value.
+///
+/// # Safety
+///
+/// `pattern` must be an initialized `KeyDict__shada_search_pat` whose pointer
+/// fields point at live data for the call.
 unsafe fn pack_search_pattern(
     entry: &ShadaEntry,
     pattern: KeyDict__shada_search_pat,
@@ -332,6 +381,11 @@ unsafe fn pack_search_pattern(
 
 /// A global mark, local mark, jump or change: a file name and a position in
 /// it, plus the mark's letter for the two kinds that have one.
+///
+/// # Safety
+///
+/// `mark` must be an initialized `ShadaFileMark` whose pointer fields point
+/// at live data for the call.
 unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Payload) {
     let default = default_filemark(entry.kind());
 
@@ -367,6 +421,11 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
 }
 
 /// One register: its lines, its name, and how it is put back.
+///
+/// # Safety
+///
+/// `reg` must be an initialized `ShadaRegister` whose pointer fields point at
+/// live data for the call.
 unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Payload) {
     let default = DEFAULT_REGISTER;
 
@@ -402,6 +461,11 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Pa
 /// The buffer list: one map per buffer, each a file name and the cursor
 /// position in it. The position's defaults are the same for every buffer,
 /// so they come from `DEFAULT_POS` rather than from an entry type.
+///
+/// # Safety
+///
+/// `list` must be an initialized `ShadaBufferList` whose pointer fields point
+/// at live data for the call.
 unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
     let default = DEFAULT_POS;
     mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
@@ -431,6 +495,10 @@ unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
 ///
 /// The file keeps its write position in the buffer, so the packer starts
 /// where the file left off and hands the position back on every flush.
+///
+/// # Safety
+///
+/// `file` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> PackerBuffer {
     if unsafe { file_space(file) } < FREE_SPACE {
         unsafe { file_flush(file) };
@@ -447,6 +515,10 @@ pub(crate) unsafe fn packer_buffer_for_file(file: *mut FileDescriptor) -> Packer
 
 /// Hand what has been packed to the file, and start again at whatever it
 /// leaves in its buffer.
+///
+/// # Safety
+///
+/// `buffer` must point at a live `PackerBuffer`, unaliased for the call.
 unsafe fn flush_file_buffer(buffer: *mut PackerBuffer) {
     let fd = unsafe { (*buffer).anydata.cast::<FileDescriptor>() };
     unsafe { (*fd).write_pos = (*buffer).ptr };

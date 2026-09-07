@@ -135,16 +135,16 @@ pub unsafe fn ctx_save(ctx: *mut Context, flags: c_int) {
     // encoder runs editor code, so the stack is not borrowed across them.
     let ctx = unsafe { &mut *ctx };
     if flags & kCtxRegs as c_int != 0 {
-        ctx.regs = unsafe { shada_encode_regs() };
+        ctx.regs = shada_encode_regs();
     }
     if flags & kCtxJumps as c_int != 0 {
-        ctx.jumps = unsafe { shada_encode_jumps() };
+        ctx.jumps = shada_encode_jumps();
     }
     if flags & kCtxBufs as c_int != 0 {
-        ctx.bufs = unsafe { shada_encode_buflist() };
+        ctx.bufs = shada_encode_buflist();
     }
     if flags & kCtxGVars as c_int != 0 {
-        ctx.gvars = unsafe { shada_encode_gvars() };
+        ctx.gvars = shada_encode_gvars();
     }
     if flags & kCtxFuncs as c_int != 0 {
         unsafe { ctx_save_funcs(ctx, false) };

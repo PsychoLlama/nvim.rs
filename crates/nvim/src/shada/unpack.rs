@@ -125,6 +125,10 @@ struct Body {
 
 impl Body {
     /// Read `len` bytes of entry payload.
+    ///
+    /// # Safety
+    ///
+    /// `sd_reader` must point at an open file descriptor, unaliased for the call.
     unsafe fn read(sd_reader: *mut FileDescriptor, len: size_t) -> Result<Self, ShaDaReadResult> {
         let buffered = unsafe { file_try_read_buffered(sd_reader, len) };
         if !buffered.is_null() {
@@ -176,6 +180,11 @@ impl Drop for Body {
 }
 
 /// Read exactly `length` bytes, complaining if the file is shorter.
+///
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
+/// `buffer` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn fread_len(
     sd_reader: *mut FileDescriptor,
     buffer: *mut c_char,
@@ -196,6 +205,10 @@ pub(crate) unsafe fn fread_len(
 }
 
 /// Step over `offset` bytes, complaining if the file is shorter.
+///
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn sd_reader_skip(
     sd_reader: *mut FileDescriptor,
     offset: size_t,
@@ -231,6 +244,10 @@ pub(crate) unsafe fn sd_reader_skip(
 ///
 /// `Err(kSDReadStatusFinished)` means end of file, and is only produced when
 /// `allow_eof` — i.e. for the first of the three header integers.
+///
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
 unsafe fn read_uint64(
     sd_reader: *mut FileDescriptor,
     allow_eof: bool,
@@ -319,6 +336,9 @@ pub(crate) struct Header {
     pub(crate) fpos: uint64_t,
 }
 
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
 unsafe fn read_header(sd_reader: *mut FileDescriptor) -> Result<Header, ShaDaReadResult> {
     let fpos = unsafe { (*sd_reader).bytes_read };
     let type_u64 = unsafe { read_uint64(sd_reader, true) }?;
@@ -389,6 +409,11 @@ pub(crate) struct Malformed;
 /// `flags` says which types the caller wants (see the `kSDRead*` values);
 /// anything else is skipped. `max_kbyte`, if non-zero, skips entries longer
 /// than that many kilobytes.
+///
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 pub(crate) unsafe fn shada_read_next_item(
     sd_reader: *mut FileDescriptor,
     entry: *mut ShadaEntry,
@@ -453,6 +478,13 @@ pub(crate) unsafe fn shada_read_next_item(
 
 /// An entry of a type this Nvim does not know: kept whole, so that writing
 /// the file back out does not lose it.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
+/// `body` must be an initialized `Body` whose pointer fields point at live
+/// data for the call. `cursor` must be an initialized `Cursor` whose pointer
+/// fields point at live data for the call.
 unsafe fn read_unknown(
     entry: *mut ShadaEntry,
     header: &Header,

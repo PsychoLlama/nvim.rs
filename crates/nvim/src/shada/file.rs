@@ -49,16 +49,28 @@ fn shada_file_error2(fmt: &'static CStr, what: *const c_char, why: *const c_char
 }
 
 /// Whether the reader has nothing more to give.
+///
+/// # Safety
+///
+/// `file` must point at an open file descriptor.
 pub(crate) unsafe fn file_eof(file: *const FileDescriptor) -> bool {
     unsafe { (*file).eof && (*file).read_pos == (*file).write_pos }
 }
 
 /// The descriptor behind a file, for the calls that want the number.
+///
+/// # Safety
+///
+/// `file` must point at an open file descriptor.
 pub(crate) unsafe fn file_fd(file: *const FileDescriptor) -> c_int {
     unsafe { (*file).fd }
 }
 
 /// How many bytes can still be written into the file's own buffer.
+///
+/// # Safety
+///
+/// `file` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn file_space(file: *mut FileDescriptor) -> size_t {
     unsafe {
         (*file)
@@ -70,6 +82,10 @@ pub(crate) unsafe fn file_space(file: *mut FileDescriptor) -> size_t {
 
 /// Close a ShaDa file, saying so if that fails. `'fsync'` decides whether
 /// the bytes are pushed to the platter first.
+///
+/// # Safety
+///
+/// `cookie` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn close_file(cookie: *mut FileDescriptor) {
     let error = unsafe { file_close(cookie, p_fs.get() != 0) };
     if error != 0 {
@@ -83,7 +99,7 @@ pub(crate) unsafe fn close_file(cookie: *mut FileDescriptor) {
 static default_shada_file: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
 /// `<state directory>/shada/main.shada`.
-unsafe fn shada_get_default_file() -> *const c_char {
+fn shada_get_default_file() -> *const c_char {
     if default_shada_file.with(Option::is_none) {
         // SAFETY: both helpers answer an owned NUL-terminated string.
         let shada_dir = unsafe { stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false) };
@@ -106,6 +122,10 @@ unsafe fn shada_get_default_file() -> *const c_char {
 /// `'shada'`'s `n` entry, then the default. Only the last two go through
 /// environment-variable expansion — anything the shell handed over has been
 /// expanded already.
+///
+/// # Safety
+///
+/// `file` must point at a NUL-terminated string.
 unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
     let mut expansion = [0 as c_char; MAXPATHL as usize];
     if !file.is_null() && unsafe { *file } != NUL as c_char {
@@ -118,9 +138,9 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
         return Some(unsafe { CStr::from_ptr(p_shadafile.get()) }.to_owned());
     }
 
-    let mut named = unsafe { find_shada_parameter('n' as c_int) };
+    let mut named = find_shada_parameter('n' as c_int);
     if named.is_null() || unsafe { *named } == NUL as c_char {
-        named = unsafe { shada_get_default_file() }.cast_mut();
+        named = shada_get_default_file().cast_mut();
     }
     let len = unsafe { expand_env(named, expansion.as_mut_ptr(), MAXPATHL) };
     let expanded = unsafe { core::slice::from_raw_parts(expansion.as_ptr().cast::<u8>(), len) };
@@ -130,6 +150,10 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
 /// Read a ShaDa file into the running editor.
 ///
 /// `flags` says which parts of it are wanted; see the `kShaDa*` values.
+///
+/// # Safety
+///
+/// `file` must point at a NUL-terminated string.
 unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Failed> {
     let Some(fname) = (unsafe { shada_filename(file) }) else {
         return Err(Failed);
@@ -188,7 +212,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Faile
 }
 
 /// Read the marks out of the default ShaDa file.
-pub unsafe fn shada_read_marks() -> Result<(), Failed> {
+pub fn shada_read_marks() -> Result<(), Failed> {
     unsafe { shada_read_file(core::ptr::null(), kShaDaWantMarks as c_int) }
 }
 
@@ -196,6 +220,10 @@ pub unsafe fn shada_read_marks() -> Result<(), Failed> {
 ///
 /// `forceit` lets the file's contents win over the running editor's state;
 /// `missing_ok` keeps quiet about a file that is not there.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 pub unsafe fn shada_read_everything(
     fname: *const c_char,
     forceit: bool,
@@ -221,6 +249,10 @@ pub unsafe fn shada_read_everything(
 /// another Nvim writing at the same moment holds one of those, so the
 /// letters are tried in turn. `None` means every one of them was taken, or
 /// the open failed for some other reason — which is reported here.
+///
+/// # Safety
+///
+/// `sd_writer` must point at an open file descriptor, unaliased for the call.
 unsafe fn open_temp_writer(
     sd_writer: *mut FileDescriptor,
     fname: &CStr,
@@ -270,6 +302,10 @@ unsafe fn open_temp_writer(
 
 /// Open the ShaDa file itself for writing, making the directory it lives in
 /// if it is not there yet. Answers whether it is open.
+///
+/// # Safety
+///
+/// `sd_writer` must point at an open file descriptor, unaliased for the call.
 unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Result<bool, ()> {
     // `path_tail_with_sep` points at the file name; NUL it out to get the
     // directory, then put the byte back.
@@ -321,6 +357,10 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
 /// `nomerge` writes this session's state alone; otherwise the existing file
 /// is read and merged in first. Falling back to `nomerge` is normal — it is
 /// what happens when there is no file yet.
+///
+/// # Safety
+///
+/// `file` must point at a NUL-terminated string.
 pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
     let Some(fname) = (unsafe { shada_filename(file) }) else {
         return FAIL;
@@ -402,6 +442,10 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
 
 /// Move the finished temporary file over the real one. Answers whether the
 /// temporary file is gone; if it is not, the caller says where it is.
+///
+/// # Safety
+///
+/// `sd_writer` must point at an open file descriptor, unaliased for the call.
 unsafe fn replace_original(
     sd_writer: *mut FileDescriptor,
     fname: &CStr,
@@ -485,6 +529,10 @@ fn writable_by_us(info: &FileInfo) -> bool {
 
 /// Whether a file is on removable media, per `'shada'`'s `r` entries — its
 /// marks are then not remembered at all.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
     let mut folded = [0 as c_char; MAXPATHL as usize];
     let mut part = [0 as c_char; MAXPATHL as usize + 1];
@@ -513,8 +561,8 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
 /// The number `'shada'` gives for a parameter, or −1 if it has none.
 ///
 /// Only works for the number parameters, not for `r` or `n`.
-pub unsafe fn get_shada_parameter(type_0: c_int) -> c_int {
-    let p = unsafe { find_shada_parameter(type_0) };
+pub fn get_shada_parameter(type_0: c_int) -> c_int {
+    let p = find_shada_parameter(type_0);
     if !p.is_null() && ascii_isdigit(unsafe { *p } as c_int) {
         unsafe { atoi(p) }
     } else {
@@ -523,7 +571,7 @@ pub unsafe fn get_shada_parameter(type_0: c_int) -> c_int {
 }
 
 /// What follows a parameter's letter in `'shada'`, or null if it has none.
-pub unsafe fn find_shada_parameter(type_0: c_int) -> *mut c_char {
+pub fn find_shada_parameter(type_0: c_int) -> *mut c_char {
     let mut p = p_shada.get();
     while unsafe { *p } != 0 {
         if unsafe { *p } as c_int == type_0 {
@@ -542,13 +590,13 @@ pub unsafe fn find_shada_parameter(type_0: c_int) -> *mut c_char {
 }
 
 /// Read the current buffer's marks, the first time it is looked at.
-pub unsafe fn check_marks_read() {
+pub fn check_marks_read() {
     let buf = Buf::current_raw();
     if !unsafe { (*buf).b_marks_read }
-        && unsafe { get_shada_parameter('\'' as c_int) } > 0
+        && get_shada_parameter('\'' as c_int) > 0
         && !unsafe { (*buf).b_ffname.is_null() }
     {
-        let _ = unsafe { shada_read_marks() };
+        let _ = shada_read_marks();
     }
     // Set unconditionally: it is what stops this running again after
     // `'shada'` gains its `'` parameter with the buffer already open.

@@ -39,6 +39,10 @@ fn malformed_entry_because(fmt: &'static CStr, pos: uint64_t, why: *const c_char
 }
 
 /// Parse the payload of an entry whose type this Nvim knows.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 pub(crate) unsafe fn parse_known(
     entry: *mut ShadaEntry,
     header: &Header,
@@ -111,6 +115,10 @@ pub(crate) unsafe fn parse_known(
 }
 
 /// The last search pattern, as a map of the two-letter `s*` keys.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_search_pattern(
     entry: *mut ShadaEntry,
     pos: uint64_t,
@@ -148,6 +156,10 @@ unsafe fn parse_search_pattern(
 }
 
 /// A global mark, local mark, jump or change: all four are the same map.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_mark(
     entry: *mut ShadaEntry,
     header: &Header,
@@ -213,6 +225,10 @@ unsafe fn parse_mark(
 }
 
 /// One register: a name, a motion type, a width and the lines in it.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_register(
     entry: *mut ShadaEntry,
     pos: uint64_t,
@@ -310,6 +326,10 @@ unsafe fn parse_register(
 ///
 /// The stored string carries the separator after its NUL, which is what
 /// `hms_insert` and the history table expect.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_history(
     entry: *mut ShadaEntry,
     pos: uint64_t,
@@ -363,6 +383,10 @@ unsafe fn parse_history(
 
 /// One global variable: `[name, value]`, with a trailing type tag when the
 /// value is a Blob (which is otherwise indistinguishable from a String).
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_variable(
     entry: *mut ShadaEntry,
     pos: uint64_t,
@@ -401,6 +425,10 @@ unsafe fn parse_variable(
 }
 
 /// The last `:substitute` replacement string: a one-element array.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_sub_string(
     entry: *mut ShadaEntry,
     pos: uint64_t,
@@ -425,6 +453,10 @@ unsafe fn parse_sub_string(
 
 /// The buffer list: an array of maps, one per buffer, each a file name and
 /// the cursor position in it.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 unsafe fn parse_buffer_list(
     entry: *mut ShadaEntry,
     pos: uint64_t,

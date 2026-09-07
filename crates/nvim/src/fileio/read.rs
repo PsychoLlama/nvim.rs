@@ -831,7 +831,7 @@ pub(crate) unsafe fn readfile(
                     }
                 }
                 msg_scroll.set(msg_save);
-                unsafe { check_marks_read() };
+                check_marks_read();
                 retval = Ok(Loaded::Read); // an interrupt isn't really an error
                 break 'theend;
             }
@@ -856,7 +856,7 @@ pub(crate) unsafe fn readfile(
         msg_scroll.set(msg_save);
 
         // Get the marks before running autocommands, so they can use them.
-        unsafe { check_marks_read() };
+        check_marks_read();
 
         // Remember whether the last line read had no end-of-line, even
         // when 'binary' is off, to support turning 'fixeol' off or writing

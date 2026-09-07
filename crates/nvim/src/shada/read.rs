@@ -33,25 +33,25 @@ const INIT_FMARKV: FileMarkView = FileMarkView {
 ///
 /// The caller's flags and the `'shada'` option between them decide this;
 /// when they agree on nothing there is no point reading the file at all.
-unsafe fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c_uint {
+fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c_uint {
     let mut kinds: c_uint = 0;
     if flags & kShaDaWantInfo as c_int != 0 {
         kinds |= kSDReadUndisableableData | kSDReadRegisters | kSDReadGlobalMarks;
         if p_hi.get() != 0 {
             kinds |= kSDReadHistory;
         }
-        if !unsafe { find_shada_parameter('!' as c_int) }.is_null() {
+        if !find_shada_parameter('!' as c_int).is_null() {
             kinds |= kSDReadVariables;
         }
         // The buffer list is only restored into an Nvim that was not
         // given files to edit.
-        if !unsafe { find_shada_parameter('%' as c_int) }.is_null()
+        if !find_shada_parameter('%' as c_int).is_null()
             && unsafe { (*Win::current().w_alist).al_ga.len() as c_int } == 0
         {
             kinds |= kSDReadBufferList;
         }
     }
-    if want_marks && unsafe { get_shada_parameter('\'' as c_int) } > 0 {
+    if want_marks && get_shada_parameter('\'' as c_int) > 0 {
         kinds |= kSDReadLocalMarks | kSDReadChanges;
     }
     // File marks are also where `v:oldfiles` comes from.
@@ -89,6 +89,10 @@ struct Reading {
 }
 
 /// Read a ShaDa file and apply it.
+///
+/// # Safety
+///
+/// `sd_reader` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     let force = flags & kShaDaForceit as c_int != 0;
     let mut oldfiles_list = get_vim_var_list(Vv::Oldfiles);
@@ -98,7 +102,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         && (force || unsafe { tv_list_len(oldfiles_list) } == 0);
     let want_marks = flags & kShaDaWantMarks as c_int != 0;
 
-    let srni_flags = unsafe { wanted_kinds(flags, want_marks, get_old_files) };
+    let srni_flags = wanted_kinds(flags, want_marks, get_old_files);
     if srni_flags == 0 {
         return;
     }
@@ -144,6 +148,11 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
 
 impl Reading {
     /// Put one entry from the file where it belongs.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call.
     unsafe fn apply(&mut self, mut entry: ShadaEntry) {
         match entry.data {
             ShadaEntryData::Missing => unreachable!("shada: read an entry with no type"),
@@ -168,6 +177,13 @@ impl Reading {
 
     /// A search or substitute pattern. The one this session already has
     /// wins a tie, unless the read was forced.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call. `pat` must be an initialized
+    /// `KeyDict__shada_search_pat` whose pointer fields point at live data for
+    /// the call.
     unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry, pat: KeyDict__shada_search_pat) {
         let is_sub = pat.is_substitute_pattern;
         if !self.force {
@@ -210,6 +226,12 @@ impl Reading {
     }
 
     /// The last `:substitute` replacement string.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call. `sub_string` must be an initialized
+    /// `ShadaSubString` whose pointer fields point at live data for the call.
     unsafe fn apply_sub_string(&self, mut entry: ShadaEntry, sub_string: ShadaSubString) {
         if !self.force {
             let mut current: SubReplacementString = unsafe { core::mem::zeroed() };
@@ -234,6 +256,12 @@ impl Reading {
     }
 
     /// One history entry, handed to the merger for its type.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call. `item` must be an initialized `ShadaHistoryItem`
+    /// whose pointer fields point at live data for the call.
     unsafe fn apply_history(&mut self, mut entry: ShadaEntry, item: ShadaHistoryItem) {
         let histtype = item.histtype as c_uint;
         if histtype >= HIST_COUNT {
@@ -245,6 +273,12 @@ impl Reading {
 
     /// One register. The register this session already holds wins a tie,
     /// unless the read was forced.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call. `reg` must be an initialized `ShadaRegister` whose
+    /// pointer fields point at live data for the call.
     unsafe fn apply_register(&self, mut entry: ShadaEntry, reg: ShadaRegister) {
         if reg.type_0 != kMTCharWise && reg.type_0 != kMTLineWise && reg.type_0 != kMTBlockWise {
             unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -274,6 +308,11 @@ impl Reading {
     /// A global mark or a jump-list entry. Both name a *file*, so a loaded
     /// buffer for that name is looked for first: when there is one the mark
     /// refers to it by number and the file name is dropped.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call.
     unsafe fn apply_file_mark(&mut self, mut entry: ShadaEntry) {
         let buf = unsafe { buffer_for_fname(&mut self.fname_bufs, entry.data.filemark().fname) };
         if buf.is_some() {
@@ -304,6 +343,11 @@ impl Reading {
     ///
     /// These are also what `v:oldfiles` is built from, which is why the file
     /// name matters even when the marks themselves were not asked for.
+    ///
+    /// # Safety
+    ///
+    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+    /// live data for the call.
     unsafe fn apply_buffer_mark(&mut self, mut entry: ShadaEntry) {
         // SAFETY: an entry's file name is null or NUL-terminated.
         let seen = self
@@ -384,6 +428,12 @@ impl Reading {
 
 /// A global variable. `var_set_global` takes the value over, so the entry
 /// is emptied of it before the rest is freed.
+///
+/// # Safety
+///
+/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+/// live data for the call. `var` must be an initialized `ShadaGlobalVar`
+/// whose pointer fields point at live data for the call.
 unsafe fn apply_variable(mut entry: ShadaEntry, var: ShadaGlobalVar) {
     unsafe { var_set_global(var.name, var.value) };
     entry.data.variable_mut().value.v_type = VAR_UNKNOWN;
@@ -392,6 +442,12 @@ unsafe fn apply_variable(mut entry: ShadaEntry, var: ShadaGlobalVar) {
 
 /// The buffer list the file was written with: each name becomes a listed
 /// buffer with its cursor where it was left.
+///
+/// # Safety
+///
+/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
+/// live data for the call. `list` must be an initialized `ShadaBufferList`
+/// whose pointer fields point at live data for the call.
 unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
     for i in 0..list.size {
         let item = unsafe { list.buffers.add(i) };
@@ -422,6 +478,10 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
 ///
 /// Answers are memoised in `fname_bufs`, whose keys are copies this makes
 /// and the caller frees.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string.
 unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> Option<Buf> {
     // SAFETY: the caller's file name, null or NUL-terminated.
     let key = unsafe { shada_key(fname) };
@@ -445,6 +505,12 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// A jump the list already holds — same position, same file — is dropped
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
+///
+/// # Safety
+///
+/// `fm` must be an initialized `XFileMark` whose pointer fields point at live
+/// data for the call. `entry` must be an initialized `ShadaEntry` whose
+/// pointer fields point at live data for the call.
 unsafe fn insert_jump(fm: XFileMark, buffer: Option<Buf>, mut entry: ShadaEntry) {
     let mut win = Win::current();
     let mut i = win.w_jumplistlen;
@@ -489,6 +555,11 @@ unsafe fn insert_jump(fm: XFileMark, buffer: Option<Buf>, mut entry: ShadaEntry)
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
+///
+/// # Safety
+///
+/// `fm` must be an initialized `FileMark` whose pointer fields point at live
+/// data for the call.
 unsafe fn insert_change(mut buffer: Buf, fm: FileMark) {
     let mut i = buffer.b_changelistlen;
     while i > 0 {
@@ -523,6 +594,10 @@ unsafe fn insert_change(mut buffer: Buf, fm: FileMark) {
 ///
 /// Entries built from Nvim's own state borrow their strings from it and say
 /// so with `can_free_entry`; those are left alone.
+///
+/// # Safety
+///
+/// `entry` must point at an initialized ShaDa entry, unaliased for the call.
 pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
     if entry.is_null() || !unsafe { (*entry).can_free_entry } {
         return;
@@ -563,6 +638,11 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
 
 /// Apply a ShaDa file held in memory rather than on disk. The context stack
 /// keeps its registers, jumps, buffer list and variables in this format.
+///
+/// # Safety
+///
+/// `string` must be a well-formed API string: `size` readable bytes with a
+/// NUL at `data[size]`.
 pub unsafe fn shada_read_string(string: String_0, flags: c_int) {
     if string.is_empty() {
         return;
