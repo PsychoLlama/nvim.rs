@@ -45,6 +45,9 @@ NB: user Lua could in principle ffi.C into
 any export (--export-dynamic exposes them all); the project makes no compat
 guarantees, so that surface is deliberately not part of the contract.
 
+docs/abi-ledger.md is the prose half of this file: what every surviving row
+is, who reaches it, and what would retire it. A new row belongs there too.
+
 Usage: abi-ledger.py [--check]
   --check   regenerate and diff against the committed ledger; exit 1 on
             drift instead of writing.
