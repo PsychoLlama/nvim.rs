@@ -23,6 +23,11 @@ use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
 ///
 /// `flags` is `DICT_FIRST` and/or `DICT_EXACT`; `thesaurus` selects thesaurus
 /// completion.
+///
+/// # Safety
+///
+/// `dict_start` must point at a NUL-terminated string, unaliased for the
+/// call. `pat` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_dictionaries(
     dict_start: *mut c_char,
     pat: *mut c_char,
@@ -152,6 +157,12 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
 /// Add all the words in the line `*buf_arg` from the thesaurus file `fname`,
 /// skipping the word at `skip_word`; answers OK on success.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `buf_arg` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `skip_word` must point at a NUL-terminated string.
 pub(crate) unsafe fn thesaurus_add_words_in_line(
     fname: *mut c_char,
     buf_arg: *mut *mut c_char,
@@ -198,6 +209,13 @@ pub(crate) unsafe fn thesaurus_add_words_in_line(
 
 /// Read `count` dictionary/thesaurus `files` and add the text matching
 /// `regmatch`.
+///
+/// # Safety
+///
+/// `files` must point at a writable `*mut c_char` slot the caller owns for
+/// the call. `regmatch` must point at a live `RegMatch`, unaliased for the
+/// call. `buf` must point at a NUL-terminated string, unaliased for the call.
+/// `dir` must point at a live `Direction`, unaliased for the call.
 pub(crate) unsafe fn ins_compl_files(
     count: c_int,
     files: *mut *mut c_char,
@@ -303,7 +321,7 @@ pub(crate) unsafe fn ins_compl_files(
                 }
             }
             line_breakcheck();
-            unsafe { ins_compl_check_keys(50, false) };
+            ins_compl_check_keys(50, false);
         }
         unsafe { fclose(fp) };
         i += 1;
@@ -376,6 +394,11 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
 /// The next word or line from `ins_buf` at `cur_match_pos`, with its length in
 /// `match_len`; `cont_s_ipos` says the next `CTRL-X <>` sets the initial
 /// position.
+///
+/// # Safety
+///
+/// `match_len` must point at a writable `int` the caller owns. `cont_s_ipos`
+/// must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     ins_buf: Buf,
     cur_match_pos: PosRef,
@@ -484,6 +507,11 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 /// Searches `st->ins_buf` from `start_pos` in the `compl_direction` direction;
 /// with `st->set_match_pos` set, `st->first_match_pos` and `st->last_match_pos`
 /// are set too. Answers `Ok` if a new match was found, otherwise `Err`.
+///
+/// # Safety
+///
+/// `st` must point at a live `InsComplNextState`, unaliased for the call.
+/// `start_pos` must point at an initialized position, unaliased for the call.
 pub(crate) unsafe fn get_next_default_completion(
     st: *mut InsComplNextState,
     start_pos: *mut Pos,
@@ -675,7 +703,7 @@ pub(crate) unsafe fn get_next_default_completion(
 }
 
 /// Add completion matches from the contents of every usable register.
-pub(crate) unsafe fn get_register_completion() {
+pub(crate) fn get_register_completion() {
     // Upstream's `!compl_orig_text.data || (p_ic ? STRNICMP : strncmp)(…)`:
     // a candidate counts when there is no original text to compare against,
     // or it starts with it.

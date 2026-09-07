@@ -104,7 +104,7 @@ impl ComplMatchArray {
 
 /// The highlight attribute for the inserted-but-not-accepted text at
 /// `lnum`/`col`, or −1 where there is none.
-pub unsafe fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
+pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     // SAFETY: neither query has a precondition left; both are still
     // `unsafe fn`s for their call sites outside this family.
     let (preinsert, longest) = (ins_compl_has_preinsert(), ins_compl_preinsert_longest());
@@ -141,7 +141,7 @@ pub unsafe fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
 }
 
 /// Take the popup menu down and drop the item array it was built from.
-pub(crate) unsafe fn ins_compl_del_pum() {
+pub(crate) fn ins_compl_del_pum() {
     if compl_match_array().is_unset() {
         return;
     }
@@ -177,7 +177,7 @@ pub(crate) fn pum_enough_matches() -> bool {
 
 /// Fire `CompleteChanged` with `v:event.completed_item` set to match `cur`
 /// (or to an empty dict when nothing is selected).
-pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
+pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
     if recursive.get() {
         return;
@@ -256,7 +256,7 @@ unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
 
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
-pub(crate) unsafe fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
+pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
     let prepend_len = compl_col.get() - startcol;
     let new_length = prepend_len + src.len() as c_int;
 
@@ -291,6 +291,11 @@ pub(crate) fn clear_adjusted_leader() {
 /// A source whose startcol is *before* `compl_col` matches text the leader
 /// does not contain, so the leader has that text prepended; the result is
 /// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
+///
+/// # Safety
+///
+/// `match_0` must be an initialized `Cm` whose pointer fields point at live
+/// data for the call.
 pub(crate) unsafe fn get_leader_for_startcol(match_0: Cm, cached: bool) -> ComplStr {
     'theend: {
         if cpt_sources().is_unset() {
@@ -328,9 +333,7 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: Cm, cached: bool) -> Compl
                 return adjusted_leader();
             }
             adjusted_leader().clear();
-            // SAFETY: a completion is running, so the cursor line holds the
-            // text before `compl_col` that the leader is extended with.
-            unsafe { prepend_startcol_text(adjusted_leader(), compl_leader(), startcol) };
+            prepend_startcol_text(adjusted_leader(), compl_leader(), startcol);
             return adjusted_leader();
         }
     }
@@ -340,7 +343,7 @@ pub(crate) unsafe fn get_leader_for_startcol(match_0: Cm, cached: bool) -> Compl
 /// Build `compl_match_array` from the match list.
 ///
 /// Returns the entry that should be selected, or −1 for none.
-pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
+pub(crate) fn ins_compl_build_pum() -> c_int {
     // Under a user completion function with `refresh: 'always'` the leader
     // is not a prefix filter, so drop it.
     //
@@ -537,7 +540,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
 
 /// Show the popup menu, adjusting `compl_shown_match` to an entry that is
 /// actually displayed.
-pub unsafe fn ins_compl_show_pum() {
+pub fn ins_compl_show_pum() {
     if !pum_wanted() || !pum_enough_matches() {
         return;
     }
@@ -551,8 +554,7 @@ pub unsafe fn ins_compl_show_pum() {
 
     if compl_match_array().is_unset() {
         array_changed = true;
-        // SAFETY: a completion is running -- the caller's promise.
-        cur = unsafe { ins_compl_build_pum() };
+        cur = ins_compl_build_pum();
     } else if let Some(shown) = shown_match() {
         // The menu already exists; only the current item has to be found.
         for (i, item) in compl_match_array().items().iter().enumerate() {
@@ -566,8 +568,7 @@ pub unsafe fn ins_compl_show_pum() {
 
     if compl_match_array().is_unset() {
         if compl_started.get() && has_event(AutoEvent::CompleteChanged) {
-            // SAFETY: as above.
-            unsafe { trigger_complete_changed_event(cur) };
+            trigger_complete_changed_event(cur);
         }
         return;
     }
@@ -592,8 +593,7 @@ pub unsafe fn ins_compl_show_pum() {
     }
 
     if has_event(AutoEvent::CompleteChanged) {
-        // SAFETY: as above.
-        unsafe { trigger_complete_changed_event(cur) };
+        trigger_complete_changed_event(cur);
     }
 }
 
@@ -619,7 +619,7 @@ pub fn compl_match_curr_select(selected: c_int) -> bool {
 
 /// Report which file the shown match came from, truncating the name on the
 /// left to whatever room the status line leaves.
-pub(crate) unsafe fn ins_compl_show_filename() {
+pub(crate) fn ins_compl_show_filename() {
     let mut line = [0 as c_char; IOSIZE as usize];
     let lead = gettext(c"match in file");
     // SAFETY: as above.
@@ -699,7 +699,7 @@ pub(crate) fn find_next_match_in_menu() -> Cm {
 }
 
 /// The "match 3 of 17" / "Back at original" line under the menu.
-pub(crate) unsafe fn ins_compl_show_statusmsg() {
+pub(crate) fn ins_compl_show_statusmsg() {
     // Show a message about what (completion) mode we're in.
     // Upstream dereferences `compl_first_match` here without checking.
     let head = first_match().expect("a completion showing a message has matches");
@@ -771,7 +771,7 @@ pub(crate) unsafe fn ins_compl_show_statusmsg() {
 
 /// Redraw the popup menu after the cursor may have moved, with redrawing
 /// forced back on.
-pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
+pub(crate) fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // RedrawingDisabled may be set when invoked through complete().
     let _redraw = Allow::redraw();
 
@@ -781,8 +781,7 @@ pub(crate) unsafe fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // promise -- and this runs on its own thread.
     unsafe { setcursor() };
     if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol {
-        // SAFETY: as above.
-        unsafe { ins_compl_del_pum() };
+        ins_compl_del_pum();
     }
     // SAFETY: as above.
     unsafe {

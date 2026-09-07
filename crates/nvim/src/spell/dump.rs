@@ -248,7 +248,7 @@ pub unsafe fn spell_dump_compl(
                     // Every child of this node is done.
                     depth -= 1;
                     line_breakcheck();
-                    unsafe { ins_compl_check_keys(50, false) };
+                    ins_compl_check_keys(50, false);
                     continue;
                 }
 

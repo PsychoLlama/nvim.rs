@@ -15,6 +15,10 @@ use crate::types::{NUL, OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
 /// Insert `len` bytes of `p` at the cursor, `-1` meaning up to its NUL.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
     if len == -1 {
         len = unsafe { cstr::bytes_at(p) }.len() as c_int;
@@ -25,14 +29,18 @@ pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
 }
 
 /// Insert `prefix` as the completion, and redraw.
+///
+/// # Safety
+///
+/// `prefix` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_longest_insert(prefix: *mut c_char) {
-    unsafe { ins_compl_delete(false) };
+    ins_compl_delete(false);
     unsafe { ins_compl_insert_bytes(prefix.offset(get_compl_len() as isize), -1) };
     unsafe { ins_redraw(false) };
 }
 
 /// Insert the longest common prefix of the best fuzzy matches as `'longest'`.
-pub(crate) unsafe fn fuzzy_longest_match() {
+pub(crate) fn fuzzy_longest_match() {
     let num_bests = compl_num_bests.get();
     if num_bests == 0 {
         return;
@@ -124,7 +132,7 @@ pub(crate) unsafe fn fuzzy_longest_match() {
 
 /// Move `compl_shown_match` onto the match actually shown: `compl_leader` may
 /// have hidden the one it points at.
-pub(crate) unsafe fn ins_compl_update_shown_match() {
+pub(crate) fn ins_compl_update_shown_match() {
     clear_adjusted_leader();
     // Upstream dereferences `compl_shown_match` throughout without checking.
     let mut shown = shown_match().expect("a running completion has a shown match");
@@ -173,7 +181,7 @@ unsafe fn leader_hides(leader: ComplStr, shown: Cm, step: Option<Cm>) -> bool {
 }
 
 /// Delete the old text being completed.
-pub unsafe fn ins_compl_delete(new_leader: bool) {
+pub fn ins_compl_delete(new_leader: bool) {
     // Avoid deleting text that will be reinserted when changing leader.
     // This allows marks present on the original text to shrink/grow
     // appropriately.
@@ -247,6 +255,10 @@ pub unsafe fn ins_compl_delete(new_leader: bool) {
 }
 
 /// Insert a completion string that contains newlines, line by line.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
     let mut start = str;
     let mut curr = str;
@@ -280,7 +292,7 @@ pub(crate) unsafe fn ins_compl_expand_multiple(str: *mut c_char) {
 /// `move_cursor` is for `'completeopt'` `preinsert`: when true the cursor
 /// moves back from the inserted text to `compl_leader`. With `insert_prefix`
 /// the longest common prefix goes in instead of the shown match.
-pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
+pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     // Upstream dereferences `compl_shown_match` here without checking.
     let shown = shown_match().expect("a running completion has a shown match");
     let compl_len = get_compl_len();
@@ -357,6 +369,10 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
 /// `advance` moves to the first match rather than showing the original text.
 ///
 /// Answers `OK`, or `-1` when the number of matches is still unknown.
+///
+/// # Safety
+///
+/// `num_matches` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn find_next_completion_match(
     allow_get_expansion: bool,
     mut todo: c_int,
@@ -473,11 +489,7 @@ pub(crate) unsafe fn find_next_completion_match(
 /// back in with it false.
 ///
 /// `count` is at least 1; `insert_match` inserts the newly selected match.
-pub(crate) unsafe fn ins_compl_next(
-    allow_get_expansion: bool,
-    count: c_int,
-    insert_match: bool,
-) -> c_int {
+pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_match: bool) -> c_int {
     let mut num_matches = -1;
     let started = compl_started.get();
     // Taken as an identity, not an address: a completion function can wipe
@@ -498,13 +510,12 @@ pub(crate) unsafe fn ins_compl_next(
     };
 
     if !compl_leader().is_unset() && !shown.is_original() && !cot_fuzzy() {
-        // SAFETY: a completion with a shown match is running.
-        unsafe { ins_compl_update_shown_match() };
+        ins_compl_update_shown_match();
     }
 
     if allow_get_expansion && insert_match && (!compl_get_longest.get() || compl_used_match.get()) {
         // Delete old text to be replaced.
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     // When finding the longest common text we stick at the original text,
@@ -536,7 +547,7 @@ pub(crate) unsafe fn ins_compl_next(
     // SAFETY: no precondition left; still an `unsafe fn` for its call sites
     // outside this family.
     if !started && ins_compl_preinsert_longest() {
-        unsafe { ins_compl_insert(true, true) };
+        ins_compl_insert(true, true);
         if has_autocomplete_delay {
             let _ = unsafe { update_screen() }; // Show the inserted text right away
         }
@@ -554,7 +565,7 @@ pub(crate) unsafe fn ins_compl_next(
             // None selected.
             let preinsert_longest =
                 ins_compl_preinsert_longest() && shown_match().is_some_and(Cm::is_original);
-            unsafe { ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest) };
+            ins_compl_insert(compl_preinsert || preinsert_longest, preinsert_longest);
         } else {
             debug_assert!(!compl_leader().is_unset());
             unsafe {
@@ -575,11 +586,11 @@ pub(crate) unsafe fn ins_compl_next(
         let _ = unsafe { update_screen() }; // TODO(bfredl): no!
         if !has_autocomplete_delay {
             // Display the updated popup menu.
-            unsafe { ins_compl_show_pum() };
+            ins_compl_show_pum();
         }
         // Delete old text to be replaced, since we're still searching and
         // don't want to match ourselves!
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     // Enter will select a match when the match wasn't inserted and the
@@ -593,8 +604,7 @@ pub(crate) unsafe fn ins_compl_next(
 
     // Show the file name for the match (if any).
     if shown_match().is_some_and(|shown| !shown.cp_fname.is_null()) {
-        // SAFETY: a completion with a shown match is running.
-        unsafe { ins_compl_show_filename() };
+        ins_compl_show_filename();
     }
 
     num_matches

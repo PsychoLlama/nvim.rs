@@ -25,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 const LOWER_S: c_int = b's' as c_int;
 
 /// Enter CTRL-X mode, or — already on the command line — its CTRL-X flavour.
-pub unsafe fn ins_ctrl_x() {
+pub fn ins_ctrl_x() {
     if ctrl_x_mode_cmdline() {
         ctrl_x_mode.set(CTRL_X_CMDLINE_CTRL_X);
     } else {
@@ -153,7 +153,7 @@ pub(crate) fn compl_shows_dir_backward() -> bool {
 
 /// Check that `'dictionary'` (`dict_opt`) or `'thesaurus'` can be used;
 /// complain, beep and leave CTRL-X mode when it cannot.
-pub unsafe fn check_compl_option(dict_opt: bool) -> bool {
+pub fn check_compl_option(dict_opt: bool) -> bool {
     let empty = if dict_opt {
         // SAFETY: an option string is a NUL-terminated allocation, never
         // null.
@@ -193,7 +193,7 @@ pub unsafe fn check_compl_option(dict_opt: bool) -> bool {
 }
 
 /// Is `c` a key that goes to, or keeps us in, the current CTRL-X mode?
-pub unsafe fn vim_is_ctrl_x_key(c: c_int) -> bool {
+pub fn vim_is_ctrl_x_key(c: c_int) -> bool {
     // Always allow CTRL-R — let its results then be checked.
     if c == Ctrl_R && ctrl_x_mode.get() != CTRL_X_REGISTER {
         return true;
@@ -256,7 +256,7 @@ pub(crate) fn is_first_match(match_0: *const ComplItem) -> bool {
 
 /// Is `c` part of the item being completed?  Decides whether typing it
 /// abandons the completion while the menu is up.
-pub unsafe fn ins_compl_accept_char(c: c_int) -> bool {
+pub fn ins_compl_accept_char(c: c_int) -> bool {
     if compl_autocomplete.get() && compl_from_nonkeyword.get() {
         return false;
     }
@@ -464,7 +464,7 @@ pub(crate) fn get_compl_len() -> c_int {
 ///
 /// Returns true when the completion should stop without inserting anything
 /// (CTRL-X CTRL-Z).
-pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
+pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
     let mut retval = false;
     'chord: {
         match Key::try_from(c) {
@@ -525,9 +525,7 @@ pub(crate) unsafe fn set_ctrl_x_mode(c: c_int) -> bool {
             Err(NotAKey(LOWER_S | Ctrl_S)) => {
                 ctrl_x_mode.set(CTRL_X_SPELL);
                 let no_emsg = Suppress::emsg(); // avoid E756 twice
-                // SAFETY: the editor exists and the cursor is in a buffer,
-                // which is all the move back to the bad word needs.
-                unsafe { spell_back_to_badword() };
+                spell_back_to_badword();
                 drop(no_emsg);
                 break 'chord;
             }
@@ -687,6 +685,13 @@ pub fn ins_compl_enable_autocomplete() {
 }
 
 /// `preinserted()`: is a previewed match currently in the buffer?
+///
+/// # Safety
+///
+/// `_args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
+/// pointer fields point at live data for the call.
 pub unsafe fn f_preinserted(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `ins_compl_preinsert_effect` has no precondition left, and
     // `result` is the live return value the caller allocated.

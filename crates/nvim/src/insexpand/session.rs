@@ -30,6 +30,10 @@ fn set_compl_startpos_here(col: ColNr) {
 ///
 /// Sets `compl_col`, `compl_length` and `compl_pattern`; reads
 /// `compl_cont_status` and `ctrl_x_mode`.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_normal_compl_info(
     line: *mut c_char,
     mut startcol: c_int,
@@ -131,14 +135,18 @@ pub(crate) unsafe fn get_normal_compl_info(
     // Call the functions in 'complete' with 'findstart=1'; ^N completion,
     // not complete() or ^X^N.
     if ctrl_x_mode_normal() && compl_cont_status.get() & CONT_LOCAL == 0 {
-        unsafe { setup_cpt_sources() };
-        unsafe { prepare_cpt_compl_funcs() };
+        setup_cpt_sources();
+        prepare_cpt_compl_funcs();
     }
     Ok(())
 }
 
 /// The pattern, column and length for whole-line completion, and for the
 /// `complete()` function.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_wholeline_compl_info(
     line: *mut c_char,
     curs_col: ColNr,
@@ -155,6 +163,10 @@ pub(crate) unsafe fn get_wholeline_compl_info(
 }
 
 /// The pattern, column and length for filename completion.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_filename_compl_info(
     line: *mut c_char,
     mut startcol: c_int,
@@ -193,6 +205,10 @@ pub(crate) unsafe fn get_filename_compl_info(
 }
 
 /// The pattern, column and length for command-line completion.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_cmdline_compl_info(
     line: *mut c_char,
     curs_col: ColNr,
@@ -230,11 +246,11 @@ pub(crate) unsafe fn get_cmdline_compl_info(
 }
 
 /// Set `compl_col`, `compl_length`, `compl_pattern` and `cpt_compl_pattern`.
-pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_compl: bool) {
+pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_compl: bool) {
     if is_cpt_compl {
         cpt_compl_pattern().clear();
         if startcol < compl_col.get() {
-            unsafe { prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol) };
+            prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol);
         } else {
             cpt_compl_pattern()
                 .set(unsafe { copy_string(compl_orig_text().value(), ptr::null_mut()) });
@@ -258,6 +274,11 @@ pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_
 ///
 /// `cb` is set when a function in `'complete'` triggered this, null otherwise;
 /// `startcol`, when not null, receives the column the function answered.
+///
+/// # Safety
+///
+/// `cb` must point at an initialized callback, unaliased for the call.
+/// `startcol` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn get_userdefined_compl_info(
     curs_col: ColNr,
     mut cb: *mut Callback,
@@ -281,7 +302,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
             semsg!("E764: Option '{arg0}' is not set");
             return Err(Failed);
         }
-        cb = unsafe { get_insert_callback(ctrl_x_mode.get()) };
+        cb = get_insert_callback(ctrl_x_mode.get());
     }
 
     let mut args = [TYPVAL_T_INIT; 3];
@@ -332,13 +353,13 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     compl_opt_refresh_always.set(false);
 
     if !is_cpt_function {
-        unsafe { set_compl_globals(col, curs_col, false) };
+        set_compl_globals(col, curs_col, false);
     }
     Ok(())
 }
 
 /// The pattern, column and length for spell completion; reads `spell_bad_len`.
-pub(crate) unsafe fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
+pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if spell_bad_len.get() > 0 {
         debug_assert!(spell_bad_len.get() <= c_int::MAX as size_t);
         compl_col.set(curs_col - spell_bad_len.get() as c_int);
@@ -362,6 +383,11 @@ pub(crate) unsafe fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> R
 /// The completion pattern, column and length for whichever CTRL-X mode is
 /// running; `line_invalid` is set when the current line may have become
 /// invalid and needs fetching again.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
+/// `line_invalid` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn compl_get_info(
     line: *mut c_char,
     startcol: c_int,
@@ -371,7 +397,7 @@ pub(crate) unsafe fn compl_get_info(
     if ctrl_x_mode_normal()
         || ctrl_x_mode_register()
         || (ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0
-            && !unsafe { thesaurus_func_complete(ctrl_x_mode.get()) })
+            && !thesaurus_func_complete(ctrl_x_mode.get()))
     {
         unsafe { get_normal_compl_info(line, startcol, curs_col) }?;
         unsafe { *line_invalid = true }; // 'cpt' func may have invalidated "line"
@@ -383,7 +409,7 @@ pub(crate) unsafe fn compl_get_info(
         return unsafe { get_cmdline_compl_info(line, curs_col) };
     } else if ctrl_x_mode_function()
         || ctrl_x_mode_omni()
-        || unsafe { thesaurus_func_complete(ctrl_x_mode.get()) }
+        || thesaurus_func_complete(ctrl_x_mode.get())
     {
         if unsafe { get_userdefined_compl_info(curs_col, ptr::null_mut(), ptr::null_mut()) }
             .is_err()
@@ -392,7 +418,7 @@ pub(crate) unsafe fn compl_get_info(
         }
         unsafe { *line_invalid = true }; // "line" may have become invalid
     } else if ctrl_x_mode_spell() {
-        unsafe { get_spell_compl_info(startcol, curs_col) }?;
+        get_spell_compl_info(startcol, curs_col)?;
         unsafe { *line_invalid = true }; // "line" may have become invalid
     } else {
         unsafe { internal_error(c"ins_complete()".as_ptr()) };
@@ -409,6 +435,10 @@ pub(crate) unsafe fn compl_get_info(
 /// on the cursor's line it is fixed up first (the line was split because it
 /// was longer than 'tw'). With SOL set, the previous pattern is skipped: a
 /// word at the start of the line was inserted and that is what we look for.
+///
+/// # Safety
+///
+/// `line` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
     // It is a continued search.
     compl_cont_status.set(compl_cont_status.get() & !CONT_INTRPT); // remove INTRPT
@@ -455,7 +485,7 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
 }
 
 /// Start insert-mode completion.
-pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
+pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // First time we hit ^N or ^P (in a row, I mean).
     let save_did_ai = did_ai.get();
     did_ai.set(false);
@@ -501,7 +531,7 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
     if unsafe { compl_get_info(line, startcol, curs_col, &raw mut line_invalid) }.is_err() {
         if ctrl_x_mode_function()
             || ctrl_x_mode_omni()
-            || unsafe { thesaurus_func_complete(ctrl_x_mode.get()) }
+            || thesaurus_func_complete(ctrl_x_mode.get())
         {
             // Restore did_ai, so that adding a comment leader works.
             did_ai.set(save_did_ai);
@@ -581,7 +611,7 @@ pub(crate) unsafe fn ins_compl_start() -> Result<(), Failed> {
 
 /// Do Insert mode completion, called when the character `c` was typed and it
 /// means something for completion; answers `Ok`, or `Err` if something failed.
-pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
+pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     // Milliseconds of `'autocompletelinger'` elapsed since collection began.
     let elapsed_ms = |start: uint64_t| os_hrtime().wrapping_sub(start) / 1_000_000;
 
@@ -593,7 +623,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     let insert_match = ins_compl_use_match(c);
 
     if !compl_started.get() {
-        unsafe { ins_compl_start() }?;
+        ins_compl_start()?;
     } else if insert_match && unsafe { stop_arrow() }.is_err() {
         return Err(Failed);
     }
@@ -615,7 +645,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     // Find the next match (and the following matches).
     let save_w_wrow = Win::current().w_wrow;
     let save_w_leftcol = Win::current().w_leftcol;
-    let n = unsafe { ins_compl_next(true, ins_compl_key2count(c), insert_match) };
+    let n = ins_compl_next(true, ins_compl_key2count(c), insert_match);
 
     // Reset the autocompletion timer expiry flag.
     if compl_autocomplete.get() {
@@ -661,7 +691,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
     }
 
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
-        unsafe { ins_compl_show_statusmsg() };
+        ins_compl_show_statusmsg();
     }
 
     // Wait for the autocompletion delay to expire.
@@ -676,10 +706,10 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         loop {
             if char_avail() {
                 if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
-                    unsafe { ins_compl_delete(false) }; // Remove pre-inserted text
+                    ins_compl_delete(false); // Remove pre-inserted text
                     compl_ins_end_col.set(compl_col.get());
                 }
-                unsafe { ins_compl_restart() };
+                ins_compl_restart();
                 compl_interrupted.set(true);
                 break;
             }
@@ -692,7 +722,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 
     // Show the popup menu, unless we got interrupted.
     if enable_pum && !compl_interrupted.get() {
-        unsafe { show_pum(save_w_wrow, save_w_leftcol) };
+        show_pum(save_w_wrow, save_w_leftcol);
     }
     compl_was_interrupted.set(compl_interrupted.get());
     compl_interrupted.set(false);
@@ -701,7 +731,7 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 
 /// Move the cursor back to the start of the bad word, recording its length in
 /// `spell_bad_len`.
-pub(crate) unsafe fn spell_back_to_badword() {
+pub(crate) fn spell_back_to_badword() {
     let mut tpos = Win::current().w_cursor;
     let win = Win::current();
     spell_bad_len.set(unsafe { spell_move_to(win, BACKWARD, SMT_ALL, true, ptr::null_mut()) });

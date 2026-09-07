@@ -261,7 +261,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                     // redrawn first, and the nested `update_screen` inside
                     // it must not draw the pum at its old position.
                     redraw_popupmenu.set(false);
-                    unsafe { ins_compl_show_pum() };
+                    ins_compl_show_pum();
                 }
                 let _ = unsafe { update_screen() };
                 if redrawing() {

@@ -540,7 +540,7 @@ impl FindTags {
                 fast_breakcheck();
             }
             if self.flags & TAG_INS_COMP as c_int != 0 {
-                unsafe { ins_compl_check_keys(30, false) };
+                ins_compl_check_keys(30, false);
             }
             if got_int.get() || ins_compl_interrupted() {
                 self.stop_searching = true;

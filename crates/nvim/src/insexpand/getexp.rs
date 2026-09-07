@@ -139,7 +139,7 @@ unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
     buffer_at(unsafe { (*st).ins_buf }).is_some()
 }
 
-pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
+pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
         && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
             || unsafe { *p_tsrfu.get() } as c_int != NUL)
@@ -147,6 +147,10 @@ pub(crate) unsafe fn thesaurus_func_complete(type_0: c_int) -> bool {
 
 /// Is there another `'complete'` entry after `cpt`, so the source index should
 /// move on?
+///
+/// # Safety
+///
+/// `cpt` must point at a NUL-terminated string.
 pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
     if cpt_sources().index() == -1 {
         return false;
@@ -165,6 +169,13 @@ pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
 /// `INS_COMPL_CPT_OK` when the entry is ready to collect from,
 /// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when `'complete'` is
 /// exhausted.
+///
+/// # Safety
+///
+/// `st` must point at a live `InsComplNextState`, unaliased for the call.
+/// `compl_type_arg` must point at a writable `int` the caller owns.
+/// `start_match_pos` must point at an initialized position, unaliased for the
+/// call. `advance_cpt_idx` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn process_next_cpt_value(
     st: *mut InsComplNextState,
     compl_type_arg: *mut c_int,
@@ -325,7 +336,7 @@ pub(crate) unsafe fn process_next_cpt_value(
 }
 
 /// Identifiers (`i`) or defines (`d`) from included files.
-pub(crate) unsafe fn get_next_include_file_completion(compl_type: c_int) {
+pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
     let pattern = compl_pattern().value();
     let what = if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
         FIND_DEFINE
@@ -347,13 +358,17 @@ pub(crate) unsafe fn get_next_include_file_completion(compl_type: c_int) {
 }
 
 /// Words from `'dictionary'` (`k`) or `'thesaurus'` (`s`) files.
+///
+/// # Safety
+///
+/// `dict` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_next_dict_tsr_completion(
     compl_type: c_int,
     dict: *mut c_char,
     dict_f: c_int,
 ) {
     let pattern = compl_pattern().data();
-    if unsafe { thesaurus_func_complete(compl_type) } {
+    if thesaurus_func_complete(compl_type) {
         unsafe { expand_by_function(compl_type, pattern, ptr::null_mut()) };
         return;
     }
@@ -378,7 +393,7 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
 }
 
 /// Tag names matching `compl_pattern`, up to `TAG_MANY` of them.
-pub(crate) unsafe fn get_next_tag_completion() {
+pub(crate) fn get_next_tag_completion() {
     // Set `p_ic` from `p_ic`, `p_scs` and the pattern, for `find_tags`.
     let save_p_ic = p_ic.get();
     p_ic.set(unsafe { ignorecase(compl_pattern().data()) });
@@ -406,7 +421,7 @@ pub(crate) unsafe fn get_next_tag_completion() {
 }
 
 /// File names matching `compl_pattern`, fuzzily when `'completeopt'` asks.
-pub(crate) unsafe fn get_next_filename_completion() {
+pub(crate) fn get_next_filename_completion() {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let mut num_matches = 0;
     let mut leader = ins_compl_leader();
@@ -537,7 +552,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
         unsafe { xfree(compl_fuzzy_scores.get().cast::<c_void>()) };
         unsafe { ga_clear(&raw mut fuzzy_indices) };
         if compl_num_bests.get() > 0 && compl_get_longest.get() {
-            unsafe { fuzzy_longest_match() };
+            fuzzy_longest_match();
         }
         return;
     }
@@ -554,7 +569,7 @@ pub(crate) unsafe fn get_next_filename_completion() {
 }
 
 /// Vim command-line completion (`CTRL-X CTRL-V`).
-pub(crate) unsafe fn get_next_cmdline_completion() {
+pub(crate) fn get_next_cmdline_completion() {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let mut num_matches = 0;
     let pattern = compl_pattern().value();
@@ -573,7 +588,7 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
 }
 
 /// Spelling suggestions for the bad word at `lnum`.
-pub(crate) unsafe fn get_next_spell_completion(lnum: LineNr) {
+pub(crate) fn get_next_spell_completion(lnum: LineNr) {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let num_matches = unsafe { expand_spelling(lnum, compl_pattern().data(), &raw mut matches) };
     if num_matches > 0 {
@@ -586,6 +601,11 @@ pub(crate) unsafe fn get_next_spell_completion(lnum: LineNr) {
 /// Collect one source's worth of matches for `type_0`.
 ///
 /// Returns true when a new match was found.
+///
+/// # Safety
+///
+/// `st` must point at a live `InsComplNextState`, unaliased for the call.
+/// `ini` must point at an initialized position, unaliased for the call.
 pub(crate) unsafe fn get_next_completion_match(
     type_0: c_int,
     st: *mut InsComplNextState,
@@ -596,15 +616,15 @@ pub(crate) unsafe fn get_next_completion_match(
         // No source: `process_next_cpt_value` rejected this entry.
         -1 => {}
         CTRL_X_PATH_PATTERNS | CTRL_X_PATH_DEFINES => {
-            unsafe { get_next_include_file_completion(type_0) };
+            get_next_include_file_completion(type_0);
         }
         CTRL_X_DICTIONARY | CTRL_X_THESAURUS => {
             unsafe { get_next_dict_tsr_completion(type_0, (*st).dict, (*st).dict_f) };
             unsafe { (*st).dict = ptr::null_mut() };
         }
-        CTRL_X_TAGS => unsafe { get_next_tag_completion() },
-        CTRL_X_FILES => unsafe { get_next_filename_completion() },
-        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X => unsafe { get_next_cmdline_completion() },
+        CTRL_X_TAGS => get_next_tag_completion(),
+        CTRL_X_FILES => get_next_filename_completion(),
+        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X => get_next_cmdline_completion(),
         CTRL_X_FUNCTION => {
             if ctrl_x_mode_normal() {
                 // Invoked by an `F`/`o` entry in 'complete'.
@@ -617,8 +637,8 @@ pub(crate) unsafe fn get_next_completion_match(
             unsafe { expand_by_function(type_0, compl_pattern().data(), ptr::null_mut()) };
         }
         CTRL_X_SPELL => unsafe { get_next_spell_completion((*st).first_match_pos.lnum) },
-        CTRL_X_BUFNAMES => unsafe { get_next_bufname_token() },
-        CTRL_X_REGISTER => unsafe { get_register_completion() },
+        CTRL_X_BUFNAMES => get_next_bufname_token(),
+        CTRL_X_REGISTER => get_register_completion(),
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = unsafe { get_next_default_completion(st, ini) };
@@ -649,7 +669,7 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 /// continues where the previous call stopped. May return before every match is
 /// found; the answer is the total number of matches, or −1 while that is still
 /// unknown. -- Acevedo
-pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
+pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
     // Upstream's function-scope `static InsComplNextState st`: the
     // scan is collected over many calls, so the state outlives each one.
     // The pointer is taken once, here, because `st.cur_match_pos` points
@@ -808,7 +828,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
             }
             // Fill the popup menu as soon as possible.
             if type_0 != -1 {
-                unsafe { ins_compl_check_keys(0, false) };
+                ins_compl_check_keys(0, false);
             }
             if (ctrl_x_mode_not_default() && !ctrl_x_mode_line_or_eval()) || compl_interrupted.get()
             {
@@ -863,7 +883,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
     }
 
     if cot_fuzzy() && compl_get_longest.get() && compl_num_bests.get() > 0 {
-        unsafe { fuzzy_longest_match() };
+        fuzzy_longest_match();
     }
 
     if let Some(old) = old_match() {

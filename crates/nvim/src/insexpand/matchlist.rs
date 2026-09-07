@@ -182,8 +182,7 @@ pub(crate) unsafe fn ins_compl_add(
     }
 
     // Remove any popup menu before changing the list of matches.
-    // SAFETY: a completion is running, which is what the pum belongs to.
-    unsafe { ins_compl_del_pum() };
+    ins_compl_del_pum();
 
     // SAFETY: `xcalloc` answers a fresh zeroed `ComplItem` or aborts, and this
     // is the allocation the list takes over.
@@ -390,8 +389,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
         // running -- the caller's promise.
         unsafe { ins_compl_longest_insert(compl_leader().data()) };
         if !had_match {
-            // SAFETY: as above.
-            unsafe { ins_compl_delete(false) };
+            ins_compl_delete(false);
         }
         compl_used_match.set(false);
         return;
@@ -437,8 +435,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
         // SAFETY: as in the branch above.
         unsafe { ins_compl_longest_insert(compl_leader().data()) };
         if !had_match {
-            // SAFETY: as above.
-            unsafe { ins_compl_delete(false) };
+            ins_compl_delete(false);
         }
     }
     compl_used_match.set(false);
@@ -743,8 +740,7 @@ pub(crate) unsafe fn ins_compl_free() {
         return;
     }
 
-    // SAFETY: a completion is running, which is what the pum belongs to.
-    unsafe { ins_compl_del_pum() };
+    ins_compl_del_pum();
     pum_clear();
 
     compl_curr_match.set(compl_first_match.get());

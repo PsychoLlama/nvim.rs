@@ -20,6 +20,11 @@ use core::slice;
 ///
 /// The answer is `out` unless it did not fit, in which case `tofree` is set
 /// to the allocation the answer lives in.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string. `tofree` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 unsafe fn ins_compl_infercase_gettext(
     str: *const c_char,
     char_len: c_int,
@@ -125,6 +130,12 @@ unsafe fn ins_compl_infercase_gettext(
 /// i.e. this works out what case you probably wanted the rest of the word in.
 ///
 /// `cont_s_ipos` says the next `CTRL-X <>` sets the initial position.
+///
+/// # Safety
+///
+/// `str_arg` must point at `len` bytes the caller owns, readable and
+/// writable, unaliased for the call. `fname` must point at a NUL-terminated
+/// string, unaliased for the call.
 pub unsafe fn ins_compl_add_infercase(
     str_arg: *mut c_char,
     len: c_int,
@@ -184,6 +195,10 @@ pub unsafe fn ins_compl_add_infercase(
 }
 
 /// The first character of the next word, stopping at a NUL.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn find_word_start(mut text: *mut c_char) -> *mut c_char {
     while unsafe { *text } as c_int != NUL
         && unsafe { *text } as c_int != '\n' as c_int
@@ -195,6 +210,10 @@ pub unsafe fn find_word_start(mut text: *mut c_char) -> *mut c_char {
 }
 
 /// Just after the word `text` points inside of.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn find_word_end(mut text: *mut c_char) -> *mut c_char {
     let start_class = unsafe { mb_get_class(text) };
     if start_class > 1 {
@@ -209,6 +228,10 @@ pub unsafe fn find_word_end(mut text: *mut c_char) -> *mut c_char {
 }
 
 /// Just after the line, omitting the CR and NL at its end.
+///
+/// # Safety
+///
+/// `text` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn find_line_end(text: *mut c_char) -> *mut c_char {
     let mut s = unsafe { text.add(cstr::bytes_at(text).len()) };
     while s > text && matches!(unsafe { *s.offset(-1) } as c_int, c if c == CAR || c == NL) {
@@ -218,7 +241,7 @@ pub unsafe fn find_line_end(text: *mut c_char) -> *mut c_char {
 }
 
 /// Add every listed buffer's file name that starts with what was typed.
-pub(crate) unsafe fn get_next_bufname_token() {
+pub(crate) fn get_next_bufname_token() {
     for b in buffers() {
         if b.b_p_bl == 0 || b.b_sfname.is_null() {
             continue;
@@ -247,6 +270,10 @@ pub(crate) unsafe fn get_next_bufname_token() {
 
 /// Strip carets followed by numbers — the `'complete'` `^N` max-matches
 /// suffix — in place.
+///
+/// # Safety
+///
+/// `str` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn strip_caret_numbers_in_place(str: *mut c_char) {
     if str.is_null() {
         return;
@@ -279,6 +306,10 @@ pub(crate) unsafe fn strip_caret_numbers_in_place(str: *mut c_char) {
 /// to its length; null when there is none longer than the leader.
 ///
 /// With `curbuf_only` only matches from the `'complete'` `.` source count.
+///
+/// # Safety
+///
+/// `prefix_len` must point at a writable `size_t` the caller owns.
 pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bool) -> *mut c_char {
     if cpt_sources().is_unset() {
         return ptr::null_mut();
@@ -400,6 +431,11 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
 /// When `dest` is not null they are copied there, quoting the metacharacters
 /// with a backslash, and `dest` is NUL terminated. Answers the length `dest`
 /// needs either way.
+///
+/// # Safety
+///
+/// `dest` must point at a NUL-terminated string, unaliased for the call.
+/// `src` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn quote_meta(
     mut dest: *mut c_char,
     mut src: *mut c_char,

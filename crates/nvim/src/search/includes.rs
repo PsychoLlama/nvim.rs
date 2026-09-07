@@ -914,7 +914,7 @@ pub unsafe fn find_pattern_in_path(
 
         line_breakcheck();
         if action == ACTION_EXPAND {
-            unsafe { ins_compl_check_keys(30, false) };
+            ins_compl_check_keys(30, false);
         }
         if got_int.get() || ins_compl_interrupted() {
             break;

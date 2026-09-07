@@ -380,7 +380,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             }
         }
         Err(NotAKey(Ctrl_X)) => {
-            unsafe { ins_ctrl_x() };
+            ins_ctrl_x();
             Next::Continue
         }
 
@@ -580,10 +580,6 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
 /// same code may also have synced undo, in which case the next character
 /// needs the line saved again.
 fn check_pum(s: &mut InsertState) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if pum_want.get().active {
         if pum_visible() {
             // Null so that `ins_complete` updates the message.
@@ -591,7 +587,7 @@ fn check_pum(s: &mut InsertState) {
             insert_do_complete(s);
             if pum_want.get().finish {
                 // Accept the item and stop completing.
-                unsafe { ins_compl_prep(Ctrl_Y) };
+                ins_compl_prep(Ctrl_Y);
             }
         }
         pum_ext_want_done();
@@ -712,8 +708,7 @@ fn check_abbr(c: c_int) -> bool {
 /// Is 'complete' set to something this completion mode can use?
 #[inline(always)]
 fn compl_option_ok(cpt_only: bool) -> bool {
-    // SAFETY: `curbuf` is live for the whole session.
-    unsafe { check_compl_option(cpt_only) }
+    check_compl_option(cpt_only)
 }
 
 /// Is `c` a character that can be shown on the screen?

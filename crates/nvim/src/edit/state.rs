@@ -459,9 +459,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
         }
         s.count = 0;
         s.nomove = true;
-        // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all
-        // this and the editor-wide routines below ask for.
-        unsafe { ins_compl_prep(ESC) };
+        ins_compl_prep(ESC);
         return 0;
     }
     if key == Key::Ignore.code() || key == Key::Nop.code() {
@@ -479,7 +477,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
     }
 
     ins_compl_init_get_longest();
-    if unsafe { ins_compl_prep(s.c) } {
+    if ins_compl_prep(s.c) {
         return 1;
     }
 
@@ -584,7 +582,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 
     // Backspace inside the leader: shrink it rather than deleting text.
     if (s.c == Key::Bs.code() || s.c == Ctrl_H) && Win::current().w_cursor.col > ins_compl_col() {
-        s.c = unsafe { ins_compl_bs() };
+        s.c = ins_compl_bs();
         if s.c == NUL {
             return true;
         }
@@ -596,17 +594,17 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 
     // CTRL-L: take the rest of the shown match.
     if s.c == Ctrl_L && (!ctrl_x_mode_line_or_eval() || ins_compl_long_shown_match()) {
-        unsafe { ins_compl_addfrommatch() };
+        ins_compl_addfrommatch();
         return true;
     }
 
     // An ordinary character extends the leader.  `InsertCharPre` may
     // replace it with a whole string, which goes in a character at a
     // time.
-    if unsafe { ins_compl_accept_char(s.c) } {
+    if ins_compl_accept_char(s.c) {
         let str = do_insert_char_pre(s.c);
         if str.is_null() {
-            unsafe { ins_compl_addleader(s.c) };
+            ins_compl_addleader(s.c);
         } else {
             let mut p = str;
             // SAFETY: `do_insert_char_pre` answers a NUL-terminated string, so
@@ -626,15 +624,15 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
         || (ins_compl_enter_selects() && (s.c == CAR || s.c == Key::Kenter.code() || s.c == NL)))
         && stop_arrow_ok()
     {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
         if ins_compl_preinsert_longest() && !ins_compl_is_match_selected() {
-            unsafe { ins_compl_insert(false, true) };
+            ins_compl_insert(false, true);
             ins_compl_init_get_longest();
             return true;
         }
-        unsafe { ins_compl_insert(false, false) };
+        ins_compl_insert(false, false);
     } else if ascii_iswhite_nl_or_nul(s.c) && ins_compl_preinsert_effect() {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
     false
 }
@@ -644,9 +642,7 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
     compl_busy.set(true);
     // Folds must not be updated while the popup menu is being built.
     let folds_frozen = Suppress::fold_update();
-    // SAFETY: the caller promises a live `curwin`/`curbuf`, which is all the
-    // completion machine and 'smartindent' ask for.
-    if unsafe { ins_complete(s.c, true) }.is_err() {
+    if ins_complete(s.c, true).is_err() {
         compl_status_clear();
     }
     drop(folds_frozen);
@@ -663,7 +659,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
     }
     // The completion popup belongs to the window it was started in.
     if ins_compl_active() && !ins_compl_win_active(Win::current()) {
-        unsafe { ins_compl_cancel() };
+        ins_compl_cancel();
     }
     if arrow_used.get() {
         s.inserted_space = 0;

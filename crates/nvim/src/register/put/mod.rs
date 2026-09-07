@@ -385,10 +385,8 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
     let ve_flags = get_ve_flags(Win::current());
 
     // Remove any preinserted completion text (vim/vim#19329).
-    // SAFETY: main thread; the completion state is its own.
     if ins_compl_preinsert_effect() {
-        // SAFETY: as above.
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     // Defaults for the `'[` and `']` marks.

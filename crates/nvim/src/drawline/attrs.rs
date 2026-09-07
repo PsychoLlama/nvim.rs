@@ -226,7 +226,7 @@ impl Cells {
             && ins_compl_win_active(window)
             && (self.in_curline || unsafe { ins_compl_lnum_in_range(wlv.lnum) })
         {
-            let ins_match_attr = unsafe { ins_compl_col_range_attr(wlv.lnum, self.byte_col()) };
+            let ins_match_attr = ins_compl_col_range_attr(wlv.lnum, self.byte_col());
             if ins_match_attr > 0 {
                 self.search_attr = unsafe { hl_combine_attr(self.search_attr, ins_match_attr) };
             }
@@ -338,7 +338,6 @@ impl Cells {
     /// Put the lowest-priority whole-line attribute underneath everything
     /// else — usually, but see the `CursorLine` exception below.
     pub(super) unsafe fn apply_line_attr_lowprio(&mut self, wlv: &mut WinLineVars) {
-        // SAFETY: `hl_combine_attr` only reads the attribute table.
         if wlv.filler_todo > 0 {
             return;
         }

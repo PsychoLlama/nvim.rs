@@ -22,9 +22,9 @@ use crate::winlayer::Win;
 ///
 /// Answers the character to use, or NUL when the work is done and another
 /// character is to be got from the user.
-pub unsafe fn ins_compl_bs() -> c_int {
+pub fn ins_compl_bs() -> c_int {
     if ins_compl_preinsert_effect() {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     let mut line = get_cursor_line_ptr();
@@ -50,7 +50,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
     if Win::current().w_cursor.col <= compl_col.get() + compl_length.get()
         || ins_compl_need_restart()
     {
-        unsafe { ins_compl_restart() };
+        ins_compl_restart();
     }
 
     // ins_compl_restart() calls update_screen(), which may invalidate the
@@ -74,7 +74,7 @@ pub unsafe fn ins_compl_bs() -> c_int {
         compl_shown_match.set(compl_first_match.get());
     }
 
-    unsafe { ins_compl_new_leader() };
+    ins_compl_new_leader();
     if !compl_shown_match.get().is_null() {
         // Make sure the current match is not a hidden item.
         compl_curr_match.set(compl_shown_match.get());
@@ -84,9 +84,9 @@ pub unsafe fn ins_compl_bs() -> c_int {
 
 /// Called after changing `compl_leader`: show the popup menu with a different
 /// set of matches, searching again if the previous search was interrupted.
-pub(crate) unsafe fn ins_compl_new_leader() {
-    unsafe { ins_compl_del_pum() };
-    unsafe { ins_compl_delete(true) };
+pub(crate) fn ins_compl_new_leader() {
+    ins_compl_del_pum();
+    ins_compl_delete(true);
     unsafe { ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1) };
     compl_used_match.set(false);
 
@@ -100,7 +100,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
     if compl_started.get() {
         unsafe { ins_compl_set_original_text(compl_leader().data(), compl_leader().len()) };
         if is_cpt_func_refresh_always() {
-            unsafe { cpt_compl_refresh() };
+            cpt_compl_refresh();
         }
         if cot_fuzzy() {
             unsafe { ins_compl_fuzzy_sort() };
@@ -115,7 +115,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
         } else {
             compl_autocomplete.set(false);
         }
-        if unsafe { ins_complete(Ctrl_N, true) }.is_err() {
+        if ins_complete(Ctrl_N, true).is_err() {
             compl_cont_status.set(0);
         }
         compl_restarting.set(false);
@@ -124,19 +124,19 @@ pub(crate) unsafe fn ins_compl_new_leader() {
     compl_enter_selects.set(!compl_used_match.get() && compl_selected_item.get() != -1);
 
     // Show the popup menu with a different set of matches.
-    unsafe { ins_compl_show_pum() };
+    ins_compl_show_pum();
 
     // Don't let Enter select the original text when there is no popup menu.
     if compl_match_array().is_unset() {
         compl_enter_selects.set(false);
     } else if ins_compl_has_preinsert() && !compl_leader().is_empty() {
-        unsafe { ins_compl_insert(true, false) };
+        ins_compl_insert(true, false);
     } else if compl_started.get()
         && ins_compl_preinsert_longest()
         && !compl_leader().is_empty()
         && !ins_compl_preinsert_effect()
     {
-        unsafe { ins_compl_insert(true, true) };
+        ins_compl_insert(true, true);
     }
     // Don't let Enter select when a user function with refresh_always is used.
     if ins_compl_refresh_always() {
@@ -145,9 +145,9 @@ pub(crate) unsafe fn ins_compl_new_leader() {
 }
 
 /// Append one character to the match leader. May reduce the number of matches.
-pub unsafe fn ins_compl_addleader(c: c_int) {
+pub fn ins_compl_addleader(c: c_int) {
     if ins_compl_preinsert_effect() {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     if unsafe { stop_arrow() }.is_err() {
@@ -165,7 +165,7 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
 
     // If we didn't complete finding matches we must search again.
     if ins_compl_need_restart() {
-        unsafe { ins_compl_restart() };
+        ins_compl_restart();
     }
 
     compl_leader().clear();
@@ -175,12 +175,12 @@ pub unsafe fn ins_compl_addleader(c: c_int) {
             (Win::current().w_cursor.col - compl_col.get()) as size_t,
         )
     });
-    unsafe { ins_compl_new_leader() };
+    ins_compl_new_leader();
 }
 
 /// Set up for finding completions again without leaving CTRL-X mode, after BS
 /// or a key was typed while still searching for matches.
-pub(crate) unsafe fn ins_compl_restart() {
+pub(crate) fn ins_compl_restart() {
     // Update the screen before restarting, so that if completion is
     // blocked we stay at the last popup menu and reduce flicker.
     let _ = unsafe { update_screen() }; // TODO(bfredl): no.
@@ -196,6 +196,11 @@ pub(crate) unsafe fn ins_compl_restart() {
 }
 
 /// Replace the first match — the original text — with `str`.
+///
+/// # Safety
+///
+/// `str` must point at `len` bytes the caller owns, readable and writable,
+/// unaliased for the call.
 pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) {
     // The CP_ORIGINAL_TEXT flag is at the first item, or possibly at the
     // last one for backward completion.
@@ -217,7 +222,7 @@ pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) 
 }
 
 /// Append the next character of the shown match to the leader.
-pub unsafe fn ins_compl_addfrommatch() {
+pub fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
     let len = Win::current().w_cursor.col - compl_col.get();
     let mut p = shown.cp_str.data();
@@ -250,15 +255,14 @@ pub unsafe fn ins_compl_addfrommatch() {
     // SAFETY: `p` is a match's NUL-terminated text and `len` bytes of the
     // leader are already in it.
     let c = unsafe { utf_ptr2char(p.offset(len as isize)) };
-    // SAFETY: a completion is running -- the caller's promise.
-    unsafe { ins_compl_addleader(c) };
+    ins_compl_addleader(c);
 }
 
 /// Stop insert completion mode.
-pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
+pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bool {
     // Remove pre-inserted text when present.
     if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     // Get here when we have finished typing a sequence of ^N and ^P or
@@ -339,7 +343,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
     // CTRL-E means completion is Ended: go back to the typed text, but
     // only if the popup is still visible.
     if c == Ctrl_E {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
         let text = if !compl_leader().is_unset() {
             compl_leader().value()
         } else if !compl_first_match.get().is_null() {
@@ -406,21 +410,21 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
 }
 
 /// Cancel completion.
-pub unsafe fn ins_compl_cancel() -> bool {
-    unsafe { ins_compl_stop(' ' as c_int, ctrl_x_mode.get(), true) }
+pub fn ins_compl_cancel() -> bool {
+    ins_compl_stop(' ' as c_int, ctrl_x_mode.get(), true)
 }
 
 /// Prepare for Insert mode completion, or stop it; called just after typing a
 /// character in Insert mode.
 ///
 /// Answers true when `c` is not to be inserted.
-pub unsafe fn ins_compl_prep(c: c_int) -> bool {
+pub fn ins_compl_prep(c: c_int) -> bool {
     let mut retval = false;
     let prev_mode = ctrl_x_mode.get();
 
     // Forget any previous 'special' messages if this is actually a ^X mode
     // key — bar ^R, in which case we wait to see what it gives us.
-    if c != Ctrl_R && unsafe { vim_is_ctrl_x_key(c) } {
+    if c != Ctrl_R && vim_is_ctrl_x_key(c) {
         edit_submode_extra.set(ptr::null_mut());
     }
 
@@ -445,7 +449,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
             || c == Ctrl_Q
             || c == Ctrl_Z
             || ins_compl_pum_key(c)
-            || !unsafe { vim_is_ctrl_x_key(c) }
+            || !vim_is_ctrl_x_key(c)
         {
             // Not starting another completion mode.
             ctrl_x_mode.set(CTRL_X_CMDLINE);
@@ -457,7 +461,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
             ctrl_x_mode.set(CTRL_X_CMDLINE);
             // Other CTRL-X keys first stop completion, then start another
             // completion mode.
-            unsafe { ins_compl_prep(' ' as c_int) };
+            ins_compl_prep(' ' as c_int);
             ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
         }
     }
@@ -471,10 +475,10 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
     if ctrl_x_mode_not_defined_yet() {
         // We have just typed CTRL-X and aren't quite sure which CTRL-X
         // mode it will be yet.  Now we decide.
-        retval = unsafe { set_ctrl_x_mode(c) };
+        retval = set_ctrl_x_mode(c);
     } else if ctrl_x_mode_not_default() {
         // We're already in CTRL-X mode, do we stay in it?
-        if !unsafe { vim_is_ctrl_x_key(c) } {
+        if !vim_is_ctrl_x_key(c) {
             ctrl_x_mode.set(if ctrl_x_mode_scroll() {
                 CTRL_X_NORMAL
             } else {
@@ -497,7 +501,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
             && !ins_compl_pum_key(c))
             || ctrl_x_mode.get() == CTRL_X_FINISHED
         {
-            retval = unsafe { ins_compl_stop(c, prev_mode, retval) };
+            retval = ins_compl_stop(c, prev_mode, retval);
         }
     } else if ctrl_x_mode.get() == CTRL_X_LOCAL_MSG {
         // Trigger the CompleteDone event to give scripts a chance to act
@@ -509,7 +513,7 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
 
     // Reset continue_* if we left expansion mode; if we stay they'll be
     // (re)set properly in ins_complete().
-    if !unsafe { vim_is_ctrl_x_key(c) } {
+    if !vim_is_ctrl_x_key(c) {
         compl_cont_status.set(0);
         compl_cont_mode.set(0);
     }
@@ -521,6 +525,10 @@ pub unsafe fn ins_compl_prep(c: c_int) -> bool {
 /// text: insert backspaces and append the changed text.
 ///
 /// `ptr_arg` is the known leader text, or null to use `compl_leader`.
+///
+/// # Safety
+///
+/// `ptr_arg` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
     let mut len = 0;
     let mut ptr = ptr_arg;
@@ -560,7 +568,7 @@ pub(crate) unsafe fn ins_compl_fix_redo_buf_for_leader(ptr_arg: *mut c_char) {
 /// `frequency` says out of how many calls we actually check. `in_compl_func`
 /// is true when called from `complete_check()`, where `compl_curr_match` must
 /// not be set.
-pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
+pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     static count: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Don't check when reading keys from a script, :normal or feedkeys().
@@ -581,14 +589,14 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
     // vim_is_ctrl_x_key() can't do its work correctly.
     let mut c = vpeekc_any();
     if c != NUL && !test_disable_char_avail.get() {
-        if unsafe { vim_is_ctrl_x_key(c) } && c != Ctrl_X && c != Ctrl_R {
+        if vim_is_ctrl_x_key(c) && c != Ctrl_X && c != Ctrl_R {
             c = safe_vgetc(); // Eat the character
             compl_shows_dir.set(ins_compl_key2dir(c));
             let (repeat, allow_get) = (
                 ins_compl_key2count(c),
                 !matches!(Key::try_from(c), Ok(Key::Up | Key::Down)),
             );
-            unsafe { ins_compl_next(false, repeat, allow_get) };
+            ins_compl_next(false, repeat, allow_get);
         } else {
             // Need to get the character to have KeyTyped set.  We'll put it
             // back with vungetc() below.  But skip K_IGNORE.
@@ -622,6 +630,6 @@ pub unsafe fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
         // compl_shown_match, before finding other matches.
         let todo = compl_pending.get().abs();
         compl_pending.set(0);
-        unsafe { ins_compl_next(false, todo, true) };
+        ins_compl_next(false, todo, true);
     }
 }

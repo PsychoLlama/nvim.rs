@@ -258,6 +258,10 @@ impl CptSources {
 }
 
 /// Step over the `,` and ` ` that separate two `'complete'` entries.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
     while unsafe { *p } as c_int == ',' as c_int || unsafe { *p } as c_int == ' ' as c_int {
         p = unsafe { p.offset(1) };
@@ -267,7 +271,7 @@ unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
 
 /// The number of entries in `'complete'` — every non-empty comma-separated
 /// segment counts as one.
-pub(crate) unsafe fn get_cpt_sources_count() -> c_int {
+pub(crate) fn get_cpt_sources_count() -> c_int {
     let mut dummy = [0 as c_char; LSIZE as usize];
     let mut count = 0;
     let mut p = Buf::current().b_p_cpt;
@@ -284,6 +288,11 @@ pub(crate) unsafe fn get_cpt_sources_count() -> c_int {
 }
 
 /// Copy a global callback function to a buffer-local callback.
+///
+/// # Safety
+///
+/// `globcb` must point at an initialized callback, unaliased for the call.
+/// `bufcb` must point at an initialized callback, unaliased for the call.
 pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *mut Callback) {
     unsafe { callback_free(bufcb) };
     if unsafe { &*globcb }.is_set() {
@@ -295,7 +304,7 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let value = args
         .os_newval
@@ -328,7 +337,7 @@ pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
 
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let value = args
         .os_newval
@@ -360,6 +369,11 @@ pub fn set_buflocal_ofu_callback(mut buffer: Buf) {
 }
 
 /// Free an array of `'complete'` `F{func}` callbacks and null the pointer.
+///
+/// # Safety
+///
+/// `callbacks` must point at a writable `*mut Callback` slot the caller owns
+/// for the call.
 pub unsafe fn clear_cpt_callbacks(callbacks: *mut *mut Callback, count: c_int) {
     if callbacks.is_null() || unsafe { *callbacks }.is_null() {
         return;
@@ -373,6 +387,12 @@ pub unsafe fn clear_cpt_callbacks(callbacks: *mut *mut Callback, count: c_int) {
 
 /// Copy `cnt` `Callback`s from `src` to `*dest`, clearing what was there and
 /// allocating the destination.
+///
+/// # Safety
+///
+/// `dest` must point at a writable `*mut Callback` slot the caller owns for
+/// the call. `dest_cnt` must point at a writable `int` the caller owns. `src`
+/// must point at an initialized callback, unaliased for the call.
 pub(crate) unsafe fn copy_cpt_callbacks(
     dest: *mut *mut Callback,
     dest_cnt: *mut c_int,
@@ -418,6 +438,10 @@ pub fn set_buflocal_cpt_callbacks(buffer: Buf) {
 
 /// Parse `'complete'` and (re)build the `F{func}` callbacks; entries other
 /// than `F{func}` are counted but leave their slot empty.
+///
+/// # Safety
+///
+/// `args` must point at a live `OptSet`, unaliased for the call.
 pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     if Buf::current_or_none().is_none() {
@@ -428,7 +452,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
     unsafe { clear_cpt_callbacks(&raw mut (*buffer).b_p_cpt_cb, count) };
     Buf::current().b_p_cpt_count = 0;
 
-    let count = unsafe { get_cpt_sources_count() };
+    let count = get_cpt_sources_count();
     if count == 0 {
         return Ok(());
     }
@@ -470,7 +494,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
@@ -493,6 +517,10 @@ pub unsafe fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
 
 /// Mark `copy_id` references in an array of `F{func}` callbacks so they are not
 /// garbage collected.
+///
+/// # Safety
+///
+/// `callbacks` must point at an initialized callback, unaliased for the call.
 pub unsafe fn set_ref_in_cpt_callbacks(
     callbacks: *mut Callback,
     count: c_int,
@@ -515,7 +543,7 @@ pub unsafe fn set_ref_in_cpt_callbacks(
 
 /// Mark the global `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'`
 /// callbacks with `copy_id` so they are not garbage collected.
-pub unsafe fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
+pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
     let mut abort = unsafe { cfu_cb().set_ref(copy_id) };
     abort = abort || unsafe { ofu_cb().set_ref(copy_id) };
     abort = abort || unsafe { tsrfu_cb().set_ref(copy_id) };
@@ -525,7 +553,7 @@ pub unsafe fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 }
 
 /// The user-defined completion function name for completion `type_0`.
-pub(crate) unsafe fn get_complete_funcname(type_0: c_int) -> *mut c_char {
+pub(crate) fn get_complete_funcname(type_0: c_int) -> *mut c_char {
     match type_0 {
         CTRL_X_FUNCTION => Buf::current().b_p_cfu,
         CTRL_X_OMNI => Buf::current().b_p_ofu,
@@ -541,7 +569,7 @@ pub(crate) unsafe fn get_complete_funcname(type_0: c_int) -> *mut c_char {
 }
 
 /// The callback to use for insert-mode completion of `type_0`.
-pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
+pub(crate) fn get_insert_callback(type_0: c_int) -> *mut Callback {
     if type_0 == CTRL_X_FUNCTION {
         return unsafe { &raw mut (*Buf::current_raw()).b_cfu_cb };
     }
@@ -561,6 +589,11 @@ pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
 ///
 /// `type_0` is one of `CTRL_X_OMNI`, `CTRL_X_FUNCTION` or `CTRL_X_THESAURUS`;
 /// `cb` is set when a function in `'complete'` triggered this, null otherwise.
+///
+/// # Safety
+///
+/// `base` must point at a NUL-terminated string, unaliased for the call. `cb`
+/// must point at an initialized callback, unaliased for the call.
 pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb: *mut Callback) {
     debug_assert!(Buf::current_or_none().is_some());
 
@@ -569,7 +602,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
         if unsafe { *get_complete_funcname(type_0) } as c_int == NUL {
             return;
         }
-        cb = unsafe { get_insert_callback(type_0) };
+        cb = get_insert_callback(type_0);
     }
 
     // Call the function to obtain the list of matches.
@@ -627,6 +660,10 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
 }
 
 /// The attribute of the named highlight group, or `-1` for no name.
+///
+/// # Safety
+///
+/// `hlname` must point at a NUL-terminated string.
 #[inline]
 pub(crate) unsafe fn get_user_highlight_attr(hlname: *const c_char) -> c_int {
     if !hlname.is_null() && unsafe { *hlname } as c_int != NUL {
@@ -637,6 +674,10 @@ pub(crate) unsafe fn get_user_highlight_attr(hlname: *const c_char) -> c_int {
 
 /// The callback `p` names if it refers to a user-defined function in
 /// `'complete'`; `idx` indexes the callback array.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) -> *mut Callback {
     if unsafe { *p } as c_int == 'o' as c_int {
         return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
@@ -659,7 +700,7 @@ pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) ->
 
 /// Call the functions named in `'complete'` with `findstart=1` and record the
 /// start column each answers.
-pub(crate) unsafe fn prepare_cpt_compl_funcs() {
+pub(crate) fn prepare_cpt_compl_funcs() {
     // The throwaway `copy_option_part` steps the entry into.
     let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make a copy of 'cpt' in case the buffer gets wiped out.
@@ -713,10 +754,10 @@ pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
 
 /// Build the per-`'complete'`-entry state: the source letter and its `^N`
 /// max-matches limit.
-pub(crate) unsafe fn setup_cpt_sources() {
+pub(crate) fn setup_cpt_sources() {
     cpt_sources().clear();
 
-    let count = unsafe { get_cpt_sources_count() };
+    let count = get_cpt_sources_count();
     if count == 0 {
         return;
     }
@@ -755,6 +796,10 @@ pub(crate) fn is_cpt_func_refresh_always() -> bool {
 }
 
 /// Collect matches through `cb` and record its `refresh:always` flag.
+///
+/// # Safety
+///
+/// `cb` must point at an initialized callback, unaliased for the call.
 pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
     let idx = cpt_sources().index();
     let startcol = cpt_sources().row(idx).cs_startcol;
@@ -762,7 +807,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
         return;
     }
 
-    unsafe { set_compl_globals(startcol, Win::current().w_cursor.col, true) };
+    set_compl_globals(startcol, Win::current().w_cursor.col, true);
 
     // Insert the leader string (previously removed) before expansion.
     // This prevents flicker when `func` (e.g. an LSP client) is slow and
@@ -774,7 +819,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
     unsafe { expand_by_function(0, cpt_compl_pattern().data(), cb) };
 
     if !cpt_sources().row(idx).cs_refresh_always {
-        unsafe { ins_compl_delete(false) };
+        ins_compl_delete(false);
     }
 
     let refresh_always = compl_opt_refresh_always.get();
@@ -784,7 +829,7 @@ pub(crate) unsafe fn get_cpt_func_completion_matches(cb: *mut Callback) {
 
 /// Re-collect matches from the `'complete'` functions that set
 /// `refresh:always`.
-pub(crate) unsafe fn cpt_compl_refresh() {
+pub(crate) fn cpt_compl_refresh() {
     // The throwaway `copy_option_part` steps the entry into.
     let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make the completion list linear (non-cyclic).

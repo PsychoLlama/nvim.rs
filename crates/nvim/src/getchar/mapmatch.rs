@@ -113,8 +113,7 @@ pub(crate) unsafe fn at_ins_compl_key() -> bool {
     {
         c = tb.byte(3) & 0x1f;
     }
-    // SAFETY: `vim_is_ctrl_x_key` only reads the completion state.
-    (ctrl_x_mode_not_default() && unsafe { vim_is_ctrl_x_key(c) })
+    (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
         || (compl_status_local() && (c == Ctrl_N || c == Ctrl_P))
 }
 
