@@ -29,7 +29,7 @@
   "abbrev_params": 0,
   "curwin_raw": 0,
   "files_without_deny_unsafe_op": 0,
-  "files_without_deny_casts": 957,
+  "files_without_deny_casts": 929,
   "files_allowing_non_camel_case_types": 26,
   "files_allowing_non_snake_case": 5,
   "files_allowing_non_upper_case_globals": 306,
