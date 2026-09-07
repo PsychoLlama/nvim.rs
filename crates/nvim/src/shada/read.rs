@@ -25,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
 const INIT_FMARKV: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM as LineNr,
+    topline_offset: MAXLNUM,
     skipcol: 0,
 };
 

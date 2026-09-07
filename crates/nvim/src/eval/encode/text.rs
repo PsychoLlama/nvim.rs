@@ -67,7 +67,7 @@ impl<const ECHO: bool> TextSink<'_, ECHO> {
         let mut numbuf = [0 as c_char; N];
         let formatted = unsafe {
             let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), N, fmt.as_ptr(), num);
-            ::core::slice::from_raw_parts(numbuf.as_ptr() as *const u8, len)
+            ::core::slice::from_raw_parts(numbuf.as_ptr().cast::<u8>(), len)
         };
         self.gap.extend_from_slice(formatted);
     }
@@ -192,7 +192,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
             if i > 0 && (i & 3) == 0 {
                 self.gap.push(b'.');
             }
-            self.concat_num::<NUMBUFLEN, _>(c"%02X", unsafe { tv_blob_get(blob, i) } as c_int);
+            self.concat_num::<NUMBUFLEN, _>(c"%02X", c_int::from(unsafe { tv_blob_get(blob, i) }));
         }
     }
 

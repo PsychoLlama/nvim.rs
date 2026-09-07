@@ -128,13 +128,13 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
         return;
     }
     let line = get_cursor_line_ptr();
+    // SAFETY: `line` is the NUL-terminated cursor line and `col` indexes it.
+    let byte_at = |col: ColNr| unsafe { *line.offset(col as isize) };
     // 'virtualedit' can leave the cursor on the terminator.
-    if win.w_cursor.col > 0 && unsafe { *line.offset(win.w_cursor.col as isize) } as c_int == NUL {
+    if win.w_cursor.col > 0 && c_int::from(byte_at(win.w_cursor.col)) == NUL {
         win.w_cursor.col -= 1;
     }
-    while win.w_cursor.col > 0
-        && ascii_iswhite(unsafe { *line.offset(win.w_cursor.col as isize) } as c_int)
-    {
+    while win.w_cursor.col > 0 && ascii_iswhite(c_int::from(byte_at(win.w_cursor.col))) {
         win.w_cursor.col -= 1;
     }
     win.w_set_curswant = true;
@@ -391,7 +391,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             unsafe { nv_gomark(cmd_arg) };
         }
         Ok(b'`') => unsafe { nv_gomark(cmd_arg) },
-        Ok(b's') => unsafe { do_sleep((ca.count1 * 1000) as int64_t, false) },
+        Ok(b's') => unsafe { do_sleep(int64_t::from(ca.count1 * 1000), false) },
         // `ga`: describe the character under the cursor.
         Ok(b'a') => unsafe { do_ascii(ptr::null_mut()) },
         // `g8` shows the byte sequence; `8g8` finds an illegal one.

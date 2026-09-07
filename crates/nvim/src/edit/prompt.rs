@@ -79,7 +79,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
             }
     };
     if start().lnum == win.w_cursor.lnum && prompt_missing() {
-        if unsafe { *text } as c_int == NUL {
+        if c_int::from(unsafe { *text }) == NUL {
             // The line is empty: the prompt *is* the line.
             let _ = unsafe { ml_replace(start().lnum, prompt, true) };
             unsafe { inserted_bytes(start().lnum, 0, 0, prompt_len) };

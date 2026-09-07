@@ -62,7 +62,7 @@ pub(crate) unsafe fn dict_check_writable(
     let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
     if !di.is_null() {
         // SAFETY: the lookup answered a live item.
-        let flags = unsafe { (*di).di_flags } as c_int;
+        let flags = c_int::from(unsafe { (*di).di_flags });
         let refused = if flags & DI_FLAGS_RO != 0 {
             Some("read-only")
         } else if flags & DI_FLAGS_LOCK != 0 {

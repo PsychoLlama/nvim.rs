@@ -614,7 +614,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         Buf::current().b_flags |= BufFlags::CHECK_RO; // check for RO again
         Buf::current().b_keep_filetype = true; // don't detect 'filetype'
         let (ffname, fname) = (buffer.b_ffname, buffer.b_fname);
-        let last = MAXLNUM as LineNr;
+        let last = MAXLNUM;
         let quiet = shortmess(ShmFlag::FILEINFO);
         let at = &raw mut ea;
         // SAFETY: a live buffer's own names, and `ea` is a local.

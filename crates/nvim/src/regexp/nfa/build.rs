@@ -634,7 +634,7 @@ fn closing_bracket(open: NfaOp) -> NfaOp {
 pub(crate) fn nfa_postprocess(prog: *mut NfaRegProg) {
     // SAFETY: `prog` is a program this module just built, with `nstate`
     // states inline.
-    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
+    let states = unsafe { &raw mut (*prog).state }.cast::<NfaState>();
     for i in 0..unsafe { (*prog).nstate } {
         let s = unsafe { states.offset(i as isize) };
         let c = NfaOp::try_from(unsafe { (*s).c });

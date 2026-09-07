@@ -248,7 +248,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
     argv[0].vval.v_number = unsafe { (*chan).id } as VarNumber;
     let cb = if reader.is_null() {
         argv[1].v_type = VAR_NUMBER as _;
-        argv[1].vval.v_number = unsafe { (*chan).exit_status } as VarNumber;
+        argv[1].vval.v_number = VarNumber::from(unsafe { (*chan).exit_status });
         argv[2].vval.v_string = c"exit".as_ptr() as *mut c_char;
         unsafe { &raw mut (*chan).on_exit }
     } else {

@@ -164,7 +164,7 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
         // even when the tail itself is empty — which is the case upstream's
         // `tail + strlen(tail) - 1` is written for.
         let last_char = *tail.add(CStr::from_ptr(tail).to_bytes().len()).sub(1);
-        if vim_ispathsep(last_char as c_int) {
+        if vim_ispathsep(c_int::from(last_char)) {
             emsg(gettext(e_noname));
             return -1;
         }

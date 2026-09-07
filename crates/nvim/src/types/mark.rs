@@ -36,7 +36,7 @@ impl FileMarkView {
     /// "remember nothing", so `mark_view_restore` computes a topline far
     /// below line 1 and gives up.
     pub const NONE: Self = Self {
-        topline_offset: crate::pos::MAXLNUM.cast_signed(),
+        topline_offset: crate::pos::MAXLNUM,
         skipcol: 0,
     };
 }

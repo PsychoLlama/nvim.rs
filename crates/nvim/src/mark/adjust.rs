@@ -67,7 +67,7 @@ impl LineShift {
     /// `ONE_ADJUST`: a deleted mark is invalidated.
     fn line(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
-            *lnum = if self.amount == MAXLNUM.cast_signed() {
+            *lnum = if self.amount == MAXLNUM {
                 0
             } else {
                 *lnum + self.amount
@@ -81,7 +81,7 @@ impl LineShift {
     /// rather than being invalidated.
     fn line_nodel(self, lnum: &mut LineNr) {
         if *lnum >= self.line1 && *lnum <= self.line2 {
-            *lnum = if self.amount == MAXLNUM.cast_signed() {
+            *lnum = if self.amount == MAXLNUM {
                 self.line1
             } else {
                 *lnum + self.amount
@@ -95,7 +95,7 @@ impl LineShift {
     /// start of the line before it.
     fn cursor(self, posp: &mut Pos) {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
-            if self.amount == MAXLNUM.cast_signed() {
+            if self.amount == MAXLNUM {
                 posp.lnum = (self.line1 - 1).max(1);
                 posp.col = 0;
             } else {
@@ -365,7 +365,7 @@ pub unsafe fn mark_adjust_buf(
         // these three tests.
         if by_api || follows(win, by_term, buffer) {
             if win.w_topline >= line1 && win.w_topline <= line2 {
-                if amount == MAXLNUM.cast_signed() {
+                if amount == MAXLNUM {
                     // An API splice that *replaces* the topline's range with
                     // at least as many lines leaves the topline where it is.
                     if !(by_api && amount_after > line1 - line2 - 1) {
@@ -512,7 +512,7 @@ mod tests {
     const DELETE_56_57: LineShift = LineShift {
         line1: 56,
         line2: 57,
-        amount: MAXLNUM.cast_signed(),
+        amount: MAXLNUM,
         amount_after: -2,
     };
 
@@ -521,7 +521,7 @@ mod tests {
     const INSERT_TWO_BELOW_55: LineShift = LineShift {
         line1: 56,
         line2: 55,
-        amount: MAXLNUM.cast_signed(),
+        amount: MAXLNUM,
         amount_after: 2,
     };
 
@@ -560,7 +560,7 @@ mod tests {
         let shift = LineShift {
             line1: 1,
             line2: 3,
-            amount: MAXLNUM.cast_signed(),
+            amount: MAXLNUM,
             amount_after: -3,
         };
         let mut pos = at(2);
@@ -596,7 +596,7 @@ mod tests {
     fn an_insertion_moves_the_marks_it_covers() {
         let shift = LineShift {
             line1: 56,
-            line2: MAXLNUM.cast_signed(),
+            line2: MAXLNUM,
             amount: 2,
             amount_after: 0,
         };

@@ -137,7 +137,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         return;
     }
 
-    if ends_excmd(unsafe { *arg } as c_int) != 0 {
+    if ends_excmd(c_int::from(unsafe { *arg })) != 0 {
         // No argument: clear all syntax items.
         if syncing != 0 {
             syntax_sync_clear();
@@ -150,7 +150,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         }
     } else {
         // Clear the groups and clusters the argument names.
-        while ends_excmd(unsafe { *arg } as c_int) == 0 {
+        while ends_excmd(c_int::from(unsafe { *arg })) == 0 {
             // SAFETY: the caller's command line.
             let (word, arg_end) = unsafe { word_at(arg) };
             if word.first() == Some(&b'@') {
@@ -195,7 +195,7 @@ fn syn_clear_one(id: c_int, syncing: bool) {
     while idx > 0 {
         idx -= 1;
         let spp = &block.patterns()[idx];
-        if spp.sp_syn.id as c_int == id && spp.sp_syncing == syncing {
+        if c_int::from(spp.sp_syn.id) == id && spp.sp_syncing == syncing {
             syn_remove_pattern(block, idx);
         }
     }

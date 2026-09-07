@@ -223,13 +223,13 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
     // 1 marks a help entry; anything else that cannot be printed is
     // reported as no type at all.
     unsafe {
-        (*qfp).qf_type = if new.kind != 1 && !vim_isprintc(new.kind as c_int) {
+        (*qfp).qf_type = if new.kind != 1 && !vim_isprintc(c_int::from(new.kind)) {
             0
         } else {
             new.kind
         }
     };
-    unsafe { (*qfp).qf_valid = new.valid as c_char };
+    unsafe { (*qfp).qf_valid = c_char::from(new.valid) };
     unsafe { (*qfp).qf_next = ptr::null_mut() };
     unsafe { (*qfp).qf_cleared = 0 };
 
@@ -475,7 +475,7 @@ pub fn qf_mark_adjust(
             if unsafe { (*qfp).qf_fnum } == buffer.handle {
                 found_one = true;
                 if unsafe { (*qfp).qf_lnum } >= line1 && unsafe { (*qfp).qf_lnum } <= line2 {
-                    if amount == MAXLNUM as LineNr {
+                    if amount == MAXLNUM {
                         unsafe { (*qfp).qf_cleared = 1 };
                     } else {
                         unsafe { (*qfp).qf_lnum += amount };

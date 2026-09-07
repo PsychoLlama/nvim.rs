@@ -138,7 +138,7 @@ pub fn os_delay(ms: u64, ignoreinput: bool) {
 /// This blocks even "fast" events, which is disruptive; prefer [`os_delay`].
 pub fn os_sleep(ms: u64) {
     // SAFETY: uv_sleep has no preconditions.
-    unsafe { uv_sleep(ms.min(u32::MAX as u64) as u32) }
+    unsafe { uv_sleep(ms.min(u64::from(u32::MAX)) as u32) }
 }
 
 /// The TZ value `tzset` was last called for. POSIX does not require

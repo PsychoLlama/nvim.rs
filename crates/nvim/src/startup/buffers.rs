@@ -179,7 +179,7 @@ pub(crate) unsafe fn read_stdin() {
         }
         let initial_buf_handle: Handle = Buf::current().handle;
         set_curbuf(stdin_buf.expect("a live handle"), 0, false);
-        let last = MAXLNUM as c_int as LineNr;
+        let last = MAXLNUM as LineNr;
         let null_ea = ptr::null_mut::<ExArg>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());

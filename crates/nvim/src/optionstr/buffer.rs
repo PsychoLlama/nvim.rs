@@ -198,7 +198,7 @@ pub unsafe fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
         unsafe { (*prompt).timestamp = os_time() };
         unsafe {
             (*prompt).view = FileMarkView {
-                topline_offset: MAXLNUM as c_int as LineNr,
+                topline_offset: MAXLNUM as LineNr,
                 skipcol: 0 as ColNr,
             }
         };

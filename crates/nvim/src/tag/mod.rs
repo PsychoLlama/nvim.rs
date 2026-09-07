@@ -200,7 +200,7 @@ static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
         fnum: 0 as ::core::ffi::c_int,
         timestamp: 0 as Timestamp,
         view: FileMarkView {
-            topline_offset: MAXLNUM as ::core::ffi::c_int as LineNr,
+            topline_offset: MAXLNUM as LineNr,
             skipcol: 0 as ColNr,
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),

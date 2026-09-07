@@ -27,7 +27,7 @@ pub unsafe fn nvim_create_augroup(
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
         != 0 as ::core::ffi::c_ulonglong
     {
-        opts.clear as ::core::ffi::c_int
+        ::core::ffi::c_int::from(opts.clear)
     } else {
         1
     } != 0;
@@ -46,7 +46,7 @@ pub unsafe fn nvim_create_augroup(
             aucmd_del_for_event_and_group(event, augroup);
         }
     }
-    (augroup as Integer).reported(error)
+    Integer::from(augroup).reported(error)
 }
 
 pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
@@ -111,7 +111,7 @@ pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> 
                 augroup_name(au_group)
             };
             if !unsafe { augroup_exists(name) } {
-                *err = err_bad_number(c"group", au_group as int64_t);
+                *err = err_bad_number(c"group", int64_t::from(au_group));
                 return AUGROUP_ERROR as ::core::ffi::c_int;
             }
             return au_group;

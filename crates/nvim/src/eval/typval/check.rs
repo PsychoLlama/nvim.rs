@@ -133,7 +133,7 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_string_arg(args, idx) }?;
     let s = unsafe { (*args.offset(idx as isize)).string_or_null() };
-    let nonempty = !s.is_null() && unsafe { *s } as ::core::ffi::c_int != NUL;
+    let nonempty = !s.is_null() && ::core::ffi::c_int::from(unsafe { *s }) != NUL;
     arg_check(
         nonempty,
         e_non_empty_string_required_for_argument_nr.as_ptr(),

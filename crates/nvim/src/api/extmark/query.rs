@@ -292,7 +292,7 @@ unsafe fn extmark_get_index_from_obj(
             unsafe { *col = 0 as ::core::ffi::c_int as ColNr };
             return true;
         } else if id == -1 as Integer {
-            unsafe { *row = MAXLNUM as ::core::ffi::c_int };
+            unsafe { *row = MAXLNUM };
             unsafe { *col = MAXCOL as ::core::ffi::c_int as ColNr };
             return true;
         } else if id < 0 as Integer && true {
@@ -325,7 +325,7 @@ unsafe fn extmark_get_index_from_obj(
         let r = (if pos_row >= 0 as Integer {
             pos_row
         } else {
-            MAXLNUM as ::core::ffi::c_int as Integer
+            MAXLNUM as Integer
         }) as ::core::ffi::c_int;
         let c = (if pos_col >= 0 as Integer {
             pos_col

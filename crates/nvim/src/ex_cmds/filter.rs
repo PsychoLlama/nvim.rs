@@ -437,7 +437,7 @@ unsafe fn do_filter(
                         ptr::null_mut(),
                         line2,
                         0,
-                        MAXLNUM as LineNr,
+                        MAXLNUM,
                         &raw mut *args,
                         READ_FILTER as c_int,
                         false,
@@ -493,13 +493,7 @@ unsafe fn do_filter(
                             )
                         };
                         unsafe {
-                            mark_adjust(
-                                line1 + read_linecount,
-                                line2,
-                                MAXLNUM as LineNr,
-                                0,
-                                kExtmarkNOOP,
-                            )
+                            mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0, kExtmarkNOOP)
                         };
                     }
                 }

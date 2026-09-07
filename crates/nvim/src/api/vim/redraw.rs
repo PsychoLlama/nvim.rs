@@ -23,7 +23,7 @@ type Redraw = Live<KeyDict_redraw>;
 /// line -- answering what `flush` becomes.
 fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
     // SAFETY: a window's `'statuscolumn'` is a live NUL-terminated string.
-    let has_statuscolumn = unsafe { *window.w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL;
+    let has_statuscolumn = ::core::ffi::c_int::from(unsafe { *window.w_onebuf_opt.wo_stc }) != NUL;
     if opts.statuscolumn && has_statuscolumn {
         window.w_nrwidth_line_count = 0 as LineNr;
         changed_window_setting(window);
@@ -183,7 +183,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         unsafe { ui_flush() };
     }
     drop(redraw);
-    p_lz.set(save_lz as ::core::ffi::c_int);
+    p_lz.set(::core::ffi::c_int::from(save_lz));
     ().reported(error)
 }
 

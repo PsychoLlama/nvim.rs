@@ -97,7 +97,7 @@ pub unsafe fn nvim_buf_add_highlight(
         return (0 as Integer).reported(error);
     };
     let out_of_range = c"out of range".as_ptr();
-    if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
+    if line < 0 as Integer || line >= MAXLNUM as Integer {
         // SAFETY: `err` is this frame's slot and both strings are static.
         error = err_invalid(c"line number", Bad::Bare(unsafe { cstr::at(out_of_range) }));
         return (0 as Integer).reported(error);
@@ -156,7 +156,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
     };
-    if line < 0 as Integer || line >= MAXLNUM as ::core::ffi::c_int as Integer {
+    if line < 0 as Integer || line >= MAXLNUM as Integer {
         error = Error::validation(c"Line number outside range");
         return (0 as Integer).reported(error);
     }

@@ -102,7 +102,7 @@ pub unsafe fn json_decode_string(
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
     // owned by it until it is stored, and the failure path clears whatever is
     // left.
-    let bytes = unsafe { ::core::slice::from_raw_parts(buf as *const u8, buf_len) };
+    let bytes = unsafe { ::core::slice::from_raw_parts(buf.cast::<u8>(), buf_len) };
 
     let mut p = 0;
     while p < buf_len && matches!(bytes[p], b' ' | TAB | NL | CAR) {

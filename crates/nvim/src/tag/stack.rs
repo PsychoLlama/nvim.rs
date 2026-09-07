@@ -38,7 +38,7 @@ const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
 
 /// The view a stack entry's mark starts with: no remembered scroll position.
 const NO_VIEW: FileMarkView = FileMarkView {
-    topline_offset: MAXLNUM as LineNr,
+    topline_offset: MAXLNUM,
     skipcol: 0,
 };
 

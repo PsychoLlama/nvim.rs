@@ -304,8 +304,12 @@ pub(crate) fn sourcing_lnum() -> LineNr {
 /// just called `ga_grow`), and `s` is an allocation `ga_clear_strings` may
 /// free.
 pub(crate) unsafe fn ga_push_string(gap: *mut GArray, s: *mut c_char) {
-    unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = s };
-    unsafe { (*gap).ga_len += 1 };
+    // SAFETY: the contract's garray, borrowed for the push.
+    let gap = unsafe { &mut *gap };
+    let slots: *mut *mut c_char = gap.ga_data.cast();
+    // SAFETY: the contract says the slot at `ga_len` is free.
+    unsafe { *slots.offset(gap.ga_len as isize) = s };
+    gap.ga_len += 1;
 }
 
 /// The `char *` items a string `GArray` holds, as a slice.

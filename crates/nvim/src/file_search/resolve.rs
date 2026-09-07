@@ -152,7 +152,7 @@ unsafe fn prepare_name(
 /// meant relative to the current directory and never looked for in `'path'`.
 unsafe fn rel_to_curdir(name: *const c_char) -> bool {
     let at = |i: usize| unsafe { *name.add(i) } as u8;
-    let ends_component = |i: usize| at(i) == 0 || vim_ispathsep(at(i) as c_int);
+    let ends_component = |i: usize| at(i) == 0 || vim_ispathsep(c_int::from(at(i)));
     at(0) == b'.' && (ends_component(1) || (at(1) == b'.' && ends_component(2)))
 }
 

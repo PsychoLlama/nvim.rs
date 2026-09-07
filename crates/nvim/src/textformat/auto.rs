@@ -63,7 +63,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // cursor -- otherwise the line is broken, and typing another
     // non-white character does not join it back together.
     let wasatend = pos.col == get_cursor_line_len();
-    if unsafe { *old } as c_int != NUL && !trailblank && wasatend {
+    if c_int::from(unsafe { *old }) != NUL && !trailblank && wasatend {
         dec_cursor();
         let mut cc = gchar_cursor();
         if !unsafe { whitechar(cc) }
@@ -85,7 +85,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // `OPENLINE_DELSPACES` would eat that space at the break. Deferring
     // means the next non-white character lands next to the space, which
     // protects it, and the keystroke after that reformats properly.
-    if unsafe { *old } as c_int != NUL
+    if c_int::from(unsafe { *old }) != NUL
         && !trailblank
         && !wasatend
         && pos.col > 0
@@ -95,7 +95,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
         // Note the argument: `WHITECHAR` tests `ascii_iswhite` on what it
         // is given but the composing check at the *cursor*, which is one
         // byte further along than the byte named here.
-        if unsafe { whitechar(*line.offset(pos.col as isize - 1) as c_int) } {
+        if unsafe { whitechar(c_int::from(*line.offset(pos.col as isize - 1))) } {
             Win::current().w_cursor = pos;
             return;
         }

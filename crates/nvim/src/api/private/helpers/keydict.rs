@@ -155,7 +155,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     }
                 }
                 // SAFETY: the row says an `Integer` lives at `mem`.
-                unsafe { *mem.cast::<Integer>() = hl_id as Integer };
+                unsafe { *mem.cast::<Integer>() = Integer::from(hl_id) };
             }
             kObjectTypeInteger => {
                 let Some(number) = given.as_integer() else {

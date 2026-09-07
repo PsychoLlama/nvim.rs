@@ -288,7 +288,7 @@ fn enter_window(
     let past_columns = if win.w_onebuf_opt.wo_rl != 0 {
         pos.col < win.w_view_width - fdc
     } else {
-        pos.col >= fdc + (cmdwin_win.get() == Some(win.id())) as c_int
+        pos.col >= fdc + c_int::from(cmdwin_win.get() == Some(win.id()))
     };
     if visual_active()
         && (win.buffer() != old_curwin.buffer()

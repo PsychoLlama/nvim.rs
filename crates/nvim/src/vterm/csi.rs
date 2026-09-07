@@ -36,7 +36,7 @@ pub(super) enum Outcome {
 /// The `n`th parameter, or `None` when the sequence omitted it. The
 /// sub-parameter flag is not part of the value.
 fn param(args: &[c_long], n: usize) -> Option<c_int> {
-    let raw = args.get(n).copied().unwrap_or(CSI_ARG_MISSING) & CSI_ARG_MASK as c_long;
+    let raw = args.get(n).copied().unwrap_or(CSI_ARG_MISSING) & c_long::from(CSI_ARG_MASK);
     (raw != CSI_ARG_MISSING).then_some(raw as c_int)
 }
 

@@ -768,7 +768,7 @@ fn dup_bytes(src: *mut c_char, len: size_t) -> *mut c_char {
 /// `find_pattern_in_path()` as CTRL-W i / d asks it: split a window on the
 /// first, or the `prenum1`th, match of `pat` along `'path'`.
 fn search_path(pat: *mut c_char, len: size_t, kind: c_int, skip_comments: bool, prenum1: c_int) {
-    let (first, last) = (1 as LineNr, MAXLNUM as LineNr);
+    let (first, last) = (1 as LineNr, MAXLNUM);
     let action = ACTION_SPLIT as c_int;
     // SAFETY: a NUL-terminated pattern of `len` bytes.
     unsafe {

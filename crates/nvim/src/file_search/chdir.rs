@@ -78,7 +78,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
             dict,
             c"changed_window".as_ptr(),
             c"changed_window".count_bytes(),
-            (cause == kCdCauseWindow) as BoolVarValue,
+            BoolVarValue::from(cause == kCdCauseWindow),
         )
     };
     unsafe { tv_dict_set_keys_readonly(dict) };

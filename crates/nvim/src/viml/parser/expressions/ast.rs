@@ -413,7 +413,7 @@ pub(super) fn viml_pexpr_new_node(type_0: ExprASTNodeType) -> *mut ExprASTNode {
     // written explicitly, because zero bytes are not a promise about an
     // enum's representation.
     unsafe {
-        let node = xcalloc(1, size_of::<ExprASTNode>()) as *mut ExprASTNode;
+        let node = xcalloc(1, size_of::<ExprASTNode>()).cast::<ExprASTNode>();
         (*node).type_0 = type_0;
         (*node).data = ExprNodeData::None;
         node

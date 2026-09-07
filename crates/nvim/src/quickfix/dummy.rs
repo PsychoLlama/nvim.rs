@@ -97,7 +97,7 @@ pub(crate) unsafe fn load_dummy_buffer(
 
         let mut newbuf_to_wipe = BufRef::NONE;
         let sfname = ptr::null_mut();
-        let lines_to_read = MAXLNUM as LineNr;
+        let lines_to_read = MAXLNUM;
         let eap = ptr::null_mut();
         let flags = (READ_NEW | READ_DUMMY) as c_int;
         let readfile_result =

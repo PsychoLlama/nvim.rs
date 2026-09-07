@@ -83,7 +83,7 @@ pub(crate) struct TermRequest {
 unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
     // SAFETY: the event carries the request `schedule_termrequest` leaked,
     // and this is the only thing that reclaims it.
-    let mut request = unsafe { Box::from_raw(*argv as *mut TermRequest) };
+    let mut request = unsafe { Box::from_raw((*argv).cast::<TermRequest>()) };
     let Some(buf) = buf_for_handle(request.buf_handle).filter(|buf| !buf.terminal.is_null()) else {
         return;
     };
@@ -114,8 +114,8 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     // line up by one.
     let scrolled = (term.sb.deleted() - request.sb_deleted) as i64;
     let mut cursor = ArrayBuf::<2>::new();
-    cursor.push(Object::integer(request.line as i64 - scrolled));
-    cursor.push(Object::integer(request.col as i64));
+    cursor.push(Object::integer(i64::from(request.line) - scrolled));
+    cursor.push(Object::integer(i64::from(request.col)));
 
     let mut data = DictBuf::<3>::new();
     data.insert(c"sequence", Object::string(sequence));

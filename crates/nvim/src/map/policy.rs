@@ -42,13 +42,13 @@ pub(super) fn bucket_count(n_min_buckets: uint32_t) -> uint32_t {
 
 /// How many buckets may be occupied before the table is resized.
 pub(super) fn upper_bound(n_buckets: uint32_t) -> uint32_t {
-    (n_buckets as f64 * limits::UPPER_FILL + 0.5) as uint32_t
+    (f64::from(n_buckets) * limits::UPPER_FILL + 0.5) as uint32_t
 }
 
 /// At the upper bound: grow the table, or just drop the tombstones and rehash
 /// in place?
 pub(super) fn should_grow(size: uint32_t, upper_bound: uint32_t) -> bool {
-    size as f64 >= upper_bound as f64 * limits::GROW_AT
+    f64::from(size) >= f64::from(upper_bound) * limits::GROW_AT
 }
 
 /// The next capacity of a dense array that has just run out. `floor` is the

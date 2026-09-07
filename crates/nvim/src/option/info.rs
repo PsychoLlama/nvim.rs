@@ -182,8 +182,11 @@ pub(crate) unsafe fn vimoption2dict(
         (c"commalist", bool_value(opt.flags & kOptFlagComma != 0)),
         (c"flaglist", bool_value(opt.flags & kOptFlagFlagList != 0)),
         (c"was_set", bool_value(option_was_set(opt_idx))),
-        (c"last_set_sid", int_value(script_ctx.sc_sid as Integer)),
-        (c"last_set_linenr", int_value(script_ctx.sc_lnum as Integer)),
+        (c"last_set_sid", int_value(Integer::from(script_ctx.sc_sid))),
+        (
+            c"last_set_linenr",
+            int_value(Integer::from(script_ctx.sc_lnum)),
+        ),
         (c"last_set_chan", int_value(script_ctx.sc_chan as int64_t)),
         (c"type", name_value(type_name.as_ptr())),
         (c"default", optval_as_object(option_default(opt_idx))),

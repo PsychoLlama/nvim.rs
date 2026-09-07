@@ -57,8 +57,8 @@ pub(super) unsafe fn put_folds_recurse(
             fprintf(
                 fd,
                 c"sil! %ld,%ldfold".as_ptr(),
-                (fold.top() + off) as int64_t,
-                (fold.last() + off) as int64_t,
+                int64_t::from(fold.top() + off),
+                int64_t::from(fold.last() + off),
             )
         };
         // SAFETY: the caller's promise.
@@ -89,7 +89,7 @@ pub(super) unsafe fn put_foldopen_recurse(
         if !fold.nested().is_empty() {
             // Open it first, so the nested commands can reach inside.
             // SAFETY: the caller's promise; the format matches its argument.
-            let wrote = unsafe { fprintf(fd, c"%ld".as_ptr(), (fold.top() + off) as int64_t) };
+            let wrote = unsafe { fprintf(fd, c"%ld".as_ptr(), int64_t::from(fold.top() + off)) };
             // SAFETY: the caller's promise.
             if wrote < 0
                 || unsafe { put_eol(fd) }.is_err()
@@ -110,9 +110,9 @@ pub(super) unsafe fn put_foldopen_recurse(
         let level = fold_level_win(window, off + fold.top());
         let foldlevel = window.w_onebuf_opt.wo_fdl;
         let differs = if fold.is(FD_CLOSED) {
-            foldlevel >= level as OptInt
+            foldlevel >= OptInt::from(level)
         } else {
-            foldlevel < level as OptInt
+            foldlevel < OptInt::from(level)
         };
         // SAFETY: the caller's promise.
         if differs {

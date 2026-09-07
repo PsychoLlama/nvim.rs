@@ -72,12 +72,12 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     };
     patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
         .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
+        .wrapping_div(::core::ffi::c_int::from(
+            ::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
+                == 0,
+        ) as usize) as size_t;
     patterns.size = 0 as size_t;
-    patterns.items = &raw mut patterns.init_array as *mut Object;
+    patterns.items = (&raw mut patterns.init_array).cast::<Object>();
     if !pattern.is_nil() {
         if let Object::String(string) = pattern {
             let mut pat: *const ::core::ffi::c_char = string.data();

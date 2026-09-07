@@ -311,7 +311,7 @@ unsafe fn deliver(
             result
         } else {
             // Already decided, on an earlier thread.
-            (t.pim.result == PimResult::Match) as c_int
+            c_int::from(t.pim.result == PimResult::Match)
         };
         if !lookaround_held(pim_state, result) {
             // The lookaround failed: the thread dies rather than being

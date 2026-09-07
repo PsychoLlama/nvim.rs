@@ -47,7 +47,7 @@ unsafe fn tslua_init(L: *mut lua_State) {
 
 unsafe extern "C-unwind" fn tslua_get_language_version(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        lua_pushnumber(L, TREE_SITTER_LANGUAGE_VERSION as lua_Number);
+        lua_pushnumber(L, lua_Number::from(TREE_SITTER_LANGUAGE_VERSION));
         1 as ::core::ffi::c_int
     }
 }
@@ -55,8 +55,9 @@ unsafe extern "C-unwind" fn tslua_get_language_version(L: *mut lua_State) -> ::c
 unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
     L: *mut lua_State,
 ) -> ::core::ffi::c_int {
+    let version = lua_Number::from(TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION);
     unsafe {
-        lua_pushnumber(L, TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as lua_Number);
+        lua_pushnumber(L, version);
         1 as ::core::ffi::c_int
     }
 }

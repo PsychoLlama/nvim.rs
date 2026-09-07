@@ -254,7 +254,7 @@ pub unsafe fn runtimepath_default(clean_arg: bool) -> *mut c_char {
     if rtp.is_empty() {
         return ptr::null_mut();
     }
-    let out = unsafe { xmalloc(rtp.len()) } as *mut c_char;
+    let out = unsafe { xmalloc(rtp.len()) }.cast::<c_char>();
     unsafe { ptr::copy_nonoverlapping(rtp.as_ptr(), out.cast(), rtp.len()) };
     out
 }

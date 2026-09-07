@@ -200,7 +200,7 @@ pub(crate) unsafe fn updatescript(c: c_int) {
     if idle
         || (p_uc.get() > 0 && {
             count.set(count.get() + 1);
-            count.get() as OptInt >= p_uc.get()
+            OptInt::from(count.get()) >= p_uc.get()
         })
     {
         // Always fsync at idle (CursorHold).

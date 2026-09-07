@@ -235,7 +235,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         } else {
             c = CAR;
             // Wait to allow the user to verify the output.
-            unsafe { do_sleep(msg_wait.get() as int64_t, true) };
+            unsafe { do_sleep(int64_t::from(msg_wait.get()), true) };
         }
     }
     redir_off.set(false);
@@ -243,7 +243,7 @@ pub unsafe fn wait_return(redraw: c_int) {
     // If the user hits ':', '?' or '/' we get a command line from the next
     // line. It draws over the prompt, so move the cmdline row down to
     // where the prompt was and skip the redraw this tail would queue.
-    if c == KEY_COLON || c == b'?' as c_int || c == b'/' as c_int {
+    if c == KEY_COLON || c == c_int::from(b'?') || c == c_int::from(b'/') {
         if !exmode_active.get() {
             cmdline_row.set(msg_row.get());
         }
@@ -293,7 +293,7 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
         p_more.set(0);
     }
     if msg_didout.get() {
-        unsafe { msg_putchar(b'\n' as c_int) }; // start on a new line
+        unsafe { msg_putchar(c_int::from(b'\n')) }; // start on a new line
     }
     p_more.set(0); // don't want to see this message when scrolling back
     if got_int.get() {

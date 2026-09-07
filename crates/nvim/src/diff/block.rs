@@ -136,7 +136,7 @@ pub fn diff_mark_adjust(
 /// The edit `mark_adjust`'s four numbers describe, as the two counts every
 /// case below is written in terms of.
 fn inserted_deleted(line2: LineNr, amount: LineNr, amount_after: LineNr) -> (LineNr, LineNr) {
-    if line2 == MAXLNUM as LineNr {
+    if line2 == MAXLNUM {
         (amount, 0) // `mark_adjust(99, MAXLNUM, 9, 0)`: insert lines
     } else if amount_after > 0 {
         (amount_after, 0) // `mark_adjust(99, 98, MAXLNUM, 9)`: a change that inserts
@@ -215,7 +215,7 @@ unsafe fn diff_mark_adjust_tp(
         // list, which is doing its own bookkeeping.
         if (dp.is_null()
             || unsafe { (*dp).df_lnum[idx] } - 1 > line2
-            || line2 == MAXLNUM as LineNr && unsafe { (*dp).df_lnum[idx] } > line1)
+            || line2 == MAXLNUM && unsafe { (*dp).df_lnum[idx] } > line1)
             && (dprev.is_null()
                 || unsafe { (*dprev).df_lnum[idx] } + unsafe { (*dprev).df_count[idx] } < line1)
             && !diff_busy.get()

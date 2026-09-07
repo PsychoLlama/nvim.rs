@@ -410,7 +410,7 @@ fn diffgetput(
             }
 
             let last = lnum + count - 1 as LineNr;
-            let max = MAXLNUM as c_int as LineNr;
+            let max = MAXLNUM as LineNr;
             let amount = added as LineNr;
             if added != 0 {
                 // SAFETY: the editor exists.

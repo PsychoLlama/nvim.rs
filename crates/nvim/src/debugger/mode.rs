@@ -152,7 +152,7 @@ unsafe fn show_debug_line(cmd: *mut c_char) {
     if lnum != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let cmd = unsafe { c_str(cmd) };
-        smsg!(0, "line {}: {cmd}", lnum as int64_t);
+        smsg!(0, "line {}: {cmd}", int64_t::from(lnum));
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let cmd = unsafe { c_str(cmd) };
@@ -375,7 +375,7 @@ unsafe fn run_debug_cmd(
         }
         DebugCmd::Frame => {
             // SAFETY: caller contract.
-            if unsafe { *arg } as c_int == NUL {
+            if c_int::from(unsafe { *arg }) == NUL {
                 unsafe { do_showbacktrace(cmd) };
             } else {
                 unsafe { do_setdebugtracelevel(skipwhite(arg)) };
@@ -428,7 +428,7 @@ unsafe fn get_maxbacktrace_level(sname: *mut c_char) -> c_int {
 /// `arg` must be NUL-terminated.
 unsafe fn do_setdebugtracelevel(arg: *mut c_char) {
     // SAFETY: caller contract.
-    let (level, relative) = unsafe { (atoi(arg), *arg as c_int == '+' as c_int) };
+    let (level, relative) = unsafe { (atoi(arg), c_int::from(*arg) == '+' as c_int) };
     if relative || level < 0 {
         debug_backtrace_level.set(debug_backtrace_level.get() + level);
     } else {

@@ -43,7 +43,7 @@ pub unsafe fn get_expr_register() -> c_int {
     // its first byte is readable.
     if c_int::from(unsafe { *new_line }) == NUL {
         // SAFETY: the empty answer is ours and nothing else points at it.
-        unsafe { xfree(new_line as *mut c_void) }; // keep the previous expression
+        unsafe { xfree(new_line.cast::<c_void>()) }; // keep the previous expression
     } else {
         // SAFETY: an allocated, NUL-terminated string, handed over.
         unsafe { set_expr_line(new_line) };
@@ -57,7 +57,7 @@ pub unsafe fn get_expr_register() -> c_int {
 /// `new_line` must be an allocated, NUL-terminated string.
 pub unsafe fn set_expr_line(new_line: *mut c_char) {
     // SAFETY: `expr_line` holds an allocation this module made, or null.
-    unsafe { xfree(expr_line.get() as *mut c_void) };
+    unsafe { xfree(expr_line.get().cast::<c_void>()) };
     expr_line.set(new_line);
 }
 
@@ -88,7 +88,7 @@ pub unsafe fn get_expr_line() -> *mut c_char {
     let rv = unsafe { eval_to_string(expr_copy, true, false) };
     drop(nesting);
     // SAFETY: `expr_copy` is ours and `eval_to_string` kept no pointer to it.
-    unsafe { xfree(expr_copy as *mut c_void) };
+    unsafe { xfree(expr_copy.cast::<c_void>()) };
     rv
 }
 
@@ -205,7 +205,7 @@ pub unsafe fn get_spec_reg(
             value = if cnt != 0 {
                 // SAFETY: a non-zero answer means `ident` points at that many
                 // bytes of the cursor's line.
-                unsafe { xmemdupz(ident as *const c_void, cnt) as *mut c_char }
+                unsafe { xmemdupz(ident as *const c_void, cnt).cast::<c_char>() }
             } else {
                 ::core::ptr::null_mut()
             };

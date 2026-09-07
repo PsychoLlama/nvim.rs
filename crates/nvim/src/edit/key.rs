@@ -444,7 +444,7 @@ fn key_stuff_last_insert(s: &mut InsertState) -> Next {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // CTRL-A keeps Insert mode, so it asks for no trailing <Esc>.
-    if unsafe { stuff_inserted(NUL, 1, (s.c == Ctrl_A) as c_int) }.is_err() && s.c != Ctrl_A {
+    if unsafe { stuff_inserted(NUL, 1, c_int::from(s.c == Ctrl_A)) }.is_err() && s.c != Ctrl_A {
         return Next::Leave;
     }
     s.inserted_space = 0;
@@ -529,7 +529,7 @@ fn key_complete(s: &mut InsertState) -> Next {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if unsafe { *Buf::current().b_p_cpt } as c_int == NUL
+    if c_int::from(unsafe { *Buf::current().b_p_cpt }) == NUL
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()
     {
@@ -611,10 +611,10 @@ fn insert_normal_char(s: &mut InsertState) {
     if p_paste.get() == 0 {
         let str = do_insert_char_pre(s.c);
         if !str.is_null() {
-            if unsafe { *str } as c_int != NUL && unsafe { stop_arrow() }.is_ok() {
+            if c_int::from(unsafe { *str }) != NUL && unsafe { stop_arrow() }.is_ok() {
                 // Insert the new value of v:char literally.
                 let mut p = str;
-                while unsafe { *p } as c_int != NUL {
+                while c_int::from(unsafe { *p }) != NUL {
                     s.c = unsafe { utf_ptr2char(p) };
                     if s.c == CAR || s.c == Key::Kenter.code() || s.c == NL {
                         ins_eol(s.c);
@@ -625,7 +625,7 @@ fn insert_normal_char(s: &mut InsertState) {
                 }
                 unsafe { append_to_redobuff_literally(str, -1) };
             }
-            unsafe { xfree(str as *mut ::core::ffi::c_void) };
+            unsafe { xfree(str.cast::<::core::ffi::c_void>()) };
             s.c = NUL;
         }
         // The new value is already in, or was an empty string.

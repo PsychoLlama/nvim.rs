@@ -118,7 +118,7 @@ pub unsafe fn changed(buffer: Buf) {
             {
                 // SAFETY: waiting on the message just shown.
                 unsafe { msg_delay(2002, true) };
-                unsafe { wait_return(true as c_int) };
+                unsafe { wait_return(c_int::from(true)) };
                 msg_scroll.set(save_msg_scroll);
             } else {
                 need_wait_return.set(save_need_wait_return);
@@ -136,7 +136,7 @@ pub unsafe fn changed(buffer: Buf) {
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 pub fn changed_internal(mut buffer: Buf) {
-    buffer.b_changed = true as c_int;
+    buffer.b_changed = c_int::from(true);
     buffer.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
     unsafe { ml_setflags(buffer) };
@@ -159,7 +159,7 @@ pub fn changed_internal(mut buffer: Buf) {
 /// but nothing here reads the buffer after it.
 pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
     if buffer.b_changed != 0 || (ff && file_ff_differs(buffer, false)) {
-        buffer.b_changed = false as c_int;
+        buffer.b_changed = c_int::from(false);
         buffer.b_changed_invalid = true;
         // SAFETY: a live buffer, which is all it asks.
         unsafe { ml_setflags(buffer) };
@@ -195,7 +195,7 @@ pub fn save_file_ff(mut buffer: Buf) {
     // SAFETY: both are NUL-terminated option strings, and `b_start_fenc` is
     // this buffer's own allocation to replace.
     if recorded.is_null() || !unsafe { cstr::eq(recorded, current) } {
-        unsafe { xfree(recorded as *mut c_void) };
+        unsafe { xfree(recorded.cast::<c_void>()) };
         buffer.b_start_fenc = unsafe { xstrdup(current) };
     }
 }

@@ -209,7 +209,7 @@ pub unsafe fn nvim_create_autocmd(
     }
     if !handler_cmd.is_null() {
         let ptr_: *mut *mut ::core::ffi::c_void =
-            &raw mut handler_cmd as *mut *mut ::core::ffi::c_void;
+            (&raw mut handler_cmd).cast::<*mut ::core::ffi::c_void>();
         unsafe { xfree(*ptr_) };
         unsafe { *ptr_ = NULL_0 };
         let _ = unsafe { *ptr_ };

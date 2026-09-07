@@ -131,7 +131,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
     let mut view = FileMarkView {
-        topline_offset: MAXLNUM as LineNr,
+        topline_offset: MAXLNUM,
         skipcol: 0,
     };
     let win = Win::current();
@@ -420,7 +420,7 @@ pub fn appended_lines(lnum: LineNr, count: LineNr) {
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
-    let max = MAXLNUM as LineNr;
+    let max = MAXLNUM;
     let cb = Buf::current();
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
@@ -450,7 +450,7 @@ pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let made_empty = count > 0 && Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cb = Buf::current();
     let last = lnum + count - 1;
-    let max = MAXLNUM as LineNr;
+    let max = MAXLNUM;
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
     // SAFETY: the current buffer is live and `lnum` is a line of it.

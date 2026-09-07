@@ -67,7 +67,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
         // SAFETY: `VAR_STRING` says `v_string` is the live member, and a
         // non-null one is NUL-terminated, so its first byte is readable.
         && !tv.string_or_null().is_null()
-        && ascii_isdigit(unsafe { *tv.string_or_null() } as c_int)
+        && ascii_isdigit(c_int::from(unsafe { *tv.string_or_null() }))
     {
         r = FAIL;
         Callback::None
@@ -77,7 +77,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
             r = FAIL;
             Callback::None
         // SAFETY: a non-null name is NUL-terminated.
-        } else if unsafe { *name } as c_int == NUL {
+        } else if c_int::from(unsafe { *name }) == NUL {
             Callback::None
         } else {
             // A plain String may name a script-local function, which
@@ -143,7 +143,7 @@ pub unsafe fn callback_call(
     argvars_in: *mut TypVal,
     result: *mut TypVal,
 ) -> bool {
-    if callback_depth.get() as OptInt > p_mfd.get() {
+    if OptInt::from(callback_depth.get()) > p_mfd.get() {
         // SAFETY: the message is a NUL-terminated literal.
         emsg_static(e_command_too_recursive);
         return false;

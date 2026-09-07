@@ -179,7 +179,7 @@ pub unsafe fn nvim_buf_delete(
     let force: bool = unsafe { (*opts).force };
     let unload: bool = unsafe { (*opts).unload };
     let result: Result<(), Failed> = do_buffer(
-        if unload as ::core::ffi::c_int != 0 {
+        if ::core::ffi::c_int::from(unload) != 0 {
             DOBUF_UNLOAD as ::core::ffi::c_int
         } else {
             DOBUF_WIPE as ::core::ffi::c_int
@@ -187,7 +187,7 @@ pub unsafe fn nvim_buf_delete(
         DOBUF_FIRST as ::core::ffi::c_int,
         FORWARD as ::core::ffi::c_int,
         b.handle as ::core::ffi::c_int,
-        force as ::core::ffi::c_int,
+        ::core::ffi::c_int::from(force),
     );
     if result.is_err() {
         let why = c"Failed to unload buffer.";

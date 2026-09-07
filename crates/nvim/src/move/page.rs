@@ -132,7 +132,7 @@ unsafe fn half_page(
     // Scroll [count], 'scroll', or the window height in lines.
     let mut count = count;
     if count != 0 {
-        win.w_onebuf_opt.wo_scr = win.w_view_height.min(count) as OptInt;
+        win.w_onebuf_opt.wo_scr = OptInt::from(win.w_view_height.min(count));
     }
     count = win.w_view_height.min(win.w_onebuf_opt.wo_scr as c_int);
 
@@ -182,7 +182,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
     // the page; otherwise a page is the window less its overlap.
     let page = if firstwin.get() == lastwin.get()
         && p_window.get() > 0
-        && p_window.get() < (Rows.get() - 1) as OptInt
+        && p_window.get() < OptInt::from(Rows.get() - 1)
     {
         (p_window.get() as c_int - 2).max(1)
     } else {

@@ -296,5 +296,5 @@ pub unsafe fn f_diff_filler(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     //
     // SAFETY: the caller's cells, and the current window is live.
     let fill = diff_check_fill(Win::current(), unsafe { tv_get_lnum(args) });
-    unsafe { (*result).vval.v_number = fill as VarNumber };
+    unsafe { (*result).vval.v_number = VarNumber::from(fill) };
 }

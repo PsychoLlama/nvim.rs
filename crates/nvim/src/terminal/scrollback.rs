@@ -229,7 +229,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
 /// # Safety
 /// `buffer` must be a live buffer.
 unsafe fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
-    let (end, after) = (MAXLNUM as LineNr, true);
+    let (end, after) = (MAXLNUM, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
     // SAFETY: the caller's promise.
     unsafe { mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op) };

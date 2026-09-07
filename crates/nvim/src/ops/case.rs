@@ -100,10 +100,10 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         Buf::current().b_op_end = op.end;
     }
 
-    if op.line_count as OptInt > p_report.get() {
+    if OptInt::from(op.line_count) > p_report.get() {
         let n = op.line_count as ::core::ffi::c_ulong;
         let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);
-        let _: bool = report_msg(0, || tr_plural!(fmt, op.line_count as int64_t));
+        let _: bool = report_msg(0, || tr_plural!(fmt, int64_t::from(op.line_count)));
     }
 }
 

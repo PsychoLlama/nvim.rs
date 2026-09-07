@@ -77,9 +77,9 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         unsafe { stuff_readbuf(get_equalprg()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
     } else if op.op_type == OpType::Format {
-        if unsafe { *Buf::current().b_p_fp } as c_int != NUL {
+        if c_int::from(unsafe { *Buf::current().b_p_fp }) != NUL {
             unsafe { stuff_readbuf(Buf::current().b_p_fp) };
-        } else if unsafe { *p_fp.get() } as c_int != NUL {
+        } else if c_int::from(unsafe { *p_fp.get() }) != NUL {
             unsafe { stuff_readbuf(p_fp.get()) };
         } else {
             unsafe { stuff_readbuf(c"fmt".as_ptr()) };
@@ -142,7 +142,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     let orig_start: Pos = Buf::current().b_op_start;
     let orig_end: Pos = Buf::current().b_op_end;
 
-    if unsafe { *p_opfunc.get() } as c_int == NUL {
+    if c_int::from(unsafe { *p_opfunc.get() }) == NUL {
         emsg(gettext(c"E774: 'operatorfunc' is empty"));
         return;
     }
@@ -180,7 +180,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let args = &raw mut argv as *mut TypVal;
+    let args = (&raw mut argv).cast::<TypVal>();
     if unsafe { callback_call(global_opfunc(), 1, args, &raw mut rettv) } {
         unsafe { tv_clear(&raw mut rettv) };
     }

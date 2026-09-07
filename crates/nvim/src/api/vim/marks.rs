@@ -31,7 +31,7 @@ unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
     }
     // SAFETY: the caller's promise -- `name` has the one byte read here.
     let mark = unsafe { *name.data() };
-    if !((mark as u8).is_ascii_uppercase() || ascii_isdigit(mark as c_int)) {
+    if !((mark as u8).is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
         // SAFETY: as above.
         unsafe { reject(err, c"mark name (must be file/uppercase)", name) };
         return None;
@@ -85,7 +85,7 @@ pub unsafe fn nvim_get_mark(
     // SAFETY: `mark_get_global` answers a live global mark for every name
     // this one accepts -- the slot exists whether or not it is set.
     let (pos, fnum, fname) = unsafe {
-        let mark = mark_get_global(false, mark as c_int);
+        let mark = mark_get_global(false, c_int::from(mark));
         ((*mark).fmark.mark, (*mark).fmark.fnum, (*mark).fname)
     };
     // A mark in a buffer names the buffer; one restored from ShaDa names

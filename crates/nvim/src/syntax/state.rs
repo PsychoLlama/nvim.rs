@@ -270,7 +270,7 @@ pub(crate) fn syn_update_ends(startofline: bool) {
         while i < state_len() {
             let mut cur_si = unsafe { state_at(i) };
             if cur_si.si_idx >= 0
-                && syn_block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_MATCH
+                && c_int::from(syn_block().pattern(cur_si.si_idx).sp_type) == SPTYPE_MATCH
                 && cur_si.si_m_endpos.lnum < current_lnum.get()
             {
                 cur_si.si_flags |= SynFlags::MATCHCONT;
@@ -407,7 +407,7 @@ pub(crate) fn syn_finish_line(syncing: bool) -> bool {
             // syn_current_attr() skipped the check for an item that ends
             // here; do it now. Be careful not to go past the NUL.
             let prev_col = current_col.get();
-            if syn_curline_byte(current_col.get()) as c_int != NUL {
+            if c_int::from(syn_curline_byte(current_col.get())) != NUL {
                 current_col.set(current_col.get() + 1);
             }
             check_state_ends();

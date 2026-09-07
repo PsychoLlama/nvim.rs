@@ -176,7 +176,7 @@ pub unsafe fn state_handle_k_event() {
         // owns its own `argv`.
         let mut event = unsafe { multiqueue_get(main_loop_events()) };
         if let Some(handler) = event.handler {
-            unsafe { handler(&raw mut event.argv as *mut *mut core::ffi::c_void) };
+            unsafe { handler((&raw mut event.argv).cast::<*mut core::ffi::c_void>()) };
         }
         if unsafe { multiqueue_empty(main_loop_events()) } {
             return;

@@ -218,7 +218,7 @@ unsafe fn system_data_cb(
     // to the next power of two, which the unit suite's `alloc_log` asserts on
     // — do not tighten it to an exact fit.
     unsafe {
-        let dbuf = &mut *(data as *mut StringBuilder);
+        let dbuf = &mut *data.cast::<StringBuilder>();
         if dbuf.capacity < dbuf.size + count {
             let mut capacity = dbuf.size + count - 1;
             capacity |= capacity >> 1;
@@ -227,7 +227,7 @@ unsafe fn system_data_cb(
             capacity |= capacity >> 8;
             capacity |= capacity >> 16;
             dbuf.capacity = capacity + 1;
-            dbuf.items = xrealloc(dbuf.items.cast(), dbuf.capacity) as *mut c_char;
+            dbuf.items = xrealloc(dbuf.items.cast(), dbuf.capacity).cast::<c_char>();
         }
         debug_assert!(!dbuf.items.is_null());
         ptr::copy_nonoverlapping(buf, dbuf.items.add(dbuf.size), count);

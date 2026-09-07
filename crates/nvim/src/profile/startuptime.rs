@@ -136,13 +136,14 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     // the size handed to `setvbuf`; the buffer outlives the stream because
     // `time_finish` frees it after `fclose`.
     let r = unsafe {
-        STARTUPTIME_BUF.set(xmalloc(BUFSIZE + 1) as *mut c_char);
+        STARTUPTIME_BUF.set(xmalloc(BUFSIZE + 1).cast::<c_char>());
         setvbuf(time_fd.get(), STARTUPTIME_BUF.get(), _IOFBF, BUFSIZE + 1)
     };
     if r != 0 {
         // SAFETY: the buffer and stream just set up, released here and
         // cleared so nothing reaches them again.
-        unsafe { xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void) };
+        let buf = STARTUPTIME_BUF.replace(core::ptr::null_mut());
+        unsafe { xfree(buf.cast::<c_void>()) };
         unsafe { fclose(time_fd.get()) };
         time_fd.set(core::ptr::null_mut());
         let fmt = c"time_init: setvbuf failed: %d %s".as_ptr();
@@ -168,5 +169,6 @@ pub fn time_finish() {
     unsafe { time_msg(c"--- NVIM STARTED ---\n".as_ptr(), core::ptr::null()) };
     unsafe { fclose(time_fd.get()) };
     time_fd.set(core::ptr::null_mut());
-    unsafe { xfree(STARTUPTIME_BUF.replace(core::ptr::null_mut()) as *mut c_void) };
+    let buf = STARTUPTIME_BUF.replace(core::ptr::null_mut());
+    unsafe { xfree(buf.cast::<c_void>()) };
 }

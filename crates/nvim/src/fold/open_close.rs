@@ -338,7 +338,7 @@ pub unsafe fn delete_fold(
     let mut level = 0;
     let mut lnum = start;
     let mut did_one = false;
-    let mut first_lnum = MAXLNUM as LineNr;
+    let mut first_lnum = MAXLNUM;
     let mut last_lnum: LineNr = 0;
     // SAFETY: the caller's promise -- a live window.
     let win = window;
@@ -472,7 +472,7 @@ pub(super) fn set_manual_fold_win(
     let mut use_level = false;
     let mut found_fold = false;
     let mut found: Option<FoldRef> = None;
-    let mut next = MAXLNUM as LineNr;
+    let mut next = MAXLNUM;
     let mut off: LineNr = 0;
     let mut done: c_int = 0;
     checkupdate(win);

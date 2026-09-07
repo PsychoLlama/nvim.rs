@@ -219,7 +219,7 @@ pub(crate) unsafe fn step(
                 // line, so it is added at offset -1.
                 *go_to_nextline = true;
                 Step::next(out, -1)
-            } else if curc == b'\n' as c_int && rex.reg_line_lbr() {
+            } else if curc == c_int::from(b'\n') && rex.reg_line_lbr() {
                 // A string match with 'linebreak' semantics: the break
                 // is just a byte.
                 Step::next(out, 1)

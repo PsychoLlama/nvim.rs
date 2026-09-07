@@ -107,7 +107,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
         }
 
         // SAFETY: `p_pex` is the `'patchexpr'` option string.
-        if unsafe { *p_pex.get() } as c_int != NUL {
+        if c_int::from(unsafe { *p_pex.get() }) != NUL {
             // SAFETY: three NUL-terminated file names.
             unsafe { eval_patch(tmp_orig, name, tmp_new) };
         } else {
@@ -462,7 +462,7 @@ pub unsafe fn ex_diffoff(args: *mut ExArg) {
 /// the option was never really recorded.
 fn saved_or(saved: *mut c_char, fallback: *const c_char) -> *const c_char {
     // SAFETY: a NUL-terminated option string the option code allocated.
-    if unsafe { *saved } as c_int != 0 {
+    if c_int::from(unsafe { *saved }) != 0 {
         saved.cast_const()
     } else {
         fallback

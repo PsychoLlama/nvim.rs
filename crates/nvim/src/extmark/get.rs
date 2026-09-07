@@ -98,7 +98,7 @@ fn push_mark(
         if !mt_decor_any(mark.start) {
             return;
         }
-        if type_flags(mt_decor(mark.start)) as ExtmarkType & type_filter == 0 {
+        if ExtmarkType::from(type_flags(mt_decor(mark.start))) & type_filter == 0 {
             return;
         }
     }

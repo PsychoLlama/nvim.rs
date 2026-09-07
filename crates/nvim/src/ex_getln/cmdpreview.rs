@@ -272,14 +272,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 
         buf.b_changed = cp_bufinfo.save_b_changed;
 
-        extmark_clear(
-            buf,
-            cmdpreview_ns.get() as uint32_t,
-            0,
-            0,
-            MAXLNUM as ::core::ffi::c_int,
-            MAXCOL,
-        );
+        extmark_clear(buf, cmdpreview_ns.get() as uint32_t, 0, 0, MAXLNUM, MAXCOL);
 
         // Undo all the changes the preview made to this buffer.
         if buf.b_u_seq_cur != cp_bufinfo.undo_info.save_b_u_seq_cur {

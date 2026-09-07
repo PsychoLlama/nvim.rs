@@ -153,7 +153,7 @@ pub unsafe fn channel_job_start(
     }
     if status != 0 {
         unsafe { channel_destroy_early(chan) };
-        unsafe { *status_out = (*proc).status as VarNumber };
+        unsafe { *status_out = VarNumber::from((*proc).status) };
         return ptr::null_mut();
     }
 

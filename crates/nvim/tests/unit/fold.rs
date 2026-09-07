@@ -23,7 +23,7 @@ use neovim::types::{GArray, LineNr};
 
 /// The sentinel `mark_adjust` passes as `amount` to mean "these lines are
 /// gone".
-const DELETED: LineNr = MAXLNUM as c_int;
+const DELETED: LineNr = MAXLNUM;
 
 fn empty_list() -> GArray {
     let mut gap = GArray {

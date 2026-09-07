@@ -37,7 +37,7 @@ pub unsafe fn tv_dict_watcher_add(
     if dict.is_null() {
         return;
     }
-    let watcher = unsafe { xmalloc(::core::mem::size_of::<DictWatcher>()) } as *mut DictWatcher;
+    let watcher = unsafe { xmalloc(::core::mem::size_of::<DictWatcher>()) }.cast::<DictWatcher>();
     unsafe { (*watcher).key_pattern = xmemdupz(key_pattern.cast(), key_pattern_len).cast() };
     // SAFETY: freshly allocated just above.
     let mut w = unsafe { Dw::new(watcher) };
@@ -152,7 +152,7 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
     }
 
     let msglen: size_t = 100;
-    let msg = unsafe { xmallocz(msglen) } as *mut ::core::ffi::c_char;
+    let msg = unsafe { xmallocz(msglen) }.cast::<::core::ffi::c_char>();
     // SAFETY: `msg` is `msglen` writable bytes, and each name below is a
     // NUL-terminated string the callback owns.
     match callback {
@@ -236,7 +236,7 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
 ) -> bool {
     let len = unsafe { (*watcher).key_pattern_len };
     if len != 0
-        && unsafe { *(*watcher).key_pattern.add(len - 1) } as ::core::ffi::c_int == '*' as i32
+        && ::core::ffi::c_int::from(unsafe { *(*watcher).key_pattern.add(len - 1) }) == '*' as i32
     {
         return unsafe { cstr::prefix_eq(key, (*watcher).key_pattern, len - 1) };
     }

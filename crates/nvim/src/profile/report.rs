@@ -54,7 +54,7 @@ pub fn profile_dump() {
 unsafe fn write_func_name(fd: &mut dyn Write, func: *mut UserFunc) -> io::Result<()> {
     // SAFETY: `uf_name` is the flexible NUL-terminated name at the end of the
     // entry, alive for as long as `func` is.
-    let name = unsafe { CStr::from_ptr(&raw const (*func).uf_name as *const c_char).to_bytes() };
+    let name = unsafe { CStr::from_ptr((&raw const (*func).uf_name).cast::<c_char>()).to_bytes() };
     if name.first().copied() == Some(K_SPECIAL as u8) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;

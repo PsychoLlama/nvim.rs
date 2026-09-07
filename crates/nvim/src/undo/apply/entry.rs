@@ -73,7 +73,7 @@ impl CursorPick {
             same += 1;
         }
         if same == newsize
-            && self.line == MAXLNUM as LineNr
+            && self.line == MAXLNUM
             // SAFETY: a live entry, by the contract above.
             && unsafe { (*uep).ue_next }.is_null()
         {
@@ -129,7 +129,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // SAFETY: a live current window.
     let mut pick = CursorPick {
-        line: MAXLNUM as LineNr,
+        line: MAXLNUM,
         pos: Win::current().w_cursor,
     };
     // The entries come back in the reverse of the order they are applied,
@@ -307,7 +307,7 @@ unsafe fn apply_entry(
 
     if oldsize != newsize {
         let delta = newsize - oldsize;
-        let maxlnum = MAXLNUM as LineNr;
+        let maxlnum = MAXLNUM;
         // SAFETY: a live current buffer.
         unsafe { mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP) };
         if buffer.b_op_start.lnum > top + oldsize {

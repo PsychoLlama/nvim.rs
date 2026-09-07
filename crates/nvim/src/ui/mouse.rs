@@ -60,7 +60,7 @@ pub unsafe fn ui_check_mouse() {
         MOUSE_COMMAND
     } else if state == MODE_EXTERNCMD {
         // The mouse belongs to whatever is running, not to us.
-        b' ' as c_int
+        c_int::from(b' ')
     } else {
         MOUSE_NORMAL
     };
@@ -77,10 +77,10 @@ pub unsafe fn ui_check_mouse() {
 pub unsafe fn ui_mouse_has(mode: c_int) -> bool {
     let mut p = p_mouse.get();
     while unsafe { *p } != 0 {
-        let flag = unsafe { *p } as c_int;
+        let flag = c_int::from(unsafe { *p });
         let matched = match flag {
             // `a` is every mode but the hit-return prompt.
-            _ if flag == b'a' as c_int => {
+            _ if flag == c_int::from(b'a') => {
                 !unsafe { vim_strchr(MOUSE_A.as_ptr().cast_mut(), mode) }.is_null()
             }
             MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,

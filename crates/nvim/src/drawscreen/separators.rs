@@ -62,7 +62,7 @@ pub(crate) unsafe fn win_redraw_signcols(mut window: Win) -> bool {
     {
         buf.b_signcols.autom = true;
         let last = buf.b_ml.ml_line_count - 1;
-        buf_signcols_count_range(buf, 0, last, MAXLNUM as c_int, SignCountHalf::Both);
+        buf_signcols_count_range(buf, 0, last, MAXLNUM, SignCountHalf::Both);
     }
 
     // `b_signcols.max` is a high-water mark that nothing lowers as signs go

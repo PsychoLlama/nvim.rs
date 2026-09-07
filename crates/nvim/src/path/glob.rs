@@ -179,7 +179,7 @@ unsafe fn split_wild_component(
             // character it escapes is copied with the step below.
             buf[at] = pattern[at];
             at += 1;
-        } else if vim_ispathsep_nocolon(pattern[at] as c_int) {
+        } else if vim_ispathsep_nocolon(c_int::from(pattern[at])) {
             if seen_wild {
                 break;
             }

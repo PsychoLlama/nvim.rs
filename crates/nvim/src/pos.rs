@@ -18,7 +18,7 @@ use crate::types::Pos;
 
 /// One past the last addressable line: the line number `$` and an open-ended
 /// range resolve to, and the sentinel a "no line" mark carries.
-pub const MAXLNUM: ::core::ffi::c_uint = 2147483647;
+pub const MAXLNUM: i32 = i32::MAX;
 
 /// One past the last addressable column: the sentinel meaning "to the end of
 /// the line", which is `INT_MAX` because `ColNr` is `int`.

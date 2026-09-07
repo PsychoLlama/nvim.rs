@@ -120,7 +120,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
 
     // Correct the cursor when 'selection' is exclusive.
     if visual_active()
-        && unsafe { *p_sel.get() } as c_int == 'e' as c_int
+        && c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int
         && lt(visual_anchor(), Win::current().w_cursor)
     {
         dec_cursor();
@@ -182,7 +182,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
-    if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+    if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
         // Correction for exclusive selection depends on the direction.
         if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();

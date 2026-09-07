@@ -66,7 +66,7 @@ pub unsafe fn estack_push_ufunc(ufunc: *mut UserFunc, lnum: LineNr) {
     // struct's trailing inline buffer.
     let name = unsafe {
         if (*ufunc).uf_name_exp.is_null() {
-            &raw mut (*ufunc).uf_name as *mut c_char
+            (&raw mut (*ufunc).uf_name).cast::<c_char>()
         } else {
             (*ufunc).uf_name_exp
         }
@@ -312,7 +312,7 @@ unsafe fn stacktrace_push_item(
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };
     }
-    unsafe { dict_add_nr(d, c"lnum", lnum as VarNumber) };
+    unsafe { dict_add_nr(d, c"lnum", VarNumber::from(lnum)) };
     unsafe { dict_add_str(d, c"filepath", filepath) };
     unsafe { tv_list_append_tv(l, &raw mut tv) };
 }

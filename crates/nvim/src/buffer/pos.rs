@@ -410,7 +410,7 @@ pub unsafe fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
         fnum: 0,
         timestamp: 0 as Timestamp,
         view: FileMarkView {
-            topline_offset: MAXLNUM as LineNr,
+            topline_offset: MAXLNUM,
             skipcol: 0 as ColNr,
         },
         additional_data: ptr::null_mut::<AdditionalData>(),

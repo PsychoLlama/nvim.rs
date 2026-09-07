@@ -266,7 +266,7 @@ impl Put {
         let from = Buf::current().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
         // SAFETY: main thread, with a current buffer; the range runs from the
         // put's first line to the end of the buffer.
-        unsafe { mark_adjust(from, MAXLNUM as LineNr, self.nr_lines, 0, kind) };
+        unsafe { mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind) };
 
         // SAFETY (both): a live buffer, and the range is the lines the put
         // just rewrote.

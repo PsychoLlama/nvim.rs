@@ -163,7 +163,7 @@ pub unsafe fn show_sb_text() {
     if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
         unsafe { vim_beep(kOptBoFlagMess as c_uint) };
     } else {
-        unsafe { do_more_prompt(b'G' as c_int) };
+        unsafe { do_more_prompt(c_int::from(b'G')) };
         unsafe { wait_return(0) };
     }
 }

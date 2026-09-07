@@ -213,7 +213,7 @@ fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loade
         true => (ptr::null_mut(), ptr::null_mut()),
         false => (Buf::current().b_ffname, Buf::current().b_fname),
     };
-    let last = MAXLNUM as LineNr;
+    let last = MAXLNUM;
     let mut retval = read_file(
         ffname,
         fname,
@@ -336,7 +336,7 @@ fn open_buffer_inner(
             buf.b_p_bin = 1;
         }
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
-        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as LineNr);
+        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM);
         let read = flags | READ_NEW as c_int | fifo;
         retval = read_file(ffname, fname, 0, 0, last, args, read, silent);
         if read_fifo {
@@ -358,7 +358,7 @@ fn open_buffer_inner(
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
         buf.b_p_bin = 1;
-        let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM as LineNr);
+        let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
         retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
         Buf::current().b_p_bin = save_bin;
@@ -509,7 +509,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
     in_buffer(newbuf, || {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
-        let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM as LineNr);
+        let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM);
         if open_memline(Buf::current()).is_ok()
             && read_file(ffname, fname, 0, 0, last, &raw mut ea, read, false) == Ok(Loaded::Read)
             && buffer.line_count() == Buf::current().line_count()

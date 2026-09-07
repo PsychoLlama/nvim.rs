@@ -431,7 +431,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };
 
     if errornr > 0 {
-        qf_goto(qi, 0, errornr, false as c_int);
+        qf_goto(qi, 0, errornr, c_int::from(false));
     } else {
         qf_emsg(E_NO_MORE_ITEMS.as_ptr());
     }

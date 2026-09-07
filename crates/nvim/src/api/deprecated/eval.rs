@@ -127,7 +127,7 @@ pub unsafe fn nvim_call_atomic(
             // `nested_error`'s own NUL-terminated string.
             unsafe {
                 array_add(&mut errval, Object::integer(i as Integer));
-                array_add(&mut errval, Object::integer(nested_error.kind() as Integer));
+                array_add(&mut errval, Object::integer(nested_error.kind().into()));
                 let why = nested_error.message_or_empty().as_ptr();
                 let msg = copy_string(cstr_as_string(why), arena);
                 array_add(&mut errval, Object::string(msg));

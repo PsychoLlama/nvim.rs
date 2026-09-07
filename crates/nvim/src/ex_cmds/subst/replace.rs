@@ -95,7 +95,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 unsafe {
                     mark_adjust(
                         st.lnum + 1 as LineNr,
-                        MAXLNUM as LineNr,
+                        MAXLNUM,
                         1 as LineNr,
                         0 as LineNr,
                         kExtmarkNOOP,
@@ -334,7 +334,7 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
         mark_adjust(
             st.lnum,
             st.lnum + st.nmatch_tl - 1 as LineNr,
-            MAXLNUM as LineNr,
+            MAXLNUM,
             -st.nmatch_tl,
             kExtmarkNOOP,
         )

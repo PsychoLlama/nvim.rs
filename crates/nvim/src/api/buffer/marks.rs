@@ -33,7 +33,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,
-            *name.data() as ::core::ffi::c_int,
+            ::core::ffi::c_int::from(*name.data()),
         )
     };
     if fm.is_null() {
@@ -104,7 +104,7 @@ pub unsafe fn nvim_buf_get_mark(
             Win::current(),
             &raw mut slot,
             kMarkAllNoResolve,
-            mark as ::core::ffi::c_int,
+            ::core::ffi::c_int::from(mark),
         )
     };
     if fm.is_null() {
@@ -118,7 +118,7 @@ pub unsafe fn nvim_buf_get_mark(
         pos = unsafe { (*fm).mark };
     }
     rv = arena_array(arena, 2 as size_t);
-    unsafe { array_add(&mut rv, Object::integer(pos.lnum as Integer)) };
-    unsafe { array_add(&mut rv, Object::integer(pos.col as Integer)) };
+    unsafe { array_add(&mut rv, Object::integer(Integer::from(pos.lnum))) };
+    unsafe { array_add(&mut rv, Object::integer(Integer::from(pos.col))) };
     rv.reported(error)
 }

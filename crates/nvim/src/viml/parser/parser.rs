@@ -307,7 +307,7 @@ pub fn viml_parser_destroy(pstate: &mut ParserState) {
 /// `cookie` must point at a `*mut ParserLine` cursor into an array whose last
 /// entry has a null `data`, and `ret_pline` at writable storage for one line.
 pub unsafe fn parser_simple_get_line(cookie: *mut c_void, ret_pline: *mut ParserLine) {
-    let plines = cookie as *mut *mut ParserLine;
+    let plines = cookie.cast::<*mut ParserLine>();
     // SAFETY: the caller's obligation; the cursor stops at the null line.
     unsafe {
         *ret_pline = **plines;

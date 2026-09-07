@@ -147,7 +147,7 @@ pub unsafe fn parse_cmdline(
             break 'end;
         }
 
-        ea.forceit = unsafe { parse_bang(ea, &raw mut p) } as c_int;
+        ea.forceit = c_int::from(unsafe { parse_bang(ea, &raw mut p) });
         if !is_user_cmd(ea.cmdidx) {
             ea.argt = cmdnames[ea.cmdidx.index()].cmd_argt;
         }
@@ -461,5 +461,5 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 /// The byte `p` points at, as the C's `*p` reads it.
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
+    unsafe { c_int::from(*p) }
 }

@@ -229,7 +229,7 @@ impl Unset {
             (Unset::Sentinel, OptSlot::Boolean(var)) => (unsafe { *var }) < 0,
             (Unset::Sentinel, OptSlot::Number(var)) => (unsafe { *var }) < 0,
             (Unset::NoLocalUndolevel, OptSlot::Number(var)) => {
-                (unsafe { *var }) == NO_LOCAL_UNDOLEVEL as OptInt
+                (unsafe { *var }) == OptInt::from(NO_LOCAL_UNDOLEVEL)
             }
             (Unset::NoLocalUndolevel, _) => {
                 unreachable!("only 'undolevels' carries that sentinel")

@@ -89,7 +89,7 @@ pub const DONE_ACTION: c_int = 1;
 pub const DONE_FOLD: c_int = 2;
 
 /// The `amount` `mark_adjust` passes to mean "these lines are gone".
-const LINES_DELETED: LineNr = MAXLNUM as LineNr;
+const LINES_DELETED: LineNr = MAXLNUM;
 
 /// One of the six per-'foldmethod' level computations in [`level`].
 pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
@@ -601,7 +601,7 @@ fn checkupdate(mut window: Win) {
     if !window.w_foldinvalid {
         return;
     }
-    fold_update(window, 1, MAXLNUM as LineNr);
+    fold_update(window, 1, MAXLNUM);
     window.w_foldinvalid = false;
 }
 

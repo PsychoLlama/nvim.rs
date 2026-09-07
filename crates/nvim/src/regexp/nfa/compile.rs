@@ -152,7 +152,7 @@ pub(crate) unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut uint8_t {
     // `len` counted the first character too, and the write below skips
     // it (it is reported separately as the program's `regstart`), so
     // there is always at least one spare byte for the terminator.
-    let text = unsafe { xmalloc(len as usize) } as *mut uint8_t;
+    let text = unsafe { xmalloc(len as usize) }.cast::<uint8_t>();
     let mut out = text;
     let mut p = unsafe { (*(*start).out).out };
     while unsafe { (*p).c } > 0 {
@@ -238,7 +238,7 @@ pub(crate) unsafe fn nfa_recognize_char_class(
     let end = end.cast_mut();
     // SAFETY: the caller's collection; every read is between `start` and
     // `end`, which is where the loop keeps `p`.
-    if unsafe { *end } as c_int != ']' as c_int {
+    if c_int::from(unsafe { *end }) != ']' as c_int {
         return None;
     }
     let mut config = CollParts::NONE;

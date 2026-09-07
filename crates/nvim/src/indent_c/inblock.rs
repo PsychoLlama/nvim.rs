@@ -236,7 +236,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         cache: CppBaseclassCache {
             found: 0,
             lpos: LPos {
-                lnum: MAXLNUM as LineNr,
+                lnum: MAXLNUM,
                 col: 0,
             },
         },

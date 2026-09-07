@@ -225,7 +225,7 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let mut argv = Array {
         size: 0,
         capacity: 2,
-        items: &raw mut items as *mut Object,
+        items: (&raw mut items).cast::<Object>(),
     };
 
     // The modifiers are passed as text, because the health check opens
@@ -236,13 +236,13 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     if cmdmod_tab() > 0 || cmdmod_split() != 0 {
         let mut multi_mods = false;
         mods_len = cmdmod.with(|cmod| unsafe {
-            add_win_cmd_modifiers(&raw mut mods as *mut c_char, cmod, &raw mut multi_mods)
+            add_win_cmd_modifiers((&raw mut mods).cast::<c_char>(), cmod, &raw mut multi_mods)
         });
         debug_assert!(mods_len < size_of::<[c_char; 1024]>());
     }
 
     items[0] = Object::String(String_0::from_raw_parts(
-        &raw mut mods as *mut c_char,
+        (&raw mut mods).cast::<c_char>(),
         mods_len,
     ));
     // `args.items` aliases `items`, so `nlua_exec` below reads this write.
@@ -342,7 +342,7 @@ fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
 /// The byte `p` points at, as the C's `*p` reads it.
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
+    unsafe { c_int::from(*p) }
 }
 
 /// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --

@@ -20,7 +20,7 @@ use crate::types::Refcount;
 /// allocation in the editor carries — being on the main thread — and *using*
 /// what comes back is the caller's business, not this call's.
 pub(crate) fn tv_list_item_alloc() -> *mut ListItem {
-    unsafe { xmalloc(::core::mem::size_of::<ListItem>()) as *mut ListItem }
+    unsafe { xmalloc(::core::mem::size_of::<ListItem>()).cast::<ListItem>() }
 }
 
 /// Remove `item` from `l`, clear its value and free it.
@@ -78,7 +78,7 @@ pub(crate) unsafe fn tv_list_watch_fix(l: *mut List, item: *const ListItem) {
 /// `len` is upstream's hint for a future array-backed list; nothing reads it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
-    let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) } as *mut List;
+    let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
 
     // Prepend the list to the list of lists for garbage collection.
     if let Some(first) = unsafe { gc_first_list.get().as_mut() } {

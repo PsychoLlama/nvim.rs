@@ -41,12 +41,12 @@ pub fn nvim_buf_clear_namespace(
     let Some(b) = find_buffer_by_handle(buf, &mut error) else {
         return ().reported(error);
     };
-    if !(line_start >= 0 as Integer && line_start < MAXLNUM as ::core::ffi::c_int as Integer) {
+    if !(line_start >= 0 as Integer && line_start < MAXLNUM as Integer) {
         error = err_out_of_range(c"line number");
         return ().reported(error);
     }
-    if line_end < 0 as Integer || line_end > MAXLNUM as ::core::ffi::c_int as Integer {
-        line_end = MAXLNUM as ::core::ffi::c_int as Integer;
+    if line_end < 0 as Integer || line_end > MAXLNUM as Integer {
+        line_end = MAXLNUM as Integer;
     }
     let ns = if ns_id < 0 as Integer {
         0 as uint32_t

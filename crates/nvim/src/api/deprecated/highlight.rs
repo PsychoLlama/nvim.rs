@@ -25,7 +25,7 @@ pub unsafe fn nvim_get_hl_by_id(
     // SAFETY: as above.
     let attrcode = unsafe { syn_id2attr(hl_id as ::core::ffi::c_int) };
     // SAFETY: `arena` is the caller's and `error` this frame's slot.
-    unsafe { hl_get_attr_by_id(attrcode as Integer, rgb, arena, &mut error) }.reported(error)
+    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena, &mut error) }.reported(error)
 }
 
 pub unsafe fn nvim_get_hl_by_name(
@@ -42,5 +42,5 @@ pub unsafe fn nvim_get_hl_by_name(
         return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.
-    unsafe { nvim_get_hl_by_id(id as Integer, rgb, arena) }
+    unsafe { nvim_get_hl_by_id(Integer::from(id), rgb, arena) }
 }

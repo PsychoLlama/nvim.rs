@@ -478,7 +478,7 @@ pub unsafe fn buf_write(
             if req.forceit
                 && target.perm >= 0
                 && target.perm & 0o200 == 0
-                && file_info_old.stat.st_uid == unsafe { getuid() } as uint64_t
+                && file_info_old.stat.st_uid == uint64_t::from(unsafe { getuid() })
                 && !cpo_has(CpoFlag::FWRITE)
             {
                 target.perm |= 0o200;

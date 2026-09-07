@@ -74,8 +74,8 @@ pub unsafe fn buffer_get_line_slice(
     include_end: Boolean,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let start = (convert_index(start as int64_t) + !include_start as int64_t) as Integer;
-    let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+    let start = (convert_index(start as int64_t) + int64_t::from(!include_start)) as Integer;
+    let end = (convert_index(end as int64_t) + int64_t::from(include_end)) as Integer;
     let no_lua = ::core::ptr::null_mut::<lua_State>();
     // SAFETY: as `buffer_get_line`.
     unsafe { nvim_buf_get_lines(0, buffer, start, end, false, arena, no_lua) }
@@ -90,8 +90,8 @@ pub unsafe fn buffer_set_line_slice(
     replacement: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let start = (convert_index(start as int64_t) + !include_start as int64_t) as Integer;
-    let end = (convert_index(end as int64_t) + include_end as int64_t) as Integer;
+    let start = (convert_index(start as int64_t) + int64_t::from(!include_start)) as Integer;
+    let end = (convert_index(end as int64_t) + int64_t::from(include_end)) as Integer;
     // SAFETY: `replacement` and `arena` are the caller's.
     unsafe { nvim_buf_set_lines(0, buffer, start, end, false, replacement, arena) }
 }

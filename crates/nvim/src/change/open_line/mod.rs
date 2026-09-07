@@ -102,7 +102,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
         // changed_lines() is postponed: calling it here would upset
         // marker folding.
         let below = Win::current().w_cursor.lnum + 1;
-        let max = MAXLNUM as LineNr;
+        let max = MAXLNUM;
         // SAFETY: the editor exists.
         unsafe { mark_adjust(below, max, 1, 0, kExtmarkNOOP) };
         return Some(true);

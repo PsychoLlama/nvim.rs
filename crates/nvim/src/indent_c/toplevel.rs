@@ -86,7 +86,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
     let mut cache = CppBaseclassCache {
         found: 0,
         lpos: LPos {
-            lnum: MAXLNUM as LineNr,
+            lnum: MAXLNUM,
             col: 0,
         },
     };

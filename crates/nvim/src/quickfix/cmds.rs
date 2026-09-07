@@ -53,7 +53,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
         }
     }
 
-    if unsafe { *args.arg } as c_int != NUL {
+    if c_int::from(unsafe { *args.arg }) != NUL {
         set_option_direct(
             kOptErrorfile,
             OptVal::String(unsafe { cstr_as_string(args.arg) }),
@@ -63,7 +63,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
     }
 
     let local_enc = Buf::current().b_p_menc;
-    let enc = if unsafe { *local_enc } as c_int != NUL {
+    let enc = if c_int::from(unsafe { *local_enc }) != NUL {
         local_enc
     } else {
         p_menc.get()
@@ -77,7 +77,7 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
     let newlist = !matches!(args.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
     let efile = p_ef.get();
     let errorformat2 = p_efm.get();
-    let newlist2 = newlist as c_int;
+    let newlist2 = c_int::from(newlist);
     let title = unsafe { qf_cmdtitle(*args.cmdlinep) };
     let qf_title2 = title.as_ptr();
     let res = unsafe { qf_init(wp, efile, errorformat2, newlist2, qf_title2, enc) };
@@ -131,9 +131,9 @@ unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let mut args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    let buf = if unsafe { *args.arg } as c_int == NUL {
+    let buf = if c_int::from(unsafe { *args.arg }) == NUL {
         Buf::current_raw()
-    } else if unsafe { *skipwhite(skipdigits(args.arg)) } as c_int == NUL {
+    } else if c_int::from(unsafe { *skipwhite(skipdigits(args.arg)) }) == NUL {
         find_buf(unsafe { atoi(args.arg) }).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         ptr::null_mut()

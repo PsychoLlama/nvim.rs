@@ -202,7 +202,7 @@ fn find_marker(line: &[u8]) -> Option<usize> {
             }
         }
         if !keep_prev {
-            prev = at(line, s) as c_int;
+            prev = c_int::from(at(line, s));
         }
         s += 1;
     }
@@ -223,7 +223,7 @@ fn version_guard_matches(line: &[u8], s: usize) -> Option<bool> {
     };
     let (vers, e) = version_at(line, digits_at)?;
 
-    let vim_version = min_vim_version() as intmax_t;
+    let vim_version = intmax_t::from(min_vim_version());
     Some(
         at(line, e) == b':'
             // "Vim" (capitalised) only counts for a "set" list.

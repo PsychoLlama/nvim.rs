@@ -39,7 +39,7 @@ unsafe fn as_g_operator(cmd_arg: *mut CmdArg, nchar: u8) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.cmdchar = 'g' as c_int;
-    ca.nchar = nchar as c_int;
+    ca.nchar = c_int::from(nchar);
     unsafe { nv_operator(cmd_arg) };
 }
 

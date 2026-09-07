@@ -59,7 +59,7 @@ impl JsonSink<'_> {
         let mut numbuf = [0 as c_char; NUMBUFLEN];
         let formatted = unsafe {
             let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), NUMBUFLEN, fmt.as_ptr(), num);
-            ::core::slice::from_raw_parts(numbuf.as_ptr() as *const u8, len)
+            ::core::slice::from_raw_parts(numbuf.as_ptr().cast::<u8>(), len)
         };
         self.gap.extend_from_slice(formatted);
     }
@@ -125,7 +125,7 @@ impl TypvalSink for JsonSink<'_> {
     ) -> Flow {
         // Bails, so the walk's own free never runs and this one owns the
         // buffer.
-        unsafe { xfree(buf as *mut c_void) };
+        unsafe { xfree(buf.cast::<c_void>()) };
         err(E474_EXT);
         Flow::Fail
     }
@@ -141,7 +141,7 @@ impl TypvalSink for JsonSink<'_> {
             if i > 0 {
                 self.gap.extend_from_slice(b", ");
             }
-            self.concat_num(c"%d", unsafe { tv_blob_get(blob, i) } as c_int);
+            self.concat_num(c"%d", c_int::from(unsafe { tv_blob_get(blob, i) }));
         }
         self.gap.push(b']');
     }

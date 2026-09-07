@@ -29,7 +29,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{CmdArg, FileMark, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
+use crate::types::{CmdArg, FileMark, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -230,7 +230,7 @@ unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
         1
     };
     let (dir, n) = (kDirectionNotSet, ca.count1);
-    let last = MAXLNUM as LineNr;
+    let last = MAXLNUM;
     // SAFETY: `name` is the NUL-terminated identifier copied above.
     unsafe {
         find_pattern_in_path(

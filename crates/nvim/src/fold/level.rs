@@ -447,7 +447,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         adjust_fold_list(
                             current.nested(),
                             current.len(),
-                            MAXLNUM as LineNr,
+                            MAXLNUM,
                             LINES_DELETED,
                             0,
                         );
@@ -464,7 +464,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                             adjust_fold_list(
                                 current.nested(),
                                 0,
-                                MAXLNUM as LineNr,
+                                MAXLNUM,
                                 current.top() - firstlnum,
                                 0,
                             );

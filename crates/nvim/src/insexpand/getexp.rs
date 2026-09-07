@@ -334,7 +334,7 @@ pub(crate) unsafe fn get_next_include_file_completion(compl_type: c_int) {
     };
     let (pat, len) = (pattern.data(), pattern.len());
     let dir = compl_direction.get();
-    let end = MAXLNUM as LineNr;
+    let end = MAXLNUM;
     let auto = compl_autocomplete.get();
     // SAFETY: `pat` is `len` readable bytes of the running completion's
     // pattern, and the search runs over the current buffer's include path.

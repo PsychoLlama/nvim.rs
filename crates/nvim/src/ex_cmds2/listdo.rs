@@ -243,7 +243,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 i = unsafe { (*args).line1 } as c_int - 1;
                 if unsafe { (*args).addr_count } <= 0 {
                     // Default to every quickfix/location list entry.
-                    debug_assert!(qf_size < MAXLNUM as c_int as size_t, "qf_size < MAXLNUM");
+                    debug_assert!(qf_size < MAXLNUM as size_t, "qf_size < MAXLNUM");
                     unsafe { (*args).line2 = qf_size as LineNr };
                 }
             }

@@ -143,9 +143,7 @@ pub(crate) unsafe fn parse_diffanchors(
         }
         // The validator accepts an address it cannot resolve yet; only
         // the real parse insists the line exists.
-        if !check_only
-            && (lnum == MAXLNUM as LineNr || lnum <= 0 || lnum > buffer.b_ml.ml_line_count + 1)
-        {
+        if !check_only && (lnum == MAXLNUM || lnum <= 0 || lnum > buffer.b_ml.ml_line_count + 1) {
             emsg(gettext(e_invrange));
             return Err(Failed);
         }

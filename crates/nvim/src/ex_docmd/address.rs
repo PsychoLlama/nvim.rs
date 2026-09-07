@@ -303,7 +303,7 @@ pub unsafe fn parse_cmd_address(
             if ea.cmd.is_null() {
                 break 'theend;
             }
-            if lnum != MAXLNUM as LineNr {
+            if lnum != MAXLNUM {
                 ea.line2 = lnum;
             } else if byte(ea.cmd) == '%' as c_int {
                 // `%` is not an address, it is a whole range, so it is
@@ -357,7 +357,7 @@ pub unsafe fn parse_cmd_address(
         if ea.addr_count == 1 {
             ea.line1 = ea.line2;
             // One address that resolved to nothing is no address.
-            if lnum == MAXLNUM as LineNr {
+            if lnum == MAXLNUM {
                 ea.addr_count = 0;
             }
         }
@@ -509,7 +509,7 @@ pub unsafe fn get_address(
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*cursor) };
-    let mut lnum: LineNr = MAXLNUM as LineNr;
+    let mut lnum: LineNr = MAXLNUM;
     let mut pos = Pos {
         lnum: 0,
         col: 0,
@@ -596,7 +596,7 @@ pub unsafe fn get_address(
                     // The search starts from the address read so far,
                     // so `:3/pat/` searches from line 3.
                     pos = Win::current().w_cursor;
-                    if lnum > 0 && lnum != MAXLNUM as LineNr {
+                    if lnum > 0 && lnum != MAXLNUM {
                         Win::current().w_cursor.lnum = lnum.min(Buf::current().b_ml.ml_line_count);
                     }
                     Win::current().w_cursor.col =
@@ -652,7 +652,7 @@ pub unsafe fn get_address(
                     break;
                 };
                 if !skip {
-                    pos.lnum = if lnum != MAXLNUM as LineNr {
+                    pos.lnum = if lnum != MAXLNUM {
                         lnum
                     } else {
                         Win::current().w_cursor.lnum
@@ -705,7 +705,7 @@ pub unsafe fn get_address(
             if byte(cmd) != '-' as c_int && byte(cmd) != '+' as c_int && !ascii_isdigit(byte(cmd)) {
                 break;
             }
-            if lnum == MAXLNUM as LineNr
+            if lnum == MAXLNUM
                 && let Addr::At(n) = offset_base(ea, addr_type)
             {
                 lnum = n;
@@ -720,8 +720,8 @@ pub unsafe fn get_address(
             let n: LineNr = if !ascii_isdigit(byte(cmd)) {
                 1
             } else {
-                let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) } as LineNr;
-                if n == MAXLNUM as LineNr {
+                let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM) } as LineNr;
+                if n == MAXLNUM {
                     *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;

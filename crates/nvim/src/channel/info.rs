@@ -245,13 +245,13 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
     } else if unsafe { (*chan).term }.is_null() {
         c"bytes"
     } else {
-        let buf = Object::Buffer(unsafe { terminal_buf((*chan).term) } as Integer);
+        let buf = Object::Buffer(Integer::from(unsafe { terminal_buf((*chan).term) }));
         // `buf` is the documented key; `buffer` is kept for older plugins.
         push(c"buf", buf);
         push(c"buffer", buf);
         push(
             c"exitcode",
-            Object::Integer(unsafe { (*chan).exit_status } as Integer),
+            Object::Integer(Integer::from(unsafe { (*chan).exit_status })),
         );
         c"terminal"
     };

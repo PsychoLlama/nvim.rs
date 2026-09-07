@@ -339,7 +339,7 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
     get_flags(args);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
-    if n == MAXLNUM as LineNr || n < 0 || n > Buf::current().b_ml.ml_line_count {
+    if n == MAXLNUM || n < 0 || n > Buf::current().b_ml.ml_line_count {
         emsg(gettext(e_invrange.as_ptr()));
         return;
     }

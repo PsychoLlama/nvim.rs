@@ -169,7 +169,7 @@ pub fn out_repeat(tui: &mut TUIData, byte: u8, count: usize) {
 pub fn terminfo_print_nums(tui: &mut TUIData, what: TerminfoDef, nums: &[c_int]) {
     let mut params = NO_PARAMS;
     for (slot, &n) in params.iter_mut().zip(nums) {
-        slot.num = n as core::ffi::c_long;
+        slot.num = core::ffi::c_long::from(n);
     }
     terminfo_print(tui, what, &mut params);
 }

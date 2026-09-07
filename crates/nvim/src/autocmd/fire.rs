@@ -289,7 +289,7 @@ pub unsafe fn apply_autocmds_group(
             fname_io
         } else if afile_is_not_a_name(event) {
             ::core::ptr::null_mut()
-        } else if !fname.is_null() && ends_excmd(unsafe { *fname } as ::core::ffi::c_int) == 0 {
+        } else if !fname.is_null() && ends_excmd(::core::ffi::c_int::from(unsafe { *fname })) == 0 {
             fname
         } else {
             buffer.map_or(::core::ptr::null_mut(), |b| b.b_ffname)
@@ -428,7 +428,7 @@ pub unsafe fn apply_autocmds_group(
                 ::core::ptr::null_mut()
             } else {
                 let saved = unsafe { set_cmdarg(args, ::core::ptr::null_mut()) };
-                unsafe { set_vim_var_nr(Vv::Cmdbang, (*args).forceit as VarNumber) };
+                unsafe { set_vim_var_nr(Vv::Cmdbang, VarNumber::from((*args).forceit)) };
                 saved
             };
             retval = true;
@@ -517,10 +517,10 @@ pub unsafe fn apply_autocmds_group(
 
         // Only if we are still in the same buffer.
         if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
-            if Buf::current().b_changed != save_changed as ::core::ffi::c_int {
+            if Buf::current().b_changed != ::core::ffi::c_int::from(save_changed) {
                 need_maketitle.set(true);
             }
-            Buf::current().b_changed = save_changed as ::core::ffi::c_int;
+            Buf::current().b_changed = ::core::ffi::c_int::from(save_changed);
         }
 
         // The patterns and commands marked deleted can really go now.
@@ -533,7 +533,7 @@ pub unsafe fn apply_autocmds_group(
         // SAFETY: live, by this function's own contract.
         unsafe { aubuflocal_remove(buffer) };
     }
-    if retval as ::core::ffi::c_int == OK && event == AutoEvent::FileType {
+    if ::core::ffi::c_int::from(retval) == OK && event == AutoEvent::FileType {
         Buf::current().b_au_did_filetype = true;
     }
 

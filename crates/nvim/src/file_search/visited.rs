@@ -290,7 +290,7 @@ pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
 pub(crate) unsafe fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs: &[Name]) -> bool {
     // Eat up trailing path separators, except the first.
     let mut path_len = path_len;
-    while path_len > 1 && vim_ispathsep(path.at(path_len - 1) as c_int) {
+    while path_len > 1 && vim_ispathsep(c_int::from(path.at(path_len - 1))) {
         path_len -= 1;
     }
     // If no path consider it as match.
@@ -300,6 +300,6 @@ pub(crate) unsafe fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs:
 
     stopdirs.iter().any(|stop| unsafe {
         path_fnamencmp(stop.as_ptr(), path.as_ptr(), path_len) == 0
-            && (stop.len() <= path_len || vim_ispathsep(stop.at(path_len) as c_int))
+            && (stop.len() <= path_len || vim_ispathsep(c_int::from(stop.at(path_len))))
     })
 }

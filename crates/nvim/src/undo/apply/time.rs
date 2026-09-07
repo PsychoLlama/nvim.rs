@@ -342,7 +342,7 @@ fn undo_search(
             });
         }
         if absolute {
-            semsg!("E830: Undo number {} not found", step as int64_t);
+            semsg!("E830: Undo number {} not found", int64_t::from(step));
             return None;
         }
         if closest.val == closest.start {

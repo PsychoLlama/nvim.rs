@@ -459,7 +459,7 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
             Buf::current().b_fname,
             args.line2,
             0,
-            MAXLNUM as LineNr,
+            MAXLNUM,
             args.raw(),
             0,
             false,
@@ -474,7 +474,7 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
             ptr::null_mut(),
             args.line2,
             0,
-            MAXLNUM as LineNr,
+            MAXLNUM,
             args.raw(),
             0,
             false,
@@ -552,7 +552,7 @@ pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
                 ACTION_SHOW as c_int
             },
             1,
-            MAXLNUM as LineNr,
+            MAXLNUM,
             args.forceit != 0,
             false,
         )

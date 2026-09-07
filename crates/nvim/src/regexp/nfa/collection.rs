@@ -110,7 +110,7 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
     // A `-` in the very first position is that character, not a range.
     let mut startc = -1;
     if pat_byte(0) == b'-' {
-        startc = b'-' as c_int;
+        startc = c_int::from(b'-');
         postfix::emit_concat(startc);
         advance_grapheme();
     }
@@ -163,7 +163,7 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
                     // loop tail advances again, so step back one character.
                     cursor::step_back(atom_start);
                 }
-                c => startc = backslash_abbr(c as c_int),
+                c => startc = backslash_abbr(c_int::from(c)),
             }
         }
         if startc == -1 {
@@ -214,7 +214,7 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
     // seen.
     cursor::step_back(atom_start);
     if pat_byte(0) == b'-' {
-        postfix::emit_concat(b'-' as c_int);
+        postfix::emit_concat(c_int::from(b'-'));
     }
     skip_past(end);
 

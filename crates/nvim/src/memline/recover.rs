@@ -283,7 +283,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
         if !Buf::current().b_ffname.is_null() {
-            orig_file_status = read_original(0, 0, MAXLNUM as LineNr, READ_NEW as c_int);
+            orig_file_status = read_original(0, 0, MAXLNUM, READ_NEW as c_int);
         }
 
         // What the swap file recorded wins over what the file suggests.

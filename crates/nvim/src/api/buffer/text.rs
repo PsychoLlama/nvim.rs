@@ -243,7 +243,7 @@ pub unsafe fn nvim_buf_set_text(
             let mut i_2: size_t = 0 as size_t;
             while i_2 < to_replace {
                 let lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
-                if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                if !(lnum_0 < MAXLNUM as int64_t) {
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
                     break 's_652;
@@ -262,7 +262,7 @@ pub unsafe fn nvim_buf_set_text(
             let mut i_3: size_t = to_replace;
             while i_3 < new_len {
                 let lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
-                if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
+                if !(lnum_1 < MAXLNUM as int64_t) {
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
                     break 's_652;
@@ -286,7 +286,7 @@ pub unsafe fn nvim_buf_set_text(
                     0 as Integer
                 })) as ColNr;
             let adjust: LineNr = if end_row >= start_row {
-                MAXLNUM as ::core::ffi::c_int as LineNr
+                MAXLNUM as LineNr
             } else {
                 0 as LineNr
             };

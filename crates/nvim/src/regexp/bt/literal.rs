@@ -68,7 +68,7 @@ pub(crate) fn is_class_shorthand(c: c_int) -> bool {
 pub(crate) fn class_shorthand(flagp: &mut c_int, c: c_int, crosses_lines: bool) -> *mut uint8_t {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
-        .find(|(name, _)| *name as c_int == unmagic(c))
+        .find(|(name, _)| c_int::from(*name) == unmagic(c))
     else {
         // The only way to get here is `\_` followed by something that is not
         // a class.
@@ -161,12 +161,12 @@ pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
     }
     let ret = regnode(BtOp::Exactly);
     let mut end = sub;
-    while unsafe { *end } as c_int != NUL {
-        regc(unsafe { *end } as c_int);
+    while c_int::from(unsafe { *end }) != NUL {
+        regc(c_int::from(unsafe { *end }));
         end = unsafe { end.add(1) };
     }
     regc(NUL);
-    if unsafe { *sub } as c_int != NUL {
+    if c_int::from(unsafe { *sub }) != NUL {
         *flagp |= HASWIDTH;
         if unsafe { end.offset_from(sub) } == 1 {
             *flagp |= SIMPLE;

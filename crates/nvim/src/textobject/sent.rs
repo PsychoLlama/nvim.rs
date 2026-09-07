@@ -103,7 +103,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 // the `||` is the proof and is left whole.
                 if unsafe {
                     decl(&mut tpos) == -1
-                        || (*ml_get(tpos.lnum) as c_int == NUL && dir as c_int == FORWARD as c_int)
+                        || (c_int::from(*ml_get(tpos.lnum)) == NUL && dir == FORWARD)
                 } {
                     break;
                 }
@@ -347,7 +347,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
         }
         unsafe { findsent_forward(count, at_start_sent) };
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
             Win::current().w_cursor.col += 1;
         }
     }
@@ -420,7 +420,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
             return Ok(());
         }
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
             Win::current().w_cursor.col += 1;
         }
         set_visual_anchor(start_pos);

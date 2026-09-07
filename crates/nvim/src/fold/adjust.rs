@@ -212,7 +212,7 @@ pub fn fold_mark_adjust(
     if line2 < line1 {
         line2 = line1;
     }
-    if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as LineNr {
+    if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
         line1 -= 1;
     }
     adjust_fold_list(window_folds(window), line1, line2, amount, amount_after);
@@ -242,7 +242,7 @@ pub(super) fn adjust_fold_list(
     }
     // In Insert mode a fold that starts exactly where the line is being
     // inserted keeps its top, so the new line lands above it.
-    let top = if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as LineNr {
+    let top = if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM {
         line1 + 1
     } else {
         line1
@@ -477,7 +477,7 @@ pub(super) unsafe fn fold_reverse_order(folds: FoldList, start_arg: c_int, end_a
 ///
 pub(super) fn truncate_fold(fold: FoldRef, end: LineNr) {
     let end = end + 1;
-    fold_remove(fold.nested(), end - fold.top(), MAXLNUM as LineNr);
+    fold_remove(fold.nested(), end - fold.top(), MAXLNUM);
     fold.set_len(end - fold.top());
 }
 

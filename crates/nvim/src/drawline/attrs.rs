@@ -211,7 +211,7 @@ impl Cells {
         self.ptr = unsafe { self.line.offset(at as isize) };
 
         // A conceal over the end of the line would hide the eol itself.
-        if unsafe { *self.ptr } as ::core::ffi::c_int == NUL {
+        if ::core::ffi::c_int::from(unsafe { *self.ptr }) == NUL {
             self.has_match_conc = 0;
         }
 
@@ -347,18 +347,18 @@ impl Cells {
             if self.bg_attr != 0 {
                 let norm_ae = syn_attr2entry(self.bg_attr);
                 normal_rgb_bg = norm_ae.rgb_bg_color as ::core::ffi::c_int;
-                normal_cterm_bg = norm_ae.cterm_bg_color as ::core::ffi::c_int;
+                normal_cterm_bg = ::core::ffi::c_int::from(norm_ae.cterm_bg_color);
             }
             let char_is_normal_bg = if ui_rgb_attached() {
                 char_ae.rgb_bg_color == normal_rgb_bg as RgbValue
             } else {
-                char_ae.cterm_bg_color as ::core::ffi::c_int == normal_cterm_bg
+                ::core::ffi::c_int::from(char_ae.cterm_bg_color) == normal_cterm_bg
             };
             // When the line has a background of its own (CursorLine) and the
             // character's is only Normal's, reverse the order so CursorLine
             // wins.
             if (line_ae.rgb_bg_color >= 0 as RgbValue
-                || line_ae.cterm_bg_color as ::core::ffi::c_int > 0)
+                || ::core::ffi::c_int::from(line_ae.cterm_bg_color) > 0)
                 && char_is_normal_bg
             {
                 low = wlv.char_attr;

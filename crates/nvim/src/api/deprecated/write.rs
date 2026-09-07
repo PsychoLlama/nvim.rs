@@ -98,9 +98,9 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
         }
         // SAFETY: `i` is below the length, so the byte is in the message.
         let byte = unsafe { *message.data().offset(i as isize) };
-        if byte as ::core::ffi::c_int == NL {
+        if ::core::ffi::c_int::from(byte) == NL {
             flush();
-        } else if byte as ::core::ffi::c_int == NUL {
+        } else if ::core::ffi::c_int::from(byte) == NUL {
             // A NUL in the text stands for a newline, as it does everywhere
             // a buffer line is passed as a C string.
             push('\n' as ::core::ffi::c_char);

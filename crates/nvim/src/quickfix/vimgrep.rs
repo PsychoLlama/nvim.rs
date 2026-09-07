@@ -133,7 +133,7 @@ impl Search {
             tomatch: if args.addr_count > 0 {
                 args.line2 as c_int
             } else {
-                MAXLNUM as c_int
+                MAXLNUM
             },
             regmatch: RegMMatch::default(),
             qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*args.cmdlinep).as_ptr()) },

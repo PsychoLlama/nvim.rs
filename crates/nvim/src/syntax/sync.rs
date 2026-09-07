@@ -464,7 +464,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             }
         } else if word == b"FROMSTART" {
             if args.skip == 0 {
-                cur_syn_block().b_syn_sync_minlines = MAXLNUM as LineNr;
+                cur_syn_block().b_syn_sync_minlines = MAXLNUM;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {

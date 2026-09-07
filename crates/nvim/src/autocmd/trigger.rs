@@ -66,8 +66,8 @@ pub unsafe fn do_doautocmd(
     // SAFETY: `arg` stays inside the caller's NUL-terminated argument, and
     // `event_name2nr` is what advances it to the next event.
     while unsafe { *arg } != 0
-        && unsafe { ends_excmd(*arg as ::core::ffi::c_int) } == 0
-        && !unsafe { ascii_iswhite(*arg as ::core::ffi::c_int) }
+        && unsafe { ends_excmd(::core::ffi::c_int::from(*arg)) } == 0
+        && !unsafe { ascii_iswhite(::core::ffi::c_int::from(*arg)) }
     {
         // SAFETY: the event name at `arg`, the file name beside it, and
         // `curbuf`, which is live from startup to exit.

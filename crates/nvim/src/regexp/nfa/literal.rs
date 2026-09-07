@@ -69,13 +69,13 @@ pub(crate) fn is_class_shorthand(c: c_int) -> bool {
 pub(crate) fn class_shorthand(c: c_int, accepts_newline: bool) -> Parsed {
     let Some(&(_, code)) = CLASS_SHORTHANDS
         .iter()
-        .find(|(name, _)| *name as c_int == unmagic(c))
+        .find(|(name, _)| c_int::from(*name) == unmagic(c))
     else {
         // Reachable two ways: `\_` followed by something that is not a
         // class, and — only in principle — a dispatch that sent a character
         // here that is not one either.
         if accepts_newline {
-            let c = c as i64;
+            let c = i64::from(c);
             semsg!("E877: (NFA regexp) Invalid character class: {c}");
             rc_did_emsg.set(true);
         } else {
@@ -102,7 +102,7 @@ pub(crate) fn class_shorthand(c: c_int, accepts_newline: bool) -> Parsed {
 
 /// `\1` .. `\9`: match what that capture group matched.
 pub(crate) fn back_reference(rex: Rex, c: c_int) -> Parsed {
-    let refnum = unmagic(c) - b'1' as c_int;
+    let refnum = unmagic(c) - c_int::from(b'1');
     // A back-reference to a group that has not been closed yet cannot work.
     if !seen_endbrace(refnum + 1) {
         return Err(Rejected);
@@ -124,7 +124,7 @@ pub(crate) fn previous_substitute() -> Parsed {
         return Err(Rejected);
     }
     let mut p = sub;
-    while unsafe { *p } as c_int != NUL {
+    while c_int::from(unsafe { *p }) != NUL {
         postfix::emit(unsafe { utf_ptr2char(p) });
         // The join goes after the second and every later character, so
         // the run reads as `a b CONCAT c CONCAT …`.

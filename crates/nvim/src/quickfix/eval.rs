@@ -234,7 +234,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
         // `tv_get_string_chk` fails on anything else for.
         let act = unsafe { numbuf.string_chk(action_arg) };
         let known = matches!(unsafe { *act } as u8, b'a' | b'r' | b'u' | b' ' | b'f');
-        if !known || unsafe { *act.add(1) } as c_int != NUL {
+        if !known || c_int::from(unsafe { *act.add(1) }) != NUL {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let act = unsafe { c_str(act) };
             semsg!("E927: Invalid action: '{act}'");
@@ -268,7 +268,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
 
     let _recursing = Depth::of(&RECURSIVE);
     let l = unsafe { (*list_arg).vval.v_list };
-    if unsafe { set_errorlist(window, l, action as c_int, title.cast_mut(), what) }.is_ok() {
+    if unsafe { set_errorlist(window, l, c_int::from(action), title.cast_mut(), what) }.is_ok() {
         unsafe { (*result).vval.v_number = 0 };
     }
 }

@@ -37,7 +37,7 @@ pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     let count = unsafe { selected_arglist(args) }.map_or(-1, alist_count);
-    unsafe { (*result).vval.v_number = count as VarNumber };
+    unsafe { (*result).vval.v_number = VarNumber::from(count) };
 }
 
 /// "argidx()" function
@@ -47,7 +47,7 @@ pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 /// Standard eval-function contract.
 pub unsafe fn f_argidx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*result).vval.v_number = Win::current().w_arg_idx as VarNumber };
+    unsafe { (*result).vval.v_number = VarNumber::from(Win::current().w_arg_idx) };
 }
 
 /// "arglistid()" function
@@ -64,7 +64,7 @@ pub unsafe fn f_arglistid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
             // SAFETY: a window the registry answered with, so it is live,
             // and every window has an argument list.
             let id = unsafe { (*win_alist(wp)).id };
-            id as VarNumber
+            VarNumber::from(id)
         }
         None => -1 as VarNumber,
     };

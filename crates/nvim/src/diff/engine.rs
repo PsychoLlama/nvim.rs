@@ -138,8 +138,8 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Faile
         out_line: None,
     };
 
-    if unsafe { (*diffio).dio_orig.din_mmfile.size } as ::core::ffi::c_long > MAX_XDIFF_SIZE
-        || unsafe { (*diffio).dio_new.din_mmfile.size } as ::core::ffi::c_long > MAX_XDIFF_SIZE
+    if ::core::ffi::c_long::from(unsafe { (*diffio).dio_orig.din_mmfile.size }) > MAX_XDIFF_SIZE
+        || ::core::ffi::c_long::from(unsafe { (*diffio).dio_new.din_mmfile.size }) > MAX_XDIFF_SIZE
         || unsafe {
             xdl_diff(
                 &raw mut (*diffio).dio_orig.din_mmfile,
@@ -176,7 +176,7 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
         + unsafe { cstr::bytes_at(tmp_diff) }.len()
         + unsafe { cstr::bytes_at(p_srr.get()) }.len()
         + 27;
-    let cmd = unsafe { xmalloc(len) } as *mut c_char;
+    let cmd = unsafe { xmalloc(len) }.cast::<c_char>();
     // The user's own `diff` options would corrupt the output format.
     if unsafe { os_env_exists(c"DIFF_OPTIONS".as_ptr(), true) } {
         unsafe { os_unsetenv(c"DIFF_OPTIONS".as_ptr()) };
@@ -223,7 +223,7 @@ unsafe extern "C" fn xdiff_out(
     count_b: c_int,
     priv_0: *mut ::core::ffi::c_void,
 ) -> c_int {
-    let dout = priv_0 as *mut DiffOut;
+    let dout = priv_0.cast::<DiffOut>();
     // SAFETY: `priv_0` is the output side `xdl_diff` was started with.
     unsafe {
         (*dout).dout_ga.push(DiffHunk {

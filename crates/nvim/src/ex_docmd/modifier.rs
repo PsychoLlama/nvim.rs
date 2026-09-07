@@ -332,7 +332,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                         if ea.cmd.is_null() {
                             return Err(Failed);
                         }
-                        if tabnr == MAXLNUM as c_int {
+                        if tabnr == MAXLNUM {
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(None) {

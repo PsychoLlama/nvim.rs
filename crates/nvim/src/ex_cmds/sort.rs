@@ -716,18 +716,10 @@ unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Plac
     let deleted = count as LineNr - (lnum - line2);
     // SAFETY: caller's contract.
     if deleted > 0 {
-        unsafe {
-            mark_adjust(
-                line2 - deleted,
-                line2,
-                MAXLNUM as LineNr,
-                -deleted,
-                kExtmarkNOOP,
-            )
-        };
+        unsafe { mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, kExtmarkNOOP) };
         say::more(-deleted);
     } else if deleted < 0 {
-        unsafe { mark_adjust(line2, MAXLNUM as LineNr, -deleted, 0, kExtmarkNOOP) };
+        unsafe { mark_adjust(line2, MAXLNUM, -deleted, 0, kExtmarkNOOP) };
     }
 
     if placed.moved || deleted != 0 {
@@ -927,7 +919,7 @@ unsafe fn uniq_range(args: &mut ExArg) {
             mark_adjust(
                 line2 - deleted,
                 line2,
-                MAXLNUM as LineNr,
+                MAXLNUM,
                 -deleted,
                 if change_occurred {
                     kExtmarkUndo

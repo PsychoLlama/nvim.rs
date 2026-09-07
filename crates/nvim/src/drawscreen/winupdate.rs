@@ -428,7 +428,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
     // The line below the last valid entry above `mod_top`, and the first
     // valid entry at or below `mod_bot`.
     let mut lnumt = win.w_topline;
-    let mut lnumb = MAXLNUM as LineNr;
+    let mut lnumb = MAXLNUM;
     for i in 0..win.w_lines_valid {
         let wl = unsafe { win.w_lines.add(i as usize) };
         if !unsafe { (*wl).wl_valid } {
@@ -437,7 +437,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
         if unsafe { (*wl).wl_lastlnum } < rg.mod_top {
             lnumt = unsafe { (*wl).wl_lastlnum } + 1;
         }
-        if lnumb == MAXLNUM as LineNr && unsafe { (*wl).wl_lnum } >= rg.mod_bot {
+        if lnumb == MAXLNUM && unsafe { (*wl).wl_lnum } >= rg.mod_bot {
             lnumb = unsafe { (*wl).wl_lnum };
             // A fold column may need updating on the next line as well
             // ("J" just above an open fold).

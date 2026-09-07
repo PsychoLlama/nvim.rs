@@ -94,7 +94,7 @@ unsafe fn callable_name(tv: *mut TypVal) -> *mut c_char {
     } else {
         unsafe { partial_name((*tv).partial_or_null()) }
     };
-    if !name.is_null() && unsafe { *name } as c_int == NUL {
+    if !name.is_null() && c_int::from(unsafe { *name }) == NUL {
         return core::ptr::null_mut();
     }
     name

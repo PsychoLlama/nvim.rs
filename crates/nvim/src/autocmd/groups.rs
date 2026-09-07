@@ -285,7 +285,7 @@ pub(crate) unsafe fn arg_augroup_get(argp: *mut *mut ::core::ffi::c_char) -> ::c
     let bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
     let len = bytes
         .iter()
-        .position(|&c| ascii_iswhite(c as ::core::ffi::c_int) || c == b'|')
+        .position(|&c| ascii_iswhite(::core::ffi::c_int::from(c)) || c == b'|')
         .unwrap_or(bytes.len());
     if len == 0 {
         return AUGROUP_ALL;

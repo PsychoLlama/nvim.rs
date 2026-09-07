@@ -50,7 +50,7 @@ pub(crate) fn adjust(
     let mut new_byte = 0;
     let old_row;
     let new_row;
-    if amount == MAXLNUM as LineNr {
+    if amount == MAXLNUM {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
         old_byte = buffer.deleted_bytes2 as BCount;
@@ -59,7 +59,7 @@ pub(crate) fn adjust(
         // A region is either deleted (amount == MAXLNUM) or added
         // (line2 == MAXLNUM). The only other case is `:move`, which
         // `extmark_move_region` handles.
-        debug_assert!(line2 == MAXLNUM as LineNr, "line2 == MAXLNUM");
+        debug_assert!(line2 == MAXLNUM, "line2 == MAXLNUM");
         old_row = 0;
         new_row = amount;
     }

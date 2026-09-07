@@ -121,7 +121,7 @@ pub unsafe fn parse_pattern_and_range(
 
     // Default range: all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as LineNr);
+    search_last_line.set(MAXLNUM);
 
     let mut ea = ExArg {
         line1: 1,
@@ -291,7 +291,7 @@ pub(crate) fn do_incsearch_highlighting(
 
     // By default search all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as LineNr);
+    search_last_line.set(MAXLNUM);
 
     if firstc == '/' as ::core::ffi::c_int || firstc == '?' as ::core::ffi::c_int {
         *search_delim = firstc;
@@ -577,7 +577,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 
     // By default search all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as LineNr);
+    search_last_line.set(MAXLNUM);
 
     magic_overruled.set(s.magic_overruled_save);
 

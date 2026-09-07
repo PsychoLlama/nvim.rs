@@ -108,7 +108,7 @@ fn list_sync_items() {
     } else if block.b_syn_sync_minlines == 0 {
         unsafe { msg_puts(gettext(c"no syncing").as_ptr()) };
     } else {
-        if block.b_syn_sync_minlines == MAXLNUM as LineNr {
+        if block.b_syn_sync_minlines == MAXLNUM {
             unsafe { msg_puts(gettext(c"syncing starts at the first line").as_ptr()) };
         } else {
             unsafe { msg_puts(gettext(c"syncing starts ").as_ptr()) };
@@ -126,7 +126,7 @@ fn syn_lines_msg() {
         return;
     }
     unsafe { msg_puts(c"; ".as_ptr()) };
-    if block.b_syn_sync_minlines == MAXLNUM as LineNr {
+    if block.b_syn_sync_minlines == MAXLNUM {
         unsafe { msg_puts(gettext(c"from the first line").as_ptr()) };
         return;
     }

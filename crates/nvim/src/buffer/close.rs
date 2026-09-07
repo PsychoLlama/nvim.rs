@@ -171,7 +171,7 @@ fn drop_mark(mark: FileMark) {
 /// Move every mark in `buffer` up by `count` lines from line 1 -- what an
 /// emptied buffer needs so a reload starts from a clean slate.
 fn forget_lines(buffer: Buf, count: LineNr) {
-    let (raw, last) = (buffer.raw(), MAXLNUM as LineNr);
+    let (raw, last) = (buffer.raw(), MAXLNUM);
     // SAFETY: a live buffer.
     let raw = unsafe { Buf::new(raw) };
     // SAFETY: a live buffer.

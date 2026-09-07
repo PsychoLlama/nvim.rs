@@ -158,7 +158,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
         unsafe { last_insert_slot().replace(inserted) };
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
     } else {
-        unsafe { xfree(inserted.data() as *mut ::core::ffi::c_void) };
+        unsafe { xfree(inserted.data().cast::<::core::ffi::c_void>()) };
     }
 
     if !arrow_used.get() && !end_insert_pos.is_null() {
@@ -270,7 +270,8 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     let tick = buf_get_changedtick(Buf::current());
     let none = ::core::ptr::null_mut();
-    let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) } as c_int;
+    let r =
+        c_int::from(unsafe { apply_autocmds(event, none, none, false, Buf::current_or_none()) });
 
     if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(Buf::current()) {
         let _ = u_save(
