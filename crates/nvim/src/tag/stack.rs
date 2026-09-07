@@ -292,7 +292,7 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
         unsafe { add_str(retdict, c"user_data", tag.user_data) };
     }
 
-    let pos = unsafe { tv_list_alloc(4) };
+    let pos = tv_list_alloc(4);
     let _ = unsafe { tv_dict_add_list(retdict, c"from".as_ptr(), c"from".count_bytes(), pos) };
     let mark = &tag.fmark;
     let str_m = if mark.fnum != -1 {
@@ -322,7 +322,7 @@ pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
     unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
     unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
 
-    let items = unsafe { tv_list_alloc(2) };
+    let items = tv_list_alloc(2);
     let _ = unsafe { tv_dict_add_list(retdict, c"items".as_ptr(), c"items".count_bytes(), items) };
     for entry in stack.entries() {
         let d = unsafe { tv_dict_alloc() };

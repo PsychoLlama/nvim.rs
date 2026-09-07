@@ -73,7 +73,7 @@ pub(crate) unsafe fn eval_addblob(tv1: *mut TypVal, tv2: *mut TypVal) {
     // union holds a live `Blob`, and `b` is a Blob of this call's own.
     let b1: *const Blob = unsafe { (*tv1).blob_or_null() };
     let b2: *const Blob = unsafe { (*tv2).blob_or_null() };
-    let b: *mut Blob = unsafe { tv_blob_alloc() };
+    let b: *mut Blob = tv_blob_alloc();
     let len1 = unsafe { tv_blob_len(b1) } as i64;
     let len2 = unsafe { tv_blob_len(b2) } as i64;
     let total = len1 + len2;

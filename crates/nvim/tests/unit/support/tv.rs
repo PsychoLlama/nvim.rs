@@ -166,7 +166,7 @@ impl Tv {
                 },
             ),
             Tv::List(items) => {
-                let l = unsafe { tv_list_alloc(items.len() as isize) };
+                let l = tv_list_alloc(items.len() as isize);
                 unsafe { (*l).lv_refcount = Refcount::ONE };
                 path.push(Container::List(l));
                 for item in items {

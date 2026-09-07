@@ -47,6 +47,12 @@ const NIL: TypVal = TypVal {
 };
 
 /// `copy({expr})` — one level deep.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_copy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: `args.ptr(0)` and `result` are live typvals.
@@ -57,6 +63,12 @@ pub unsafe fn f_copy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 ///
 /// Without `noref` the copy is given a copy id, which is what lets it
 /// reproduce a self-referential structure rather than recursing forever.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_deepcopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals.
@@ -69,6 +81,12 @@ pub unsafe fn f_deepcopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `empty({expr})` — what "empty" means for each type.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let tv = args.get(0);
@@ -100,12 +118,24 @@ pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_flatten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     flatten_common(args, result, false);
 }
 
 /// `flattennew({list} [, {maxdepth}])` — into a copy.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_flattennew(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     flatten_common(args, result, true);
@@ -166,6 +196,12 @@ fn flatten_common(args: Args<'_>, result: &mut TypVal, make_copy: bool) {
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
 /// Funcref or Partial.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals; each union read
@@ -358,6 +394,12 @@ unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_index(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = -1;
@@ -442,6 +484,12 @@ fn index_list(args: Args<'_>, result: &mut TypVal) {
 
 /// `indexof({object}, {expr} [, {opts}])` — the first index whose value
 /// satisfies `expr`, which sees the item as `v:key` and `v:val`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = -1;
@@ -584,6 +632,12 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: *mut TypVal) -> 
 }
 
 /// `len({expr})` — bytes for a String or Number, items otherwise.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -608,6 +662,12 @@ pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 }
 
 /// `type({expr})` — the `v:t_*` number for the value's type.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_type(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let n: c_int = match args.ty(0) {

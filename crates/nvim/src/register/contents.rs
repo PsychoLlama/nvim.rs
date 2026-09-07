@@ -77,9 +77,7 @@ unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
     if flags & kGRegList as c_int == 0 {
         return s as *mut c_void;
     }
-    // SAFETY: a fresh one-element list, which then takes ownership of `s` --
-    // an allocated NUL-terminated string, as the caller promises.
-    let list = unsafe { tv_list_alloc(1) };
+    let list = tv_list_alloc(1);
     // SAFETY: as above.
     unsafe { tv_list_append_allocated_string(list, s) };
     list as *mut c_void

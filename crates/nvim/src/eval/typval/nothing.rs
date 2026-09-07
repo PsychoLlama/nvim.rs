@@ -55,6 +55,10 @@ impl TypvalSink for NothingSink {
     const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_nothing_convert_one_value()";
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_nil(&mut self, tv: *mut TypVal) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
@@ -62,6 +66,10 @@ impl TypvalSink for NothingSink {
         val.v_lock = VarLock::Unlocked;
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_bool(&mut self, tv: *mut TypVal, _num: bool) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
@@ -69,6 +77,10 @@ impl TypvalSink for NothingSink {
         val.v_lock = VarLock::Unlocked;
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_number(&mut self, tv: *mut TypVal, _num: int64_t) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
@@ -76,6 +88,10 @@ impl TypvalSink for NothingSink {
         val.v_lock = VarLock::Unlocked;
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_float(&mut self, tv: *mut TypVal, _flt: Float) -> Flow {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
@@ -84,6 +100,10 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_string(&mut self, tv: *mut TypVal, buf: *mut c_char, _len: size_t) -> Flow {
         unsafe { xfree(buf.cast::<c_void>()) };
         unsafe { (*tv).vval.v_string = ptr::null_mut() };
@@ -94,6 +114,11 @@ impl TypvalSink for NothingSink {
     /// Nothing to do, and it must *not* fall back on [`Self::conv_string`]:
     /// the only buffer that reaches this hook is a dictionary key, which the
     /// dictionary owns and frees with itself.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_str_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_str_string(
         &mut self,
         _tv: *mut TypVal,
@@ -105,6 +130,11 @@ impl TypvalSink for NothingSink {
 
     /// Unreachable: an `ext` value only comes out of a special dictionary,
     /// which this sink refuses.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
         _tv: *mut TypVal,
@@ -115,6 +145,10 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_blob(&mut self, tv: *mut TypVal, _blob: *const Blob, _len: c_int) {
         unsafe { tv_blob_unref((*tv).blob_or_null()) };
         unsafe { (*tv).vval.v_blob = ptr::null_mut() };
@@ -124,6 +158,11 @@ impl TypvalSink for NothingSink {
     /// A funcref releases its name here and is done.  A partial with another
     /// owner drops one reference and stops, so the walk never descends into
     /// arguments that are not ours to free.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
         tv: *mut TypVal,
@@ -155,6 +194,11 @@ impl TypvalSink for NothingSink {
 
     /// The last reference to a partial, its arguments and self dictionary
     /// already released by the frames the walk drained.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_end(&mut self, tv: *mut TypVal, copyid: c_int) {
         // SAFETY: the walk's live typval.
         let val = unsafe { Tv::new(tv) };
@@ -180,20 +224,37 @@ impl TypvalSink for NothingSink {
 
     /// Nothing to announce; the frame surgery below is where the list is
     /// either released or skipped.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, _len: c_int) -> Flow {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, _len: size_t) -> Flow {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_list(&mut self, tv: *mut TypVal) {
         unsafe { tv_list_unref((*tv).list_or_null()) };
         unsafe { (*tv).vval.v_list = ptr::null_mut() };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_dict(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         // Upstream asserts the lvalue is a real one.  `None` is a special
         // map's `_VAL`, which cannot reach a sink that refuses specials.
@@ -210,6 +271,11 @@ impl TypvalSink for NothingSink {
     /// Frame surgery: a list with another owner loses one reference and its
     /// frame is left looking drained, so the walk pops it without visiting a
     /// single item.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_real_list_after_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_real_list_after_start(
         &mut self,
         tv: *mut TypVal,
@@ -235,6 +301,10 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_end(&mut self, tv: *mut TypVal) {
         if tv.is_null() {
             // A partial's argument list, which has no `TypVal` of its
@@ -246,6 +316,11 @@ impl TypvalSink for NothingSink {
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_real_dict_after_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_real_dict_after_start(
         &mut self,
         tv: *mut TypVal,
@@ -268,6 +343,10 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         if let Some(dictp) = dictp {
             unsafe { tv_dict_unref(*dictp) };
@@ -279,6 +358,11 @@ impl TypvalSink for NothingSink {
     /// itself.  Answering `Go` means "handled": the walk stops converting the
     /// value, and the reference count the enclosing container drops is what
     /// frees it.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_recurse(
         &mut self,
         _val: *mut c_void,

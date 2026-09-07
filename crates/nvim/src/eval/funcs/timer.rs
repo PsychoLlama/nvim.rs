@@ -69,6 +69,12 @@ unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
 /// `wait({timeout}, {condition} [, {interval}])` — pump the event loop until
 /// `condition` evaluates true. 0 when it did, -1 on timeout, -2 on CTRL-C,
 /// -3 when evaluating `condition` failed.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -132,6 +138,12 @@ pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 }
 
 /// `localtime()` — seconds since the epoch.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_localtime(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     // SAFETY: `time(NULL)` writes nothing.
@@ -179,6 +191,12 @@ unsafe fn list2proftime(arg: *const TypVal) -> Option<ProfTime> {
 
 /// `reltime([{start} [, {end}]])` — a timestamp, an elapsed time, or the
 /// difference between two timestamps, as a `[high, low]` List.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reltime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the list entry points take the frame's return value, which is
@@ -209,6 +227,12 @@ pub unsafe fn f_reltime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reltimestr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -221,6 +245,12 @@ pub unsafe fn f_reltimestr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `reltimefloat({time})` — the elapsed time in seconds.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reltimefloat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_FLOAT;
@@ -232,6 +262,12 @@ pub unsafe fn f_reltimefloat(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `timer_info([{id}])` — one timer's state, or every live timer's.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_timer_info(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the timer list is main-thread state; the return value is the
@@ -256,6 +292,12 @@ pub unsafe fn f_timer_info(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
 /// `timer_pause({id}, {pause})` — stop or restart a timer's clock without
 /// forgetting it.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_unused` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_timer_pause(args: *mut TypVal, _unused: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, _unused);
     // SAFETY throughout: the timer comes from the main-thread timer table and its
@@ -283,6 +325,12 @@ pub unsafe fn f_timer_pause(args: *mut TypVal, _unused: *mut TypVal, _fptr: Eval
 
 /// `timer_start({time}, {callback} [, {options}])` — the new timer's id, or
 /// -1 when it could not be started.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_timer_start(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = -1;
@@ -314,6 +362,12 @@ pub unsafe fn f_timer_start(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `timer_stop({id})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_timer_stop(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, _result);
     // SAFETY throughout: the timer comes from the main-thread timer table.
@@ -327,6 +381,12 @@ pub unsafe fn f_timer_stop(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalF
 }
 
 /// `timer_stopall()`.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_unused` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_timer_stopall(_args: *mut TypVal, _unused: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: walks the main-thread timer table.
     unsafe { timer_stop_all() }

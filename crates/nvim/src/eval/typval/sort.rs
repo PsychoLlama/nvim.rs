@@ -29,6 +29,12 @@ use crate::types::{Failed, NUL};
 ///
 /// With `keep_zero` clear, ties are broken by the items' original indexes,
 /// which is what makes the sort stable.
+///
+/// # Safety
+///
+/// `s1` and `s2` must point at the two `ListSortItem`s of the array
+/// `do_sort`/`do_uniq` handed to `qsort`, live for the comparison, and
+/// `sortinfo` must still hold the `SortInfo` that sort set up.
 pub(crate) unsafe fn item_compare(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -131,6 +137,10 @@ pub(crate) unsafe fn item_compare(
 }
 
 /// [`item_compare`] answering 0 for equal items — `uniq`'s comparator.
+///
+/// # Safety
+///
+/// As [`item_compare`].
 pub(crate) unsafe extern "C" fn item_compare_keeping_zero(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -139,6 +149,10 @@ pub(crate) unsafe extern "C" fn item_compare_keeping_zero(
 }
 
 /// [`item_compare`] breaking ties by index — `sort`'s comparator.
+///
+/// # Safety
+///
+/// As [`item_compare`].
 pub(crate) unsafe extern "C" fn item_compare_not_keeping_zero(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -150,6 +164,12 @@ pub(crate) unsafe extern "C" fn item_compare_not_keeping_zero(
 ///
 /// A failed call sets `item_compare_func_err`, which makes every later
 /// comparison answer 0 and the driver abandon the sort.
+///
+/// # Safety
+///
+/// `s1` and `s2` must point at the two `ListSortItem`s of the array
+/// `do_sort`/`do_uniq` handed to `qsort`, live for the comparison, and
+/// `sortinfo` must still hold the `SortInfo` that sort set up.
 pub(crate) unsafe fn item_compare2(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -220,6 +240,10 @@ pub(crate) unsafe fn item_compare2(
 }
 
 /// [`item_compare2`] answering 0 for equal items — `uniq`'s comparator.
+///
+/// # Safety
+///
+/// As [`item_compare2`].
 pub(crate) unsafe extern "C" fn item_compare2_keeping_zero(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -228,6 +252,10 @@ pub(crate) unsafe extern "C" fn item_compare2_keeping_zero(
 }
 
 /// [`item_compare2`] breaking ties by index — `sort`'s comparator.
+///
+/// # Safety
+///
+/// As [`item_compare2`].
 pub(crate) unsafe extern "C" fn item_compare2_not_keeping_zero(
     s1: *const ::core::ffi::c_void,
     s2: *const ::core::ffi::c_void,
@@ -261,6 +289,11 @@ fn sort_item(item: *mut ListItem, idx: ::core::ffi::c_int) -> ListSortItem {
 }
 
 /// `sort()` over `l`, in place.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `info` must point
+/// at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
     let len = unsafe { tv_list_len(l) };
 
@@ -300,6 +333,11 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
 }
 
 /// `uniq()` over `l`, in place: drop each item equal to the one before it.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `info` must point
+/// at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
     let len = unsafe { tv_list_len(l) };
 
@@ -350,6 +388,11 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
 /// A `{how}` given as a Number has no string of its own, so the caller lends
 /// `how` for it: `info.item_compare_func` may borrow it, and the sort
 /// reads that field long after this returns.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call. `info`
+/// must point at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn parse_sort_uniq_args(
     args: *mut TypVal,
     info: *mut SortInfo,
@@ -431,6 +474,12 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval, unaliased for the call.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
@@ -475,11 +524,23 @@ pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: 
 }
 
 /// `sort()`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_sort(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(args, result, true) };
 }
 
 /// `uniq()`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_uniq(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(args, result, false) };
 }

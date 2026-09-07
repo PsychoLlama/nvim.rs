@@ -15,19 +15,27 @@ use crate::semsg;
 use crate::types::Failed;
 
 /// Allocate an empty blob.  The caller owns the reference count.
-pub unsafe fn tv_blob_alloc() -> *mut Blob {
+pub fn tv_blob_alloc() -> *mut Blob {
     let blob = unsafe { xcalloc(1, ::core::mem::size_of::<Blob>()) } as *mut Blob;
     unsafe { ga_init(&raw mut (*blob).bv_ga, 1, 100) };
     blob
 }
 
 /// Free `b` and its bytes.
+///
+/// # Safety
+///
+/// `b` must point at a live blob, unaliased for the call.
 pub unsafe fn tv_blob_free(b: *mut Blob) {
     unsafe { ga_clear(&raw mut (*b).bv_ga) };
     unsafe { xfree(b.cast()) };
 }
 
 /// Drop a reference to `b`, freeing it when the last one goes.
+///
+/// # Safety
+///
+/// `b` must point at a live blob, unaliased for the call.
 pub unsafe fn tv_blob_unref(b: *mut Blob) {
     if let Some(blob) = unsafe { b.as_mut() }
         && blob.bv_refcount.release() <= 0
@@ -38,6 +46,10 @@ pub unsafe fn tv_blob_unref(b: *mut Blob) {
 
 /// Whether `b1` and `b2` hold the same bytes.  An empty blob and a NULL one
 /// are equal.
+///
+/// # Safety
+///
+/// `b1` must point at a live blob. `b2` must point at a live blob.
 pub unsafe fn tv_blob_equal(b1: *const Blob, b2: *const Blob) -> bool {
     let len1 = unsafe { tv_blob_len(b1) };
     let len2 = unsafe { tv_blob_len(b2) };
@@ -64,6 +76,11 @@ pub unsafe fn tv_blob_equal(b1: *const Blob, b2: *const Blob) -> bool {
 ///
 /// `result` holds the blob being subscripted on the way in.  Indexes out of
 /// range give an empty result rather than an error.
+///
+/// # Safety
+///
+/// `_blob` must point at a live blob. `result` must point at the caller's
+/// return slot: an initialized typval it owns and will clear.
 pub(crate) unsafe fn tv_blob_slice(
     _blob: *const Blob,
     len: ::core::ffi::c_int,
@@ -94,7 +111,7 @@ pub(crate) unsafe fn tv_blob_slice(
         unsafe { (*result).v_type = VAR_BLOB };
         unsafe { (*result).vval.v_blob = ::core::ptr::null_mut() };
     } else {
-        let new_blob = unsafe { tv_blob_alloc() };
+        let new_blob = tv_blob_alloc();
         let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
         unsafe { ga_grow(&raw mut (*new_blob).bv_ga, sublen) };
         unsafe { (*new_blob).bv_ga.ga_len = sublen };
@@ -115,6 +132,11 @@ pub(crate) unsafe fn tv_blob_slice(
 ///
 /// `result` holds the blob being subscripted on the way in.  An index out of
 /// range raises `E979`.
+///
+/// # Safety
+///
+/// `_blob` must point at a live blob. `result` must point at the caller's
+/// return slot: an initialized typval it owns and will clear.
 pub(crate) unsafe fn tv_blob_index(
     _blob: *const Blob,
     len: ::core::ffi::c_int,
@@ -139,6 +161,11 @@ pub(crate) unsafe fn tv_blob_index(
 }
 
 /// `blob[n1]` or `blob[n1 : n2]`, whichever `is_range` says.
+///
+/// # Safety
+///
+/// `blob` must point at a live blob. `result` must point at the caller's
+/// return slot: an initialized typval it owns and will clear.
 pub unsafe fn tv_blob_slice_or_index(
     blob: *const Blob,
     is_range: bool,
@@ -188,6 +215,11 @@ pub fn tv_blob_check_range(
 }
 
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
+///
+/// # Safety
+///
+/// `dest` must point at a live blob, unaliased for the call. `src` must point
+/// at an initialized typval, unaliased for the call.
 pub unsafe fn tv_blob_set_range(
     dest: *mut Blob,
     n1: VarNumber,
@@ -211,6 +243,10 @@ pub unsafe fn tv_blob_set_range(
 
 /// `blob[idx] = byte`, growing the blob by one when `idx` is the slot just
 /// past the end.  Anything further out is silently ignored.
+///
+/// # Safety
+///
+/// `blob` must point at a live blob, unaliased for the call.
 pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte: uint8_t) {
     let gap = bv_ga(blob);
 
@@ -229,6 +265,13 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
 /// store what was removed in `result`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and `result`
+/// its live return value: the contract the two builtin dispatchers keep.
+/// `arg_errmsg` must point at the NUL-terminated message to raise when the
+/// blob is locked.
 pub unsafe fn tv_blob_remove(
     args: *mut TypVal,
     result: *mut TypVal,
@@ -286,7 +329,7 @@ pub unsafe fn tv_blob_remove(
     }
 
     let taken = (end - idx + 1) as ::core::ffi::c_int;
-    let taken_raw = unsafe { tv_blob_alloc() };
+    let taken_raw = tv_blob_alloc();
     // SAFETY: freshly allocated just above.
     let mut taken_blob = unsafe { Bl::new(taken_raw) };
     taken_blob.bv_ga.ga_len = taken;
@@ -309,6 +352,12 @@ pub unsafe fn tv_blob_remove(
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_blob2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     if unsafe { tv_check_for_blob_arg(args, 0) }.is_err() {
@@ -324,6 +373,12 @@ pub unsafe fn f_blob2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// `list2blob()`: a list of byte numbers as a blob.
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_list2blob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let blob = unsafe { tv_blob_alloc_ret(result) };
     if unsafe { tv_check_for_list_arg(args, 0) }.is_err() {
@@ -350,13 +405,23 @@ pub unsafe fn f_list2blob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// Allocate an empty blob and store it in `ret_tv` as the return value.
+///
+/// # Safety
+///
+/// `ret_tv` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn tv_blob_alloc_ret(ret_tv: *mut TypVal) -> *mut Blob {
-    let b = unsafe { tv_blob_alloc() };
+    let b = tv_blob_alloc();
     unsafe { tv_blob_set_ret(ret_tv, b) };
     b
 }
 
 /// Store a copy of `from` in `to`.  A NULL blob copies as a NULL blob.
+///
+/// # Safety
+///
+/// `from` must point at a live blob, unaliased for the call. `to` must point
+/// at an initialized typval, unaliased for the call.
 pub unsafe fn tv_blob_copy(from: *mut Blob, to: *mut TypVal) {
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };

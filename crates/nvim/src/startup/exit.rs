@@ -129,7 +129,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
     }
 
     // Every `:defer`red function still on the stack.
-    unsafe { invoke_all_defer() };
+    invoke_all_defer();
 
     if v_dying.get() <= 1 {
         // `BufWinLeave` for every window, but only once per buffer: the

@@ -73,7 +73,7 @@ pub unsafe fn evalvars_init() {
     let msgpack_types_dict = unsafe { tv_dict_alloc() };
     let mut type_lists = eval_msgpack_type_lists.get();
     for (i, name) in msgpack_type_names.iter().enumerate() {
-        let type_list = unsafe { tv_list_alloc(0) };
+        let type_list = tv_list_alloc(0);
         unsafe { tv_list_set_lock(type_list, VarLock::Fixed) };
         unsafe { tv_list_ref(type_list) };
         let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };

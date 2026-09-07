@@ -73,6 +73,12 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -93,6 +99,12 @@ pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -126,6 +138,12 @@ pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `jobstop({job})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -156,6 +174,12 @@ pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `jobwait({jobs} [, {timeout}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -246,7 +270,7 @@ pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         }
     }
 
-    let rv = unsafe { tv_list_alloc(count as isize) };
+    let rv = tv_list_alloc(count as isize);
     for i in 0..count {
         let chan = unsafe { *jobs.add(i as usize) };
         if chan.is_null() {
@@ -377,6 +401,12 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut cmdbuf = NumBuf::new();
     let mut numbuf = NumBuf::new();

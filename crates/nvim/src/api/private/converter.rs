@@ -383,8 +383,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
             *tv = unsafe { decode_string(str.data(), str.len(), false, false) };
         }
         Object::Array(array) => {
-            // SAFETY: the list is this call's until it is handed to `tv`.
-            let list: *mut List = unsafe { tv_list_alloc(array.size.cast_signed()) };
+            let list: *mut List = tv_list_alloc(array.size.cast_signed());
             for i in 0..array.size {
                 let mut li_tv: TypVal = TypVal {
                     v_type: VAR_UNKNOWN,

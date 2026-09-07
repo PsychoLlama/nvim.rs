@@ -33,6 +33,11 @@ pub(crate) fn tv_list_item_alloc() -> *mut ListItem {
 /// Remove `item` from `l`, clear its value and free it.
 ///
 /// Answers the item that followed it, or NULL when it was the last one.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `item` must point
+/// at an item of `l`.
 pub unsafe fn tv_list_item_remove(l: *mut List, item: *mut ListItem) -> *mut ListItem {
     let next_item = unsafe { (*item).li_next };
     unsafe { tv_list_drop_items(l, item, item) };
@@ -42,12 +47,22 @@ pub unsafe fn tv_list_item_remove(l: *mut List, item: *mut ListItem) -> *mut Lis
 }
 
 /// Push `lw` onto `l`'s watcher chain.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `lw` must point at
+/// an entry of `l`'s watcher chain.
 pub unsafe fn tv_list_watch_add(l: *mut List, lw: *mut ListWatch) {
     unsafe { (*lw).lw_next = (*l).lv_watch };
     unsafe { (*l).lv_watch = lw };
 }
 
 /// Unlink `lwrem` from `l`'s watcher chain.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `lwrem` must point
+/// at an entry of `l`'s watcher chain.
 pub unsafe fn tv_list_watch_remove(l: *mut List, lwrem: *mut ListWatch) {
     // `lwp` trails `lw` by one link so the match can be spliced out.
     let mut lwp = lv_watch(l);
@@ -68,6 +83,11 @@ pub unsafe fn tv_list_watch_remove(l: *mut List, lwrem: *mut ListWatch) {
 ///
 /// This is what keeps a `:for` loop walking a list whose current item is
 /// removed underneath it.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `item` must point
+/// at an item of `l`.
 pub(crate) unsafe fn tv_list_watch_fix(l: *mut List, item: *const ListItem) {
     let mut lw = unsafe { (*l).lv_watch };
     while !lw.is_null() {
@@ -84,7 +104,7 @@ pub(crate) unsafe fn tv_list_watch_fix(l: *mut List, item: *const ListItem) {
 ///
 /// `len` is upstream's hint for a future array-backed list; nothing reads it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
+pub extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
     let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
 
     // Prepend the list to the list of lists for garbage collection.
@@ -101,6 +121,11 @@ pub unsafe extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
 /// Initialise a stack-allocated ten-item list, all items zeroed and linked.
 ///
 /// The list is `VarLock::Fixed` and carries `DO_NOT_FREE_CNT`, so nothing frees it.
+///
+/// # Safety
+///
+/// `sl` must point at a `StaticList10` the caller owns for as long as the
+/// list is used; the list is *not* heap-allocated and must never be freed.
 pub unsafe fn tv_list_init_static10(sl: *mut StaticList10) {
     // No `Live<StaticList10>` here: the list this builds points at the item
     // array in the *same* struct, and a `DerefMut` that reborrows the whole
@@ -128,12 +153,20 @@ pub unsafe fn tv_list_init_static10(sl: *mut StaticList10) {
 }
 
 /// Initialise a stack-allocated empty list that nothing may free.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call.
 pub unsafe fn tv_list_init_static(l: *mut List) {
     unsafe { l.write_bytes(0, 1) };
     unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT.cast_signed()) };
 }
 
 /// Free every item in `l`, leaving the list itself allocated and empty.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call.
 pub unsafe fn tv_list_free_contents(l: *mut List) {
     // Unlink each item before clearing it: `tv_clear` can re-enter.
     // SAFETY: the caller's promise: a live list.
@@ -152,6 +185,10 @@ pub unsafe fn tv_list_free_contents(l: *mut List) {
 }
 
 /// Unlink `l` from the garbage collector's chain and free the `List` itself.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call.
 pub unsafe fn tv_list_free_list(l: *mut List) {
     // Remove the list from the list of lists for garbage collection.
     // SAFETY: the caller's promise: a live list.
@@ -174,6 +211,10 @@ pub unsafe fn tv_list_free_list(l: *mut List) {
 
 /// Free `l` and everything in it.  A no-op while `free_unref_items()` is
 /// walking, which frees the whole graph itself.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tv_list_free(l: *mut List) {
     if tv_in_free_unref_items.get() {
@@ -184,6 +225,10 @@ pub unsafe extern "C" fn tv_list_free(l: *mut List) {
 }
 
 /// Drop a reference to `l`, freeing it when the last one goes.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call.
 pub unsafe fn tv_list_unref(l: *mut List) {
     if let Some(list) = unsafe { l.as_mut() }
         && list.lv_refcount.release() <= 0
@@ -193,6 +238,11 @@ pub unsafe fn tv_list_unref(l: *mut List) {
 }
 
 /// Unlink the items `item..=item2` from `l` without freeing them.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `item` must point
+/// at an item of `l`. `item2` must point at an item of `l`.
 pub unsafe fn tv_list_drop_items(l: *mut List, item: *mut ListItem, item2: *mut ListItem) {
     // Notify watchers.
     let mut ip = item;
@@ -218,6 +268,11 @@ pub unsafe fn tv_list_drop_items(l: *mut List, item: *mut ListItem, item2: *mut 
 }
 
 /// Unlink the items `item..=item2` from `l` and free them.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `item` must point
+/// at an item of `l`. `item2` must point at an item of `l`.
 pub unsafe fn tv_list_remove_items(l: *mut List, item: *mut ListItem, item2: *mut ListItem) {
     unsafe { tv_list_drop_items(l, item, item2) };
     let mut li = item;
@@ -234,6 +289,12 @@ pub unsafe fn tv_list_remove_items(l: *mut List, item: *mut ListItem, item2: *mu
 }
 
 /// Move the items `item..=item2` (`cnt` of them) from `l` onto `tgt_l`'s tail.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `item` must point
+/// at an item of `l`. `item2` must point at an item of `l`. `tgt_l` must
+/// point at a live list, unaliased for the call.
 pub unsafe fn tv_list_move_items(
     l: *mut List,
     item: *mut ListItem,
@@ -255,8 +316,13 @@ pub unsafe fn tv_list_move_items(
 }
 
 /// Allocate an empty list and store it in `ret_tv` as the return value.
+///
+/// # Safety
+///
+/// `ret_tv` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn tv_list_alloc_ret(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
-    let l = unsafe { tv_list_alloc(len) };
+    let l = tv_list_alloc(len);
     unsafe { tv_list_set_ret(ret_tv, l) };
     unsafe { (*ret_tv).v_lock = VarLock::Unlocked };
     l

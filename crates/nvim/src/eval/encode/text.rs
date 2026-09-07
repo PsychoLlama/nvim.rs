@@ -136,10 +136,18 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         c"_typval_encode_string_convert_one_value()"
     };
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b"v:null");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
         self.gap.extend_from_slice(if num {
             b"v:true".as_slice()
@@ -148,12 +156,21 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         });
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
         self.concat_num::<NUMBUFLEN, _>(c"%ld", num);
     }
 
     /// NaN and infinity have no Vimscript literal, so they come out as the
     /// `str2float()` call that rebuilds them.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
         match flt.classify() {
             ::core::num::FpCategory::Nan => self.gap.extend_from_slice(b"str2float('nan')"),
@@ -168,6 +185,10 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         unsafe { self.quoted(buf, len) };
         Flow::Go
@@ -176,6 +197,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     /// Unreachable: this sink refuses special dictionaries, which are the only
     /// source of an `ext` value.  Upstream's macro is empty, and falling
     /// through leaves the buffer for the walk to free.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_ext_string`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
         _tv: *mut TypVal,
@@ -186,6 +212,10 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
         if len == 0 {
             self.gap.extend_from_slice(b"0z");
@@ -206,6 +236,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     }
 
     /// `function('name'` — the closing paren is [`Self::conv_func_end`]'s.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
         _tv: *mut TypVal,
@@ -232,56 +267,104 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_before_args`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_before_args(&mut self, _tv: *mut TypVal, len: ptrdiff_t) {
         if len != 0 {
             self.gap.extend_from_slice(b", ");
         }
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_before_self`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_before_self(&mut self, _tv: *mut TypVal, len: ptrdiff_t) {
         if len != -1 {
             self.gap.extend_from_slice(b", ");
         }
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_func_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_func_end(&mut self, _tv: *mut TypVal, _copyid: c_int) {
         self.gap.push(b')');
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b"[]");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b"{}");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, _len: c_int) -> Flow {
         self.gap.push(b'[');
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b", ");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
         self.gap.push(b']');
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, _len: size_t) -> Flow {
         self.gap.push(b'{');
         Flow::Go
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b": ");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b", ");
     }
 
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.push(b'}');
     }
@@ -291,6 +374,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     /// Both keep going — a self-reference is a marker in the output, not a
     /// failed dump — but only `string()` reports it, and only once per dump so
     /// a cycle seen many times does not flood the user.
+    ///
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_recurse`]: the walk's contract on the value
+    /// it is standing on.
     unsafe fn conv_recurse(
         &mut self,
         val: *mut c_void,

@@ -74,6 +74,12 @@ const CONV_NONE_INIT: VimConv = VimConv {
 
 /// `char2nr({string} [, {utf8}])` — the first character's code point. The
 /// second argument only has to type-check; nvim is always UTF-8.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_char2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -86,6 +92,12 @@ pub unsafe fn f_char2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_escape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -99,6 +111,12 @@ pub unsafe fn f_escape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `fnameescape({string})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_fnameescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -110,6 +128,12 @@ pub unsafe fn f_fnameescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `gettext({string})` — a no-op while no message catalogs ship, but it
 /// still requires a non-empty String.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_gettext(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval.
@@ -123,6 +147,12 @@ pub unsafe fn f_gettext(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `keytrans({string})` — the readable spelling of a key sequence.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_keytrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -139,6 +169,12 @@ pub unsafe fn f_keytrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `nr2char({number} [, {utf8}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_nr2char(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut error = false;
@@ -178,6 +214,12 @@ pub unsafe fn f_nr2char(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// format reports, and the formatting pass is skipped when it did. The
 /// caller's own `did_emsg` is restored by OR-ing it back, so an error
 /// raised before this call is not lost and one raised inside it is.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_printf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -202,6 +244,12 @@ pub unsafe fn f_printf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `repeat({expr}, {count})` — for a List, a Blob or a String.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_repeat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments are live typvals.
@@ -294,6 +342,12 @@ unsafe fn repeat_string(args: Args<'_>, result: &mut TypVal, n: VarNumber) {
 
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they
 /// are rather than up to the first NUL.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_sha256(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -324,6 +378,12 @@ pub unsafe fn f_sha256(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `shellescape({string} [, {special}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_shellescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -335,6 +395,12 @@ pub unsafe fn f_shellescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `soundfold({word})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_soundfold(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -366,6 +432,12 @@ fn with_spell(body: impl FnOnce()) {
 }
 
 /// `spellbadword([{sentence}])` — the first misspelling and why it is one.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_spellbadword(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -424,6 +496,12 @@ pub unsafe fn f_spellbadword(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `spellsuggest({word} [, {max} [, {capital}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_spellsuggest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -467,6 +545,12 @@ pub unsafe fn f_spellsuggest(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `split({string} [, {pattern} [, {keepempty}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_split(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -561,6 +645,12 @@ unsafe fn split_into(list: *mut List, mut str: *const c_char, prog: *mut RegProg
 }
 
 /// `strftime({format} [, {time}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_strftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -605,6 +695,12 @@ pub unsafe fn f_strftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `strptime({format}, {timestring})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_strptime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut fmt_buf = NumBuf::new();
@@ -649,6 +745,12 @@ pub unsafe fn f_strptime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `submatch({nr} [, {list}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_submatch(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut error = false;
@@ -683,6 +785,12 @@ pub unsafe fn f_submatch(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
 /// `substitute({string}, {pat}, {sub}, {flags})` — `{sub}` may be a Funcref,
 /// in which case it is handed on rather than read as a String.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_substitute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);

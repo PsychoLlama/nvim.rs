@@ -330,8 +330,7 @@ pub unsafe fn stacktrace_create() -> *mut List {
     // A copy of the stack, because building the dicts below runs arbitrary
     // allocation and it is not worth holding the cell's borrow across it.
     let stack = exestack.with(|stack| stack.clone());
-    // SAFETY: a fresh list sized for the frames about to go into it.
-    let l = unsafe { tv_list_alloc(stack.len().cast_signed()) };
+    let l = tv_list_alloc(stack.len().cast_signed());
 
     for entry in &stack {
         match entry.es_type {

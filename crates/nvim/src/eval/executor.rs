@@ -54,6 +54,11 @@ fn float_op(lhs: Float, op: u8, rhs: Float) -> Float {
 }
 
 /// `blob1 += blob2`.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval.
 unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias, which is why they are held as pointers and never as references.
@@ -93,6 +98,11 @@ unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
 }
 
 /// `list1 += list2`.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval.
 unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias.
@@ -122,6 +132,11 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
 ///
 /// A float on the right promotes the result to a float, except for `%`, which
 /// has no float form and fails.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval.
 unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias. Both operands are read out in full before `tv_clear` touches
@@ -160,6 +175,11 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
 }
 
 /// `str1 .= str2`.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval.
 unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Failed> {
     // The two operands need a scratch each: `s2` is still live when `tv1`'s
     // own string form is rendered.
@@ -190,6 +210,11 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
 }
 
 /// `f1 += f2`, `f1 -= f2`, `f1 *= f2`, `f1 /= f2`.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval.
 unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias. The right operand is read before the left is written.

@@ -28,6 +28,12 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_changenr(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `result` is the cleared return value.
     unsafe { (*result).vval.v_number = Buf::current().b_u_seq_cur as VarNumber };
@@ -49,6 +55,12 @@ unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
 }
 
 /// `getchangelist([{buf}])` — `[changes, index]`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals; `curwin` and its
@@ -67,7 +79,7 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     let Some(buf) = buf else {
         return;
     };
-    let l = unsafe { tv_list_alloc(buf.b_changelistlen as isize) };
+    let l = tv_list_alloc(buf.b_changelistlen as isize);
     unsafe { tv_list_append_list(out, l) };
 
     // The index is this window's if it is showing the buffer, and
@@ -95,6 +107,12 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getjumplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals, and the jump
@@ -123,6 +141,12 @@ pub unsafe fn f_getjumplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getmarklist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals.
@@ -139,6 +163,12 @@ pub unsafe fn f_getmarklist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `gettagstack([{winnr}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_gettagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals. The dict is
@@ -157,6 +187,12 @@ pub unsafe fn f_gettagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_settagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -198,6 +234,12 @@ pub unsafe fn f_settagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `tagfiles()` — the tags files that would be searched, in order.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_tagfiles(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; each name the walk
     // answers is NUL-terminated and lives until the next round.
@@ -209,6 +251,12 @@ pub unsafe fn f_tagfiles(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `taglist({expr} [, {filename}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_taglist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();

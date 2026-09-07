@@ -97,6 +97,12 @@ impl Cell {
 
 /// `screenattr({row}, {col})` — the cell's highlight attribute, or -1 off
 /// the grid.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screenattr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live; the attribute row is as long as the grid is
@@ -112,6 +118,12 @@ pub unsafe fn f_screenattr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
 /// the grid.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screenchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
@@ -125,6 +137,12 @@ pub unsafe fn f_screenchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
 /// combining ones `screenchar()` drops.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screenchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live and `result` is the cleared return value.
@@ -147,18 +165,36 @@ pub unsafe fn f_screenchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `screencol()` — the cursor's screen column, one-based.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screencol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = (ui_current_col() + 1) as VarNumber };
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screenrow(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = (ui_current_row() + 1) as VarNumber };
 }
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_screenstring(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -171,6 +207,12 @@ pub unsafe fn f_screenstring(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `hlID({name})` — the highlight group's id, or 0.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -180,6 +222,12 @@ pub unsafe fn f_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `hlexists({name})` — whether the group is defined.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_hlexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -246,6 +294,12 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 }
 
 /// `synIDattr({id}, {what} [, {mode}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_syn_id_attr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -287,6 +341,12 @@ pub unsafe fn f_syn_id_attr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
 /// buffer or when the `{trans}` argument does not coerce.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live, and `curbuf`/`curwin` are live for the
@@ -310,6 +370,12 @@ pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_syn_id_trans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
@@ -322,6 +388,12 @@ pub unsafe fn f_syn_id_trans(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_synconcealed(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut syntax_flags = SynFlags::NONE;
@@ -373,6 +445,12 @@ pub unsafe fn f_synconcealed(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
 /// outermost first.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_synstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole

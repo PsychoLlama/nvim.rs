@@ -307,6 +307,12 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut flags = 0;
@@ -316,6 +322,12 @@ pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
 /// sub-pattern number under the `p` flag.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_searchpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut match_pos = Pos {
@@ -341,6 +353,12 @@ pub unsafe fn f_searchpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -455,6 +473,12 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_searchpair(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
@@ -462,6 +486,12 @@ pub unsafe fn f_searchpair(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_searchpairpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut match_pos = Pos {

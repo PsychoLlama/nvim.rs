@@ -139,7 +139,6 @@ pub(crate) unsafe fn get_errorlist(
     eidx: c_int,
     list: *mut List,
 ) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
     let mut qi = qi_arg;
     if qi.is_null() {
         qi = match window {
@@ -212,7 +211,7 @@ unsafe fn qf_get_list_from_lines(
     }
 
     // Only a List value is supported.
-    let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let qi = qf_alloc_stack(QFLT_INTERNAL, 1);
     let parsed = unsafe {
         qf_init_ext(
@@ -247,7 +246,6 @@ unsafe fn qf_get_list_from_lines(
 ///
 /// `qi` must be null or a live stack.
 unsafe fn qf_winid(qi: *mut QfInfo) -> c_int {
-    // SAFETY: forwarded from the caller.
     if qi.is_null() {
         return 0;
     }
@@ -265,7 +263,6 @@ unsafe fn qf_winid(qi: *mut QfInfo) -> c_int {
 ///
 /// `qi` must be null or a live stack, and `retdict` live.
 unsafe fn qf_getprop_qfbufnr(qi: *const QfInfo, retdict: *mut Dict) -> Result<(), KeyTaken> {
-    // SAFETY: forwarded from the caller.
     let mut bufnum = 0;
     if !qi.is_null() && find_buf(unsafe { (*qi).qf_bufnr }).is_some() {
         bufnum = unsafe { (*qi).qf_bufnr };
@@ -297,7 +294,6 @@ const GETLIST_KEYS: [(&str, GetListProps); 12] = [
 ///
 /// `what` must be null or a live dictionary.
 unsafe fn qf_getprop_keys2flags(what: *const Dict, loclist: bool) -> GetListProps {
-    // SAFETY: forwarded from the caller.
     let mut flags = GetListProps::NONE;
     if unsafe { asked_for(what, "all") } {
         flags |= GetListProps::ALL;
@@ -378,7 +374,6 @@ unsafe fn qf_getprop_defaults(
     locstack: bool,
     retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
-    // SAFETY: forwarded from the caller.
     let wanted = |flag: GetListProps| flags.has(flag);
 
     // `?` is upstream's `if (status == OK && ...)` ladder: the first key
@@ -387,7 +382,7 @@ unsafe fn qf_getprop_defaults(
         unsafe { add_str(retdict, "title", ptr::null()) }?;
     }
     if wanted(GetListProps::ITEMS) {
-        let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+        let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         unsafe { add_list(retdict, "items", l) }?;
     }
     if wanted(GetListProps::NR) {
@@ -451,8 +446,7 @@ unsafe fn qf_getprop_filewinid(
 ///
 /// `qi` must be a live stack and `retdict` live.
 unsafe fn qf_getprop_items(qi: *mut QfInfo, qf_idx: c_int, eidx: c_int, retdict: *mut Dict) {
-    // SAFETY: forwarded from the caller.
-    let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let _ = unsafe { get_errorlist(qi, None, qf_idx, eidx, l) };
     let _ = unsafe { add_list(retdict, "items", l) };
 }
@@ -530,7 +524,6 @@ pub(crate) unsafe fn qf_get_properties(
     what: *mut Dict,
     retdict: *mut Dict,
 ) -> Result<(), QfError> {
-    // SAFETY: forwarded from the caller.
     let mut qi = QfStack::Global.raw();
 
     // A 'lines' key asks about lines the caller supplies, not about a

@@ -774,8 +774,7 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
 /// # Safety
 /// `argv` must hold `argc` NUL-terminated strings.
 pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
-    // SAFETY: the List is fresh and this frame's until `v:argv` takes it.
-    let l: *mut List = unsafe { tv_list_alloc(argc as ptrdiff_t) };
+    let l: *mut List = tv_list_alloc(argc as ptrdiff_t);
     // SAFETY: `l` is that List.
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
     for i in 0..argc {

@@ -70,6 +70,12 @@ impl Drop for Owned {
 }
 
 /// `call({func}, {arglist} [, {dict}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -138,6 +144,12 @@ pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 }
 
 /// `eval({string})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_eval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
@@ -303,6 +315,12 @@ pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_
 }
 
 /// `execute({command} [, {silent}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: this is the dispatcher's argument array, which is what
     // `execute_common` needs.
@@ -310,6 +328,12 @@ pub unsafe fn f_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_exists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -547,12 +571,24 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_funcref(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     common_function(args, result, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_function(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     common_function(args, result, false);
@@ -560,6 +596,12 @@ pub unsafe fn f_function(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
 /// `garbagecollect([{atexit}])` — schedules a collection; the argument asks
 /// for one on exit as well.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_garbagecollect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, result);
     want_garbage_collect.set(true);
@@ -622,18 +664,36 @@ fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
 }
 
 /// `libcall({lib}, {func}, {arg})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_libcall(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     libcall_common(args, result, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_libcallnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     libcall_common(args, result, VAR_NUMBER);
 }
 
 /// `luaeval({expr} [, {expr}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_luaeval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -646,18 +706,36 @@ pub unsafe fn f_luaeval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `py3eval({expr})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_py3eval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, args, result) };
 }
 
 /// `perleval({expr})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_perleval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, args, result) };
 }
 
 /// `rubyeval({expr})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_rubyeval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, args, result) };

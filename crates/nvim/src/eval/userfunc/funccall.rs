@@ -403,6 +403,11 @@ pub unsafe fn save_funccal(entry: *mut FuncCallEntry) {
 }
 
 /// Put back what [`save_funccal`] set aside.
+///
+/// # Safety
+///
+/// A [`save_funccal`] must be outstanding and the `FuncCallEntry` it was
+/// handed still live: this reads that entry back and pops it.
 pub unsafe fn restore_funccal() {
     let top = funccal_stack.get();
     if top.is_null() {
@@ -422,6 +427,11 @@ pub fn get_current_funccal() -> *mut FuncCall {
 }
 
 /// Make `fc` the call in progress.
+///
+/// # Safety
+///
+/// `fc` must be null, or point at a funccall that stays live until something
+/// else is made current — every reader of `current_funccal` dereferences it.
 pub unsafe fn set_current_funccal(fc: *mut FuncCall) {
     current_funccal.set(fc);
 }
@@ -609,7 +619,7 @@ unsafe fn unlink_parked_funccals(
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
-pub unsafe fn get_funccal() -> *mut FuncCall {
+pub fn get_funccal() -> *mut FuncCall {
     let mut funccal = current_funccal.get();
     // The bound is re-read every step on purpose: the overflow arm below
     // lowers it, and that is what ends the walk.
@@ -630,26 +640,23 @@ pub unsafe fn get_funccal() -> *mut FuncCall {
 }
 
 /// Whether there is a `l:` scope to read at all.
-unsafe fn have_funccal_scope() -> bool {
+fn have_funccal_scope() -> bool {
     let fc = current_funccal.get();
     // SAFETY: `current_funccal` is null or the live call in progress.
     !fc.is_null() && unsafe { (*fc).fc_l_vars.dv_refcount } != Refcount::ZERO
 }
 
 /// The `l:` scope dictionary, or null when there is no call.
-pub unsafe fn get_funccal_local_dict() -> *mut Dict {
-    // SAFETY: `get_funccal` answers a live call, and the address of a field
-    // of it is taken without reading the object.
-    if !unsafe { have_funccal_scope() } {
+pub fn get_funccal_local_dict() -> *mut Dict {
+    if !have_funccal_scope() {
         return ptr::null_mut();
     }
     unsafe { &raw mut (*get_funccal()).fc_l_vars }
 }
 
 /// The `l:` scope hashtab, or null when there is no call.
-pub unsafe fn get_funccal_local_ht() -> *mut HashTab {
-    // SAFETY: `get_funccal_local_dict` answers null or a live dictionary.
-    let d = unsafe { get_funccal_local_dict() };
+pub fn get_funccal_local_ht() -> *mut HashTab {
+    let d = get_funccal_local_dict();
     if d.is_null() {
         ptr::null_mut()
     } else {
@@ -658,27 +665,24 @@ pub unsafe fn get_funccal_local_ht() -> *mut HashTab {
 }
 
 /// The `l:` scope variable, or null when there is no call.
-pub unsafe fn get_funccal_local_var() -> *mut DictItem {
-    // SAFETY: as [`get_funccal_local_dict`].
-    if !unsafe { have_funccal_scope() } {
+pub fn get_funccal_local_var() -> *mut DictItem {
+    if !have_funccal_scope() {
         return ptr::null_mut();
     }
     unsafe { &raw mut (*get_funccal()).fc_l_vars_var }.cast()
 }
 
 /// The `a:` scope dictionary, or null when there is no call.
-pub unsafe fn get_funccal_args_dict() -> *mut Dict {
-    // SAFETY: as [`get_funccal_local_dict`].
-    if !unsafe { have_funccal_scope() } {
+pub fn get_funccal_args_dict() -> *mut Dict {
+    if !have_funccal_scope() {
         return ptr::null_mut();
     }
     unsafe { &raw mut (*get_funccal()).fc_l_avars }
 }
 
 /// The `a:` scope hashtab, or null when there is no call.
-pub unsafe fn get_funccal_args_ht() -> *mut HashTab {
-    // SAFETY: `get_funccal_args_dict` answers null or a live dictionary.
-    let d = unsafe { get_funccal_args_dict() };
+pub fn get_funccal_args_ht() -> *mut HashTab {
+    let d = get_funccal_args_dict();
     if d.is_null() {
         ptr::null_mut()
     } else {
@@ -687,9 +691,8 @@ pub unsafe fn get_funccal_args_ht() -> *mut HashTab {
 }
 
 /// The `a:` scope variable, or null when there is no call.
-pub unsafe fn get_funccal_args_var() -> *mut DictItem {
-    // SAFETY: as [`get_funccal_local_dict`].
-    if !unsafe { have_funccal_scope() } {
+pub fn get_funccal_args_var() -> *mut DictItem {
+    if !have_funccal_scope() {
         return ptr::null_mut();
     }
     unsafe { &raw mut (*get_funccal()).fc_l_avars_var }.cast()
@@ -834,7 +837,7 @@ pub unsafe fn find_var_in_scoped_ht(
 
 /// Mark the parked funccalls with `copyID + 1`, so that the collector can
 /// tell "reachable from a live value" from "merely parked".
-pub unsafe fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
+pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
     let mut fc = previous_funccal.get();
     let mark = copy_id + 1;
     while !fc.is_null() {
@@ -895,7 +898,7 @@ unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
 
 /// Mark every local and argument on the call stack, including the stacks
 /// `save_funccal` set aside.
-pub unsafe fn set_ref_in_call_stack(copy_id: c_int) -> bool {
+pub fn set_ref_in_call_stack(copy_id: c_int) -> bool {
     // SAFETY: every funccall on the current stack and on each set-aside
     // stack is live, which is what `save_funccal`'s caller promised. That
     // holds for every dereference below.
@@ -922,7 +925,7 @@ pub unsafe fn set_ref_in_call_stack(copy_id: c_int) -> bool {
 }
 
 /// Mark everything reachable from a function that is still available by name.
-pub unsafe fn set_ref_in_functions(copy_id: c_int) -> bool {
+pub fn set_ref_in_functions(copy_id: c_int) -> bool {
     let mut todo = func_table().used() as c_int;
     let mut idx = 0;
     // SAFETY: the walk covers the `ht_used` kept items of the function
@@ -946,7 +949,7 @@ pub unsafe fn set_ref_in_functions(copy_id: c_int) -> bool {
 }
 
 /// Mark everything reachable from an argument of a call in progress.
-pub unsafe fn set_ref_in_func_args(copy_id: c_int) -> bool {
+pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
     // Marking only reads; nothing it reaches calls a function, so holding the
     // borrow across the walk is sound.
     funcargs.with(|args| {

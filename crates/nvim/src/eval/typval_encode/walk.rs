@@ -71,6 +71,12 @@ pub(crate) unsafe fn tv_strlen(tv: *const TypVal) -> size_t {
 ///
 /// Answers [`Flow::Go`] for a container the walk has not seen (upstream's
 /// `NOTDONE`), and otherwise whatever the sink makes of the self-reference.
+///
+/// # Safety
+///
+/// `val` must be the container the walk is standing on and `val_copyid` the
+/// address of that container's `copyID` field, both live and unaliased for
+/// the call.
 unsafe fn check_self_reference<S: TypvalSink>(
     sink: &mut S,
     val: *mut c_void,
@@ -161,6 +167,12 @@ const SPECIAL_KINDS: [SpecialKind; 8] = [
 ///
 /// Only scalars are finished here; a list or dictionary is announced to the
 /// sink and left for the walk to feed back one item at a time.
+///
+/// # Safety
+///
+/// `tv` must point at the value the walk is standing on, live and unaliased
+/// for the call, and `objname` at the NUL-terminated name the walk's error
+/// messages use.
 unsafe fn convert_one_value<S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack,
@@ -307,6 +319,12 @@ unsafe fn convert_one_value<S: TypvalSink>(
 /// looked special but is not, so the caller emits it as an ordinary one.
 /// `Some(flow)` means it was handled — including the two arms that push a
 /// container for the walk to drain.
+///
+/// # Safety
+///
+/// `tv` must point at the special dictionary the walk is standing on, live
+/// and unaliased for the call, and `objname` at the NUL-terminated name the
+/// walk's error messages use.
 unsafe fn convert_special_dict<S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack,
@@ -537,6 +555,11 @@ pub(crate) unsafe fn encode_typval<S: TypvalSink>(
     unsafe { walk(sink, top_tv, objname).is_ok() }
 }
 
+/// # Safety
+///
+/// `top_tv` must point at the value to encode, live and unaliased for the
+/// whole walk, and `objname` at the NUL-terminated name the error messages
+/// use.
 unsafe fn walk<S: TypvalSink>(
     sink: &mut S,
     top_tv: *mut TypVal,

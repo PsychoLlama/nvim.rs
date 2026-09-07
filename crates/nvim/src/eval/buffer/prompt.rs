@@ -52,6 +52,12 @@ unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
 /// Text appended while the prompt line is being edited joins onto the last
 /// line rather than starting a new one, unless the previous append ended in a
 /// newline.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -132,6 +138,12 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
 }
 
 /// `prompt_setcallback({buf}, {callback})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_setcallback(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
@@ -139,6 +151,12 @@ pub unsafe fn f_prompt_setcallback(args: *mut TypVal, _result: *mut TypVal, _fpt
 }
 
 /// `prompt_setinterrupt({buf}, {callback})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_setinterrupt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
@@ -177,6 +195,12 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut
 /// changing it has to rewrite the line the old prompt is sitting in — unless
 /// that line no longer starts with the old prompt, in which case the whole
 /// line is replaced.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_setprompt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _) = frame!(args, _result);

@@ -124,7 +124,6 @@ pub(crate) unsafe fn print_tag_list(
 /// # Safety
 /// `curwin` must be live.
 unsafe fn is_current(i: c_int, use_tagstack: bool) -> bool {
-    // SAFETY: the caller's promise.
     if g_do_tagpreview.get() != 0 && i == ptag_entry_handle().position().0 {
         return true;
     }
@@ -318,7 +317,6 @@ unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
 /// # Safety
 /// `command` must be NUL-terminated.
 unsafe fn command_text_end(command: *const c_char) -> *const c_char {
-    // SAFETY: the caller's promise.
     let mut p = command;
     while !matches!(unsafe { *p } as u8, 0 | b'\r' | b'\n') {
         p = unsafe { p.add(1) };
@@ -358,10 +356,7 @@ pub(crate) unsafe fn add_llist_tags(
 ) -> Result<(), Failed> {
     // The list's title outlives `set_errorlist`, so it is this frame's.
     let mut title = [0 as c_char; IOSIZE as usize];
-    // SAFETY: the caller's promise; each match outlives the `TagParts`
-    // taken from it, and the list is handed to `set_errorlist` before it
-    // is freed.
-    let list = unsafe { tv_list_alloc(0) };
+    let list = tv_list_alloc(0);
     let mut tagp = TagParts::default();
 
     for i in 0..num_matches {

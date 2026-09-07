@@ -399,10 +399,7 @@ pub fn listdigraphs(use_headers: bool) {
 unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
-    // SAFETY: `l` is a valid list; `utf_char2bytes` writes at most six bytes
-    // into `buf`; both local buffers are NUL-terminated and outlive the
-    // appends, which copy what they keep.
-    let l2 = unsafe { tv_list_alloc(2) };
+    let l2 = tv_list_alloc(2);
     unsafe { tv_list_append_list(l, l2) };
     unsafe { tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1) };
     unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };

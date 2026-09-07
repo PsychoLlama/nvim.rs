@@ -54,6 +54,12 @@ const DIALOG_TYPES: [(u8, c_int); 5] = [
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -109,6 +115,12 @@ pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 
 /// `debugbreak({pid})` — SIGINT to a process, which on Windows is how a
 /// debugger is attached. Answers FAIL; there is no success value.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_debugbreak(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = FAIL as VarNumber;
@@ -122,6 +134,12 @@ pub unsafe fn f_debugbreak(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `feedkeys({string} [, {mode}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_feedkeys(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(args, result);
@@ -145,6 +163,12 @@ pub unsafe fn f_feedkeys(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 static INPUTSECRET: GlobalCell<bool> = GlobalCell::new(false);
 
 /// `input({prompt} [, {text} [, {completion}]])`, or the options-Dict form.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_input(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(args, result, false, INPUTSECRET.get()) };
@@ -152,12 +176,24 @@ pub unsafe fn f_input(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 
 /// `inputdialog()` — as `input()`, but cancelling answers the third
 /// argument rather than an empty string.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_inputdialog(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(args, result, true, INPUTSECRET.get()) };
 }
 
 /// `inputsecret({prompt} [, {text}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_inputsecret(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
@@ -169,6 +205,12 @@ pub unsafe fn f_inputsecret(args: *mut TypVal, result: *mut TypVal, fptr: EvalFu
 }
 
 /// `inputlist({textlist})` — print the list and read a number.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -219,6 +261,12 @@ static SAVED_TYPEAHEAD: GlobalCell<Vec<TypeaheadSave>> = GlobalCell::new(Vec::ne
 
 /// `inputsave()` — push the typeahead aside so that a prompt reads real
 /// keys.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_inputsave(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut saved = TypeaheadSave::default();
     // SAFETY: `saved` is a fresh state of the right type, and the stack owns
@@ -229,6 +277,12 @@ pub unsafe fn f_inputsave(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalF
 
 /// `inputrestore()` — pop it back. Answers 1 only for an underflow, and
 /// only when 'verbose' is high enough to have said something.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_inputrestore(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // The pop happens outside the restore: `restore_typeahead` reaches the
     // typeahead cells, not this one, but keeping the borrow a leaf is the rule.
@@ -244,6 +298,12 @@ pub unsafe fn f_inputrestore(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `interrupt()` — raise the same flag CTRL-C does.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_interrupt(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     got_int.set(true);
 }
@@ -262,6 +322,12 @@ unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
 
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
 /// not a prompt buffer.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_getprompt(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -273,6 +339,12 @@ pub unsafe fn f_prompt_getprompt(args: *mut TypVal, result: *mut TypVal, _fptr: 
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_prompt_getinput(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;

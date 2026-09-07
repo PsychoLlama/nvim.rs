@@ -26,6 +26,10 @@ use super::*;
 use crate::cstr;
 
 /// Free `watcher` and the callback and pattern it owns.
+///
+/// # Safety
+///
+/// `watcher` must point at a live dictionary watcher, unaliased for the call.
 pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
     unsafe { callback_free(&raw mut (*watcher).callback) };
     unsafe { xfree((*watcher).key_pattern.cast()) };
@@ -34,6 +38,11 @@ pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
 
 /// Register `callback` to fire when a key of `dict` matching `key_pattern`
 /// changes.  A trailing `*` in the pattern matches a prefix.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call, and
+/// `key_pattern` at `key_pattern_len` readable bytes.
 pub unsafe fn tv_dict_watcher_add(
     dict: *mut Dict,
     key_pattern: *const ::core::ffi::c_char,
@@ -55,6 +64,11 @@ pub unsafe fn tv_dict_watcher_add(
 }
 
 /// Whether `cb1` and `cb2` name the same function.
+///
+/// # Safety
+///
+/// `cb1` must point at an initialized callback. `cb2` must point at an
+/// initialized callback.
 pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> bool {
     // SAFETY: the caller's callbacks, live for the comparison.
     match unsafe { (&*cb1, &*cb2) } {
@@ -68,6 +82,10 @@ pub unsafe fn tv_callback_equal(cb1: *const Callback, cb2: *const Callback) -> b
 }
 
 /// Drop whatever `callback` holds and leave it `kCallbackNone`.
+///
+/// # Safety
+///
+/// `callback` must point at an initialized callback, unaliased for the call.
 pub unsafe fn callback_free(callback: *mut Callback) {
     // SAFETY: the caller's promise: a live callback, whose payload it owns.
     match unsafe { &*callback } {
@@ -93,6 +111,11 @@ pub unsafe fn callback_free(callback: *mut Callback) {
 /// Store `cb` in `tv` as a Vimscript value, taking a reference to it.
 ///
 /// A Lua callback has no Vimscript form and comes out as `v:null`.
+///
+/// # Safety
+///
+/// `cb` must point at an initialized callback, unaliased for the call. `tv`
+/// must point at an initialized typval, unaliased for the call.
 pub unsafe fn callback_put(cb: *mut Callback, tv: *mut TypVal) {
     // SAFETY: the caller's promise: a live typval.
     let mut value = unsafe { Tv::new(tv) };
@@ -122,6 +145,11 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: *mut TypVal) {
 }
 
 /// Copy `src` into `dest`, taking a reference to whatever it holds.
+///
+/// # Safety
+///
+/// `dest` must point at an initialized callback, unaliased for the call.
+/// `src` must point at an initialized callback, unaliased for the call.
 pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
     // SAFETY: the caller's callbacks; `dest` need not hold a value yet, and
     // a `Callback` has no destructor to run over what was there.
@@ -148,6 +176,11 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
 }
 
 /// A freshly allocated description of `cb`, as `string()` prints it.
+///
+/// # Safety
+///
+/// `cb` must point at an initialized callback, unaliased for the call.
+/// `arena` must point at a live arena, unaliased for the call.
 pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut ::core::ffi::c_char {
     // SAFETY: the caller's promise: a live callback.
     // SAFETY: the caller's promise: a live callback.
@@ -184,6 +217,11 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
 /// `callback` is only compared against the registered ones — it stays the
 /// caller's to free, which is why it arrives borrowed. Contrast
 /// [`tv_dict_watcher_add`], which takes its callback over.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call, and
+/// `key_pattern` at `key_pattern_len` readable bytes.
 pub unsafe fn tv_dict_watcher_remove(
     dict: *mut Dict,
     key_pattern: *const ::core::ffi::c_char,
@@ -237,6 +275,11 @@ pub unsafe fn tv_dict_watcher_remove(
 
 /// Whether `watcher`'s pattern matches `key`.  A trailing `*` makes it a
 /// prefix match.
+///
+/// # Safety
+///
+/// `watcher` must point at a live entry of some dictionary's watcher chain
+/// and `key` at a NUL-terminated key, both live for the call.
 pub(crate) unsafe fn tv_dict_watcher_matches(
     watcher: *mut DictWatcher,
     key: *const ::core::ffi::c_char,
@@ -256,6 +299,12 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
 /// A callback may add or remove watchers, and may re-enter this function; the
 /// `busy` flag is what stops a watcher firing inside its own callback, and the
 /// second walk is the deferred deletion the first one could not do.
+///
+/// # Safety
+///
+/// `dict` must point at a live dictionary, unaliased for the call, and `key`
+/// at a NUL-terminated key. `newtv` and `oldtv` must each be null or point at
+/// an initialized typval.
 pub unsafe fn tv_dict_watcher_notify(
     dict: *mut Dict,
     key: *const ::core::ffi::c_char,

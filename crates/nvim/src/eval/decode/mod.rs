@@ -86,7 +86,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
 /// # Safety
 /// `ret_tv` is writable and holds no value that needs clearing.
 pub unsafe fn decode_create_map_special_dict(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
-    let list = unsafe { tv_list_alloc(len) };
+    let list = tv_list_alloc(len);
     unsafe { tv_list_ref(list) };
     let val_tv = TypVal::list(list);
     unsafe { create_special_dict(ret_tv, kMPMap, val_tv) };

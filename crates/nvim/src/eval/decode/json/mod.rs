@@ -281,7 +281,7 @@ pub unsafe fn json_decode_string(
                         }
                     }
                     b'[' => {
-                        let list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+                        let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
                         unsafe { tv_list_ref(list) };
                         let tv = TypVal {
                             v_type: VAR_LIST,

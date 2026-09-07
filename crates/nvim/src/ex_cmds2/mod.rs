@@ -201,7 +201,7 @@ unsafe fn script_host_execute(name: &CStr, args: *mut ExArg) {
     if script.is_null() {
         return;
     }
-    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    let argv = tv_list_alloc(3 as ptrdiff_t);
     unsafe { tv_list_append_allocated_string(argv, script) };
     unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
     unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
@@ -227,7 +227,7 @@ unsafe fn script_host_execute_file(name: &CStr, args: *mut ExArg) {
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
     let _ = unsafe { vim_full_name((*args).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
 
-    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    let argv = tv_list_alloc(3 as ptrdiff_t);
     unsafe { tv_list_append_string(argv, buffer.as_ptr(), -1 as ssize_t) };
     unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
     unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
@@ -250,7 +250,7 @@ unsafe fn script_host_do_range(name: &CStr, args: *mut ExArg) {
     if unsafe { (*args).skip } != 0 {
         return;
     }
-    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    let argv = tv_list_alloc(3 as ptrdiff_t);
     unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
     unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
     unsafe { tv_list_append_string(argv, (*args).arg, -1 as ssize_t) };

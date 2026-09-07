@@ -352,6 +352,12 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
 /// per line.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let _swap = BufferSwap::save();
@@ -379,6 +385,12 @@ pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
 /// positions per line.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getregionpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let _swap = BufferSwap::save();
@@ -483,12 +495,10 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 /// `result` holds the list being built, and `curbuf` is the region's own
 /// buffer -- the caller's `BufferSwap` has already put it there.
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
-    // SAFETY: the caller's obligation; each list is handed to its parent
-    // immediately, so none is leaked.
-    let pair = unsafe { tv_list_alloc(2) };
+    let pair = tv_list_alloc(2);
     unsafe { tv_list_append_list(result.list_or_null(), pair) };
     for p in [p1, p2] {
-        let l = unsafe { tv_list_alloc(4) };
+        let l = tv_list_alloc(4);
         unsafe { tv_list_append_list(pair, l) };
         unsafe { tv_list_append_number(l, Buf::current().handle as VarNumber) };
         unsafe { tv_list_append_number(l, p.lnum as VarNumber) };

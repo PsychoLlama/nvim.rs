@@ -170,10 +170,10 @@ pub(crate) unsafe fn get_clipboard(
     // SAFETY: a live register, about to be refilled.
     unsafe { free_register(reg) };
 
-    // SAFETY: main-thread editor call; `regname` outlives the append, and
-    // the provider call owns `args` from here on.
-    let args = unsafe { tv_list_alloc(1) };
+    let args = tv_list_alloc(1);
     let regname = name as c_char;
+    // SAFETY: a fresh list; `regname` outlives the append, and the provider
+    // call below owns `args` from here on.
     unsafe { tv_list_append_string(args, &raw const regname, 1) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
     let result = unsafe { eval_call_provider(provider, method, args, false) };
@@ -305,9 +305,9 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
         _ => ::std::process::abort(),
     };
 
-    // SAFETY: main-thread editor call; `regtype`/`regname` outlive their
-    // appends, and the provider call owns `args` from here on.
-    let lines = unsafe { tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t) };
+    // SAFETY: a fresh list; each register line outlives its append, and the
+    // provider call below owns the whole structure from here on.
+    let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
     for i in 0..reg.y_size {
         let line = unsafe { *reg.y_array.add(i) };
         unsafe { tv_list_append_string(lines, line.data(), line.len() as ssize_t) };
@@ -316,7 +316,7 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
         unsafe { tv_list_append_string(lines, core::ptr::null(), 0) };
     }
 
-    let args = unsafe { tv_list_alloc(3) };
+    let args = tv_list_alloc(3);
     unsafe { tv_list_append_list(args, lines) };
     unsafe { tv_list_append_string(args, &raw const regtype, 1) };
     let regname = [name as c_char];

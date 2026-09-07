@@ -52,6 +52,12 @@ fn context_at(index: usize) -> Option<*mut Context> {
 }
 
 /// `ctxget([{index}])` — the context at `index` as a Dictionary.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_ctxget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the arena and the error are owned here and freed on the way
@@ -74,6 +80,12 @@ pub unsafe fn f_ctxget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `ctxpop()` — restore and drop the context on top of the stack.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_ctxpop(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: restores from the context stack; main thread only.
     if !unsafe { ctx_restore(ptr::null_mut(), kCtxAll.get()) } {
@@ -83,6 +95,12 @@ pub unsafe fn f_ctxpop(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFunc
 
 /// `ctxpush([{types}])` — push a context holding the named parts of the
 /// editor state, or all of them when no list is given.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_ctxpush(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, _result);
     // SAFETY throughout: walks the argument list, whose items live for the call.
@@ -121,6 +139,12 @@ pub unsafe fn f_ctxpush(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `ctxset({context} [, {index}])` — replace the context at `index`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, _result);
     // SAFETY throughout: the arena, the error and the scratch context are owned here;
@@ -165,6 +189,12 @@ pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `ctxsize()` — how many contexts are on the stack.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_ctxsize(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     result.v_type = VAR_NUMBER;

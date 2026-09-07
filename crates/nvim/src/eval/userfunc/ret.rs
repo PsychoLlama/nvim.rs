@@ -315,7 +315,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
 }
 
 /// Make every deferred call on every funccall, which is what an exit does.
-pub unsafe fn invoke_all_defer() {
+pub fn invoke_all_defer() {
     let mut fc = current_funccal.get();
     while !fc.is_null() {
         unsafe { handle_defer_one(fc) };
@@ -665,6 +665,11 @@ pub unsafe fn func_level(cookie: *mut c_void) -> c_int {
 }
 
 /// Whether the function running has already returned.
+///
+/// # Safety
+///
+/// A function call must be in progress: `current_funccal` is dereferenced
+/// with no null check.
 pub unsafe fn current_func_returned() -> c_int {
     unsafe { (*current_funccal.get()).fc_returned }
 }

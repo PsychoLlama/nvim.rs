@@ -265,8 +265,7 @@ pub unsafe fn ex_let_vars(
         if sep == b';' {
             // The rest of the list, which may be empty, goes to the
             // variable after the ';', as a list of its own.
-            // SAFETY: the list just allocated, and the items left in `l`.
-            let rest_list = unsafe { tv_list_alloc(rest_len as ptrdiff_t) };
+            let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
             while !item.is_null() {
                 unsafe { tv_list_append_tv(rest_list, &raw mut (*item).li_tv) };
                 item = unsafe { (*item).li_next };

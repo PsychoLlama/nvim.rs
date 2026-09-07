@@ -45,6 +45,12 @@ pub unsafe fn find_buffer(avar: *mut TypVal) -> Option<Buf> {
 }
 
 /// `bufadd({name})` — the number of the buffer, creating it if need be.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -61,6 +67,12 @@ pub unsafe fn f_bufadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `bufexists({buf})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
@@ -69,6 +81,12 @@ pub unsafe fn f_bufexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `buflisted({buf})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_buflisted(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
@@ -78,6 +96,12 @@ pub unsafe fn f_buflisted(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `bufload({buf})` — read the file in if the buffer is not loaded yet.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `unused` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufload(args: *mut TypVal, unused: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _) = frame!(args, unused);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
@@ -95,6 +119,12 @@ pub unsafe fn f_bufload(args: *mut TypVal, unused: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `bufloaded({buf})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufloaded(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
@@ -104,6 +134,12 @@ pub unsafe fn f_bufloaded(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -124,6 +160,12 @@ pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 
 /// `bufnr([{buf} [, {create}]])` — -1 when there is no such buffer and it was
 /// not asked to be created.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -182,12 +224,24 @@ fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
 }
 
 /// `bufwinid({buf})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufwinid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     buf_win_common(args, result, false);
 }
 
 /// `bufwinnr({buf})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_bufwinnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     buf_win_common(args, result, true);

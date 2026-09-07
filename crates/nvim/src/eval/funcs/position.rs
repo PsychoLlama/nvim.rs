@@ -55,6 +55,12 @@ const NOWHERE: Pos = Pos {
 };
 
 /// `byte2line({byte})` — which line a byte offset falls in.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_byte2line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
@@ -69,6 +75,12 @@ pub unsafe fn f_byte2line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `line2byte({lnum})` — the byte offset a line starts at, one-based, or -1
 /// past the end. One past the last line is allowed: it is the buffer size.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
@@ -87,12 +99,24 @@ pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `col({expr} [, {winid}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_col(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     get_col(args, result, false);
 }
 
 /// `charcol({expr} [, {winid}])` — as `col()` but counting characters.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_charcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     get_col(args, result, true);
@@ -184,6 +208,12 @@ unsafe fn virtualedit_tail(mut win: Win, buffer: Buf, pos: *mut Pos) -> ColNr {
 }
 
 /// `virtcol({expr} [, {list} [, {winid}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut vcol_start: ColNr = 0;
@@ -235,6 +265,12 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `line({expr} [, {winid}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let mut fnum: c_int = 0;
@@ -270,24 +306,48 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 }
 
 /// `getpos({expr})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     getpos_both(args, result, false, false);
 }
 
 /// `getcharpos({expr})` — as `getpos()` but with a character column.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     getpos_both(args, result, false, true);
 }
 
 /// `getcurpos([{winid}])` — the cursor, plus a fifth 'curswant' element.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getcurpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     getpos_both(args, result, true, false);
 }
 
 /// `getcursorcharpos([{winid}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getcursorcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     getpos_both(args, result, true, true);
@@ -381,12 +441,24 @@ unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
 }
 
 /// `cursor({lnum}, {col} [, {off}])` or `cursor({list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_cursor(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     set_cursorpos(args, result, false);
 }
 
 /// `setcursorcharpos({lnum}, {col} [, {off}])` or with a List.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setcursorcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     set_cursorpos(args, result, true);
@@ -463,12 +535,24 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
 }
 
 /// `setpos({expr}, {list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     set_position(args, result, false);
 }
 
 /// `setcharpos({expr}, {list})` — as `setpos()` with a character column.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     set_position(args, result, true);
@@ -517,6 +601,12 @@ fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
 }
 
 /// `getcharsearch()` — the state `;` and `,` repeat.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getcharsearch(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `result` is the dispatcher's cleared return value; the three
     // readers answer from the process-wide character-search state.
@@ -532,6 +622,12 @@ pub unsafe fn f_getcharsearch(_args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
 /// that part of the state alone.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setcharsearch(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(args, _result);

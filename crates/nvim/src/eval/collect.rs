@@ -161,7 +161,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
     // Variables in the previous_funccal list must not be freed unless
     // they are reachable *only* through it, so this goes first.
-    abort = abort || unsafe { set_ref_in_previous_funccal(copy_id) };
+    abort = abort || set_ref_in_previous_funccal(copy_id);
     abort = abort || unsafe { garbage_collect_scriptvars(copy_id) };
 
     for buf in buffers() {
@@ -240,8 +240,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
     abort = abort || unsafe { garbage_collect_globvars(copy_id) } != 0;
     // function-local variables, then named functions (closures)
-    abort = abort || unsafe { set_ref_in_call_stack(copy_id) };
-    abort = abort || unsafe { set_ref_in_functions(copy_id) };
+    abort = abort || set_ref_in_call_stack(copy_id);
+    abort = abort || set_ref_in_functions(copy_id);
 
     // Channels. Deliberately not `abort`ed on: upstream discards these
     // answers, and doing otherwise would change when a collection is
@@ -269,7 +269,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     }
 
     // function call arguments, if v:testing is set
-    abort = abort || unsafe { set_ref_in_func_args(copy_id) };
+    abort = abort || set_ref_in_func_args(copy_id);
     abort = abort || unsafe { garbage_collect_vimvars(copy_id) };
     abort = abort || unsafe { set_ref_in_quickfix(copy_id) };
 

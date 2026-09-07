@@ -102,6 +102,12 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 }
 
 /// `win_execute({winid}, {command} [, {silent}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;

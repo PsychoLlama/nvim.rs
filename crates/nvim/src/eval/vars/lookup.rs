@@ -187,7 +187,7 @@ pub unsafe fn check_vars(name: *const c_char, len: size_t) {
     }
     let mut varname: *const c_char = ptr::null();
     let ht = unsafe { find_var_ht(name, len, &raw mut varname) };
-    if (ht == unsafe { get_funccal_local_ht() } || ht == unsafe { get_funccal_args_ht() })
+    if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht())
         && !unsafe { find_var(name, len, ptr::null_mut(), true) }.is_null()
     {
         unsafe { *eval_lavars_used.get() = true };
@@ -255,8 +255,8 @@ pub unsafe fn find_var_in_ht(
             b'b' => (unsafe { &raw mut (*Buf::current_raw()).b_bufvar }).cast(),
             b'w' => (unsafe { &raw mut (*Win::current_raw()).w_winvar }).cast(),
             b't' => (unsafe { &raw mut (*TabPage::current_raw()).tp_winvar }).cast(),
-            b'l' => unsafe { get_funccal_local_var() },
-            b'a' => unsafe { get_funccal_args_var() },
+            b'l' => get_funccal_local_var(),
+            b'a' => get_funccal_args_var(),
             _ => ptr::null_mut(),
         };
     }
@@ -321,7 +321,7 @@ pub(crate) unsafe fn find_var_ht_dict(
             return get_compat_ht();
         }
 
-        *dict = unsafe { get_funccal_local_dict() };
+        *dict = get_funccal_local_dict();
         if dict.is_null() {
             *dict = get_globvar_dict();
         }
@@ -343,8 +343,8 @@ pub(crate) unsafe fn find_var_ht_dict(
             b'w' => *dict = Win::current().w_vars,
             b't' => *dict = TabPage::current().tp_vars,
             b'v' => *dict = get_vimvar_dict(),
-            b'a' => *dict = unsafe { get_funccal_args_dict() },
-            b'l' => *dict = unsafe { get_funccal_local_dict() },
+            b'a' => *dict = get_funccal_args_dict(),
+            b'l' => *dict = get_funccal_local_dict(),
             b's' => {
                 // Both calls below fill `sctx` in, and neither reads the
                 // cell, so the round trip through a local is what the C's

@@ -57,7 +57,7 @@ pub(crate) unsafe fn eval_list(
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
     let list: *mut List = if evaluate {
-        unsafe { tv_list_alloc(kListLenShouldKnow as ptrdiff_t) }
+        tv_list_alloc(kListLenShouldKnow as ptrdiff_t)
     } else {
         null_mut()
     };

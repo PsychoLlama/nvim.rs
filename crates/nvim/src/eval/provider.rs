@@ -189,8 +189,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: *mut TypVal, result: *mu
         emsg_static(e_invarg);
         return;
     }
-    // SAFETY: the List is fresh and this frame's.
-    let args: *mut List = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    let args: *mut List = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
     // -1 asks the callee to measure it.
     unsafe { tv_list_append_string(args, arg.string_or_null(), -1 as ssize_t) };

@@ -232,7 +232,7 @@ pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bo
 
     let mut theline: *mut c_char = ptr::null_mut();
     let mut eval_failed = false;
-    let l = unsafe { tv_list_alloc(0) };
+    let l = tv_list_alloc(0);
     loop {
         if heredoc_in_string {
             if unsafe { *line_arg } == NUL as c_char {

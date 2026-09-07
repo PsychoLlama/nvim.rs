@@ -156,7 +156,7 @@ pub unsafe fn set_var_const(
         unsafe { tv_clear(cur) };
     } else {
         // A new variable. `v:` and `a:` do not take one.
-        if ht == get_vimvar_ht() || ht == unsafe { get_funccal_args_ht() } {
+        if ht == get_vimvar_ht() || ht == get_funccal_args_ht() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E461: Illegal variable name: {name}");

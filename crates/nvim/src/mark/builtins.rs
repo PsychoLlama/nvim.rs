@@ -57,7 +57,7 @@ pub(super) unsafe fn add_mark(
     // `tv_list_append_dict` on.
     let d = unsafe { tv_dict_alloc() };
     unsafe { tv_list_append_dict(l, d) };
-    let lpos = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     unsafe { tv_list_append_number(lpos, VarNumber::from(bufnr)) };
     unsafe { tv_list_append_number(lpos, VarNumber::from(pos.lnum)) };
     // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is

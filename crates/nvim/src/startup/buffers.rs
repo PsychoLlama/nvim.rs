@@ -88,8 +88,7 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) unsafe fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: the global argument list is initialised by `early_init`.
-    let list: *mut List = unsafe { tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t) };
+    let list: *mut List = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     let alist = global_arglist();
     for i in 0..unsafe { (*alist).al_ga.len() as c_int } {
         let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };

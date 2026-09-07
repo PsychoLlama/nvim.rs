@@ -76,8 +76,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buffer.b_vars) };
 
     // The windows displaying this buffer.
-    // SAFETY: the list is handed to the dictionary below, so it is not leaked.
-    let windows = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let append = |handle: Handle| {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
@@ -98,6 +97,12 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getbufinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list belongs to

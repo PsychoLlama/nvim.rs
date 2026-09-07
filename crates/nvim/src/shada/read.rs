@@ -110,7 +110,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
         }
     }
     if get_old_files && (oldfiles_list.is_null() || force) {
-        oldfiles_list = unsafe { tv_list_alloc(kListLenUnknown as ptrdiff_t) };
+        oldfiles_list = tv_list_alloc(kListLenUnknown as ptrdiff_t);
         unsafe { set_vim_var_list(Vv::Oldfiles, oldfiles_list) };
     }
 

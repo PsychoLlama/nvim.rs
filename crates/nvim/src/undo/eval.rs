@@ -107,8 +107,7 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,
 /// newest change first, each carrying its own alternate branch under `alt`.
 fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
-    // SAFETY: an empty list, whose length is not known up front.
-    let list: *mut List = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let list: *mut List = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
         // SAFETY: a fresh dictionary.

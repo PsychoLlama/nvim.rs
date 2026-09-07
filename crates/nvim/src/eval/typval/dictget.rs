@@ -29,7 +29,7 @@ pub(crate) unsafe fn tv_blob2items(args: *mut TypVal, result: *mut TypVal) {
     let blob = unsafe { (*args).blob_or_null() };
     unsafe { tv_list_alloc_ret(result, tv_blob_len(blob) as ptrdiff_t) };
     for i in 0..unsafe { tv_blob_len(blob) } {
-        let l2 = unsafe { tv_list_alloc(2) };
+        let l2 = tv_list_alloc(2);
         unsafe { tv_list_append_list((*result).list_or_null(), l2) };
         unsafe { tv_list_append_number(l2, i as VarNumber) };
         unsafe { tv_list_append_number(l2, tv_blob_get(blob, i) as VarNumber) };
@@ -59,7 +59,7 @@ pub(crate) unsafe fn tv_list2items(args: *mut TypVal, result: *mut TypVal) {
         return;
     }
     for (idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
-        let l2 = unsafe { tv_list_alloc(2) };
+        let l2 = tv_list_alloc(2);
         unsafe { tv_list_append_list((*result).list_or_null(), l2) };
         unsafe { tv_list_append_number(l2, idx as VarNumber) };
         unsafe { tv_list_append_tv(l2, &raw mut (*li).li_tv) };
@@ -87,7 +87,7 @@ pub(crate) unsafe fn tv_string2items(args: *mut TypVal, result: *mut TypVal) {
         if len == 0 {
             break;
         }
-        let l2 = unsafe { tv_list_alloc(2) };
+        let l2 = tv_list_alloc(2);
         unsafe { tv_list_append_list((*result).list_or_null(), l2) };
         unsafe { tv_list_append_number(l2, idx) };
         unsafe { tv_list_append_string(l2, p, len as ssize_t) };
@@ -345,7 +345,7 @@ pub unsafe fn tv_dict_wrong_func_name(
     tv: *mut TypVal,
     name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
-    ((d == get_globvar_dict() || dv_hashtab(d) == unsafe { get_funccal_local_ht() })
+    ((d == get_globvar_dict() || dv_hashtab(d) == get_funccal_local_ht())
         && tv_is_func(unsafe { *tv })
         && unsafe { var_wrong_func_name(name, true) }) as ::core::ffi::c_int
 }
@@ -384,7 +384,7 @@ pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: 
             }
             kDict2ListItems => {
                 // items()
-                let sub_l = unsafe { tv_list_alloc(2) };
+                let sub_l = tv_list_alloc(2);
                 tv_item.v_type = VAR_LIST;
                 tv_item.vval.v_list = sub_l;
                 unsafe { tv_list_ref(sub_l) };

@@ -212,7 +212,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
         // pos1..pos8 into the list `match_add` wants.
         let mut positions: *mut List = ::core::ptr::null_mut();
         if unsafe { find(d, "pattern") }.is_null() {
-            positions = unsafe { tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1) };
+            positions = tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1);
             for i in 1..MAX_SAVED_POS + 1 {
                 let key = format!("pos{i}");
                 let pos_di =
@@ -278,7 +278,6 @@ unsafe fn optional_args(
     args: *mut TypVal,
     numbuf: &mut NumBuf,
 ) -> Option<(c_int, c_int, *const c_char, Win)> {
-    // SAFETY: the evaluator's slots.
     let mut prio = DEFAULT_PRIORITY;
     let mut id = -1;
     let mut conceal_char: *const c_char = ::core::ptr::null();

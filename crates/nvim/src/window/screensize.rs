@@ -371,8 +371,7 @@ pub unsafe fn may_trigger_win_scrolled_resized() {
 
     let mut windows_list = ptr::null_mut::<List>();
     if trigger_resize {
-        // SAFETY: a fresh list of the right size.
-        windows_list = unsafe { tv_list_alloc(size_count as ptrdiff_t) };
+        windows_list = tv_list_alloc(size_count as ptrdiff_t);
         scan_windows(&mut Scan::Winlist(windows_list));
     }
     let mut scroll_dict = ptr::null_mut::<Dict>();

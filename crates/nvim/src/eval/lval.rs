@@ -215,8 +215,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         // A "v:" or "a:" variable cannot be added.
         // SAFETY: naming a live Dict's hashtab reads nothing.
         let ht = unsafe { &raw mut (*lval.ll_dict).dv_hashtab };
-        // SAFETY: the function-call stack is the editor's own.
-        let args_ht = unsafe { get_funccal_args_ht() };
+        let args_ht = get_funccal_args_ht();
         if lval.ll_dict == get_vimvar_dict() || ht == args_ht {
             // SAFETY: the format takes one NUL-terminated string.
             let name = unsafe { c_str(name) };

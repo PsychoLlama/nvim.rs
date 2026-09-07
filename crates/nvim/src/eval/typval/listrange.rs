@@ -21,6 +21,11 @@ use crate::types::NUL;
 /// off the front and raising `E684` when there is no such item.
 ///
 /// `*n1` is updated to the index actually used.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `n1` must point at
+/// a writable `int` the caller owns.
 pub unsafe fn tv_list_check_range_index_one(
     l: *mut List,
     n1: *mut ::core::ffi::c_int,
@@ -37,6 +42,12 @@ pub unsafe fn tv_list_check_range_index_one(
 
 /// Resolve the second index of `l[n1:n2]` against the item `li1` the first one
 /// landed on, normalising both to non-negative indexes.
+///
+/// # Safety
+///
+/// `l` must point at a live list, unaliased for the call. `n1` must point at
+/// a writable `int` the caller owns. `li1` must point at an item of `l`. `n2`
+/// must point at a writable `int` the caller owns.
 pub unsafe fn tv_list_check_range_index_two(
     l: *mut List,
     n1: *mut ::core::ffi::c_int,
@@ -73,6 +84,12 @@ pub unsafe fn tv_list_check_range_index_two(
 /// `dest[idx1:idx2] = src`, or `dest[idx1:idx2] op= src` when `op` is given.
 ///
 /// `empty_idx2` means the range had no upper bound (`dest[idx1:]`).
+///
+/// # Safety
+///
+/// `dest` and `src` must point at live lists, unaliased for the call. `op`
+/// must be null or a NUL-terminated operator, and `varname` null or a NUL-
+/// terminated name for the lock error; both live for the call.
 pub unsafe fn tv_list_assign_range(
     dest: *mut List,
     src: *mut List,
@@ -148,6 +165,11 @@ pub unsafe fn tv_list_assign_range(
 
 /// `flatten()`: splice the items of any nested list into `list` in place,
 /// starting at `first` and going `maxdepth` levels down.
+///
+/// # Safety
+///
+/// `list` must point at a live list, unaliased for the call. `first` must
+/// point at an item of `list`.
 pub unsafe fn tv_list_flatten(
     list: *mut List,
     first: *mut ListItem,
@@ -202,8 +224,12 @@ pub unsafe fn tv_list_flatten(
 }
 
 /// A fresh list holding copies of `ol[n1..=n2]`.
+///
+/// # Safety
+///
+/// `ol` must point at a live list, unaliased for the call.
 pub(crate) unsafe fn tv_list_slice(ol: *mut List, mut n1: VarNumber, n2: VarNumber) -> *mut List {
-    let l = unsafe { tv_list_alloc((n2 - n1 + 1) as ptrdiff_t) };
+    let l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
     let mut item = unsafe { tv_list_find(ol, n1 as ::core::ffi::c_int) };
     while n1 <= n2 {
         unsafe { tv_list_append_tv(l, &raw mut (*item).li_tv) };
@@ -217,6 +243,12 @@ pub(crate) unsafe fn tv_list_slice(ol: *mut List, mut n1: VarNumber, n2: VarNumb
 ///
 /// `result` holds the list being subscripted on the way in.  An index out of
 /// range is an error; a *range* out of range is merely empty.
+///
+/// # Safety
+///
+/// `_list` must point at a live list, unaliased for the call. `result` must
+/// point at the caller's return slot: an initialized typval it owns and will
+/// clear.
 pub unsafe fn tv_list_slice_or_index(
     _list: *mut List,
     range: bool,
@@ -276,6 +308,12 @@ pub unsafe fn tv_list_slice_or_index(
 /// concatenate them into `gap` with `sep` between.
 ///
 /// Splitting it in two is what lets `gap` be grown to its final size once.
+///
+/// # Safety
+///
+/// `gap` and `join_gap` must point at live growable arrays the caller owns,
+/// `l` at a live list, and `sep` at a NUL-terminated separator; all live for
+/// the call.
 pub(crate) unsafe fn list_join_inner(
     gap: *mut GArray,
     l: *mut List,
@@ -337,6 +375,11 @@ pub(crate) unsafe fn list_join_inner(
 }
 
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
+///
+/// # Safety
+///
+/// `gap` must point at a live growable array the caller owns, `l` at a live
+/// list, and `sep` at a NUL-terminated separator; all live for the call.
 pub unsafe fn tv_list_join(
     gap: *mut GArray,
     l: *mut List,
@@ -365,6 +408,12 @@ pub unsafe fn tv_list_join(
 }
 
 /// `join()` the builtin.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*args).v_type } != VAR_LIST {
@@ -392,6 +441,12 @@ pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 }
 
 /// `list2str()`: a list of codepoints as a string.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };

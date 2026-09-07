@@ -170,8 +170,7 @@ pub(crate) unsafe fn string_to_list(
     if !keepempty && unsafe { *str.add(len - 1) } as c_int == NL {
         len -= 1;
     }
-    // SAFETY: the allocation is the encoder's own sink.
-    let list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     // SAFETY: as above; `str` has `len` readable bytes.
     unsafe { encode_list_write(list as *mut c_void, str, len) };
     list

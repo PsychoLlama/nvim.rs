@@ -234,12 +234,10 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     } else {
         b'+' as c_char
     };
-    // SAFETY: a fresh list, which takes ownership of `data`.
-    let lines: *mut List = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    let lines: *mut List = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: as above.
     unsafe { tv_list_append_allocated_string(lines, data) };
-    // SAFETY: a fresh list, which takes ownership of `lines`.
-    let args: *mut List = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    let args: *mut List = tv_list_alloc(3 as ptrdiff_t);
     // SAFETY: as above.
     unsafe { tv_list_append_list(args, lines) };
     let regtype = b'v' as c_char;

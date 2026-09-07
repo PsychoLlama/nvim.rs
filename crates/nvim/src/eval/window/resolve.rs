@@ -232,6 +232,12 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
 }
 
 /// `win_getid([{winnr} [, {tabnr}]])` — the id of a window named by number.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_getid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and `curwin`/`curtab` are set.
@@ -276,6 +282,12 @@ fn nth_numbered_win(tabpage: TabPage, winnr: c_int) -> Option<Win> {
 }
 
 /// `win_id2tabwin({winid})` — `[tabnr, winnr]`, `[0, 0]` for an unknown id.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_id2tabwin(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the two counters are
@@ -289,6 +301,12 @@ pub unsafe fn f_win_id2tabwin(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `win_id2win({winid})` — the window's number in the current tab page, or 0.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_id2win(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     let tp = TabPage::current();
@@ -310,6 +328,12 @@ pub unsafe fn f_win_id2win(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_findbuf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals, and the list stays
@@ -322,6 +346,12 @@ pub unsafe fn f_win_findbuf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `win_gotoid({winid})` — 1 when the window was reached, 0 otherwise.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals and `curwin` is set.
@@ -346,6 +376,12 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `winnr([{arg}])` — a window number in the current tab page.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_winnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals and `curtab` is set.
@@ -354,6 +390,12 @@ pub unsafe fn f_winnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `tabpagenr([{arg}])` — a tab page number.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -384,6 +426,12 @@ pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `tabpagewinnr({tabnr} [, {arg}])` — a window number in another tab page.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_tabpagewinnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
@@ -397,6 +445,12 @@ pub unsafe fn f_tabpagewinnr(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `winbufnr({nr})` — the buffer number of the window `nr` names, -1 for none.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_winbufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.

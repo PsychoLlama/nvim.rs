@@ -212,6 +212,12 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
 }
 
 /// `append({lnum}, {string/list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
@@ -223,6 +229,12 @@ pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_appendbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
@@ -230,6 +242,12 @@ pub unsafe fn f_appendbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
@@ -237,6 +255,12 @@ pub unsafe fn f_setbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `setline({lnum}, {string/list})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
@@ -248,6 +272,12 @@ pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
@@ -262,6 +292,12 @@ pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
@@ -269,6 +305,12 @@ pub unsafe fn f_getbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getbufoneline({buf}, {lnum})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getbufoneline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
@@ -276,6 +318,12 @@ pub unsafe fn f_getbufoneline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.vval.v_number = 1;

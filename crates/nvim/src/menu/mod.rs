@@ -577,8 +577,7 @@ pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: *mut Dict) {
 }
 
 pub(crate) fn list_alloc() -> *mut List {
-    // SAFETY: allocates a fresh List and never answers null.
-    unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) }
+    tv_list_alloc(kListLenMayKnow as ptrdiff_t)
 }
 
 pub(crate) fn list_append_dict(list: *mut List, dict: *mut Dict) {

@@ -38,6 +38,10 @@ const TV_CSTRING: size_t = size_t::MAX - 1;
 /// The work is done by the `nothing` sink, the seventh instantiation of
 /// `typval_encode.c.h`: it walks the value iteratively, so a container that
 /// refers to itself is deep-freed without recursing.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_clear(tv: *mut TypVal) {
     if tv.is_null() || unsafe { (*tv).v_type } == VAR_UNKNOWN {
         return;
@@ -58,6 +62,10 @@ pub unsafe fn tv_clear(tv: *mut TypVal) {
 ///
 /// Unlike [`tv_clear`] this does not recurse into a container: it drops one
 /// reference and frees the box.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_free(tv: *mut TypVal) {
     if tv.is_null() {
         return;
@@ -87,6 +95,11 @@ pub unsafe fn tv_free(tv: *mut TypVal) {
 ///
 /// The copy is shallow and always unlocked; `deepcopy()` goes through
 /// `var_item_copy`.
+///
+/// # Safety
+///
+/// `from` must point at an initialized typval. `to` must point at an
+/// initialized typval, unaliased for the call.
 pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
     unsafe { (*to).v_type = (*from).v_type };
     // SAFETY: the caller's promise: a writable typval.
@@ -135,6 +148,10 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
 /// With `check_refcount`, a container held by more than one reference is left
 /// alone — that is what keeps `:lockvar` on a function argument from locking
 /// the caller's value.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_item_lock(
     tv: *mut TypVal,
     deep: ::core::ffi::c_int,
@@ -204,6 +221,10 @@ pub unsafe fn tv_item_lock(
 }
 
 /// Whether `tv` is locked, either itself or as the container it names.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_islocked(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
@@ -222,6 +243,12 @@ pub unsafe fn tv_islocked(tv: *const TypVal) -> bool {
 ///
 /// `name` is what the error names; `name_len` may be `TV_TRANSLATE` or
 /// `TV_CSTRING` instead of a real length.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `name` must be null, or point at
+/// the name the error reports — NUL-terminated for
+/// `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable bytes.
 pub unsafe extern "C" fn tv_check_lock(
     tv: *const TypVal,
     name: *const ::core::ffi::c_char,
@@ -248,6 +275,12 @@ pub unsafe extern "C" fn tv_check_lock(
 }
 
 /// Whether `lock` forbids a change, raising the matching error if so.
+///
+/// # Safety
+///
+/// `name` must be null, or point at the name the error reports — NUL-
+/// terminated for `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable
+/// bytes.
 pub unsafe fn value_check_lock(
     lock: VarLock,
     mut name: *const ::core::ffi::c_char,
@@ -292,6 +325,11 @@ pub unsafe fn value_check_lock(
 ///
 /// Containers are compared structurally.  Two values of different types are
 /// never equal, except that a funcref and a partial may be.
+///
+/// # Safety
+///
+/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
+/// must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

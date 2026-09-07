@@ -62,6 +62,12 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
@@ -87,7 +93,7 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         result.v_type = VAR_LIST;
         let mut l = unsafe { get_reg_contents(regname, flags) } as *mut List;
         if l.is_null() {
-            l = unsafe { tv_list_alloc(0) };
+            l = tv_list_alloc(0);
         }
         result.vval.v_list = l;
         unsafe { tv_list_ref(l) };
@@ -98,6 +104,12 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `getregtype([{regname}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
@@ -115,6 +127,12 @@ pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getreginfo([{regname}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getreginfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `buf` outlives
@@ -178,18 +196,36 @@ unsafe fn return_register(regname: c_int, result: &mut TypVal) {
 }
 
 /// `reg_executing()` — the register a macro is being played from.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reg_executing(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_executing.get(), &mut *result) };
 }
 
 /// `reg_recording()` — the register `q` is recording into.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reg_recording(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recording.get(), &mut *result) };
 }
 
 /// `reg_recorded()` — the register the last recording went into.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_reg_recorded(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recorded.get(), &mut *result) };
@@ -228,6 +264,12 @@ unsafe fn get_yank_type(
 }
 
 /// `setreg({regname}, {value} [, {options}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();

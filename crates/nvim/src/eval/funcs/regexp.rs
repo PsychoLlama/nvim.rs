@@ -378,7 +378,7 @@ unsafe fn get_matches_in_str(
         let matchlen = unsafe { end.offset_from(start) } as c_int;
         let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
         if submatches {
-            let sml = unsafe { tv_list_alloc(NSUBEXP as isize - 1) };
+            let sml = tv_list_alloc(NSUBEXP as isize - 1);
             let _ = unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, sml) };
             for i in 1..NSUBEXP as usize {
                 if unsafe { (*rmp).endp[i] }.is_null() {
@@ -403,6 +403,12 @@ unsafe fn get_matches_in_str(
 }
 
 /// `matchbufline({buf}, {pat}, {lnum}, {end} [, {dict}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -501,6 +507,12 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_match(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
@@ -508,6 +520,12 @@ pub unsafe fn f_match(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) 
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchend(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
@@ -515,6 +533,12 @@ pub unsafe fn f_matchend(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncDat
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchlist(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
@@ -522,6 +546,12 @@ pub unsafe fn f_matchlist(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncDa
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchstr(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
@@ -529,6 +559,12 @@ pub unsafe fn f_matchstr(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncDat
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchstrpos(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
@@ -536,6 +572,12 @@ pub unsafe fn f_matchstrpos(args: *mut TypVal, result: *mut TypVal, _f: EvalFunc
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_matchstrlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the List and its items outlive the call.
@@ -624,6 +666,11 @@ struct FuzzyItem {
 /// The item's string, as `Request::source` says to find it. A callback's
 /// answer lands in `result`, which the caller clears; the string is only
 /// borrowed until then.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `result` must point at the
+/// caller's return slot: an initialized typval it owns and will clear.
 unsafe fn item_string(
     request: &Request,
     tv: *const TypVal,
@@ -665,6 +712,10 @@ unsafe fn item_string(
 }
 
 /// The list held by item `idx` of `list`, which the caller has just built.
+///
+/// # Safety
+///
+/// `list` must point at a live list, unaliased for the call.
 unsafe fn nested_list(list: *mut List, idx: c_int) -> *mut List {
     let li = unsafe { tv_list_find(list, idx) };
     debug_assert!(!li.is_null(), "fuzzy: result list is short");
@@ -678,6 +729,11 @@ unsafe fn nested_list(list: *mut List, idx: c_int) -> *mut List {
 /// that is a list of strings; for `matchfuzzypos()` `fmatchlist` already
 /// holds three lists — the matched strings, the matching positions of each,
 /// and the scores — which are filled in turn.
+///
+/// # Safety
+///
+/// `list` must point at a live list, unaliased for the call. `fmatchlist`
+/// must point at a live list, unaliased for the call.
 unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *mut List) {
     let mut numbuf = NumBuf::new();
     let pattern = unsafe { CStr::from_ptr(request.pattern) };
@@ -704,7 +760,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                     .get(at..)
                     .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
                 let positions = request.retmatchpos.then(|| {
-                    let positions = unsafe { tv_list_alloc(kListLenMayKnow as isize) };
+                    let positions = tv_list_alloc(kListLenMayKnow as isize);
                     // One position per pattern character that took part
                     // in the match, i.e. all but the word separators.
                     let placed = matched_char_count(pattern, request.matchseq);
@@ -763,6 +819,11 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
 }
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
+///
+/// # Safety
+///
+/// `args` must point at an initialized typval. `result` must point at the
+/// caller's return slot: an initialized typval it owns and will clear.
 unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();

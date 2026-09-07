@@ -19,6 +19,10 @@ use crate::winlayer::Win;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_get_number(tv: *const TypVal) -> VarNumber {
     let mut error = false;
     unsafe { tv_get_number_chk(tv, &raw mut error) }
@@ -29,6 +33,11 @@ pub unsafe fn tv_get_number(tv: *const TypVal) -> VarNumber {
 ///
 /// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
 /// what makes `tv_get_bool` usable as a tri-state.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `ret_error` must point at a
+/// writable `bool` the caller owns.
 pub unsafe fn tv_get_number_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNumber {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
@@ -66,17 +75,30 @@ pub unsafe fn tv_get_number_chk(tv: *const TypVal, ret_error: *mut bool) -> VarN
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_get_bool(tv: *const TypVal) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
 /// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `ret_error` must point at a
+/// writable `bool` the caller owns.
 pub unsafe fn tv_get_bool_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ret_error) }
 }
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
     let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
@@ -92,6 +114,10 @@ pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: Option<Buf>) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
@@ -108,6 +134,10 @@ pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: Option<Buf>) -> LineNr 
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
 /// float form.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv_get_float(tv: *const TypVal) -> Float {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
@@ -135,6 +165,12 @@ pub unsafe fn tv_get_float(tv: *const TypVal) -> Float {
 /// `tv` as a string, formatting a number into `buf` (`NUMBUFLEN` bytes).
 ///
 /// Answers NULL with an error raised for a value that has no string form.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `buf` must point at writable
+/// scratch of at least `NUMBUFLEN` bytes, which the answer borrows when the
+/// value has no string of its own.
 pub unsafe fn tv_get_string_buf_chk(
     tv: *const TypVal,
     buf: *mut ::core::ffi::c_char,
@@ -230,6 +266,12 @@ impl NumBuf {
 }
 
 /// [`tv_get_string_buf_chk`] answering the empty string rather than NULL.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval. `buf` must point at writable
+/// scratch of at least `NUMBUFLEN` bytes, which the answer borrows when the
+/// value has no string of its own.
 pub unsafe fn tv_get_string_buf(
     tv: *const TypVal,
     buf: *mut ::core::ffi::c_char,
@@ -239,6 +281,10 @@ pub unsafe fn tv_get_string_buf(
 }
 
 /// Truthiness of `tv`, as `if` and `while` ask for it.
+///
+/// # Safety
+///
+/// `tv` must point at an initialized typval.
 pub unsafe fn tv2bool(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let tv = unsafe { Tv::new(tv.cast_mut()) };

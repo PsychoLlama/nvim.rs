@@ -274,7 +274,7 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut List {
         if start.is_null() || match_.endp[no].is_null() {
             return core::ptr::null_mut();
         }
-        let list = unsafe { tv_list_alloc(1) };
+        let list = tv_list_alloc(1);
         unsafe { tv_list_append_string(list, start, match_.endp[no].offset_from(start)) };
         unsafe { tv_list_ref(list) };
         return list;
@@ -290,7 +290,7 @@ pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut List {
     let scol = mmatch.startpos[no].col;
     let ecol = mmatch.endpos[no].col;
 
-    let list = unsafe { tv_list_alloc((elnum - slnum + 1) as isize) };
+    let list = tv_list_alloc((elnum - slnum + 1) as isize);
     let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
     if slnum == elnum {
         unsafe { tv_list_append_string(list, s, (ecol - scol) as isize) };

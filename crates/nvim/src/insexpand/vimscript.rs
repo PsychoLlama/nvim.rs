@@ -453,7 +453,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
     let has_matches = what_flag & CI_WHAT_MATCHES != 0;
     let has_completed = what_flag & CI_WHAT_COMPLETED != 0;
     if has_items || has_matches {
-        li = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+        li = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         let key = if has_matches && !has_items {
             "matches"
         } else {

@@ -89,6 +89,12 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -134,6 +140,12 @@ pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `chansend({id}, {data})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
@@ -180,6 +192,12 @@ pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_rpcnotify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -294,6 +312,12 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -377,6 +401,12 @@ pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
@@ -443,6 +473,12 @@ pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `serverstart([{address}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_serverstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -489,6 +525,12 @@ pub unsafe fn f_serverstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `serverstop({address})`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_serverstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
@@ -512,6 +554,12 @@ pub unsafe fn f_serverstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -569,6 +617,12 @@ pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_stdioopen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `on_stdin` is moved into

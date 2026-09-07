@@ -381,7 +381,7 @@ pub unsafe fn f_getcellwidths(_args: *mut TypVal, result: *mut TypVal, _fptr: Ev
     let rows = CELL_WIDTHS.with(|t| t.clone());
     unsafe { tv_list_alloc_ret(result, rows.len() as ptrdiff_t) };
     for row in &rows {
-        let entry = unsafe { tv_list_alloc(3) };
+        let entry = tv_list_alloc(3);
         unsafe { tv_list_append_number(entry, row.first) };
         unsafe { tv_list_append_number(entry, row.last) };
         unsafe { tv_list_append_number(entry, row.width as VarNumber) };

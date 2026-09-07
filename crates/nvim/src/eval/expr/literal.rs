@@ -269,9 +269,8 @@ pub(crate) unsafe fn eval_number(
             rv.vval.v_float = f;
         }
     } else if cur.byte() == b'0' && matches!(cur.at(1), b'z' | b'Z') {
-        // SAFETY: a fresh Blob of this call's own, or none while skipping.
         let blob: *mut Blob = if evaluate {
-            unsafe { tv_blob_alloc() }
+            tv_blob_alloc()
         } else {
             null_mut()
         };

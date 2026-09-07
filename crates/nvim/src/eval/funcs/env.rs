@@ -45,6 +45,12 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// `environ()` — the process environment as a Dictionary.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_environ(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     // SAFETY throughout: `env` is an array of `env_size` strings plus a NULL, filled by
@@ -82,6 +88,12 @@ pub unsafe fn f_environ(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_getenv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -97,6 +109,12 @@ pub unsafe fn f_getenv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `expand({string} [, {nosuf} [, {list}]])`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -175,6 +193,12 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// `expandcmd({string} [, {options}])` — expand the `%`, `#` and wildcard
 /// items in a command line.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -210,6 +234,12 @@ pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `_result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setenv(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(args, _result);
     // SAFETY throughout: the two scratch buffers outlive the strings coerced into them.
@@ -230,6 +260,12 @@ pub unsafe fn f_setenv(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 
 /// `setfperm({fname}, {mode})` — `{mode}` is nine "rwxrwxrwx" characters,
 /// any of which is "off" only when it is a `-`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -264,9 +300,7 @@ pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// path, each with the application name appended.
 fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     let appname = get_appname(false);
-    // SAFETY: the caller's obligation. `dirs` is owned here; `vim_env_iter`
-    // hands back slices of it and null when the walk is done.
-    let list = unsafe { tv_list_alloc(kListLenShouldKnow as isize) };
+    let list = tv_list_alloc(kListLenShouldKnow as isize);
     result.v_type = VAR_LIST;
     result.vval.v_list = list;
     unsafe { tv_list_ref(list) };
@@ -296,6 +330,12 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
 }
 
 /// `stdpath({what})`.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -329,6 +369,12 @@ pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
+///
+/// # Safety
+///
+/// `_args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_swapfilelist(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     // SAFETY throughout: `recover_names` appends to the list just allocated.
@@ -339,6 +385,12 @@ pub unsafe fn f_swapfilelist(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_swapinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
@@ -349,6 +401,12 @@ pub unsafe fn f_swapinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.
+///
+/// # Safety
+///
+/// `args` must be the evaluator's argument buffer (`Args::new`) and
+/// `result` its live return value: the contract the two builtin
+/// dispatchers keep.
 pub unsafe fn f_swapname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;

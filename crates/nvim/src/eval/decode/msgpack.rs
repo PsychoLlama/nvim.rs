@@ -69,7 +69,7 @@ unsafe fn positive_integer_to_special_typval(result: *mut TypVal, val: u64) {
         unsafe { *result = TypVal::number(val as VarNumber) };
         return;
     }
-    let list = unsafe { tv_list_alloc(4) };
+    let list = tv_list_alloc(4);
     unsafe { tv_list_ref(list) };
     let val_tv = TypVal::list(list);
     unsafe { create_special_dict(result, kMPInteger, val_tv) };
@@ -81,6 +81,12 @@ unsafe fn positive_integer_to_special_typval(result: *mut TypVal, val: u64) {
 
 /// A node has opened: work out where its value belongs, and decode it if the
 /// token already carries the whole value.
+///
+/// # Safety
+///
+/// `parser` must be the `mpack_parser_t` driving this parse and `node` the
+/// node it is standing on, both live for the call: libmpack's callback
+/// contract.
 unsafe extern "C-unwind" fn typval_parse_enter(
     parser: *mut mpack_parser_t,
     node: *mut mpack_node_t,
@@ -162,7 +168,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             unsafe { dst.cast::<u8>().copy_from_nonoverlapping(src.cast(), len) };
         }
         MPACK_TOKEN_ARRAY => {
-            let list = unsafe { tv_list_alloc(len as ptrdiff_t) };
+            let list = tv_list_alloc(len as ptrdiff_t);
             unsafe { tv_list_ref(list) };
             unsafe { *result = TypVal::list(list) };
             unsafe { (*node).data[1].p = list.cast() };
@@ -258,6 +264,12 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
 }
 
 /// A node has closed: finish the values whose bytes only arrive now.
+///
+/// # Safety
+///
+/// `_parser` must be the `mpack_parser_t` driving this parse and `node` the
+/// node it is standing on, both live for the call: libmpack's callback
+/// contract.
 unsafe extern "C-unwind" fn typval_parse_exit(
     _parser: *mut mpack_parser_t,
     node: *mut mpack_node_t,
@@ -275,10 +287,10 @@ unsafe extern "C-unwind" fn typval_parse_exit(
         // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes into a
         // list of strings rather than a blob, as upstream's TODO notes.
         MPACK_TOKEN_EXT => {
-            let list = unsafe { tv_list_alloc(2) };
+            let list = tv_list_alloc(2);
             unsafe { tv_list_ref(list) };
             unsafe { tv_list_append_number(list, (*node).tok.data.ext_type as VarNumber) };
-            let ext_val_list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+            let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
             unsafe { tv_list_append_list(list, ext_val_list) };
             let val_tv = TypVal::list(list);
             unsafe { create_special_dict(result, kMPExt, val_tv) };
@@ -292,7 +304,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
             if !unsafe { map_to_dict(result, pairs, len) } {
                 let list = unsafe { decode_create_map_special_dict(result, len as ptrdiff_t) };
                 for i in 0..len {
-                    let kv_pair = unsafe { tv_list_alloc(2) };
+                    let kv_pair = tv_list_alloc(2);
                     unsafe { tv_list_append_list(list, kv_pair) };
                     unsafe { tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2)) };
                     unsafe { tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2 + 1)) };
