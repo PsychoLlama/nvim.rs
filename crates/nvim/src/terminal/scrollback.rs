@@ -72,6 +72,10 @@ fn scrollback_limit(mut buffer: Buf) -> usize {
     buffer.b_p_scbk as usize
 }
 
+/// # Safety
+///
+/// `cells` must point at a live `VTermScreenCell`. `data` must be the payload
+/// this callback was registered with, live for the call.
 pub(crate) unsafe extern "C" fn term_sb_push(
     cols: c_int,
     cells: *const VTermScreenCell,
@@ -91,6 +95,11 @@ pub(crate) unsafe extern "C" fn term_sb_push(
     1
 }
 
+/// # Safety
+///
+/// `cells` must point at a live `VTermScreenCell`, unaliased for the call.
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 pub(crate) unsafe extern "C" fn term_sb_pop(
     cols: c_int,
     cells: *mut VTermScreenCell,
@@ -111,6 +120,10 @@ pub(crate) unsafe extern "C" fn term_sb_pop(
     1
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 pub(crate) unsafe extern "C" fn term_sb_clear(data: *mut c_void) -> c_int {
     // SAFETY: vterm hands back the terminal registered alongside this table.
     let mut term = unsafe { Term::new(data.cast()) };

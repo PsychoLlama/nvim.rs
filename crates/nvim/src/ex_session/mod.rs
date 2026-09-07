@@ -633,10 +633,10 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
         known && ssop_flags.get() & kOptSsopFlagCurdir != 0 && !globaldir.get().is_null();
     if to_sesdir {
         if unsafe { vim_chdirfile(fname, flag::kCdCauseOther) }.is_ok() {
-            unsafe { shorten_fnames(1) };
+            shorten_fnames(1);
         }
     } else if to_globaldir && unsafe { os_chdir(globaldir.get()) } == 0 {
-        unsafe { shorten_fnames(1) };
+        shorten_fnames(1);
     }
 
     let ok = unsafe { makeopens(out, dirnow) };
@@ -646,7 +646,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
         if unsafe { os_chdir(dirnow) } != 0 {
             emsg(gettext(e_prev_dir));
         }
-        unsafe { shorten_fnames(1) };
+        shorten_fnames(1);
     }
     unsafe { xfree(dirnow.cast::<c_void>()) };
     ok

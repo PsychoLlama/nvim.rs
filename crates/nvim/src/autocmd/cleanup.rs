@@ -29,6 +29,10 @@ use crate::winlayer::Buf;
 /// The row itself stays in place.  A walk may be standing on it, and the
 /// pattern list it is walking is indexed, so the row may not move until
 /// `autocmd_busy` is clear.
+///
+/// # Safety
+///
+/// `ac` must point at a live `AutoCmd`, unaliased for the call.
 pub(crate) unsafe fn aucmd_del(ac: *mut AutoCmd) {
     // `XFREE_CLEAR`, three times, over `*mut c_char` fields.
     let xfree_clear = |slot: *mut *mut ::core::ffi::c_char| {
@@ -127,7 +131,7 @@ pub fn au_get_autocmds_for_event(event: AutoEvent) -> *mut AutoCmdVec {
 }
 
 /// Drop every `<buffer=N>` autocommand naming `buffer`, which is being freed.
-pub unsafe fn aubuflocal_remove(buffer: Buf) {
+pub fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
     let mut apc = active_apc_list.get();
@@ -167,6 +171,10 @@ pub unsafe fn aubuflocal_remove(buffer: Buf) {
 
 /// Whether `pat` is one of the buffer-local pattern spellings:
 /// `<buffer>`, `<buffer=N>` or `<buffer=abuf>`.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string.
 pub unsafe fn aupat_is_buflocal(
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,
@@ -182,6 +190,10 @@ pub unsafe fn aupat_is_buflocal(
 
 /// The buffer number a buffer-local pattern names, or 0 when it names one
 /// that cannot be resolved.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string.
 pub unsafe fn aupat_get_buflocal_nr(
     pat: *const ::core::ffi::c_char,
     patlen: ::core::ffi::c_int,
@@ -210,6 +222,11 @@ pub unsafe fn aupat_get_buflocal_nr(
 
 /// Write the canonical `<buffer=N>` spelling of a buffer-local pattern
 /// into `dest`, which must hold `BUFLOCAL_PAT_LEN` bytes.
+///
+/// # Safety
+///
+/// `dest` must point at a NUL-terminated string, unaliased for the call.
+/// `pat` must point at a NUL-terminated string.
 pub unsafe fn aupat_normalize_buflocal_pat(
     dest: *mut ::core::ffi::c_char,
     pat: *const ::core::ffi::c_char,

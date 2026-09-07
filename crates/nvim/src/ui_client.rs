@@ -842,7 +842,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         );
         unsafe { xfree(server_addr.cast()) };
         ui_client_exit_status.set(1);
-        unsafe { os_exit(1) };
+        os_exit(1);
     }
     ui_client_channel_id.set(chan);
     let (w, h, term, rgb) = (

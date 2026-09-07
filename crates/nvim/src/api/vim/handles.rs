@@ -110,8 +110,7 @@ pub fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle
 
 /// [`nvim_create_buf`]'s body, inside the try/catch bracket.
 fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
-    // SAFETY: paired with the `unblock_autocmds` on both paths below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     let flags = BLN_NOOPT as ::core::ffi::c_int
         | BLN_NEW as ::core::ffi::c_int
         | if listed {
@@ -125,8 +124,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: `buf` is the buffer just made, or null.
     let opened = buf.is_some() && unsafe { ml_open(buf.expect("a live handle")) }.is_ok();
     if !opened {
-        // SAFETY: paired with the `block_autocmds` above.
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
         return 0;
     }
     let mut b = buf.expect("`buflist_new` answered a buffer");
@@ -155,8 +153,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         b.b_p_swf = 0;
         b.b_p_ml = 0;
     }
-    // SAFETY: paired with the `block_autocmds` above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     let bufref = BufRef::of_opt(Some(b));
     // SAFETY: `buf` is live, and the event has neither a file name nor a
     // pattern. A handler may wipe the buffer, which is what `bufref` checks.

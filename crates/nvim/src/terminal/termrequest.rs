@@ -87,6 +87,11 @@ pub(crate) struct TermRequest {
 /// Deferred a second time when the refresh still owes the buffer scrollback
 /// rows: the reported cursor line is a buffer line number, and appending
 /// those rows is what makes it correct.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
     // SAFETY: the event carries the request `schedule_termrequest` leaked,
     // and this is the only thing that reclaims it.
@@ -267,6 +272,11 @@ fn apply_osc8(term: Term) {
     unsafe { set_pen_attr(&mut *state.0, VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &value) };
 }
 
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 pub(crate) unsafe extern "C" fn on_osc(
     command: c_int,
     frag: VTermStringFragment,
@@ -295,6 +305,12 @@ pub(crate) unsafe extern "C" fn on_osc(
     1
 }
 
+/// # Safety
+///
+/// `command` must point at a NUL-terminated string. `frag` must be an
+/// initialized `VTermStringFragment` whose pointer fields point at live data
+/// for the call. `user` must be the payload this callback was registered
+/// with, live for the call.
 pub(crate) unsafe extern "C" fn on_dcs(
     command: *const c_char,
     commandlen: size_t,
@@ -321,6 +337,11 @@ pub(crate) unsafe extern "C" fn on_dcs(
     1
 }
 
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 pub(crate) unsafe extern "C" fn on_apc(frag: VTermStringFragment, user: *mut c_void) -> c_int {
     // SAFETY: as in `on_osc`.
     let term = unsafe { Term::new(user.cast()) };

@@ -24,6 +24,11 @@ const CALLBACK_INIT: Callback = Callback::None;
 
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`. `arg_in` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn do_autocmd(
     args: *mut ExArg,
     arg_in: *mut ::core::ffi::c_char,
@@ -174,6 +179,11 @@ pub unsafe fn do_autocmd(
 }
 
 /// [`do_autocmd_event`] for every event: what `:autocmd *` means.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string. `cmd` must point at a NUL-
+/// terminated string, unaliased for the call.
 pub unsafe fn do_all_autocmd_events(
     pat: *const ::core::ffi::c_char,
     once: bool,
@@ -194,6 +204,12 @@ pub unsafe fn do_all_autocmd_events(
 /// An empty `cmd` with `del` deletes; a non-empty one adds.  Both together
 /// are `:autocmd! {event} {pat} {cmd}`, which deletes the existing
 /// autocommands on the pattern and then appends to the same `AutoPat`.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `pat` must point at a NUL-terminated string. `cmd`
+/// must point at a NUL-terminated string.
 pub unsafe fn do_autocmd_event(
     event: AutoEvent,
     mut pat: *const ::core::ffi::c_char,
@@ -290,6 +306,14 @@ pub unsafe fn do_autocmd_event(
 ///
 /// The handler is `handler_cmd` when that is non-null and `handler_fn`
 /// otherwise.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `pat` must point at a NUL-terminated string.
+/// `desc` must point at a NUL-terminated string, unaliased for the call.
+/// `handler_cmd` must point at a NUL-terminated string. `handler_fn` must
+/// point at an initialized callback, unaliased for the call.
 pub unsafe fn autocmd_register(
     id: int64_t,
     event: AutoEvent,
@@ -484,6 +508,11 @@ pub unsafe fn autocmd_register(
 ///
 /// Leading commas are skipped, and a comma inside braces or after a
 /// backslash (`*.\{obj,o\}`) does not end a pattern.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string. `start` must point at a
+/// writable `*const c_char` slot the caller owns for the call.
 pub unsafe fn aucmd_span_pattern(
     mut pat: *const ::core::ffi::c_char,
     start: *mut *const ::core::ffi::c_char,
@@ -513,6 +542,11 @@ pub unsafe fn aucmd_span_pattern(
 
 /// Whether `do_modelines` should be called: false when `*argp` begins with
 /// `<nomodeline>`, which is then skipped.
+///
+/// # Safety
+///
+/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
+/// call.
 pub unsafe fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
     if unsafe { cstr::starts_with(*argp, b"<nomodeline>") } {
         unsafe { *argp = skipwhite((*argp).add(12)) };
@@ -547,6 +581,10 @@ pub fn autocmd_delete_id(id: int64_t) -> bool {
 }
 
 /// An autocommand's handler as an allocated string, whichever kind it is.
+///
+/// # Safety
+///
+/// `ac` must point at a live `AutoCmd`, unaliased for the call.
 pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     if unsafe { (*ac).handler_cmd.is_null() } {
         unsafe { callback_to_string(&raw mut (*ac).handler_fn, ::core::ptr::null_mut()) }
@@ -561,6 +599,10 @@ pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_c
 ///
 /// `have_group` only picks the wording: without a group, the leading word
 /// could have been meant as one.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn arg_event_skip(
     arg: *mut ::core::ffi::c_char,
     have_group: bool,
@@ -603,6 +645,11 @@ pub(crate) unsafe fn arg_event_skip(
 ///
 /// Answers *true* on the error case -- the flag given twice -- so the
 /// caller can `|=` the three calls together.
+///
+/// # Safety
+///
+/// `flag` must point at a writable `bool` the caller owns. `cmd_ptr` must
+/// point at a writable `*mut c_char` slot the caller owns for the call.
 unsafe fn arg_autocmd_flag_get(
     flag: *mut bool,
     cmd_ptr: *mut *mut ::core::ffi::c_char,

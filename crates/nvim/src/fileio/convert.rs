@@ -40,6 +40,12 @@ pub(crate) fn no_iconv() -> iconv_t {
 /// `cursor` is advanced past the entry it returns, and set to NULL once the list
 /// is exhausted — which is reported as an empty name. `alloced` says whether
 /// the result has to be freed.
+///
+/// # Safety
+///
+/// `cursor` must point at a cursor standing inside a NUL-terminated
+/// 'fileencodings' list; it is read through and left past the entry answered,
+/// or null once the list is exhausted.
 pub(crate) unsafe fn next_fenc(cursor: &mut *mut c_char, alloced: &mut bool) -> *mut c_char {
     *alloced = false;
     if unsafe { **cursor } == 0 {
@@ -71,13 +77,18 @@ pub(crate) unsafe fn next_fenc(cursor: &mut *mut c_char, alloced: &mut bool) -> 
 ///
 /// @return  the name of the converted file, which the caller deletes after
 ///          reading it.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `fenc` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn readfile_charconvert(
     fname: *mut c_char,
     fenc: *mut c_char,
     fdp: &mut c_int,
 ) -> *mut c_char {
     let mut errmsg: Option<&CStr> = None;
-    let mut tmpname = unsafe { vim_tempname() };
+    let mut tmpname = vim_tempname();
     if tmpname.is_null() {
         errmsg = Some(translate(c"Can't find temp file for conversion"));
     } else {
@@ -114,6 +125,10 @@ pub(crate) unsafe fn readfile_charconvert(
 }
 
 /// Does file encoding `fenc` need converting from or to `'encoding'`?
+///
+/// # Safety
+///
+/// `fenc` must point at a NUL-terminated string.
 pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
     let fenc_flags;
     let same_encoding = if unsafe { *fenc } == 0 || unsafe { cstr::eq(p_enc.get(), fenc) } {
@@ -137,6 +152,10 @@ pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
 
 /// The `FIO_*` flags for converting `name` internally, or 0 when only iconv
 /// can do it. An empty name means `'encoding'`.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn get_fio_flags(name: *const c_char) -> c_int {
     let name = if unsafe { *name } == 0 {
         p_enc.get()
@@ -247,6 +266,10 @@ pub(crate) struct Window {
 impl Window {
     /// Move the previous line's tail to just before `at`, and make that the
     /// start of the current line.
+    ///
+    /// # Safety
+    ///
+    /// `at` must point at a NUL-terminated string, unaliased for the call.
     unsafe fn move_linerest(&mut self, at: *mut c_char) {
         self.line_start = unsafe { at.offset(-self.linerest) };
         unsafe { ptr::copy(self.buffer, self.line_start, self.linerest as usize) };
@@ -307,6 +330,10 @@ impl Conv {
     }
 
     /// Ask iconv to convert `fenc` to UTF-8. False when it cannot.
+    ///
+    /// # Safety
+    ///
+    /// `fenc` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn open_iconv(&mut self, fenc: *mut c_char) -> bool {
         self.iconv = unsafe { my_iconv_open(c"utf-8".as_ptr().cast_mut(), fenc) };
         self.has_iconv()
@@ -319,6 +346,11 @@ impl Conv {
 
     /// Note a conversion error at the line `at` falls on, if none was noted
     /// yet.
+    ///
+    /// # Safety
+    ///
+    /// `start` must point at a NUL-terminated string. `at` must point at a NUL-
+    /// terminated string.
     unsafe fn note_error(&mut self, start: *const c_char, at: *const c_char) {
         if self.conv_error == 0 {
             self.conv_error = unsafe { readfile_linenr(self.linecnt, start, at) };
@@ -326,6 +358,10 @@ impl Conv {
     }
 
     /// Keep `len` bytes at `from` for the next read.
+    ///
+    /// # Safety
+    ///
+    /// `from` must point at `len` readable bytes.
     unsafe fn stash(&mut self, from: *const c_char, len: usize) {
         unsafe { ptr::copy(from, self.rest.as_mut_ptr(), len) };
         self.restlen = len as c_int;
@@ -336,6 +372,10 @@ impl Conv {
     /// `restlen` deliberately stays set: the bytes are laid down before the
     /// read so that the read appends to them, and only counted back in once
     /// the read is done.
+    ///
+    /// # Safety
+    ///
+    /// `text` must point at a NUL-terminated string, unaliased for the call.
     pub(crate) unsafe fn restore(&self, text: *mut c_char) {
         unsafe { ptr::copy(self.rest.as_ptr(), text, self.restlen as usize) };
     }
@@ -344,7 +384,7 @@ impl Conv {
     ///
     /// False means the encoding is wrong and the file should be read again
     /// with the next one.
-    pub(crate) unsafe fn with_iconv(&mut self, w: &mut Window) -> bool {
+    pub(crate) fn with_iconv(&mut self, w: &mut Window) -> bool {
         let mut fromp: *const c_char = w.ptr;
         let mut from_size = w.size as size_t;
         // The converted bytes go after the ones being converted.
@@ -399,7 +439,7 @@ impl Conv {
     /// Works from the end of the buffer towards the start, because the number
     /// of bytes may grow. False means "read the file again with the next
     /// encoding".
-    pub(crate) unsafe fn units_to_utf8(&mut self, w: &mut Window) -> bool {
+    pub(crate) fn units_to_utf8(&mut self, w: &mut Window) -> bool {
         let flags = self.flags;
         let start: *const u8 = w.ptr.cast();
         // Where the UTF-8 bytes go, filling the allocation from its end.
@@ -548,7 +588,7 @@ impl Conv {
     /// dropping or keeping the ones that are not.
     ///
     /// False means "read the file again with another conversion".
-    pub(crate) unsafe fn check_utf8(
+    pub(crate) fn check_utf8(
         &mut self,
         w: &mut Window,
         filesize: FileOffset,
@@ -635,6 +675,11 @@ impl Conv {
 }
 
 /// Read one 16-bit code unit backwards from `p`, in the flags' byte order.
+///
+/// # Safety
+///
+/// `p` must point at a cursor at least two bytes into a readable buffer: it
+/// is stepped back twice and read each time.
 unsafe fn read_word(p: &mut *const u8, flags: c_int) -> c_uint {
     *p = unsafe { p.offset(-1) };
     let first = unsafe { **p } as c_uint;
@@ -659,7 +704,7 @@ pub(crate) struct FormatGuess {
 }
 
 impl FormatGuess {
-    pub(crate) unsafe fn from_ffs() -> Self {
+    pub(crate) fn from_ffs() -> Self {
         FormatGuess {
             try_dos: !unsafe { vim_strchr(p_ffs.get(), b'd' as c_int) }.is_null(),
             try_unix: !unsafe { vim_strchr(p_ffs.get(), b'x' as c_int) }.is_null() as c_int,
@@ -668,6 +713,10 @@ impl FormatGuess {
     }
 
     /// Guess the end-of-line format from the first bytes of the file.
+    ///
+    /// # Safety
+    ///
+    /// `data` must point at `size` readable bytes.
     pub(crate) unsafe fn guess(&mut self, data: *const c_char, size: ptrdiff_t) -> c_int {
         let start: *const u8 = data.cast();
         let end = unsafe { start.offset(size) };

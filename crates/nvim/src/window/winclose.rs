@@ -613,6 +613,5 @@ fn number_into(buf: &mut [c_char; NUMBUFLEN as usize], fmt: *const c_char, n: c_
 
 /// Exit the editor: every window is gone.
 fn quit_now() -> ! {
-    // SAFETY: never returns; tears the editor down.
-    unsafe { getout(0) }
+    getout(0)
 }

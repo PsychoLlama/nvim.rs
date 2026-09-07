@@ -434,8 +434,7 @@ fn fix_current_dir() {
         return;
     }
     last_chdir_reason.set(ptr::null_mut::<c_char>());
-    // SAFETY: reads the buffer list.
-    unsafe { shorten_fnames(1) };
+    shorten_fnames(1);
 }
 
 /// `chdir()` to `dir`, firing `DirChangedPre` and `DirChanged` around it when

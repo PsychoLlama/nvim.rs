@@ -320,9 +320,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
     if stuff_empty() {
         did_check_timestamps.set(false);
         if need_check_timestamps.get() {
-            // SAFETY: the caller promises a live `curwin`/`curbuf`, which is
-            // all this and the editor-wide routines below ask for.
-            unsafe { check_timestamps(0) };
+            check_timestamps(0);
         }
     }
 
@@ -697,8 +695,7 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
             force_restart_edit.set(true);
             return false;
         }
-        // SAFETY: a live `curbuf` with a terminal is all it asks for.
-        return unsafe { terminal_enter() };
+        return terminal_enter();
     }
 
     // Don't allow inserting in the sandbox, or while textlock is set.

@@ -330,7 +330,7 @@ fn saved_winopts(s: Session) -> Option<*mut WinOpt> {
 ///
 /// Returns whether it was left by `CTRL-\ CTRL-O`, which the caller turns
 /// into a single normal-mode command before coming back.
-pub(crate) unsafe fn terminal_enter() -> bool {
+pub(crate) fn terminal_enter() -> bool {
     let buf = current_buf();
     assert!(
         !buf.terminal.is_null(),
@@ -507,6 +507,10 @@ fn terminal_check_focus(mut s: Session) -> bool {
 
 /// The mode loop's per-iteration work: refresh, redraw, and place the
 /// cursor. Returning zero leaves terminal mode.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 unsafe fn terminal_check(state: *mut VimState) -> c_int {
     // SAFETY: the state stack hands back the session this module pushed.
     let mut s = unsafe { Session::of(state) };
@@ -517,8 +521,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     if stop_insert_mode.get() || !terminal_check_focus(s) {
         return 0;
     }
-    // SAFETY: drains the refresh queue, which is this module's own.
-    unsafe { terminal_check_refresh() };
+    terminal_check_refresh();
     terminal_check_cursor(s.term);
     // SAFETY: a live window.
     validate_cursor(current_win());
@@ -576,6 +579,10 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
 }
 
 /// Dispatch one key. Returning zero leaves terminal mode.
+///
+/// # Safety
+///
+/// `state` must point at a live `VimState`, unaliased for the call.
 unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
     // SAFETY: the state stack hands back the session this module pushed.
     let mut s = unsafe { Session::of(state) };

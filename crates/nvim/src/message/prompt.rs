@@ -127,7 +127,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         // prompt to start an Ex command but the file-changed dialog gets
         // in the way.
         if need_check_timestamps.get() {
-            unsafe { check_timestamps(0) };
+            check_timestamps(0);
         }
 
         // With 'cmdheight' zero we need to scroll the first line of

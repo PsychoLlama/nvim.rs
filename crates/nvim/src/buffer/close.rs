@@ -254,8 +254,7 @@ fn release_vars(buffer: Buf) {
 }
 
 fn forget_autocmds(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { aubuflocal_remove(buffer) };
+    aubuflocal_remove(buffer);
 }
 
 /// Take the buffer's number out of the registry, so that nothing can look it

@@ -65,7 +65,7 @@ const USAGE: &[&CStr] = &[
 ];
 
 /// Print the usage summary on stdout.
-pub(crate) unsafe fn usage() {
+pub(crate) fn usage() {
     // SAFETY: stops the signal handlers and writes to stdout.
     signal_stop();
     for line in USAGE {
@@ -81,7 +81,7 @@ pub(crate) unsafe fn usage() {
 ///
 /// Lua has to be up first: the version list names the Lua runtime and the
 /// features that depend on it.
-pub(crate) unsafe fn version() {
+pub(crate) fn version() {
     // SAFETY: initialises the Lua state with no argv and writes a message.
     unsafe { nlua_init(ptr::null_mut(), 0, -1) };
     info_message.set(true);
@@ -94,6 +94,11 @@ pub(crate) unsafe fn version() {
 /// uses: `nvim: <what>: "<offending argument>"`.
 ///
 /// `msg2` and `msg3` are optional and quoted when present.
+///
+/// # Safety
+///
+/// `msg1` must point at a NUL-terminated string. `msg2` must point at a NUL-
+/// terminated string. `msg3` must point at a NUL-terminated string.
 pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg3: *const c_char) {
     // SAFETY: the three messages are NUL-terminated or null, and `argv0` is
     // set before any caller can reach this.
@@ -113,8 +118,13 @@ pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg
 }
 
 /// [`print_mainerr`] and then exit 1. Every argument error takes this path.
+///
+/// # Safety
+///
+/// `msg1` must point at a NUL-terminated string. `msg2` must point at a NUL-
+/// terminated string. `msg3` must point at a NUL-terminated string.
 pub(crate) unsafe fn mainerr(msg1: *const c_char, msg2: *const c_char, msg3: *const c_char) -> ! {
     // SAFETY: as `print_mainerr`; `os_exit` does not return.
     unsafe { print_mainerr(msg1, msg2, msg3) };
-    unsafe { os_exit(1) };
+    os_exit(1);
 }

@@ -79,6 +79,10 @@ const DEBUG_BREAK_ALL: c_int = 9999;
 const READONLY_UPDATECOUNT: OptInt = 10000;
 
 /// A string option value naming a string the option layer will copy.
+///
+/// # Safety
+///
+/// `value` must point at a NUL-terminated string.
 unsafe fn string_opt(value: *const c_char) -> OptVal {
     // SAFETY: `value` is NUL-terminated and outlives the call.
     OptVal::String(unsafe { cstr_as_string(value as *mut c_char) })
@@ -99,7 +103,7 @@ fn set_opt(idx: OptIndex, value: OptVal) {
 ///
 /// `-es`, `-Es` and `-l` all do this: a batch process has no business
 /// writing over the user's ShaDa.
-unsafe fn suppress_shada() {
+fn suppress_shada() {
     // SAFETY: reads and writes one option.
     if p_shadafile.get().is_null() || unsafe { *p_shadafile.get() } as c_int == NUL {
         set_opt(kOptShadafile, unsafe { string_opt(c"NONE".as_ptr()) });
@@ -108,6 +112,11 @@ unsafe fn suppress_shada() {
 
 /// Read a decimal number out of `p` starting at `*idx`, leaving `*idx` past
 /// it. Answers `def` when there is no number there.
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string. `idx` must point at a writable
+/// `int` the caller owns.
 pub(crate) unsafe fn get_number_arg(p: *const c_char, idx: *mut c_int, def: c_int) -> c_int {
     // SAFETY: `p` is NUL-terminated and `*idx` indexes into it.
     if !ascii_isdigit(unsafe { *p.offset(*idx as isize) } as c_int) {
@@ -126,6 +135,10 @@ pub(crate) unsafe fn get_number_arg(p: *const c_char, idx: *mut c_int, def: c_in
 /// handed a pipe and nothing else claims it: not headless, not an embedded
 /// server without a stdin, not Ex mode reading commands from it, and `-s -`
 /// did not already take it.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn edit_stdin(parmp: *mut MainParams) -> bool {
     // SAFETY: `parmp` is the caller's live parameter block.
     let implicit = !headless_mode.get()
@@ -254,17 +267,17 @@ impl Scan {
         let word = unsafe { *self.argv };
         unsafe { vim_snprintf(into, IOSIZE as size_t, fmt.as_ptr(), option, word) };
         unsafe { fprintf(stderr, c"%s".as_ptr(), complaint.as_ptr()) };
-        unsafe { os_exit(2) }
+        os_exit(2)
     }
 
     /// A `--long` option. Answers whether it wants the next word.
     fn long_option(&mut self) -> bool {
         if self.tail_is(c"help") {
-            unsafe { usage() };
-            unsafe { os_exit(0) };
+            usage();
+            os_exit(0);
         } else if self.tail_is(c"version") {
-            unsafe { version() };
-            unsafe { os_exit(0) };
+            version();
+            os_exit(0);
         } else if self.tail_is(c"api-info") {
             let data = api_metadata_raw();
             let written = unsafe { os_write(STDOUT_FILENO, data.data(), data.len(), false) };
@@ -274,7 +287,7 @@ impl Scan {
                 let why = unsafe { c_str(why) };
                 semsg!("E5420: Failed to write to file: {why}");
             }
-            unsafe { os_exit(0) };
+            os_exit(0);
         } else if self.tail_is(c"headless") {
             headless_mode.set(true);
         } else if self.tail_is(c"embed") {
@@ -359,8 +372,8 @@ impl Scan {
             b'f' => {}
             // `-?` is the MS-Windows spelling of `-h`.
             b'?' | b'h' => {
-                unsafe { usage() };
-                unsafe { os_exit(0) };
+                usage();
+                os_exit(0);
             }
             b'H' => {
                 set_opt(kOptKeymap, unsafe { string_opt(c"hebrew".as_ptr()) });
@@ -410,7 +423,7 @@ impl Scan {
                     // `-es`: silent (batch) Ex mode.
                     silent_mode.set(true);
                     self.parm.no_swap_file = 1;
-                    unsafe { suppress_shada() };
+                    suppress_shada();
                 } else {
                     // `-s {scriptin}`
                     return true;
@@ -428,8 +441,8 @@ impl Scan {
                 }
             }
             b'v' => {
-                unsafe { version() };
-                unsafe { os_exit(0) };
+                version();
+                os_exit(0);
             }
             b'V' => {
                 let word = self.arg();
@@ -541,7 +554,7 @@ impl Scan {
                 if self.parm.use_vimrc.is_null() {
                     self.parm.use_vimrc = c"NONE".as_ptr() as *mut c_char;
                 }
-                unsafe { suppress_shada() };
+                suppress_shada();
                 self.parm.luaf = self.arg();
                 self.argc -= 1;
                 if self.argc >= 0 {
@@ -621,6 +634,10 @@ impl Scan {
 }
 
 /// Walk the command line once, filling in `parmp`.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn command_line_scan(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block and holds the
     // process's own argv, which outlives everything here -- which is why the
@@ -680,6 +697,11 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut MainParams) {
 
 /// Zero the parameter block, and set the fields whose "not given" value is
 /// not zero.
+///
+/// # Safety
+///
+/// `paramp` must point at the startup parameters. `argv` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 pub(crate) unsafe fn init_params(paramp: *mut MainParams, argc: c_int, argv: *mut *mut c_char) {
     // SAFETY: `paramp` points at one live `MainParams`.
     unsafe { paramp.cast::<u8>().write_bytes(0, size_of::<MainParams>()) };
@@ -699,6 +721,10 @@ pub(crate) unsafe fn init_params(paramp: *mut MainParams, argc: c_int, argv: *mu
 /// This runs its own tiny scan of argv because the real one is far too late:
 /// the point of `--startuptime` is to time the whole startup, the argument
 /// scan included.
+///
+/// # Safety
+///
+/// `paramp` must point at the startup parameters.
 pub(crate) unsafe fn init_startuptime(paramp: *mut MainParams) {
     // SAFETY: `paramp.argv[0..argc]` are the process arguments.
     // The last word cannot be either of these: both take a value.
@@ -723,7 +749,7 @@ pub(crate) unsafe fn init_startuptime(paramp: *mut MainParams) {
 }
 
 /// Remember which of the three standard streams are terminals.
-pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut MainParams) {
+pub(crate) fn check_and_set_isatty(_paramp: *mut MainParams) {
     // SAFETY: three `isatty` calls on the standard descriptors.
     stdin_isatty.set(os_isatty(STDIN_FILENO));
     stdout_isatty.set(os_isatty(STDOUT_FILENO));
@@ -736,6 +762,10 @@ pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut MainParams) {
 /// `v:progpath` is the absolute path of this executable, which the OS
 /// usually knows; `exename` (argv[0]) is the fallback for when it does not
 /// -- a missing procfs, say (#6734).
+///
+/// # Safety
+///
+/// `exename` must point at a NUL-terminated string.
 pub(crate) unsafe fn init_path(exename: *const c_char) {
     // SAFETY: `exename` is NUL-terminated; `exepath` is `MAXPATHL` bytes.
     let mut exepath: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
@@ -748,6 +778,10 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
 }
 
 /// `-d` with no `-o`/`-O` splits the way 'diffopt' asks.
+///
+/// # Safety
+///
+/// `paramp` must point at the startup parameters.
 pub(crate) unsafe fn set_window_layout(paramp: *mut MainParams) {
     // SAFETY: `paramp` is the caller's live parameter block.
     if unsafe { (*paramp).diff_mode } != 0 && unsafe { (*paramp).window_layout } == 0 {
@@ -775,6 +809,10 @@ fn env_script() -> SavedSctx {
 ///
 /// Answers `Ok` when the variable existed -- which is what makes it count as
 /// a config source, whether or not the commands in it worked.
+///
+/// # Safety
+///
+/// `env` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `env` names an environment variable; `os_getenv` hands over an
     // owned copy of its value.

@@ -37,6 +37,11 @@ const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
 ///
 /// `Ok` unless the argument was malformed or an autocommand aborted;
 /// `did_something` (when given) says whether any autocommand ran.
+///
+/// # Safety
+///
+/// `arg_start` must point at a NUL-terminated string, unaliased for the call.
+/// `did_something` must point at a writable `bool` the caller owns.
 pub unsafe fn do_doautocmd(
     arg_start: *mut ::core::ffi::c_char,
     do_msg: bool,
@@ -120,6 +125,10 @@ pub unsafe fn do_doautocmd(
 /// ([`aucmd_prepbuf`]), because commands expect `curwin->w_buffer ==
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn ex_doautoall(args: *mut ExArg) {
     let mut aco = AcoSave::default();
     // SAFETY: a live command block, by the contract above, and
@@ -178,6 +187,14 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
 /// the code that noticed it.
 ///
 /// Everything is copied: `fname`, `fname_io` and `data` are the caller's.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `fname` must point at a NUL-terminated string,
+/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
+/// unaliased for the call. `args` must point at the command's `ExArg`. `data`
+/// must point at a live `Object`, unaliased for the call.
 pub unsafe fn aucmd_defer(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
@@ -235,6 +252,11 @@ pub unsafe fn aucmd_defer(
 }
 
 /// Run a queued [`aucmd_defer`] event, and free everything it copied.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     // SAFETY: the event `aucmd_defer` queued, whose payload it owns until
     // this call frees it below.
@@ -302,6 +324,11 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
 }
 
 /// Fire `TermResponse` with the terminal's reply in `v:event.sequence`.
+///
+/// # Safety
+///
+/// `sequence` must be a well-formed API string: `size` readable bytes with a
+/// NUL at `data[size]`.
 pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
     let mut data = DictBuf::<1>::new();
     let mut event_data = data.insert(c"sequence", Object::string(sequence)).object();
@@ -324,7 +351,7 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
 
 /// The queued half of [`may_trigger_vim_suspend_resume`]: `VimResume` has
 /// to fire from the event loop, not from the signal handler's caller.
-unsafe extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
+extern "C" fn vimresume_event(_argv: *mut *mut ::core::ffi::c_void) {
     // SAFETY: no file name and no buffer, so there is nothing for the event
     // to read but the editor's own autocommand tables.
     unsafe {
@@ -439,9 +466,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
         )
     };
     if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {
-        // SAFETY: re-checks the buffer list's timestamps; nothing here holds
-        // a borrow of editor state across it.
-        unsafe { check_timestamps(1) };
+        check_timestamps(1);
         last_time.set(os_now());
     }
 

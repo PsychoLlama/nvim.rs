@@ -777,7 +777,7 @@ pub(crate) unsafe fn ex_checktime(args: *mut ExArg) {
     // SAFETY: module contract.
     if unsafe { (*args).addr_count } == 0 {
         // The default is all buffers.
-        unsafe { check_timestamps(0) };
+        check_timestamps(0);
     } else {
         if let Some(buf) = find_buf(unsafe { (*args).line2 } as c_int) {
             // Cannot happen?

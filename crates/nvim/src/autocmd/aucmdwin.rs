@@ -115,6 +115,10 @@ pub(crate) fn is_aucmd_win(win: Win) -> bool {
 
 /// Make `buffer` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
+///
+/// # Safety
+///
+/// `aco` must point at a live `AcoSave`, unaliased for the call.
 pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
@@ -186,7 +190,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         unsafe { (*aco).globaldir = globaldir.get() };
         globaldir.set(::core::ptr::null_mut());
 
-        unsafe { block_autocmds() };
+        block_autocmds();
         if need_append {
             // Findable by handle again *before* it goes on a list, not
             // after: the list links are handles, so a window that is on one
@@ -205,7 +209,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         unsafe { win_enter(Win::new(auc_win), false) };
         drop(redraw_off);
         p_acd.set(save_acd);
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
         auc.make_current();
     }
 
@@ -223,6 +227,10 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
 
 /// Undo [`aucmd_prepbuf`], restoring the window layout as far as what the
 /// autocommand did to it allows.
+///
+/// # Safety
+///
+/// `aco` must point at a live `AcoSave`, unaliased for the call.
 pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     if unsafe { (*aco).use_aucmd_win_idx } >= 0 {
         let idx = unsafe { (*aco).use_aucmd_win_idx } as usize;
@@ -230,7 +238,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
         // Go to `awp`.  It cannot have been closed, but the autocommand
         // may have moved it to another tab page.
-        unsafe { block_autocmds() };
+        block_autocmds();
         if Win::current_raw() != awp {
             'found: for tp in tabs() {
                 for wp in windows_in_tab(tp) {
@@ -270,7 +278,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         if valid_tabpage_win(TabPage::current()) == 0 {
             close_tabpage(TabPage::current());
         }
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
 
         let save_curwin = win_find_by_handle(unsafe { (*aco).save_curwin_handle });
         // The original window may have disappeared under the

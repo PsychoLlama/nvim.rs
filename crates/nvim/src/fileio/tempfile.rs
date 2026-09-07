@@ -104,7 +104,7 @@ impl Template {
 /// of `TEMP_DIR_NAMES` until one succeeds.
 ///
 /// Only done once; the same directory is used for all temp files.
-unsafe fn vim_mktempdir() {
+fn vim_mktempdir() {
     let mut user = [0u8; 40];
     let _ = unsafe { os_get_username(user.as_mut_ptr().cast(), user.len()) };
     // Usernames may contain slashes! #19240
@@ -211,6 +211,14 @@ unsafe fn vim_mktempdir() {
 /// negative number to stop the walk.
 ///
 /// @return  `Ok` for success, `Err` for failure.
+///
+/// # Safety
+///
+/// `gap` must point at a live growable array, unaliased for the call. `path`
+/// must point at a NUL-terminated string. `context` must be the payload this
+/// callback was registered with, live for the call. `checkitem` must be an
+/// initialized `CheckItem` whose pointer fields point at live data for the
+/// call.
 pub unsafe fn readdir_core(
     gap: *mut GArray,
     path: *const c_char,
@@ -263,6 +271,10 @@ pub unsafe fn readdir_core(
 /// Delete `name` and everything in it, recursively.
 ///
 /// @return  0 for success, -1 if some file was not deleted.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
     unsafe { delete_tree(CStr::from_ptr(name).to_bytes()) }
 }
@@ -273,7 +285,7 @@ pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
 /// only because each level of the recursion rewrites the prefix it shares
 /// with its caller. This carries its own buffer instead, which also lifts
 /// the `MAXPATHL` limit on how deep a tree can be deleted.
-unsafe fn delete_tree(name: &[u8]) -> c_int {
+fn delete_tree(name: &[u8]) -> c_int {
     let path = CString::new(name).unwrap_or_default();
     if !unsafe { os_isrealdir(path.as_ptr()) } {
         // Delete symlink only.
@@ -297,7 +309,7 @@ unsafe fn delete_tree(name: &[u8]) -> c_int {
         child.truncate(stem);
         let entry = unsafe { *(ga.ga_data as *mut *mut c_char).add(at) };
         child.extend_from_slice(unsafe { CStr::from_ptr(entry) }.to_bytes());
-        if unsafe { delete_tree(&child) } != 0 {
+        if delete_tree(&child) != 0 {
             // Remember the failure but continue deleting any further
             // entries.
             result = -1;
@@ -312,7 +324,7 @@ unsafe fn delete_tree(name: &[u8]) -> c_int {
 
 /// Open the temporary directory and take a file lock, so that it is not
 /// auto-cleaned while we are using it.
-unsafe fn vim_opentempdir() {
+fn vim_opentempdir() {
     if !VIM_TEMPDIR_DP.get().is_null() {
         return;
     }
@@ -328,7 +340,7 @@ unsafe fn vim_opentempdir() {
 }
 
 /// Close the temporary directory, which releases the file lock.
-unsafe fn vim_closetempdir() {
+fn vim_closetempdir() {
     let dp = VIM_TEMPDIR_DP.get();
     if !dp.is_null() {
         unsafe { closedir(dp) };
@@ -337,20 +349,20 @@ unsafe fn vim_closetempdir() {
 }
 
 /// Delete the temp directory and all files it contains.
-pub unsafe fn vim_deltempdir() {
+pub fn vim_deltempdir() {
     let Some(dir) = VIM_TEMPDIR.with_mut(|dir| dir.take()) else {
         return;
     };
-    unsafe { vim_closetempdir() };
+    vim_closetempdir();
     // Remove the trailing path separator, which is always there.
     let dir = dir.to_bytes();
-    unsafe { delete_tree(dir.strip_suffix(b"/").unwrap_or(dir)) };
+    delete_tree(dir.strip_suffix(b"/").unwrap_or(dir));
 }
 
 /// Gets the path to Nvim's own temp dir, ending with a slash.
 ///
 /// Creates the directory on the first call.
-pub unsafe fn vim_gettempdir() -> *mut c_char {
+pub fn vim_gettempdir() -> *mut c_char {
     static NOTFOUND: GlobalCell<c_int> = GlobalCell::new(0);
     let usable = VIM_TEMPDIR.with(|dir| {
         dir.as_ref()
@@ -373,7 +385,7 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
                 msg_schedule_semsg!("E5431: tempdir disappeared ({} times)", notfound);
             }
         }
-        unsafe { vim_mktempdir() };
+        vim_mktempdir();
     }
     VIM_TEMPDIR.with(|dir| match dir {
         Some(dir) => dir.as_ptr().cast_mut(),
@@ -386,6 +398,10 @@ pub unsafe fn vim_gettempdir() -> *mut c_char {
 /// cannot confuse us, and a trailing path separator is added.
 ///
 /// @return  false if we run out of memory.
+///
+/// # Safety
+///
+/// `tempdir` must point at a NUL-terminated string.
 unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
     // Not `xmalloc`: running out of memory here is survivable, we just
     // fall through to the next candidate directory.
@@ -401,7 +417,7 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
         full.push(b'/');
     }
     VIM_TEMPDIR.set(CString::new(full).ok());
-    unsafe { vim_opentempdir() };
+    vim_opentempdir();
     true
 }
 
@@ -411,10 +427,10 @@ unsafe fn vim_settempdir(tempdir: *const c_char) -> bool {
 /// exists, because we own the directory and nobody else creates files in it.
 ///
 /// @return  the name, or NULL if Nvim can't create its temporary directory.
-pub unsafe fn vim_tempname() -> *mut c_char {
+pub fn vim_tempname() -> *mut c_char {
     /// Temp filename counter.
     static TEMP_COUNT: GlobalCell<u64> = GlobalCell::new(0);
-    let tempdir = unsafe { vim_gettempdir() };
+    let tempdir = vim_gettempdir();
     if tempdir.is_null() {
         return ptr::null_mut();
     }

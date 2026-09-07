@@ -82,11 +82,11 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
         did_emsg.set(0);
     }
     ui_call_error_exit(1 as Integer);
-    unsafe { getout(1) }
+    getout(1)
 }
 
 /// Set `v:argf` to the full paths of the file arguments.
-pub(crate) unsafe fn set_argf_var() {
+pub(crate) fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
     let list: *mut List = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
     let alist = global_arglist();
@@ -103,7 +103,7 @@ pub(crate) unsafe fn set_argf_var() {
 
 /// The first file argument, which is what decides whether `-r` lists the swap
 /// files or recovers one.
-pub(crate) unsafe fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
+pub(crate) fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
     // SAFETY: only reached when the argument list is non-empty.
     unsafe { alist_name((*global_arglist()).al_ga.as_mut_ptr()) }
 }
@@ -111,6 +111,10 @@ pub(crate) unsafe fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
 /// `-q`: read the errorfile and set up the quickfix list.
 ///
 /// A quickfix list that cannot be built is fatal, with status 3.
+///
+/// # Safety
+///
+/// `paramp` must point at the startup parameters.
 pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: `paramp` is the caller's live parameter block, and `title`
@@ -134,12 +138,16 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     let (ef, efm, enc) = (p_ef.get(), p_efm.get(), p_menc.get());
     if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
         unsafe { msg_putchar('\n' as c_int) };
-        unsafe { os_exit(3) };
+        os_exit(3);
     }
     time_msg_at(c"reading errorfile");
 }
 
 /// `-t`: jump to a tag instead of opening a file.
+///
+/// # Safety
+///
+/// `tagname` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     let mut cmd = [0 as c_char; IOSIZE as usize];
     // SAFETY: `tagname`, when non-null, points into argv.
@@ -161,7 +169,7 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
 /// When a file argument already claimed the current buffer, stdin gets a
 /// buffer of its own and the file argument's is restored underneath it -- and
 /// the stdin buffer is wiped again if nothing came down the pipe (#8561).
-pub(crate) unsafe fn read_stdin() {
+pub(crate) fn read_stdin() {
     // SAFETY: creates and switches buffers, all of which are live for the
     // duration.
     // Use a dialog for the ATTENTION prompt, not a message.
@@ -224,6 +232,10 @@ type Mp = Live<MainParams>;
 
 /// Make the windows and tab pages the command line asked for, and give every
 /// one of them a buffer.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the window and
     // buffer lists are global and may be rearranged by the autocommands the
@@ -261,7 +273,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
         unsafe { ml_recover(true) };
         if Buf::current().b_ml.ml_mfp.is_null() {
             // Recovery failed; there is nothing to edit.
-            unsafe { getout(1) };
+            getout(1);
         }
         do_modelines(OptionSetFlags::NONE);
         return;
@@ -342,6 +354,10 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
 
 /// Load the remaining file arguments into the windows [`create_windows`]
 /// made, and leave the cursor in the first non-preview one.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the window list
     // is global and `do_ecmd` may close windows through autocommands.
@@ -458,6 +474,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 }
 
 /// Set 'shortmess' to `value`, reporting an error the way `:set` would.
+///
+/// # Safety
+///
+/// `value` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn set_shortmess(value: *mut c_char) {
     // SAFETY: `value` is a NUL-terminated string that outlives the call; the
     // option layer copies it.

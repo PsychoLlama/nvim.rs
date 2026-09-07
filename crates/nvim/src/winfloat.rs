@@ -297,12 +297,10 @@ fn report_error(err: &Error) {
     unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
 }
 fn suppress_autocmds() {
-    // SAFETY: `block_autocmds` touches only the global block counter.
-    unsafe { block_autocmds() };
+    block_autocmds();
 }
 fn resume_autocmds() {
-    // SAFETY: paired with `suppress_autocmds`.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 fn parse_winhl(win: Win) {
     // SAFETY: a live window; a null pattern means "use the window's option".

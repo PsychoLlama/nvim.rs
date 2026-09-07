@@ -73,6 +73,10 @@ pub(crate) fn get_deleted_augroup() -> *const ::core::ffi::c_char {
 
 /// The id of the group called `name`, creating one if there is not
 /// already an id for that name.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     // SAFETY: `name` is the caller's NUL-terminated string.
     debug_assert!(unsafe { strcasecmp(name, c"end".as_ptr()) } != 0);
@@ -109,6 +113,10 @@ pub unsafe fn augroup_add(name: *const ::core::ffi::c_char) -> ::core::ffi::c_in
 /// autocommands keeps them and is merely renamed `--Deleted--`, leaving
 /// them defined and unreachable (O-B14-2).  Everywhere else the
 /// autocommands go with the group.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bool) {
     // SAFETY: `name` is the caller's NUL-terminated string.
     let group = unsafe { augroup_find(name) };
@@ -167,6 +175,10 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
 /// The id of the group called `name`, or `AUGROUP_ERROR` when there is
 /// none.  `AUGROUP_DELETED` is an answer of its own: the name is known and
 /// belongs to a group `:augroup!` renamed.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn augroup_find(name: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
     // SAFETY: `name` is the caller's string, read only for the lookup.
     let key = unsafe { group_key(name) };
@@ -218,11 +230,19 @@ pub fn augroup_name(mut group: ::core::ffi::c_int) -> *mut ::core::ffi::c_char {
 }
 
 /// Whether a group called `name` exists.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string.
 pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
     unsafe { augroup_find(name) > 0 }
 }
 
 /// `:augroup`: switch to a group, leave one, delete one, or list them.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
     // SAFETY, for every region in this function: `arg` is the caller's
     // NUL-terminated string, so reading its first byte and comparing it
@@ -273,7 +293,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
 
 /// Completion source for a group name: [`augroup_name`] answers null once
 /// `idx` runs past the last id.
-pub unsafe fn expand_get_augroup_name(
+pub fn expand_get_augroup_name(
     _expand: *mut Expand,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -285,6 +305,11 @@ pub unsafe fn expand_get_augroup_name(
 /// A name that is not a group is *not* consumed and answers
 /// `AUGROUP_ALL`, which is how `:autocmd BufEnter …` is told from
 /// `:autocmd MyGroup BufEnter …` without a lookahead.
+///
+/// # Safety
+///
+/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
+/// call.
 pub(crate) unsafe fn arg_augroup_get(argp: *mut *mut ::core::ffi::c_char) -> ::core::ffi::c_int {
     // SAFETY: `argp` points at the caller's live `char *` slot, and what it
     // holds is a NUL-terminated string.

@@ -226,8 +226,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_vars = unsafe { tv_dict_alloc() };
     // SAFETY: the dictionary just allocated, and the window's own scope.
     unsafe { init_var_dict(new_wp.w_vars, &raw mut new_wp.w_winvar, VAR_SCOPE) };
-    // SAFETY: matched by the `unblock_autocmds` below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     if !hidden {
         // A window in another tab page goes on that tab page's list.
         let tp = after.and_then(win_tabpage).and_then(TabPage::into_other);
@@ -253,8 +252,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_prev_fraction_row = -1;
     // SAFETY: a freshly allocated window, whose `w_folds` is still zeroed.
     unsafe { fold_init_win(new_wp) };
-    // SAFETY: matches the `block_autocmds` above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     // Up to 1000 can be picked by the user.
     new_wp.w_next_match_id = 1000;
     new_wp
@@ -285,8 +283,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     // SAFETY: the window's own argument list.
     unsafe { alist_unlink(window.w_alist) };
     // Don't execute autocommands while the window is halfway deleted.
-    // SAFETY: matched by the `unblock_autocmds` below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     // The window's memory goes back with `free` below, which runs no
     // destructor, so the set's own allocation is released here. `take`
     // rather than `drop_in_place`: what is left is a valid empty set, which
@@ -358,8 +355,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     } else {
         free(window.raw());
     }
-    // SAFETY: matches the `block_autocmds` above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// Drop `window` from `buffer`'s remembered positions, and with it the older of the

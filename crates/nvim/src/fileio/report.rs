@@ -50,6 +50,12 @@ fn note_num(io: *mut c_char, buflen: c_int, fmt: *const c_char, n: int64_t) {
 }
 
 /// Report what was read.
+///
+/// # Safety
+///
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
+/// `how` must be an initialized `How` whose pointer fields point at live data
+/// for the call.
 pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     // The report. Upstream assembles it in `IObuff`, which `msg_trunc` and
     // `set_keep_msg` reach the message machinery through.

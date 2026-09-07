@@ -31,6 +31,11 @@ pub(super) fn event_row(event: AutoEvent) -> &'static EventName {
 /// comma or bar.  `*end` is left just past the name and its comma, so a
 /// caller can walk a list; `None` means no event is spelled that way, which
 /// upstream said with `NUM_EVENTS`.
+///
+/// # Safety
+///
+/// `start` must point at a NUL-terminated string. `end` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 pub unsafe fn event_name2nr(
     start: *const ::core::ffi::c_char,
     end: *mut *mut ::core::ffi::c_char,
@@ -53,6 +58,11 @@ pub unsafe fn event_name2nr(
 }
 
 /// [`event_name2nr`] over a counted string, which is the whole name.
+///
+/// # Safety
+///
+/// `str` must be a well-formed API string: `size` readable bytes with a NUL
+/// at `data[size]`.
 pub unsafe fn event_name2nr_str(str: String_0) -> Option<AutoEvent> {
     // An empty API string has a null `data`, which is not a valid pointer
     // even for a zero-length slice.
@@ -79,6 +89,12 @@ pub fn event_nr2name(event: AutoEvent) -> *const ::core::ffi::c_char {
 /// that a `-name` exclusion answers immediately.  `all` in 'eventignorewin'
 /// covers only the window-local events, which is what the sign of a row's
 /// `event` records.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `ei` must point at a NUL-terminated string,
+/// unaliased for the call.
 pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) -> bool {
     let mut ignored = false;
     // SAFETY: `ei` is a NUL-terminated option value, so the walk stops at
@@ -105,6 +121,10 @@ pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) 
 ///
 /// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
 /// the window-local events.
+///
+/// # Safety
+///
+/// `ei` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
     let win = ei != p_ei.get();
     // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
@@ -131,6 +151,10 @@ pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
 /// `strncasecmp` rather than an ASCII fold because upstream's is the
 /// locale's, and it stops at the first mismatch -- so a string shorter than
 /// `all` is rejected without `ei[3]` ever being read.
+///
+/// # Safety
+///
+/// `ei` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_char> {
     // SAFETY: `ei` is NUL-terminated, so the comparison reads at most three
     // bytes of it and stops at the first mismatch -- a shorter string
@@ -150,6 +174,10 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
 /// the old value in allocated memory for [`au_event_restore`].
+///
+/// # Safety
+///
+/// `what` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: 'eventignore' holds a NUL-terminated value and `what` is the
     // caller's NUL-terminated string, so both lengths are the strings' own.
@@ -177,6 +205,10 @@ pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::f
 }
 
 /// Put back what [`au_event_disable`] saved, and free it.
+///
+/// # Safety
+///
+/// `old_ei` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
     if !old_ei.is_null() {
         // SAFETY: by the contract this is what `au_event_disable` answered:
@@ -187,6 +219,10 @@ pub unsafe fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
 }
 
 /// Set 'eventignore' to a NUL-terminated string, without an owner.
+///
+/// # Safety
+///
+/// `value` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
     // SAFETY: `value` is the caller's NUL-terminated string.  The `String_0`
     // borrows it rather than owning it, and only for the call below, which
@@ -241,7 +277,7 @@ pub fn trigger_cursorhold() -> bool {
 
 /// Completion source for `:autocmd`'s event argument: the augroup names
 /// first (when [`autocmd_include_groups`] is set), then every event name.
-pub unsafe fn expand_get_event_name(
+pub fn expand_get_event_name(
     _expand: *mut Expand,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
@@ -284,6 +320,10 @@ pub fn get_event_name_no_group(
 }
 
 /// Whether `event` -- a NUL-terminated name -- is an event nvim has.
+///
+/// # Safety
+///
+/// `event` must point at a NUL-terminated string.
 pub unsafe fn autocmd_supported(event: *const ::core::ffi::c_char) -> bool {
     let mut end = ::core::ptr::null_mut::<::core::ffi::c_char>();
     // SAFETY: `event` is a NUL-terminated name by the contract, and `end` is

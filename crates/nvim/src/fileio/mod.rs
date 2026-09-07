@@ -194,6 +194,11 @@ pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
 ///
 /// `s` is the note to append; an empty one means the message is progress on
 /// a write that is still running.
+///
+/// # Safety
+///
+/// `name` must point at a NUL-terminated string, unaliased for the call. `s`
+/// must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     // The report. Upstream builds it in `IObuff` and then calls
     // `msg_progress`/`msg_outtrans`, which write it again.
@@ -245,6 +250,11 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
 /// @param linecnt  the line count before the extra bytes were read
 /// @param p        the start of those bytes
 /// @param endp     the end of them
+///
+/// # Safety
+///
+/// `p` must point at a NUL-terminated string. `endp` must point at a NUL-
+/// terminated string.
 pub(crate) unsafe fn readfile_linenr(
     linecnt: LineNr,
     p: *const ::core::ffi::c_char,
@@ -262,6 +272,11 @@ pub(crate) unsafe fn readfile_linenr(
 }
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file
 /// name given for a buffer that has none.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<(), Failed> {
     let buf = Buf::current_raw();
 
@@ -307,6 +322,11 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
 
 /// Put a file name into `ret_buf`, in quotes, with the home directory at the
 /// start replaced by `~`.
+///
+/// # Safety
+///
+/// `ret_buf` must point at a NUL-terminated string, unaliased for the call.
+/// `fname` must point at a NUL-terminated string.
 pub unsafe fn add_quoted_fname(
     ret_buf: *mut c_char,
     buf_len: size_t,
@@ -326,6 +346,11 @@ pub unsafe fn add_quoted_fname(
 /// Append the file format to `IObuff`, unless it is the platform default.
 ///
 /// @return  true if something was appended.
+///
+/// # Safety
+///
+/// `report` must hold a NUL-terminated message with room after it: the note
+/// is appended in place, up to the buffer's own size.
 pub(crate) unsafe fn msg_add_fileformat(
     report: &mut [c_char; IOSIZE as usize],
     eol_type: c_int,
@@ -345,6 +370,11 @@ pub(crate) unsafe fn msg_add_fileformat(
 }
 
 /// Append the line and character count to `report`.
+///
+/// # Safety
+///
+/// `report` must hold a NUL-terminated message with room after it: the note
+/// is appended in place, up to the buffer's own size.
 pub(crate) unsafe fn msg_add_lines(
     report: &mut [c_char; IOSIZE as usize],
     insert_space: c_int,
@@ -382,6 +412,12 @@ pub(crate) unsafe fn msg_add_lines(
 /// of it thrown away.
 ///
 /// @return  true for EOF or error
+///
+/// # Safety
+///
+/// `buf` must point at `size` bytes the caller owns, readable and writable,
+/// unaliased for the call. `stream` must point at a live `FILE`, unaliased
+/// for the call.
 pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, stream: *mut FILE) -> bool {
     debug_assert!(size > 0);
     // The last-but-one byte tells us whether the line fitted: `fgets`
@@ -428,6 +464,10 @@ pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, stream: *mut FILE) -> boo
 
 /// Read `N` bytes from `fd` and turn them into an integer, most significant
 /// byte first. Returns -1 at end of file.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 unsafe fn get_bytes<const N: usize>(fd: *mut FILE) -> Option<u64> {
     let mut n: u64 = 0;
     for _ in 0..N {
@@ -443,6 +483,10 @@ unsafe fn get_bytes<const N: usize>(fd: *mut FILE) -> Option<u64> {
 /// Read 2 bytes from `fd` and turn them into an int, MSB first.
 ///
 /// @return  -1 when encountering EOF.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn get2c(fd: *mut FILE) -> c_int {
     unsafe { get_bytes::<2>(fd).map_or(-1, |n| n as c_int) }
 }
@@ -450,6 +494,10 @@ pub unsafe fn get2c(fd: *mut FILE) -> c_int {
 /// Read 3 bytes from `fd` and turn them into an int, MSB first.
 ///
 /// @return  -1 when encountering EOF.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn get3c(fd: *mut FILE) -> c_int {
     unsafe { get_bytes::<3>(fd).map_or(-1, |n| n as c_int) }
 }
@@ -460,6 +508,10 @@ pub unsafe fn get3c(fd: *mut FILE) -> c_int {
 /// which is what upstream's unsigned accumulator gives.
 ///
 /// @return  -1 when encountering EOF.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn get4c(fd: *mut FILE) -> c_int {
     unsafe { get_bytes::<4>(fd).map_or(-1, |n| n as u32 as c_int) }
 }
@@ -467,6 +519,10 @@ pub unsafe fn get4c(fd: *mut FILE) -> c_int {
 /// Read 8 bytes from `fd` and turn them into a `time_t`, MSB first.
 ///
 /// @return  -1 when encountering EOF.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn get8ctime(fd: *mut FILE) -> time_t {
     unsafe { get_bytes::<8>(fd).map_or(-1, |n| n as time_t) }
 }
@@ -474,6 +530,10 @@ pub unsafe fn get8ctime(fd: *mut FILE) -> time_t {
 /// Read a string of length `cnt` from `fd` into allocated memory.
 ///
 /// @return  the string, or NULL when unable to read that many bytes.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn read_string(fd: *mut FILE, cnt: size_t) -> *mut c_char {
     let str = unsafe { xmallocz(cnt) }.cast::<c_char>();
     for i in 0..cnt {
@@ -490,6 +550,10 @@ pub unsafe fn read_string(fd: *mut FILE, cnt: size_t) -> *mut c_char {
 /// Write `number` to `fd` in `len` bytes, most significant byte first.
 ///
 /// @return  false in case of an error.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn put_bytes(fd: *mut FILE, number: uintmax_t, len: size_t) -> bool {
     debug_assert!(len > 0);
     for i in (0..len).rev() {
@@ -503,6 +567,10 @@ pub unsafe fn put_bytes(fd: *mut FILE, number: uintmax_t, len: size_t) -> bool {
 /// Write a `time_t` to `fd` in 8 bytes.
 ///
 /// @return  FAIL when the write failed.
+///
+/// # Safety
+///
+/// `fd` must point at a live `FILE`, unaliased for the call.
 pub unsafe fn put_time(fd: *mut FILE, time_: time_t) -> c_int {
     let mut buf = [0u8; 8];
     unsafe { time_to_bytes(time_, buf.as_mut_ptr()) };
@@ -518,6 +586,11 @@ pub unsafe fn put_time(fd: *mut FILE, time_: time_t) -> c_int {
 
 /// Version of `read()` that retries when interrupted by a signal, which
 /// `SIGWINCH` makes routine.
+///
+/// # Safety
+///
+/// `buf` must point at `bufsize` writable bytes the caller owns, unaliased
+/// for the call.
 pub unsafe fn read_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize_t {
     loop {
         let ret = unsafe { read(fd, buf, bufsize) };
@@ -532,6 +605,11 @@ pub unsafe fn read_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize_
 /// Repeats the write for as long as it doesn't fail for a reason other than
 /// being interrupted; the caller compares the result against `bufsize` to see
 /// whether everything got out.
+///
+/// # Safety
+///
+/// `buf` must point at `bufsize` writable bytes the caller owns, unaliased
+/// for the call.
 pub unsafe fn write_eintr(fd: c_int, buf: *mut c_void, bufsize: size_t) -> ssize_t {
     let mut written: ssize_t = 0;
     while (written as size_t) < bufsize {
@@ -571,6 +649,10 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 /// Fill `args` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buffer` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn prep_exarg(args: *mut ExArg, buffer: Buf) {
     // SAFETY: the caller's command, live for the call.
     let mut ea = unsafe { Ea::new(args) };
@@ -593,6 +675,10 @@ pub unsafe fn prep_exarg(args: *mut ExArg, buffer: Buf) {
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
     // Set the default 'fileformat'.
     if set_options {
@@ -616,6 +702,10 @@ pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
 }
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
+///
+/// # Safety
+///
+/// `args` must point at the command's `ExArg`.
 pub unsafe fn set_forced_fenc(args: *mut ExArg) {
     // SAFETY: the caller's command, live for the call.
     let ea = unsafe { Ea::new(args) };

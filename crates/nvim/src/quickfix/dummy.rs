@@ -124,10 +124,10 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { aucmd_restbuf(&raw mut aco) };
 
         if let Some(to_wipe) = newbuf_to_wipe.get() {
-            unsafe { block_autocmds() };
+            block_autocmds();
             // SAFETY: `BufRef::get` just established the buffer.
             unsafe { wipe_dummy_buffer(to_wipe, ptr::null()) };
-            unsafe { unblock_autocmds() };
+            unblock_autocmds();
         }
 
         // Add back the "dummy" flag, otherwise buflist_findname_file_id()

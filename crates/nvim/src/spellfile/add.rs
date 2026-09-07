@@ -94,7 +94,7 @@ pub unsafe fn spell_add_word(
 
     let fname = if idx == 0 {
         if int_wordlist.get().is_null() {
-            int_wordlist.set(unsafe { vim_tempname() });
+            int_wordlist.set(vim_tempname());
             if int_wordlist.get().is_null() {
                 return;
             }

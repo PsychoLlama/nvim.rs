@@ -29,6 +29,10 @@ use crate::types::EstackInfo;
 ///
 /// When there is no next one, `lastpat` is left null and `auidx` at
 /// `SIZE_MAX`, which is how [`getnextac`] and its caller see the end.
+///
+/// # Safety
+///
+/// `apc` must point at a live `AutoPatCmd`, unaliased for the call.
 pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
     // SAFETY: `apc` is the caller's cursor, standing in the frame
     // `apply_autocmds_group` is still in, and `acs` is the event table's own
@@ -141,6 +145,11 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 ///
 /// Answers whether the callback asked to be deleted, which only a Lua one
 /// can do (by returning `true`).
+///
+/// # Safety
+///
+/// `ac` must point at a live `AutoCmd`. `apc` must point at a live
+/// `AutoPatCmd`.
 unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     // SAFETY: `ac` and `apc` are the caller's live row and walk cursor, and
     // the row owns the handler this clones.
@@ -211,6 +220,11 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
 /// The `_c`/`_indent`/`_do_concat` parameters exist for `do_cmdline`'s
 /// signature.  A callback handler has no line to give back, so this
 /// answers an empty allocated string -- "not null, keep going".
+///
+/// # Safety
+///
+/// `cookie` must be the payload this callback was registered with, live for
+/// the call.
 pub unsafe fn getnextac(
     _c: ::core::ffi::c_int,
     cookie: *mut ::core::ffi::c_void,

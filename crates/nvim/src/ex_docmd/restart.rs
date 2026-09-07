@@ -416,7 +416,7 @@ pub(crate) unsafe fn ex_connect(args: *mut ExArg) {
     unsafe { ex_detach(ptr::null_mut()) };
     if stop_server {
         exiting.set(true);
-        unsafe { getout(0) };
+        getout(0);
     }
 }
 

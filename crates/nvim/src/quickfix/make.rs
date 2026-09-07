@@ -201,7 +201,7 @@ unsafe fn get_mef_name() -> *mut c_char {
 
     // SAFETY: the option strings are NUL-terminated.
     if unsafe { *p_mef.get() } as c_int == NUL {
-        let name = unsafe { vim_tempname() };
+        let name = vim_tempname();
         if name.is_null() {
             qf_emsg(e_notmp.as_ptr());
         }

@@ -39,6 +39,12 @@ const CS_REMOTE: &CStr = c"return vim._cs_remote(...)";
 ///
 /// Answers 0 and fills `errmsg` on failure; the message is owned by the
 /// channel layer and outlives the call.
+///
+/// # Safety
+///
+/// `server_addr` must point at a NUL-terminated string, unaliased for the
+/// call. `errmsg` must point at a writable `*const c_char` slot the caller
+/// owns for the call.
 pub(crate) unsafe fn server_connect(
     server_addr: *mut c_char,
     errmsg: *mut *const c_char,
@@ -66,15 +72,15 @@ pub(crate) unsafe fn server_connect(
 }
 
 /// Complain that `vim._cs_remote` answered with the wrong shape, and exit 2.
-unsafe fn bad_reply_type(key: &CStr) -> ! {
+fn bad_reply_type(key: &CStr) -> ! {
     // SAFETY: writes one message to stderr and does not return.
     let fmt = c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr();
     unsafe { fprintf(stderr, fmt, key.as_ptr()) };
-    unsafe { os_exit(2) }
+    os_exit(2)
 }
 
 /// Read one key of the reply dict, checking its type first.
-unsafe fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
+fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
     // SAFETY: `index` is below `dict.size`, so the pair is in the items array
     // and its key is a NUL-terminated string.
     let pair = unsafe { &*dict.items.add(index) };
@@ -92,6 +98,12 @@ unsafe fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
 ///
 /// Returns only when the process should carry on starting up; the server's
 /// answer may instead exit.
+///
+/// # Safety
+///
+/// `params` must point at the startup parameters. `server_addr` must point at
+/// a NUL-terminated string, unaliased for the call. `argv` must point at a
+/// writable `*mut c_char` slot the caller owns for the call.
 pub(crate) unsafe fn remote_request(
     params: *mut MainParams,
     remote_args: c_int,
@@ -115,7 +127,7 @@ pub(crate) unsafe fn remote_request(
         if chan == 0 {
             let fmt = c"Remote ui failed to start: %s\n".as_ptr();
             unsafe { fprintf(stderr, fmt, connect_error) };
-            unsafe { os_exit(1) };
+            os_exit(1);
         } else if unsafe { strequal(server_addr, os_getenv_into(c"NVIM".as_ptr(), &mut env)) } {
             // $NVIM in a `:terminal` child names its own parent, and a UI
             // attached to that is a loop.
@@ -123,7 +135,7 @@ pub(crate) unsafe fn remote_request(
             unsafe { fprintf(stderr, c"%s".as_ptr(), why) };
             let hint = c"(Unset $NVIM to skip this check)".as_ptr();
             unsafe { fprintf(stderr, c"%s\n".as_ptr(), hint) };
-            unsafe { os_exit(1) };
+            os_exit(1);
         }
         ui_client_channel_id.set(chan);
         return;
@@ -163,12 +175,12 @@ pub(crate) unsafe fn remote_request(
 
     if err.is_set() {
         unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
-        unsafe { os_exit(2) };
+        os_exit(2);
     }
     let Some(dict) = reply.as_dict() else {
         let msg = c"vim._cs_remote returned unexpected value\n".as_ptr();
         unsafe { fprintf(stderr, msg) };
-        unsafe { os_exit(2) };
+        os_exit(2);
     };
 
     // `should_exit` and `tabbed` are three-state so that "the server did
@@ -176,30 +188,30 @@ pub(crate) unsafe fn remote_request(
     let mut should_exit: Option<bool> = None;
     let mut tabbed: Option<bool> = None;
     for i in 0..dict.size {
-        let (key, value) = unsafe { field(&dict, i) };
+        let (key, value) = field(&dict, i);
         match key.to_bytes() {
             b"errmsg" => {
                 let Some(text) = value.as_string() else {
-                    unsafe { bad_reply_type(c"errmsg") };
+                    bad_reply_type(c"errmsg");
                 };
                 unsafe { fprintf(stderr, c"%s\n".as_ptr(), text.data()) };
-                unsafe { os_exit(2) };
+                os_exit(2);
             }
             b"result" => {
                 let Some(text) = value.as_string() else {
-                    unsafe { bad_reply_type(c"result") };
+                    bad_reply_type(c"result");
                 };
                 unsafe { printf(c"%s".as_ptr(), text.data()) };
             }
             b"tabbed" => {
                 let Some(flag) = value.as_boolean() else {
-                    unsafe { bad_reply_type(c"tabbed") };
+                    bad_reply_type(c"tabbed");
                 };
                 tabbed = Some(flag);
             }
             b"should_exit" => {
                 let Some(flag) = value.as_boolean() else {
-                    unsafe { bad_reply_type(c"should_exit") };
+                    bad_reply_type(c"should_exit");
                 };
                 should_exit = Some(flag);
             }
@@ -211,13 +223,13 @@ pub(crate) unsafe fn remote_request(
         let msg =
             c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n".as_ptr();
         unsafe { fprintf(stderr, msg) };
-        unsafe { os_exit(2) };
+        os_exit(2);
     }
 
     unsafe { api_free_object(reply) };
 
     if should_exit == Some(true) {
-        unsafe { os_exit(0) };
+        os_exit(0);
     }
     if tabbed == Some(true) {
         // One tab page per file the server was asked to open, less the

@@ -59,7 +59,7 @@ pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_
 }
 
 /// Shorten file names for all buffers.
-pub unsafe fn shorten_fnames(force: c_int) {
+pub fn shorten_fnames(force: c_int) {
     let mut dirname = [0 as c_char; MAXPATHL as usize];
     // SAFETY: a buffer the caller's stack owns, of the length passed with it.
     let _ = unsafe { os_dirname(dirname.as_mut_ptr(), MAXPATHL as size_t) };
@@ -92,6 +92,11 @@ pub unsafe fn shorten_fnames(force: c_int) {
 ///                     truncated basename was already underscores, the first
 ///                     becomes a `v`. NULL only when `fname` was empty and
 ///                     the current directory could not be read.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string. `ext` must point at a NUL-
+/// terminated string.
 pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: bool) -> *mut c_char {
     let ext = unsafe { CStr::from_ptr(ext) }.to_bytes();
     let mut prepend_dot = prepend_dot;
@@ -168,6 +173,11 @@ pub unsafe fn modname(fname: *const c_char, ext: *const c_char, prepend_dot: boo
 ///
 /// Needed when the two names refer to the same file but are spelled
 /// differently, which a plain rename would treat as a no-op.
+///
+/// # Safety
+///
+/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
+/// terminated string.
 unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
     let from_len = unsafe { CStr::from_ptr(from) }.to_bytes().len();
     if from_len >= MAXPATHL as usize - 5 {
@@ -211,6 +221,11 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
 /// `os_rename` only works when both names are on the same file system.
 ///
 /// @return  -1 for failure, 0 for success
+///
+/// # Safety
+///
+/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
+/// terminated string.
 pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     let mut use_tmp_file = false;
 
@@ -270,6 +285,11 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
 /// A symbolic link is copied as a link, not as its target.
 ///
 /// @return  FAIL for failure, OK for success
+///
+/// # Safety
+///
+/// `from` must point at a NUL-terminated string. `to` must point at a NUL-
+/// terminated string.
 pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
     let mut from_info = FileInfo::default();
     if unsafe { os_fileinfo_link(from, &raw mut from_info) }
@@ -310,6 +330,15 @@ pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
 /// @param sfname     short file name, or NULL
 /// @param tail       tail of the path
 /// @param allow_dirs the pattern may match a directory
+///
+/// # Safety
+///
+/// `pattern` must point at a NUL-terminated string, unaliased for the call.
+/// `prog` must point at a writable `*mut RegProg` slot the caller owns for
+/// the call. `fname` must point at a NUL-terminated string, unaliased for the
+/// call. `sfname` must point at a NUL-terminated string, unaliased for the
+/// call. `tail` must point at a NUL-terminated string, unaliased for the
+/// call.
 pub unsafe fn match_file_pat(
     pattern: *mut c_char,
     prog: *mut *mut RegProg,
@@ -355,6 +384,12 @@ pub unsafe fn match_file_pat(
 /// @param list    comma-separated list of patterns, like `'wildignore'`
 /// @param sfname  short file name
 /// @param ffname  full file name
+///
+/// # Safety
+///
+/// `list` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
+/// `ffname` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *mut c_char) -> bool {
     let tail = unsafe { path_tail(sfname) };
     let mut p = list;

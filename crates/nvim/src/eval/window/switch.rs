@@ -142,8 +142,7 @@ pub unsafe fn switch_win(
     tabpage: Option<TabPage>,
     no_display: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation.
-    unsafe { block_autocmds() };
+    block_autocmds();
     unsafe { switch_win_noblock(switchwin, win, tabpage, no_display) }
 }
 
@@ -196,7 +195,7 @@ pub unsafe fn switch_win_noblock(
 pub unsafe fn restore_win(switchwin: *mut SwitchWin, no_display: bool) {
     // SAFETY: the caller's obligation.
     unsafe { restore_win_noblock(switchwin, no_display) };
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// [`restore_win`] without unblocking autocommands.

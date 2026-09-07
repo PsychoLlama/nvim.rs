@@ -655,8 +655,7 @@ pub unsafe fn do_wqall(args: *mut ExArg) {
     if exiting.get() {
         if error == 0 {
             // exit Vim
-            // SAFETY: main thread; this does not return.
-            unsafe { getout(0) };
+            getout(0);
         }
         not_exiting(save_exiting);
     }

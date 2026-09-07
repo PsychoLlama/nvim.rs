@@ -77,6 +77,10 @@ unsafe fn fragment_bytes(frag: &VTermStringFragment) -> &[u8] {
     unsafe { ::core::slice::from_raw_parts(frag.str.cast::<u8>(), frag.len()) }
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe extern "C" fn term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
     // SAFETY: vterm hands back the terminal registered alongside this table.
     let term = unsafe { Term::new(data.cast()) };
@@ -84,6 +88,10 @@ unsafe extern "C" fn term_damage(rect: VTermRect, data: *mut c_void) -> c_int {
     1
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe extern "C" fn term_moverect(dest: VTermRect, src: VTermRect, data: *mut c_void) -> c_int {
     // SAFETY: as above.
     let term = unsafe { Term::new(data.cast()) };
@@ -95,6 +103,10 @@ unsafe extern "C" fn term_moverect(dest: VTermRect, src: VTermRect, data: *mut c
     1
 }
 
+/// # Safety
+///
+/// `data` must be the payload this callback was registered with, live for the
+/// call.
 unsafe extern "C" fn term_movecursor(
     new_pos: VTermPos,
     _old_pos: VTermPos,
@@ -163,6 +175,10 @@ unsafe fn term_set_title(mut term: Term, frag: &VTermStringFragment) {
     }
 }
 
+/// # Safety
+///
+/// `val` must point at a live `VTermValue`, unaliased for the call. `data`
+/// must be the payload this callback was registered with, live for the call.
 unsafe extern "C" fn term_settermprop(
     prop: VTermProp,
     val: *mut VTermValue,
@@ -211,13 +227,17 @@ unsafe extern "C" fn term_settermprop(
     1
 }
 
-unsafe extern "C" fn term_bell(_data: *mut c_void) -> c_int {
+extern "C" fn term_bell(_data: *mut c_void) -> c_int {
     // SAFETY: the editor's own beep, which takes no pointer.
     unsafe { vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint) };
     1
 }
 
 /// Answer vterm's "is the background dark?" query from `'background'`.
+///
+/// # Safety
+///
+/// `dark` must point at a writable `bool` the caller owns.
 unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
     // SAFETY: vterm's own out-parameter, and `'background'` is a live
     // option string.
@@ -225,6 +245,10 @@ unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
     1
 }
 
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     // SAFETY: the event's own two arguments, as `term_selection_set` left
     // them: a selection mask, and the string it allocated.
@@ -253,6 +277,12 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
 }
 
 /// Accumulate an OSC 52 clipboard write, queueing it once complete.
+///
+/// # Safety
+///
+/// `frag` must be an initialized `VTermStringFragment` whose pointer fields
+/// point at live data for the call. `user` must be the payload this callback
+/// was registered with, live for the call.
 unsafe extern "C" fn term_selection_set(
     mask: VTermSelectionMask,
     frag: VTermStringFragment,

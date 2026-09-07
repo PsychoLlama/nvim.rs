@@ -60,6 +60,12 @@ pub(crate) struct How {
 ///
 /// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
 /// the reading itself, which are not failures.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
+/// `args` must point at the command's `ExArg`.
 pub(crate) unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
@@ -626,7 +632,7 @@ pub(crate) unsafe fn readfile(
                     break;
                 }
 
-                if conv.has_iconv() && !unsafe { conv.with_iconv(&mut w) } {
+                if conv.has_iconv() && !conv.with_iconv(&mut w) {
                     conv.close_iconv();
                     rewind_retry(
                         &mut did_iconv,
@@ -638,7 +644,7 @@ pub(crate) unsafe fn readfile(
                 }
 
                 if conv.flags != 0 {
-                    if !unsafe { conv.units_to_utf8(&mut w) } {
+                    if !conv.units_to_utf8(&mut w) {
                         let had_iconv = conv.has_iconv();
                         conv.close_iconv();
                         rewind_retry(
@@ -650,7 +656,7 @@ pub(crate) unsafe fn readfile(
                         continue 'retry;
                     }
                 } else if Buf::current().b_p_bin == 0
-                    && !unsafe { conv.check_utf8(&mut w, filesize, &mut illegal_byte) }
+                    && !conv.check_utf8(&mut w, filesize, &mut illegal_byte)
                 {
                     let had_iconv = conv.has_iconv();
                     conv.close_iconv();
@@ -691,9 +697,7 @@ pub(crate) unsafe fn readfile(
                     fd,
                     set_options,
                 };
-                // SAFETY: the read's own window into the buffer, and the
-                // five out-parameters are this frame's locals.
-                let split = unsafe {
+                let split = {
                     let at = &mut about;
                     let (l, s, r) = (&mut lnum, &mut skip_count, &mut read_count);
                     split_lines(&mut w, at, l, s, r, &mut fileformat, &mut ff_error)

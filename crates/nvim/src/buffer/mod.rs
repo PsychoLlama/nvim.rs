@@ -423,13 +423,11 @@ pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<
 }
 
 pub(crate) fn block_autocmds_now() {
-    // SAFETY: paired with `unblock_autocmds_now` by every caller.
-    unsafe { block_autocmds() };
+    block_autocmds();
 }
 
 pub(crate) fn unblock_autocmds_now() {
-    // SAFETY: paired with `block_autocmds_now` by every caller.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// Whether an error, interrupt or exception is unwinding the script.

@@ -208,7 +208,7 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
         )
     };
     unsafe { append_redir(cmd, len, p_srr.get(), tmp_diff) };
-    unsafe { block_autocmds() };
+    block_autocmds();
     unsafe {
         call_shell(
             cmd,
@@ -216,7 +216,7 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
             ::core::ptr::null_mut(),
         )
     };
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     unsafe { xfree(cmd.cast()) };
     Ok(())
 }

@@ -595,6 +595,5 @@ pub unsafe fn f_rename(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// As [`f_chdir`], arity 0.
 pub unsafe fn f_tempname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_, result) = frame!(args, result);
-    // SAFETY: answers a fresh string in nvim's heap, or NULL.
-    ret_string(result, unsafe { vim_tempname() });
+    ret_string(result, vim_tempname());
 }

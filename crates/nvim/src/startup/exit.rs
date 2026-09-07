@@ -53,7 +53,7 @@ use crate::winlayer::{Buf, WinId, buffer_at, buffers, first_buffer, first_tab, f
 ///
 /// `r` is the status, except that a UI client with a status of its own wins
 /// and a botched event-loop teardown turns a success into a failure.
-pub unsafe fn os_exit(mut r: c_int) -> ! {
+pub fn os_exit(mut r: c_int) -> ! {
     exiting.set(true);
 
     // SAFETY: shuts down the singleton UI, event loop and memfiles, in that
@@ -68,7 +68,7 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
         ui_call_stop();
     }
 
-    if !unsafe { event_teardown() } && r == 0 {
+    if !event_teardown() && r == 0 {
         // The main loop did not come down cleanly; say so in the status.
         r = 1;
     }
@@ -104,7 +104,7 @@ pub unsafe fn os_exit(mut r: c_int) -> ! {
 /// ShaDa file and then hands over to [`os_exit`]. A deadly signal has raised
 /// `v_dying` by the time it gets here, and the autocommands are skipped --
 /// running user code inside a signal handler is how one crash becomes two.
-pub unsafe fn getout(mut exitval: c_int) -> ! {
+pub fn getout(mut exitval: c_int) -> ! {
     debug_assert!(
         ui_client_channel_id.get() == 0,
         "getout() in a UI client, which has no editor state to shut down"
@@ -211,7 +211,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
         unsafe { garbage_collect(false) };
     }
 
-    unsafe { os_exit(exitval) };
+    os_exit(exitval);
 }
 
 /// Fire one of the leave events even if autocommands are blocked, and leave
@@ -219,17 +219,22 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
 ///
 /// `deathtrap()` blocks autocommands on the way in, but `VimLeavePre` and
 /// `VimLeave` are exactly the two the user still expects to see.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call.
 unsafe fn with_autocmds_unblocked(event: AutoEvent) {
     // SAFETY: the block counter and the autocommand tables are global.
     let blocked = is_autocmd_blocked();
     if blocked {
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
     }
     let buffer = Buf::current_raw();
     let __hoisted_1 = unsafe { Buf::from_raw(buffer) };
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_1) };
     if blocked {
-        unsafe { block_autocmds() };
+        block_autocmds();
     }
 }
 
@@ -241,6 +246,10 @@ unsafe fn with_autocmds_unblocked(event: AutoEvent) {
 ///
 /// A null `errmsg` means "say nothing", which is how the process-teardown
 /// path reaches it.
+///
+/// # Safety
+///
+/// `errmsg` must point at a NUL-terminated string.
 pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
     /// Set once we are certain we are going down, e.g. after a deadly signal.
     static really_exiting: GlobalCell<bool> = GlobalCell::new(false);
@@ -276,7 +285,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
     if ui_client_channel_id.get() != 0 {
         // A UI client has no buffers to preserve.
-        unsafe { os_exit(1) };
+        os_exit(1);
     }
 
     unsafe { ml_close_notmod() };
@@ -301,5 +310,5 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         unsafe { fprintf(stderr, c"Nvim: Finished.\n".as_ptr()) };
     }
 
-    unsafe { getout(1) };
+    getout(1);
 }

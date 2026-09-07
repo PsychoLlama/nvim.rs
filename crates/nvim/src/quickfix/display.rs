@@ -81,7 +81,6 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
     // message machinery.
     let mut heading = [0 as c_char; IOSIZE as usize];
     let mut fname = ptr::null_mut::<c_char>();
-    // SAFETY: forwarded from the caller.
     let module = qfp.qf_module;
     if !module.is_null() && unsafe { *module } != 0 {
         let heading = heading.as_mut_ptr();
@@ -228,7 +227,7 @@ pub unsafe fn qf_list(args: *mut ExArg) {
     }
 
     // Shorten all the file names, so that it is easy to read.
-    unsafe { shorten_fnames(false as c_int) };
+    shorten_fnames(false as c_int);
 
     // The highlighting comes from the qf.vim syntax file.
     qfFile_hl_id.set(unsafe { syn_name2id(c"qfFileName".as_ptr()) });
@@ -268,7 +267,6 @@ pub unsafe fn qf_list(args: *mut ExArg) {
 ///
 /// `text` must be a live NUL-terminated string.
 pub(crate) unsafe fn qf_fmt_text(out: &mut Vec<u8>, text: *const c_char) {
-    // SAFETY: forwarded from the caller.
     let mut p = text.cast::<u8>();
     while unsafe { *p } != 0 {
         if unsafe { *p } == b'\n' {
@@ -338,7 +336,6 @@ pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const QfLine) {
 unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
     // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
-    // SAFETY: forwarded from the caller.
     let qfl = qf_nth_list(qi, which);
     let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];
     let size = IOSIZE as size_t;
@@ -415,7 +412,6 @@ pub unsafe fn qf_age(args: *mut ExArg) {
 pub unsafe fn qf_history(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args) };
-    // SAFETY: forwarded from the caller.
     let stack = qf_cmd_stack(args, false);
     if args.addr_count > 0 {
         match stack {

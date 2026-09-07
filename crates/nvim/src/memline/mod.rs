@@ -471,7 +471,7 @@ pub unsafe fn ml_open_file(buffer: Buf) {
 
     // A spell buffer gets a temp file name.
     if b.b_spell {
-        let fname = unsafe { vim_tempname() };
+        let fname = vim_tempname();
         if !fname.is_null() {
             // A spell buffer keeps working without a swap file.
             let _ = unsafe { mf_open_file(mfp, fname) }; // consumes fname!
@@ -588,7 +588,7 @@ pub unsafe fn ml_close_all(del_file: bool) {
         unsafe { ml_close(buf, del_file as ::core::ffi::c_int) };
     }
     spell_delete_wordlist(); // delete the internal wordlist
-    unsafe { vim_deltempdir() }; // delete the temp directory that was created
+    vim_deltempdir(); // delete the temp directory that was created
 }
 
 /// Close the memfile of every unmodified buffer. Only for use just before

@@ -183,8 +183,7 @@ fn chdir_to_file(fname: *mut c_char) -> Result<(), Failed> {
 
 /// Recompute every buffer's short file name against the new directory.
 fn reshorten_fnames() {
-    // SAFETY: walks the buffer list only.
-    unsafe { shorten_fnames(1) };
+    shorten_fnames(1);
 }
 
 /// The wall clock, for `b_last_used`.

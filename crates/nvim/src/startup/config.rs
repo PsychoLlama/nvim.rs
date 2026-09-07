@@ -45,6 +45,10 @@ use ::libc::fprintf;
 type Mp = Live<MainParams>;
 
 /// Run the `--cmd` commands, which come before any config.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the commands it
     // holds point into argv.
@@ -74,6 +78,10 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
 
 /// Run the `-c` and `+cmd` commands, which come after the config and the
 /// first file.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block.
     let parm = unsafe { Mp::new(parmp) };
@@ -124,6 +132,11 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
 /// `$XDG_CONFIG_DIRS` entry that already ends in a separator would otherwise
 /// produce a doubled one. Upstream only does this on the system side, so
 /// this does too.
+///
+/// # Safety
+///
+/// `dir` must point at a NUL-terminated string. `appname` must point at a
+/// NUL-terminated string.
 unsafe fn config_subpath(
     dir: *const c_char,
     dir_len: size_t,
@@ -157,7 +170,7 @@ unsafe fn config_subpath(
 /// Walk `$XDG_CONFIG_DIRS`, calling `visit` with each entry.
 ///
 /// `visit` answers `true` to stop the walk. Answers whether it did.
-unsafe fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bool) -> bool {
+fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bool) -> bool {
     // SAFETY: `stdpaths_get_xdg_var` hands over an owned string, and
     // `vim_env_iter` hands back slices of it.
     let config_dirs = stdpaths_get_xdg_var(kXDGConfigDirs);
@@ -188,7 +201,7 @@ unsafe fn for_each_config_dir(mut visit: impl FnMut(*const c_char, size_t) -> bo
 
 /// Source the system-wide vimrc: the first `<config dir>/<appname>/sysinit.vim`
 /// that exists, or the compiled-in path if none do.
-pub(crate) unsafe fn do_system_initialization() {
+pub(crate) fn do_system_initialization() {
     let appname = get_appname(false);
     let appname_len = appname.count_bytes();
     // SAFETY: sources at most one file; `appname` outlives the walk.
@@ -213,6 +226,11 @@ pub(crate) unsafe fn do_system_initialization() {
 /// Answers `Some(do_exrc)` when one of them was sourced, and `None` when
 /// neither was: `do_exrc` is off when the file that was sourced *is* the
 /// `exrc` the working directory would offer, so it is not read twice.
+///
+/// # Safety
+///
+/// `init_lua` must point at a NUL-terminated string, unaliased for the call.
+/// `init_vim` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn source_init_pair(
     init_lua: *mut c_char,
     init_vim: *mut c_char,
@@ -249,7 +267,7 @@ unsafe fn source_init_pair(
 /// The sources are tried in order and the first that works wins: `$VIMINIT`,
 /// `$XDG_CONFIG_HOME/<appname>/init.{lua,vim}`, then the same pair under each
 /// `$XDG_CONFIG_DIRS` entry, then `$EXINIT`.
-pub(crate) unsafe fn do_user_initialization() -> bool {
+pub(crate) fn do_user_initialization() -> bool {
     // SAFETY: sources at most one config; every path built here is freed on
     // every way out.
     // Read before anything is sourced: the fall-through at the bottom
@@ -295,7 +313,7 @@ pub(crate) unsafe fn do_user_initialization() -> bool {
 }
 
 /// Read the working directory's `exrc`, which is Lua's job.
-pub(crate) unsafe fn do_exrc_initialization() {
+pub(crate) fn do_exrc_initialization() {
     // SAFETY: the Lua state exists by now -- `nlua_init` ran in `main_0`.
     let lstate: *mut lua_State = get_global_lstate();
     // Deliberately a hard failure, not a `debug_assert!`: every line
@@ -315,6 +333,10 @@ pub(crate) unsafe fn do_exrc_initialization() {
 ///
 /// `-u NONE` and `-u NORC` name no file at all and source nothing; silent
 /// (batch) mode skips the standard sources too.
+///
+/// # Safety
+///
+/// `parmp` must point at the startup parameters.
 pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block.
     if !unsafe { (*parmp).use_vimrc }.is_null() {
@@ -329,9 +351,9 @@ pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
             semsg!("E282: Cannot read from \"{vimrc}\"");
         }
     } else if !silent_mode.get() {
-        unsafe { do_system_initialization() };
-        if unsafe { do_user_initialization() } {
-            unsafe { do_exrc_initialization() };
+        do_system_initialization();
+        if do_user_initialization() {
+            do_exrc_initialization();
         }
     }
 

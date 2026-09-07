@@ -203,7 +203,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
     if !pum_is_visible.get() || !compl_match_curr_select(selected) {
         return None;
     }
-    unsafe { block_autocmds() };
+    block_autocmds();
     RedrawingDisabled.set(RedrawingDisabled.get() + 1);
     no_u_sync.set(no_u_sync.get() + 1);
 
@@ -227,7 +227,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
     // `unblock_autocmds` has to run whichever way the placement went, so
     // the answer is settled before it rather than after.
     let placed = unsafe { pum_adjust_info_position(wp, max_info_width) }.then(|| wp.raw());
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     unsafe { Win::from_raw(placed.unwrap_or(::core::ptr::null_mut())) }
 }
 
@@ -306,7 +306,7 @@ unsafe fn pum_show_info(
     let curtab_save = TabPage::current().id();
 
     if use_float {
-        unsafe { block_autocmds() };
+        block_autocmds();
     }
 
     // A preview split is 3 lines by default, less if 'previewheight' is.
@@ -380,7 +380,7 @@ unsafe fn pum_show_info(
     }
 
     if use_float {
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
     }
     resized
 }

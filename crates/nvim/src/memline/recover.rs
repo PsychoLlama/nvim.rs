@@ -91,7 +91,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // When called from main() the storage structure still needs
         // initialising.
         if called_from_main && unsafe { ml_open(Buf::current()) }.is_err() {
-            unsafe { getout(1) };
+            getout(1);
         }
 
         // A buffer structure for the swap file being recovered. Only the

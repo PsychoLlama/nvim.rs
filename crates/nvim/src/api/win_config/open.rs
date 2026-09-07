@@ -62,8 +62,7 @@ pub unsafe fn nvim_open_win(
     let style = fconfig.style;
     let cmdline_offset = fconfig._cmdline_offset;
     if noautocmd {
-        // SAFETY: paired with the `unblock_autocmds` at the end.
-        unsafe { block_autocmds() };
+        block_autocmds();
     }
     let wp: Option<Win>;
     let mut tp = Some(TabPage::current());
@@ -234,8 +233,7 @@ pub unsafe fn nvim_open_win(
         }
     }
     if noautocmd {
-        // SAFETY: paired with the `block_autocmds` above.
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
     }
     rv.reported(error)
 }

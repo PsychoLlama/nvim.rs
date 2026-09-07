@@ -118,14 +118,12 @@ fn empty_buffer(buffer: Buf) -> bool {
 
 /// `b:changedtick`.
 fn changedtick(buffer: Buf) -> VarNumber {
-    // SAFETY: a live buffer.
     buf_get_changedtick(buffer)
 }
 
 /// Leave the editor with exit code `n` -- never returns.
 fn bail_out(n: c_int) {
-    // SAFETY: unwinds and exits; nothing here is reached again.
-    unsafe { getout(n) };
+    getout(n);
 }
 
 /// Fill in `args` with the file format and encoding of `buffer`, as the reload

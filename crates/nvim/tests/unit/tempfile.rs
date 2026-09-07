@@ -38,7 +38,7 @@ fn tempname() -> String {
 /// case did to the tempdir, the next one starts from nothing.
 fn fresh() -> Sandbox {
     let sandbox = Sandbox::globals();
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
     sandbox
 }
 
@@ -79,14 +79,14 @@ fn the_temp_directory_is_ours_private_and_empty() {
         "{dir:?} is not under an `nvim.<user>` root"
     );
 
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 #[test]
 fn the_same_directory_comes_back_every_time() {
     let _sandbox = fresh();
     assert_eq!(tempdir(), tempdir());
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn a_temp_name_is_fresh_unused_and_inside_the_directory() {
         );
     }
 
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 /// The directory is deleted with everything in it, not just when it is empty
@@ -118,14 +118,14 @@ fn deleting_the_directory_takes_its_contents_with_it() {
     std::fs::create_dir(dir.join("nested")).unwrap();
     std::fs::write(dir.join("nested/deeper"), b"y").unwrap();
 
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
     assert!(!dir.exists(), "{dir:?} survived deletion");
 
     // And the next request makes a new one, at a new path.
     let next = tempdir();
     assert_ne!(next, dir);
     assert!(next.exists());
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 /// `$TMPDIR` is the first candidate root, so pointing it somewhere puts the
@@ -133,7 +133,7 @@ fn deleting_the_directory_takes_its_contents_with_it() {
 #[test]
 fn tmpdir_decides_where_the_directory_goes() {
     let mut sandbox = Sandbox::dir("tempfile-tmpdir");
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
     let root = sandbox.mkdir("elsewhere");
     sandbox.set_env("TMPDIR", root.to_str().unwrap());
 
@@ -143,7 +143,7 @@ fn tmpdir_decides_where_the_directory_goes() {
         "{dir:?} is not under the requested {root:?}"
     );
 
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 /// A hostile `umask` does not get to make the directory unusable. The
@@ -162,7 +162,7 @@ fn a_umask_that_would_strip_the_execute_bit_is_overridden() {
 
     assert_eq!(mode & 0o777, 0o700, "{dir:?} came out of a 0177 umask");
     assert!(is_writable_dir(&dir));
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }
 
 /// A `/tmp` cleaner that removes the directory anyway is survivable: the
@@ -202,5 +202,5 @@ fn a_directory_that_disappears_is_replaced() {
         });
     assert!(stale, "expected the handle on {dir:?} to still be open");
 
-    unsafe { vim_deltempdir() };
+    vim_deltempdir();
 }

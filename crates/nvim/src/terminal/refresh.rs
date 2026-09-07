@@ -58,7 +58,7 @@ static REFRESH_PENDING: GlobalCell<bool> = GlobalCell::new(false);
 /// first took damage.
 static INVALIDATED: GlobalCell<Vec<Term>> = GlobalCell::new(Vec::new());
 
-pub(crate) unsafe fn terminal_init() {
+pub(crate) fn terminal_init() {
     // SAFETY: the main loop is up, and the timer is this module's own,
     // untouched until `terminal_teardown` closes it.
     unsafe { time_watcher_init(main_loop.ptr(), timer(), ::core::ptr::null_mut()) };
@@ -66,7 +66,7 @@ pub(crate) unsafe fn terminal_init() {
     unsafe { (*timer()).events = multiqueue_new_child(main_loop_events()) };
 }
 
-pub(crate) unsafe fn terminal_teardown() {
+pub(crate) fn terminal_teardown() {
     // SAFETY: the timer this module started, stopped and closed once.
     unsafe { time_watcher_stop(timer()) };
     // SAFETY: as above, freeing the queue `terminal_init` made.
@@ -119,19 +119,17 @@ pub(crate) fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) 
 
 /// Run whatever refresh work has come due. Called from the editor's idle
 /// paths, since the timer only queues.
-pub(crate) unsafe fn terminal_check_refresh() {
+pub(crate) fn terminal_check_refresh() {
     // SAFETY: the refresh queue, whose events are this module's own.
     unsafe { multiqueue_process_events(refresh_queue()) };
 }
 
-unsafe fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
+fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
     REFRESH_PENDING.set(false);
     if exiting.get() {
         return;
     }
-    // SAFETY: refreshing runs editor code, which must not fire autocommands
-    // from the middle of the event loop; paired with the unblock below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     // Taken rather than iterated in place: refreshing runs editor code that
     // damages terminals, and those belong to the next round.
     for term in INVALIDATED.with_mut(::core::mem::take) {
@@ -139,8 +137,7 @@ unsafe fn refresh_timer_cb(_watcher: *mut TimeWatcher, _data: *mut c_void) {
             refresh_terminal(term);
         }
     }
-    // SAFETY: as above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// Refresh `term` one last time before it is freed, if it was waiting on
@@ -149,11 +146,9 @@ pub(super) fn refresh_before_destroy(term: Term) {
     if !INVALIDATED.with(|queued| queued.contains(&term)) {
         return;
     }
-    // SAFETY: as in `refresh_timer_cb`; paired with the unblock below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     refresh_terminal(term);
-    // SAFETY: as above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     // By value, not by index: refreshing can have queued more.
     INVALIDATED.with_mut(|queued| queued.retain(|&queued| queued != term));
 }
@@ -211,6 +206,10 @@ fn refresh_size(mut term: Term) -> bool {
 
 /// `'scrollback'` changed; trim or extend to match, but only once the
 /// scrollback has been sized at all.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
 pub(crate) unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
     // SAFETY: the caller hands over a live terminal.
     let term = unsafe { Term::new(term) };

@@ -51,8 +51,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
 
     // Don't execute autocommands while creating the windows: `curwin` and
     // `curbuf` are not set up yet.
-    // SAFETY: matched by the `unblock_autocmds` below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     let mut todo = count - 1;
     while todo > 0 {
         let cur = Win::current();
@@ -75,8 +74,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
         }
         todo -= 1;
     }
-    // SAFETY: matches the `block_autocmds` above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
     // return actual number of windows
     count - todo
 }

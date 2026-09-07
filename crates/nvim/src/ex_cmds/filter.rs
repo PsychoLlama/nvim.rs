@@ -238,8 +238,7 @@ impl TempFile {
     /// # Safety
     /// Main thread; the temp directory must be available.
     unsafe fn new() -> Option<TempFile> {
-        // SAFETY: caller's contract.
-        let name = unsafe { vim_tempname() };
+        let name = vim_tempname();
         (!name.is_null()).then_some(TempFile(name))
     }
 

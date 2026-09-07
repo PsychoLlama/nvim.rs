@@ -118,7 +118,7 @@ pub fn time_differs(file_info: &FileInfo, mtime: i64, mtime_ns: i64) -> bool {
 ///
 /// @return  true if a message was written, so the screen should be redrawn
 ///          and the cursor positioned.
-pub unsafe fn check_timestamps(focus: c_int) -> c_int {
+pub fn check_timestamps(focus: c_int) -> c_int {
     // Don't check timestamps while system() or another low-level function
     // may cause us to lose and gain focus.
     if no_check_timestamps.get() > 0 {

@@ -75,8 +75,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
     let mut esc_name: *mut c_char = ptr::null_mut();
     let mut fullname: *mut c_char = ptr::null_mut();
     let mut buf: *mut c_char = ptr::null_mut();
-    // SAFETY: the editor exists, for both names.
-    let (tmp_orig, tmp_new) = unsafe { (vim_tempname(), vim_tempname()) };
+    let (tmp_orig, tmp_new) = (vim_tempname(), vim_tempname());
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // SAFETY: `args.arg` is the command's own argument string.
@@ -101,8 +100,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
         let mut dirbuf: [c_char; 4096] = [0; 4096];
         let saved_dir = save_cwd(&mut dirbuf);
         if saved_dir {
-            // SAFETY: the editor's own temp directory, else the fallback.
-            let tempdir = unsafe { vim_gettempdir() };
+            let tempdir = vim_gettempdir();
             let tempdir = if tempdir.is_null() {
                 c"/tmp".as_ptr() as *mut c_char
             } else {
@@ -110,7 +108,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             };
             // SAFETY: a NUL-terminated directory name; the editor exists.
             unsafe { os_chdir(tempdir) };
-            unsafe { shorten_fnames(1) };
+            shorten_fnames(1);
         }
 
         // SAFETY: `p_pex` is the `'patchexpr'` option string.
@@ -122,10 +120,9 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             // SAFETY: `buf` holds `buflen` bytes, and the three `%s` are
             // matched by the three NUL-terminated names.
             unsafe { vim_snprintf(buf, buflen, fmt, tmp_new, tmp_orig, esc_name) };
-            // SAFETY: the editor exists, in all three calls.
-            unsafe { block_autocmds() };
+            block_autocmds();
             unsafe { call_shell(buf, ShellOpts::FILTER, ptr::null_mut::<c_char>()) };
-            unsafe { unblock_autocmds() };
+            unblock_autocmds();
         }
 
         if saved_dir {
@@ -133,8 +130,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             if unsafe { os_chdir(dirbuf.as_mut_ptr()) } != 0 {
                 emsg_gettext(e_prev_dir.as_ptr());
             }
-            // SAFETY: the editor exists.
-            unsafe { shorten_fnames(1) };
+            shorten_fnames(1);
         }
         remove_suffixed(buf, tmp_new, c".orig".as_ptr());
         remove_suffixed(buf, tmp_new, c".rej".as_ptr());

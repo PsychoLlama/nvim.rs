@@ -279,6 +279,10 @@ fn is_filter_char(c: c_int) -> bool {
 
 /// Open or close a bracketed paste that spans more than one `nvim_paste`
 /// call, so the child sees one paste rather than several.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
 pub(crate) unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: bool) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
@@ -304,6 +308,10 @@ pub(crate) unsafe fn terminal_set_streamed_paste(term: *mut Terminal, streamed: 
 ///
 /// Bracketed unless the paste is already part of a stream, and filtered
 /// through `'termpastefilter'` a character at a time.
+///
+/// # Safety
+///
+/// `y_array` must point at a live `String_0`, unaliased for the call.
 pub(crate) unsafe fn terminal_paste(count: c_int, y_array: *mut String_0, y_size: size_t) {
     if y_size == 0 {
         return;

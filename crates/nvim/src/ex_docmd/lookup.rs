@@ -225,7 +225,7 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
         iemsg(gettext(
             c"E943: Command table needs to be updated, run 'make'",
         ));
-        unsafe { getout(1) };
+        getout(1);
     }
     let c2 = if len == 1 {
         0u8

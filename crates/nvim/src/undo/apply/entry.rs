@@ -109,8 +109,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // Autocommands must not see the undo structures: they are inconsistent
     // until the end.
-    // SAFETY: nothing here holds a borrow of editor state.
-    unsafe { block_autocmds() };
+    block_autocmds();
 
     let old_flags = curhead.uh_flags;
     let new_flags = (if buf.b_changed != 0 { UH_CHANGED } else { 0 })
@@ -232,8 +231,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
     // Several changes can share a timestamp; the one that moved wins.
     buf.b_u_time_cur = curhead.uh_time;
-    // SAFETY: nothing here holds a borrow of editor state.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// Swaps one entry's saved lines with the buffer lines it covers.

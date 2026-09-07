@@ -78,6 +78,13 @@ pub(crate) struct Opened {
 ///
 /// `Err` carries the answer `readfile` should give: a failure, or a
 /// directory, or `Ok` when an autocommand did the reading itself.
+///
+/// # Safety
+///
+/// `fname` must point at a NUL-terminated string, unaliased for the call.
+/// `sfname` must point at a NUL-terminated string, unaliased for the call.
+/// `args` must point at the command's `ExArg`. `how` must be an initialized
+/// `How` whose pointer fields point at live data for the call.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn open_source(
     fname: *mut c_char,
@@ -418,7 +425,7 @@ pub(crate) unsafe fn open_source(
     Buf::current().b_op_start.lnum = if from == 0 { 1 } else { from };
     Buf::current().b_op_start.col = 0;
 
-    let mut guess = unsafe { FormatGuess::from_ffs() };
+    let mut guess = FormatGuess::from_ffs();
 
     if !how.buffer {
         let m = msg_scroll.get();
@@ -445,7 +452,7 @@ pub(crate) unsafe fn open_source(
         }
 
         // The autocommands may have changed 'fileformats'.
-        guess = unsafe { FormatGuess::from_ffs() };
+        guess = FormatGuess::from_ffs();
         Buf::current().b_op_start = orig_start;
 
         if msg_scrolled.get() == n {

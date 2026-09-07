@@ -793,8 +793,7 @@ unsafe extern "C" fn exit_event(argv: *mut *mut c_void) {
     if !exiting.get() {
         if ui_client_channel_id.get() != 0 {
             ui_client_exit_status.set(status);
-            // SAFETY: the editor's own exit path; it does not return.
-            unsafe { os_exit(status) };
+            os_exit(status);
         } else {
             // The only other caller is `rpc_close`, which passes 0.
             debug_assert!(status == 0);

@@ -106,7 +106,7 @@ use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 ///
 /// Exported: the unit tests build an editor without a `main`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn event_init() {
+pub extern "C" fn event_init() {
     // SAFETY: initialises the singleton main loop and its subsystems, once.
     unsafe { loop_init(main_loop.ptr()) };
     env_init();
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn event_init() {
     autocmd_init();
     signal_init();
     unsafe { channel_init() };
-    unsafe { terminal_init() };
+    terminal_init();
     ui_init();
     time_msg_at(c"event init");
 }
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn event_init() {
 ///
 /// Answers whether it came down cleanly; [`os_exit`] turns a `false` into a
 /// non-zero exit status.
-pub(crate) unsafe fn event_teardown() -> bool {
+pub(crate) fn event_teardown() -> bool {
     // SAFETY: shuts down the singleton main loop and its subsystems.
     if unsafe { (*main_loop.ptr()).events }.is_null() {
         // Never came up; there is nothing to drain.
@@ -139,7 +139,7 @@ pub(crate) unsafe fn event_teardown() -> bool {
     unsafe { proc_teardown(main_loop.ptr()) };
     unsafe { timer_teardown() };
     signal_teardown();
-    unsafe { terminal_teardown() };
+    terminal_teardown();
     unsafe { loop_close(main_loop.ptr(), true) }
 }
 
@@ -147,6 +147,10 @@ pub(crate) unsafe fn event_teardown() -> bool {
 /// looked at: the option defaults, the first window, the runtime paths.
 ///
 /// Exported: the unit tests build an editor without a `main`.
+///
+/// # Safety
+///
+/// `paramp` must point at the startup parameters.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     // SAFETY: `paramp` is null when the unit tests call this; every use of
@@ -187,6 +191,11 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
 ///
 /// Never returns: it ends in `normal_enter`, which is the editor's main
 /// loop, or in one of the exits along the way.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_char` slot the caller owns for the
+/// call.
 pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // Why `server_init` gave up, when it does. Upstream leaves it in the
     // shared `IObuff`.
@@ -225,12 +234,12 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
 
-    unsafe { event_init() };
+    event_init();
     unsafe { early_init(&raw mut params) };
     unsafe { set_argv_var(argv, argc) };
-    unsafe { check_and_set_isatty(&raw mut params) };
+    check_and_set_isatty(&raw mut params);
     unsafe { command_line_scan(&raw mut params) };
-    unsafe { set_argf_var() };
+    set_argf_var();
 
     unsafe { nlua_init(argv, argc, params.lua_arg0) };
     time_msg_at(c"init lua interpreter");
@@ -246,7 +255,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     let mut fname: *mut c_char = ptr::null_mut();
     if unsafe { (*global_arglist()).al_ga.len() as c_int } > 0 {
-        fname = unsafe { get_fname(&raw mut params) };
+        fname = get_fname(&raw mut params);
     }
     if recoverymode.get() && fname.is_null() {
         // `-r` with no file only lists the swap files.
@@ -272,7 +281,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let chan = unsafe { ui_client_start_server(progpath, params.argc as usize, params.argv) };
         if chan == 0 {
             unsafe { fprintf(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
-            unsafe { os_exit(1) };
+            os_exit(1);
         }
         ui_client_channel_id.set(chan);
     }
@@ -350,7 +359,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         params.edit_type = EDIT_STDIN as c_int;
     }
     if !params.scriptin.is_null() && !unsafe { open_scriptin(params.scriptin) } {
-        unsafe { os_exit(2) };
+        os_exit(2);
     }
     if !params.scriptout.is_null() {
         let mode = if params.scriptout_append {
@@ -363,7 +372,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             let fmt = gettext(c"Cannot open for script output: \"");
             unsafe { fprintf(stderr, fmt.as_ptr()) };
             unsafe { fprintf(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
-            unsafe { os_exit(2) };
+            os_exit(2);
         }
     }
 
@@ -395,7 +404,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         // `-r` with no file: list the swap files and leave.
         let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<List>());
         unsafe { recover_names(no_name, true, no_list, 0, ptr::null_mut()) };
-        unsafe { os_exit(0) };
+        os_exit(0);
     }
 
     set_init_3();
@@ -425,7 +434,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     if params.edit_type == EDIT_STDIN as c_int && !recoverymode.get() {
-        unsafe { read_stdin() };
+        read_stdin();
     }
 
     setmouse();
@@ -463,7 +472,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
 
-    unsafe { shorten_fnames(0) };
+    shorten_fnames(0);
     unsafe { handle_tag(params.tagname) };
     if params.n_commands > 0 {
         unsafe { exe_commands(&raw mut params) };
@@ -514,7 +523,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
             unsafe { msg_putchar('\n' as c_int) };
             msg_didout.set(false);
         }
-        unsafe { getout(if lua_ok { 0 } else { 1 }) };
+        getout(if lua_ok { 0 } else { 1 });
     }
 
     time_msg_at(c"before starting main loop");

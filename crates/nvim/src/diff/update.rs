@@ -346,10 +346,9 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
         if dio.dio_internal != 0 {
             dio.dio_diff.dout_ga.clear();
         } else {
-            // SAFETY: the editor exists, for all three names.
-            dio.dio_orig.din_fname = unsafe { vim_tempname() };
-            dio.dio_new.din_fname = unsafe { vim_tempname() };
-            dio.dio_diff.dout_fname = unsafe { vim_tempname() };
+            dio.dio_orig.din_fname = vim_tempname();
+            dio.dio_new.din_fname = vim_tempname();
+            dio.dio_diff.dout_fname = vim_tempname();
             if dio.dio_orig.din_fname.is_null()
                 || dio.dio_new.din_fname.is_null()
                 || dio.dio_diff.dout_fname.is_null()

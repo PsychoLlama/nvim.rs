@@ -557,7 +557,7 @@ pub unsafe fn buf_write(
                             end = 0;
                         }
                     } else if unsafe { *p_ccv.get() } != 0 {
-                        wfname = unsafe { vim_tempname() };
+                        wfname = vim_tempname();
                         if wfname.is_null() {
                             // Can't write without a temp file!
                             err =

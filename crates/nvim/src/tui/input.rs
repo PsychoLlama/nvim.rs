@@ -316,8 +316,7 @@ unsafe fn tinput_read_cb(
 /// # Safety
 /// Called by the event loop, which passes arguments this takes none of.
 unsafe extern "C" fn tinput_done_event(_argv: *mut *mut c_void) {
-    // SAFETY: exiting takes the process down; there is nothing to unwind.
-    unsafe { os_exit(1) };
+    os_exit(1);
 }
 
 /// An incomplete sequence has waited long enough: take it as it stands.

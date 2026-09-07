@@ -282,9 +282,7 @@ fn static_option(text: &'static CStr) -> OptVal {
 /// # Safety
 /// `buffer` must be a live buffer.
 unsafe fn wipe_ft_buf(mut buffer: Buf) {
-    // SAFETY: `buffer` is the caller's live buffer; the `bufref` re-checks it
-    // after each step that can delete it.
-    unsafe { block_autocmds() };
+    block_autocmds();
     let bufref = BufRef::of(buffer);
     close_windows(buffer, false);
     if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows == 0 {
@@ -293,7 +291,7 @@ unsafe fn wipe_ft_buf(mut buffer: Buf) {
     if bufref.valid() {
         buffer.b_flags.clear(BufFlags::DUMMY);
     }
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// The value of option `name`, at whatever scope `opts` names.

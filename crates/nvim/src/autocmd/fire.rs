@@ -109,6 +109,13 @@ fn keeps_changed_flag(event: AutoEvent) -> bool {
 }
 
 /// Fire `event`, in every group.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `fname` must point at a NUL-terminated string,
+/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
+/// unaliased for the call.
 pub unsafe fn apply_autocmds(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
@@ -134,6 +141,13 @@ pub unsafe fn apply_autocmds(
 
 /// [`apply_autocmds`], passing an `ExArg` on so `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `fname` must point at a NUL-terminated string,
+/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
+/// unaliased for the call. `args` must point at the command's `ExArg`.
 pub unsafe fn apply_autocmds_exarg(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
@@ -162,6 +176,14 @@ pub unsafe fn apply_autocmds_exarg(
 /// [`apply_autocmds`] threaded through a caller's `OK`/`FAIL`: it does
 /// nothing once that says to abort, and turns it to `FAIL` if a handler
 /// aborted.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `fname` must point at a NUL-terminated string,
+/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
+/// unaliased for the call. `retval` must point at a writable `int` the caller
+/// owns.
 pub unsafe fn apply_autocmds_retval(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
@@ -199,6 +221,14 @@ pub unsafe fn apply_autocmds_retval(
 /// leaves it, and the two things that happen either way -- wiping a
 /// buffer's own autocommands, and remembering that `FileType` ran -- are
 /// after it.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `fname` must point at a NUL-terminated string,
+/// unaliased for the call. `fname_io` must point at a NUL-terminated string,
+/// unaliased for the call. `args` must point at the command's `ExArg`. `data`
+/// must point at a live `Object`, unaliased for the call.
 pub unsafe fn apply_autocmds_group(
     event: AutoEvent,
     mut fname: *mut ::core::ffi::c_char,
@@ -537,8 +567,7 @@ pub unsafe fn apply_autocmds_group(
     // Wiping a buffer takes its buffer-local autocommands with it,
     // whether or not anything fired.
     if let (AutoEvent::BufWipeout, Some(buffer)) = (event, buffer) {
-        // SAFETY: live, by this function's own contract.
-        unsafe { aubuflocal_remove(buffer) };
+        aubuflocal_remove(buffer);
     }
     if ::core::ffi::c_int::from(retval) == OK && event == AutoEvent::FileType {
         Buf::current().b_au_did_filetype = true;
@@ -549,7 +578,7 @@ pub unsafe fn apply_autocmds_group(
 
 /// Turn autocommands off editor-wide, nestably.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn block_autocmds() {
+pub extern "C" fn block_autocmds() {
     // Remember that we may need to fire `TermResponse` later.
     if !is_autocmd_blocked() {
         termresponse_changed.set(false);
@@ -560,7 +589,7 @@ pub unsafe extern "C" fn block_autocmds() {
 /// Undo one [`block_autocmds`], firing the `TermResponse` that arrived
 /// while they were off.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn unblock_autocmds() {
+pub extern "C" fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
     if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
         let sequence = unsafe { cstr_to_string(get_vim_var_str(Vv::Termresponse)) };

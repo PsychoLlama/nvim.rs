@@ -238,6 +238,11 @@ fn buf_for_handle(handle: Handle) -> Option<Buf> {
 }
 
 /// vterm's "here are bytes for the child" callback.
+///
+/// # Safety
+///
+/// `s` must point at `len` readable bytes. `user_data` must be the payload
+/// this callback was registered with, live for the call.
 unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_data: *mut c_void) {
     // SAFETY: vterm hands back the terminal registered alongside this
     // callback, and `s` points at `len` readable bytes.
@@ -251,6 +256,11 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// The buffer is emptied: its lines are about to become a mirror of the
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
+///
+/// # Safety
+///
+/// `opts` must be an initialized `TerminalOptions` whose pointer fields point
+/// at live data for the call.
 pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *mut Terminal {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
@@ -331,6 +341,11 @@ pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
+///
+/// # Safety
+///
+/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) {
     // SAFETY: the caller hands over the buffer's own terminal slot.
     let mut term = unsafe { Term::new(*termpp) };
@@ -431,6 +446,11 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
 /// wait for. Runs `TermClose` unless autocommands are blocked; the buffer
 /// stays, showing whatever the child left on screen, until something wipes
 /// it.
+///
+/// # Safety
+///
+/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: the caller hands over a slot holding a live terminal.
     let mut term = unsafe { Term::new(*termpp) };
@@ -445,13 +465,9 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
         if !exiting.get() {
             // Show the child's last output before announcing its death.
             //
-            // SAFETY: a live terminal, with autocommands blocked around the
-            // refresh because mirroring into the buffer would otherwise run
-            // Vimscript from here.
-            unsafe { block_autocmds() };
+            block_autocmds();
             refresh::refresh_terminal(term);
-            // SAFETY: as above.
-            unsafe { unblock_autocmds() };
+            unblock_autocmds();
         }
         term.closed = true;
     }
@@ -518,6 +534,11 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
 
 /// Redraw the last line of a terminal's buffer, where the "running" /
 /// "suspended" marker is drawn.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the buffer handle `terminal_set_state` put
     // in it.
@@ -535,6 +556,10 @@ unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
 ///
 /// The redraw is deferred: this is reached from a process-status callback,
 /// which is no place to touch the screen.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
 pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
@@ -555,6 +580,10 @@ pub(crate) unsafe fn terminal_set_state(term: *mut Terminal, suspended: bool) {
 ///
 /// The largest of them, not the smallest: a narrower window scrolls
 /// sideways rather than making the child reflow for everyone else.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
 pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
@@ -598,6 +627,11 @@ pub(crate) unsafe fn terminal_check_size(term: *mut Terminal) {
 ///
 /// Reached repeatedly — from the close callback, from the buffer being
 /// wiped — and does nothing until `refcount` reaches zero.
+///
+/// # Safety
+///
+/// `termpp` must point at a writable `*mut Terminal` slot the caller owns for
+/// the call.
 pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
     // SAFETY: the caller hands over a slot holding a live terminal.
     let mut term = unsafe { Term::new(*termpp) };
@@ -650,6 +684,11 @@ fn terminal_send(term: Term, data: &[u8]) {
 }
 
 /// Redraw after the child closed a synchronized-output frame.
+///
+/// # Safety
+///
+/// `argv` must point at a writable `*mut c_void` slot the caller owns for the
+/// call.
 unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
     if exiting.get() {
         return;
@@ -663,19 +702,20 @@ unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
     };
     // SAFETY: a buffer that still has its terminal.
     let term = unsafe { Term::new(buf.terminal) };
-    // SAFETY: autocommands are blocked around the refresh because
-    // mirroring into the buffer would otherwise run Vimscript from the
-    // middle of the event loop; paired with the unblock below.
-    unsafe { block_autocmds() };
+    block_autocmds();
     refresh::refresh_terminal(term);
-    // SAFETY: as above.
-    unsafe { unblock_autocmds() };
+    unblock_autocmds();
 }
 
 /// Feed `len` bytes of the child's output to the emulator.
 ///
 /// `force_crlf` is for channels that are not a pty: a bare newline from
 /// those means "next line, column zero", which to a terminal is CR LF.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call. `data`
+/// must point at `len` readable bytes.
 pub(crate) unsafe fn terminal_receive(term: *mut Terminal, data: *const c_char, len: size_t) {
     // SAFETY: the caller hands over a live terminal.
     let mut term = unsafe { Term::new(term) };
@@ -751,6 +791,11 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// buffer; `term_attrs` is its scratch array, `TERM_ATTRS_MAX` wide. Lines
 /// that are scrollback rather than screen resolve through the scrollback,
 /// and lines below the screen are left alone.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
+/// `term_attrs` must point at a writable `int` the caller owns.
 pub(crate) unsafe fn terminal_get_line_attributes(
     term: *mut Terminal,
     _window: Win,
@@ -845,22 +890,35 @@ pub(crate) unsafe fn terminal_get_line_attributes(
     }
 }
 
+/// # Safety
+///
+/// `term` must point at a live `Terminal`.
 pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> BufferHandle {
     // SAFETY: the caller hands over a live terminal.
     unsafe { (*term).buf_handle as BufferHandle }
 }
 
+/// # Safety
+///
+/// `term` must point at a live `Terminal`.
 pub(crate) unsafe fn terminal_running(term: *const Terminal) -> bool {
     // SAFETY: the caller hands over a live terminal.
     unsafe { !(*term).closed }
 }
 
+/// # Safety
+///
+/// `term` must point at a live `Terminal`.
 pub(crate) unsafe fn terminal_suspended(term: *const Terminal) -> bool {
     // SAFETY: the caller hands over a live terminal.
     unsafe { (*term).suspended }
 }
 
 /// Tell a child that asked for theme updates that `'background'` changed.
+///
+/// # Safety
+///
+/// `term` must point at a live `Terminal`, unaliased for the call.
 pub(crate) unsafe fn terminal_notify_theme(term: *mut Terminal, dark: bool) {
     // SAFETY: the caller hands over a live terminal.
     if !unsafe { Term::new(term) }.theme_updates {
@@ -916,6 +974,10 @@ unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
 /// The result BORROWS the variable's own bytes, or is null. It must not be
 /// freed, and it stays valid only until something assigns to or unsets the
 /// variable.
+///
+/// # Safety
+///
+/// `key` must point at a NUL-terminated string.
 unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
     // SAFETY: `buffer` is a live buffer and `key` is NUL-terminated.
     let mut obj = unsafe { dict_lookup(buffer.b_vars, key) };

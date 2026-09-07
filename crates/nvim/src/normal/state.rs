@@ -436,7 +436,7 @@ fn normal_check_stuff_buffer() {
     if stuff_empty() {
         did_check_timestamps.set(false);
         if need_check_timestamps.get() {
-            unsafe { check_timestamps(0) };
+            check_timestamps(0);
         }
         if need_wait_return.get() {
             unsafe { wait_return(0) };
@@ -598,7 +598,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         skip_redraw.set(false);
         unsafe { setcursor() };
     } else if do_redraw.get() || stuff_empty() {
-        unsafe { terminal_check_refresh() };
+        terminal_check_refresh();
         update_topline(Win::current());
         validate_cursor(Win::current());
         normal_check_cursor_moved();

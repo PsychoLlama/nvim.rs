@@ -723,8 +723,7 @@ fn emsg(s: *const c_char) -> bool {
 
 /// `getout()` as checked code.
 fn getout(exitval: c_int) -> ! {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::startup::getout(exitval) }
+    crate::startup::getout(exitval)
 }
 
 /// `gettext()` as checked code.

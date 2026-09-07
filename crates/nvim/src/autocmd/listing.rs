@@ -16,6 +16,10 @@ use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 
 /// `:autocmd` with no event: list every event's autocommands.
+///
+/// # Safety
+///
+/// `pat` must point at a NUL-terminated string.
 pub(crate) unsafe fn au_show_for_all_events(
     group: ::core::ffi::c_int,
     pat: *const ::core::ffi::c_char,
@@ -31,6 +35,11 @@ pub(crate) unsafe fn au_show_for_all_events(
 ///
 /// `got_int` is checked between every write: a listing is interruptible,
 /// and each check is at the point where upstream put it.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `pat` must point at a NUL-terminated string.
 pub(crate) unsafe fn au_show_for_event(
     group: ::core::ffi::c_int,
     event: AutoEvent,
@@ -218,6 +227,12 @@ pub(crate) unsafe fn au_show_for_event(
 
 /// Whether any autocommand for `event` would match the file `sfname`
 /// opened in `buffer`.
+///
+/// # Safety
+///
+/// `event` must be an initialized `AutoEvent` whose pointer fields point at
+/// live data for the call. `sfname` must point at a NUL-terminated string,
+/// unaliased for the call.
 pub unsafe fn has_autocmd(
     event: AutoEvent,
     sfname: *mut ::core::ffi::c_char,
@@ -278,6 +293,11 @@ pub unsafe fn has_autocmd(
 ///
 /// Answers a pointer at the next command to expand instead, or null when
 /// it has set `expand` itself.
+///
+/// # Safety
+///
+/// `expand` must point at a live `Expand` context, unaliased for the call.
+/// `arg` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn set_context_in_autocmd(
     expand: *mut Expand,
     mut arg: *mut ::core::ffi::c_char,
@@ -353,6 +373,10 @@ pub unsafe fn set_context_in_autocmd(
 
 /// `exists('#…')`, in all four shapes: `#Group`, `#Event`, `#Event#pat`
 /// and `#Group#Event#pat`.
+///
+/// # Safety
+///
+/// `arg` must point at a NUL-terminated string.
 pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     // A copy, so the `#` separators can be overwritten with NULs.
     //

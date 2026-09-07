@@ -411,7 +411,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // block events.
         let errors_silent = Suppress::emsg_silent();
         let silenced = Suppress::messages();
-        unsafe { block_autocmds() };
+        block_autocmds();
 
         // SAFETY: `cpinfo` lives in this frame for the whole preview.
         cmdpreview_prepare(unsafe { Cp::new(&raw mut cpinfo) });
@@ -477,7 +477,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // SAFETY: as the `cmdpreview_prepare` above.
         cmdpreview_restore_state(unsafe { Cp::new(&raw mut cpinfo) });
 
-        unsafe { unblock_autocmds() };
+        unblock_autocmds();
         drop(silenced);
         drop(errors_silent);
         redrawcmdline();
