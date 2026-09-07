@@ -50,117 +50,82 @@ nvim-mainthread = { path = "../mainthread" }
 # binary but the impls it wrote.
 thiserror = { version = "2", default-features = false, features = ["std"] }
 
-# Edition 2024 warns when an `unsafe fn` body uses unsafe operations without
-# an explicit `unsafe {}` block. The transpiled tree has thousands of such
-# fns; blanket-wrapping their bodies would double the textual `unsafe` count
-# the ratchet tracks while making nothing safer. So the lint is allowed here,
-# and modules deny it as they are rewritten — rewrites eliminate unsafe
-# instead of annotating it. Every file in the library now does, and lib.rs
-# denies it crate-wide on top; this allow survives only for the sibling
-# bin/test/bench crate roots, which this table also governs.
+# Edition 2024 warns when an `unsafe fn` body uses unsafe operations without an
+# explicit `unsafe {}` block. Allowed here only for the sibling bin/test/bench
+# crate roots; every file in the library denies it, and lib.rs denies it
+# crate-wide on top.
 [lints.rust]
 unsafe_op_in_unsafe_fn = "allow"
 
-# The posture flip (roadmap phase 28 item 5). `unsafe_code` is allow-by-default,
-# so for the whole transpile nothing said where unsafe was allowed to live —
-# the tree's answer was the *absence* of `#![forbid(unsafe_code)]`, which is
-# not a claim a file makes, it is one it fails to make. Denying it here inverts
-# that: a file that needs `unsafe` — a block, an `unsafe fn`, an `unsafe trait`
-# or `impl`, an `unsafe extern` block, an `#[unsafe(no_mangle)]` export — says
-# so with an inner `#![allow(unsafe_code)]` and a one-line reason, and
-# scripts/ratchet.py holds `files_allowing_unsafe_code` shrink-only. A
-# perimeter module (docs/perimeter.md) names its row; anything else is debt,
-# and the count is what the migration has left to do. `forbid` still wins over
-# this deny and cannot be lifted, so a finished module keeps taking it.
+# `unsafe_code` is allow-by-default, so silence was the tree's only answer for
+# where unsafe may live — and silence is not a claim a file makes, it is one it
+# fails to make. Denying it inverts that: a file that needs unsafe says so with
+# an inner `#![allow(unsafe_code)]` and a one-line reason, and scripts/ratchet.py
+# holds `files_allowing_unsafe_code` shrink-only. A perimeter module names its
+# row in docs/perimeter.md; anything else is debt. `forbid` still wins over this
+# deny and cannot be lifted, so a finished module keeps taking it.
 unsafe_code = "deny"
 
 # The crate root is a flat namespace of ~130 `pub mod`s, so for most of the
-# migration "pub" said nothing: an item was `pub` because c2rust made every
-# translation unit's symbols visible, not because anything outside reached it.
-# Both of these were counted down to zero as ratcheted totals (they are
-# allow-by-default, so the count had to be asked for) and are denied here
-# instead, the same way the `warnings` metric retired into RUSTFLAGS once it
-# hit zero. What the deny buys is a real invariant: inside this crate,
-# **`pub` now means externally reachable**, which is what makes a visibility
-# ledger over the `pub` surface mean anything. The fix for a new finding is to
-# narrow the item, not to widen its module.
+# migration `pub` said nothing. What the deny buys is a real invariant: inside
+# this crate, **`pub` now means externally reachable**, which is what makes a
+# visibility ledger over the `pub` surface mean anything. The fix for a new
+# finding is to narrow the item, not to widen its module.
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 
-# c2rust wrote every name the C's way, so `non_snake_case` was allowed at the
-# crate root for the whole transpile. Phase 27 renamed what the port owns and
-# marked what it does not: an API method's own name (`nvim__id`, and every
-# wrapper apigen derives from it) carries an item-level allow, and five files
-# whose *value* names are someone else's -- LuaJIT's `L`, apigen's
-# `is_set__<name>_` keyset mask -- carry a file-level one with a reason. The
-# ratchet's `files_allowing_non_snake_case` may only fall from there. Denying
-# it here rather than on the lib target means the bin, test and bench roots
-# are held to it too.
+# c2rust wrote every name the C's way. What the port owns has been renamed; what
+# it does not carries an allow with a reason — an API method's own name
+# (`nvim__id`, and every wrapper apigen derives from it) on the item, and five
+# files whose *value* names are someone else's (LuaJIT's `L`, apigen's
+# `is_set__<name>_` keyset mask) on the file. `files_allowing_non_snake_case`
+# may only fall. Denied here rather than on the lib target so the bin, test and
+# bench roots are held to it too, as with the four below.
 non_snake_case = "deny"
 
 # c2rust wrote `mut` on every binding it emitted, whether or not the value was
-# ever reassigned — 956 findings in 169 files at the point the allow came off.
-# `cargo fix` cleared all of them mechanically (the fix is textual and cannot
-# change behaviour: a binding that is never reassigned reads the same either
-# way). Denied here rather than in lib.rs so it also governs the bin/test/bench
-# roots, which were already clean.
+# ever reassigned. `cargo fix` cleared all of them mechanically: a binding that
+# is never reassigned reads the same either way.
 unused_mut = "deny"
 
-# The same transpiler habit one step further: 121 findings in 67 files where a
-# binding was initialised and then overwritten before anything read it. All but
-# five were dead stores or `let mut x = 0; … x = f();` shapes and are gone. The
-# five that stay carry a local `#[allow]`: the lint is not alias-aware — rustc's
-# liveness stops at a local's last *direct* use, so a write reached only through
-# a raw pointer taken earlier (an `iconv` length, a Lua array behind an
-# `Array.items`) reads as dead when it is the whole point of the statement.
+# The same habit one step further, a binding initialised and then overwritten
+# before anything read it. Five sites keep a local `#[allow]` because the lint
+# is not alias-aware — rustc's liveness stops at a local's last *direct* use, so
+# a write reached only through a raw pointer taken earlier (an `iconv` length, a
+# Lua array behind an `Array.items`) reads as dead when it is the whole point of
+# the statement.
 unused_assignments = "deny"
 
-# Every type c2rust emitted wore the C's name, so the crate root allowed this
-# for the whole transpile — 452 findings when the allow came off. Phase 27
-# renamed the tree's own types (the 212 `_T` typedefs, the `_S` tags and the
-# lowercase struct tags under them); what is left is 171 names that belong to
-# somebody else — libuv's `uv_loop_t`, libc's `size_t`, LuaJIT's
-# `lua_CFunction`, libmpack's tokens — plus c2rust's names for anonymous
-# struct members. Those 26 files carry a per-file `#![allow]` with a one-line
-# reason, and scripts/ratchet.py holds the count of them shrink-only under
-# `files_allowing_non_camel_case_types`. Denied here rather than in lib.rs so
-# it also governs the bin/test/bench roots, which were already clean.
+# Every type c2rust emitted wore the C's name. The tree's own are renamed; the
+# 171 left belong to somebody else — libuv's `uv_loop_t`, libc's `size_t`,
+# LuaJIT's `lua_CFunction`, libmpack's tokens — plus c2rust's names for
+# anonymous struct members. Those 26 files carry a per-file `#![allow]` with a
+# one-line reason, held shrink-only as `files_allowing_non_camel_case_types`.
 non_camel_case_types = "deny"
 
-# The value half of the same story, and the largest of the four: 4 386
-# findings when the allow came off, which is every global the editor has.
-# Almost none of them can be renamed. A `p_<abbrev>` is the option table's
-# `var` field, a `kOpt<Name>` is an index the option metadata spells, a
-# `KEYSET_OPTIDX_<method>__<key>` is a mask bit apigen derives, `_ISalnum`
-# and `TSQueryErrorNone` are glibc's and tree-sitter's, and the rest are the
-# names upstream's C uses for the editor's own state. So this lift renamed
-# only what the port itself had named (`redo_block`/`redo_at`,
-# `last_bufname`/`last_bufref`) and marked the rest: 298 files carry a
-# per-file `#![allow]` with a one-line reason, eight generated files get
-# theirs from apigen (a hand-written one would not survive `just apigen`),
-# and `lua/xdiff.rs` answers for six function-local constants on the item.
-# scripts/ratchet.py holds `files_allowing_non_upper_case_globals`
-# shrink-only, and it falls a file at a time as a module is rewritten to
-# Rust's spelling. Denied here rather than in lib.rs so it also governs the
-# bin/test/bench roots, which were already clean.
+# The value half of the same story, and the largest: almost none of these can be
+# renamed. A `p_<abbrev>` is the option table's `var` field, a `kOpt<Name>` is an
+# index the option metadata spells, a `KEYSET_OPTIDX_<method>__<key>` is a mask
+# bit apigen derives, `_ISalnum` and `TSQueryErrorNone` are glibc's and
+# tree-sitter's, and the rest are the names upstream's C uses for the editor's
+# own state. So 298 files carry a per-file `#![allow]` with a one-line reason,
+# eight generated files get theirs from apigen (a hand-written one would not
+# survive `just apigen`), and `lua/xdiff.rs` answers for six function-local
+# constants on the item. `files_allowing_non_upper_case_globals` falls a file at
+# a time as a module is rewritten to Rust's spelling.
 non_upper_case_globals = "deny"
 
-# `just lint` runs clippy with correctness at its deny default; suspicious/
-# complexity/perf/style warn and burn down through the ratchet
+# `just lint` runs clippy with correctness at its deny default; suspicious,
+# complexity, perf and style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,
-# cargo) stay at their allow default.
-#
-# `style` was allowed tree-wide until phase 19 turned it on: 3 256 findings,
-# of which 855 were real and are now zero. One member stays off, for a reason
-# that does not retire with a rewrite:
+# cargo) stay at their allow default. `missing_safety_doc` was allowed here
+# until the last `# Safety` section was written; it is a plain `warn` again,
+# which `-D warnings` makes a deny, so leave it that way. One style member stays
+# off, for a reason that does not retire with a rewrite:
 [lints.clippy]
-# `missing_safety_doc` was allowed here from phase 19 (2 380 findings) until
-# phase 28 wrote the last section. It is a plain `warn` again, which `-D
-# warnings` makes a deny, so a new `unsafe fn` without a `# Safety` section
-# fails the build rather than being counted.
 # `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,
 # `viml/parser/parser.rs` and `types/types.rs` are ports of upstream's
-# `tui/tui.c`, `vterm/vterm.c`, `tui/termkey/termkey.c`,
-# `viml/parser/parser.c` and `types_defs.h`. The repeated name is the mapping
-# back to the C, which is worth more than the nesting costs.
+# `tui/tui.c`, `vterm/vterm.c`, `tui/termkey/termkey.c`, `viml/parser/parser.c`
+# and `types_defs.h`. The repeated name is the mapping back to the C, which is
+# worth more than the nesting costs.
 module_inception = "allow"
