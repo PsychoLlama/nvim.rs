@@ -58,7 +58,7 @@ use crate::guard::{Allow, Suppress};
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};
-use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
+use crate::message::{emsg, emsg_ptr, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;
 use crate::option::vars::p_verbose;
@@ -489,7 +489,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     let (template, value) = unsafe { (gettext_ptr(mesg.as_ptr()), c_str(value)) };
     let _: bool = report_msg(0, || tr_plural!(template, value));
     // Don't overwrite this either.
-    unsafe { msg_puts(c"\n".as_ptr()) };
+    msg_str(c"\n");
     if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
         cmdline_row.set(msg_row.get());
     }
@@ -733,7 +733,7 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
     let (template, text) = unsafe { (gettext_ptr(mesg), c_str(s)) };
     let _: bool = report_msg(0, || tr_plural!(template, text));
     // Don't overwrite this either.
-    unsafe { msg_puts(c"\n".as_ptr()) };
+    msg_str(c"\n");
     cmdline_row.set(msg_row.get());
     drop(no_prompt);
     drop(loud);

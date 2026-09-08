@@ -54,8 +54,8 @@ use crate::message::state::{
     msg_scrolled, msg_scrolled_ign, msg_silent, need_fileinfo, need_wait_return, no_wait_return,
 };
 use crate::message::{
-    do_dialog, emsg, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_end, msg_may_trunc,
-    msg_outtrans, msg_progress, msg_putchar, msg_puts, msg_puts_hl, msg_start, msg_trunc,
+    do_dialog, emsg, msg, msg_check_for_delay, msg_clr_eos, msg_delay, msg_display, msg_end,
+    msg_may_trunc, msg_progress, msg_putchar, msg_start, msg_str, msg_str_hl, msg_trunc,
     set_keep_msg,
 };
 use crate::r#move::update_topline;
@@ -201,7 +201,7 @@ pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
 /// must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     // The report. Upstream builds it in `IObuff` and then calls
-    // `msg_progress`/`msg_outtrans`, which write it again.
+    // `msg_progress`/`msg_display`, which write it again.
     let mut report = [0 as c_char; IOSIZE as usize];
     let prev_msg_col = msg_col.get();
     if msg_silent.get() != 0 {
@@ -239,7 +239,7 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
         unsafe { msg_progress(io, id.cast_mut(), status.cast_mut(), 0, false, true) };
     } else {
         // May truncate the message to avoid a hit-return prompt.
-        unsafe { msg_outtrans(msg_may_trunc(false, io), 0, false) };
+        msg_display(unsafe { cstr::at(msg_may_trunc(false, io)) }, 0, false);
     }
     unsafe { msg_clr_eos() };
     msg_scrolled_ign.set(false);

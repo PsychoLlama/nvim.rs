@@ -71,7 +71,7 @@ use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
 use crate::message::state::{msg_col, msg_didout};
-use crate::message::{msg_clr_eos, msg_puts, msg_start};
+use crate::message::{msg_clr_eos, msg_start, msg_str};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
@@ -490,7 +490,7 @@ pub(super) unsafe fn tree_add_word(
         spin.si_compress_cnt = compress_added.get();
         if spin.si_verbose != 0 {
             msg_start();
-            unsafe { msg_puts(gettext(MSG_COMPRESSING).as_ptr()) };
+            msg_str(gettext(MSG_COMPRESSING));
             unsafe { msg_clr_eos() };
             msg_didout.set(false);
             msg_col.set(0);

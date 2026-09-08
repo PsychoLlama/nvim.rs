@@ -21,6 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -52,7 +53,11 @@ unsafe fn dis_msg(mut p: *const c_char, skip_esc: bool) {
         // never less than one byte.
         let l = unsafe { utfc_ptr2len(p) }.max(1);
         // SAFETY: `l` bytes from `p` are that character.
-        unsafe { msg_outtrans_len(p, l, 0, false) };
+        msg_display_bytes(
+            unsafe { cstr::slice_at(p, l.cast_unsigned() as usize) },
+            0,
+            false,
+        );
         // SAFETY: stepping over a whole character stays within the string.
         p = unsafe { p.offset(l as isize) };
     }
@@ -80,11 +85,11 @@ unsafe fn dis_special(
         return;
     }
     // SAFETY: `text` is NUL-terminated, tested non-null above.
-    if got_int.get() || unsafe { message_filtered(text) } {
+    if got_int.get() || message_filtered(unsafe { cstr::at(text) }) {
         return;
     }
     // SAFETY: `label` is the caller's NUL-terminated prefix.
-    unsafe { msg_puts(label) };
+    msg_str(unsafe { cstr::at(label) });
     // SAFETY: `text` is NUL-terminated.
     unsafe { dis_msg(text, skip_esc) };
 }
@@ -108,7 +113,7 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     let mut j: size_t = 0;
     while !do_show && j < size() {
         // SAFETY: `j` is below `y_size`, so the line is NUL-terminated.
-        do_show = !unsafe { message_filtered(line(j)) };
+        do_show = !message_filtered(unsafe { cstr::at(line(j)) });
         j = j.wrapping_add(1);
     }
     if !do_show && size() != 0 {
@@ -116,12 +121,12 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     }
 
     msg_putchar('\n' as c_int);
-    unsafe { msg_puts(c"  ".as_ptr()) };
+    msg_str(c" ");
     msg_putchar(type_0);
-    unsafe { msg_puts(c"  ".as_ptr()) };
+    msg_str(c" ");
     msg_putchar('"' as c_int);
     msg_putchar(name);
-    unsafe { msg_puts(c"   ".as_ptr()) };
+    msg_str(c" ");
 
     // The content, cut off at the window width. A line break inside the
     // register shows as `^J`.
@@ -129,8 +134,7 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     let mut j: size_t = 0;
     while j < size() && n > 1 {
         if j != 0 {
-            // SAFETY: a NUL-terminated literal.
-            unsafe { msg_puts_hl(c"^J".as_ptr(), hl_id, false) };
+            msg_str_hl(c"^J", hl_id, false);
             n -= 2;
         }
         let mut p = line(j);
@@ -148,7 +152,11 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
             // SAFETY: as above; the answer covers one whole character.
             let clen = unsafe { utfc_ptr2len(p) };
             // SAFETY: `clen` bytes from `p` are that character.
-            unsafe { msg_outtrans_len(p, clen, 0, false) };
+            msg_display_bytes(
+                unsafe { cstr::slice_at(p, clen.cast_unsigned() as usize) },
+                0,
+                false,
+            );
             // SAFETY: stepping over a whole character stays within the line.
             p = unsafe { p.offset(clen as isize) };
         }
@@ -156,8 +164,7 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     }
     // SAFETY: `yb` is still the caller's live register.
     if n > 1 && unsafe { (*yb).y_type } == kMTLineWise {
-        // SAFETY: a NUL-terminated literal.
-        unsafe { msg_puts_hl(c"^J".as_ptr(), hl_id, false) };
+        msg_str_hl(c"^J", hl_id, false);
     }
 }
 
@@ -182,7 +189,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
     // SAFETY (both): main thread, printing NUL-terminated literals.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     msg_ext_skip_flush.set(true);
-    unsafe { msg_puts_title(gettext(c"\nType Name Content").as_ptr()) };
+    msg_title(gettext(c"\nType Name Content"));
 
     // -1 is the unnamed register, which aliases whichever slot was
     // written last.
@@ -263,9 +270,9 @@ pub unsafe fn ex_display(args: *mut ExArg) {
         let named = unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_ok();
         // SAFETY: on success `fname` is the alternate file's name, which is
         // NUL-terminated.
-        if named && !unsafe { message_filtered(fname) } {
+        if named && !message_filtered(unsafe { cstr::at(fname) }) {
             // SAFETY: a NUL-terminated literal, then the name.
-            unsafe { msg_puts(c"\n  c  \"#   ".as_ptr()) };
+            msg_str(c"\n c \"# ");
             unsafe { dis_msg(fname, false) };
         }
     }

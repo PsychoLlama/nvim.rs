@@ -29,8 +29,7 @@ use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::state::info_message;
 use crate::message::{
-    message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
-    msg_puts_title,
+    message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
 use crate::mouse::setmouse;
 use crate::option::vars::p_mouse;
@@ -93,7 +92,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     } else {
         c"\n--- Options ---"
     };
-    unsafe { msg_puts_title(gettext(title).as_ptr()) };
+    msg_title(gettext(title));
 
     for run in 1..=2 {
         if got_int.get() {
@@ -102,7 +101,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         items.clear();
         for opt_idx in all_options() {
             let opt = get_option(opt_idx);
-            if unsafe { message_filtered(opt.fullname) } {
+            if message_filtered(unsafe { cstr::at(opt.fullname) }) {
                 continue;
             }
             // An explicit `:setlocal`/`:setglobal` listing skips the
@@ -219,14 +218,14 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     } else {
         c"  "
     };
-    unsafe { msg_puts(prefix.as_ptr()) };
-    unsafe { msg_puts(opt.fullname) };
+    msg_str(prefix);
+    msg_str(unsafe { cstr::at(opt.fullname) });
 
     if !boolean {
         msg_putchar('=' as c_int);
         unsafe { option_value2string(opt_idx, opt_flags, &mut rendered) };
         if rendered[0] != NUL as c_char {
-            unsafe { msg_outtrans(rendered.as_mut_ptr(), 0, false) };
+            msg_display(cstr::in_chars(&rendered), 0, false);
         }
     }
 

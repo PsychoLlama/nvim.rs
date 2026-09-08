@@ -81,8 +81,8 @@ use crate::message::{
     e_winfixbuf_cannot_go_to_buffer,
 };
 use crate::message::{
-    emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_keep,
-    msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl, msg_start, msg_strtrunc,
+    emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_display, msg_ext_set_kind,
+    msg_keep, msg_prt_line, msg_putchar, msg_start, msg_str, msg_str_hl, msg_strtrunc,
     trunc_string,
 };
 use crate::r#move::update_topline;

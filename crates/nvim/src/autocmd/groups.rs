@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 
@@ -264,23 +265,23 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
         // SAFETY: a static literal names the message kind.
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         // The listing is the table's own order, which is creation order.
-        // `msg_puts` writes to the message buffers and reads nothing here,
+        // `msg_str` writes to the message buffers and reads nothing here,
         // so the borrow across it is a leaf.
         map_augroup_name_to_id.with(|groups| {
             for (name, id) in groups.entries() {
                 // A group `:augroup!` renamed lists as `--Deleted--`; its
                 // key is still the old name.
                 if *id > 0 {
-                    // SAFETY: `name` is the table's own key, NUL-terminated
-                    // by `interned_key` and alive for as long as the borrow.
-                    unsafe { msg_puts(name.as_ptr().cast::<::core::ffi::c_char>()) };
+                    // The table's own key, NUL-terminated by
+                    // `interned_key`.
+                    msg_str(cstr::in_bytes(name));
                 } else {
                     // SAFETY: `augroup_name` answers a string the id table
                     // or the catalogue owns.
-                    unsafe { msg_puts(augroup_name(*id)) };
+                    msg_str(unsafe { cstr::at(augroup_name(*id)) });
                 }
                 // SAFETY: a static literal.
-                unsafe { msg_puts(c"  ".as_ptr()) };
+                msg_str(c" ");
             }
         });
         // SAFETY: the message buffers again.

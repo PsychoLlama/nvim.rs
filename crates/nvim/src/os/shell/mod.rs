@@ -45,7 +45,7 @@ use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
 use crate::message::state::emsg_silent;
 use crate::message::{e_notmp, e_shellempty};
 use crate::message::{
-    emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
+    emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_str, verbose_enter, verbose_leave,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_sh, p_shcf, p_sxe, p_sxq, p_verbose};
@@ -264,7 +264,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
             if !ui_has(kUIMessages) {
                 msg_putchar(NL);
             }
-            msg_puts(gettext(c"shell returned ").as_ptr());
+            msg_str(gettext(c"shell returned "));
             msg_outnum(exitcode);
         }
         exitcode

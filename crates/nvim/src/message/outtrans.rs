@@ -1,6 +1,6 @@
 //! Turning bytes into something displayable.
 //!
-//! The `msg_outtrans*` half renders unprintable bytes as `<xx>` and multibyte
+//! The `msg_display*` half renders unprintable bytes as `<xx>` and multibyte
 //! sequences as themselves; the `str2special*` half renders key codes as
 //! `<C-X>` notation, which is what mapping listings and `keytrans()` show.
 
@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::charset::CharDisplay;
+use crate::charset::{CharDisplay, skip};
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
@@ -16,7 +16,7 @@ use crate::mbyte::{cells_at, char_at, cluster_len};
 use crate::memory::handoff::owned_cstr;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
-use core::{ptr, slice};
+use core::ptr;
 
 /// The `<xx>` form of an unprintable byte gets its own highlight so it can be
 /// told apart from the same characters typed literally.
@@ -30,7 +30,7 @@ pub fn msg_putchar(c: c_int) {
 /// Show one character with a highlight id.
 ///
 /// A special key is put back into the three-byte `K_SPECIAL` form it arrived
-/// as, because that is what [`msg_outtrans_len`] and `str2special` downstream
+/// as, because that is what [`msg_display_bytes`] and `str2special` downstream
 /// know how to read.
 pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
     let mut buf = [0 as c_char; MB_MAXCHAR + 1];
@@ -46,7 +46,7 @@ pub fn msg_putchar_hl(c: c_int, hl_id: c_int) {
         let len = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
         buf[len as usize] = 0;
     }
-    unsafe { msg_puts_hl(buf.as_ptr(), hl_id, false) }
+    msg_str_hl(cstr::in_chars(&buf), hl_id, false)
 }
 
 /// Show a number in decimal.
@@ -68,76 +68,51 @@ pub fn msg_outnum(n: c_int) {
         at -= 1;
         buf[at] = b'-';
     }
-    unsafe { msg_puts(buf[at..].as_ptr().cast()) }
+    msg_str(cstr::in_bytes(&buf[at..]))
 }
 
 /// Show a file name with `$HOME` folded back to `~`.
-///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string.
-pub unsafe fn msg_home_replace(fname: *const c_char) {
-    unsafe { msg_home_replace_hl(fname, 0) }
+pub fn msg_home_replace(fname: &CStr) {
+    msg_home_replace_hl(fname, 0)
 }
 
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string.
-pub(crate) unsafe fn msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
-    let name = unsafe { home_replace_save(None, fname) };
-    unsafe { msg_outtrans(name, hl_id, false) };
+/// [`msg_home_replace`] with a highlight id.
+pub(crate) fn msg_home_replace_hl(fname: &CStr, hl_id: c_int) {
+    // SAFETY: a `CStr` is a valid C string, and the answer is an allocation
+    // of this function's own.
+    let name = unsafe { home_replace_save(None, fname.as_ptr()) };
+    // SAFETY: as above.
+    msg_display(unsafe { cstr::at(name) }, hl_id, false);
+    // SAFETY: as above.
     unsafe { xfree(name.cast()) };
 }
 
 /// Show a NUL-terminated string, translating what cannot be displayed.
 ///
 /// Answers how many screen cells it took.
-///
-/// # Safety
-///
-/// `str` must point at a NUL-terminated string.
-pub unsafe fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int {
-    unsafe { msg_outtrans_len(str, cstr::bytes_at(str).len() as c_int, hl_id, hist) }
+pub fn msg_display(text: &CStr, hl_id: c_int, hist: bool) -> c_int {
+    msg_display_bytes(text.to_bytes(), hl_id, hist)
 }
 
-/// Show the one character at `p`, answering a pointer to the next one.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *const c_char {
-    let len = unsafe { utfc_ptr2len(p) };
+/// Show the character at the start of `bytes`, answering how many bytes of
+/// it were shown.
+pub fn msg_display_char(bytes: &[u8], hl_id: c_int, hist: bool) -> usize {
+    let len = cluster_len(bytes);
     if len > 1 {
-        unsafe { msg_outtrans_len(p, len, hl_id, hist) };
-        return unsafe { p.add(len as usize) };
+        msg_display_bytes(&bytes[..len], hl_id, hist);
+        return len;
     }
-    let display = unsafe { transchar_byte_buf(None, *p as u8 as c_int) };
-    unsafe { msg_puts_hl(display.as_ptr(), hl_id, hist) };
-    unsafe { p.add(1) }
-}
-
-/// Show `len` bytes of `msgstr`, NULs included, translating what cannot be
-/// displayed.
-///
-/// Answers how many screen cells it took.
-///
-/// # Safety
-/// `msgstr` must point at `len` readable bytes.
-pub unsafe fn msg_outtrans_len(
-    msgstr: *const c_char,
-    len: c_int,
-    hl_id: c_int,
-    hist: bool,
-) -> c_int {
-    debug_assert!(len >= 0, "a negative length has no pointer form left");
-    // SAFETY: the caller's contract.
-    let bytes = unsafe { slice::from_raw_parts(msgstr.cast::<u8>(), len.cast_unsigned() as usize) };
-    msg_display_bytes(bytes, hl_id, hist)
+    // Past the end of the slice this reads a NUL, which renders as `^@` --
+    // what the pointer form showed at the terminator, and what every caller
+    // that walks up to a bound already expects.
+    let rendered = transchar_byte_buf(None, c_int::from(cstr::byte_at(bytes, 0)));
+    msg_str_hl(cstr::in_chars(&rendered), hl_id, hist);
+    1
 }
 
 /// Show `bytes`, NULs included, translating what cannot be displayed.
 ///
-/// Printable runs are handed to [`msg_puts_len`] whole; only the characters
+/// Printable runs are handed to [`msg_bytes`] whole; only the characters
 /// that need a `^X` or `<xx>` rendering are emitted one at a time, in the
 /// `SPECIAL_HL` highlight.
 ///
@@ -148,8 +123,7 @@ pub fn msg_display_bytes(bytes: &[u8], hl_id: c_int, hist: bool) -> c_int {
     got_int.set(false);
 
     if hist {
-        // SAFETY: `bytes` is readable for its own length.
-        unsafe { msg_hist_add(bytes.as_ptr().cast(), bytes.len() as c_int, hl_id) };
+        msg_hist_add(bytes, hl_id);
     }
 
     // When drawing over the command line there is no need to clear it
@@ -164,15 +138,8 @@ pub fn msg_display_bytes(bytes: &[u8], hl_id: c_int, hist: bool) -> c_int {
     }
 
     let cells = walk_display(bytes, &mut |shown| match shown {
-        Shown::Plain(run) => {
-            // SAFETY: `run` is a subslice of `bytes`, so it is readable for
-            // its own length.
-            unsafe { msg_puts_len(run.as_ptr().cast(), run.len() as ptrdiff_t, hl_id, hist) };
-        }
-        Shown::Instead(text) => {
-            // SAFETY: a `CharDisplay` is NUL-terminated.
-            unsafe { msg_puts_hl(text.as_ptr(), special_hl(hl_id), false) };
-        }
+        Shown::Plain(run) => msg_bytes(run, hl_id, hist),
+        Shown::Instead(text) => msg_str_hl(cstr::in_chars(&text), special_hl(hl_id), false),
     });
 
     got_int.set(got_int.get() | save_got_int);
@@ -255,27 +222,24 @@ fn special_hl(hl_id: c_int) -> c_int {
 }
 
 /// `:smile`.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-pub unsafe fn msg_make(arg: *const c_char) {
+pub fn msg_make(arg: &CStr) {
     // The command name backwards, and the answer with every byte shifted up
     // by three -- both so that neither reads as itself in the binary.
     const REVERSED: &[u8] = b"eeffoc";
     const SHIFTED: &[u8] = b"Plon#dqg#vxjduB";
 
-    let mut arg = unsafe { skipwhite(arg) };
-    let mut at = REVERSED.len() as isize - 1;
-    while unsafe { *arg } != 0 && at >= 0 {
-        let byte = unsafe { *arg as u8 };
-        arg = unsafe { arg.add(1) };
-        if byte != REVERSED[at as usize] {
-            break;
+    let bytes = arg.to_bytes();
+    let mut at = skip::white(bytes);
+    let mut left = REVERSED.len();
+    while at < bytes.len() && left > 0 {
+        let byte = bytes[at];
+        at += 1;
+        left -= 1;
+        if byte != REVERSED[left] {
+            return;
         }
-        at -= 1;
     }
-    if at < 0 {
+    if left == 0 {
         msg_putchar(NL);
         for &byte in SHIFTED {
             msg_putchar((byte - 3) as c_int);
@@ -290,14 +254,8 @@ pub unsafe fn msg_make(arg: *const c_char) {
 /// Stops before exceeding `maxlen` screen columns; 0 means unlimited.
 ///
 /// @param from  true for the left-hand side of a mapping
-///
-/// # Safety
-///
-/// `strstart` must point at a NUL-terminated string.
-pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: c_int) -> c_int {
-    if strstart.is_null() {
-        return 0;
-    }
+pub fn msg_display_keys(text: &CStr, from: bool, maxlen: c_int) -> c_int {
+    let strstart = text.as_ptr();
     let mut piece: SpecialKeyName = [0; MAX_KEY_NAME_LEN as usize + 1];
     let mut display: CharDisplay;
     let mut str = strstart;
@@ -326,7 +284,9 @@ pub unsafe fn msg_outtrans_special(strstart: *const c_char, from: bool, maxlen: 
         } else {
             0
         };
-        unsafe { msg_puts_hl(text, hl_id, false) };
+        // SAFETY: `str2special` and `transchar` both answer a
+        // NUL-terminated rendering.
+        msg_str_hl(unsafe { cstr::at(text) }, hl_id, false);
         cells += len;
     }
     cells
@@ -478,20 +438,16 @@ fn to_special(second: u8, third: u8) -> c_int {
 /// rest of the line.
 ///
 /// Does not handle multi-byte characters.
-///
-/// # Safety
-///
-/// `longstr` must point at a NUL-terminated string.
-pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
-    let len = unsafe { cstr::bytes_at(longstr).len() as c_int };
-    let mut tail = len;
-    let room = Columns.get() - msg_col.get();
-    if !ui_has(kUIMessages) && len > room && room >= 20 {
+pub fn msg_display_elided(text: &CStr, hl_id: c_int) {
+    let bytes = text.to_bytes();
+    let mut tail = bytes.len();
+    let room = usize::try_from(Columns.get() - msg_col.get()).unwrap_or(0);
+    if !ui_has(kUIMessages) && bytes.len() > room && room >= 20 {
         tail = (room - 3) / 2;
-        unsafe { msg_outtrans_len(longstr, tail, hl_id, false) };
-        unsafe { msg_puts_hl(c"...".as_ptr(), SPECIAL_HL, false) };
+        msg_display_bytes(&bytes[..tail], hl_id, false);
+        msg_str_hl(c"...", SPECIAL_HL, false);
     }
-    unsafe { msg_outtrans_len(longstr.offset((len - tail) as isize), tail, hl_id, false) };
+    msg_display_bytes(&bytes[bytes.len() - tail..], hl_id, false);
 }
 
 #[cfg(test)]

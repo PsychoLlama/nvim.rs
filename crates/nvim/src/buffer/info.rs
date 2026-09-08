@@ -10,7 +10,7 @@
 //! Upstream assembles the listing in `NameBuff` and `IObuff`, and
 //! the rule here is the one the rest of the tree already follows: fill them
 //! inside a `with_mut` borrow, then hand them on -- to `message_filtered`, to
-//! `msg_outtrans` -- through the cell rather than through a reference that is
+//! `msg_display` -- through the cell rather than through a reference that is
 //! still outstanding, because those callees re-enter the message machinery.
 //!
 //! Original: `src/nvim/buffer.c`, Vim/Neovim, Vim license.
@@ -33,7 +33,7 @@ use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
-    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start, msg_trunc,
+    message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_start, msg_trunc,
     set_keep_msg,
 };
 use crate::r#move::validate_virtcol;
@@ -150,7 +150,7 @@ pub unsafe fn buflist_list(args: *mut ExArg) {
         // `message_filtered` re-enters the regexp engine, and `show` the
         // message machinery, so the line is this frame's own.
         fill_name(buf, &mut name);
-        if unsafe { message_filtered(name.as_ptr()) } {
+        if message_filtered(cstr::in_chars(&name)) {
             continue;
         }
         show(buf, has_flag(arg, b't'), &name);
@@ -312,7 +312,7 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
         format_lnum(&mut io, len, lnum);
     }
     // SAFETY: a NUL-terminated line, just assembled.
-    unsafe { msg_outtrans(io.as_mut_ptr(), 0, false) };
+    msg_display(unsafe { cstr::at(io.as_mut_ptr()) }, 0, false);
     line_breakcheck();
 }
 

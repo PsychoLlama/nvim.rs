@@ -72,8 +72,8 @@ use crate::mbyte::{
 };
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree};
 use crate::message::{
-    emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_outtrans,
-    msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl, msg_start, str2special_arena,
+    emsg, iemsg, message_filtered, msg, msg_clr_eos, msg_display, msg_display_keys,
+    msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, str2special_arena,
     str2special_save,
 };
 use crate::os::cshim::{gettext, putc, snprintf, strchr};

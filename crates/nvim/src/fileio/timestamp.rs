@@ -172,7 +172,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
     need_check_timestamps.set(false);
     if need_wait_return.get() && didit == 2 {
         // Make sure the message isn't overwritten.
-        unsafe { msg_puts(c"\n".as_ptr()) };
+        msg_str(c"\n");
         unsafe { ui_flush() };
     }
     didit
@@ -330,9 +330,9 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
 
     if !autocmd_busy.get() {
         msg_start();
-        unsafe { msg_puts_hl(tbuf.as_ptr(), HLF_E, true) };
+        msg_str_hl(cstr::in_chars(&tbuf), HLF_E, true);
         if !mesg2.is_empty() {
-            unsafe { msg_puts_hl(mesg2.as_ptr(), HLF_W, true) };
+            msg_str_hl(mesg2, HLF_W, true);
         }
         unsafe { msg_clr_eos() };
         msg_end();

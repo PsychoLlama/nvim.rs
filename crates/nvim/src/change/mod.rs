@@ -66,7 +66,7 @@ use crate::message::state::{
     emsg_silent, in_assert_fails, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
 };
 use crate::message::{
-    msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_puts_hl, msg_source, msg_start,
+    msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_source, msg_start, msg_str_hl,
     wait_return,
 };
 use crate::r#move::{

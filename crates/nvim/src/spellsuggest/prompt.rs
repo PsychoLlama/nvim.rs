@@ -46,7 +46,7 @@ use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
 use crate::message::e_no_spell;
 use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll};
 use crate::message::{
-    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
+    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str,
 };
 use crate::mouse::state::mouse_row;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
@@ -259,7 +259,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     }
     let fmt = fmt.as_ptr();
     unsafe { vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr) };
-    unsafe { msg_puts(out) };
+    msg_str(unsafe { cstr::at(out) });
     unsafe { msg_clr_eos() };
     msg_putchar('\n' as c_int);
 
@@ -323,16 +323,16 @@ unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c
     if cmdmsg_rl.get() {
         unsafe { rl_mirror_ascii(out, ptr::null_mut()) };
     }
-    unsafe { msg_puts(out) };
+    msg_str(unsafe { cstr::at(out) });
 
     unsafe { vim_snprintf(out, IOSIZE as usize, c" \"%s\"".as_ptr(), wcopyp) };
-    unsafe { msg_puts(out) };
+    msg_str(unsafe { cstr::at(out) });
 
     // The word may replace more than the bad word does.
     if badlen < stp.st_orglen {
         let fmt = gettext(c" < \"%.*s\"");
         unsafe { vim_snprintf(out, IOSIZE as usize, fmt.as_ptr(), stp.st_orglen, badptr) };
-        unsafe { msg_puts(out) };
+        msg_str(unsafe { cstr::at(out) });
     }
 
     if p_verbose.get() > 0 {
@@ -369,7 +369,7 @@ unsafe fn show_score(stp: &Suggest) {
         unsafe { rl_mirror_ascii(out.add(1), ptr::null_mut()) };
     }
     msg_advance(30);
-    unsafe { msg_puts(out) };
+    msg_str(unsafe { cstr::at(out) });
 }
 
 /// Put the chosen suggestion into the line, and record it for

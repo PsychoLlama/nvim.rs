@@ -30,7 +30,7 @@ use crate::ex_cmds::check_secure;
 use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::e_invarg;
-use crate::message::{msg_puts, verbose_enter_scroll, verbose_leave_scroll};
+use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::c_str;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::snprintf;
@@ -228,7 +228,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         let shown = unsafe { c_str(cmdstr) };
         smsg!(0, "Executing command: \"{shown}\"");
         // SAFETY: the literal is NUL-terminated.
-        unsafe { msg_puts(c"\n\n".as_ptr()) };
+        msg_str(c"\n\n");
         // SAFETY: this closes the bracket opened above.
         unsafe { verbose_leave_scroll() };
         // SAFETY: `cmdstr` is the owned rendering.

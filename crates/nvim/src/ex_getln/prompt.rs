@@ -234,7 +234,10 @@ pub unsafe fn get_user_input(
             p = unsafe { lastnl.offset(1) };
             msg_start();
             unsafe { msg_clr_eos() };
-            unsafe { msg_puts_len(prompt, p.offset_from(prompt), get_echo_hl_id(), false) };
+            // SAFETY: `p` was found inside the prompt, so the span is
+            // readable.
+            let head = unsafe { cstr::slice_at(prompt, p.offset_from(prompt).cast_unsigned()) };
+            msg_bytes(head, get_echo_hl_id(), false);
             msg_didout.set(false);
             msg_starthere();
         }

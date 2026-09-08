@@ -335,7 +335,7 @@ pub(crate) fn command_line_enter(
                     msg_putchar('\n' as ::core::ffi::c_int);
                 }
                 msg_scroll.set(1);
-                unsafe { msg_puts_hl(err.message_or_empty().as_ptr(), HLF_E, true) };
+                msg_str_hl(err.message_or_empty(), HLF_E, true);
                 err.clear();
                 redrawcmd();
             }

@@ -1,6 +1,6 @@
 //! The message scrollback, which `g<` and the pager page through.
 //!
-//! Every line [`crate::message::msg_puts_display`] emits is also
+//! Every line [`crate::message::msg_bytes_to_grid`] emits is also
 //! copied into a linked list of [`MsgChunk`] chunks ([`store_sb_text`]), so
 //! that the pager can scroll backwards past what the screen still holds.
 
@@ -37,56 +37,52 @@ unsafe fn sb_text(mp: *mut MsgChunk) -> *mut c_char {
     unsafe { (&raw mut (*mp).sb_text).cast() }
 }
 
-/// Remember `*sb_str ..= s` for scrolling back over later.
+/// Remember `run` for scrolling back over later.
 ///
 /// `finish` marks the chunk as ending its screen line. `sb_col` is the column
-/// the run started at, so the pager can put it back where it was.
-///
-/// # Safety
-/// `*sb_str` and `s` must point into the same readable buffer, with `s` at or
-/// after `*sb_str`.
-pub(crate) unsafe fn store_sb_text(
-    sb_str: *mut *const c_char,
-    s: *const c_char,
-    hl_id: c_int,
-    sb_col: *mut c_int,
-    finish: c_int,
-) {
+/// the run started at, so the pager can put it back where it was; it is reset
+/// here, because the next run starts at the left margin of whatever comes
+/// after this one.
+pub(crate) fn store_sb_text(run: &[u8], hl_id: c_int, sb_col: &mut c_int, finish: bool) {
+    let mut run = run;
     if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE {
         clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL);
         msg_sb_eol(); // prevent messages from overlapping
-        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE
-            && s > unsafe { *sb_str }
-            && unsafe { **sb_str } == b'\n'.cast_signed()
-        {
-            unsafe { *sb_str = (*sb_str).add(1) };
+        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE && run.first() == Some(&b'\n') {
+            run = &run[1..];
         }
         do_clear_sb_text.set(SB_CLEAR_NONE);
     }
 
-    if s > unsafe { *sb_str } {
-        let len = unsafe { s.offset_from(*sb_str) }.cast_unsigned();
+    if !run.is_empty() {
+        let len = run.len();
+        // SAFETY: the chunk's text lives in the same allocation, right after
+        // the header, which is why the size is asked for that way.
         let mp: *mut MsgChunk =
             unsafe { xmalloc(mem::offset_of!(MsgChunk, sb_text) + len + 1) }.cast();
-        let eol = c_char::try_from(finish).expect("a finish flag is 0 or 1");
-        unsafe { (*mp).sb_eol = eol };
-        unsafe { (*mp).sb_msg_col = *sb_col };
-        unsafe { (*mp).sb_hl_id = hl_id };
-        unsafe { ptr::copy_nonoverlapping(*sb_str, sb_text(mp), len) };
-        unsafe { *sb_text(mp).add(len) = 0 };
+        // SAFETY: the allocation is live and holds a header and `len + 1`
+        // bytes of text.
+        unsafe {
+            (*mp).sb_eol = c_char::from(finish);
+            (*mp).sb_msg_col = *sb_col;
+            (*mp).sb_hl_id = hl_id;
+            ptr::copy_nonoverlapping(run.as_ptr().cast::<c_char>(), sb_text(mp), len);
+            *sb_text(mp).add(len) = 0;
 
-        unsafe { (*mp).sb_prev = last_msgchunk.get() };
-        unsafe { (*mp).sb_next = ptr::null_mut() };
+            (*mp).sb_prev = last_msgchunk.get();
+            (*mp).sb_next = ptr::null_mut();
+        }
         if !last_msgchunk.get().is_null() {
+            // SAFETY: the list's tail is a live chunk.
             unsafe { (*last_msgchunk.get()).sb_next = mp };
         }
         last_msgchunk.set(mp);
-    } else if finish != 0 && !last_msgchunk.get().is_null() {
+    } else if finish && !last_msgchunk.get().is_null() {
+        // SAFETY: as above.
         unsafe { (*last_msgchunk.get()).sb_eol = 1 };
     }
 
-    unsafe { *sb_str = s };
-    unsafe { *sb_col = 0 };
+    *sb_col = 0;
 }
 
 /// Finished showing messages: clear the scroll-back text on the next one.
@@ -210,7 +206,11 @@ pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut MsgChunk) -> *mut MsgChu
     loop {
         msg_row.set(row);
         msg_col.set(unsafe { (*mp).sb_msg_col });
-        unsafe { msg_puts_display(sb_text(mp), -1, (*mp).sb_hl_id, true) };
+        msg_bytes_to_grid(
+            unsafe { cstr::bytes_at(sb_text(mp)) },
+            unsafe { (*mp).sb_hl_id },
+            true,
+        );
         if unsafe { (*mp).sb_eol } != 0 || unsafe { (*mp).sb_next }.is_null() {
             break;
         }

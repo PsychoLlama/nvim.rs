@@ -41,7 +41,7 @@ use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
-use crate::message::msg_puts;
+use crate::message::msg_str;
 use crate::message::state::{msg_row, msg_scroll, need_fileinfo};
 use crate::message::{e_cannot_switch_to_a_closing_buffer, e_trailing_arg};
 use crate::message_fmt::{c_str, report_msg};
@@ -143,8 +143,7 @@ fn recover_swapfile() {
     ml_recover(false);
 }
 fn put_message(msg: &CStr) {
-    // SAFETY: a NUL-terminated literal.
-    unsafe { msg_puts(msg.as_ptr()) };
+    msg_str(msg);
 }
 fn err_nobufnr(n: int64_t) {
     semsg!("E86: Buffer {n} does not exist");

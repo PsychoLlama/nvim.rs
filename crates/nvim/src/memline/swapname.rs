@@ -469,7 +469,7 @@ unsafe fn resolve_swapfile_clash(
             got_int.set(true);
         }
         SEA_CHOICE_NONE => {
-            unsafe { msg_puts(c"\n".as_ptr()) };
+            msg_str(c"\n");
             if msg_silent.get() == 0 {
                 need_wait_return.set(true); // call wait_return() later
             }
@@ -862,8 +862,8 @@ pub unsafe fn recover_names(
                 }
             } else {
                 say(c"   In directory ");
-                unsafe { msg_home_replace(dir_name) };
-                unsafe { msg_puts(c":\n".as_ptr()) };
+                msg_home_replace(unsafe { cstr::at(dir_name) });
+                msg_str(c":\n");
             }
 
             if num_files == 0 {
@@ -872,8 +872,8 @@ pub unsafe fn recover_names(
                 for &name in found.iter() {
                     file_count += 1;
                     msg_outnum(file_count);
-                    unsafe { msg_puts(c".    ".as_ptr()) };
-                    unsafe { msg_puts(path_tail(name)) };
+                    msg_str(c". ");
+                    msg_str(unsafe { cstr::at(path_tail(name)) });
                     msg_putchar('\n' as c_int);
 
                     // Upstream's `kv_resize(msg, IOSIZE)`: a size hint.

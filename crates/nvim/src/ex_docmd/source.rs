@@ -48,7 +48,7 @@ use crate::state::mode::{State, exmode_active};
 use crate::ui::state::Rows;
 
 use crate::message::{
-    emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,
+    emsg_multiline, msg_clr_eos, msg_ptr, msg_scroll_flush, msg_str, verbose_enter_scroll,
     verbose_leave_scroll,
 };
 use crate::message_fmt::c_str;
@@ -230,7 +230,7 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
         smsg!(0, "line {}: {cmd}", lnum);
     }
     if msg_silent.get() == 0 {
-        unsafe { msg_puts(c"\n".as_ptr()) };
+        msg_str(c"\n");
     }
     unsafe { verbose_leave_scroll() };
 }

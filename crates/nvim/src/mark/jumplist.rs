@@ -22,12 +22,13 @@
 )]
 
 use crate::buffer::find_buf;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{global_busy, listcmd_busy};
 use crate::getchar::state::got_int;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
-    message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,
+    message_filtered, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
 use crate::option::vars::jop_flags;
 use crate::os::cshim::{gettext, snprintf};
@@ -356,7 +357,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
     // SAFETY: as above.
     unsafe { cleanup_jumplist(win, true) };
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    unsafe { msg_puts_title(gettext(c"\n jump line  col file/text").as_ptr()) };
+    msg_title(gettext(c"\n jump line col file/text"));
     let mut i: c_int = 0;
     while i < win.w_jumplistlen && !got_int.get() {
         let jump = win.jump(i);
@@ -371,7 +372,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
             }
             // SAFETY: `name` is a NUL-terminated allocation or null, owned
             // here; every path below frees it exactly once.
-            if name.is_null() || unsafe { message_filtered(name) } {
+            if name.is_null() || message_filtered(unsafe { cstr::at(name) }) {
                 unsafe { xfree(name.cast()) };
             } else {
                 msg_putchar('\n' as c_int);
@@ -395,13 +396,13 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
                         jump.fmark().col(),
                     )
                 };
-                unsafe { msg_outtrans(row.as_ptr(), 0, false) };
+                msg_display(cstr::in_chars(&row), 0, false);
                 let attr = if jump.fmark().fnum() == here {
                     HLF_D
                 } else {
                     0
                 };
-                unsafe { msg_outtrans(name, attr, false) };
+                msg_display(unsafe { cstr::at(name) }, attr, false);
                 unsafe { xfree(name.cast()) };
                 os_breakcheck();
             }
@@ -411,8 +412,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
     if win.w_jumplistidx == win.w_jumplistlen {
         // The bare `>` row: the index is one past the end, so there is no
         // entry to draw it on.
-        // SAFETY: a `'static` C string.
-        unsafe { msg_puts(c"\n>".as_ptr()) };
+        msg_str(c"\n>");
     }
 }
 
@@ -435,7 +435,7 @@ pub unsafe fn ex_changes(_args: *mut ExArg) {
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: as above.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    unsafe { msg_puts_title(gettext(c"\nchange line  col text").as_ptr()) };
+    msg_title(gettext(c"\nchange line col text"));
     let mut i: c_int = 0;
     while i < buf.b_changelistlen && !got_int.get() {
         let change = buf.change(i);
@@ -461,17 +461,16 @@ pub unsafe fn ex_changes(_args: *mut ExArg) {
                     change.col(),
                 )
             };
-            unsafe { msg_outtrans(row.as_ptr(), 0, false) };
+            msg_display(cstr::in_chars(&row), 0, false);
             let name = unsafe { mark_line(change.pos(), 17) };
-            unsafe { msg_outtrans(name, HLF_D, false) };
+            msg_display(unsafe { cstr::at(name) }, HLF_D, false);
             unsafe { xfree(name.cast()) };
             os_breakcheck();
         }
         i += 1;
     }
     if win.w_changelistidx == buf.b_changelistlen {
-        // SAFETY: a `'static` C string.
-        unsafe { msg_puts(c"\n>".as_ptr()) };
+        msg_str(c"\n>");
     }
 }
 

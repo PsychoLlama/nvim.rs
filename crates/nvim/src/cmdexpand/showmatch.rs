@@ -38,7 +38,7 @@ pub(crate) unsafe fn showmatches_oneline(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    // `msg_outtrans` runs the message machinery, which is why the shortened
+    // `msg_display` runs the message machinery, which is why the shortened
     // name it is handed is this frame's and not the shared `NameBuff`.
     let mut shown = [0 as c_char; MAXPATHL as usize];
     // C's SHOW_MATCH().
@@ -55,15 +55,19 @@ pub(crate) unsafe fn showmatches_oneline(
     let mut j = linenr;
     while j < num_matches {
         if expand.xp_context == ExpandContext::TagsListFiles {
-            unsafe { msg_outtrans(*matches.offset(j as isize), HLF_D, false) };
+            msg_display(
+                unsafe { cstr::at(*matches.offset(j as isize)) },
+                HLF_D,
+                false,
+            );
             let name = unsafe { *matches.offset(j as isize) };
             // SAFETY: the tag file name follows the tag's own NUL, which is
             // how `ExpandContext::TagsListFiles` packs the two.
             let p = unsafe { name.add(cstr::bytes_at(name).len() + 1) };
             msg_advance(maxlen + 1);
-            unsafe { msg_puts(p) };
+            msg_str(unsafe { cstr::at(p) });
             msg_advance(maxlen + 3);
-            unsafe { msg_outtrans_long(p.add(2), HLF_D) };
+            msg_display_elided(unsafe { cstr::at(p.add(2)) }, HLF_D);
             break;
         }
         for _ in 0..(maxlen - lastlen).max(0) {
@@ -114,7 +118,7 @@ pub(crate) unsafe fn showmatches_oneline(
             isdir = false;
             p = show_match(j);
         }
-        lastlen = unsafe { msg_outtrans(p, if isdir { HLF_D } else { 0 }, false) };
+        lastlen = msg_display(unsafe { cstr::at(p) }, if isdir { HLF_D } else { 0 }, false);
         j += lines;
     }
     if msg_col.get() > 0 {
@@ -259,10 +263,10 @@ pub unsafe fn showmatches(
         };
 
         if expand.xp_context == ExpandContext::TagsListFiles {
-            unsafe { msg_puts_hl(gettext(c"tagname").as_ptr(), HLF_T, false) };
+            msg_str_hl(gettext(c"tagname"), HLF_T, false);
             unsafe { msg_clr_eos() };
             msg_advance(maxlen - 3);
-            unsafe { msg_puts_hl(gettext(c" kind file\n").as_ptr(), HLF_T, false) };
+            msg_str_hl(gettext(c" kind file\n"), HLF_T, false);
         }
 
         // List the files line by line.

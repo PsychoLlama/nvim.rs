@@ -44,7 +44,7 @@ use crate::keycodes::Ctrl_G;
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::state::{msg_col, msg_scroll};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
-use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
+use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start};
 use crate::message_fmt::c_str;
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
@@ -445,7 +445,7 @@ pub(crate) unsafe fn ex_tabs(_args: *mut ExArg) {
 
     let lastused_win = last_used_tab().and_then(TabPage::current_window);
     // The listing's scratch line. Upstream assembles it in `IObuff`, which
-    // `msg_outtrans` reads again as it re-enters the message machinery.
+    // `msg_display` reads again as it re-enters the message machinery.
     let mut line = [0 as c_char; IOSIZE as usize];
 
     for (tabcount, tp) in tabs().enumerate() {
@@ -520,10 +520,10 @@ fn msg_char(c: c_int) {
 
 /// Print what [`fill_name`] and friends left in `line`.
 fn msg_line(line: &[c_char; IOSIZE as usize], hl_id: c_int) {
-    // SAFETY: NUL-terminated by whatever filled it, and `msg_outtrans` only
+    // SAFETY: NUL-terminated by whatever filled it, and `msg_display` only
     // reads it — the re-entry into the message machinery no longer reaches
     // the same buffer, because this one belongs to `ex_tabs`.
-    unsafe { msg_outtrans(line.as_ptr().cast_mut(), hl_id, false) };
+    msg_display(unsafe { cstr::at(line.as_ptr().cast_mut()) }, hl_id, false);
 }
 
 fn is_changed(buffer: Buf) -> bool {

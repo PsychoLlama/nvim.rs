@@ -38,9 +38,9 @@ use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
 use crate::message::{
-    emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_ext_set_kind, msg_outtrans,
-    msg_outtrans_len, msg_outtrans_one, msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
-    msg_start, verbose_enter, verbose_leave, wait_return,
+    emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_display, msg_display_bytes,
+    msg_display_char, msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, msg_title,
+    verbose_enter, verbose_leave, wait_return,
 };
 use crate::r#move::{set_topline, validate_cursor};
 use crate::option::vars::{

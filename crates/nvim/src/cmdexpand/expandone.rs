@@ -149,7 +149,7 @@ pub(crate) unsafe fn nextwild(
         && !wild_navigate
         && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
     {
-        unsafe { msg_puts(c"...".as_ptr()) }; // show that we are busy
+        msg_str(c"..."); // show that we are busy
         unsafe { ui_flush() };
     }
 

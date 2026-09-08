@@ -70,7 +70,8 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
     }
     unsafe { msg_source(HLF_W) };
     unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
-    unsafe { msg_puts_hl(gettext_ptr(W_READONLY).as_ptr(), HLF_W, true) };
+    // SAFETY: the translation of a static message.
+    msg_str_hl(unsafe { gettext_ptr(W_READONLY) }, HLF_W, true);
     unsafe { set_vim_var_string(Vv::Warningmsg, gettext_ptr(W_READONLY).as_ptr(), -1) };
     unsafe { msg_clr_eos() };
     msg_end();

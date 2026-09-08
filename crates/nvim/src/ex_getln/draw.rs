@@ -108,7 +108,7 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
             i += unsafe { utfc_ptr2len(cc.at(start + i)) };
         }
     } else if !cc.last_colors.chunks().is_empty() {
-        // Indexed rather than iterated: `msg_outtrans_len` re-enters the
+        // Indexed rather than iterated: `msg_display_bytes` re-enters the
         // editor, which can replace the whole command line, so no borrow
         // of it may outlive one access.
         let mut i: size_t = 0;
@@ -116,19 +116,21 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
             let chunk: CmdlineColorChunk = cc.last_colors.chunks()[i];
             if chunk.end > start {
                 let chunk_start = chunk.start.max(start);
-                unsafe {
-                    msg_outtrans_len(
-                        cc.at(chunk_start),
-                        chunk.end - chunk_start,
-                        chunk.hl_id,
-                        false,
-                    )
+                // SAFETY: the chunk names a span of the command line.
+                let text = unsafe {
+                    cstr::slice_at(cc.at(chunk_start), (chunk.end - chunk_start) as usize)
                 };
+                msg_display_bytes(text, chunk.hl_id, false);
             }
             i += 1;
         }
     } else {
-        unsafe { msg_outtrans_len(cc.at(start), len, 0, false) };
+        // SAFETY: `len` bytes follow `start` in the command line.
+        msg_display_bytes(
+            unsafe { cstr::slice_at(cc.at(start), len as usize) },
+            0,
+            false,
+        );
     }
 }
 
@@ -329,7 +331,7 @@ pub(crate) fn redrawcmdprompt() {
         msg_putchar(cc.cmdfirstc);
     }
     if !cc.cmdprompt.is_null() {
-        unsafe { msg_puts_hl(cc.cmdprompt, cc.hl_id, false) };
+        msg_str_hl(unsafe { cstr::at(cc.cmdprompt) }, cc.hl_id, false);
         cc.cmdindent = msg_col.get() + (msg_row.get() - cmdline_row.get()) * Columns.get();
         // The reverse of cmd_startcol().
         if cc.cmdfirstc != NUL {

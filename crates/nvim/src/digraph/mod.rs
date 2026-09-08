@@ -13,6 +13,7 @@
 mod tables;
 
 use crate::charset::char2cells;
+use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
 use crate::eval::typval::{
@@ -32,7 +33,7 @@ use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{xfree, xmemdupz};
 use crate::message::state::msg_col;
-use crate::message::{msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar};
+use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
 use crate::option::vars::{p_cpo, p_dg, p_enc};
 use crate::os::cshim::gettext;
@@ -284,21 +285,24 @@ pub fn putdigraph(mut s: &[u8]) {
     }
 }
 
-/// NUL-terminate `bytes` and print them with `msg_outtrans`.
+/// NUL-terminate `bytes` and print them with `msg_display`.
 fn outtrans(bytes: &[u8], hl_id: c_int) {
     let mut buf = [0u8; 32];
     buf[..bytes.len()].copy_from_slice(bytes);
     // SAFETY: buf is NUL-terminated (bytes is always shorter than buf).
-    unsafe { msg_outtrans(buf.as_ptr() as *const c_char, hl_id, false) };
+    msg_display(
+        unsafe { cstr::at(buf.as_ptr() as *const c_char) },
+        hl_id,
+        false,
+    );
 }
 
 fn digraph_header(name: &'static [u8]) {
     if msg_col.get() > 0 {
         newline();
     }
-    let header = gettext(crate::cstr::in_bytes(name));
-    // SAFETY: a NUL-terminated translation, which outlives the call.
-    unsafe { msg_outtrans(header.as_ptr(), HLF_CM, false) };
+    let header = gettext(cstr::in_bytes(name));
+    msg_display(header, HLF_CM, false);
     newline();
 }
 

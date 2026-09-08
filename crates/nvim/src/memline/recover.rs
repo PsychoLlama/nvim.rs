@@ -128,7 +128,7 @@ pub fn ml_recover(checkext: bool) {
         if hp.is_null() {
             msg_start();
             note(c"Unable to read block 0 from ", hl_id);
-            unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
+            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
             note(
                 c"\nMaybe no changes were made or Nvim did not update the swap file.",
                 hl_id,
@@ -139,7 +139,7 @@ pub fn ml_recover(checkext: bool) {
         let mut b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
         if unsafe { cstr::starts_with((*b0p).b0_version.as_ptr(), b"VIM 3.0") } {
             msg_start();
-            unsafe { msg_outtrans(mf_fname(mfp), 0, true) };
+            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, 0, true);
             note(c" cannot be used with this version of Nvim.\n", 0);
             note(c"Use Vim version 3.0.\n", 0);
             msg_end();
@@ -153,13 +153,14 @@ pub fn ml_recover(checkext: bool) {
         }
         if b0_magic_wrong(unsafe { &*b0p }) {
             msg_start();
-            unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
+            msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
             note(c" cannot be used on this computer.\n", hl_id);
             note(c"The file was created on ", hl_id);
             // Terminate the name field, so that printing the host name
             // cannot run off the end of a corrupted one.
             unsafe { (*b0p).b0_fname[0] = NUL as c_char };
-            unsafe { msg_puts_hl((*b0p).b0_hname.as_ptr(), hl_id, true) };
+            // SAFETY: `b0p` is the live block-zero header.
+            msg_str_hl(cstr::in_chars(unsafe { &(*b0p).b0_hname }), hl_id, true);
             note(c",\nor the file has been damaged.", hl_id);
             msg_end();
             break 'theend;
@@ -173,7 +174,7 @@ pub fn ml_recover(checkext: bool) {
             unsafe { mf_new_page_size(mfp, recorded_page_size) };
             if unsafe { (*mfp).mf_page_size } < previous_page_size {
                 msg_start();
-                unsafe { msg_outtrans(mf_fname(mfp), hl_id, true) };
+                msg_display(unsafe { cstr::at(mf_fname(mfp)) }, hl_id, true);
                 note(
                     c" has been damaged (page size is smaller than minimum value).\n",
                     hl_id,
@@ -708,16 +709,16 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
             c"Recovery completed. You should check if everything is OK.",
             0,
         );
-        unsafe {
-            msg_puts(tr(
+        msg_str(unsafe {
+            cstr::at(tr(
                 c"\n(You might want to write out this file under another name\n",
             ))
-        };
-        unsafe {
-            msg_puts(tr(
+        });
+        msg_str(unsafe {
+            cstr::at(tr(
                 c"and run diff with the original file to check for changes)",
             ))
-        };
+        });
     } else {
         tell(
             c"Recovery completed. Buffer contents equals file contents.",
@@ -732,7 +733,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
         unsafe { msg_outnum((*b0p).pid() as c_int) };
     }
     if !ui_has(kUIMessages) {
-        unsafe { msg_puts(c"\n\n".as_ptr()) };
+        msg_str(c"\n\n");
     }
     cmdline_row.set(msg_row.get());
 }

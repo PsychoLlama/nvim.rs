@@ -61,8 +61,8 @@ use crate::menu::{get_menu_name, get_menu_names, menu_is_separator, set_context_
 use crate::message::state::{cmd_silent, msg_col, msg_didany, msg_row, msg_scrolled};
 use crate::message::{e_invarg, e_toomany};
 use crate::message::{
-    emsg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_grid_view, msg_outtrans,
-    msg_outtrans_long, msg_putchar, msg_puts, msg_puts_hl, msg_scroll_up, msg_start,
+    emsg, msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind,
+    msg_grid_view, msg_putchar, msg_scroll_up, msg_start, msg_str, msg_str_hl,
 };
 use crate::option::vars::{p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, wop_flags};
 use crate::option::{

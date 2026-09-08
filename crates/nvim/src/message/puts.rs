@@ -1,9 +1,9 @@
-//! `msg_puts` and its display half: text onto the message grid.
+//! `msg_str` and its display half: text onto the message grid.
 //!
-//! [`msg_puts_len`] is the funnel every message eventually reaches; it feeds
-//! the redirection sinks and then [`msg_puts_display`], which lays the text
+//! [`msg_bytes`] is the funnel every message eventually reaches; it feeds
+//! the redirection sinks and then [`msg_bytes_to_grid`], which lays the text
 //! out cell by cell, scrolls when it runs off the bottom and raises the pager
-//! when `'more'` says to. [`msg_puts_printf`] is the same job for a process
+//! when `'more'` says to. [`msg_bytes_to_stdio`] is the same job for a process
 //! with no UI at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -13,10 +13,11 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
+use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::types::builders::static_cstring;
 use crate::types::{Callback, NUL, VAR_STRING, VAR_UNKNOWN, VarLock};
-use core::ffi::{c_char, c_int, c_uint};
-use core::{ptr, slice};
+use core::ffi::{c_int, c_uint};
+use core::ptr;
 
 /// The `on_print` callback an RPC client installed.
 ///
@@ -74,7 +75,7 @@ pub fn msg_start() {
     } else if (msg_didout.get() || p_ch.get() == 0) && !ui_has(kUIMessages) {
         // Start the message on the next line.
         if p_ch.get() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
-            unsafe { msg_puts_display(c"\n".as_ptr(), 1, 0, false) };
+            msg_bytes_to_grid(b"\n", 0, false);
         } else {
             msg_putchar(NL);
         }
@@ -93,7 +94,7 @@ pub fn msg_start() {
     }
     // When redirecting, may need to start a new line.
     if !did_return {
-        unsafe { redir_write(c"\n".as_ptr(), 1) };
+        redir_write(b"\n");
     }
 }
 
@@ -104,53 +105,42 @@ pub fn msg_starthere() {
 }
 
 /// Show a string at `msg_row`/`msg_col`, advancing them past it.
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn msg_puts(s: *const c_char) {
-    unsafe { msg_puts_hl(s, 0, false) }
+pub fn msg_str(text: &CStr) {
+    msg_str_hl(text, 0, false)
 }
 
-/// [`msg_puts`] in the title highlight.
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn msg_puts_title(s: *const c_char) {
+/// [`msg_str`] in the title highlight.
+pub fn msg_title(text: &CStr) {
     // An `ext_messages` UI lays messages out itself, so a leading newline
     // is noise there.
-    let s = unsafe { s.add(usize::from(ui_has(kUIMessages) && *s == b'\n' as c_char)) };
-    unsafe { msg_puts_hl(s, HLF_T, false) }
+    let bytes = text.to_bytes();
+    let skip = usize::from(ui_has(kUIMessages) && bytes.first() == Some(&b'\n'));
+    msg_bytes(&bytes[skip..], HLF_T, false)
 }
 
-/// [`msg_puts_len`] over a NUL-terminated string.
-///
-/// # Safety
-///
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool) {
-    unsafe { msg_puts_len(s, -1, hl_id, hist) }
+/// [`msg_bytes`] over a NUL-terminated string.
+pub fn msg_str_hl(text: &CStr, hl_id: c_int, hist: bool) {
+    msg_bytes(text.to_bytes(), hl_id, hist)
 }
 
-/// Show `len` bytes of `str` — or, when `len` is negative, up to its NUL.
+/// Show `bytes`.
 ///
 /// Everything displayed goes through here: this is where redirection is fed,
 /// `:silent` is honoured, the history entry is made, and the choice between
 /// the grid and plain `stderr` is taken.
-///
-/// # Safety
-/// `str` must point at `len` readable bytes, or at a NUL-terminated string
-/// when `len` is negative.
-pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, hist: bool) {
-    debug_assert!(len < 0 || unsafe { memchr(str.cast(), 0, len as size_t) }.is_null());
+pub fn msg_bytes(bytes: &[u8], hl_id: c_int, hist: bool) {
+    debug_assert!(
+        !bytes.contains(&0),
+        "a NUL is shown as `^@` by the translating half, never put through as itself"
+    );
 
     // If redirection is on, also write to the redirection file.
-    unsafe { redir_write(str, len) };
+    redir_write(bytes);
 
     // Print nothing under `:silent`, or for an empty message.
-    if msg_silent.get() != 0 || unsafe { *str } == 0 {
-        if unsafe { *str } == 0 && ui_has(kUIMessages) {
+    if msg_silent.get() != 0 || bytes.is_empty() {
+        if bytes.is_empty() && ui_has(kUIMessages) {
+            // SAFETY: main-thread editor call.
             unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
             ui_call_msg_show(
                 static_cstring(c"empty"),
@@ -167,13 +157,13 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
     }
 
     if hist {
-        unsafe { msg_hist_add(str, len as c_int, hl_id) };
+        msg_hist_add(bytes, hl_id);
     }
 
     // Writing to a screen that has already scrolled needs a hit-enter
     // prompt afterwards. Not when only using CR to move the cursor.
     let overflow = !ui_has(kUIMessages) && msg_scrolled.get() > c_int::from(p_ch.get() == 0);
-    if overflow && !msg_scrolled_ign.get() && unsafe { !cstr::eq_bytes(str, b"\r") } {
+    if overflow && !msg_scrolled_ign.get() && bytes != b"\r" {
         need_wait_return.set(true);
     }
     msg_didany.set(true); // remember that something was output
@@ -183,19 +173,47 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
     // UI attached) gets both.
     if msg_use_printf() != 0 {
         let saved_msg_col = msg_col.get();
-        unsafe { msg_puts_printf(str, len) };
+        msg_bytes_to_stdio(bytes);
         if headless_mode.get() {
             msg_col.set(saved_msg_col);
         }
     }
     if msg_use_printf() == 0 || (headless_mode.get() && default_grid_ref().is_allocated()) {
-        unsafe { msg_puts_display(str, len as c_int, hl_id, false) };
+        msg_bytes_to_grid(bytes, hl_id, false);
     }
 
     need_fileinfo.set(false);
 }
 
-/// The display half of [`msg_puts_len`].
+/// The `ext_messages` half of [`msg_bytes_to_grid`].
+///
+/// Nothing is drawn: the text joins the pending chunk and the UI lays it
+/// out. Only the message column has to be kept, because the code that
+/// decides whether a newline is owed still reads it.
+fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
+    if attr as ScreenAttr != msg_ext_last_attr.get() {
+        // Colour changed: end the chunk and start another.
+        // SAFETY: main-thread editor call.
+        unsafe { msg_ext_emit_chunk() };
+        msg_ext_last_attr.set(attr as ScreenAttr);
+        msg_ext_last_hl_id.set(hl_id);
+    }
+    msg_ext_last_chunk.with_mut(|chunk| chunk.extend_from_slice(bytes));
+
+    // The message column is whatever follows the last newline.
+    let tail = match bytes.iter().rposition(|&byte| byte == b'\n') {
+        Some(at) => {
+            msg_col.set(0);
+            &bytes[at + 1..]
+        }
+        None => bytes,
+    };
+    // SAFETY: options exist by the time a message is shown.
+    let cells = unsafe { string_cells(tail) };
+    msg_col.set(msg_col.get() + c_int::try_from(cells).unwrap_or(c_int::MAX));
+}
+
+/// The display half of [`msg_bytes`].
 ///
 /// Walks the text a character at a time, filling grid lines and scrolling the
 /// message grid when it reaches the bottom of the screen — which is where the
@@ -206,18 +224,10 @@ pub unsafe fn msg_puts_len(str: *const c_char, len: ptrdiff_t, hl_id: c_int, his
 /// `recurse` is set when the scrollback is being redisplayed, and suppresses
 /// both the scrollback capture and the pager — the text is already stored and
 /// the pager is what is asking for it.
-///
-/// # Safety
-/// `str` must point at `maxlen` readable bytes, or at a NUL-terminated string
-/// when `maxlen` is negative.
-pub(crate) unsafe fn msg_puts_display(
-    str: *const c_char,
-    mut maxlen: c_int,
-    hl_id: c_int,
-    recurse: bool,
-) {
-    let mut s = str;
+pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     let attr = if hl_id != 0 {
+        // SAFETY: a highlight id is looked up in the group table, which
+        // exists by the time anything is shown.
         unsafe { syn_id2attr(hl_id) }
     } else {
         0
@@ -225,53 +235,29 @@ pub(crate) unsafe fn msg_puts_display(
     did_wait_return.set(false);
 
     if ui_has(kUIMessages) {
-        if attr as ScreenAttr != msg_ext_last_attr.get() {
-            // Colour changed: end the chunk and start another.
-            unsafe { msg_ext_emit_chunk() };
-            msg_ext_last_attr.set(attr as ScreenAttr);
-            msg_ext_last_hl_id.set(hl_id);
-        }
-        let len = if maxlen < 0 {
-            unsafe { cstr::bytes_at(str) }.len()
-        } else {
-            unsafe { strnlen(str, maxlen as size_t) }
-        };
-        let bytes = unsafe { slice::from_raw_parts(str.cast::<u8>(), len) };
-        msg_ext_last_chunk.with_mut(|chunk| chunk.extend_from_slice(bytes));
-
-        // The message column is whatever follows the last newline.
-        let lastline: *const c_char = unsafe { xmemrchr(str.cast(), b'\n', len) }.cast();
-        maxlen -= if lastline.is_null() {
-            0
-        } else {
-            unsafe { lastline.offset_from(str) as c_int }
-        };
-        let tail = if lastline.is_null() {
-            str
-        } else {
-            unsafe { lastline.add(1) }
-        };
-        let cells = if maxlen < 0 {
-            unsafe { mb_string2cells(tail) }
-        } else {
-            unsafe { mb_string2cells_len(tail, maxlen as size_t) }
-        } as c_int;
-        msg_col.set(if lastline.is_null() { msg_col.get() } else { 0 } + cells);
+        msg_bytes_to_ui(bytes, hl_id, attr);
         return;
     }
 
     let print_attr =
+        // SAFETY: `hl_attr_active` points at the active attribute table.
         unsafe { hl_combine_attr(*hl_attr_active.get().offset(HLF_MSG as isize), attr) };
+    // SAFETY: main-thread editor call.
     unsafe { msg_grid_validate() };
     cmdline_was_last_drawn.set(redrawing_cmdline.get());
 
-    // The scrollback copy runs one chunk behind the cursor: `sb_str` is
-    // where the un-stored text starts, `sb_col` the column it started at.
-    let mut sb_str = str;
+    // The text being shown, which is not always the caller's: the pager can
+    // jump ahead to a dialog's buttons, and those are a string of their own.
+    let mut text = bytes;
+    let mut at = 0;
+    // The scrollback copy runs one chunk behind the cursor: `stored` is how
+    // much of `text` has been captured, `sb_col` the column the run it holds
+    // started at.
+    let mut stored = 0;
     let mut sb_col = msg_col.get();
-    let store = |sb_str: &mut *const c_char, upto, sb_col: &mut c_int, finish| {
+    let store = |run: &[u8], sb_col: &mut c_int, finish: bool| {
         if p_more.get() != 0 && !recurse {
-            unsafe { store_sb_text(sb_str, upto, hl_id, sb_col, finish) };
+            store_sb_text(run, hl_id, sb_col, finish);
         }
     };
 
@@ -281,7 +267,8 @@ pub(crate) unsafe fn msg_puts_display(
     let mut open_row = -1;
     loop {
         if msg_col.get() >= Columns.get() {
-            store(&mut sb_str, s, &mut sb_col, 1);
+            store(&text[stored..at], &mut sb_col, true);
+            stored = at;
             if msg_no_more.get() && lines_left.get() == 0 {
                 break;
             }
@@ -298,10 +285,13 @@ pub(crate) unsafe fn msg_puts_display(
             }
             if !recurse {
                 if open_row >= 0 {
+                    // SAFETY: a line is open, so the batch is live.
                     unsafe { msg_line_flush() };
                     open_row = -1;
                 }
+                // SAFETY: main-thread editor calls.
                 unsafe { msg_scroll_up(true, false) };
+                // SAFETY: as above.
                 unsafe { inc_msg_scrolled() };
                 need_wait_return.set(true); // may need wait_return() in main()
                 redraw_cmdline.set(true);
@@ -318,9 +308,16 @@ pub(crate) unsafe fn msg_puts_display(
                     && !msg_no_more.get()
                     && !exmode_active.get()
                 {
+                    // SAFETY: main-thread editor call.
                     if unsafe { do_more_prompt(NUL) } {
-                        // The pager jumped ahead to the dialog buttons.
-                        s = confirm_buttons.get();
+                        // The pager jumped ahead to the dialog buttons, so
+                        // the rest of the caller's text is not shown and
+                        // nothing of it is left to store.
+                        // SAFETY: the prompt only answers true while a
+                        // dialog is up, and a dialog owns its button string.
+                        text = unsafe { cstr::bytes_at(confirm_buttons.get()) };
+                        at = 0;
+                        stored = 0;
                     }
                     if quit_more.get() {
                         return;
@@ -329,52 +326,61 @@ pub(crate) unsafe fn msg_puts_display(
             }
         }
 
-        let at_end = !(maxlen < 0 || (unsafe { s.offset_from(str) as c_int }) < maxlen)
-            || unsafe { *s } == 0;
-        if at_end {
+        if at >= text.len() {
             break;
         }
 
-        let byte = unsafe { *s as u8 };
-        if msg_row.get() != open_row && (byte >= 0x20 || byte as c_int == TAB) {
+        let byte = text[at];
+        if msg_row.get() != open_row && (byte >= 0x20 || c_int::from(byte) == TAB) {
             if open_row >= 0 {
+                // SAFETY: a line is open, so the batch is live.
                 unsafe { msg_line_flush() };
             }
+            // SAFETY: main-thread editor call.
             unsafe { grid_line_start(msg_grid_view(), msg_row.get()) };
             open_row = msg_row.get();
         }
 
         if byte >= 0x20 {
             // Printable character.
-            let mut cw = unsafe { utf_ptr2cells(s) };
-            // Avoid including composing characters past the end.
-            let l = if maxlen >= 0 {
-                unsafe { utfc_ptr2len_len(s, str.offset(maxlen as isize).offset_from(s) as c_int) }
-            } else {
-                unsafe { utfc_ptr2len(s) }
-            };
+            // SAFETY: options exist by the time a message is shown.
+            let mut cw = unsafe { cells_at(&text[at..]) };
+            // Composing characters past the end of the text are left out.
+            let len = cluster_len(&text[at..]);
             if cw > 1 && msg_col.get() == Columns.get() - 1 {
                 // Doesn't fit: fill the last column with a highlighted '>'
                 // and let the wrap put the character on the next line.
+                // SAFETY: `hl_attr_active` points at the active table.
                 let at = unsafe { *hl_attr_active.get().offset(HLF_AT as isize) };
+                // SAFETY: a line is open and the literal is one byte.
                 unsafe { grid_line_puts(msg_col.get(), c">".as_ptr(), 1, at) };
                 cw = 1;
             } else {
-                unsafe { grid_line_puts(msg_col.get(), s, l, print_attr) };
-                s = unsafe { s.add(l as usize) };
+                // SAFETY: a line is open and `len` bytes of `text` follow
+                // `at`.
+                unsafe {
+                    grid_line_puts(
+                        msg_col.get(),
+                        text[at..].as_ptr().cast(),
+                        len as c_int,
+                        print_attr,
+                    )
+                };
+                at += len;
             }
             msg_didout.set(true); // remember that the line is not empty
             msg_col.set(msg_col.get() + cw);
             continue;
         }
 
-        s = unsafe { s.add(1) };
-        match byte as c_int {
+        at += 1;
+        match c_int::from(byte) {
             NL => {
                 msg_didout.set(false); // remember that the line is empty
                 msg_col.set(0);
                 msg_row.set(msg_row.get() + 1);
-                store(&mut sb_str, s, &mut sb_col, 1);
+                store(&text[stored..at], &mut sb_col, true);
+                stored = at;
             }
             CAR => msg_col.set(0),
             BS => {
@@ -386,6 +392,7 @@ pub(crate) unsafe fn msg_puts_display(
                 // Translate a tab into spaces, up to the next multiple of
                 // eight or the end of the line.
                 loop {
+                    // SAFETY: a line is open and the literal is one byte.
                     unsafe { grid_line_puts(msg_col.get(), c" ".as_ptr(), 1, print_attr) };
                     msg_col.set(msg_col.get() + 1);
                     if msg_col.get() == Columns.get() || msg_col.get() & 7 == 0 {
@@ -393,26 +400,26 @@ pub(crate) unsafe fn msg_puts_display(
                     }
                 }
             }
+            // SAFETY: main-thread editor call.
             BELL => unsafe { vim_beep(kOptBoFlagShell as c_uint) },
             _ => {}
         }
     }
 
     if open_row >= 0 {
+        // SAFETY: a line is open, so the batch is live.
         unsafe { msg_line_flush() };
     }
+    // SAFETY: main-thread editor call.
     unsafe { msg_cursor_goto(msg_row.get(), msg_col.get()) };
-    store(&mut sb_str, s, &mut sb_col, 0);
+    store(&text[stored..at], &mut sb_col, false);
     msg_check();
 }
 
 /// Whether `:filter pattern` was used and `msg` does not match it.
-///
-/// # Safety
-/// `msg` is NUL-terminated; main-thread editor call.
-pub(crate) unsafe fn message_filtered(msg: *const c_char) -> bool {
-    // SAFETY: the caller's contract.
-    unsafe { cmdmod_filters_out(msg) }
+pub(crate) fn message_filtered(msg: &CStr) -> bool {
+    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
+    unsafe { cmdmod_filters_out(msg.as_ptr()) }
 }
 
 /// Whether messages should be printed to stdout/stderr rather than drawn:
@@ -425,18 +432,20 @@ pub fn msg_use_printf() -> c_int {
 ///
 /// Also keeps `msg_col`/`msg_didout` roughly in step, so that the code that
 /// decides whether a newline is needed still works with no grid to measure.
-///
-/// # Safety
-///
-/// `str` must point at `maxlen` readable bytes.
-pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
+pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
     // `vim.on_print` takes the whole message instead, if it is set.
+    // SAFETY: the cell holds a live callback.
     if unsafe { &*on_print_cb() }.is_set() {
+        // The callback wants a C string, and `bytes` is a span of one; the
+        // copy is what gives it a terminator of its own. Upstream handed
+        // over the *pointer* instead, so a caller that asked for a prefix
+        // of a longer string had the whole of it printed.
+        let text = cstr::owned(bytes);
         let mut argv = [TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
-                v_string: str.cast_mut(),
+                v_string: text.as_ptr().cast_mut(),
             },
         }];
         let mut rettv = TypVal {
@@ -444,44 +453,47 @@ pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
+        // SAFETY: one argument, and `rettv` is a live unset value.
         unsafe { callback_call(on_print_cb(), 1, argv.as_mut_ptr(), &raw mut rettv) };
+        // SAFETY: `rettv` is whatever the callback answered.
         unsafe { tv_clear(&raw mut rettv) };
         return;
     }
 
-    let mut s = str;
-    while (maxlen < 0 || unsafe { s.offset_from(str) } < maxlen) && unsafe { *s } != 0 {
-        let len = unsafe { utf_ptr2len(s) };
+    let mut at = 0;
+    while at < bytes.len() && bytes[at] != 0 {
+        let rest = &bytes[at..];
+        let len = char_len(rest);
         if !(silent_mode.get() && p_verbose.get() == 0) {
             // One character, with NL translated to CR NL.
-            let mut buf = [0 as c_char; 7];
-            let mut at = 0;
-            if unsafe { *s } == b'\n' as c_char
-                && !info_message.get()
-                && !silent_mode.get()
-                && !headless_mode.get()
+            let mut buf = [0u8; 7];
+            let mut used = 0;
+            if rest[0] == b'\n' && !info_message.get() && !silent_mode.get() && !headless_mode.get()
             {
-                buf[at] = b'\r' as c_char;
-                at += 1;
+                buf[used] = b'\r';
+                used += 1;
             }
-            unsafe { ptr::copy_nonoverlapping(s, buf.as_mut_ptr().add(at), len as usize) };
-            buf[at + len as usize] = 0;
+            buf[used..used + len].copy_from_slice(&rest[..len]);
+            let text = cstr::in_bytes(&buf);
             if info_message.get() {
-                unsafe { printf(c"%s".as_ptr(), buf.as_ptr()) };
+                // SAFETY: a `%s` format and one NUL-terminated string.
+                unsafe { printf(c"%s".as_ptr(), text.as_ptr()) };
             } else {
-                unsafe { fprintf(stderr, c"%s".as_ptr(), buf.as_ptr()) };
+                // SAFETY: as above.
+                unsafe { fprintf(stderr, c"%s".as_ptr(), text.as_ptr()) };
             }
         }
 
         // Primitive way to compute the current column.
-        if unsafe { *s } == b'\r' as c_char || unsafe { *s } == b'\n' as c_char {
+        if rest[0] == b'\r' || rest[0] == b'\n' {
             msg_col.set(0);
             msg_didout.set(false);
         } else {
-            msg_col.set(msg_col.get() + unsafe { utf_char2cells(utf_ptr2char(s)) });
+            // SAFETY: options exist by the time a message is shown.
+            msg_col.set(msg_col.get() + unsafe { utf_char2cells(char_at(rest)) });
             msg_didout.set(true);
         }
-        s = unsafe { s.add(len as usize) };
+        at += len;
     }
 }
 

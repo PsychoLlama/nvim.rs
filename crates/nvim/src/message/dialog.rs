@@ -321,7 +321,7 @@ pub(crate) unsafe fn display_confirm_msg() {
     let _in_use = Suppress::counter(&confirm_msg_used);
     if !confirm_msg.get().is_null() {
         unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
-        unsafe { msg_puts_hl(confirm_msg.get(), HLF_M, false) };
+        msg_str_hl(unsafe { cstr::at(confirm_msg.get()) }, HLF_M, false);
     }
 }
 

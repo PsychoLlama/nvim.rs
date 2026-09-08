@@ -37,7 +37,7 @@ fn verbose_report(body: impl FnOnce()) {
     // terminator is a NUL-terminated literal.
     unsafe { verbose_enter_scroll() };
     body();
-    unsafe { msg_puts(c"\n".as_ptr()) };
+    msg_str(c"\n");
     unsafe { verbose_leave_scroll() };
 }
 
@@ -276,10 +276,10 @@ pub unsafe fn call_user_func(
             let called = unsafe { c_str(called) };
             smsg!(0, "calling {called}");
             if p_verbose.get() >= 14 {
-                unsafe { msg_puts(c"(".as_ptr()) };
+                msg_str(c"(");
                 for i in 0..argcount {
                     if i > 0 {
-                        unsafe { msg_puts(c", ".as_ptr()) };
+                        msg_str(c", ");
                     }
                     // SAFETY: `i` is inside the caller's argument array.
                     let tv = unsafe { Tv::new(args.offset(i as isize)) };
@@ -301,12 +301,12 @@ pub unsafe fn call_user_func(
                                 unsafe { trunc_string(s, into, MSG_BUF_CLEN, cap) };
                                 s = buf.as_mut_ptr();
                             }
-                            unsafe { msg_puts(s) };
+                            msg_str(unsafe { cstr::at(s) });
                             unsafe { xfree(tofree as *mut c_void) };
                         }
                     }
                 }
-                unsafe { msg_puts(c")".as_ptr()) };
+                msg_str(c")");
             }
         });
     }

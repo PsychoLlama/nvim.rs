@@ -46,9 +46,9 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrd
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
-    emsg, give_warning, msg_advance, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
-    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, msg_start, verbose_enter,
-    verbose_enter_scroll, verbose_leave, verbose_leave_scroll,
+    emsg, give_warning, msg_advance, msg_clr_eos, msg_display, msg_end, msg_ext_set_kind,
+    msg_putchar, msg_start, msg_str, msg_str_hl, msg_title, verbose_enter, verbose_enter_scroll,
+    verbose_leave, verbose_leave_scroll,
 };
 use crate::option::set_option_direct;
 use crate::option::vars::{p_acd, p_ei, p_verbose};

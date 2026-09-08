@@ -70,7 +70,7 @@ use crate::message::{
 };
 use crate::message::{
     emsg, iemsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,
-    msg_prt_line, msg_putchar, msg_puts, msg_start, trunc_string, verbose_enter_scroll,
+    msg_prt_line, msg_putchar, msg_start, msg_str, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
 use crate::option::vars::{p_ic, p_mfd, p_verbose};

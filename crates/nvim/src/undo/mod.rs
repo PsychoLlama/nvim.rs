@@ -50,7 +50,7 @@ use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
-    msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
+    msg_putchar, msg_start, msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::copy_option_part;
 use crate::option::vars::{fdo_flags, p_fs, p_udir, p_ul, p_verbose};

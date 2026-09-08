@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -93,9 +94,8 @@ pub fn showmode() -> c_int {
         let save_lines_left = lines_left.get();
         lines_left.set(0);
 
-        let put = |s: &'static CStr| unsafe { msg_puts_hl(s.as_ptr(), hl_id, false) };
-        let put_translated =
-            |s: &'static CStr| unsafe { msg_puts_hl(gettext(s).as_ptr(), hl_id, false) };
+        let put = |s: &'static CStr| msg_str_hl(s, hl_id, false);
+        let put_translated = |s: &'static CStr| msg_str_hl(gettext(s), hl_id, false);
 
         if do_mode {
             put(c"--");
@@ -118,9 +118,9 @@ pub fn showmode() -> c_int {
                     }
                     if length - unsafe { vim_strsize(edit_submode.get()) } > 0 {
                         if !edit_submode_pre.get().is_null() {
-                            unsafe { msg_puts_hl(edit_submode_pre.get(), hl_id, false) };
+                            msg_str_hl(unsafe { cstr::at(edit_submode_pre.get()) }, hl_id, false);
                         }
-                        unsafe { msg_puts_hl(edit_submode.get(), hl_id, false) };
+                        msg_str_hl(unsafe { cstr::at(edit_submode.get()) }, hl_id, false);
                     }
                     if !edit_submode_extra.get().is_null() {
                         put(c" ");
@@ -129,7 +129,7 @@ pub fn showmode() -> c_int {
                         } else {
                             hl_id
                         };
-                        unsafe { msg_puts_hl(edit_submode_extra.get(), sub_id, false) };
+                        msg_str_hl(unsafe { cstr::at(edit_submode_extra.get()) }, sub_id, false);
                     }
                 }
             } else {
@@ -175,7 +175,7 @@ pub fn showmode() -> c_int {
                             )
                         };
                         if plen > 0 && plen < MAXPATHL {
-                            unsafe { msg_puts_hl(buf, hl_id, false) };
+                            msg_str_hl(unsafe { cstr::at(buf) }, hl_id, false);
                         }
                     }
                 }
@@ -291,16 +291,15 @@ pub fn clearmode() {
 
 /// Print `recording @x` for the register being recorded into.
 pub(crate) fn recording_mode(hl_id: c_int) {
-    // SAFETY: the message layer on the main thread.
     if shortmess(ShmFlag::RECORDING) {
         return;
     }
-    unsafe { msg_puts_hl(gettext(c"recording").as_ptr(), hl_id, false) };
+    msg_str_hl(gettext(c"recording"), hl_id, false);
     // Upstream formats this with `snprintf(s, 4, " @%c", reg_recording)`,
     // which is exactly three bytes and the terminator.
     let reg = u8::try_from(reg_recording.get()).expect("a register name is a single byte");
     let suffix = [b' ', b'@', reg, 0];
-    unsafe { msg_puts_hl(suffix.as_ptr().cast(), hl_id, false) };
+    msg_str_hl(cstr::in_bytes(&suffix), hl_id, false);
 }
 
 /// Columns a standard ruler needs.

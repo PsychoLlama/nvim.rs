@@ -47,7 +47,7 @@ use crate::hashtab::{hash_add_item, hash_find, hash_hash, hash_lookup};
 use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::state::{msg_col, msg_didout};
-use crate::message::{msg_clr_eos, msg_outtrans_long, msg_start};
+use crate::message::{msg_clr_eos, msg_display_elided, msg_start};
 use crate::message_fmt::c_str;
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
@@ -184,7 +184,7 @@ pub(super) unsafe fn spell_read_dic(
                 let count = spin.si_foldwcount + spin.si_keepwcount;
                 unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
                 msg_start();
-                unsafe { msg_outtrans_long(message.as_mut_ptr(), 0) };
+                msg_display_elided(unsafe { cstr::at(message.as_mut_ptr()) }, 0);
                 unsafe { msg_clr_eos() };
                 msg_didout.set(false);
                 msg_col.set(0);

@@ -11,6 +11,7 @@ use super::{
 use crate::api::private::helpers::cstr_as_string;
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
+use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
@@ -27,7 +28,7 @@ use crate::memory::xstrdup;
 use crate::message::e_invarg;
 use crate::message::state::{lines_left, msg_row, msg_scroll};
 use crate::message::{
-    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
+    do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str, verb_msg,
 };
 use crate::mouse::state::mouse_row;
 use crate::option::vars::p_verbose;
@@ -233,7 +234,7 @@ pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     if !list.is_null() {
         let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
-            unsafe { msg_puts(numbuf.string(&raw const (*li).li_tv)) };
+            msg_str(unsafe { cstr::at(numbuf.string(&raw const (*li).li_tv)) });
             // A UI that owns the message area keeps the items in one
             // message, bar the last separator.
             if !ui_has(kUIMessages) || !unsafe { (*li).li_next }.is_null() {

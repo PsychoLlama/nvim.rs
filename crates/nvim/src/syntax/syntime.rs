@@ -139,15 +139,8 @@ fn syntime_report() {
         };
     }
 
-    unsafe {
-        msg_puts_title(
-            gettext(
-                c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN",
-            )
-            .as_ptr(),
-        )
-    };
-    unsafe { msg_puts(c"\n".as_ptr()) };
+    msg_title(gettext(c" TOTAL COUNT MATCH SLOWEST AVERAGE NAME PATTERN"));
+    msg_str(c"\n");
     for entry in &entries {
         if got_int.get() {
             break;
@@ -155,11 +148,11 @@ fn syntime_report() {
         report_row(entry);
     }
     if !got_int.get() {
-        unsafe { msg_puts(c"\n".as_ptr()) };
-        unsafe { msg_puts(profile_msg(total_total).as_ptr()) };
+        msg_str(c"\n");
+        msg_str(cstr::in_chars(&profile_msg(total_total)));
         msg_advance(13);
         msg_outnum(total_count);
-        unsafe { msg_puts(c"\n".as_ptr()) };
+        msg_str(c"\n");
     }
 }
 
@@ -169,23 +162,27 @@ fn syntime_report() {
 /// pushes the rest of the row right; the trailing space after each value is
 /// what keeps two of them from running together when that happens.
 fn report_row(entry: &TimeEntry) {
-    unsafe { msg_puts(profile_msg(entry.total).as_ptr()) };
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(cstr::in_chars(&profile_msg(entry.total)));
+    msg_str(c" ");
     msg_advance(13);
     msg_outnum(entry.count);
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(c" ");
     msg_advance(20);
     msg_outnum(entry.matches);
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(c" ");
     msg_advance(26);
-    unsafe { msg_puts(profile_msg(entry.slowest).as_ptr()) };
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(cstr::in_chars(&profile_msg(entry.slowest)));
+    msg_str(c" ");
     msg_advance(38);
-    unsafe { msg_puts(profile_msg(entry.average).as_ptr()) };
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(cstr::in_chars(&profile_msg(entry.average)));
+    msg_str(c" ");
     msg_advance(50);
-    unsafe { msg_outtrans(highlight_group_name(entry.id - 1), 0, false) };
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_display(
+        unsafe { cstr::at(highlight_group_name(entry.id - 1)) },
+        0,
+        false,
+    );
+    msg_str(c" ");
     msg_advance(69);
 
     // The pattern gets whatever is left of the line; under 80 columns it
@@ -195,7 +192,9 @@ fn report_row(entry: &TimeEntry) {
     } else {
         Columns.get() - 70
     };
-    let len = room.min(unsafe { cstr::bytes_at(entry.pattern) }.len() as c_int);
-    unsafe { msg_outtrans_len(entry.pattern, len, 0, false) };
-    unsafe { msg_puts(c"\n".as_ptr()) };
+    // SAFETY: the entry's pattern is NUL-terminated.
+    let pattern = unsafe { cstr::bytes_at(entry.pattern) };
+    let room = usize::try_from(room).unwrap_or(0);
+    msg_display_bytes(&pattern[..room.min(pattern.len())], 0, false);
+    msg_str(c"\n");
 }

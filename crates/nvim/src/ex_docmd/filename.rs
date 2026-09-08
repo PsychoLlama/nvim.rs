@@ -116,7 +116,7 @@ pub unsafe fn replace_makeprg(
         unsafe { strcat(new_cmdline, arg) };
     }
 
-    unsafe { msg_make(arg) };
+    msg_make(unsafe { cstr::at(arg) });
     unsafe { xfree(*cmdlinep as *mut c_void) };
     unsafe { *cmdlinep = new_cmdline };
     new_cmdline

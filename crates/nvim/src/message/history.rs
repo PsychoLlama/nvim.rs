@@ -71,28 +71,30 @@ pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
 /// # Safety
 /// `s` must be a valid C string, readable for `len` bytes when that is not
 /// negative.
-pub(crate) unsafe fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int) {
-    let mut start = s;
-    let mut size = if len < 0 {
-        unsafe { cstr::bytes_at(s) }.len()
-    } else {
-        len as size_t
-    };
+pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
     // Remove leading and trailing newlines.
-    while size > 0 && unsafe { *start } == b'\n' as c_char {
-        size -= 1;
-        start = unsafe { start.add(1) };
-    }
-    while size > 0 && unsafe { *start.add(size - 1) } == b'\n' as c_char {
-        size -= 1;
-    }
-    if size == 0 {
+    let text = bytes
+        .iter()
+        .position(|&byte| byte != b'\n')
+        .map_or(&[][..], |first| {
+            let last = bytes
+                .iter()
+                .rposition(|&byte| byte != b'\n')
+                .unwrap_or(first);
+            &bytes[first..=last]
+        });
+    if text.is_empty() {
         return;
     }
 
-    let text = String_0::from_raw_parts(unsafe { xmemdupz(start.cast(), size) }.cast(), size);
+    // SAFETY: `text` is readable for its own length, and the copy is a
+    // fresh allocation the message takes ownership of.
+    let owned = unsafe { xmemdupz(text.as_ptr().cast(), text.len()) };
+    let text = String_0::from_raw_parts(owned.cast(), text.len());
     let mut msg = EMPTY_HL_MESSAGE;
+    // SAFETY: `msg` is a live, empty message.
     unsafe { hl_msg_push(&mut msg, HlMessageChunk { text, hl_id }) };
+    // SAFETY: `msg` owns its one chunk.
     unsafe { msg_hist_add_multihl(msg, false, ptr::null_mut()) };
 }
 

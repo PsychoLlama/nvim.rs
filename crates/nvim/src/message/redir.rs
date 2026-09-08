@@ -10,7 +10,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::Failed;
@@ -62,13 +61,12 @@ pub unsafe fn verb_msg(s: *const c_char) -> c_int {
 
 /// Copy a message to `:redir`'s destination and to `'verbosefile'`.
 ///
-/// `maxlen` is the byte count to write, or -1 for the whole of `str`.
-///
-/// # Safety
-/// `str` must be a valid C string, readable for `maxlen` bytes when that is
-/// not negative.
-pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
-    if maxlen == 0 {
+/// An empty message is not one: nothing is written, no column is padded and
+/// none is tracked. Upstream took that branch only when the caller passed an
+/// explicit zero length, and padded for an empty *string* passed with the
+/// `-1` length that is now gone.
+pub(crate) fn redir_write(bytes: &[u8]) {
+    if bytes.is_empty() {
         return;
     }
     // Don't do anything for displaying prompts and the like.
@@ -76,77 +74,82 @@ pub(crate) unsafe fn redir_write(str: *const c_char, maxlen: ptrdiff_t) {
         return;
     }
     // If 'verbosefile' is set prepare for writing in that file.
+    // SAFETY: `p_vfile` holds a valid option string.
     if unsafe { verbosefile_set() } && verbose_fd.get().is_null() {
+        // SAFETY: as above.
         let _ = unsafe { verbose_open() };
     }
+    // SAFETY: as above.
     if !unsafe { redirecting() } {
         return;
     }
 
-    // One space to every sink this message is going to. A closure rather
-    // than a fn: it inherits the enclosing `unsafe` block, where a
-    // separate `unsafe`-declared fn would need one of its own.
+    // One space to every sink this message is going to.
     let pad = || {
         if !capture_ga.get().is_null() {
+            // SAFETY: the cell holds a live growable array.
             unsafe { ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1) };
         }
         if redir_reg.get() != 0 {
+            // SAFETY: a one-byte literal.
             unsafe { write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1) };
         } else if redir_vname.get() {
+            // SAFETY: as above.
             unsafe { var_redir_str(c" ".as_ptr(), -1) };
         } else if !redir_fd.get().is_null() {
+            // SAFETY: the cell holds an open stream.
             unsafe { fputs(c" ".as_ptr(), redir_fd.get()) };
         }
         if !verbose_fd.get().is_null() {
+            // SAFETY: as above.
             unsafe { fputs(c" ".as_ptr(), verbose_fd.get()) };
         }
     };
 
     // If the string doesn't start with CR or NL, go to msg_col.
-    if unsafe { *str } != b'\n' as c_char && unsafe { *str } != b'\r' as c_char {
+    if !matches!(bytes[0], b'\n' | b'\r') {
         while redir_col.get() < msg_col.get() {
             pad();
             redir_col.set(redir_col.get() + 1);
         }
     }
 
-    let len = if maxlen == -1 {
-        unsafe { cstr::bytes_at(str) }.len()
-    } else {
-        maxlen as size_t
-    };
+    let text = bytes.as_ptr().cast::<c_char>();
+    let len = bytes.len();
     if !capture_ga.get().is_null() {
-        unsafe { ga_concat_len(capture_ga.get(), str, len) };
+        // SAFETY: the cell holds a live growable array, and `len` bytes
+        // follow `text`.
+        unsafe { ga_concat_len(capture_ga.get(), text, len) };
     }
     if redir_reg.get() != 0 {
-        unsafe { write_reg_contents(redir_reg.get(), str, len as ssize_t, 1) };
+        // SAFETY: as above.
+        unsafe { write_reg_contents(redir_reg.get(), text, len as ssize_t, 1) };
     }
     if redir_vname.get() {
-        unsafe { var_redir_str(str, maxlen as c_int) };
+        // SAFETY: as above.
+        unsafe { var_redir_str(text, len as c_int) };
     }
 
     // Write and adjust the current column. The file sinks are fed byte by
     // byte because the column has to be tracked byte by byte anyway.
-    let mut s = str;
-    while unsafe { *s } != 0
-        && (maxlen < 0 || (unsafe { s.offset_from(str) as c_int as ptrdiff_t }) < maxlen)
-    {
+    for &byte in bytes {
         if redir_reg.get() == 0
             && !redir_vname.get()
             && capture_ga.get().is_null()
             && !redir_fd.get().is_null()
         {
-            unsafe { putc(*s as c_int, redir_fd.get()) };
+            // SAFETY: the cell holds an open stream.
+            unsafe { putc(c_int::from(byte), redir_fd.get()) };
         }
         if !verbose_fd.get().is_null() {
-            unsafe { putc(*s as c_int, verbose_fd.get()) };
+            // SAFETY: as above.
+            unsafe { putc(c_int::from(byte), verbose_fd.get()) };
         }
-        match unsafe { *s as u8 } {
+        match byte {
             b'\r' | b'\n' => redir_col.set(0),
             b'\t' => redir_col.set(redir_col.get() + 8 - redir_col.get() % 8),
             _ => redir_col.set(redir_col.get() + 1),
         }
-        s = unsafe { s.add(1) };
     }
 
     if msg_silent.get() != 0 {

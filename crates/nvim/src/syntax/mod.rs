@@ -69,8 +69,8 @@ use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::message::state::msg_col;
 use crate::message::{
-    emsg, msg, msg_advance, msg_ext_set_kind, msg_outnum, msg_outtrans, msg_outtrans_len,
-    msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
+    emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
+    msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 use crate::option::vars::p_cpo;
 use crate::optionstr::clear_string_option;

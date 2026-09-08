@@ -60,8 +60,8 @@ use crate::message::state::{
 };
 use crate::message::{
     msg_check_for_delay, msg_clr_cmdline, msg_clr_eos, msg_ext_flush_showmode, msg_ext_ui_flush,
-    msg_grid_ref, msg_grid_set_pos, msg_grid_validate, msg_puts_hl, msg_reset_scroll,
-    msg_scrollsize, msg_use_grid, repeat_message,
+    msg_grid_ref, msg_grid_set_pos, msg_grid_validate, msg_reset_scroll, msg_scrollsize,
+    msg_str_hl, msg_use_grid, repeat_message,
 };
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting, curs_columns,

@@ -18,6 +18,7 @@
 
 mod ring;
 
+use crate::cstr;
 use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
 
@@ -30,8 +31,7 @@ use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
-    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
-    trunc_string,
+    message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title, trunc_string,
 };
 use crate::option::vars::p_hi;
 use crate::os::cshim::{gettext, snprintf};
@@ -551,9 +551,7 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
     let name = HISTORY_NAMES[histype as usize];
     let name = String::from_utf8_lossy(&name[..name.len() - 1]);
     let title = format!("\n      #  {name} history\0");
-    // SAFETY: `title` is NUL-terminated and outlives the call, which copies
-    // what it keeps.
-    unsafe { msg_puts_title(title.as_ptr() as *const c_char) };
+    msg_title(cstr::in_bytes(title.as_bytes()));
     let hislen = get_hislen();
     let idx = get_hisidx(histype);
     let number_at = |i: c_int| HISTORY.with(|h| h[histype as usize].number_at(i));
@@ -580,7 +578,7 @@ fn list_one_history(histype: HistoryType, first: c_int, last: c_int) {
             let num = number_at(i);
             // SAFETY: the entry text is NUL-terminated and stays valid while
             // it is printed.
-            if num >= first && num <= last && !unsafe { message_filtered(entry.text) } {
+            if num >= first && num <= last && !message_filtered(unsafe { cstr::at(entry.text) }) {
                 print_history_entry(entry, num, i == idx);
             }
         }
@@ -609,7 +607,7 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
         } else {
             xstrlcpy(text, entry.text, (IOSIZE - len) as size_t);
         }
-        msg_outtrans(buf, 0, false);
+        msg_display(cstr::at(buf), 0, false);
     }
 }
 

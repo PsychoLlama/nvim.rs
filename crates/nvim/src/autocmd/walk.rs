@@ -258,7 +258,7 @@ pub unsafe fn getnextac(
         let shown = unsafe { c_str(handler_str) };
         smsg!(0, "autocommand {shown}");
         // Don't overwrite this either.
-        unsafe { msg_puts(c"\n".as_ptr()) };
+        msg_str(c"\n");
         unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };
         unsafe { verbose_leave_scroll() };
     }

@@ -45,7 +45,7 @@ pub unsafe fn list_hashtable_vars(
         let mut buf = [0 as c_char; IOSIZE as usize];
         unsafe { xstrlcpy(buf.as_mut_ptr(), prefix, IOSIZE as size_t) };
         unsafe { xstrlcat(buf.as_mut_ptr(), tv_dict_item_key(di), IOSIZE as size_t) };
-        if unsafe { message_filtered(buf.as_mut_ptr()) } {
+        if message_filtered(unsafe { cstr::at(buf.as_mut_ptr()) }) {
             continue;
         }
         if empty
@@ -287,10 +287,11 @@ unsafe fn list_one_var_a(
     }
     // Not `msg()`, which would overwrite "v:statusmsg".
     if unsafe { *prefix } != NUL as c_char {
-        unsafe { msg_puts(prefix) };
+        msg_str(unsafe { cstr::at(prefix) });
     }
     if !name.is_null() {
-        unsafe { msg_puts_len(name, name_len, 0, false) };
+        // SAFETY: `name_len` bytes follow `name`.
+        msg_bytes(unsafe { cstr::slice_at(name, name_len as usize) }, 0, false);
     }
     msg_putchar(b' ' as c_int);
     msg_advance(22);
@@ -308,10 +309,10 @@ unsafe fn list_one_var_a(
         string = unsafe { string.add(1) };
     }
 
-    unsafe { msg_outtrans(string, 0, false) };
+    msg_display(unsafe { cstr::at(string) }, 0, false);
 
     if type_0 == VAR_FUNC || type_0 == VAR_PARTIAL {
-        unsafe { msg_puts(c"()".as_ptr()) };
+        msg_str(c"()");
     }
     if is_first {
         unsafe { msg_clr_eos() };

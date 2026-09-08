@@ -10,6 +10,7 @@
 
 mod vim_patches;
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -28,7 +29,7 @@ use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::state::msg_col;
-use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
+use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
 use crate::option::vars::{p_ls, p_shm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
@@ -213,11 +214,11 @@ unsafe fn version_msg_wrap(s: &CStr, wrap: bool) {
         return;
     }
     if wrap {
-        unsafe { msg_puts(c"[".as_ptr()) };
+        msg_str(c"[");
     }
-    unsafe { msg_puts(s.as_ptr()) };
+    msg_str(s);
     if wrap {
-        unsafe { msg_puts(c"]".as_ptr()) };
+        msg_str(c"]");
     }
 }
 
@@ -282,7 +283,7 @@ pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
         if idx == current {
             msg_putchar(b'[' as c_int);
         }
-        unsafe { msg_puts(item.as_ptr()) };
+        msg_str(item);
         if idx == current {
             msg_putchar(b']' as c_int);
         }
@@ -319,7 +320,7 @@ pub(crate) unsafe fn list_lua_version() {
     let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, &mut err) };
     debug_assert!(!err.is_set(), "a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
-    unsafe { msg_puts(version.data()) };
+    msg_str(unsafe { cstr::at(version.data()) });
     unsafe { api_free_object(ret) };
 }
 
@@ -331,7 +332,7 @@ pub(crate) unsafe fn list_lua_version() {
 pub(crate) unsafe fn list_version() {
     // SAFETY: the caller's obligation.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    unsafe { msg_puts(LONG_VERSION.as_ptr()) };
+    msg_str(LONG_VERSION);
     msg_putchar(b'\n' as c_int);
     // The Nvim release this port tracks -- the version every
     // compatibility surface (`has('nvim-…')`, `v:version`, the API
@@ -340,20 +341,20 @@ pub(crate) unsafe fn list_version() {
         "NVIM v{NVIM_VERSION_MAJOR}.{NVIM_VERSION_MINOR}.{NVIM_VERSION_PATCH} compatible"
     ))
     .expect("version numbers hold no NUL");
-    unsafe { msg_puts(compat.as_ptr()) };
+    msg_str(&compat);
     msg_putchar(b'\n' as c_int);
     unsafe { list_lua_version() };
 
     if p_verbose.get() > 0 as OptInt {
         msg_putchar(b'\n' as c_int);
-        unsafe { msg_puts(BUILD_LINE.as_ptr()) };
+        msg_str(BUILD_LINE);
         msg_putchar(b'\n' as c_int);
-        unsafe { msg_puts(c"Vim versions: ".as_ptr()) };
+        msg_str(c"Vim versions: ");
         for (i, baseline) in VIM_BASELINES.iter().enumerate() {
             if i != 0 {
-                unsafe { msg_puts(c", ".as_ptr()) };
+                msg_str(c", ");
             }
-            unsafe { msg_puts(baseline.name.as_ptr()) };
+            msg_str(baseline.name);
         }
         unsafe { version_msg(c"\n") };
         unsafe { version_msg(translate(c"   system vimrc file: \"")) };

@@ -110,7 +110,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     unsafe { ptr::copy_nonoverlapping(s, buf.as_mut_ptr(), len as usize) };
                     buf[len as usize] = 0;
                 }
-                unsafe { msg_puts(buf.as_ptr()) };
+                msg_str(cstr::in_chars(&buf));
                 s = unsafe { s.add(len as usize) };
                 continue;
             }
@@ -217,7 +217,7 @@ fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
     // TODO(bfredl): this is such baloney. need msg_put_schar
     let mut buf = [0 as c_char; MAX_SCHAR_SIZE];
     unsafe { schar_get(buf.as_mut_ptr(), sc) };
-    unsafe { msg_puts_hl(buf.as_ptr(), hl_id, false) };
+    msg_str_hl(cstr::in_chars(&buf), hl_id, false);
     *col += 1;
 }
 

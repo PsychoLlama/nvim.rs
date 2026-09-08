@@ -13,6 +13,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::types::AutoEvent;
 use core::mem::offset_of;
 
@@ -49,9 +50,9 @@ use crate::message::state::{
     msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
 };
 use crate::message::{
-    do_dialog, emsg_ptr, iemsg_ptr, msg, msg_end, msg_ext_set_kind, msg_home_replace,
-    msg_multiline, msg_outnum, msg_outtrans, msg_ptr, msg_putchar, msg_puts, msg_puts_hl,
-    msg_reset_scroll, msg_start, set_keep_msg, verb_msg,
+    do_dialog, emsg_ptr, iemsg_ptr, msg, msg_display, msg_end, msg_ext_set_kind, msg_home_replace,
+    msg_multiline, msg_outnum, msg_ptr, msg_putchar, msg_reset_scroll, msg_start, msg_str,
+    msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_dir, p_shm, p_uc, p_verbose};
@@ -247,7 +248,7 @@ pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
 ///
 /// `gettext` asks only for a live NUL-terminated string, which is what a
 /// `CStr` is; paying that once here is what keeps the forty-odd
-/// `msg_puts(gettext(c"..."))` in this family out of an `unsafe` region.
+/// `msg_str(gettext(c"..."))` in this family out of an `unsafe` region.
 fn tr(text: &'static ::core::ffi::CStr) -> *mut ::core::ffi::c_char {
     // SAFETY: a `CStr` is NUL-terminated by construction.
     gettext(text).as_ptr().cast_mut()
@@ -262,13 +263,13 @@ fn tr(text: &'static ::core::ffi::CStr) -> *mut ::core::ffi::c_char {
 /// argument, because the argument list did not fit.
 fn note(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
     // SAFETY: `tr` answers a live NUL-terminated string.
-    unsafe { msg_puts_hl(tr(text), hl_id, true) };
+    msg_str_hl(unsafe { cstr::at(tr(text)) }, hl_id, true);
 }
 
 /// [`note`], appended to the message being built.
 fn say(text: &'static ::core::ffi::CStr) {
     // SAFETY: as [`note`].
-    unsafe { msg_puts(tr(text)) };
+    msg_str(unsafe { cstr::at(tr(text)) });
 }
 
 /// [`note`], as an error.

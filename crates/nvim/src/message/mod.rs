@@ -1,3 +1,47 @@
+//! Messages: what the editor says, and where it says it.
+//!
+//! [`msg`] and the `emsg`/`smsg` families start and end a message;
+//! [`msg_str`] and its kin *append* to the one being built, and everything
+//! displayed funnels through [`msg_bytes`], which feeds `:redir`, the
+//! history, and then either the message grid ([`msg_bytes_to_grid`]) or
+//! plain stdio ([`msg_bytes_to_stdio`]).
+//!
+//! # What the entry points take
+//!
+//! Two shapes, and which one a function takes says what its text *is*
+//! (`cstr`'s convention, § The parameter convention):
+//!
+//! - **`&CStr`** for a whole string the caller already has terminated —
+//!   a literal, a `gettext` translation, an option value, a file name, a
+//!   group name. That is nearly every message in the tree, and passing one
+//!   costs nothing.
+//! - **`&[u8]`** for a *span*: a run inside a command line, a tag field
+//!   between two pointers, a chunk of an API `String`. These have a length
+//!   of their own and no terminator to find.
+//!
+//! There is no third shape and no length parameter. The `-1`-means-
+//! NUL-terminated `len` the C carried is gone: the end of the slice is the
+//! end of the text, and a NUL inside one is an ordinary byte that the
+//! translating half shows as `^@`.
+//!
+//! | upstream | here | takes |
+//! | --- | --- | --- |
+//! | `msg_puts` | [`msg_str`] | `&CStr` |
+//! | `msg_puts_hl` | [`msg_str_hl`] | `&CStr` |
+//! | `msg_puts_title` | [`msg_title`] | `&CStr` |
+//! | `msg_puts_len` | [`msg_bytes`] | `&[u8]` |
+//! | `msg_puts_display` | [`msg_bytes_to_grid`] | `&[u8]` |
+//! | `msg_puts_printf` | [`msg_bytes_to_stdio`] | `&[u8]` |
+//! | `msg_outtrans` | [`msg_display`] | `&CStr` |
+//! | `msg_outtrans_len` | [`msg_display_bytes`] | `&[u8]` |
+//! | `msg_outtrans_one` | [`msg_display_char`] | `&[u8]`, answers bytes |
+//! | `msg_outtrans_special` | [`msg_display_keys`] | `&CStr` |
+//! | `msg_outtrans_long` | [`msg_display_elided`] | `&CStr` |
+//!
+//! The `msg_display*` half is the one that renders what cannot be shown:
+//! a control character as `^X`, anything else unprintable as `<xx>`. The
+//! `msg_str*` half puts the bytes through as they are.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
@@ -11,7 +55,7 @@ use crate::api::vim::nvim_echo;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{AUGROUP_ALL, apply_autocmds_group, has_event};
 use crate::charset::{
-    byte2cells, char2cells, getdigits_int, ptr2cells, skipwhite, transchar_buf, transchar_byte_buf,
+    byte2cells, char2cells, getdigits_int, ptr2cells, transchar_buf, transchar_byte_buf,
     vim_isprintc, vim_strsize,
 };
 use crate::cstr;
@@ -58,13 +102,12 @@ use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::mbyte::{
-    mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,
-    utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_ptr2len,
-    utfc_ptr2len_len,
+    mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells, utf_head_off, utf_ptr2cells,
+    utf_ptr2char, utf8len_tab, utfc_ptr2len,
 };
 use crate::memory::{
-    arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xmemrchr, xrealloc,
-    xstrdup, xstrlcat, xstrlcpy,
+    arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup,
+    xstrlcat, xstrlcpy,
 };
 use crate::message::state::{
     called_emsg, capture_ga, cmd_silent, cmdmsg_rl, did_emsg, did_wait_return,
@@ -120,7 +163,7 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strnlen};
+use ::libc::{abort, abs, fclose, fprintf, fputs, printf};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -348,33 +391,37 @@ pub unsafe fn msg_multiline(
     hist: bool,
     need_clear: *mut bool,
 ) {
-    let mut s = str.data().cast_const();
-    let mut chunk = s;
-    while (unsafe { s.offset_from(str.data()) as size_t }) < str.len() {
+    // SAFETY: the caller's contract -- `str` describes a readable range.
+    let bytes = unsafe { str.as_bytes() };
+    let mut chunk = 0;
+    let mut at = 0;
+    while at < bytes.len() {
         if check_int && got_int.get() {
             return;
         }
-        if matches!(unsafe { *s as u8 }, b'\n' | b'\t' | b'\r' | 0x07) {
-            unsafe { msg_outtrans_len(chunk, s.offset_from(chunk) as c_int, hl_id, hist) };
-            if unsafe { *s as c_int } != TAB && unsafe { *need_clear } {
+        if matches!(bytes[at], b'\n' | b'\t' | b'\r' | 0x07) {
+            msg_display_bytes(&bytes[chunk..at], hl_id, hist);
+            // SAFETY: the caller's contract -- `need_clear` is writable.
+            if c_int::from(bytes[at]) != TAB && unsafe { *need_clear } {
+                // SAFETY: main-thread editor call.
                 unsafe { msg_clr_eos() };
+                // SAFETY: as above.
                 unsafe { *need_clear = false };
             }
-            if unsafe { *s as c_int } == BELL {
+            if c_int::from(bytes[at]) == BELL {
+                // SAFETY: main-thread editor call.
                 unsafe { vim_beep(kOptBoFlagShell as c_uint) };
             } else {
-                unsafe { msg_putchar_hl(*s as u8 as c_int, hl_id) };
+                msg_putchar_hl(c_int::from(bytes[at]), hl_id);
             }
-            chunk = unsafe { s.add(1) };
+            chunk = at + 1;
         }
-        s = unsafe { s.add(1) };
+        at += 1;
     }
     // The tail, and the whole of an empty message: an empty `str` still
-    // has to reach `msg_outtrans_len`, which is what clears the line.
-    if unsafe { *chunk } != 0 || chunk == str.data().cast_const() {
-        let done = unsafe { chunk.offset_from(str.data()) } as size_t;
-        let rest = (str.len() - done) as c_int;
-        unsafe { msg_outtrans_len(chunk, rest, hl_id, hist) };
+    // has to reach `msg_display_bytes`, which is what clears the line.
+    if cstr::byte_at(bytes, chunk) != 0 || chunk == 0 {
+        msg_display_bytes(&bytes[chunk..], hl_id, hist);
     }
 }
 
@@ -478,7 +525,7 @@ pub unsafe fn msg_multihl(
 ///
 /// `keep` sets `keep_msg` when the message fits without scrolling;
 /// `multiline` sends it through [`msg_multiline`] rather than
-/// [`msg_outtrans`].
+/// [`msg_display`].
 ///
 /// # Safety
 /// `s` must be a valid C string.
@@ -494,7 +541,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 
     // Skip messages that do not match ":filter pattern", but never filter
     // when there is an error.
-    if !emsg_on_display.get() && unsafe { message_filtered(s) } {
+    if !emsg_on_display.get() && message_filtered(unsafe { cstr::at(s) }) {
         return true;
     }
 
@@ -518,7 +565,8 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
                 && !msg_hist_last.get().is_null()
                 && !unsafe { cstr::eq(s, (*(*msg_hist_last.get()).msg.items).text.data()) }))
     {
-        unsafe { msg_hist_add(s, -1, hl_id) };
+        // SAFETY: the caller's message is NUL-terminated.
+        msg_hist_add(unsafe { cstr::bytes_at(s) }, hl_id);
     }
 
     if is_multihl.get() == 0 {
@@ -533,7 +581,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     if multiline {
         unsafe { msg_multiline(cstr_as_string(s), hl_id, false, false, &raw mut need_clear) };
     } else {
-        unsafe { msg_outtrans(s, hl_id, false) };
+        msg_display(unsafe { cstr::at(s) }, hl_id, false);
     }
     if need_clear {
         unsafe { msg_clr_eos() };
@@ -713,7 +761,8 @@ pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
 /// `s` must be a valid, writable C string -- the truncation writes into it.
 pub unsafe fn msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char {
     // The history gets the whole message; only the display is truncated.
-    unsafe { msg_hist_add(s, -1, hl_id) };
+    // SAFETY: the caller's message is NUL-terminated.
+    msg_hist_add(unsafe { cstr::bytes_at(s) }, hl_id);
     let ts = unsafe { msg_may_trunc(force, s) };
     msg_hist_off.set(true);
     let n = unsafe { msg_ptr(ts, hl_id) };

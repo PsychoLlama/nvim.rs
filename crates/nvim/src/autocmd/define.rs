@@ -121,7 +121,7 @@ pub unsafe fn do_autocmd(
 
     if is_showing {
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-        unsafe { msg_puts_title(gettext(c"\n--- Autocommands ---").as_ptr()) };
+        msg_title(gettext(c"\n--- Autocommands ---"));
 
         if all_events {
             unsafe { au_show_for_all_events(group, pat) };

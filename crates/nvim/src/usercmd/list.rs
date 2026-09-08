@@ -22,14 +22,15 @@ use super::{LUA_NOREF, Scope, Table, ucmd_name};
 use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
 };
+use crate::cstr;
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
 use crate::memory::xfree;
 use crate::message::{
-    message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
-    msg_puts, msg_puts_hl, msg_puts_title,
+    message_filtered, msg, msg_display, msg_display_keys, msg_ext_set_kind, msg_putchar, msg_str,
+    msg_str_hl, msg_title,
 };
 use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
@@ -60,7 +61,7 @@ fn nargs_str(argt: ExArgt) -> &'static CStr {
 
 /// The fixed-width middle columns of one `:command` line, built in a
 /// buffer of the row's own — upstream uses the shared `IObuff`, which
-/// `msg_outtrans` writes again.
+/// `msg_display` writes again.
 ///
 /// `over` is how far the name column overran; every following column is
 /// pulled left by it, and a column that would then start before the text
@@ -115,8 +116,9 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
         let mut interrupted = false;
         // SAFETY: module contract; nothing below adds or removes a command.
         for cmd in unsafe { scope.list() } {
-            let matches =
-                unsafe { ucmd_name(cmd).starts_with(wanted) && !message_filtered(cmd.uc_name) };
+            let matches = unsafe {
+                ucmd_name(cmd).starts_with(wanted) && !message_filtered(cstr::at(cmd.uc_name))
+            };
             if !matches {
                 continue;
             }
@@ -124,7 +126,8 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 let heading =
                     c"\n    Name              Args Address Complete    Definition".as_ptr();
                 // SAFETY: module contract; the heading is a static string.
-                unsafe { msg_puts_title(gettext_ptr(heading).as_ptr()) };
+                // SAFETY: the translation of a static message.
+                msg_title(unsafe { gettext_ptr(heading) });
             }
             found = true;
             msg_putchar(b'\n' as c_int);
@@ -171,16 +174,16 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
         }
     }
     if blank != 0 {
-        unsafe { msg_puts(c"    ".as_ptr().add(4 - blank)) };
+        msg_str(cstr::in_bytes(&b"    \0"[4 - blank..]));
     }
 
-    unsafe { msg_outtrans(cmd.uc_name, HLF_D, false) };
+    msg_display(unsafe { cstr::at(cmd.uc_name) }, HLF_D, false);
     // The name column is 17 wide; a longer name pushes the rest left.
     let mut len = unsafe { ucmd_name(cmd) }.len() + 4;
     if len < 21 {
         // Field padding spaces   12345678901234567
-        static SPACES: &CStr = c"                 ";
-        unsafe { msg_puts(SPACES.as_ptr().add(len - 4)) };
+        static SPACES: &[u8] = b"                 \0";
+        msg_str(cstr::in_bytes(&SPACES[len - 4..]));
         len = 21;
     }
     msg_putchar(b' ' as c_int);
@@ -224,22 +227,22 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
         let end = cols.len;
         cols.buf[end] = NUL as c_char;
     }
-    unsafe { msg_outtrans(middle.as_mut_ptr(), 0, false) };
+    msg_display(unsafe { cstr::at(middle.as_mut_ptr()) }, 0, false);
 
     if cmd.uc_luaref != LUA_NOREF {
         let text = unsafe { nlua_funcref_str(cmd.uc_luaref, ptr::null_mut()) };
-        unsafe { msg_puts_hl(text, HLF_8, false) };
+        msg_str_hl(unsafe { cstr::at(text) }, HLF_8, false);
         unsafe { xfree(text.cast()) };
         // The definition goes on a line of its own.
         if unsafe { *cmd.uc_rep } != NUL as c_char {
-            unsafe { msg_puts(c"\n                                               ".as_ptr()) };
+            msg_str(c"\n ");
         }
     }
     // The definition column is what is left of the line when the whole table
     // is being listed, and the whole width when one command is.
     let room = if name_len == 0 { Columns.get() - 47 } else { 0 };
     // SAFETY: module contract; `uc_rep` is the entry's own string.
-    unsafe { msg_outtrans_special(cmd.uc_rep, false, room) };
+    msg_display_keys(unsafe { cstr::at(cmd.uc_rep) }, false, room);
     if p_verbose.get() > 0 {
         unsafe { last_set_msg(cmd.uc_script_ctx) };
     }

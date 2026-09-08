@@ -30,8 +30,7 @@ use crate::highlight_group::{HLF_8, HLF_D};
 use crate::memory::xfree;
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::{
-    msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
-    msg_puts_title,
+    msg_display, msg_display_keys, msg_outnum, msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 use crate::message_fmt::msg_cstr;
 use crate::types::{Dict, List, VarNumber};
@@ -438,18 +437,15 @@ fn show_menus_recursive(menu: Option<Menu>, modes: c_int, depth: c_int) {
 // message layer a `'static` literal or a string owned by a live node.
 
 fn put(s: &CStr) {
-    // SAFETY: a NUL-terminated string that outlives the call.
-    unsafe { msg_puts(s.as_ptr()) };
+    msg_str(s);
 }
 
 fn put_title(s: &CStr) {
-    // SAFETY: as `put`.
-    unsafe { msg_puts_title(s.as_ptr()) };
+    msg_title(s);
 }
 
 fn put_hl(s: &CStr, hl_id: c_int) {
-    // SAFETY: as `put`.
-    unsafe { msg_puts_hl(s.as_ptr(), hl_id, false) };
+    msg_str_hl(s, hl_id, false);
 }
 
 fn put_char(byte: u8) {
@@ -461,11 +457,10 @@ fn put_num(n: c_int) {
 }
 
 fn put_trans(s: &CStr, hl_id: c_int) {
-    // SAFETY: as `put`.
-    unsafe { msg_outtrans(s.as_ptr(), hl_id, false) };
+    msg_display(s, hl_id, false);
 }
 
 fn put_special(s: *const c_char) {
     // SAFETY: a node's rhs, NUL-terminated and live.
-    unsafe { msg_outtrans_special(s, false, 0) };
+    msg_display_keys(unsafe { cstr::at(s) }, false, 0);
 }

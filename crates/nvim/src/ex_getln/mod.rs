@@ -89,8 +89,8 @@ use crate::message::{
     e_textlock,
 };
 use crate::message::{
-    emsg, msg, msg_check, msg_clr_eos, msg_cursor_goto, msg_grid_validate, msg_outtrans_len,
-    msg_putchar, msg_puts_hl, msg_puts_len, msg_start, msg_starthere, sb_text_end_cmdline,
+    emsg, msg, msg_bytes, msg_check, msg_clr_eos, msg_cursor_goto, msg_display_bytes,
+    msg_grid_validate, msg_putchar, msg_start, msg_starthere, msg_str_hl, sb_text_end_cmdline,
     sb_text_restart_cmdline, sb_text_start_cmdline,
 };
 use crate::mouse::setmouse;

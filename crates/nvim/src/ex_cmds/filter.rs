@@ -46,8 +46,8 @@ use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc};
 use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
 use crate::message::{
-    MSG_BUF_LEN, emsg, message_filtered, msg_ext_set_kind, msg_outtrans, msg_prt_line, msg_ptr,
-    msg_puts_hl, set_keep_msg, wait_return,
+    MSG_BUF_LEN, emsg, message_filtered, msg_display, msg_ext_set_kind, msg_prt_line, msg_ptr,
+    msg_str_hl, set_keep_msg, wait_return,
 };
 use crate::message::{e_noprev, e_notmp};
 use crate::message_fmt::c_str;
@@ -195,7 +195,7 @@ pub unsafe fn do_bang(
             unsafe { msg_ext_set_kind(c"shell_cmd".as_ptr()) };
             say::putchar(':' as c_int);
             say::putchar('!' as c_int);
-            unsafe { msg_outtrans(cmd, 0, false) };
+            msg_display(unsafe { cstr::at(cmd) }, 0, false);
             say::clear_eos();
             ui_cursor_goto(msg_row.get(), msg_col.get());
             // SAFETY: as above.
@@ -838,7 +838,7 @@ pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
                 lnum,
             )
         };
-        unsafe { msg_puts_hl(numbuf.as_ptr(), HLF_N + 1, false) };
+        msg_str_hl(cstr::in_chars(&numbuf), HLF_N + 1, false);
     }
     // SAFETY: caller's contract.
     unsafe { msg_prt_line(ml_get(lnum), list) };
@@ -856,7 +856,7 @@ pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool
 
     // apply :filter /pat/
     // SAFETY: caller's contract.
-    if unsafe { message_filtered(ml_get(lnum)) } {
+    if message_filtered(unsafe { cstr::at(ml_get(lnum)) }) {
         return;
     }
 

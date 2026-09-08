@@ -151,11 +151,11 @@ pub unsafe fn ex_scriptnames(args: *mut ExArg) {
                 namebuff,
             )
         };
-        if !unsafe { message_filtered(iobuff) } {
+        if !message_filtered(unsafe { cstr::at(iobuff) }) {
             if msg_col.get() > 0 {
                 msg_putchar('\n' as c_int);
             }
-            unsafe { msg_outtrans(iobuff, 0, false) };
+            msg_display(unsafe { cstr::at(iobuff) }, 0, false);
             line_breakcheck();
         }
     }

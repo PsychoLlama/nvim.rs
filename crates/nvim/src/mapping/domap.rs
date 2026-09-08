@@ -659,10 +659,8 @@ pub unsafe fn ex_map(args: *mut ExArg) {
         secure.set(2);
         // SAFETY: the caller's promise — `args` is live, so `cmd` is its own
         // NUL-terminated command name.
-        unsafe {
-            msg_outtrans((*args).cmd, 0, false);
-            msg_putchar(c_int::from(b'\n'));
-        }
+        msg_display(unsafe { cstr::at((*args).cmd) }, 0, false);
+        msg_putchar(c_int::from(b'\n'));
     }
     // SAFETY: as above.
     unsafe { do_exmap(args, false) };

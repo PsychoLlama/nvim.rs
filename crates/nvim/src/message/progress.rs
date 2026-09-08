@@ -141,7 +141,8 @@ pub unsafe fn msg_progress(
     // Under ext_messages the UI keeps the untruncated text, so history
     // gets the original either way; on a grid it gets what fits.
     if hist && (!trunc || ui_has(kUIMessages)) {
-        unsafe { msg_hist_add(s, -1, 0) };
+        // SAFETY: the progress message is NUL-terminated.
+        msg_hist_add(unsafe { cstr::bytes_at(s) }, 0);
     }
     if trunc {
         s = unsafe { msg_may_trunc(false, s) };

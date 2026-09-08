@@ -228,13 +228,13 @@ pub unsafe fn emsg_multiline(
                     if !line.is_null() {
                         let len = unsafe { cstr::bytes_at(line) }.len();
                         unsafe { *line.add(len) = b'\n' as c_char };
-                        unsafe { redir_write(line, len as ptrdiff_t + 1) };
+                        redir_write(unsafe { cstr::slice_at(line, len + 1) });
                         unsafe { xfree(line.cast()) };
                     }
                 };
                 write_line(unsafe { get_emsg_source() });
                 write_line(unsafe { get_emsg_lnum() });
-                unsafe { redir_write(s, cstr::bytes_at(s).len() as ptrdiff_t) };
+                redir_write(unsafe { cstr::bytes_at(s) });
             }
             // SAFETY: the message being reported, and the exec stack's own
             // name for where it came from -- both NUL-terminated.

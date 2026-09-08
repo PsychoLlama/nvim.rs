@@ -26,7 +26,7 @@ use crate::search::{
 use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 // ---------------------------------------------------------------------
@@ -47,6 +47,12 @@ impl Owned {
 
     fn as_ptr(&self) -> *mut c_char {
         self.0
+    }
+
+    fn as_cstr(&self) -> &CStr {
+        // SAFETY: the allocation is live and NUL-terminated for as long as
+        // this owns it, and a null pointer is never shown.
+        unsafe { cstr::at(self.0) }
     }
 
     /// Take ownership of `p`, freeing whatever was held.
@@ -342,7 +348,7 @@ unsafe fn echo_search_cmd(
             unsafe { reverse_echo(&mut echo) };
         }
 
-        unsafe { msg_outtrans(echo.buf.as_ptr(), 0, false) };
+        msg_display(echo.buf.as_cstr(), 0, false);
         unsafe { msg_clr_eos() };
         msg_check();
         gotocmdline(false);

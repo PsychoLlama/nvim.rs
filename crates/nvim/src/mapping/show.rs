@@ -33,16 +33,12 @@ static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
 /// `mp` must be a live mapblock.
 pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     let rhs = &mp.m_rhs;
-    // SAFETY: the three strings a live mapblock owns are NUL-terminated by
-    // `MapStr`'s own invariant.
-    let filtered = unsafe {
-        message_filtered(mp.m_keys.as_ptr())
-            && message_filtered(rhs.str.as_ptr())
-            && rhs
-                .desc
-                .as_ref()
-                .is_none_or(|desc| message_filtered(desc.as_ptr()))
-    };
+    let filtered = message_filtered(mp.m_keys.as_cstr())
+        && message_filtered(rhs.str.as_cstr())
+        && rhs
+            .desc
+            .as_ref()
+            .is_none_or(|desc| message_filtered(desc.as_cstr()));
     if filtered {
         return;
     }
@@ -55,12 +51,9 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     }
 
     let mapchars = map_mode_to_chars(mp.m_mode);
-    // SAFETY: `map_mode_to_chars` answers a NUL-terminated seven-byte array
-    // that lives until the end of this body.
-    let mut len = unsafe {
-        msg_puts(mapchars.as_ptr());
-        cstr::bytes_at(mapchars.as_ptr()).len()
-    };
+    let modes = cstr::in_chars(&mapchars);
+    msg_str(modes);
+    let mut len = modes.count_bytes();
     len += 1;
     while len <= 3 {
         msg_putchar(c_int::from(b' '));
@@ -68,8 +61,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     }
 
     // Display the LHS, and pad to at least twelve columns.
-    // SAFETY: `m_keys` is the mapping's own NUL-terminated LHS.
-    len = unsafe { msg_outtrans_special(mp.m_keys.as_ptr(), true, 0) } as size_t;
+    len = msg_display_keys(mp.m_keys.as_cstr(), true, 0) as size_t;
     loop {
         msg_putchar(c_int::from(b' '));
         len += 1;
@@ -78,18 +70,15 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
         }
     }
 
-    // SAFETY: static NUL-terminated markers, and the message primitives.
-    unsafe {
-        if mp.m_noremap == REMAP_NONE {
-            msg_puts_hl(c"*".as_ptr(), HLF_8, false);
-        } else if mp.m_noremap == REMAP_SCRIPT {
-            msg_puts_hl(c"&".as_ptr(), HLF_8, false);
-        } else {
-            msg_putchar(c_int::from(b' '));
-        }
-
-        msg_putchar(c_int::from(if local { b'@' } else { b' ' }));
+    if mp.m_noremap == REMAP_NONE {
+        msg_str_hl(c"*", HLF_8, false);
+    } else if mp.m_noremap == REMAP_SCRIPT {
+        msg_str_hl(c"&", HLF_8, false);
+    } else {
+        msg_putchar(c_int::from(b' '));
     }
+
+    msg_putchar(c_int::from(if local { b'@' } else { b' ' }));
 
     // `false` below would show only things like <Up> as such on the rhs
     // and not M-x etc; `true` gets both -- webb
@@ -97,21 +86,16 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
         // SAFETY: the mapping's own reference; the rendering is the guard's.
         let text = unsafe { COwned::new(nlua_funcref_str(rhs.luaref(), ptr::null_mut())) };
         // SAFETY: a NUL-terminated rendering that outlives the call.
-        unsafe { msg_puts_hl(text.as_c_ptr(), HLF_8, false) };
+        msg_str_hl(unsafe { cstr::at(text.as_c_ptr()) }, HLF_8, false);
     } else if rhs.str.is_empty() {
-        // SAFETY: a static NUL-terminated marker.
-        unsafe { msg_puts_hl(c"<Nop>".as_ptr(), HLF_8, false) };
+        msg_str_hl(c"<Nop>", HLF_8, false);
     } else {
-        // SAFETY: `m_str` is the mapping's own NUL-terminated RHS.
-        unsafe { msg_outtrans_special(rhs.str.as_ptr(), false, 0) };
+        msg_display_keys(rhs.str.as_cstr(), false, 0);
     }
 
     if let Some(desc) = &rhs.desc {
-        // SAFETY: a static text, then the mapping's own NUL-terminated `desc`.
-        unsafe {
-            msg_puts(c"\n                 ".as_ptr()); // shift to the rhs column
-            msg_puts(desc.as_ptr());
-        }
+        msg_str(c"\n "); // shift to the rhs column
+        msg_str(desc.as_cstr());
     }
     if p_verbose.get() > 0 {
         // SAFETY: a plain copy of the mapping's script context.

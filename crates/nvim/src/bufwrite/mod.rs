@@ -36,7 +36,7 @@ use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preser
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
-use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_puts_hl, set_keep_msg};
+use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_str_hl, set_keep_msg};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::{p_bdir, p_bex, p_bk, p_bsk, p_ccv, p_fs, p_pm, p_wb};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
@@ -805,11 +805,11 @@ pub unsafe fn buf_write(
         if end == 0 {
             let hl_id = HLF_E;
             let warning = translate(c"\nWARNING: Original file may be lost or damaged\n").as_ptr();
-            unsafe { msg_puts_hl(warning, hl_id, true) };
+            msg_str_hl(unsafe { cstr::at(warning) }, hl_id, true);
             let advice =
                 translate(c"don't quit the editor until the file is successfully written!")
                     .as_ptr();
-            unsafe { msg_puts_hl(advice, hl_id, true) };
+            msg_str_hl(unsafe { cstr::at(advice) }, hl_id, true);
             // Update the timestamp to avoid an "overwrite changed file"
             // prompt when writing again.
             if unsafe { os_fileinfo(fname, &raw mut file_info_old) } {

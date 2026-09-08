@@ -42,7 +42,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
             // numbered/lambda functions; with one, skip the numbered
             // functions and ask the pattern.
             let show = if regmatch.is_null() {
-                !unsafe { message_filtered(uf_name_ptr(fp)) }
+                !message_filtered(unsafe { cstr::at(uf_name_ptr(fp)) })
                     && !unsafe { func_name_refcount(uf_name_ptr(fp)) }
             } else {
                 !(unsafe { *uf_name_ptr(fp) } as u8).is_ascii_digit()
@@ -164,7 +164,7 @@ pub(crate) unsafe fn list_one_function(
             } else {
                 c"   endfunction".as_ptr()
             };
-            unsafe { msg_puts(end) };
+            msg_str(unsafe { cstr::at(end) });
         }
     }
     fp

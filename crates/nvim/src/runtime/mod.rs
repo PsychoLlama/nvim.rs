@@ -62,7 +62,7 @@ use crate::memory::{strequal, try_malloc, xfree, xmalloc, xmallocz, xstrdup, xst
 use crate::message::state::msg_col;
 use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
 use crate::message::{
-    emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
+    emsg, message_filtered, msg_display, msg_ext_set_kind, msg_ext_ui_flush, msg_putchar,
     verbose_enter, verbose_leave,
 };
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};

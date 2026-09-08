@@ -44,8 +44,8 @@ use crate::memory::xfree;
 use crate::message::state::{msg_scroll, quit_more};
 use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
 use crate::message::{
-    emsg, message_filtered, msg, msg_clr_eos, msg_end, msg_outnum, msg_outtrans, msg_putchar,
-    msg_puts, msg_start, msg_starthere, msgmore,
+    emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_putchar,
+    msg_start, msg_starthere, msg_str, msgmore,
 };
 use crate::option::set_option_direct;
 use crate::options::kOptFoldcolumn;
@@ -380,10 +380,10 @@ unsafe fn list_oldfiles(list: *mut List) {
         // SAFETY: a live item of the list.
         let value = &raw mut unsafe { &mut *item }.li_tv;
         // SAFETY: `value` is that item's own.
-        if !unsafe { message_filtered(number.string(value)) } {
+        if !message_filtered(unsafe { cstr::at(number.string(value)) }) {
             msg_outnum(nr);
             say::puts(c": ");
-            unsafe { msg_outtrans(text.string(value), 0, false) };
+            msg_display(unsafe { cstr::at(text.string(value)) }, 0, false);
             say::clear_eos();
             say::putchar('\n' as ::core::ffi::c_int);
             os_breakcheck();
@@ -467,7 +467,7 @@ impl LineCopy {
 /// sites. The real fix is the message layer's own signatures; this is the
 /// family's share of it.
 pub(crate) mod say {
-    use super::{msg_clr_eos, msg_end, msg_putchar, msg_puts, msg_start, msg_starthere, msgmore};
+    use super::{msg_clr_eos, msg_end, msg_putchar, msg_start, msg_starthere, msg_str, msgmore};
     use ::core::ffi::{CStr, c_int};
 
     /// [`msg_start`]: begin a message.
@@ -491,10 +491,9 @@ pub(crate) mod say {
         msg_putchar(c)
     }
 
-    /// [`msg_puts`]: show a string that carries its own NUL.
+    /// [`msg_str`]: show a string that carries its own NUL.
     pub(crate) fn puts(s: &CStr) {
-        // SAFETY: as above, and a `CStr` is what the pointer form wants.
-        unsafe { msg_puts(s.as_ptr()) }
+        msg_str(s)
     }
 
     /// [`msg_clr_eos`]: clear from the message position to the end.

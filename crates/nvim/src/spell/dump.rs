@@ -42,7 +42,7 @@ use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_
 use crate::mbyte::{mb_strnicmp, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::xstrlcpy;
-use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_puts, msg_start};
+use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str};
 use crate::option::vars::p_ic;
 use crate::option::{get_option_value, optval_free, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
@@ -85,14 +85,14 @@ pub fn ex_spellinfo(_args: *mut ExArg) {
     let mut lpi = 0;
     while lpi < langp.ga_len && !got_int.get() {
         let lp = unsafe { (langp.ga_data as *mut LangP).offset(lpi as isize) };
-        unsafe { msg_puts(c"file: ".as_ptr()) };
-        unsafe { msg_puts((*(*lp).lp_slang).sl_fname) };
+        msg_str(c"file: ");
+        msg_str(unsafe { cstr::at((*(*lp).lp_slang).sl_fname) });
         let p = unsafe { (*(*lp).lp_slang).sl_info };
         if lpi < langp.ga_len || !p.is_null() {
             msg_putchar('\n' as c_int);
         }
         if !p.is_null() {
-            unsafe { msg_puts(p) };
+            msg_str(unsafe { cstr::at(p) });
             if lpi < langp.ga_len - 1 {
                 msg_putchar('\n' as c_int);
             }

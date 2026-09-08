@@ -77,7 +77,7 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
     // SAFETY: the caller's promise -- a live `QfLine`.
     let qfp = unsafe { Qfe::new(qfp) };
     // The heading. Upstream assembles it in `IObuff` and then calls
-    // `message_filtered` and `msg_outtrans`, both of which re-enter the
+    // `message_filtered` and `msg_display`, both of which re-enter the
     // message machinery.
     let mut heading = [0 as c_char; IOSIZE as usize];
     let mut fname = ptr::null_mut::<c_char>();
@@ -122,16 +122,16 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
     // one of them is filtered out.
     let mut filtered = true;
     if !module.is_null() && unsafe { *module } != 0 {
-        filtered = unsafe { message_filtered(module) };
+        filtered = message_filtered(unsafe { cstr::at(module) });
     }
     if filtered && !fname.is_null() {
-        filtered = unsafe { message_filtered(fname) };
+        filtered = message_filtered(unsafe { cstr::at(fname) });
     }
     if filtered && !qfp.qf_pattern.is_null() {
-        filtered = unsafe { message_filtered(qfp.qf_pattern) };
+        filtered = message_filtered(unsafe { cstr::at(qfp.qf_pattern) });
     }
     if filtered {
-        filtered = unsafe { message_filtered(qfp.qf_text) };
+        filtered = message_filtered(unsafe { cstr::at(qfp.qf_text) });
     }
     if filtered {
         return;
@@ -141,11 +141,11 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
         msg_putchar('\n' as c_int);
     }
     let cursel = if cursel { HLF_QFL } else { qfFile_hl_id.get() };
-    unsafe { msg_outtrans(heading.as_mut_ptr(), cursel, false) };
+    msg_display(unsafe { cstr::at(heading.as_mut_ptr()) }, cursel, false);
 
     // The position: "<lnum>[-<end>][ col <col>[-<end>]][ <type> <nr>]".
     if qfp.qf_lnum != 0 {
-        unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
+        msg_str_hl(c":", qfSep_hl_id.get(), false);
     }
     let position = build_line(|out| {
         if qfp.qf_lnum != 0 {
@@ -155,16 +155,16 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
         unsafe { push_cstr(out, types.as_ptr()) };
     });
     if position[0] != 0 {
-        unsafe { msg_puts_hl(position.as_ptr().cast(), qfLine_hl_id.get(), false) };
+        msg_str_hl(cstr::in_bytes(position), qfLine_hl_id.get(), false);
     }
-    unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
+    msg_str_hl(c":", qfSep_hl_id.get(), false);
 
     if !qfp.qf_pattern.is_null() {
         let pattern = build_line(|out| unsafe { qf_fmt_text(out, qfp.qf_pattern) });
-        unsafe { msg_puts(pattern.as_ptr().cast()) };
-        unsafe { msg_puts_hl(c":".as_ptr(), qfSep_hl_id.get(), false) };
+        msg_str(cstr::in_bytes(pattern));
+        msg_str_hl(c":", qfSep_hl_id.get(), false);
     }
-    unsafe { msg_puts(c" ".as_ptr()) };
+    msg_str(c" ");
 
     // The message itself. An unrecognized line keeps its indent, since
     // the compiler may be marking a word with "^^^^".

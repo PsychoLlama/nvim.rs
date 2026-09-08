@@ -112,7 +112,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         quit_more.set(false);
         got_int.set(false);
     } else if exmode_active.get() {
-        unsafe { msg_puts(c" ".as_ptr()) }; // make sure the cursor is on the right line
+        msg_str(c" "); // make sure the cursor is on the right line
         c = CAR; // no need for a return in ex mode
         got_int.set(false);
     } else if !stuff_empty() {
@@ -304,10 +304,10 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     }
     p_more.set(0); // don't want to see this message when scrolling back
     if got_int.get() {
-        unsafe { msg_puts(gettext(c"Interrupt: ").as_ptr()) };
+        msg_str(gettext(c"Interrupt: "));
     }
     let prompt = gettext(c"Press ENTER or type command to continue");
-    unsafe { msg_puts_hl(prompt.as_ptr(), HLF_R, false) };
+    msg_str_hl(prompt, HLF_R, false);
     if msg_use_printf() == 0 {
         unsafe { msg_clr_eos() };
     }

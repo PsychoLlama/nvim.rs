@@ -10,7 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use std::rc::Rc;
 
 /// The NUL an empty [`MapStr`] hands out instead of owning one.
@@ -61,13 +61,18 @@ impl MapStr {
         self.0.as_deref().unwrap_or(&EMPTY_MAP_STR)
     }
 
+    /// The content as a C string, which is what the message layer takes.
+    pub(crate) fn as_cstr(&self) -> &CStr {
+        crate::cstr::in_bytes(self.as_bytes_with_nul())
+    }
+
     /// A C string for the callees that still take one.
     pub(crate) fn as_ptr(&self) -> *const c_char {
         self.as_bytes_with_nul().as_ptr().cast()
     }
 
     /// A C string for the callees whose signature says `*mut` but that only
-    /// read (`ins_typebuf`, `msg_outtrans_special`).
+    /// read (`ins_typebuf`, `msg_display_keys`).
     pub(crate) fn as_mut_ptr(&self) -> *mut c_char {
         self.as_ptr().cast_mut()
     }

@@ -77,8 +77,8 @@ use crate::memory::{
 use crate::message::state::{msg_ext_skip_flush, redir_reg};
 use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
 use crate::message::{
-    emsg, emsg_invreg, message_filtered, msg, msg_ext_set_kind, msg_outtrans_len, msg_putchar,
-    msg_puts, msg_puts_hl, msg_puts_title, msgmore,
+    emsg, emsg_invreg, message_filtered, msg, msg_display_bytes, msg_ext_set_kind, msg_putchar,
+    msg_str, msg_str_hl, msg_title, msgmore,
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::normal::find_ident_under_cursor;

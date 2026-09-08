@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::{skiptowhite, skipwhite, vim_strsize};
@@ -17,7 +18,7 @@ use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::message::state::{msg_col, msg_silent};
 use crate::message::{
-    message_filtered, msg_advance, msg_clr_eos, msg_outtrans, msg_putchar, msg_puts_hl,
+    message_filtered, msg_advance, msg_clr_eos, msg_display, msg_putchar, msg_str_hl,
 };
 use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
@@ -147,10 +148,10 @@ unsafe fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool
     unsafe { syn_list_header(didh, width, id, false) };
     if !got_int.get() {
         if !name.is_empty() {
-            unsafe { msg_puts_hl(name.as_ptr(), HLF_D, false) };
-            unsafe { msg_puts_hl(c"=".as_ptr(), HLF_D, false) };
+            msg_str_hl(name, HLF_D, false);
+            msg_str_hl(c"=", HLF_D, false);
         }
-        unsafe { msg_outtrans(text.as_ptr(), 0, false) };
+        msg_display(text, 0, false);
     }
     true
 }
@@ -168,7 +169,7 @@ fn color(idx: c_int, value: c_int, buf: &mut HexBuf) -> ListValue<'_> {
 pub(crate) unsafe fn highlight_list_one(id: c_int) {
     let entry = group(id);
     // SAFETY: the name is a live static string.
-    if unsafe { message_filtered(entry.name.as_ptr().cast_mut()) } {
+    if message_filtered(unsafe { cstr::at(entry.name.as_ptr().cast_mut()) }) {
         return;
     }
     // Don't list a specialized `@a.b` group if its parent is used instead.
@@ -196,9 +197,9 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
     if entry.link != 0 && !got_int.get() {
         unsafe { syn_list_header(didh, 0, id, true) };
         didh = true;
-        unsafe { msg_puts_hl(c"links to".as_ptr(), HLF_D, false) };
+        msg_str_hl(c"links to", HLF_D, false);
         msg_putchar(' ' as c_int);
-        unsafe { msg_outtrans(group(entry.link).name.as_ptr(), 0, false) };
+        msg_display(group(entry.link).name, 0, false);
     }
 
     if !didh {
@@ -236,7 +237,7 @@ pub(crate) unsafe fn syn_list_header(
         if got_int.get() {
             return true;
         }
-        name_col = unsafe { msg_outtrans(group(id).name.as_ptr(), 0, false) };
+        name_col = msg_display(group(id).name, 0, false);
         msg_col.set(name_col);
         endcol = 15;
     } else if (ui_has(kUIMessages) || msg_silent.get() != 0) && !force_newline {
@@ -264,7 +265,7 @@ pub(crate) unsafe fn syn_list_header(
         if endcol == Columns.get() - 1 && endcol <= name_col {
             msg_putchar(' ' as c_int);
         }
-        unsafe { msg_puts_hl(c"xxx".as_ptr(), id, false) };
+        msg_str_hl(c"xxx", id, false);
         msg_putchar(' ' as c_int);
     }
 
@@ -291,10 +292,10 @@ unsafe fn highlight_list() {
 /// # Safety
 /// See [`highlight_list`].
 unsafe fn highlight_list_two(cnt: c_int, id: c_int) {
-    const FRAMES: &CStr = c"N \x08I \x08!  \x08";
-    // SAFETY: main-thread message calls; the index is 0 or 9, both inside.
+    const FRAMES: &[u8] = b"N \x08I \x08!  \x08\0";
+    // The index is 0 or 9, both inside.
     let at = (cnt / 11) as usize;
-    unsafe { msg_puts_hl(FRAMES.as_ptr().add(at), id, false) };
+    msg_str_hl(cstr::in_bytes(&FRAMES[at..]), id, false);
     unsafe { msg_clr_eos() };
     unsafe { ui_flush() };
     // TODO(justinmk): is this delay needed? ":hi" seems to work without it.

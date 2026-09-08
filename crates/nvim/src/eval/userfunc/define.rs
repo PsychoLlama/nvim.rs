@@ -54,15 +54,15 @@ pub(crate) unsafe fn list_func_head(
     }
 
     if indent {
-        unsafe { msg_puts(c"   ".as_ptr()) };
+        msg_str(c" ");
     }
     let intro = if force {
         c"function! ".as_ptr()
     } else {
         c"function ".as_ptr()
     };
-    unsafe { msg_puts(intro) };
-    unsafe { msg_puts(printable_func_name(func)) };
+    msg_str(unsafe { cstr::at(intro) });
+    msg_str(unsafe { cstr::at(printable_func_name(func)) });
     msg_putchar(b'(' as c_int);
 
     let args = ga_strings(&f.uf_args);
@@ -74,19 +74,19 @@ pub(crate) unsafe fn list_func_head(
     let first_default = args.len().saturating_sub(defaults.len());
     for (j, &arg) in args.iter().enumerate() {
         if j != 0 {
-            unsafe { msg_puts(c", ".as_ptr()) };
+            msg_str(c", ");
         }
-        unsafe { msg_puts(arg) };
+        msg_str(unsafe { cstr::at(arg) });
         if j >= first_default {
-            unsafe { msg_puts(c" = ".as_ptr()) };
-            unsafe { msg_puts(defaults[j - first_default]) };
+            msg_str(c" = ");
+            msg_str(unsafe { cstr::at(defaults[j - first_default]) });
         }
     }
     if f.uf_varargs != 0 {
         if !args.is_empty() {
-            unsafe { msg_puts(c", ".as_ptr()) };
+            msg_str(c", ");
         }
-        unsafe { msg_puts(c"...".as_ptr()) };
+        msg_str(c"...");
     }
     msg_putchar(b')' as c_int);
 
@@ -97,7 +97,7 @@ pub(crate) unsafe fn list_func_head(
         (FuncFlags::CLOSURE, c" closure"),
     ] {
         if f.uf_flags.has(flag) {
-            unsafe { msg_puts(text.as_ptr()) };
+            msg_str(text);
         }
     }
 

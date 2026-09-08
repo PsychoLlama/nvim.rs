@@ -22,7 +22,7 @@ use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 const CHECK_PATH: c_int = super::CHECK_PATH as c_int;
@@ -39,6 +39,12 @@ struct Name(*mut c_char);
 impl Name {
     fn as_ptr(&self) -> *mut c_char {
         self.0
+    }
+
+    fn as_cstr(&self) -> &CStr {
+        // SAFETY: the allocation is live and NUL-terminated for as long as
+        // this owns it.
+        unsafe { cstr::at(self.0) }
     }
 }
 
@@ -416,8 +422,8 @@ unsafe fn handle_include(
             if !got_int.get() {
                 // Don't display if 'q' was typed at the
                 // "--more--" message.
-                unsafe { msg_home_replace(name.as_ptr()) };
-                unsafe { msg_puts(gettext(c" (includes previously listed match)").as_ptr()) };
+                msg_home_replace(name.as_cstr());
+                msg_str(gettext(c" (includes previously listed match)"));
                 walk.prev_fname = ptr::null_mut();
             }
         }
@@ -481,11 +487,11 @@ unsafe fn show_include_name(
         msg_putchar('\n' as c_int); // cursor below the last one
     } else {
         gotocmdline(true); // cursor at the status line
-        unsafe { msg_puts_title(gettext(c"--- Included files ").as_ptr()) };
+        msg_title(gettext(c"--- Included files "));
         if action != ACTION_SHOW_ALL {
-            unsafe { msg_puts_title(gettext(c"not found ").as_ptr()) };
+            msg_title(gettext(c"not found "));
         }
-        unsafe { msg_puts_title(gettext(c"in path ---\n").as_ptr()) };
+        msg_title(gettext(c"in path ---\n"));
     }
     walk.did_show = true;
 
@@ -493,24 +499,28 @@ unsafe fn show_include_name(
     while walk.depth_displayed < walk.files.depth() && !got_int.get() {
         walk.depth_displayed += 1;
         for _ in 0..walk.depth_displayed {
-            unsafe { msg_puts(c"  ".as_ptr()) };
+            msg_str(c" ");
         }
-        unsafe { msg_home_replace(walk.files.open[walk.depth_displayed as usize].name.as_ptr()) };
-        unsafe { msg_puts(c" -->\n".as_ptr()) };
+        msg_home_replace(
+            walk.files.open[walk.depth_displayed as usize]
+                .name
+                .as_cstr(),
+        );
+        msg_str(c" -->\n");
     }
     if got_int.get() {
         // Don't display if 'q' was typed at the "--more--" message.
         return;
     }
     for _ in 0..=walk.depth_displayed {
-        unsafe { msg_puts(c"  ".as_ptr()) };
+        msg_str(c" ");
     }
 
     match new_fname {
         // Using the resolved name is more reliable, e.g. when
         // 'includeexpr' is set.
         Some(name) => {
-            unsafe { msg_outtrans(name.as_ptr(), HLF_D, false) };
+            msg_display(name.as_cstr(), HLF_D, false);
         }
         None => {
             // Isolate the file name off the line, including the
@@ -554,16 +564,16 @@ unsafe fn show_include_name(
             }
             let save = unsafe { *p.offset(i as isize) };
             unsafe { *p.offset(i as isize) = NUL as c_char };
-            unsafe { msg_outtrans(p, HLF_D, false) };
+            msg_display(unsafe { cstr::at(p) }, HLF_D, false);
             unsafe { *p.offset(i as isize) = save };
         }
     }
 
     if new_fname.is_none() && action == ACTION_SHOW_ALL {
         if already_searched {
-            unsafe { msg_puts(gettext(c"  (Already listed)").as_ptr()) };
+            msg_str(gettext(c" (Already listed)"));
         } else {
-            unsafe { msg_puts(gettext(c"  NOT FOUND").as_ptr()) };
+            msg_str(gettext(c" NOT FOUND"));
         }
     }
 }
@@ -697,7 +707,7 @@ unsafe fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
         if !got_int.get() {
             // Don't display if 'q' was typed at the "--more--"
             // message.
-            unsafe { msg_home_replace(walk.curr_fname) };
+            msg_home_replace(unsafe { cstr::at(walk.curr_fname) });
         }
         walk.prev_fname = walk.curr_fname;
     }

@@ -167,12 +167,12 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
     }
     let arg = unsafe { skipwhite(args.arg) };
     if unsafe { *arg } as c_int == NUL {
-        unsafe { msg_puts(c"\n".as_ptr()) };
+        msg_str(c"\n");
         if !is_empty_option(cur_syn_block().b_syn_isk) {
-            unsafe { msg_puts(c"syntax iskeyword ".as_ptr()) };
-            unsafe { msg_outtrans(cur_syn_block().b_syn_isk, 0, false) };
+            msg_str(c"syntax iskeyword ");
+            msg_display(unsafe { cstr::at(cur_syn_block().b_syn_isk) }, 0, false);
         } else {
-            unsafe { msg_outtrans(gettext(c"syntax iskeyword not set").as_ptr(), 0, false) };
+            msg_display(gettext(c"syntax iskeyword not set"), 0, false);
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
         cur_syn_block().b_syn_chartab = buf_chartab();

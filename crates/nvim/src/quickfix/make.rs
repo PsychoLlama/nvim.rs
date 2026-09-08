@@ -88,8 +88,8 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut
         msg_didout.set(false);
     }
     msg_start();
-    unsafe { msg_puts(c":!".as_ptr()) };
-    unsafe { msg_outtrans(cmd, 0, false) };
+    msg_str(c":!");
+    msg_display(unsafe { cstr::at(cmd) }, 0, false);
 
     cmd
 }

@@ -191,9 +191,9 @@ unsafe fn display_fname(fname: *mut c_char) {
     msg_start();
     let truncated = unsafe { msg_strtrunc(fname, 1) };
     if truncated.is_null() {
-        unsafe { msg_outtrans(fname, 0, false) };
+        msg_display(unsafe { cstr::at(fname) }, 0, false);
     } else {
-        unsafe { msg_outtrans(truncated, 0, false) };
+        msg_display(unsafe { cstr::at(truncated) }, 0, false);
         unsafe { xfree(truncated.cast()) };
     }
     unsafe { msg_clr_eos() };

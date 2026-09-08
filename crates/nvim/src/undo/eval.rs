@@ -85,8 +85,7 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
     rows.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
     msg_start();
     let heading = gettext(c"number changes  when               saved");
-    // SAFETY: the string `gettext` just answered, NUL-terminated.
-    unsafe { msg_puts_hl(heading.as_ptr(), HLF_T, false) };
+    msg_str_hl(heading, HLF_T, false);
     for row in &rows {
         if got_int.get() {
             break;
@@ -95,8 +94,7 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
         if got_int.get() {
             break;
         }
-        // SAFETY: a NUL-terminated string this function owns.
-        unsafe { msg_puts(row.as_ptr()) };
+        msg_str(row);
     }
     msg_end();
 }

@@ -73,10 +73,10 @@ pub(crate) unsafe fn print_tag_list(
     }
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
     msg_start();
-    unsafe { msg_puts_hl(gettext(c"  # pri kind tag").as_ptr(), HLF_T, false) };
+    msg_str_hl(gettext(c" # pri kind tag"), HLF_T, false);
     unsafe { msg_clr_eos() };
     unsafe { advance_to_files(taglen) };
-    unsafe { msg_puts_hl(gettext(c"file\n").as_ptr(), HLF_T, false) };
+    msg_str_hl(gettext(c"file\n"), HLF_T, false);
 
     'each: for i in 0..num_matches {
         if got_int.get() {
@@ -162,21 +162,25 @@ unsafe fn print_entry_head(
             PRIORITY[(*entry as c_int & MT_MASK as c_int) as usize].as_ptr(),
         )
     };
-    unsafe { msg_puts(buf) };
+    msg_str(unsafe { cstr::at(buf) });
 
     if !tagp.tagkind.is_null() {
-        let len = unsafe { tagp.tagkind_end.offset_from(tagp.tagkind) } as c_int;
-        unsafe { msg_outtrans_len(tagp.tagkind, len, 0, false) };
+        // SAFETY: `tagkind_end` points into the same line as `tagkind`.
+        let len = unsafe { tagp.tagkind_end.offset_from(tagp.tagkind) }.cast_unsigned();
+        // SAFETY: as above.
+        msg_display_bytes(unsafe { cstr::slice_at(tagp.tagkind, len) }, 0, false);
     }
     msg_advance(13);
-    let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
-    unsafe { msg_outtrans_len(tagp.tagname, len, HLF_T, false) };
+    // SAFETY: `tagname_end` points into the same line as `tagname`.
+    let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) }.cast_unsigned();
+    // SAFETY: as above.
+    msg_display_bytes(unsafe { cstr::slice_at(tagp.tagname, len) }, HLF_T, false);
     msg_putchar(' ' as c_int);
     unsafe { advance_to_files(taglen) };
 
     let fname = unsafe { tag_full_fname(tagp) };
     if !fname.is_null() {
-        unsafe { msg_outtrans(fname, HLF_D, false) };
+        msg_display(unsafe { cstr::at(fname) }, HLF_D, false);
         unsafe { xfree(fname.cast()) };
     }
 }
@@ -224,9 +228,10 @@ unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
                 }
                 msg_advance(INFO_COLUMN);
             }
-            p = unsafe { msg_outtrans_one(p, hl_id, false) };
+            // SAFETY: `p` walks a NUL-terminated field.
+            p = unsafe { p.add(msg_display_char(cstr::bytes_at(p), hl_id, false)) };
             if unsafe { *p } == TAB as c_char {
-                unsafe { msg_puts_hl(c" ".as_ptr(), hl_id, false) };
+                msg_str_hl(c" ", hl_id, false);
                 break;
             }
             if unsafe { *p } == b':' as c_char {
@@ -292,7 +297,8 @@ unsafe fn print_command(tagp: &TagParts, command_end: *const c_char) {
             msg_putchar(' ' as c_int);
             p = unsafe { p.add(1) };
         } else {
-            p = unsafe { msg_outtrans_one(p, 0, false) };
+            // SAFETY: `p` walks the command, which is NUL-terminated.
+            p = unsafe { p.add(msg_display_char(cstr::bytes_at(p), 0, false)) };
         }
 
         // Stop before the `$/` or `$?` that closes an anchored pattern.

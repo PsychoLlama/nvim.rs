@@ -147,13 +147,13 @@ pub(crate) unsafe fn au_show_for_event(
                     // A group whose name is gone is one `:augroup!`
                     // renamed out from under its autocommands.
                     if last_group_name.is_null() {
-                        unsafe { msg_puts_hl(get_deleted_augroup(), HLF_E, false) };
+                        msg_str_hl(unsafe { cstr::at(get_deleted_augroup()) }, HLF_E, false);
                     } else {
-                        unsafe { msg_puts_hl(last_group_name, HLF_T, false) };
+                        msg_str_hl(unsafe { cstr::at(last_group_name) }, HLF_T, false);
                     }
-                    unsafe { msg_puts(c"  ".as_ptr()) };
+                    msg_str(c" ");
                 }
-                unsafe { msg_puts_hl(event_nr2name(event), HLF_T, false) };
+                msg_str_hl(unsafe { cstr::at(event_nr2name(event)) }, HLF_T, false);
             }
 
             // The pattern only when it changed.
@@ -165,7 +165,7 @@ pub(crate) unsafe fn au_show_for_event(
                 }
                 msg_advance(4);
                 // SAFETY: the pattern's own NUL-terminated text.
-                unsafe { msg_outtrans((*ap).pat, 0, false) };
+                msg_display(unsafe { cstr::at((*ap).pat) }, 0, false);
             }
 
             if got_int.get() {
@@ -186,9 +186,9 @@ pub(crate) unsafe fn au_show_for_event(
             if unsafe { (*ac).desc.is_null() } {
                 // A command is transliterated, a callback is not.
                 if unsafe { (*ac).handler_cmd.is_null() } {
-                    unsafe { msg_puts_hl(handler_str, HLF_8, false) };
+                    msg_str_hl(unsafe { cstr::at(handler_str) }, HLF_8, false);
                 } else {
-                    unsafe { msg_outtrans(handler_str, 0, false) };
+                    msg_display(unsafe { cstr::at(handler_str) }, 0, false);
                 }
             } else {
                 let msglen: size_t = 100;
@@ -197,12 +197,12 @@ pub(crate) unsafe fn au_show_for_event(
                 // are NUL-terminated, as `%s` wants.
                 let msg = unsafe { xmallocz(msglen) }.cast::<::core::ffi::c_char>();
                 if unsafe { (*ac).handler_cmd.is_null() } {
-                    unsafe { msg_puts_hl(handler_str, HLF_8, false) };
+                    msg_str_hl(unsafe { cstr::at(handler_str) }, HLF_8, false);
                     unsafe { snprintf(msg, msglen, c" [%s]".as_ptr(), (*ac).desc) };
                 } else {
                     unsafe { snprintf(msg, msglen, c"%s [%s]".as_ptr(), handler_str, (*ac).desc) };
                 }
-                unsafe { msg_outtrans(msg, 0, false) };
+                msg_display(unsafe { cstr::at(msg) }, 0, false);
                 unsafe { xfree(msg.cast::<::core::ffi::c_void>()) };
             }
             unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };

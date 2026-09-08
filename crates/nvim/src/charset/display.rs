@@ -417,7 +417,7 @@ pub unsafe fn str_foldcase(
 /// A character's display form, NUL-terminated within its own storage.
 ///
 /// Upstream answers a pointer into one shared static buffer, so a second
-/// rendering invalidates the first — which the `msg_outtrans` family walks
+/// rendering invalidates the first — which the `msg_display` family walks
 /// straight into, holding one rendering while it asks for the next.
 pub(crate) type CharDisplay = [c_char; CHAR_DISPLAY_LEN];
 

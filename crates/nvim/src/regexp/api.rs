@@ -23,7 +23,7 @@ use super::{
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::called_emsg;
-use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
+use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{p_re, p_verbose};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
@@ -104,8 +104,9 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
         if p_verbose.get() > 0 as OptInt {
             unsafe { verbose_enter() };
             let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
-            unsafe { msg_puts(gettext_ptr(note).as_ptr()) };
-            unsafe { msg_puts(expr) };
+            // SAFETY: the translation of a static message.
+            msg_str(unsafe { gettext_ptr(note) });
+            msg_str(unsafe { cstr::at(expr) });
             unsafe { verbose_leave() };
         }
         let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
@@ -151,8 +152,10 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
     p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {
         unsafe { verbose_enter() };
-        unsafe { msg_puts(gettext(c"Switching to backtracking RE engine for pattern: ").as_ptr()) };
-        unsafe { msg_puts(pat) };
+        msg_str(gettext(
+            c"Switching to backtracking RE engine for pattern: ",
+        ));
+        msg_str(unsafe { cstr::at(pat) });
         unsafe { verbose_leave() };
     }
     if extmatch {

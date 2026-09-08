@@ -36,7 +36,7 @@ use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::memory::{xfree, xrealloc, xstrlcpy};
 use crate::message::state::{lines_left, msg_no_more};
-use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
+use crate::message::{msg_display, msg_end, msg_putchar, msg_sb_eol, msg_start};
 use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::os::cshim::gettext;
@@ -128,10 +128,10 @@ pub(crate) unsafe fn do_os_system(
             loop_poll_events(main_loop.ptr(), 0);
             // Probably 'shell' is not executable.
             if !silent {
-                msg_puts(gettext(c"\nshell failed to start: ").as_ptr());
-                msg_outtrans(uv_strerror(status), 0, false);
-                msg_puts(c": ".as_ptr());
-                msg_outtrans(prog.as_ptr(), 0, false);
+                msg_str(gettext(c"\nshell failed to start: "));
+                msg_display(cstr::at(uv_strerror(status)), 0, false);
+                msg_str(c": ");
+                msg_display(cstr::in_chars(&prog), 0, false);
                 msg_putchar('\n' as c_int);
             }
             multiqueue_free(events);

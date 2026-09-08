@@ -32,7 +32,7 @@ const STAR: c_char = b'*'.cast_signed();
 const ZERO: c_char = b'0'.cast_signed();
 
 /// A `vim_snprintf` into a fresh [`MSG_BUF_LEN`] buffer, kept as bytes so the
-/// caller can hand the result straight back to `msg_puts`.
+/// caller can hand the result straight back to `msg_str`.
 ///
 /// Every message in this module is bounded that way upstream; `MSG_BUF_LEN`
 /// is 480, and the format arguments (a file name, a group name, a sign name)
@@ -56,8 +56,7 @@ macro_rules! msg_buf {
 pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
-    // SAFETY: a static title.
-    unsafe { msg_puts_title(gettext(c"\n--- Signs ---").as_ptr()) };
+    msg_title(gettext(c"\n--- Signs ---"));
 
     let mut cur = match rbuf {
         Some(buf) => Some(buf),
@@ -73,8 +72,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
             // A live buffer's name is a NUL-terminated string, and the
             // formatting happens inside `msg_buf!`'s own region.
             let lbuf = msg_buf!(c"Signs for %s:", cbuf.b_fname);
-            // SAFETY: `lbuf` is this frame's NUL-terminated buffer.
-            unsafe { msg_puts_hl(lbuf.as_ptr(), HLF_D, false) };
+            msg_str_hl(cstr::in_chars(&lbuf), HLF_D, false);
         }
 
         // A group that names no namespace matches nothing, but still prints
@@ -129,8 +127,7 @@ unsafe fn report_signs(signs: &[MTKey]) {
             namebuf.as_ptr(),
             c_int::from(sh.priority),
         );
-        // SAFETY: each buffer above is this frame's, and NUL-terminated.
-        unsafe { msg_puts(lbuf.as_ptr()) };
+        msg_str(cstr::in_chars(&lbuf));
         if i + 1 < signs.len() {
             msg_putchar('\n' as c_int);
         }
@@ -169,19 +166,19 @@ pub(crate) unsafe fn sign_list_defined(sign: SignRef) {
     let sn_name = unsafe { c_str(sign.sn_name) };
     smsg!(0, "sign {sn_name}");
     if !sign.sn_icon.is_null() {
-        unsafe { msg_puts(c" icon=".as_ptr()) };
-        unsafe { msg_outtrans(sign.sn_icon, 0, false) };
-        unsafe { msg_puts(gettext(c" (not supported)").as_ptr()) };
+        msg_str(c" icon=");
+        msg_display(unsafe { cstr::at(sign.sn_icon) }, 0, false);
+        msg_str(gettext(c" (not supported)"));
     }
     if sign.sn_text[0] != 0 {
-        unsafe { msg_puts(c" text=".as_ptr()) };
+        msg_str(c" text=");
         let mut buf = [0 as c_char; SIGN_TEXT_BUF];
         unsafe { describe_sign_text(buf.as_mut_ptr(), sign.cells()) };
-        unsafe { msg_outtrans(buf.as_ptr(), 0, false) };
+        msg_display(cstr::in_chars(&buf), 0, false);
     }
     if sign.sn_priority > 0 {
         let lbuf = msg_buf!(c" priority=%d", sign.sn_priority);
-        unsafe { msg_puts(lbuf.as_ptr()) };
+        msg_str(cstr::in_chars(&lbuf));
     }
     let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
     let ids = [
@@ -192,9 +189,10 @@ pub(crate) unsafe fn sign_list_defined(sign: SignRef) {
     ];
     for (label, id) in labels.into_iter().zip(ids) {
         if id > 0 {
-            unsafe { msg_puts(label.as_ptr()) };
+            msg_str(label);
             let p = unsafe { get_highlight_name_ext(::core::ptr::null_mut(), id - 1, false) };
-            unsafe { msg_puts(if p.is_null() { c"NONE".as_ptr() } else { p }) };
+            // SAFETY: a highlight group's own name, NUL-terminated.
+            msg_str(unsafe { cstr::at_opt(p) }.unwrap_or(c"NONE"));
         }
     }
 }

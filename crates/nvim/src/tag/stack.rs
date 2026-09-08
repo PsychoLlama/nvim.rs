@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::highlight_group::HLF_D;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -229,7 +230,7 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
     let curidx = stack.curidx();
     let len = stack.len();
 
-    unsafe { msg_puts_title(gettext(c"\n  # TO tag         FROM line  in file/text").as_ptr()) };
+    msg_title(gettext(c"\n # TO tag FROM line in file/text"));
     for (i, item) in stack.entries().iter_mut().enumerate() {
         if item.tagname.is_null() {
             continue;
@@ -244,7 +245,7 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
         // buffer is truncated, as upstream truncates it.
         let str_m = IOSIZE as size_t;
         // Two trailing spaces: the file name that follows is a separate
-        // `msg_outtrans`, and the gap is part of this format.
+        // `msg_display`, and the gap is part of this format.
         let fmt = c"%c%2d %2d %-15s %5d  ".as_ptr();
         let args = if i as c_int == curidx { '>' } else { ' ' } as c_int;
         let arg5 = i as c_int + 1;
@@ -263,18 +264,18 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
                 lnum2,
             )
         };
-        unsafe { msg_outtrans(row.as_ptr(), 0, false) };
+        msg_display(cstr::in_chars(&row), 0, false);
         let hl = if item.fmark.fnum == Buf::current().handle {
             HLF_D
         } else {
             0
         };
-        unsafe { msg_outtrans(name, hl, false) };
+        msg_display(unsafe { cstr::at(name) }, hl, false);
         unsafe { xfree(name.cast()) };
     }
     if curidx as usize == len {
         // Nothing has been popped: show where the next CTRL-T lands.
-        unsafe { msg_puts(c"\n>".as_ptr()) };
+        msg_str(c"\n>");
     }
 }
 

@@ -29,8 +29,8 @@ use crate::message::state::{
     called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
 };
 use crate::message::{
-    emsg_multiline, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind, msg_multiline,
-    msg_outnum, msg_ptr, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,
+    emsg_multiline, msg_bytes, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind,
+    msg_multiline, msg_outnum, msg_ptr, msg_sb_eol, msg_start, msg_str, msg_str_hl, verbose_enter,
     verbose_leave,
 };
 use crate::message_fmt::c_str;
@@ -39,8 +39,8 @@ use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     EvalArg, ExArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock,
-    ptrdiff_t, size_t, typval_vval_union,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, size_t,
+    typval_vval_union,
 };
 use crate::ui::ui_has;
 
@@ -122,7 +122,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
             } else if args.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
                 // SAFETY: the separator is a NUL-terminated literal.
-                unsafe { msg_puts_hl(c" ".as_ptr(), echo_hl_id.get(), false) };
+                msg_str_hl(c" ", echo_hl_id.get(), false);
             }
             // SAFETY: `rettv` is this frame's.
             let tofree = unsafe { encode_tv2echo(&raw mut rettv, null_mut::<size_t>()) };
@@ -151,8 +151,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
     // SAFETY: the command's argument is NUL-terminated.
     if ui_has(kUIMessages) && ends_args(unsafe { *args.arg }) {
         // A bare `:echo` still has to produce an (empty) message.
-        // SAFETY: the literal is NUL-terminated and zero bytes long.
-        unsafe { msg_puts_len(c"".as_ptr(), 0 as ptrdiff_t, 0, false) };
+        msg_bytes(b"", 0, false);
     } else if need_clear {
         unsafe { msg_clr_eos() };
     }
@@ -318,18 +317,15 @@ pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
     let p = get_scriptname(script_ctx, true);
     msg_ext_skip_verbose.set(true);
     unsafe { verbose_enter() };
-    // SAFETY: the text is a NUL-terminated literal.
-    unsafe { msg_puts(gettext(c"\n\tLast set from ").as_ptr()) };
-    // SAFETY: the `CString` `p` outlives the call.
-    unsafe { msg_puts(p.as_ptr()) };
+    msg_str(gettext(c"\n\tLast set from "));
+    msg_str(&p);
     if script_ctx.sc_lnum > 0 as LineNr {
-        // SAFETY: `line_msg` is a shared NUL-terminated message.
-        unsafe { msg_puts(gettext(line_msg).as_ptr()) };
+        msg_str(gettext(line_msg));
         msg_outnum(script_ctx.sc_lnum as c_int);
     // SAFETY: the caller's promise about `script_ctx`.
     } else if script_is_lua(script_ctx.sc_sid) {
         // SAFETY: the hint is a NUL-terminated literal.
-        unsafe { msg_puts(gettext(c" (run Nvim with -V1 for more details)").as_ptr()) };
+        msg_str(gettext(c" (run Nvim with -V1 for more details)"));
     }
     unsafe { verbose_leave() };
 }
