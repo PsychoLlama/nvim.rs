@@ -871,3 +871,119 @@ unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CSt
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Split `text` the way [`spell_read_aff`] splits one line of a `.aff`
+    /// file, and answer the items as bytes.
+    fn items_of(text: &str) -> Vec<Vec<u8>> {
+        let mut line: Vec<c_char> = text.bytes().map(|byte| byte as c_char).collect();
+        line.push(NUL as c_char);
+        let mut items = [core::ptr::null_mut(); MAXITEMCNT];
+        // SAFETY: a NUL-terminated buffer of this call's own.
+        let count = unsafe { split_items(line.as_mut_ptr(), &mut items) };
+        // SAFETY: the splitter terminated each of the items it counted.
+        (0..count)
+            .map(|at| unsafe { cstr::bytes_at(items[at]) }.to_vec())
+            .collect()
+    }
+
+    fn strs(items: &[Vec<u8>]) -> Vec<&str> {
+        items
+            .iter()
+            .map(|item| core::str::from_utf8(item).expect("ASCII test input"))
+            .collect()
+    }
+
+    #[test]
+    fn items_are_separated_by_runs_of_white_space() {
+        let items = items_of("SET UTF-8");
+        assert_eq!(strs(&items), ["SET", "UTF-8"]);
+        let items = items_of("  PFX \t A\tY   1  ");
+        assert_eq!(strs(&items), ["PFX", "A", "Y", "1"]);
+    }
+
+    #[test]
+    fn a_blank_line_has_no_items() {
+        assert_eq!(items_of("").len(), 0);
+        assert_eq!(items_of("   \t  ").len(), 0);
+    }
+
+    /// `#` is not comment syntax to the splitter: it is an ordinary item,
+    /// and it is the *keyword tests* that let a rule end with one.
+    #[test]
+    fn a_hash_is_an_item_like_any_other() {
+        let items = items_of("MIDWORD ' # why it is here");
+        assert_eq!(
+            strs(&items),
+            ["MIDWORD", "'", "#", "why", "it", "is", "here"]
+        );
+    }
+
+    /// An informational keyword's argument is the rest of the line, spaces
+    /// and all -- **trailing ones included**, because the walk stops at the
+    /// terminator rather than at the last printing character.
+    #[test]
+    fn an_info_keyword_takes_the_rest_of_the_line() {
+        let items = items_of("NAME  Some Dictionary  ");
+        assert_eq!(strs(&items), ["NAME", "Some Dictionary  "]);
+        for keyword in ["HOME", "VERSION", "AUTHOR", "EMAIL", "COPYRIGHT"] {
+            let items = items_of(&format!("{keyword} a b"));
+            assert_eq!(strs(&items), [keyword, "a b"]);
+        }
+        // Only the *second* item swallows the rest, and only for these
+        // keywords.
+        assert_eq!(strs(&items_of("NAME")), ["NAME"]);
+        assert_eq!(strs(&items_of("TRY a b")), ["TRY", "a", "b"]);
+    }
+
+    /// The rest-of-the-line walk stops at a control character that is not a
+    /// tab, and the ordinary splitting picks up again after it.
+    #[test]
+    fn a_control_character_ends_an_info_keywords_argument() {
+        let items = items_of("NAME Some\u{1}Dictionary");
+        assert_eq!(strs(&items), ["NAME", "Some", "Dictionary"]);
+        let items = items_of("NAME Some\tDictionary");
+        assert_eq!(strs(&items), ["NAME", "Some\tDictionary"]);
+    }
+
+    /// Past `MAXITEMCNT` the rest of the line is dropped -- and the last
+    /// item kept is a whole one, because its terminator is written before
+    /// the count is looked at again.
+    #[test]
+    fn a_line_stops_at_the_item_limit() {
+        let text: Vec<String> = (0..MAXITEMCNT + 5).map(|at| format!("i{at}")).collect();
+        let items = items_of(&text.join(" "));
+        assert_eq!(items.len(), MAXITEMCNT);
+        assert_eq!(items[0], b"i0");
+        assert_eq!(
+            items[MAXITEMCNT - 1],
+            format!("i{}", MAXITEMCNT - 1).as_bytes()
+        );
+    }
+
+    /// A rule is its keyword, a count of items, and one allowance: a
+    /// trailing comment does not make the line a different rule.
+    #[test]
+    fn a_rule_is_its_keyword_and_a_count_of_items() {
+        let mut owned: Vec<Vec<c_char>> = ["SET", "UTF-8", "# and a comment"]
+            .iter()
+            .map(|item| {
+                let mut bytes: Vec<c_char> = item.bytes().map(|byte| byte as c_char).collect();
+                bytes.push(NUL as c_char);
+                bytes
+            })
+            .collect();
+        let items: Vec<*mut c_char> = owned.iter_mut().map(|item| item.as_mut_ptr()).collect();
+        // SAFETY: the buffers above are NUL-terminated and live.
+        unsafe {
+            assert!(is_aff_rule(&items[..2], c"SET", 2));
+            assert!(!is_aff_rule(&items[..2], c"SET", 3));
+            assert!(!is_aff_rule(&items[..2], c"FLAG", 2));
+            assert!(is_aff_rule(&items, c"SET", 2));
+            assert!(!is_aff_rule(&items[..1], c"SET", 2));
+        }
+    }
+}
