@@ -90,6 +90,17 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# A/B two nvim binaries on one whole-binary bench, e.g.
+# `just bench-ab scrbench /tmp/a/nvim /tmp/b/nvim`. The bench is a name from
+# test/benchmark/ab (evalbench, inbench, mlbench, scrbench, spellbench);
+# extra args go to the driver (`[rounds]`, or `--cachegrind <nvim>` in place
+# of the two binaries, which is the measurement that actually settles a perf
+# question). Nothing gates on these: read test/benchmark/ab/README.md before
+# quoting a number, and note that the wall-clock lane wants both sides built
+# `--release` with `codegen-units = 1`, which `just build-release` is not.
+bench-ab bench *args:
+  @test/benchmark/ab/{{ bench }}.sh {{ args }}
+
 # Thirty-two differential oracles plus the startup probe, run over the binary
 # this tree builds. Every row must say IDENTICAL and the last line must be
 # `BATTERY_EXIT=0`; anything else is a behaviour change, intended or not, and
