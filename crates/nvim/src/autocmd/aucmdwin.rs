@@ -246,7 +246,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
                         if !tp.is_current() {
                             goto_tabpage_tp(tp, true, true);
                         }
-                        unsafe { win_goto(Win::new(awp)) };
+                        win_goto(wp);
                         // Nothing steps the walk after those two: the
                         // `break` leaves both loops before either iterator
                         // reads a link the tab switch could have moved.

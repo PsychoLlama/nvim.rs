@@ -49,17 +49,16 @@ use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 ///
 /// # Safety
 /// A live tab page's cursor window must be live, which it is.
-unsafe fn current_window_of(tabpage: TabPage) -> Win {
+fn current_window_of(tabpage: TabPage) -> Win {
     // As with [`windows_in_tab`], the current tab page's cursor window is the
     // `curwin` global rather than its own `tp_curwin`, which is only recorded
     // when the tab page is left.
-    // SAFETY: the caller's promise.
-    unsafe {
-        Win::new(if tabpage.is_current() {
-            Win::current_raw()
-        } else {
-            tabpage.current_window().map_or(ptr::null_mut(), Win::raw)
-        })
+    if tabpage.is_current() {
+        Win::current()
+    } else {
+        tabpage
+            .current_window()
+            .expect("a live tab page has a cursor window")
     }
 }
 
@@ -80,9 +79,9 @@ unsafe fn ui_ext_tabline_update() {
     let mut tab_infos = arena_array(arenap, tabs().count());
     for tp in tabs() {
         let mut info = arena_dict(arenap, 2);
-        let (handle, cwp) = (tp.handle as TabpageHandle, unsafe { current_window_of(tp) });
+        let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
-        unsafe { get_trans_bufname(Buf::new(cwp.buffer().raw()), &mut name) };
+        unsafe { get_trans_bufname(cwp.buffer(), &mut name) };
         put(
             &mut info,
             c"name",
@@ -199,11 +198,7 @@ unsafe fn draw_default_tabline() {
             break;
         }
         let scol = col;
-        // SAFETY: a live tab page and its own frame pointer.
-        let (cwp, current) = (
-            unsafe { current_window_of(tp) },
-            tp.tp_topframe == topframe.get(),
-        );
+        let (cwp, current) = (current_window_of(tp), tp.tp_topframe == topframe.get());
         if current {
             attr = win_hl(cwp, HLF_TPS);
         }
@@ -251,7 +246,7 @@ unsafe fn draw_default_tabline() {
         let room = scol - col + tabwidth - 1;
         if room > 0 {
             // SAFETY: a live window's buffer.
-            unsafe { get_trans_bufname(Buf::new(cwp.buffer().raw()), &mut name) };
+            unsafe { get_trans_bufname(cwp.buffer(), &mut name) };
             col += paint_bufname(col, room, attr, &mut name);
         }
         paint_schar(col, schar_from_ascii(b' '), attr);

@@ -36,11 +36,10 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Buffer, Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
+    Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
     VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
     kListLenMayKnow, kListLenUnknown, typval_vval_union,
 };
-use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -426,8 +425,8 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         return;
     }
     let prev_did_emsg = did_emsg.get();
-    let buf: *mut Buffer = unsafe { tv_get_buf(args.ptr(0), 0).map_or(ptr::null_mut(), Buf::raw) };
-    if buf.is_null() {
+    let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let Some(buf) = buf else {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
             let what = arg_string(&mut numbuf, args.get(0));
@@ -436,8 +435,8 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
             semsg!("E158: Invalid buffer name: {what}");
         }
         return;
-    }
-    if unsafe { (*buf).b_ml.ml_mfp }.is_null() {
+    };
+    if buf.b_ml.ml_mfp.is_null() {
         emsg(gettext(e_buffer_is_not_loaded));
         return;
     }
@@ -445,7 +444,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let pat = arg_string(&mut patbuf, args.get(1));
 
     let did_emsg_before = did_emsg.get();
-    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), Buf::from_raw(buf)) };
+    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), Some(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -454,7 +453,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), Buf::from_raw(buf)) };
+    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), Some(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -463,7 +462,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    elnum = elnum.min(unsafe { (*buf).b_ml.ml_line_count });
+    elnum = elnum.min(buf.b_ml.ml_line_count);
 
     let Some(submatches) = (unsafe { want_submatches(args, 4) }) else {
         return;
@@ -474,7 +473,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         return;
     };
     while slnum <= elnum {
-        let str = unsafe { ml_get_buf(Buf::new(buf), slnum) };
+        let str = unsafe { ml_get_buf(buf, slnum) };
         unsafe { get_matches_in_str(str, &raw mut prog.0, retlist, slnum, submatches, true) };
         slnum += 1;
     }
