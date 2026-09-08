@@ -139,13 +139,12 @@ impl Lines {
         let buf = self.0.raw();
         // SAFETY: a live buffer.
         let buf = unsafe { Buf::new(buf) };
-        // SAFETY: a live buffer. `ml_get_buf` never answers NULL, and the
-        // second call is a cache hit on the line the first one just read, so
-        // it is that line's length: the slice is the line. The borrow of
-        // `self` is what keeps the next read from invalidating it.
+        // SAFETY: a live buffer, and `ml_get_buf` never answers NULL. The
+        // borrow of `self` is what keeps the next read from invalidating the
+        // slice.
         unsafe {
             let text = ml_get_buf(buf, lnum).cast::<u8>();
-            ::core::slice::from_raw_parts(text, to_len(ml_get_buf_len(buf, lnum)))
+            ::core::slice::from_raw_parts(text, cached_line_len(buf, text))
         }
     }
 
@@ -158,12 +157,12 @@ impl Lines {
         let buf = self.0.raw();
         // SAFETY: a live buffer.
         let buf = unsafe { Buf::new(buf) };
-        // SAFETY: as [`Lines::line`] -- the first call marks the line dirty
-        // and the second is a cache hit on it -- and the borrow is
-        // exclusive, so no shared slice of the same cache can be alive.
+        // SAFETY: as [`Lines::line`], with the read marking the line dirty;
+        // the borrow is exclusive, so no shared slice of the same cache can
+        // be alive.
         unsafe {
             let text = ml_get_buf_mut(buf, lnum).cast::<u8>();
-            ::core::slice::from_raw_parts_mut(text, to_len(ml_get_buf_len(buf, lnum)))
+            ::core::slice::from_raw_parts_mut(text, cached_line_len(buf, text))
         }
     }
 
@@ -178,10 +177,25 @@ impl Lines {
     }
 }
 
-/// A line length as a slice length. `ml_get_buf_len` answers 0 for an empty
-/// line and never less, so the clamp is a formality the type asks for.
-fn to_len(len: ColNr) -> usize {
-    usize::try_from(len).unwrap_or(0)
+/// The length of the line `ml_get_buf` just answered, without its NUL.
+///
+/// [`ml_get_buf_len`] is the same answer for callers that hold only a line
+/// number, and pays a second `ml_get_buf` to get back to the cache. Here the
+/// read has just happened, so the cached length is the one for `text` and the
+/// dispatch is not repeated — which matters, because this is on every line
+/// read the editor makes.
+///
+/// # Safety
+/// `text` must be what `ml_get_buf`/`ml_get_buf_mut` answered for `buffer`,
+/// with nothing in between.
+unsafe fn cached_line_len(buffer: Buf, text: *const u8) -> usize {
+    // The two failure paths answer a placeholder without a length; an empty
+    // line is the same test and the same answer.
+    if unsafe { *text } == NUL as u8 {
+        return 0;
+    }
+    debug_assert!(buffer.b_ml.cached_len() > 0);
+    usize::try_from(buffer.b_ml.cached_len() - 1).unwrap_or(0)
 }
 
 /// A pointer to position `pos` of the current buffer.
