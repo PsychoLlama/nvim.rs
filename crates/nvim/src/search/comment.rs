@@ -21,25 +21,21 @@ use core::ffi::c_int;
 /// Whether a raw string starting at `linep[startpos.col - 1]` ends
 /// between `startpos` and `endpos`.
 ///
-/// # Safety
-/// `linep` must be the line `startpos` is on; `startpos` and `endpos`
-/// must be positions in the current buffer.
-pub(crate) unsafe fn find_rawstring_end(
-    linep: &[u8],
-    startpos: *mut Pos,
-    endpos: *mut Pos,
-) -> bool {
-    // SAFETY: the caller's two positions.
-    let (start_lnum, start_col) = unsafe { ((*startpos).lnum, (*startpos).col as usize) };
-    let (end_lnum, end_col) = unsafe { ((*endpos).lnum, (*endpos).col as usize) };
+/// The scan reads every line between the two positions out of `lines`,
+/// including the one `startpos` is on -- so a caller holding a slice from
+/// that cache must have dropped it.
+pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos) -> bool {
+    let (start_lnum, start_col) = (startpos.lnum, startpos.col as usize);
+    let (end_lnum, end_col) = (endpos.lnum, endpos.col as usize);
     // The delimiter runs from just after the quote to the '(' -- or, when
     // the line has none, to its end. A copy, because the scan below reads
     // other lines out of the same cache.
-    let from = (start_col + 1).min(linep.len());
-    let tail = &linep[from..];
-    let delim = tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec();
+    let delim = {
+        let linep = lines.line(start_lnum);
+        let tail = &linep[(start_col + 1).min(linep.len())..];
+        tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec()
+    };
 
-    let mut lines = Lines::current();
     for lnum in start_lnum..=end_lnum {
         let line = lines.line(lnum);
         let mut at = if lnum == start_lnum {

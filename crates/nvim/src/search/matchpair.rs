@@ -12,12 +12,14 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
+use crate::charset::skip;
+use crate::cstr::byte_at;
+use crate::mbyte::char_at;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::types::{CpoFlag, NUL};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 const FM_BACKWARD: c_int = super::FM_BACKWARD as c_int;
 const FM_FORWARD: c_int = super::FM_FORWARD as c_int;
@@ -67,40 +69,40 @@ pub unsafe fn findmatchlimit(
 // Deciding what to look for.
 // ---------------------------------------------------------------------
 
-/// Whether the character before `linep[col]` is `ch`, reporting the
+/// The byte `off` columns away from `col`, as the pointer walk read it.
+///
+/// Past the end of the line is its terminator, which is what stopped every
+/// forward test. A *negative* index is the one place this is not the
+/// pointer's answer: the C read the byte before the line, and every caller
+/// guards against reaching that, so answering NUL keeps the guards honest
+/// and takes the read out of the language.
+fn at_col(line: &[u8], col: c_int, off: c_int) -> u8 {
+    usize::try_from(col + off).map_or(0, |i| byte_at(line, i))
+}
+
+/// Whether the character before `line[col]` is `ch`, reporting the
 /// column of that previous character through `prev`.
 ///
 /// False when `col` is zero. Handles multi-byte characters.
-///
-/// # Safety
-/// `linep` must be a NUL-terminated line and `col` a column in it.
-unsafe fn check_prevcol(
-    linep: *mut c_char,
-    col: c_int,
-    ch: c_int,
-    prev: Option<&mut c_int>,
-) -> bool {
+fn check_prevcol(line: &[u8], col: c_int, ch: u8, prev: Option<&mut c_int>) -> bool {
     let mut col = col - 1;
     if col > 0 {
-        col -= unsafe { utf_head_off(linep, linep.offset(col as isize)) };
+        col -= head_off(line, col as usize) as c_int;
     }
     if let Some(prev) = prev {
         *prev = col;
     }
-    col >= 0 && unsafe { *linep.offset(col as isize) } as u8 as c_int == ch
+    col >= 0 && byte_at(line, col as usize) == ch
 }
 
-/// How many backslashes immediately precede `linep[col]`.
+/// How many backslashes immediately precede `line[col]`.
 ///
 /// An odd number means the character there is escaped. `'cpoptions'` "M"
 /// switches the whole idea off, and both callers check that first.
-///
-/// # Safety
-/// As [`check_prevcol`].
-unsafe fn backslash_count(linep: *mut c_char, col: c_int) -> c_int {
+fn backslash_count(line: &[u8], col: c_int) -> c_int {
     let mut count = 0;
     let mut col = col;
-    while unsafe { check_prevcol(linep, col, '\\' as c_int, Some(&mut col)) } {
+    while check_prevcol(line, col, b'\\', Some(&mut col)) {
         count += 1;
     }
     count
@@ -155,14 +157,6 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
     }
 }
 
-/// Whether `text` begins with `word`.
-///
-/// # Safety
-/// `text` must be NUL-terminated.
-unsafe fn starts_with(text: *const c_char, word: &str) -> bool {
-    unsafe { cstr::prefix_eq(text, word.as_ptr() as *const c_char, word.len() as size_t) }
-}
-
 /// What the walk is looking for, once `initc` and the text under the
 /// cursor have been interpreted.
 struct Target {
@@ -201,14 +195,13 @@ enum Plan {
 /// along the line to the first bracket after the cursor.
 ///
 /// # Safety
-/// `pos` and `linep` must address the current buffer; `op` must be null
-/// or valid.
+/// `line` must be the line `pos` is on; `op` must be null or valid.
 unsafe fn make_plan(
     op: *mut OpArg,
     initc: c_int,
     dir: c_int,
     pos: &mut Pos,
-    linep: *mut c_char,
+    line: &[u8],
     cpo_match: bool,
     cpo_bsl: bool,
 ) -> Plan {
@@ -252,36 +245,32 @@ unsafe fn make_plan(
     if initc != '#' as c_int {
         // Only check for the special things when 'cpo' has no '%'.
         if !cpo_match {
-            let ptr = unsafe { skipwhite(linep) };
-            let col = pos.col as isize;
-            let at = |off: isize| unsafe { *linep.offset(col + off) } as c_int;
-            if unsafe { *ptr } as c_int == '#' as c_int
-                && pos.col <= unsafe { ptr.offset_from(linep) } as ColNr
-            {
+            let white = skip::white(line);
+            let col = pos.col;
+            let at = |off: c_int| at_col(line, col, off);
+            if byte_at(line, white) == b'#' && pos.col <= white as ColNr {
                 // Are we before or at #if, #else etc.?
-                let ptr = unsafe { skipwhite(ptr.offset(1)) };
-                if unsafe { starts_with(ptr, "if") }
-                    || unsafe { starts_with(ptr, "endif") }
-                    || unsafe { starts_with(ptr, "el") }
+                let word = after_hash(line, white);
+                if word.starts_with(b"if") || word.starts_with(b"endif") || word.starts_with(b"el")
                 {
                     hash_dir = 1;
                 }
-            } else if at(0) == '/' as c_int {
+            } else if at(0) == b'/' {
                 // Are we on a comment?
-                if at(1) == '*' as c_int {
+                if at(1) == b'*' {
                     target.comment_dir = FORWARD;
                     target.backwards = false;
                     pos.col += 1;
-                } else if pos.col > 0 && at(-1) == '*' as c_int {
+                } else if pos.col > 0 && at(-1) == b'*' {
                     target.comment_dir = BACKWARD;
                     target.backwards = true;
                     pos.col -= 1;
                 }
-            } else if at(0) == '*' as c_int {
-                if at(1) == '/' as c_int {
+            } else if at(0) == b'*' {
+                if at(1) == b'/' {
                     target.comment_dir = BACKWARD;
                     target.backwards = true;
-                } else if pos.col > 0 && at(-1) == '/' as c_int {
+                } else if pos.col > 0 && at(-1) == b'/' {
                     target.comment_dir = FORWARD;
                     target.backwards = false;
                 }
@@ -292,11 +281,12 @@ unsafe fn make_plan(
         // for a brace anywhere on this line at or after the cursor.
         if hash_dir == 0 && target.comment_dir == 0 {
             // Beyond the end of the line, use its last character.
-            if unsafe { *linep.offset(pos.col as isize) } as c_int == NUL && pos.col != 0 {
+            if pos.col as usize >= line.len() && pos.col != 0 {
                 pos.col -= 1;
             }
             loop {
-                target.initc = unsafe { utf_ptr2char(linep.offset(pos.col as isize)) };
+                let rest = &line[(pos.col as usize).min(line.len())..];
+                target.initc = char_at(rest);
                 if target.initc == NUL {
                     break;
                 }
@@ -304,17 +294,17 @@ unsafe fn make_plan(
                 if target.findc != 0 {
                     break;
                 }
-                pos.col += unsafe { utfc_ptr2len(linep.offset(pos.col as isize)) };
+                pos.col += cluster_len(rest) as ColNr;
             }
             if target.findc == 0 {
                 // No brace in the line; maybe use "  #if" then.
-                if !cpo_match && unsafe { *skipwhite(linep) } as c_int == '#' as c_int {
+                if !cpo_match && byte_at(line, skip::white(line)) == b'#' {
                     hash_dir = 1;
                 } else {
                     return Plan::Nothing;
                 }
             } else if !cpo_bsl {
-                target.match_escaped = unsafe { backslash_count(linep, pos.col) } & 1;
+                target.match_escaped = backslash_count(line, pos.col) & 1;
             }
         }
     }
@@ -328,10 +318,10 @@ unsafe fn make_plan(
         unsafe { (*op).motion_type = kMTLineWise }; // linewise for this case only
     }
     if initc != '#' as c_int {
-        let ptr = unsafe { skipwhite(skipwhite(linep).offset(1)) };
-        hash_dir = if unsafe { starts_with(ptr, "if") } || unsafe { starts_with(ptr, "el") } {
+        let word = after_hash(line, skip::white(line));
+        hash_dir = if word.starts_with(b"if") || word.starts_with(b"el") {
             1
-        } else if unsafe { starts_with(ptr, "endif") } {
+        } else if word.starts_with(b"endif") {
             -1
         } else {
             return Plan::Nothing;
@@ -340,14 +330,22 @@ unsafe fn make_plan(
     Plan::Hash(hash_dir)
 }
 
+/// The directive name after the `#` at `hash`: one byte on, then white
+/// space skipped.
+fn after_hash(line: &[u8], hash: usize) -> &[u8] {
+    let rest = &line[(hash + 1).min(line.len())..];
+    &rest[skip::white(rest)..]
+}
+
 /// Walk lines looking for the `#if`/`#else`/`#endif` that partners the
 /// one the cursor is on.
 ///
 /// # Safety
 /// `pos` must address the current buffer.
-unsafe fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
+fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
     let mut count = 0;
     pos.col = 0;
+    let mut lines = Lines::current();
     while !got_int.get() {
         if hash_dir > 0 {
             if pos.lnum == Buf::current().b_ml.ml_line_count {
@@ -357,37 +355,37 @@ unsafe fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option
             break;
         }
         pos.lnum += hash_dir;
-        let linep = ml_get(pos.lnum);
         line_breakcheck(); // check for CTRL-C typed
-        let ptr = unsafe { skipwhite(linep) };
-        if unsafe { *ptr } as c_int != '#' as c_int {
+        let line = lines.line(pos.lnum);
+        let white = skip::white(line);
+        if byte_at(line, white) != b'#' {
             continue;
         }
-        pos.col = unsafe { ptr.offset_from(linep) } as ColNr;
-        let ptr = unsafe { skipwhite(ptr.offset(1)) };
+        pos.col = white as ColNr;
+        let word = after_hash(line, white);
         if hash_dir > 0 {
-            if unsafe { starts_with(ptr, "if") } {
+            if word.starts_with(b"if") {
                 count += 1;
-            } else if unsafe { starts_with(ptr, "el") } {
+            } else if word.starts_with(b"el") {
                 if count == 0 {
                     return Some(pos);
                 }
-            } else if unsafe { starts_with(ptr, "endif") } {
+            } else if word.starts_with(b"endif") {
                 if count == 0 {
                     return Some(pos);
                 }
                 count -= 1;
             }
-        } else if unsafe { starts_with(ptr, "if") } {
+        } else if word.starts_with(b"if") {
             if count == 0 {
                 return Some(pos);
             }
             count -= 1;
-        } else if initc == '#' as c_int && unsafe { starts_with(ptr, "el") } {
+        } else if initc == '#' as c_int && word.starts_with(b"el") {
             if count == 0 {
                 return Some(pos);
             }
-        } else if unsafe { starts_with(ptr, "endif") } {
+        } else if word.starts_with(b"endif") {
             count += 1;
         }
     }
@@ -411,10 +409,11 @@ enum Step {
 /// Everything the walk carries from one position to the next.
 struct Walk {
     pos: Pos,
-    /// The line `pos` is on. `ml_get` keeps only one line, so this is
-    /// re-derived at every line boundary and after anything that may
-    /// have released it.
-    linep: *mut c_char,
+    /// The buffer's line cache. The walk reads `pos`'s line out of it at
+    /// every step; upstream keeps a pointer instead and re-derives it at
+    /// each line boundary and after anything that may have released it,
+    /// which is the bookkeeping this replaces.
+    lines: Lines,
     backwards: bool,
     lisp: bool,
     /// Where a `//` (or Lisp `;`) comment starts on this line, or MAXCOL.
@@ -444,7 +443,7 @@ impl Walk {
     ///
     /// # Safety
     /// The current buffer must be the one `self.pos` addresses.
-    unsafe fn step_back(&mut self, comment_dir: c_int) -> bool {
+    fn step_back(&mut self, comment_dir: c_int) -> bool {
         // The character to match is inside a comment; don't look
         // outside it.
         if self.lispcomm && self.pos.col < self.comment_col {
@@ -452,8 +451,8 @@ impl Walk {
         }
         if self.pos.col != 0 {
             self.pos.col -= 1;
-            self.pos.col -=
-                unsafe { utf_head_off(self.linep, self.linep.offset(self.pos.col as isize)) };
+            let back = head_off(self.lines.line(self.pos.lnum), self.pos.col as usize);
+            self.pos.col -= back as ColNr;
             return true;
         }
         // At the start of the line, go to the previous one.
@@ -465,13 +464,12 @@ impl Walk {
         if self.maxtravel > 0 && self.traveled as int64_t > self.maxtravel {
             return false;
         }
-        self.linep = ml_get(self.pos.lnum);
-        self.pos.col = ml_get_len(self.pos.lnum); // pos.col on the trailing NUL
+        self.pos.col = self.lines.line_len(self.pos.lnum); // pos.col on the trailing NUL
         self.do_quotes = -1;
         line_breakcheck();
         // Does this line hold a single-line comment?
         if comment_dir != 0 || self.lisp {
-            self.comment_col = check_linecomment(unsafe { cstr::bytes_at(self.linep) });
+            self.comment_col = check_linecomment(self.lines.line(self.pos.lnum));
         }
         if self.lisp && self.comment_col != MAXCOL {
             self.pos.col = self.comment_col; // skip the comment
@@ -484,12 +482,14 @@ impl Walk {
     ///
     /// # Safety
     /// As [`Walk::step_back`].
-    unsafe fn step_forward(&mut self) -> bool {
-        let at_end = unsafe { *self.linep.offset(self.pos.col as isize) } as c_int == NUL
+    fn step_forward(&mut self) -> bool {
+        let line = self.lines.line(self.pos.lnum);
+        let col = self.pos.col as usize;
+        let at_end = col >= line.len()
             // For Lisp don't look for a match inside a comment.
             || (self.lisp && self.comment_col != MAXCOL && self.pos.col == self.comment_col);
         if !at_end {
-            self.pos.col += unsafe { utfc_ptr2len(self.linep.offset(self.pos.col as isize)) };
+            self.pos.col += cluster_len(&line[col..]) as ColNr;
             return true;
         }
         // End of file, or the line is exhausted and the comment with
@@ -505,12 +505,12 @@ impl Walk {
         if self.maxtravel != 0 && before as int64_t > self.maxtravel {
             return false;
         }
-        self.linep = ml_get(self.pos.lnum);
         self.pos.col = 0;
         self.do_quotes = -1;
         line_breakcheck();
         if self.lisp {
-            self.comment_col = check_linecomment(unsafe { cstr::bytes_at(self.linep) }); // in the new line
+            // In the new line.
+            self.comment_col = check_linecomment(self.lines.line(self.pos.lnum));
         }
         true
     }
@@ -522,13 +522,13 @@ impl Walk {
     ///
     /// # Safety
     /// As [`Walk::step_back`].
-    unsafe fn comment_step(&mut self, target: &Target) -> Step {
-        let linep = self.linep;
-        let col = self.pos.col as isize;
-        let at = |off: isize| unsafe { *linep.offset(col + off) } as c_int;
+    fn comment_step(&mut self, target: &Target) -> Step {
+        let col = self.pos.col;
+        let line = self.lines.line(self.pos.lnum);
+        let at = |off: c_int| at_col(line, col, off);
 
         if target.comment_dir == FORWARD {
-            if at(0) == '*' as c_int && at(1) == '/' as c_int {
+            if at(0) == b'*' && at(1) == b'/' {
                 self.pos.col += 1;
                 return Step::Found(self.pos);
             }
@@ -542,43 +542,42 @@ impl Walk {
             return Step::Next;
         }
         if target.raw_string {
-            if at(-1) == 'R' as c_int
-                && at(0) == '"' as c_int
-                && !unsafe { vim_strchr(linep.offset(col + 1), '(' as c_int) }.is_null()
-            {
+            let opens = at(-1) == b'R'
+                && at(0) == b'"'
+                && line[(col as usize + 1).min(line.len())..].contains(&b'(');
+            if opens {
                 // A possible start of a raw string. Now that the
                 // delimiter is known, check whether it ends before
                 // where the search started, or before the previously
                 // found raw-string start.
-                let mut end = if self.count > 0 {
+                let end = if self.count > 0 {
                     self.match_pos
                 } else {
                     Win::current().w_cursor
                 };
-                if !unsafe {
-                    find_rawstring_end(cstr::bytes_at(linep), &raw mut self.pos, &raw mut end)
-                } {
+                // The borrow of `line` ends here: the scan below reads
+                // every line between the two positions out of the same
+                // cache, which is what used to release `linep`.
+                if !find_rawstring_end(&mut self.lines, &self.pos, &end) {
                     self.count += 1;
                     self.match_pos = self.pos;
                     self.match_pos.col -= 1;
                 }
-                self.linep = ml_get(self.pos.lnum); // may have been released
             }
             return Step::Next;
         }
-        if at(-1) == '/' as c_int
-            && at(0) == '*' as c_int
-            && (self.pos.col == 1 || at(-2) != '*' as c_int)
+        if at(-1) == b'/'
+            && at(0) == b'*'
+            && (self.pos.col == 1 || at(-2) != b'*')
             && self.pos.col < self.comment_col
         {
             self.count += 1;
             self.match_pos = self.pos;
             self.match_pos.col -= 1;
-        } else if at(-1) == '*' as c_int && at(0) == '/' as c_int {
+        } else if at(-1) == b'*' && at(0) == b'/' {
             if self.count > 0 {
                 self.pos = self.match_pos;
-            } else if self.pos.col > 1 && at(-2) == '/' as c_int && self.pos.col <= self.comment_col
-            {
+            } else if self.pos.col > 1 && at(-2) == b'/' && self.pos.col <= self.comment_col {
                 self.pos.col -= 2;
             } else if target.ignore_cend {
                 return Step::Next;
@@ -603,58 +602,55 @@ impl Walk {
     /// As [`Walk::step_back`]. Only called with `do_quotes == -1`, which
     /// is also where the count starts: after N quotes it holds `N - 1`,
     /// so masking with 1 answers "the count was even".
-    unsafe fn count_quotes(&mut self) {
+    fn count_quotes(&mut self) {
         // A walk that never reaches the start position leaves
         // `at_start` at -1, i.e. *true*. Upstream.
         let mut at_start = self.do_quotes;
-        let stop = unsafe {
-            self.linep
-                .offset(self.pos.col as isize + self.backwards as isize)
-        };
-        // Count the quotes, skipping \" and '"'. Watch out for "\\".
-        let mut ptr = self.linep;
-        while unsafe { *ptr } as c_int != NUL {
-            if ptr == stop {
-                at_start = self.do_quotes & 1;
+        let stop = self.pos.col as usize + usize::from(self.backwards);
+        {
+            let line = self.lines.line(self.pos.lnum);
+            // Count the quotes, skipping \" and '"'. Watch out for "\\".
+            let mut at = 0usize;
+            while at < line.len() {
+                if at == stop {
+                    at_start = self.do_quotes & 1;
+                }
+                if line[at] == b'"'
+                    && (at == 0 || line[at - 1] != b'\'' || byte_at(line, at + 1) != b'\'')
+                {
+                    self.do_quotes += 1;
+                }
+                if line[at] == b'\\' && byte_at(line, at + 1) != 0 {
+                    at += 1;
+                }
+                at += 1;
             }
-            if unsafe { *ptr } as c_int == '"' as c_int
-                && (ptr == self.linep
-                    || unsafe { *ptr.offset(-1) } as c_int != '\'' as c_int
-                    || unsafe { *ptr.offset(1) } as c_int != '\'' as c_int)
-            {
-                self.do_quotes += 1;
-            }
-            if unsafe { *ptr } as c_int == '\\' as c_int
-                && unsafe { *ptr.offset(1) } as c_int != NUL
-            {
-                ptr = unsafe { ptr.offset(1) };
-            }
-            ptr = unsafe { ptr.offset(1) };
-        }
-        self.do_quotes &= 1; // 1 with an even number of quotes
+            self.do_quotes &= 1; // 1 with an even number of quotes
 
-        if self.do_quotes != 0 {
-            return;
-        }
-        // An uneven count: check this line and the previous one for a
-        // trailing '\'.
-        self.inquote = false;
-        if unsafe { *ptr.offset(-1) } as c_int == '\\' as c_int {
-            self.do_quotes = 1;
-            if self.start_in_quotes.is_none() {
-                // Do we need to use at_start here?
-                self.inquote = true;
-                self.start_in_quotes = Some(true);
-            } else if self.backwards {
-                self.inquote = true;
+            if self.do_quotes != 0 {
+                return;
+            }
+            // An uneven count: check this line and the previous one for a
+            // trailing '\'.
+            self.inquote = false;
+            if line.last() == Some(&b'\\') {
+                self.do_quotes = 1;
+                if self.start_in_quotes.is_none() {
+                    // Do we need to use at_start here?
+                    self.inquote = true;
+                    self.start_in_quotes = Some(true);
+                } else if self.backwards {
+                    self.inquote = true;
+                }
             }
         }
         if self.pos.lnum <= 1 {
             return;
         }
-        // The borrow ends here: `linep` is re-read from the cache below,
-        // and this is the only thing the line before is asked.
-        let continued = Lines::current().line(self.pos.lnum - 1).last() == Some(&b'\\');
+        // The line above is a second read of the same cache, so the borrow
+        // above has to be over -- which is the whole of what upstream's
+        // "ml_get() keeps only one line; get linep back" was about.
+        let continued = self.lines.line(self.pos.lnum - 1).last() == Some(&b'\\');
         if continued {
             self.do_quotes = 1;
             if self.start_in_quotes.is_none() {
@@ -666,8 +662,6 @@ impl Walk {
                 self.inquote = true;
             }
         }
-        // ml_get() keeps only one line; get linep back.
-        self.linep = ml_get(self.pos.lnum);
     }
 
     /// Skip over a single-quoted character constant: `'x'` or `'\x'`.
@@ -678,28 +672,28 @@ impl Walk {
     ///
     /// # Safety
     /// As [`Walk::step_back`].
-    unsafe fn skip_char_constant(&mut self) -> bool {
-        let linep = self.linep;
-        let col = self.pos.col as isize;
-        let at = |off: isize| unsafe { *linep.offset(col + off) } as c_int;
+    fn skip_char_constant(&mut self) -> bool {
+        let col = self.pos.col;
+        let line = self.lines.line(self.pos.lnum);
+        let at = |off: c_int| at_col(line, col, off);
         if self.backwards {
             if self.pos.col > 1 {
-                if at(-2) == '\'' as c_int {
+                if at(-2) == b'\'' {
                     self.pos.col -= 2;
                     return true;
                 }
-                if at(-2) == '\\' as c_int && self.pos.col > 2 && at(-3) == '\'' as c_int {
+                if at(-2) == b'\\' && self.pos.col > 2 && at(-3) == b'\'' {
                     self.pos.col -= 3;
                     return true;
                 }
             }
-        } else if at(1) != NUL {
+        } else if at(1) != 0 {
             // Forward search.
-            if at(1) == '\\' as c_int && at(2) != NUL && at(3) == '\'' as c_int {
+            if at(1) == b'\\' && at(2) != 0 && at(3) == b'\'' {
                 self.pos.col += 3;
                 return true;
             }
-            if at(2) == '\'' as c_int {
+            if at(2) == b'\'' {
                 self.pos.col += 2;
                 return true;
             }
@@ -713,14 +707,15 @@ impl Walk {
     /// # Safety
     /// As [`Walk::step_back`].
     unsafe fn match_char(&mut self, target: &Target, cpo_match: bool, cpo_bsl: bool) -> Step {
-        let c = unsafe { utf_ptr2char(self.linep.offset(self.pos.col as isize)) };
+        let col = self.pos.col;
+        let c = {
+            let line = self.lines.line(self.pos.lnum);
+            char_at(&line[(col as usize).min(line.len())..])
+        };
         if c == NUL {
             // At the end of a line without a trailing backslash,
             // reset inquote.
-            if self.pos.col == 0
-                || unsafe { *self.linep.offset(self.pos.col as isize - 1) } as c_int
-                    != '\\' as c_int
-            {
+            if col == 0 || at_col(self.lines.line(self.pos.lnum), col, -1) != b'\\' {
                 self.inquote = false;
                 self.start_in_quotes = Some(false);
             }
@@ -730,13 +725,12 @@ impl Walk {
             // A quote preceded by an odd number of backslashes is
             // ignored.
             if self.do_quotes != 0 {
-                let mut col = self.pos.col - 1;
-                while col >= 0
-                    && unsafe { *self.linep.offset(col as isize) } as c_int == '\\' as c_int
-                {
-                    col -= 1;
+                let line = self.lines.line(self.pos.lnum);
+                let mut back = col - 1;
+                while back >= 0 && byte_at(line, back as usize) == b'\\' {
+                    back -= 1;
                 }
-                if ((self.pos.col - 1 - col) & 1) == 0 {
+                if ((col - 1 - back) & 1) == 0 {
                     self.inquote = !self.inquote;
                     self.start_in_quotes = Some(false);
                 }
@@ -749,7 +743,7 @@ impl Walk {
             && !cpo_match
             && target.initc != '\'' as c_int
             && target.findc != '\'' as c_int
-            && unsafe { self.skip_char_constant() }
+            && self.skip_char_constant()
         {
             return Step::Next;
         }
@@ -758,9 +752,9 @@ impl Walk {
         // over "#\(" and friends.
         if Buf::current().b_p_lisp != 0
             && !unsafe { vim_strchr(c"(){}[]".as_ptr(), c) }.is_null()
-            && self.pos.col > 1
-            && unsafe { check_prevcol(self.linep, self.pos.col, '\\' as c_int, None) }
-            && unsafe { check_prevcol(self.linep, self.pos.col - 1, '#' as c_int, None) }
+            && col > 1
+            && check_prevcol(self.lines.line(self.pos.lnum), col, b'\\', None)
+            && check_prevcol(self.lines.line(self.pos.lnum), col - 1, b'#', None)
         {
             return Step::Next;
         }
@@ -773,7 +767,7 @@ impl Walk {
             let bslcnt = if cpo_bsl {
                 0
             } else {
-                unsafe { backslash_count(self.linep, self.pos.col) }
+                backslash_count(self.lines.line(self.pos.lnum), col)
             };
             // Only accept a match when 'M' is in 'cpo', or when the
             // escaping is what it was at the start.
@@ -804,7 +798,7 @@ unsafe fn find_match(
 ) -> Option<Pos> {
     let mut pos = Win::current().w_cursor;
     pos.coladd = 0;
-    let linep = ml_get(pos.lnum);
+    let mut lines = Lines::current();
     let lisp = Buf::current().b_p_lisp != 0; // engage Lisp-specific hacks ;)
 
     // vi compatible matching, and "don't recognise backslashes".
@@ -820,10 +814,14 @@ unsafe fn find_match(
         0
     };
 
-    let mut target = match unsafe { make_plan(op, initc, dir, &mut pos, linep, cpo_match, cpo_bsl) }
-    {
+    let plan = {
+        let line = lines.line(pos.lnum);
+        // SAFETY: the caller's `op`, and `line` is the line `pos` is on.
+        unsafe { make_plan(op, initc, dir, &mut pos, line, cpo_match, cpo_bsl) }
+    };
+    let mut target = match plan {
         Plan::Nothing => return None,
-        Plan::Hash(hash_dir) => return unsafe { find_hash_match(pos, hash_dir, initc) },
+        Plan::Hash(hash_dir) => return find_hash_match(pos, hash_dir, initc),
         Plan::Walk(target) => target,
     };
 
@@ -837,7 +835,7 @@ unsafe fn find_match(
 
     let mut walk = Walk {
         pos,
-        linep,
+        lines,
         backwards: target.backwards,
         lisp,
         comment_col: MAXCOL,
@@ -853,7 +851,7 @@ unsafe fn find_match(
 
     // Backward search: does this line hold a single-line comment?
     if (walk.backwards && target.comment_dir != 0) || lisp {
-        walk.comment_col = check_linecomment(unsafe { cstr::bytes_at(walk.linep) });
+        walk.comment_col = check_linecomment(walk.lines.line(walk.pos.lnum));
     }
     if lisp && walk.comment_col != MAXCOL && walk.pos.col > walk.comment_col {
         walk.lispcomm = true; // find the match inside this comment
@@ -863,28 +861,28 @@ unsafe fn find_match(
         // Go to the next position. inc() and dec() would do, but they
         // are much slower.
         let moved = if walk.backwards {
-            unsafe { walk.step_back(target.comment_dir) }
+            walk.step_back(target.comment_dir)
         } else {
-            unsafe { walk.step_forward() }
+            walk.step_forward()
         };
         if !moved {
             break;
         }
 
         // With FM_BLOCKSTOP, stop at a '{' or '}' in column 0.
+        let first = c_int::from(byte_at(walk.lines.line(walk.pos.lnum), 0));
         if walk.pos.col == 0
             && flags & FM_BLOCKSTOP != 0
-            && (unsafe { *walk.linep } as c_int == '{' as c_int
-                || unsafe { *walk.linep } as c_int == '}' as c_int)
+            && (first == '{' as c_int || first == '}' as c_int)
         {
-            if unsafe { *walk.linep } as c_int == target.findc && walk.count == 0 {
+            if first == target.findc && walk.count == 0 {
                 return Some(walk.pos); // match!
             }
             break; // out of scope
         }
 
         if target.comment_dir != 0 {
-            match unsafe { walk.comment_step(&target) } {
+            match walk.comment_step(&target) {
                 Step::Next => continue,
                 Step::Found(pos) => return Some(pos),
                 Step::Nothing => return None,
@@ -896,7 +894,7 @@ unsafe fn find_match(
         if cpo_match {
             walk.do_quotes = 0;
         } else if walk.do_quotes == -1 {
-            unsafe { walk.count_quotes() };
+            walk.count_quotes();
         }
         if walk.start_in_quotes.is_none() {
             walk.start_in_quotes = Some(false);
