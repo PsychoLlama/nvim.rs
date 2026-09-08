@@ -19,22 +19,21 @@
 //! | `FIND_NAMESPACE_LIM` | how far back `LOOKFOR_*`'s namespace hunt may go |
 //! | `FM_*` | `findmatchlimit` direction/stop flags |
 //! | `KEY_*` | the pseudo-keys `in_cinkeys` is asked about that are not typed characters |
-//! | `CppBaseclassCache` | one line's `cin_is_cpp_baseclass` answer, cached across the scan |
+//! | `CppBaseclassCache` | one line's `in_baseclass_list` answer, cached across the scan |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
+use crate::charset::skip;
 use crate::charset::{
-    getdigits_int, getwhitecols_curline, skiptowhite, skipwhite, vim_is_ident_char, vim_iswordc,
-    vim_iswordp, vim_strsize,
+    getdigits_int, getwhitecols_curline, vim_is_ident_char, vim_iswordc, vim_iswordp, vim_strsize,
 };
 use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::eval::typval::tv_get_lnum;
 use crate::indent::{fixthisline, get_expr_indent, get_indent, get_indent_lnum, get_sw_value};
 use crate::keycodes::get_special_key_code;
-use crate::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
-use crate::memline::{Lines, ml_get, ml_get_pos};
-use crate::memory::{xfree, xstrdup};
+use crate::mbyte::{cluster_len, mb_prevptr, mb_strnicmp};
+use crate::memline::Lines;
 use crate::option::vars::p_paste;
 use crate::option::{copy_option_part, skip_to_option_part};
 use crate::pos::{MAXCOL, MAXLNUM, lt};
@@ -42,9 +41,7 @@ use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::strings::vim_strchr;
-use crate::types::{
-    ColNr, EvalFuncData, LPos, LineNr, OpArg, Pos, TypVal, VarNumber, int64_t, size_t,
-};
+use crate::types::{ColNr, EvalFuncData, LPos, LineNr, OpArg, Pos, TypVal, VarNumber, int64_t};
 use ::libc::{atoi, tolower};
 
 // The carve of the transpiled module; see each child's docs.

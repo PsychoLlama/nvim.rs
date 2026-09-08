@@ -2,20 +2,24 @@
 //!
 //! [`skip_label`] and [`get_indent_nolabel`] answer "how indented is this
 //! line, not counting a jump label in front of it"; [`after_label`] is the
-//! text past one.  [`cin_first_id_amount`] is 'cinoptions' `+`'s
+//! offset of the text past one.  [`first_id_amount`] is 'cinoptions' `+`'s
 //! continuation base -- the column of the first identifier after a type --
-//! and [`cin_get_equal_amount`] the column after a trailing `=`, which is
-//! what a `\`-continued assignment lines up with.
+//! and [`equal_amount`] the column after a trailing `=`, which is what a
+//! `\`-continued assignment lines up with.
+//!
+//! | C | here |
+//! | --- | --- |
+//! | `cin_first_id_amount` | [`first_id_amount`] |
+//! | `cin_get_equal_amount` | [`equal_amount`] |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
-/// The first non-white non-comment character after a `:` label in `l`, or
-/// null.
+/// The first non-white non-comment character after a `:` label in `line`.
 ///
 /// ```text
 ///    case 234:    a = b;
@@ -23,39 +27,29 @@ use core::ffi::{CStr, c_char, c_int};
 /// ```
 ///
 /// `::` is C++ scope resolution, and a `:` that opens *another* `case` is not
-/// the end of this label.
-///
-/// # Safety
-/// `l` must point at a NUL-terminated string.
-pub(crate) unsafe fn after_label(l: *const c_char) -> *const c_char {
-    // SAFETY: the caller's promise.  Every step stays inside the string:
-    // the `l.add(1)`/`l.add(2)` skips run only after the byte before them
-    // has been seen to be non-NUL, which the `&&` chains keep in front.
-    let mut l = l;
-    while unsafe { *l } != 0 {
-        if unsafe { *l } as u8 == b':' {
-            if unsafe { *l.add(1) } as u8 == b':' {
-                l = unsafe { l.add(1) }; // skip over "::" for C++
-            } else if !unsafe { cin_iscase(l.add(1), false) } {
+/// the end of this label.  `None` when there is nothing after one.
+pub(crate) fn after_label(line: &[u8]) -> Option<usize> {
+    let mut at = 0usize;
+    while byte_at(line, at) != 0 {
+        if byte_at(line, at) == b':' {
+            if byte_at(line, at + 1) == b':' {
+                at += 1; // skip over "::" for C++
+            } else if !is_case_label(line, at + 1, false) {
                 break;
             }
-        } else if unsafe { *l } as u8 == b'\''
-            && unsafe { *l.add(1) } != 0
-            && unsafe { *l.add(2) } as u8 == b'\''
+        } else if byte_at(line, at) == b'\''
+            && byte_at(line, at + 1) != 0
+            && byte_at(line, at + 2) == b'\''
         {
-            l = unsafe { l.add(2) }; // skip over 'x'
+            at += 2; // skip over 'x'
         }
-        l = unsafe { l.add(1) };
+        at += 1;
     }
-    if unsafe { *l } == 0 {
-        return ::core::ptr::null::<c_char>();
+    if byte_at(line, at) == 0 {
+        return None;
     }
-    let l = unsafe { cin_skipcomment(l.add(1)) };
-    if unsafe { *l } == 0 {
-        ::core::ptr::null::<c_char>()
-    } else {
-        l
-    }
+    let at = code_at(line, at + 1);
+    (byte_at(line, at) != 0).then_some(at)
 }
 
 /// The screen column the code *after* a label on line `lnum` starts at, or 0
@@ -64,22 +58,15 @@ pub(crate) unsafe fn after_label(l: *const c_char) -> *const c_char {
 /// # Safety
 /// `lnum` must be a valid line; may unlock the current line.
 pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
-    // SAFETY: on the main thread with a current buffer; `after_label` is
-    // handed the NUL-terminated line `ml_get` answered with, and gives back
-    // either null or a pointer inside it.
-    let (l, p) = unsafe {
-        let l = ml_get(lnum);
-        (l, after_label(l))
-    };
-    if p.is_null() {
+    let Some(at) = after_label(Lines::current().line(lnum)) else {
         return 0;
-    }
-    // SAFETY: `p` points inside line `lnum`.
-    unsafe { line_vcol(lnum, p.offset_from(l) as ColNr) }
+    };
+    // SAFETY: `at` is an offset inside line `lnum` of the current buffer.
+    unsafe { line_vcol(lnum, at as ColNr) }
 }
 
-/// The indent of line `lnum` ignoring any case or jump label, with `cursor` left
-/// pointing at the text the amount belongs to.
+/// The indent of line `lnum` ignoring any case or jump label, with the offset
+/// of the text the amount belongs to.
 ///
 /// ```text
 ///   label:     if (asdf && asdfasdf)
@@ -88,27 +75,35 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
 ///
 /// # Safety
 /// Moves the cursor and restores it; may unlock the current line.
-pub(crate) unsafe fn skip_label(lnum: LineNr, cursor: &mut *const c_char) -> c_int {
+pub(crate) unsafe fn skip_label(lnum: LineNr) -> (c_int, usize) {
     let cursor_save = Win::current().w_cursor;
     Win::current().w_cursor.lnum = lnum;
-    // SAFETY: the cursor now sits on line `lnum` of the current buffer, so
-    // `get_cursor_line_ptr` answers with that NUL-terminated line.
-    let (amount, mut text) = unsafe {
-        let l = get_cursor_line_ptr().cast_const();
-        if cin_iscase(l, false) || cin_isscopedecl(l) || cin_islabel() {
-            (get_indent_nolabel(lnum), after_label(get_cursor_line_ptr()))
-        } else {
-            (get_indent(), get_cursor_line_ptr().cast_const())
-        }
+    // The chain re-enters at `is_jump_label`, so the borrow the two tests in
+    // front of it take is dropped before it runs.
+    let labelled = {
+        let mut lines = Lines::current();
+        let line = lines.line(lnum);
+        // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
+        is_case_label(line, 0, false) || unsafe { is_scope_decl(line, 0) }
+        // SAFETY: the cursor sits on `lnum`, a line of the current buffer.
+    } || unsafe { is_jump_label() };
+
+    let answer = if labelled {
+        // SAFETY: `lnum` is a line of the current buffer.
+        let amount = unsafe { get_indent_nolabel(lnum) };
+        // Upstream falls back to the start of the line when there is nothing
+        // after the label, "just in case".
+        (
+            amount,
+            after_label(Lines::current().line(lnum)).unwrap_or(0),
+        )
+    } else {
+        // SAFETY: reads the cursor's line, which is `lnum`.
+        (get_indent(), 0)
     };
-    if text.is_null() {
-        // SAFETY: the cursor is still on line `lnum`.
-        text = get_cursor_line_ptr(); // just in case
-    }
-    *cursor = text;
 
     Win::current().w_cursor = cursor_save;
-    amount
+    answer
 }
 
 /// The screen column of the first variable name after a type in a
@@ -124,56 +119,55 @@ pub(crate) unsafe fn skip_label(lnum: LineNr, cursor: &mut *const c_char) -> c_i
 ///
 /// # Safety
 /// Reads the cursor; may unlock the current line.
-pub(crate) unsafe fn cin_first_id_amount() -> c_int {
-    // SAFETY: the cursor is on a line of the current buffer, and every walk
-    // below starts from the NUL-terminated line it names.  `p.add(len)` is
-    // inside it because `len` counts bytes the walk has already read.
-    let line = get_cursor_line_ptr().cast_const();
-    let mut p = unsafe { skipwhite(line) }.cast_const();
+pub(crate) unsafe fn first_id_amount() -> c_int {
+    let lnum = Win::current().w_cursor.lnum;
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    let mut at = skip::white(line);
 
     // Step over the storage class and the type's first word, so that the
-    // identifier the answer is about is what `p` ends on.
-    let mut len = unsafe { skiptowhite(p).offset_from(p) } as usize;
-    if len == 6
-        && unsafe { CStr::from_ptr(p) }
-            .to_bytes()
-            .starts_with(b"static")
-    {
-        p = unsafe { skipwhite(p.add(6)) };
-        len = unsafe { skiptowhite(p).offset_from(p) } as usize;
+    // identifier the answer is about is what `at` ends on.
+    let mut len = skip::to_white(&line[at..]);
+    if len == 6 && line[at..].starts_with(b"static") {
+        at += 6;
+        at += skip::white(&line[at..]);
+        len = skip::to_white(&line[at..]);
     }
-    let word = unsafe { CStr::from_ptr(p) }.to_bytes();
+    let word = &line[at..];
     if len == 6 && word.starts_with(b"struct") {
-        p = unsafe { skipwhite(p.add(6)) };
+        at += 6;
+        at += skip::white(&line[at..]);
     } else if len == 4 && word.starts_with(b"enum") {
-        p = unsafe { skipwhite(p.add(4)) };
+        at += 4;
+        at += skip::white(&line[at..]);
     } else if (len == 8 && word.starts_with(b"unsigned"))
         || (len == 6 && word.starts_with(b"signed"))
     {
         // `unsigned`/`signed` only prefixes a type; take the type with it.
-        let s = unsafe { skipwhite(p.add(len)) }.cast_const();
-        let rest = unsafe { CStr::from_ptr(s) }.to_bytes();
+        let after = at + len + skip::white(&line[at + len..]);
+        let rest = &line[after..];
         let takes_type = [&b"int"[..], b"long", b"short", b"char"]
             .into_iter()
             .any(|kw| rest.starts_with(kw) && ascii_iswhite(c_int::from(byte_at(rest, kw.len()))));
         if takes_type {
-            p = s.cast_mut();
+            at = after;
         }
     }
 
     let mut len = 0usize;
-    while unsafe { vim_is_ident_char(c_int::from(*p.add(len) as u8)) } {
+    while vim_is_ident_char(c_int::from(byte_at(line, at + len))) {
         len += 1;
     }
     if len == 0
-        || !ascii_iswhite(c_int::from(unsafe { *p.add(len) } as u8))
-        || unsafe { cin_nocode(p) }
+        || !ascii_iswhite(c_int::from(byte_at(line, at + len)))
+        || only_comment_left(line, at)
     {
         return 0;
     }
 
-    let p = unsafe { skipwhite(p.add(len)) }.cast_const();
-    unsafe { line_vcol(Win::current().w_cursor.lnum, p.offset_from(line) as ColNr) }
+    let at = at + len + skip::white(&line[at + len..]);
+    // SAFETY: `at` is an offset inside the cursor's line.
+    unsafe { line_vcol(lnum, at as ColNr) }
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -189,38 +183,33 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line; may unlock the current line.
-pub(crate) unsafe fn cin_get_equal_amount(lnum: LineNr) -> c_int {
-    if lnum > 1 {
-        // SAFETY: on the main thread with a current buffer; `ml_get` hands
-        // back a NUL-terminated line.
-        if unsafe { cin_ends_in_backslash(ml_get(lnum - 1)) } {
-            return -1;
-        }
+pub(crate) unsafe fn equal_amount(lnum: LineNr) -> c_int {
+    if lnum > 1 && ends_in_backslash(Lines::current().line(lnum - 1)) {
+        return -1;
     }
 
-    // SAFETY: the same, and every walk below stays inside that line: the
-    // `s.add(1)` steps run only past a byte already seen to be non-NUL.
-    let line = ml_get(lnum).cast_const();
-    let mut s = line;
-    while unsafe { *s } != 0
-        && unsafe { vim_strchr(c"=;{}\"'".as_ptr(), c_int::from(*s as u8)) }.is_null()
-    {
-        if unsafe { cin_iscomment(s) } {
-            s = unsafe { cin_skipcomment(s) };
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    let mut at = 0usize;
+    while byte_at(line, at) != 0 && !b"=;{}\"'".contains(&byte_at(line, at)) {
+        if starts_comment(line, at) {
+            at = code_at(line, at);
         } else {
-            s = unsafe { s.add(1) };
+            at += 1;
         }
     }
-    if unsafe { *s } as u8 != b'=' {
+    if byte_at(line, at) != b'=' {
         return 0;
     }
 
-    let mut s = unsafe { skipwhite(s.add(1)) }.cast_const();
-    if unsafe { cin_nocode(s) } {
+    let mut at = at + 1;
+    at += skip::white(&line[at.min(line.len())..]);
+    if only_comment_left(line, at) {
         return 0;
     }
-    if unsafe { *s } as u8 == b'"' {
-        s = unsafe { s.add(1) }; // nice alignment for continued strings
+    if byte_at(line, at) == b'"' {
+        at += 1; // nice alignment for continued strings
     }
-    unsafe { line_vcol(lnum, s.offset_from(line) as ColNr) }
+    // SAFETY: `at` is an offset inside line `lnum`.
+    unsafe { line_vcol(lnum, at as ColNr) }
 }

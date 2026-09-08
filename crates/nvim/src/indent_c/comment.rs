@@ -8,17 +8,25 @@
 //! (`b_ind_maxcomment`).  [`ind_find_start_comment_or_raw_string`] is the pair asked at once --
 //! Comment Or Raw String -- and answers whichever starts later.
 //!
-//! The scanners here are written over `&[u8]` and answer a byte *index*, so
-//! they are ordinary safe code with tests; the pointer forms the rest of the
-//! family calls are one-line wrappers over them.
+//! Everything here is written over `&[u8]` and answers a byte *offset* into
+//! the line it was given, so it is ordinary safe code with tests.  The C
+//! names, for anyone reading upstream beside this:
+//!
+//! | C | here |
+//! | --- | --- |
+//! | `cin_skipcomment` | [`code_at`] |
+//! | `skip_string` | [`string_end_at`] |
+//! | `cin_skip_comment_and_string` | [`code_or_string_at`] |
+//! | `cin_nocode` | [`only_comment_left`] |
+//! | `cin_iscomment` | [`starts_comment`] |
+//! | `cin_islinecomment` | [`starts_line_comment`] |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
 /// `*N`.
@@ -123,71 +131,73 @@ pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
     comment_pos
 }
 
-/// Step over the run of `"string"`s and `'c'` constants starting at `s[0]`,
-/// answering the index upstream's pointer walk ends on.
+/// Step over the run of `"string"`s and `'c'` constants starting at
+/// `line[at]`, answering the offset upstream's pointer walk ends on.
 ///
 /// Strings concatenate (`"date""time"`), which is why this is a loop, and the
 /// walk deliberately ends one byte *past* the closing quote -- upstream's
-/// `for (;; p++)` runs its increment on every `continue`.  Ending on the NUL
-/// steps back one, so the answer is always inside `s`.
+/// `for (;; p++)` runs its increment on every `continue`.  Ending on the
+/// terminator steps back one, so the answer is always a byte of the line --
+/// which is why [`find_last_paren`] can go round again on it.
 ///
-/// The answer is *signed* because upstream backs up off the NUL
-/// unconditionally: over an empty tail that is the byte before `s`, which
-/// `find_last_paren` genuinely reaches and depends on.
-fn string_end(s: &[u8]) -> isize {
-    let mut p = 0usize;
+/// `at` at the end of the line therefore answers the byte *before* it.  That
+/// is upstream's own arithmetic, and `find_last_paren` is the caller that
+/// reaches it (a line ending in a comment); nothing calls this on an empty
+/// line, where the answer would have to be negative.
+pub(crate) fn string_end_at(line: &[u8], at: usize) -> usize {
+    let mut p = at;
     loop {
-        if byte_at(s, p) == b'\'' {
+        if byte_at(line, p) == b'\'' {
             // 'c', '\n' or '\000'.
-            if byte_at(s, p + 1) == 0 {
+            if byte_at(line, p + 1) == 0 {
                 break; // ' at end of line
             }
             let mut i = 2;
-            if byte_at(s, p + 1) == b'\\' && byte_at(s, p + 2) != 0 {
+            if byte_at(line, p + 1) == b'\\' && byte_at(line, p + 2) != 0 {
                 i += 1;
-                while byte_at(s, p + i - 1).is_ascii_digit() {
+                while byte_at(line, p + i - 1).is_ascii_digit() {
                     i += 1;
                 }
             }
             // Check for the trailing '.
-            if byte_at(s, p + i - 1) == 0 || byte_at(s, p + i) != b'\'' {
+            if byte_at(line, p + i - 1) == 0 || byte_at(line, p + i) != b'\'' {
                 break;
             }
             p += i;
-        } else if byte_at(s, p) == b'"' {
+        } else if byte_at(line, p) == b'"' {
             p += 1;
-            while byte_at(s, p) != 0 {
-                if byte_at(s, p) == b'\\' && byte_at(s, p + 1) != 0 {
+            while byte_at(line, p) != 0 {
+                if byte_at(line, p) == b'\\' && byte_at(line, p + 1) != 0 {
                     p += 1;
-                } else if byte_at(s, p) == b'"' {
+                } else if byte_at(line, p) == b'"' {
                     break; // end of string
                 }
                 p += 1;
             }
-            if byte_at(s, p) != b'"' {
+            if byte_at(line, p) != b'"' {
                 break;
             }
-        } else if byte_at(s, p) == b'R' && byte_at(s, p + 1) == b'"' {
+        } else if byte_at(line, p) == b'R' && byte_at(line, p + 1) == b'"' {
             // Raw string: R"[delim](...)[delim]"
             let delim = p + 2;
-            let Some(delim_len) = s
+            let Some(delim_len) = line
                 .get(delim..)
                 .and_then(|t| t.iter().position(|&b| b == b'('))
             else {
                 break;
             };
             p += 3;
-            while byte_at(s, p) != 0 {
-                if byte_at(s, p) == b')'
-                    && s[p + 1..].starts_with(&s[delim..delim + delim_len])
-                    && byte_at(s, p + delim_len + 1) == b'"'
+            while byte_at(line, p) != 0 {
+                if byte_at(line, p) == b')'
+                    && line[p + 1..].starts_with(&line[delim..delim + delim_len])
+                    && byte_at(line, p + delim_len + 1) == b'"'
                 {
                     p += delim_len + 1;
                     break;
                 }
                 p += 1;
             }
-            if byte_at(s, p) != b'"' {
+            if byte_at(line, p) != b'"' {
                 break;
             }
         } else {
@@ -195,77 +205,69 @@ fn string_end(s: &[u8]) -> isize {
         }
         p += 1;
     }
-    // Back up off the NUL, as upstream does -- to -1 when `s` is empty.
-    if byte_at(s, p) == 0 {
-        p as isize - 1
+    // Back up off the terminator, as upstream does.
+    if byte_at(line, p) == 0 {
+        p.saturating_sub(1)
     } else {
-        p as isize
+        p
     }
 }
 
-/// [`string_end`] over a pointer: past the run of strings starting at `p`.
-///
-/// # Safety
-/// `p` must point at a NUL-terminated string, and -- because an empty one
-/// answers the byte *before* it -- must not be the start of its allocation
-/// when it is empty.  `find_last_paren` is the only caller that reaches
-/// that, and only from `p >= line + 1`.
-pub(crate) unsafe fn skip_string(p: *const c_char) -> *const c_char {
-    unsafe { p.offset(string_end(CStr::from_ptr(p).to_bytes())) }
-}
-
 /// Whether `line[col]` is inside a C string.
-pub fn is_pos_in_string(s: &[u8], col: ColNr) -> bool {
+pub fn is_pos_in_string(line: &[u8], col: ColNr) -> bool {
     let mut p = 0usize;
-    while p < s.len() && (p as ColNr) < col {
-        // `p < s.len()` is upstream's `*p`, so the tail is non-empty and the
-        // signed answer is non-negative.
-        p = (p as isize + string_end(&s[p..]) + 1) as usize;
+    while p < line.len() && (p as ColNr) < col {
+        // `p < line.len()` is upstream's `*p`, so the walk below cannot be
+        // the "back up off the terminator" case and `p` strictly grows.
+        p = string_end_at(line, p) + 1;
     }
     p as ColNr > col
 }
 
-/// Step over white space and C comments -- and, with 'cinoptions' `#N`, over
-/// Perl/shell `#` comments too.
+/// Whether 'cinoptions' `#N` is on, i.e. a `#` starts a comment.
+///
+/// `false` where there is no buffer, which is the library test harness and
+/// nothing else -- and is also the option's default.
+fn hash_comments() -> bool {
+    Buf::current_or_none().is_some_and(|buffer| buffer.b_ind_hash_comment != 0)
+}
+
+/// The offset of the first byte of code at or after `at`: white space and C
+/// comments -- and, with 'cinoptions' `#N`, Perl/shell `#` comments -- are
+/// stepped over.
+pub(crate) fn code_at(line: &[u8], at: usize) -> usize {
+    code_from(line, at, hash_comments())
+}
+
+/// [`code_at`] with the `#` rule spelled out rather than read off the buffer.
 ///
 /// The `#` form requires a space in front of it, so that `$#array` is not
 /// read as a comment.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_skipcomment(s: *const c_char) -> *const c_char {
-    let hash_comment = Buf::current().b_ind_hash_comment != 0;
-    // SAFETY: the caller's promise -- `s` is NUL-terminated, and
-    // `skip_comment` answers an index no further than that NUL.
-    unsafe { s.add(skip_comment(CStr::from_ptr(s).to_bytes(), hash_comment)) }
-}
-
-/// [`cin_skipcomment`] over a slice: the index of the first byte of code.
-fn skip_comment(s: &[u8], hash_comment: bool) -> usize {
-    let mut p = 0usize;
-    while byte_at(s, p) != 0 {
+fn code_from(line: &[u8], at: usize, hash_comment: bool) -> usize {
+    let mut p = at.min(line.len());
+    while byte_at(line, p) != 0 {
         let prev = p;
-        while ascii_iswhite(c_int::from(byte_at(s, p))) {
+        while ascii_iswhite(c_int::from(byte_at(line, p))) {
             p += 1;
         }
         // A Perl/shell `#` comment runs to end of line.
-        if hash_comment && p != prev && byte_at(s, p) == b'#' {
-            return s.len();
+        if hash_comment && p != prev && byte_at(line, p) == b'#' {
+            return line.len();
         }
-        if byte_at(s, p) != b'/' {
+        if byte_at(line, p) != b'/' {
             break;
         }
         p += 1;
-        if byte_at(s, p) == b'/' {
+        if byte_at(line, p) == b'/' {
             // A `//` comment runs to end of line.
-            return s.len();
+            return line.len();
         }
-        if byte_at(s, p) != b'*' {
+        if byte_at(line, p) != b'*' {
             break;
         }
         p += 1;
-        while byte_at(s, p) != 0 {
-            if byte_at(s, p) == b'*' && byte_at(s, p + 1) == b'/' {
+        while byte_at(line, p) != 0 {
+            if byte_at(line, p) == b'*' && byte_at(line, p + 1) == b'/' {
                 p += 2;
                 break;
             }
@@ -275,41 +277,28 @@ fn skip_comment(s: &[u8], hash_comment: bool) -> usize {
     p
 }
 
-/// Whether there is no code at `s`: white space and comments are not code.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_nocode(s: *const c_char) -> bool {
-    unsafe { *cin_skipcomment(s) as c_int == NUL }
+/// Whether there is no code left at `at`: white space and comments are not
+/// code.
+pub(crate) fn only_comment_left(line: &[u8], at: usize) -> bool {
+    code_at(line, at) >= line.len()
 }
 
 /// The nearest `//` comment above the cursor, skipping blank lines.
-///
-/// # Safety
-/// Reads the current buffer and window.
-pub(crate) unsafe fn find_line_comment() -> Option<Pos> {
+pub(crate) fn find_line_comment() -> Option<Pos> {
     let mut pos = Win::current().w_cursor;
+    let mut lines = Lines::current();
     loop {
         pos.lnum -= 1;
         if pos.lnum <= 0 {
             return None;
         }
-        // SAFETY: on the main thread with a current buffer; `ml_get` hands
-        // back a NUL-terminated line, which is all the rest ask for.
-        let (is_comment, col, at_end) = unsafe {
-            let line = ml_get(pos.lnum);
-            let p = skipwhite(line);
-            (
-                cin_islinecomment(p),
-                p.offset_from(line) as ColNr,
-                *p as c_int == NUL,
-            )
-        };
-        if is_comment {
-            return Some(pos.with_col(col));
+        let line = lines.line(pos.lnum);
+        let col = skip::white(line);
+        if starts_line_comment(line, col) {
+            return Some(pos.with_col(col as ColNr));
         }
-        if !at_end {
-            return None;
+        if col < line.len() {
+            return None; // code before it: not a comment line
         }
     }
 }
@@ -318,39 +307,28 @@ pub(crate) unsafe fn find_line_comment() -> Option<Pos> {
 ///
 /// They interleave: `"string0" /*comment*/ "string1"` is one run, and neither
 /// skipper alone gets past it.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_skip_comment_and_string(s: *const c_char) -> *const c_char {
-    let mut p = s;
+pub(crate) fn code_or_string_at(line: &[u8], at: usize) -> usize {
+    let mut p = at;
     loop {
-        let r = p;
-        // SAFETY: `s` is NUL-terminated and neither skipper walks past its
-        // NUL, so every `p` the loop sees is NUL-terminated too.
-        p = unsafe {
-            let p = cin_skipcomment(p);
-            if *p != 0 { skip_string(p) } else { p }
-        };
-        if p == r {
+        let before = p;
+        p = code_at(line, p);
+        if p < line.len() {
+            p = string_end_at(line, p);
+        }
+        if p == before {
             return p;
         }
     }
 }
 
 /// The start of a C or C++ comment.
-///
-/// # Safety
-/// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_iscomment(p: *const c_char) -> bool {
-    unsafe { *p == b'/' as c_char && (*p.add(1) == b'*' as c_char || *p.add(1) == b'/' as c_char) }
+pub(crate) fn starts_comment(line: &[u8], at: usize) -> bool {
+    byte_at(line, at) == b'/' && matches!(byte_at(line, at + 1), b'*' | b'/')
 }
 
 /// The start of a `//` comment.
-///
-/// # Safety
-/// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_islinecomment(p: *const c_char) -> bool {
-    unsafe { *p == b'/' as c_char && *p.add(1) == b'/' as c_char }
+pub(crate) fn starts_line_comment(line: &[u8], at: usize) -> bool {
+    byte_at(line, at) == b'/' && byte_at(line, at + 1) == b'/'
 }
 
 #[cfg(test)]
@@ -358,7 +336,17 @@ mod tests {
     use super::*;
 
     fn skip(s: &str) -> isize {
-        string_end(s.as_bytes())
+        // The offset form never answers a negative, so the empty case --
+        // upstream's "back up onto the byte before the argument" -- is read
+        // off the saturating answer instead.
+        if s.is_empty() {
+            return -1;
+        }
+        string_end_at(s.as_bytes(), 0) as isize
+    }
+
+    fn skip_comment(s: &[u8], hash_comment: bool) -> usize {
+        code_from(s, 0, hash_comment)
     }
 
     #[test]
@@ -373,6 +361,12 @@ mod tests {
         // the argument, which `find_last_paren` reaches after a trailing
         // comment and which makes it revisit the line's last byte.
         assert_eq!(skip(""), -1);
+        // From the middle of a line, the answer is an offset into the whole
+        // of it: the walk is the same one, only its origin moves.
+        assert_eq!(string_end_at(b"x = \"abc\" y", 4), 9);
+        // At the end of a line, upstream steps back onto the last byte --
+        // which is what makes `find_last_paren` look at it a second time.
+        assert_eq!(string_end_at(b"code", 4), 3);
     }
 
     #[test]

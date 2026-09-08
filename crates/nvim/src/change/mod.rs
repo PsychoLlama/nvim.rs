@@ -50,7 +50,7 @@ use crate::indent::{
     copy_indent, fixthisline, get_indent, get_lisp_indent, get_sw_value, indent_size_ts, may_do_si,
     set_indent, use_indentexpr_for_lisp,
 };
-use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
+use crate::indent_c::{do_c_expr_indent, in_cinkeys, starts_with_cinword};
 use crate::insexpand::ins_compl_active;
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{

@@ -21,21 +21,20 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 /// The line being indented, and where it sits.
 ///
-/// `theline` points into `linecopy`, a private copy of the line: `ml_get`
-/// only guarantees the *most recent* line it answered, and this code asks for
-/// hundreds of others before it is done.
+/// The text is a private copy: `ml_get` only guarantees the *most recent*
+/// line it answered, and this code asks for hundreds of others before it is
+/// done.
 pub(crate) struct Line {
-    /// The cursor's line, white space skipped -- the text being judged.
-    pub theline: *const c_char,
-    /// The same copy from column 0, which the `#` test reads.
-    pub linecopy: *const c_char,
+    /// The copy, from column 0.
+    copy: Vec<u8>,
+    /// Where the text being judged starts in it -- the leading white space
+    /// skipped.
+    start: usize,
     /// Where the cursor was when the question was asked.
     pub cur_curpos: Pos,
     /// Whether that line is a jump label, decided before anything moved.
@@ -43,12 +42,19 @@ pub(crate) struct Line {
 }
 
 impl Line {
+    /// The cursor's line, white space skipped -- the text being judged.
+    pub(crate) fn theline(&self) -> &[u8] {
+        &self.copy[self.start..]
+    }
+
+    /// The same copy from column 0, which the `#` test reads.
+    pub(crate) fn whole(&self) -> &[u8] {
+        &self.copy
+    }
+
     /// Whether the line being indented starts with `c`.
-    ///
-    /// # Safety
-    /// `theline` must still be valid.
-    pub(crate) unsafe fn starts_with(&self, c: u8) -> bool {
-        unsafe { *self.theline as u8 == c }
+    pub(crate) fn starts_with(&self, c: u8) -> bool {
+        self.theline().first() == Some(&c)
     }
 }
 
@@ -68,37 +74,27 @@ pub unsafe fn get_c_indent() -> c_int {
 
     // A copy, because only the most recent line `ml_get` answered stays
     // valid and everything below asks for more.
-    // SAFETY: on the main thread with a current buffer; `xstrdup` copies the
-    // NUL-terminated line `ml_get` answers with.
-    let linecopy = unsafe { xstrdup(ml_get(cur_curpos.lnum)) };
+    let mut copy = Lines::current().line(cur_curpos.lnum).to_vec();
 
     // In Insert mode with the cursor on a ')', truncate the line there:
     // new text should not line up with the matching '('.  The cursor can
     // be past the end of the line, for unknown reasons, so check.
-    let col = Win::current().w_cursor.col;
-    // SAFETY: `linecopy` is a NUL-terminated copy of the line, and the
-    // `strlen` test -- which the `&&` chain keeps in front -- is what says
-    // `col` indexes inside it.
-    if State.get() & MODE_INSERT != 0
-        && (col as size_t) < unsafe { cstr::bytes_at(linecopy) }.len()
-        && unsafe { *linecopy.offset(col as isize) } as u8 == b')'
-    {
-        unsafe { *linecopy.offset(col as isize) = NUL as c_char };
+    let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+    if State.get() & MODE_INSERT != 0 && copy.get(col) == Some(&b')') {
+        copy.truncate(col);
     }
-
-    // SAFETY: `linecopy` is NUL-terminated, so `skipwhite` stops inside it.
-    let theline = unsafe { skipwhite(linecopy) }.cast_const();
+    let start = skip::white(&copy);
 
     // Move the cursor to the start of the line, and judge the line before
     // anything else moves: 'cinoptions' `L` reads the answer again at the
     // very end.
     Win::current().w_cursor.col = 0;
     let line = Line {
-        theline,
-        linecopy: linecopy.cast_const(),
+        copy,
+        start,
         cur_curpos,
         // SAFETY: the cursor is on a line of the current buffer.
-        original_line_islabel: unsafe { cin_islabel() },
+        original_line_islabel: unsafe { is_jump_label() },
     };
 
     // SAFETY: `line` outlives the call, and the cursor is restored below.
@@ -110,8 +106,6 @@ pub unsafe fn get_c_indent() -> c_int {
 
     // Put the cursor back where it belongs.
     Win::current().w_cursor = cur_curpos;
-    // SAFETY: `linecopy` came from `xstrdup` and nothing else owns it.
-    unsafe { xfree(linecopy.cast::<::core::ffi::c_void>()) };
     amount
 }
 
@@ -136,20 +130,15 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
 
     // `#define` and friends go at the left when 'cinkeys' says so,
     // excluding `#pragma` when 'cinoptions' `P` asks.
-    // SAFETY: `line`'s two pointers are NUL-terminated copies of the cursor's
-    // line, alive for the whole call.  `theline.add(1)` is inside the copy
-    // because `starts_with` has just seen a `#` at `theline[0]`, which the
-    // `&&` chain keeps in front of it.
-    let hash_at_left = unsafe {
-        line.starts_with(b'#')
-            && (*line.linecopy as u8 == b'#'
-                || in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true))
-            && {
-                let directive = skipwhite(line.theline.add(1));
-                Buf::current().b_ind_pragma == 0
-                    || !CStr::from_ptr(directive).to_bytes().starts_with(b"pragma")
-            }
-    };
+    let theline = line.theline();
+    // SAFETY: `in_cinkeys` reads the current buffer and its cursor line.
+    let hash_at_left = line.starts_with(b'#')
+        && (line.whole().first() == Some(&b'#')
+            || unsafe { in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true) })
+        && {
+            let directive = 1 + skip::white(&theline[1..]);
+            Buf::current().b_ind_pragma == 0 || !theline[directive..].starts_with(b"pragma")
+        };
     if hash_at_left {
         return Some(Buf::current().b_ind_hash_comment);
     }
@@ -164,21 +153,18 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     }
 
     // Inside a `//` comment with another one above: line up with it.
-    // SAFETY: `line.theline` is NUL-terminated; the alignment search only
-    // runs when it is a `//` comment, as upstream has it.
-    let aligned = unsafe {
-        cin_islinecomment(line.theline)
-            .then(|| incomment::align_with_line_comment())
-            .flatten()
-    };
+    // SAFETY: the alignment search reads the current buffer, and only runs
+    // when the line is a `//` comment, as upstream has it.
+    let aligned = starts_line_comment(theline, 0)
+        .then(|| unsafe { incomment::align_with_line_comment() })
+        .flatten();
     if let Some(amount) = aligned {
         return Some(amount);
     }
 
     // Inside a `/* */` comment, and not looking at its start: the
     // 'comments' option decides.
-    // SAFETY: `line.theline` is NUL-terminated.
-    if !unsafe { cin_iscomment(line.theline) }
+    if !starts_comment(theline, 0)
         && let Some(comment) = comment_pos.as_mut()
     {
         // SAFETY: `line` outlives the call and `comment` is a position this
@@ -187,13 +173,11 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     }
 
     // A `]` that has a match lines up with the line holding the `[`.
-    // SAFETY: `line.theline` is NUL-terminated, so `skipwhite` stops inside
-    // it; the match search runs on the current buffer, and only for a `]`.
-    let bracket = unsafe {
-        (*skipwhite(line.theline) as u8 == b']')
-            .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen))
-            .flatten()
-    };
+    // SAFETY: the match search runs on the current buffer, and only for a `]`.
+    let bracket = line
+        .starts_with(b']')
+        .then(|| unsafe { find_match_char(b'[', Buf::current().b_ind_maxparen) })
+        .flatten();
     if let Some(trypos) = bracket {
         // SAFETY: `trypos` is a position in the current buffer.
         return Some(get_indent_lnum(trypos.lnum));
@@ -235,8 +219,7 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     };
 
     // Extra indent for a comment.
-    // SAFETY: `line.theline` is NUL-terminated.
-    if unsafe { cin_iscomment(line.theline) } {
+    if starts_comment(line.theline(), 0) {
         amount += Buf::current().b_ind_comment;
     }
     // Take back the extra left shift jump labels get.

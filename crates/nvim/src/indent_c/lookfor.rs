@@ -23,9 +23,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::winlayer::{Buf, Win};
-use core::ffi::c_char;
 
 impl BlockScan<'_> {
     /// A continuation line's amount: the remembered base, or one more level.
@@ -68,8 +66,7 @@ impl BlockScan<'_> {
             && self.lookfor != LOOKFOR_COMMA
         {
             self.amount = self.scope_amount;
-            // SAFETY: `self.line` keeps its copy of the text alive.
-            if unsafe { self.line.starts_with(b'{') } {
+            if self.line.starts_with(b'{') {
                 self.amount += Buf::current().b_ind_open_extra;
                 self.added_to_amount = Buf::current().b_ind_open_extra;
             }
@@ -90,30 +87,25 @@ impl BlockScan<'_> {
                 return Step::Again;
             }
 
-            // SAFETY: the cursor is on a line of the current buffer.
-            let mut l = get_cursor_line_ptr().cast_const();
-            // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum`
-            // borrow is sound -- `cin_ispreproc_cont` never reads `curwin`.
-            let is_preproc = unsafe {
-                cin_ispreproc_cont(&mut l, &mut Win::current().w_cursor.lnum, &mut self.amount)
-            };
-            if is_preproc {
+            if preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) {
                 return Step::Again;
             }
 
             // Finally, the actual check for "namespace".
-            // SAFETY: `l` is a NUL-terminated line.
-            if unsafe { cin_is_cpp_namespace(l) } {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            // SAFETY: both read the current buffer's 'iskeyword'.
+            if unsafe { opens_namespace(l, 0) } {
                 self.amount += Buf::current().b_ind_cpp_namespace - self.added_to_amount;
                 return Step::Done;
             }
             // SAFETY: the same.
-            if unsafe { cin_is_cpp_extern_c(l) } {
+            if unsafe { opens_extern_c(l, 0) } {
                 self.amount += Buf::current().b_ind_cpp_extern_c - self.added_to_amount;
                 return Step::Done;
             }
-            // SAFETY: the same.
-            if unsafe { cin_nocode(l) } {
+            if only_comment_left(l, 0) {
                 return Step::Again;
             }
         }
@@ -150,41 +142,35 @@ impl BlockScan<'_> {
             return Step::Again;
         }
 
-        // SAFETY: the cursor is on a line of the current buffer.
-        let mut l = get_cursor_line_ptr().cast_const();
-        // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum` borrow
-        // is sound -- `cin_ispreproc_cont` never reads `curwin`.  The chain
-        // stays whole: it may move `l` on before `cin_nocode` reads it.
-        let skipped = unsafe {
-            cin_ispreproc_cont(&mut l, &mut Win::current().w_cursor.lnum, &mut self.amount)
-                || cin_nocode(l)
+        // The chain stays whole: `preproc_start` may move the cursor's line
+        // number on before the text is read.
+        let skipped = preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) || {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            only_comment_left(Lines::current().line(cursor_lnum), 0)
         };
         if skipped {
             return Step::Again;
         }
 
-        // SAFETY: `l` is a NUL-terminated line.
-        let terminated = unsafe { cin_isterminated(l, false, true) };
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let terminated = terminator(Lines::current().line(cursor_lnum), 0, false, true);
 
         // At top level and looking like a function declaration: done, it
         // is a variable declaration.
-        // SAFETY: `l` is the cursor's NUL-terminated line.  The chain stays
-        // whole: `cin_isfuncdecl` moves `l` on, so it must not run early.
-        let is_var_decl = unsafe {
-            self.start_brace != BRACE_IN_COL0
-                || !cin_isfuncdecl(Some(&mut l), Win::current().w_cursor.lnum, 0)
-        };
+        // SAFETY: the search moves the cursor over lines of the buffer.
+        let is_var_decl = self.start_brace != BRACE_IN_COL0
+            || !unsafe { is_func_decl(Win::current().w_cursor.lnum, 0) };
         if is_var_decl {
             // Terminated with another ',': a continued initialisation, so
             // no extra indent.
             // TODO(vim): does not work if a function declaration is split
-            // over several lines -- `cin_isfuncdecl` says no then.
+            // over several lines -- `is_func_decl` says no then.
             if terminated == b',' {
                 return Step::Done;
             }
             // An enum declaration or an assignment: done.
             // SAFETY: reads the cursor's line of the current buffer.
-            if terminated != b';' && unsafe { cin_isinit() } {
+            if terminated != b';' && unsafe { is_enum_or_init() } {
                 return Step::Done;
             }
             if terminated == 0 || terminated == b'{' {
@@ -196,13 +182,16 @@ impl BlockScan<'_> {
             // Skip parens and braces: position on the rightmost paren so
             // that matching it takes us to the start of the line.
             let mut trypos = None;
-            // SAFETY: `l` is the cursor's line; both move the cursor inside the
-            // buffer, and the match runs only when a paren was found, as upstream.
-            if unsafe { find_last_paren(l, b'(', b')') } {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            // The borrow ends with the statement; the match runs only when a
+            // paren was found, as upstream has it.
+            if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
+                // SAFETY: moves the cursor inside the current buffer.
                 trypos = unsafe { find_match_paren(Buf::current().b_ind_maxparen) };
             }
-            // SAFETY: the same, for the brace pair.
-            if trypos.is_none() && unsafe { find_last_paren(l, b'{', b'}') } {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            if trypos.is_none() && find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}') {
+                // SAFETY: the same, for the brace pair.
                 trypos = unsafe { find_start_brace() };
             }
             if let Some(trypos) = trypos {
@@ -232,15 +221,16 @@ impl BlockScan<'_> {
             return Step::Again;
         }
 
-        // SAFETY: the cursor is on a line of the current buffer.
-        let mut l = get_cursor_line_ptr().cast_const();
-
         // A switch() label or a C++ scope declaration may be what we line
         // up relative to.
-        // SAFETY: `l` is a NUL-terminated line.
-        let iscase = unsafe { cin_iscase(l, false) };
-        // SAFETY: the same.
-        if iscase || unsafe { cin_isscopedecl(l) } {
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let (iscase, isscopedecl) = {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
+            (is_case_label(l, 0, false), unsafe { is_scope_decl(l, 0) })
+        };
+        if iscase || isscopedecl {
             // SAFETY: the caller's promise, handed straight on.
             return unsafe { self.on_label(iscase) };
         }
@@ -248,11 +238,11 @@ impl BlockScan<'_> {
         // Looking for a switch() label or scope declaration: ignore other
         // lines and skip `{}` blocks whole.
         if self.lookfor == LOOKFOR_CASE || self.lookfor == LOOKFOR_SCOPEDECL {
-            // SAFETY: `l` is the cursor's line; both move the cursor inside
-            // the buffer, and the hunt runs only when a brace was found.
-            if unsafe { find_last_paren(l, b'{', b'}') }
-                && let Some(trypos) = unsafe { find_start_brace() }
-            {
+            // The borrow ends with the statement; the hunt runs only when a
+            // brace was found.
+            let has_brace = find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}');
+            // SAFETY: moves the cursor inside the current buffer.
+            if has_brace && let Some(trypos) = unsafe { find_start_brace() } {
                 self.resume_at(trypos.lnum);
             }
             return Step::Again;
@@ -260,25 +250,24 @@ impl BlockScan<'_> {
 
         // Ignore jump labels with nothing after them.
         // SAFETY: reads the cursor's line of the current buffer.
-        if Buf::current().b_ind_js == 0 && unsafe { cin_islabel() } {
-            // SAFETY: the cursor's line is NUL-terminated.
-            let after = unsafe { after_label(get_cursor_line_ptr()) };
-            // SAFETY: `after` points into that line, once it is not NULL.
-            if after.is_null() || unsafe { cin_nocode(after) } {
+        if Buf::current().b_ind_js == 0 && unsafe { is_jump_label() } {
+            // `is_jump_label` may have unlocked the line, so it is read again.
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            let mut lines = Lines::current();
+            let text = lines.line(cursor_lnum);
+            let nothing_after =
+                after_label(text).is_none_or(|after| only_comment_left(text, after));
+            if nothing_after {
                 return Step::Again;
             }
         }
 
-        // Ignore #defines, comments and empty lines.  (Get the line
-        // again: `cin_islabel` may have unlocked it.)
-        // SAFETY: the cursor is on a line of the current buffer.
-        l = get_cursor_line_ptr();
-        // SAFETY: `l` is that line, NUL-terminated; the `w_cursor.lnum` borrow
-        // is sound -- `cin_ispreproc_cont` never reads `curwin`.  The chain
-        // stays whole: it may move `l` on before `cin_nocode` reads it.
-        let skipped = unsafe {
-            cin_ispreproc_cont(&mut l, &mut Win::current().w_cursor.lnum, &mut self.amount)
-                || cin_nocode(l)
+        // Ignore #defines, comments and empty lines.  The chain stays whole:
+        // `preproc_start` may move the cursor's line number on before the
+        // text is read.
+        let skipped = preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) || {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            only_comment_left(Lines::current().line(cursor_lnum), 0)
         };
         if skipped {
             return Step::Again;
@@ -289,15 +278,12 @@ impl BlockScan<'_> {
         let mut is_baseclass = false;
         if self.lookfor != LOOKFOR_TERM && Buf::current().b_ind_cpp_baseclass > 0 {
             // SAFETY: on the main thread with a current buffer.
-            is_baseclass = unsafe { cin_is_cpp_baseclass(&mut self.cache) };
-            // SAFETY: the same; the check above may have unlocked the line.
-            l = get_cursor_line_ptr();
+            is_baseclass = unsafe { in_baseclass_list(&mut self.cache) };
         }
         if is_baseclass {
             if self.lookfor == LOOKFOR_UNTERM {
                 self.continuation();
-                // SAFETY: `self.line` keeps its copy of the text alive.
-            } else if unsafe { self.line.starts_with(b'{') } {
+            } else if self.line.starts_with(b'{') {
                 // Need to find the start of the declaration.
                 self.lookfor = LOOKFOR_UNTERM;
                 self.ind_continuation = 0;
@@ -310,9 +296,10 @@ impl BlockScan<'_> {
         }
         if self.lookfor == LOOKFOR_CPP_BASECLASS {
             // Only interested in whether there is a base-class
-            // declaration or initialisation before the opening brace.
-            // SAFETY: `l` is a NUL-terminated line.
-            return if unsafe { cin_isterminated(l, true, false) } != 0 {
+            // declaration or initialisation before the opening brace.  The
+            // check above may have unlocked the line, so it is read again.
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            return if terminator(Lines::current().line(cursor_lnum), 0, true, false) != 0 {
                 Step::Done
             } else {
                 Step::Again
@@ -325,8 +312,8 @@ impl BlockScan<'_> {
         //   123,
         //   sizeof
         //      here
-        // SAFETY: `l` is a NUL-terminated line.
-        let terminated = unsafe { cin_isterminated(l, false, true) };
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let terminated = terminator(Lines::current().line(cursor_lnum), 0, false, true);
 
         if self.js_cur_has_key {
             self.js_cur_has_key = false; // only check the first line
@@ -341,8 +328,7 @@ impl BlockScan<'_> {
                 self.lookfor = LOOKFOR_JS_KEY;
             }
         }
-        // SAFETY: `l` is a NUL-terminated line.
-        if self.lookfor == LOOKFOR_JS_KEY && unsafe { cin_has_js_key(l) } {
+        if self.lookfor == LOOKFOR_JS_KEY && has_js_key(Lines::current().line(cursor_lnum), 0) {
             // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
             return Step::Done;
@@ -365,10 +351,10 @@ impl BlockScan<'_> {
             }
         }
 
-        // SAFETY: the caller's promise, handed on; `l` is NUL-terminated.
+        // SAFETY: the caller's promise, handed on.
         if terminated == 0 || (self.lookfor != LOOKFOR_UNTERM && terminated == b',') {
-            unsafe { self.on_unterminated(l, terminated) }
-        } else if unsafe { cin_iswhileofdo_end(terminated) } {
+            unsafe { self.on_unterminated(terminated) }
+        } else if unsafe { ends_a_do_while(terminated) } {
             unsafe { self.on_while_of_do_end() }
         } else {
             unsafe { self.on_terminated() }
@@ -442,12 +428,14 @@ impl BlockScan<'_> {
         // ->              y = y + 1;
         if n != 0 {
             self.amount = n;
-            // SAFETY: the cursor's line is NUL-terminated.
-            let l = unsafe { after_label(get_cursor_line_ptr()) };
-            // SAFETY: `l` points into that line, once it is not NULL.
-            if !l.is_null() && unsafe { cin_is_cinword(l) } {
-                // SAFETY: `self.line` keeps its copy of the text alive.
-                self.amount += if unsafe { self.line.starts_with(b'{') } {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            let mut lines = Lines::current();
+            let text = lines.line(cursor_lnum);
+            // SAFETY: `starts_with_cinword` reads the buffer's 'cinwords'.
+            let cinword = after_label(text)
+                .is_some_and(|after| unsafe { starts_with_cinword(&text[after..]) });
+            if cinword {
+                self.amount += if self.line.starts_with(b'{') {
                     Buf::current().b_ind_open_extra
                 } else {
                     Buf::current().b_ind_level + Buf::current().b_ind_no_brace
@@ -495,8 +483,7 @@ impl BlockScan<'_> {
             self.lookfor = LOOKFOR_TERM;
             // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
-            // SAFETY: `self.line` keeps its copy of the text alive.
-            if unsafe { self.line.starts_with(b'{') } {
+            if self.line.starts_with(b'{') {
                 self.amount += Buf::current().b_ind_open_extra;
             }
         }
@@ -509,20 +496,22 @@ impl BlockScan<'_> {
     /// # Safety
     /// Moves the cursor; may unlock the current line.
     unsafe fn on_terminated(&mut self) -> Step {
-        // Skip a lone `break` before a switch label: it may be lined up
-        // with the label ('cinoptions' `b`).
-        // SAFETY: the cursor's line is NUL-terminated; `skipwhite` stays in it.
-        let isbreak = self.lookfor == LOOKFOR_NOBREAK
-            && unsafe { cin_isbreak(skipwhite(get_cursor_line_ptr())) };
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let (isbreak, isdo) = {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            (
+                // Skip a lone `break` before a switch label: it may be lined
+                // up with the label ('cinoptions' `b`).
+                self.lookfor == LOOKFOR_NOBREAK && is_break(l, skip::white(l)),
+                // Handle a "do {" line.
+                self.whilelevel > 0 && is_do(l, code_at(l, 0)),
+            )
+        };
         if isbreak {
             self.lookfor = LOOKFOR_ANY;
             return Step::Again;
         }
-
-        // Handle a "do {" line.
-        // SAFETY: the same, with `cin_skipcomment`, which also stays inside.
-        let isdo =
-            self.whilelevel > 0 && unsafe { cin_isdo(cin_skipcomment(get_cursor_line_ptr())) };
         if isdo {
             // SAFETY: reads the cursor's line of the current buffer.
             self.amount = get_indent();
@@ -572,11 +561,11 @@ impl BlockScan<'_> {
             //     func(asdr,
             //              asdfasdf);
             //     here;
-            // SAFETY: the cursor is on a line of the current buffer.
-            let mut l = get_cursor_line_ptr().cast_const();
-            // SAFETY: `l` is that line; both move the cursor inside the buffer,
-            // and the match runs only when a paren was found, as upstream has it.
-            if unsafe { find_last_paren(l, b'(', b')') } {
+            // The borrow ends with the statement; the match runs only when a
+            // paren was found, as upstream has it.
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
+                // SAFETY: moves the cursor inside the current buffer.
                 let trypos = unsafe { find_match_paren(Buf::current().b_ind_maxparen) };
                 if let Some(trypos) = trypos {
                     // Check whether we are on a case label now; that is
@@ -584,10 +573,13 @@ impl BlockScan<'_> {
                     //         case xx:  if ( asdf &&
                     //                          asdf)
                     Win::current().w_cursor = trypos;
-                    // SAFETY: the cursor is on a line of the current buffer.
-                    l = get_cursor_line_ptr();
-                    // SAFETY: `l` is that line, NUL-terminated.
-                    if unsafe { cin_iscase(l, false) || cin_isscopedecl(l) } {
+                    let labelled = {
+                        let mut lines = Lines::current();
+                        let l = lines.line(trypos.lnum);
+                        // SAFETY: reads the buffer's 'cinscopedecls'.
+                        is_case_label(l, 0, false) || unsafe { is_scope_decl(l, 0) }
+                    };
+                    if labelled {
                         // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
                         self.resume_at(Win::current().w_cursor.lnum);
                         return Step::Again;
@@ -603,23 +595,29 @@ impl BlockScan<'_> {
             //  case 2:
             //        stat;
             // }
-            // SAFETY: `l` is a NUL-terminated line.
-            let iscase =
-                Buf::current().b_ind_keep_case_label != 0 && unsafe { cin_iscase(l, false) };
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            let iscase = Buf::current().b_ind_keep_case_label != 0
+                && is_case_label(Lines::current().line(cursor_lnum), 0, false);
 
             // The indent of the current line, ignoring any jump label.
-            // SAFETY: the line number is the cursor's own and `l` is that line.
-            self.amount = unsafe { skip_label(Win::current().w_cursor.lnum, &mut l) };
-            // SAFETY: `self.line` keeps its copy of the text alive.
-            if unsafe { self.line.starts_with(b'{') } {
+            // SAFETY: the line number is the cursor's own.
+            let (amount, at) = unsafe { skip_label(cursor_lnum) };
+            self.amount = amount;
+            if self.line.starts_with(b'{') {
                 self.amount += Buf::current().b_ind_open_extra;
             }
             // See the remark above: only add `b_ind_open_extra` when the
             // line does not itself start with a '{'.
-            // SAFETY: `l` is NUL-terminated, so `skipwhite` stays in it and the
-            // dereference behind it is in bounds.
-            l = unsafe { skipwhite(l) };
-            if unsafe { *l } as u8 == b'{' {
+            let (opens_brace, is_else_line) = {
+                let mut lines = Lines::current();
+                let l = lines.line(cursor_lnum);
+                let at = at + skip::white(&l[at.min(l.len())..]);
+                (
+                    byte_at(l, at) == b'{',
+                    byte_at(l, at) != b'}' && is_else(l, at),
+                )
+            };
+            if opens_brace {
                 self.amount -= Buf::current().b_ind_open_extra;
             }
             self.lookfor = if iscase { LOOKFOR_ANY } else { LOOKFOR_TERM };
@@ -627,11 +625,7 @@ impl BlockScan<'_> {
             // A terminated line starting with "else" needs the scope of
             // *that* else, so skip to the matching "if".  With
             // `whilelevel != 0` keep looking for a "do {" instead.
-            // SAFETY: `l` is NUL-terminated; the chain keeps upstream's order.
-            let is_else = self.lookfor == LOOKFOR_TERM
-                && unsafe { *l as u8 != b'}' && cin_iselse(l) }
-                && self.whilelevel == 0;
-            if is_else {
+            if self.lookfor == LOOKFOR_TERM && is_else_line && self.whilelevel == 0 {
                 // SAFETY: both move the cursor inside the current buffer.
                 let unmatched = unsafe {
                     find_start_brace().is_none_or(|pos| !find_match(LOOKFOR_IF, pos.lnum))
@@ -642,22 +636,24 @@ impl BlockScan<'_> {
                 return Step::Again;
             }
 
-            // At the end of a block: skip to the start of that block.
-            // SAFETY: the cursor is on a line of the current buffer.
-            l = get_cursor_line_ptr();
-            // SAFETY: `l` is that line; both move the cursor inside the
-            // buffer, and the hunt runs only when a brace was found.
-            if unsafe { find_last_paren(l, b'{', b'}') }
-                && let Some(trypos) = unsafe { find_start_brace() }
-            {
+            // At the end of a block: skip to the start of that block.  The
+            // borrow ends with the statement; the hunt runs only when a
+            // brace was found.
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            let has_brace = find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}');
+            // SAFETY: moves the cursor inside the current buffer.
+            if has_brace && let Some(trypos) = unsafe { find_start_brace() } {
                 Win::current().w_cursor = trypos;
                 // If not "else {", check for terminated again; but
                 // skip the block for "} else {".
-                // SAFETY: the cursor's line is NUL-terminated.
-                l = unsafe { cin_skipcomment(get_cursor_line_ptr()) };
-                // SAFETY: `l` points into that line.
-                if unsafe { *l as u8 == b'}' || !cin_iselse(l) } {
-                    continue; // term_again
+                let term_again = {
+                    let mut lines = Lines::current();
+                    let l = lines.line(trypos.lnum);
+                    let at = code_at(l, 0);
+                    byte_at(l, at) == b'}' || !is_else(l, at)
+                };
+                if term_again {
+                    continue;
                 }
                 // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
                 self.resume_at(Win::current().w_cursor.lnum);
@@ -670,15 +666,15 @@ impl BlockScan<'_> {
     ///
     /// # Safety
     /// Moves the cursor; may unlock the current line.
-    unsafe fn on_unterminated(&mut self, mut l: *const c_char, terminated: u8) -> Step {
-        // `l` holds code -- `cin_nocode` was false -- so `strlen` is at
-        // least 1 and upstream's `l[strlen(l) - 1]` is in bounds.
-        // SAFETY: `l` is NUL-terminated, so `strlen`'s index is in bounds.
-        let n = unsafe { cstr::bytes_at(l) }.len();
-        let last = unsafe { n.checked_sub(1).map_or(0, |i| *l.add(i) as u8) };
-        // SAFETY: `l` is NUL-terminated, so `skipwhite` stays in it.
-        let opens_bracket = self.lookfor != LOOKFOR_ENUM_OR_INIT
-            && (unsafe { *skipwhite(l) } as u8 == b'[' || last == b'[');
+    unsafe fn on_unterminated(&mut self, terminated: u8) -> Step {
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let opens_bracket = self.lookfor != LOOKFOR_ENUM_OR_INIT && {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            // The line holds code -- `only_comment_left` was false -- so
+            // upstream's `l[strlen(l) - 1]` is in bounds.
+            byte_at(l, skip::white(l)) == b'[' || l.last() == Some(&b'[')
+        };
         if opens_bracket {
             self.amount += self.ind_continuation;
         }
@@ -688,10 +684,11 @@ impl BlockScan<'_> {
         //     if ( foo &&
         //              bar )
         // Position on the rightmost paren so that matching it takes us to
-        // the start of the line, and ignore a match before the block.
-        // SAFETY: `l` is the cursor's line; it moves the cursor in the buffer.
-        unsafe { find_last_paren(l, b'(', b')') };
-        // SAFETY: the same; the limit is derived from `self.line`'s position.
+        // the start of the line, and ignore a match before the block.  The
+        // borrow ends with the statement.
+        find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
+        // SAFETY: moves the cursor in the buffer; the limit is derived from
+        // `self.line`'s position.
         let mut trypos = unsafe { find_match_paren(corr_ind_maxparen(&self.line.cur_curpos)) };
         if let Some(pos) = trypos
             && (pos.lnum < self.brace.lnum
@@ -699,18 +696,15 @@ impl BlockScan<'_> {
         {
             trypos = None;
         }
-        // SAFETY: the cursor is on a line of the current buffer.
-        l = get_cursor_line_ptr();
 
         // Looking for a ',' means matching braces count too.
         if trypos.is_none() && terminated == b',' {
-            // SAFETY: `l` is that line; both move the cursor inside the
-            // buffer, and the hunt runs only when a brace was found.
-            if unsafe { find_last_paren(l, b'{', b'}') } {
+            let cursor_lnum = Win::current().w_cursor.lnum;
+            // The hunt runs only when a brace was found.
+            if find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}') {
+                // SAFETY: moves the cursor inside the current buffer.
                 trypos = unsafe { find_start_brace() };
             }
-            // SAFETY: the cursor is on a line of the current buffer.
-            l = get_cursor_line_ptr();
         }
 
         if let Some(trypos) = trypos {
@@ -719,10 +713,13 @@ impl BlockScan<'_> {
             //     case xx:  if ( asdf &&
             //                        asdf)
             Win::current().w_cursor = trypos;
-            // SAFETY: the cursor is on a line of the current buffer.
-            l = get_cursor_line_ptr();
-            // SAFETY: `l` is that line, NUL-terminated.
-            if unsafe { cin_iscase(l, false) || cin_isscopedecl(l) } {
+            let labelled = {
+                let mut lines = Lines::current();
+                let l = lines.line(trypos.lnum);
+                // SAFETY: reads the buffer's 'cinscopedecls'.
+                is_case_label(l, 0, false) || unsafe { is_scope_decl(l, 0) }
+            };
+            if labelled {
                 // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
                 self.resume_at(Win::current().w_cursor.lnum);
                 return Step::Again;
@@ -736,26 +733,27 @@ impl BlockScan<'_> {
         //          here;
         if terminated == b',' {
             while Win::current().w_cursor.lnum > 1 {
-                // SAFETY: `lnum - 1` is at least 1, so it is a line of the buffer.
-                let above = ml_get(Win::current().w_cursor.lnum - 1);
-                // SAFETY: `ml_get` hands back a NUL-terminated line.
-                if !unsafe { cin_ends_in_backslash(above) } {
+                // `lnum - 1` is at least 1, so it is a line of the buffer.
+                let above = Win::current().w_cursor.lnum - 1;
+                if !ends_in_backslash(Lines::current().line(above)) {
                     break;
                 }
                 Win::current().w_cursor.lnum -= 1;
                 Win::current().w_cursor.col = 0;
             }
-            // SAFETY: the cursor is on a line of the current buffer.
-            l = get_cursor_line_ptr();
         }
 
-        // The indent and the text of the current line, ignoring any jump
-        // label.
-        // SAFETY: the line number is the cursor's own and `l` is that line.
-        self.cur_amount = if Buf::current().b_ind_js != 0 {
-            get_indent()
+        // The indent and the offset of the current line's text, ignoring
+        // any jump label.
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let at = if Buf::current().b_ind_js != 0 {
+            self.cur_amount = get_indent();
+            0
         } else {
-            unsafe { skip_label(Win::current().w_cursor.lnum, &mut l) }
+            // SAFETY: the line number is the cursor's own.
+            let (amount, label_end) = unsafe { skip_label(cursor_lnum) };
+            self.cur_amount = amount;
+            label_end
         };
 
         // Just above the line being indented and it starts with a '{':
@@ -763,19 +761,19 @@ impl BlockScan<'_> {
         //          while (not)
         // ->       {
         //          }
-        // SAFETY: `self.line` keeps its copy of the text alive.
-        if terminated != b','
-            && self.lookfor != LOOKFOR_TERM
-            && unsafe { self.line.starts_with(b'{') }
-        {
+        if terminated != b',' && self.lookfor != LOOKFOR_TERM && self.line.starts_with(b'{') {
             self.amount = self.cur_amount;
             // Only add `b_ind_open_extra` when the line does not itself
             // start with a '{', which must have a match on the same line
             // (the same scope).  Probably:
             //        { 1, 2 },
             // ->     { 3, 4 }
-            // SAFETY: `l` is NUL-terminated, so `skipwhite` stays in it.
-            if unsafe { *skipwhite(l) } as u8 != b'{' {
+            let opens_brace = {
+                let mut lines = Lines::current();
+                let l = lines.line(cursor_lnum);
+                byte_at(l, at + skip::white(&l[at.min(l.len())..])) == b'{'
+            };
+            if !opens_brace {
                 self.amount += Buf::current().b_ind_open_extra;
             }
             if Buf::current().b_ind_cpp_baseclass != 0 && Buf::current().b_ind_js == 0 {
@@ -788,8 +786,15 @@ impl BlockScan<'_> {
         }
 
         // After an "if", "while", etc.  Also allow "   } else".
-        // SAFETY: `l` is NUL-terminated; the promise is handed on to both arms.
-        if unsafe { cin_is_cinword(l) || cin_iselse(skipwhite(l)) } {
+        let cinword = {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            // SAFETY: `starts_with_cinword` reads the buffer's 'cinwords'.
+            (unsafe { starts_with_cinword(&l[at.min(l.len())..]) })
+                || is_else(l, at + skip::white(&l[at.min(l.len())..]))
+        };
+        // SAFETY: the caller's promise, handed on to both arms.
+        if cinword {
             unsafe { self.after_cinword() }
         } else {
             unsafe { self.after_plain_unterminated(terminated) }
@@ -822,8 +827,7 @@ impl BlockScan<'_> {
         //                xxx;
         // ->     here;
         self.amount = self.cur_amount;
-        // SAFETY: `self.line` keeps its copy of the text alive.
-        if unsafe { self.line.starts_with(b'{') } {
+        if self.line.starts_with(b'{') {
             self.amount += Buf::current().b_ind_open_extra;
         }
         if self.lookfor != LOOKFOR_TERM {
@@ -836,10 +840,14 @@ impl BlockScan<'_> {
         //     do
         //            x = 1;
         // ->  here
-        // SAFETY: the cursor's line is NUL-terminated.
-        let l = unsafe { skipwhite(get_cursor_line_ptr()) }.cast_const();
-        // SAFETY: `l` points into that line.
-        if unsafe { cin_isdo(l) } {
+        let cursor_lnum = Win::current().w_cursor.lnum;
+        let (isdo, is_else_line, at) = {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            let at = skip::white(l);
+            (is_do(l, at), is_else(l, at) && byte_at(l, at) == b'}', at)
+        };
+        if isdo {
             if self.whilelevel == 0 {
                 return Step::Done;
             }
@@ -849,15 +857,15 @@ impl BlockScan<'_> {
         // Searching for a terminated line: do not use the one between the
         // "if" and the matching "else"; use the scope of *this* "else".
         // With `whilelevel != 0` keep looking for a "do {".
-        // SAFETY: `l` points into the cursor's NUL-terminated line.
-        if unsafe { cin_iselse(l) } && self.whilelevel == 0 {
+        let iselse = {
+            let mut lines = Lines::current();
+            is_else(lines.line(cursor_lnum), at)
+        };
+        if iselse && self.whilelevel == 0 {
             // For "} else", find the opening brace of the enclosing
             // scope, not the one from "if () {".
-            // SAFETY: the read is in bounds, and `l` came out of `skipwhite` on
-            // the very line `get_cursor_line_ptr` hands back: one allocation.
-            if unsafe { *l } as u8 == b'}' {
-                Win::current().w_cursor.col =
-                    unsafe { l.offset_from(get_cursor_line_ptr()) } as ColNr + 1;
+            if is_else_line {
+                Win::current().w_cursor.col = at as ColNr + 1;
             }
             // SAFETY: both move the cursor inside the current buffer.
             let unmatched =
@@ -906,17 +914,16 @@ impl BlockScan<'_> {
         // line up with, so remember its indent.
         //          100 +
         // ->       here;
-        // SAFETY: the cursor is on a line of the current buffer.
-        let l = get_cursor_line_ptr().cast_const();
+        let cursor_lnum = Win::current().w_cursor.lnum;
         self.amount = self.cur_amount;
 
-        // SAFETY: `l` is that line, NUL-terminated.
-        let n = unsafe { cstr::bytes_at(l) }.len();
-        // SAFETY: `l` is NUL-terminated; the `n >= 2` test in front of
-        // `l.add(n - 2)` is its bounds proof, so the chain stays whole.
-        let ends_in_bracket = Buf::current().b_ind_js != 0
-            && terminated == b','
-            && unsafe { *skipwhite(l) as u8 == b']' || (n >= 2 && *l.add(n - 2) as u8 == b']') };
+        let ends_in_bracket = Buf::current().b_ind_js != 0 && terminated == b',' && {
+            let mut lines = Lines::current();
+            let l = lines.line(cursor_lnum);
+            // Upstream reads `l[strlen(l) - 2]`, the byte before the last.
+            byte_at(l, skip::white(l)) == b']'
+                || l.len().checked_sub(2).is_some_and(|i| l[i] == b']')
+        };
         if ends_in_bracket {
             return Step::Done;
         }
@@ -933,7 +940,7 @@ impl BlockScan<'_> {
             if Buf::current().b_ind_js == 0 {
                 self.lookfor = LOOKFOR_ENUM_OR_INIT;
                 // SAFETY: reads the cursor's line of the current buffer.
-                self.cont_amount = unsafe { cin_first_id_amount() };
+                self.cont_amount = unsafe { first_id_amount() };
                 return Step::Again;
             }
             // Javascript: search for a line ending in a comma and line up
@@ -946,8 +953,12 @@ impl BlockScan<'_> {
             //           4 *
             //            5,
             //         6,
-            // SAFETY: `l` is NUL-terminated, so `skipwhite` stays in it.
-            if unsafe { cin_iscomment(skipwhite(l)) } {
+            let commented = {
+                let mut lines = Lines::current();
+                let l = lines.line(cursor_lnum);
+                starts_comment(l, skip::white(l))
+            };
+            if commented {
                 return Step::Done;
             }
             self.lookfor = LOOKFOR_COMMA;
@@ -963,10 +974,10 @@ impl BlockScan<'_> {
             return Step::Again;
         }
 
-        // SAFETY: `l` is a NUL-terminated line.
-        if self.lookfor == LOOKFOR_INITIAL && unsafe { cin_ends_in_backslash(l) } {
+        if self.lookfor == LOOKFOR_INITIAL && ends_in_backslash(Lines::current().line(cursor_lnum))
+        {
             // SAFETY: the line number is the cursor's own.
-            self.cont_amount = unsafe { cin_get_equal_amount(Win::current().w_cursor.lnum) };
+            self.cont_amount = unsafe { equal_amount(Win::current().w_cursor.lnum) };
         }
         if self.lookfor != LOOKFOR_TERM
             && self.lookfor != LOOKFOR_JS_KEY

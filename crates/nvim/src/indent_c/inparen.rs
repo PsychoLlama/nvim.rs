@@ -27,9 +27,7 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int 
     let mut our_paren_pos = our_paren_pos;
     let mut cur_amount = MAXCOL;
 
-    // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line,
-    // alive for the whole call.
-    let mut amount = if unsafe { line.starts_with(b')') } && Buf::current().b_ind_paren_prev != 0 {
+    let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev != 0 {
         // Line up with the start of the matching paren's line.
         // SAFETY: on the main thread with a current buffer; a bad line number
         // is `ml_get`'s own to report, as upstream leaves it.
@@ -51,10 +49,9 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int 
     // Extra indent for a comment.  `get_c_indent` adds `b_ind_comment`
     // again for the whole "inside something" branch, so a comment inside
     // unclosed parens gets it **twice**; upstream's two `if
-    // (cin_iscomment(theline))` blocks are both on this path
+    // `starts_comment(theline)`) blocks are both on this path
     // (`v0.12.4:src/nvim/indent_c.c:2430` and `:3419`).  Reproduced.
-    // SAFETY: `line.theline` is NUL-terminated.
-    if unsafe { cin_iscomment(line.theline) } {
+    if starts_comment(line.theline(), 0) {
         amount += Buf::current().b_ind_comment;
     }
     amount
@@ -77,18 +74,15 @@ unsafe fn previous_line_under_same_paren(
     let mut amount = -1;
     let mut lnum = line.cur_curpos.lnum - 1;
     while lnum > our_paren_pos.lnum {
-        // SAFETY: `lnum` sits between the paren's line and the cursor, so it
-        // is a line of the current buffer, and `ml_get` hands back a
-        // NUL-terminated one that `skipwhite` stops inside.
-        let mut l = unsafe { skipwhite(ml_get(lnum)) }.cast_const();
         // A comment line, or a #define / #if continuation: ignore it.  The
-        // `||` keeps upstream's order -- `cin_ispreproc_cont` runs only when
-        // the line holds code.
-        //
-        // SAFETY: `l` is that NUL-terminated line.  The borrows handed to
-        // `cin_ispreproc_cont` are this scan's own locals, and it reads only
-        // the line it is given and the current *buffer*, never `curwin`.
-        let skip = unsafe { cin_nocode(l) || cin_ispreproc_cont(&mut l, &mut lnum, &mut amount) };
+        // `||` keeps upstream's order -- `preproc_start` runs only when the
+        // line holds code, and its own line number is this scan's local.
+        let no_code = {
+            let mut lines = Lines::current();
+            let text = lines.line(lnum);
+            only_comment_left(text, skip::white(text))
+        };
+        let skip = no_code || preproc_start(&mut lnum, &mut amount);
         if !skip {
             Win::current().w_cursor.lnum = lnum;
 
@@ -107,8 +101,7 @@ unsafe fn previous_line_under_same_paren(
                 {
                     // SAFETY: `lnum` is still a line of the current buffer.
                     amount = get_indent_lnum(lnum);
-                    // SAFETY: `line.theline` is still valid.
-                    if unsafe { line.starts_with(b')') } {
+                    if line.starts_with(b')') {
                         if our_paren_pos.lnum != lnum && *cur_amount > amount {
                             *cur_amount = amount;
                         }
@@ -153,31 +146,26 @@ unsafe fn align_with_unclosed_paren(
             }
         }
         Win::current().w_cursor = cursor_save;
-        // SAFETY: `outermost` is a paren position in the current buffer, so
-        // its line number is one of that buffer's and its column indexes
-        // inside the NUL-terminated line `ml_get` hands back.
-        let text = ml_get(outermost.lnum);
-        // SAFETY: the same, and `outermost.col` is this function's own copy.
-        is_if_for_while = unsafe { cin_is_if_for_while_before_offset(text, &mut outermost.col) };
+        // `outermost` is a paren position in the current buffer, so the
+        // cache answers with the line it sits on; `outermost.col` is this
+        // function's own copy.
+        let mut lines = Lines::current();
+        is_if_for_while = control_clause_before(lines.line(outermost.lnum), &mut outermost.col);
     }
 
-    let mut look = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `our_paren_pos.lnum` is a line of the current buffer, and
-    // `skip_label` writes a pointer into it through `look`.
-    let mut amount = unsafe { skip_label(our_paren_pos.lnum, &mut look) };
-    // SAFETY: `look` now points into that NUL-terminated line.
-    look = unsafe { skipwhite(look) };
-    // SAFETY: the same -- `skipwhite` stops at the NUL at the latest.
-    if unsafe { *look as u8 == b'(' } {
+    // SAFETY: `our_paren_pos.lnum` is a line of the current buffer.
+    let (mut amount, at) = unsafe { skip_label(our_paren_pos.lnum) };
+    let look_col = {
+        let mut lines = Lines::current();
+        let text = lines.line(our_paren_pos.lnum);
+        at + skip::white(&text[at.min(text.len())..])
+    };
+    if byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'(' {
         // Ignore a '(' in front of the line that has a match *before* our
         // matching '(' -- a `(void)` cast, say.
         let save_lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
-        // SAFETY: the cursor was just moved onto `our_paren_pos.lnum`, so
-        // `get_cursor_line_ptr` hands back the very line `look` points into
-        // -- the two pointers are into the same allocation.
-        let look_col = unsafe { look.offset_from(get_cursor_line_ptr()) } as ColNr;
-        Win::current().w_cursor.col = look_col + 1;
+        Win::current().w_cursor.col = look_col as ColNr + 1;
         let no_oparg = ::core::ptr::null_mut::<OpArg>();
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
         // SAFETY: the cursor is just past that `(`, which is where the match
@@ -191,10 +179,6 @@ unsafe fn align_with_unclosed_paren(
             ignore_paren_col = trypos.col + 1;
         }
         Win::current().w_cursor.lnum = save_lnum;
-        // SAFETY: the search above may have unlocked the line, so `look` is
-        // refetched at the same column of the same line -- `look_col` came
-        // from that line and is therefore inside it.
-        look = unsafe { ml_get(our_paren_pos.lnum).offset(look_col as isize) };
     }
 
     // "line up with the paren itself" applies to a zero `(` with no `k`
@@ -202,33 +186,31 @@ unsafe fn align_with_unclosed_paren(
     // Upstream reads `*look` at both of the two places this is tested,
     // once before and once after a `getvcol`, so it stays a closure.
     let line_up_with_paren = || {
-        // SAFETY: `look` points into a NUL-terminated line -- the `skipwhite`d
-        // label tail, or the same column of that line refetched above -- and
-        // nothing between here and either call site moves it.
+        // The column is read from the cache each time: the searches in
+        // between unlock lines, and it is the same line and column either
+        // way -- the `skipwhite`d label tail of `our_paren_pos.lnum`.
         Buf::current().b_ind_unclosed == 0 && !is_if_for_while
             || Buf::current().b_ind_unclosed_noignore == 0
-                && unsafe { *look as u8 == b'(' }
+                && byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'('
                 && ignore_paren_col == 0
     };
 
-    // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line.
-    if unsafe { line.starts_with(b')') } || line_up_with_paren() {
-        // SAFETY: the same.
-        if !unsafe { line.starts_with(b')') } {
+    if line.starts_with(b')') || line_up_with_paren() {
+        if !line.starts_with(b')') {
             *cur_amount = MAXCOL;
-            // SAFETY: `our_paren_pos` is a paren position in this buffer, so
-            // `ml_get` hands back the NUL-terminated line holding it.
-            let l = ml_get(our_paren_pos.lnum);
-            // SAFETY: `l` is that line; the `&&` keeps the scan behind the
-            // option test, as upstream does.
-            if Buf::current().b_ind_unclosed_wrapped != 0 && unsafe { cin_ends_in(l, b"(") } {
+            // `our_paren_pos` is a paren position in this buffer, so the
+            // cache answers with the line holding it; the `&&` keeps the
+            // scan behind the option test, as upstream does.
+            let mut lines = Lines::current();
+            let l = lines.line(our_paren_pos.lnum);
+            if Buf::current().b_ind_unclosed_wrapped != 0 && ends_in(l, 0, b"(") {
                 // The paren is the last non-white character of its line:
                 // indent one `W` level per nesting level instead.
                 let mut n = 1;
                 for col in 0..our_paren_pos.col {
-                    // SAFETY: `col` is below `our_paren_pos.col`, the column
-                    // of a `(` found on this line, so it indexes inside it.
-                    match unsafe { *l.offset(col as isize) } as u8 {
+                    // `col` is below `our_paren_pos.col`, the column of a
+                    // `(` found on this line, so it indexes inside it.
+                    match byte_at(l, col as usize) {
                         b'(' | b'{' => n += 1,
                         b')' | b'}' if n > 1 => {
                             n -= 1;
@@ -242,15 +224,13 @@ unsafe fn align_with_unclosed_paren(
                 our_paren_pos.col += 1;
             } else {
                 let mut col = our_paren_pos.col + 1;
-                // SAFETY: `col` starts just past the `(`, so at most at the
-                // line's NUL, and `ascii_iswhite` is false for a NUL -- the
-                // walk cannot run off the end of `l`.
-                while ascii_iswhite(c_int::from(unsafe { *l.offset(col as isize) } as u8)) {
+                // `col` starts just past the `(`, and the terminator is not
+                // white space, so the walk cannot run off the end of `l`.
+                while ascii_iswhite(c_int::from(byte_at(l, col as usize))) {
                     col += 1;
                 }
                 // In case of trailing space, stay on the paren.
-                // SAFETY: `col` is at most the line's NUL, per the above.
-                our_paren_pos.col = if unsafe { *l.offset(col as isize) } == 0 {
+                our_paren_pos.col = if byte_at(l, col as usize) == 0 {
                     our_paren_pos.col + 1
                 } else {
                     col
@@ -267,8 +247,7 @@ unsafe fn align_with_unclosed_paren(
         }
     }
 
-    // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line.
-    if unsafe { line.starts_with(b')') } && Buf::current().b_ind_matching_paren != 0 {
+    if line.starts_with(b')') && Buf::current().b_ind_matching_paren != 0 {
         // 'cinoptions' `m`: line up with the start of the matching
         // paren's line, which `amount` already holds.
     } else if line_up_with_paren() {
@@ -281,10 +260,14 @@ unsafe fn align_with_unclosed_paren(
         let mut col = our_paren_pos.col;
         while our_paren_pos.col > ignore_paren_col {
             our_paren_pos.col -= 1;
-            // SAFETY: `our_paren_pos` is a position in the current buffer,
-            // its column only walked back towards column 0, so `ml_get_pos`
-            // hands back a byte of its own line.
-            match unsafe { *ml_get_pos(&raw mut *our_paren_pos) } as u8 {
+            // `our_paren_pos` is a position in the current buffer, its
+            // column only walked back towards column 0, so the cache answers
+            // with a byte of its own line.
+            let byte = byte_at(
+                Lines::current().line(our_paren_pos.lnum),
+                our_paren_pos.col as usize,
+            );
+            match byte {
                 b'(' => {
                     amount += Buf::current().b_ind_unclosed2;
                     col = our_paren_pos.col;

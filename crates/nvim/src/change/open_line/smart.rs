@@ -260,8 +260,9 @@ unsafe fn smart_indent_forward(
         no_si = true; // ... and typing `{` must not un-indent it again
     } else if last_char != ';' as c_int
         && last_char != '}' as c_int
-        // SAFETY: a NUL-terminated line of the current buffer.
-        && unsafe { cin_is_cinword(text) }
+        // SAFETY: `text` is a NUL-terminated line of the current buffer, and
+        // `starts_with_cinword` reads the buffer's 'cinwords' and 'iskeyword'.
+        && unsafe { starts_with_cinword(cstr::bytes_at(text)) }
     {
         // One of 'cinwords', and the line before did not finish a
         // statement.

@@ -19,10 +19,8 @@
 )]
 
 use super::*;
-use crate::charset::skip;
-use crate::memline::Lines;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// How long a 'comments' leader part may be.
 const LEN: usize = COM_MAX_LEN as usize;
@@ -55,9 +53,7 @@ fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
 /// # Safety
 /// Reads the cursor and the buffer; may unlock the current line.
 pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
-    // SAFETY: on the main thread with a current buffer and the cursor on a
-    // line of it, which is all `find_line_comment` searches back from.
-    let mut trypos = unsafe { find_line_comment() };
+    let mut trypos = find_line_comment();
     if trypos.is_none() && Win::current().w_cursor.lnum > 1 {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
@@ -99,8 +95,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
 
     // A line starting with an asterisk lines up with the asterisk in the
     // opener; anything else with the first character of the comment text.
-    // SAFETY: `line.theline` is still valid.
-    if unsafe { line.starts_with(b'*') } {
+    if line.starts_with(b'*') {
         return amount + 1;
     }
 
@@ -120,16 +115,15 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // text that follows the opener.
     let mut nothing_after_opener = true;
     if Buf::current().b_ind_in_comment2 == 0 {
-        // SAFETY: a contiguous walk over one NUL-terminated line, every step
-        // of which is unsafe.  `comment` is the position of a `/*` in this
-        // buffer, so `col + 2` lands on the byte after the `*` -- at worst
-        // the line's NUL, which is what the test below reads.  `skipwhite`
-        // then stops at that NUL at the latest, so it stays inside `start`.
-        let start = ml_get(comment.lnum);
-        let look = unsafe { start.offset(comment.col as isize).add(2) }; // skip / and *
-        nothing_after_opener = unsafe { *look } == 0;
+        // `comment` is the position of a `/*` in this buffer, so `col + 2`
+        // is the byte after the `*` -- at worst one past the line's end,
+        // which reads as the terminator.
+        let mut lines = Lines::current();
+        let start = lines.line(comment.lnum);
+        let look = usize::try_from(comment.col).unwrap_or(0) + 2; // skip / and *
+        nothing_after_opener = byte_at(start, look) == 0;
         if !nothing_after_opener {
-            let at = unsafe { skipwhite(look).offset_from(start) };
+            let at = look + skip::white(&start[look.min(start.len())..]);
             comment.col = ColNr::try_from(at).expect("a column within a line fits a ColNr");
         }
     }
@@ -157,9 +151,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
     // SAFETY: the leaders are `LEN`-byte buffers `copy_option_part` filled,
     // and it always NUL-terminates what it writes.
     let strsize = |buf: &[u8; LEN]| unsafe { vim_strsize(buf.as_ptr().cast::<c_char>()) };
-    // SAFETY: `line.theline` is a NUL-terminated copy of the cursor's line,
-    // alive for the whole call.
-    let theline = unsafe { CStr::from_ptr(line.theline) }.to_bytes();
+    let theline = line.theline();
 
     // The three parts of a leader.  The initial lengths are upstream's,
     // and they matter: until an `s:`/`m:` item has been seen the buffers

@@ -7,42 +7,38 @@
 //! `= {`/`enum` one, and [`cin_ispreproc_cont`] walks a `\`-continued
 //! `#define` back to its first line so that the scan does not stop inside
 //! one.
+//!
+//! | C | here |
+//! | --- | --- |
+//! | `cin_islabel_skip` | [`past_label`] |
+//! | `cin_is_compound_init` | [`is_compound_init`] |
+//! | `cin_ispreproc` | [`is_preproc`] |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
-/// Step `s` over `label:`, answering whether there was one.
+/// The offset past a `label:` at `line[at..]`, or `None` when there is not
+/// one there.
 ///
 /// `::` is C++ scope resolution rather than a label, and the walk is by
 /// *character* rather than by byte, because an identifier may be multibyte.
-///
-/// # Safety
-/// `*s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_islabel_skip(s: &mut *const c_char) -> bool {
-    // SAFETY: the caller's promise, so reading `**s` is in bounds;
-    // `vim_is_ident_char` reads the 'isident' table, set up long before any
-    // buffer is indented.
-    if !unsafe { vim_is_ident_char(c_int::from(**s as u8)) } {
-        return false; // need at least one ID character
+pub(crate) fn past_label(line: &[u8], at: usize) -> Option<usize> {
+    let mut i = at;
+    if !vim_is_ident_char(c_int::from(byte_at(line, i))) {
+        return None; // need at least one ID character
     }
-    // SAFETY: `*s` walks the same NUL-terminated string: `utfc_ptr2len`
-    // answers the length of the character it points at -- never past the NUL,
-    // which is not an ID character -- and `cin_skipcomment` a pointer into
-    // that string.  The `:` test in front of the `add(1)` is what says the
-    // byte behind it is there too.
-    while unsafe { vim_is_ident_char(c_int::from(**s as u8)) } {
-        *s = unsafe { (*s).offset(utfc_ptr2len(*s) as isize) };
+    while vim_is_ident_char(c_int::from(byte_at(line, i))) {
+        i += cluster_len(&line[i.min(line.len())..]);
     }
-    *s = unsafe { cin_skipcomment(*s) };
-    if unsafe { **s } as u8 != b':' {
-        return false;
+    i = code_at(line, i);
+    if byte_at(line, i) != b':' {
+        return None;
     }
-    *s = unsafe { (*s).add(1) };
-    unsafe { **s as u8 != b':' }
+    (byte_at(line, i + 1) != b':').then_some(i + 1)
 }
 
 /// Whether the cursor's line is a jump label (`foo:`).
@@ -55,15 +51,17 @@ pub(crate) unsafe fn cin_islabel_skip(s: &mut *const c_char) -> bool {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn cin_islabel() -> bool {
-    // SAFETY: on the main thread with a current buffer, so
-    // `get_cursor_line_ptr` hands back a NUL-terminated line and
-    // `cin_skipcomment` a pointer into it.  The chain is left whole:
-    // `cin_islabel_skip` only steps over a line the two tests in front of it
-    // did not claim.
-    let is_label = unsafe {
-        let mut s = cin_skipcomment(get_cursor_line_ptr());
-        !cin_isdefault(s) && !cin_isscopedecl(s) && cin_islabel_skip(&mut s)
+pub(crate) unsafe fn is_jump_label() -> bool {
+    let is_label = {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum);
+        let at = code_at(line, 0);
+        // The chain is left whole: `past_label` only steps over a line the
+        // two tests in front of it did not claim.
+        // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
+        !is_default_label(line, at)
+            && !unsafe { is_scope_decl(line, at) }
+            && past_label(line, at).is_some()
     };
     if !is_label {
         return false;
@@ -82,191 +80,151 @@ pub(crate) unsafe fn cin_islabel() -> bool {
             Win::current().w_cursor = trypos;
         }
 
-        // SAFETY: the cursor is on a line of the current buffer, so
-        // `get_cursor_line_ptr` hands back that line, NUL-terminated, and
-        // `cin_skipcomment` answers a pointer into it.
-        let line = unsafe {
-            let line = get_cursor_line_ptr().cast_const();
-            (!cin_ispreproc(line)).then(|| cin_skipcomment(line))
+        // Ignore #defines, #if, etc., and lines with nothing on them.  The
+        // borrow ends with the verdict: the cursor is restored below, and
+        // nothing after this reads the text.
+        let verdict = {
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum);
+            let at = code_at(line, 0);
+            if is_preproc(line) || at >= line.len() {
+                None
+            } else {
+                // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
+                Some(
+                    terminator(line, at, true, false) != 0
+                        || unsafe { is_scope_decl(line, at) }
+                        || is_case_label(line, at, true)
+                        || past_label(line, at).is_some_and(|end| only_comment_left(line, end)),
+                )
+            }
         };
-        // Ignore #defines, #if, etc., and lines with nothing on them.
-        // SAFETY: `line`, when there is one, points into the cursor's line.
-        let Some(mut line) = line.filter(|&l| unsafe { *l } != 0) else {
+        let Some(verdict) = verdict else {
             continue;
         };
 
         Win::current().w_cursor = cursor_save;
-        // SAFETY: `line` is a NUL-terminated line of the current buffer, and
-        // the chain is left whole so `cin_nocode` only sees where
-        // `cin_islabel_skip` left `line` when it found a label.
-        return unsafe {
-            cin_isterminated(line, true, false) != 0
-                || cin_isscopedecl(line)
-                || cin_iscase(line, true)
-                || (cin_islabel_skip(&mut line) && cin_nocode(line))
-        };
+        return verdict;
     }
     Win::current().w_cursor = cursor_save;
     true // label at start of file???
 }
 
-/// Whether `s` is a structure or compound-literal initialisation:
+/// Whether `line[at..]` is a structure or compound-literal initialisation:
 /// `=`/`return` then `[&]`, an optional typecast, then any number of `{`.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_is_compound_init(s: *const c_char) -> bool {
+pub(crate) fn is_compound_init(line: &[u8], at: usize) -> bool {
     // Find the *last* `=` or `return` on the line: the initialiser is
     // whatever follows it.
-    //
-    // SAFETY: the caller's promise -- `p` walks the NUL-terminated `s`, and
-    // both skips answer a pointer into it.  `add(6)` is inside because the
-    // `starts_with(b"return")` in front of it matched six bytes, and `sub(1)`
-    // runs only when `p` is past `s`; the `&&` chain is left whole so that it
-    // keeps doing so.
-    let r = unsafe {
-        let mut p = s;
-        let mut r = ::core::ptr::null::<c_char>();
-        while *p != 0 {
-            if *p as u8 == b'=' {
-                p = cin_skipcomment(p.add(1));
-                r = p;
-            } else if CStr::from_ptr(p).to_bytes().starts_with(b"return")
-                && !vim_is_ident_char(c_int::from(*p.add(6) as u8))
-                && (p == s || !vim_is_ident_char(c_int::from(*p.sub(1) as u8)))
-            {
-                p = cin_skipcomment(p.add(6));
-                r = p;
-            } else {
-                p = cin_skip_comment_and_string(p.add(1));
-            }
+    let mut i = at;
+    let mut found = None;
+    while byte_at(line, i) != 0 {
+        if byte_at(line, i) == b'=' {
+            i = code_at(line, i + 1);
+            found = Some(i);
+        } else if line[i.min(line.len())..].starts_with(b"return")
+            && !vim_is_ident_char(c_int::from(byte_at(line, i + 6)))
+            && (i == at || !vim_is_ident_char(c_int::from(byte_at(line, i - 1))))
+        {
+            i = code_at(line, i + 6);
+            found = Some(i);
+        } else {
+            i = code_or_string_at(line, i + 1);
         }
-        r
-    };
-    if r.is_null() {
-        return false;
     }
+    let Some(mut i) = found else {
+        return false;
+    };
 
-    // SAFETY: `r` points into the same NUL-terminated string, so the walk
-    // below stops at its NUL; each `add(1)` steps over a byte the test in
-    // front of it has just read, and `cin_nocode` reads no further than the
-    // NUL either.
-    let mut p = r; // now just after the '=' or the "return"
-    if unsafe { cin_nocode(p) } {
+    // `i` is now just after the '=' or the "return".
+    if only_comment_left(line, i) {
         return true;
     }
-    if unsafe { *p } as u8 == b'&' {
-        p = unsafe { cin_skipcomment(p.add(1)) };
+    if byte_at(line, i) == b'&' {
+        i = code_at(line, i + 1);
     }
-    if unsafe { *p } as u8 == b'(' {
+    if byte_at(line, i) == b'(' {
         // Skip a typecast.
         let mut open_count = 1i32;
         while open_count != 0 {
-            p = unsafe { cin_skip_comment_and_string(p.add(1)) };
-            if unsafe { cin_nocode(p) } {
+            i = code_or_string_at(line, i + 1);
+            if only_comment_left(line, i) {
                 return true;
             }
-            open_count +=
-                i32::from(unsafe { *p } as u8 == b'(') - i32::from(unsafe { *p } as u8 == b')');
+            open_count += i32::from(byte_at(line, i) == b'(') - i32::from(byte_at(line, i) == b')');
         }
-        p = unsafe { cin_skipcomment(p.add(1)) };
-        if unsafe { cin_nocode(p) } {
+        i = code_at(line, i + 1);
+        if only_comment_left(line, i) {
             return true;
         }
     }
-    while unsafe { *p } as u8 == b'{' {
-        p = unsafe { cin_skipcomment(p.add(1)) };
+    while byte_at(line, i) == b'{' {
+        i = code_at(line, i + 1);
     }
-    unsafe { cin_nocode(p) }
+    only_comment_left(line, i)
 }
 
 /// Whether the cursor's line is an enumeration or a structure
 /// initialisation: `[typedef] [static|public|protected|private] enum`, or
-/// anything [`cin_is_compound_init`] accepts.
+/// anything [`is_compound_init`] accepts.
 ///
 /// # Safety
-/// Reads the cursor; may unlock the current line.
-pub(crate) unsafe fn cin_isinit() -> bool {
+/// Reads the cursor's line of the current buffer.
+pub(crate) unsafe fn is_enum_or_init() -> bool {
     /// Storage-class and access words that may precede the `enum`.
     const SKIP: [&[u8]; 4] = [b"static", b"public", b"protected", b"private"];
 
-    // SAFETY: on the main thread with a current buffer, so
-    // `get_cursor_line_ptr` hands back a NUL-terminated line and
-    // `cin_skipcomment` a pointer into it.
-    let mut s = unsafe { cin_skipcomment(get_cursor_line_ptr()) };
-    // SAFETY: each `add` steps over a word `cin_starts_with` has just matched
-    // on that same line, so `s` never leaves it.
-    if unsafe { cin_starts_with(s, b"typedef") } {
-        s = unsafe { cin_skipcomment(s.add(7)) };
+    let mut lines = Lines::current();
+    let line = lines.line(Win::current().w_cursor.lnum);
+    let mut at = code_at(line, 0);
+    if starts_with_word(line, at, b"typedef") {
+        at = code_at(line, at + 7);
     }
-    while let Some(word) = SKIP.iter().find(|word| unsafe { cin_starts_with(s, word) }) {
-        s = unsafe { cin_skipcomment(s.add(word.len())) };
+    while let Some(word) = SKIP.iter().find(|word| starts_with_word(line, at, word)) {
+        at = code_at(line, at + word.len());
     }
-    let is_enum = unsafe { cin_starts_with(s, b"enum") };
-    is_enum || unsafe { cin_is_compound_init(s) }
+    starts_with_word(line, at, b"enum") || is_compound_init(line, at)
 }
 
-/// Whether `s` is a preprocessor directive: anything starting with `#`.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub(crate) unsafe fn cin_ispreproc(s: *const c_char) -> bool {
-    // SAFETY: the caller's promise, so `skipwhite` stops at the NUL at the
-    // latest and its answer is inside the string.
-    unsafe { *skipwhite(s) as u8 == b'#' }
+/// Whether `line` is a preprocessor directive: anything starting with `#`.
+pub(crate) fn is_preproc(line: &[u8]) -> bool {
+    byte_at(line, skip::white(line)) == b'#'
 }
 
-/// Whether line `*lnump` is a preprocessor directive *or a `\`-continuation
-/// of one*, walking `*lnump`/`*pp` back to the line that started it.
+/// Whether line `*lnum` is a preprocessor directive *or a `\`-continuation
+/// of one*, walking `*lnum` back to the line that started it.
 ///
 /// `*amount` is only written when the answer is yes, and then it is the
 /// indent of the *continued* line rather than of the directive -- so a scan
 /// that skips over a `#define` keeps the amount it would have used.
 ///
-/// # Safety
-/// `*pp` must point at a NUL-terminated line; may unlock the current line.
-pub(crate) unsafe fn cin_ispreproc_cont(
-    cursor: &mut *const c_char,
-    lnump: &mut LineNr,
-    amount: &mut c_int,
-) -> bool {
-    let mut line = *cursor;
-    let mut lnum = *lnump;
+/// Upstream also hands the caller its line pointer back, refetched for
+/// whichever line `*lnum` ended on; here the caller reads that line itself,
+/// which is the same read and one it can see.
+pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
+    let mut at_lnum = *lnum;
     let mut retval = false;
     let mut candidate_amount = *amount;
+    let mut lines = Lines::current();
 
-    // SAFETY: the caller's promise -- `*pp` is a NUL-terminated line.
-    if unsafe { cin_ends_in_backslash(line) } {
-        // SAFETY: `lnum` is the line `*pp` came from, so it is a line of the
-        // current buffer.
-        candidate_amount = get_indent_lnum(lnum);
+    if ends_in_backslash(lines.line(at_lnum)) {
+        candidate_amount = get_indent_lnum(at_lnum);
     }
 
     loop {
-        // SAFETY: `line` is a NUL-terminated line of the current buffer.
-        if unsafe { cin_ispreproc(line) } {
+        if is_preproc(lines.line(at_lnum)) {
             retval = true;
-            *lnump = lnum;
+            *lnum = at_lnum;
             break;
         }
-        if lnum == 1 {
+        if at_lnum == 1 {
             break;
         }
-        lnum -= 1;
-        // SAFETY: `lnum` is at least 1 and no larger than the line it started
-        // on, so it is a line of the buffer; `ml_get` hands back a
-        // NUL-terminated one.
-        line = ml_get(lnum);
-        // SAFETY: the line `ml_get` just answered with.
-        if !unsafe { cin_ends_in_backslash(line) } {
+        at_lnum -= 1;
+        if !ends_in_backslash(lines.line(at_lnum)) {
             break;
         }
     }
 
-    if lnum != *lnump {
-        // SAFETY: `*lnump` is a line of the current buffer.
-        *cursor = ml_get(*lnump);
-    }
     if retval {
         *amount = candidate_amount;
     }
@@ -279,40 +237,43 @@ pub(crate) unsafe fn cin_ispreproc_cont(
 ///
 /// A line ending in `,` continues into the next one, which is why this can
 /// read further down the buffer.  `min_lnum` bounds how far *back* the
-/// matching `(` may be, and `cursor`, when given, both supplies the first line
-/// and is restored to it before returning.
+/// matching `(` may be.
+///
+/// Upstream also takes the caller's line pointer, both as the first line's
+/// text -- always `ml_get(first_lnum)` at every call site -- and to hand it
+/// back refetched.  Here the line is read from the number and the caller
+/// reads it again itself, which is the same pair of reads and one it can see.
 ///
 /// # Safety
-/// `*sp` must point at a NUL-terminated line; reads and restores the cursor
-/// line number, and may unlock the current line.
-pub(crate) unsafe fn cin_isfuncdecl(
-    cursor: Option<&mut *const c_char>,
-    first_lnum: LineNr,
-    min_lnum: LineNr,
-) -> bool {
+/// Reads and restores the cursor line number; may unlock the current line.
+pub(crate) unsafe fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
+    /// Why the walk stopped on the line it was looking at.
+    enum Stopped {
+        /// Something that cannot be a declaration: not one.
+        NotOne,
+        /// A `)` at the end of the line: a match, unless the line above the
+        /// one we started on continues into it.
+        CloseParen,
+        /// The line runs on into the next one; `comma` is whether it ended
+        /// with one.
+        Continues { comma: bool },
+    }
+
     let mut lnum = first_lnum;
     let save_lnum = Win::current().w_cursor.lnum;
-    let mut retval = false;
     let mut just_started = true;
 
-    let mut s = match &cursor {
-        Some(p) => **p,
-        // SAFETY: on the main thread with a current buffer; `ml_get` reports
-        // a line number of its own that is out of range, and hands back a
-        // NUL-terminated line.
-        None => ml_get(lnum),
-    };
-
     // Position on the rightmost unmatched paren so that matching it
-    // takes us to the line the declaration starts on.
+    // takes us to the line the declaration starts on.  The borrow ends
+    // with the statement: the match search reads other lines.
     Win::current().w_cursor.lnum = lnum;
-    // SAFETY: `s` is a NUL-terminated line; both searches run on the current
-    // buffer from the cursor, and `find_match_paren` runs only when
-    // `find_last_paren` found one, as upstream has it.
-    let opening = unsafe {
-        find_last_paren(s, b'(', b')')
-            .then(|| find_match_paren(Buf::current().b_ind_maxparen))
-            .flatten()
+    let has_paren = find_last_paren(Lines::current().line(lnum), b'(', b')');
+    // SAFETY: searches the current buffer from the cursor, and restores it.
+    // The search runs only when `find_last_paren` found one, as upstream.
+    let opening = if has_paren {
+        unsafe { find_match_paren(Buf::current().b_ind_maxparen) }
+    } else {
+        None
     };
     if let Some(trypos) = opening {
         lnum = trypos.lnum;
@@ -320,84 +281,85 @@ pub(crate) unsafe fn cin_isfuncdecl(
             Win::current().w_cursor.lnum = save_lnum;
             return false;
         }
-        // SAFETY: `lnum` is the line the match was found on.
-        s = ml_get(lnum);
     }
     Win::current().w_cursor.lnum = save_lnum;
 
-    // SAFETY: `s` is a NUL-terminated line.
-    if unsafe { cin_ispreproc(s) } {
-        return false; // ignore a line starting with #
-    }
-
-    // SAFETY: `s` walks that same line and stops at its NUL;
-    // `cin_skipcomment` answers a pointer into it, and `add(1)`/`add(2)` step
-    // over bytes the tests in front of them have just read.
-    while unsafe { *s } != 0
-        && unsafe { *s } as u8 != b'('
-        && unsafe { *s } as u8 != b';'
-        && unsafe { *s } as u8 != b'\''
-        && unsafe { *s } as u8 != b'"'
+    let mut lines = Lines::current();
+    let mut at = 0usize;
     {
-        if unsafe { cin_iscomment(s) } {
-            s = unsafe { cin_skipcomment(s) };
-        } else if unsafe { *s } as u8 == b':' {
-            if unsafe { *s.add(1) } as u8 != b':' {
-                // A constructor's initialiser list is not a declaration:
-                //     A::A(int a, int b)
-                //         : a(0)  // <-- not a function decl
-                //         , b(0)
-                return false;
+        let line = lines.line(lnum);
+        if is_preproc(line) {
+            return false; // ignore a line starting with #
+        }
+        while !matches!(byte_at(line, at), 0 | b'(' | b';' | b'\'' | b'"') {
+            if starts_comment(line, at) {
+                at = code_at(line, at);
+            } else if byte_at(line, at) == b':' {
+                if byte_at(line, at + 1) != b':' {
+                    // A constructor's initialiser list is not a declaration:
+                    //     A::A(int a, int b)
+                    //         : a(0)  // <-- not a function decl
+                    //         , b(0)
+                    return false;
+                }
+                at += 2;
+            } else {
+                at += 1;
             }
-            s = unsafe { s.add(2) };
-        } else {
-            s = unsafe { s.add(1) };
+        }
+        if byte_at(line, at) != b'(' {
+            return false; // ';', ' or " before any () or no '('
         }
     }
-    // SAFETY: `s` is inside that line.
-    if unsafe { *s } as u8 != b'(' {
-        return false; // ';', ' or " before any () or no '('
-    }
 
-    'done: {
-        loop {
-            // SAFETY: `s` is inside a NUL-terminated line of the current
-            // buffer, so reading its byte is in bounds.
-            let c = unsafe { *s } as u8;
-            if c == 0 || c == b';' || c == b'\'' || c == b'"' {
-                break;
-            }
-            // SAFETY: `s` is inside that line, so `add(1)` is at worst its
-            // NUL, which `cin_nocode` only reads.
-            if c == b')' && unsafe { cin_nocode(s.add(1)) } {
-                // ')' at the end: a match, unless the line before the
-                // one we started on ends in a backslash --
-                //     #if defined(x) && \
-                //         defined(y)
-                lnum = first_lnum - 1;
-                // SAFETY: on the main thread with a current buffer; `ml_get`
-                // reports a line number of its own that is out of range, and
-                // hands back a NUL-terminated line.
-                retval = !unsafe { cin_ends_in_backslash(ml_get(lnum)) };
-                break 'done;
-            }
-            // SAFETY: the same, and the chain is left whole so that the
-            // tests stay in the order upstream asks them in.
-            let continues =
-                unsafe { (c == b',' && cin_nocode(s.add(1))) || *s.add(1) == 0 || cin_nocode(s) };
-            if continues {
-                let comma = c == b',';
-
-                // A ',' at the end continues into the next line; so does
-                // the end of the line, for this style:
+    let mut retval = false;
+    loop {
+        // One line's worth of the walk.  The borrow is the line's, and ends
+        // where the walk has to look at another one.
+        let stopped = {
+            let line = lines.line(lnum);
+            loop {
+                let c = byte_at(line, at);
+                if matches!(c, 0 | b';' | b'\'' | b'"') {
+                    break Stopped::NotOne;
+                }
+                if c == b')' && only_comment_left(line, at + 1) {
+                    break Stopped::CloseParen;
+                }
+                // A ',' at the end continues into the next line; so does the
+                // end of the line, for this style:
                 //     func(arg1
                 //           , arg2)
+                if (c == b',' && only_comment_left(line, at + 1))
+                    || byte_at(line, at + 1) == 0
+                    || only_comment_left(line, at)
+                {
+                    break Stopped::Continues { comma: c == b',' };
+                }
+                if starts_comment(line, at) {
+                    at = code_at(line, at);
+                } else {
+                    at += 1;
+                    just_started = false;
+                }
+            }
+        };
+
+        match stopped {
+            Stopped::NotOne => break,
+            Stopped::CloseParen => {
+                //     #if defined(x) && \
+                //         defined(y)
+                // is not a declaration, however it ends.  Line 0 is line 1,
+                // as it is for `ml_get`.
+                lnum = first_lnum - 1;
+                retval = !ends_in_backslash(lines.line(lnum));
+                break;
+            }
+            Stopped::Continues { comma } => {
                 while lnum < Buf::current().b_ml.ml_line_count {
                     lnum += 1;
-                    // SAFETY: `lnum` is a line of the current buffer.
-                    s = ml_get(lnum);
-                    // SAFETY: `s` is the NUL-terminated line it answered.
-                    if !unsafe { cin_ispreproc(s) } {
+                    if !is_preproc(lines.line(lnum)) {
                         break;
                     }
                 }
@@ -406,37 +368,15 @@ pub(crate) unsafe fn cin_isfuncdecl(
                 }
                 // Require a comma at the end of this line, or a comma or
                 // ')' at the start of the next.
-                // SAFETY: `s` is a NUL-terminated line, so `skipwhite` stops
-                // inside it.
-                s = unsafe { skipwhite(s) };
-                // SAFETY: `s` is inside that line.
-                let next = unsafe { *s } as u8;
+                let line = lines.line(lnum);
+                at = skip::white(line);
+                let next = byte_at(line, at);
                 if !just_started && !comma && next != b',' && next != b')' {
                     break;
                 }
                 just_started = false;
-                continue;
-            }
-            // SAFETY: `s` is inside a NUL-terminated line, and
-            // `cin_skipcomment` answers a pointer into it.
-            if unsafe { cin_iscomment(s) } {
-                // SAFETY: the same.
-                s = unsafe { cin_skipcomment(s) };
-            } else {
-                // SAFETY: the byte at `s` is not the NUL -- the top of the
-                // loop broke out on that -- so `add(1)` stays inside.
-                s = unsafe { s.add(1) };
-                just_started = false;
             }
         }
-    }
-
-    if lnum != first_lnum
-        && let Some(p) = cursor
-    {
-        // SAFETY: `first_lnum` is the line the caller named; `ml_get` reports
-        // a line number of its own that is out of range.
-        *p = ml_get(first_lnum);
     }
     retval
 }

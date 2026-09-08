@@ -15,7 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 
 /// Whether C indenting is on: `'cindent'` or a non-empty `'indentexpr'`, and
 /// not `'paste'`.
@@ -128,13 +128,12 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             // Check for "else" at the start of the line and just before
             // the cursor.
             if try_match && keytyped == c_int::from(b'e') && Win::current().w_cursor.col >= 4 {
-                let back = (Win::current().w_cursor.col - 4) as isize;
-                let is_else = unsafe {
-                    let p = get_cursor_line_ptr();
-                    let at = p.offset(back).cast_const();
-                    skipwhite(p).cast_const() == at
-                        && CStr::from_ptr(at).to_bytes().starts_with(b"else")
-                };
+                let back = usize::try_from(Win::current().w_cursor.col - 4).unwrap_or(0);
+                let cursor_lnum = Win::current().w_cursor.lnum;
+                let mut lines = Lines::current();
+                let text = lines.line(cursor_lnum);
+                let is_else =
+                    skip::white(text) == back && text[back.min(text.len())..].starts_with(b"else");
                 if is_else {
                     return true;
                 }
@@ -238,35 +237,46 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
 /// # Safety
 /// Reads and temporarily writes the cursor line.
 unsafe fn colon_reindents() -> bool {
-    // SAFETY: the cursor is on a line of the current buffer, and
-    // `get_cursor_line_ptr` hands back a NUL-terminated one -- which is all
-    // the three recognisers ask for.
-    let is_label = unsafe {
-        let p = get_cursor_line_ptr();
-        cin_iscase(p, false) || cin_isscopedecl(p) || cin_islabel()
+    let lnum = Win::current().w_cursor.lnum;
+    // The chain re-enters at `is_jump_label`, so the borrow the two tests in
+    // front of it take is dropped before it runs.
+    let labelled = |lnum: LineNr| {
+        let claimed = {
+            let mut lines = Lines::current();
+            let line = lines.line(lnum);
+            // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
+            is_case_label(line, 0, false) || unsafe { is_scope_decl(line, 0) }
+        };
+        // SAFETY: the cursor is on a line of the current buffer.
+        claimed || unsafe { is_jump_label() }
     };
-    if is_label {
+    if labelled(lnum) {
         return true;
     }
-    // `cin_islabel` may have unlocked the line.
-    // SAFETY: as above.
-    let mut p = get_cursor_line_ptr();
-    let col = Win::current().w_cursor.col as isize;
-    // SAFETY: `col > 2` -- which the `||` chain keeps in front -- says that
-    // `col - 1` and `col - 2` are bytes of the cursor's line.
-    if col <= 2 || unsafe { *p.offset(col - 1) as u8 != b':' || *p.offset(col - 2) as u8 != b':' } {
+
+    let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+    let double_colon = col > 2 && {
+        let mut lines = Lines::current();
+        let line = lines.line(lnum);
+        byte_at(line, col - 1) == b':' && byte_at(line, col - 2) == b':'
+    };
+    if !double_colon {
         return false;
     }
-    // SAFETY: `col - 1` is a byte of the cursor's own line, ours to blank out
-    // while the recognisers read it; it is put back below.
-    let looks_like_one = unsafe {
-        *p.offset(col - 1) = b' ' as c_char;
-        cin_iscase(p, false) || cin_isscopedecl(p) || cin_islabel()
-    };
+
+    // Blank the first colon out while the recognisers read the line, then
+    // put it back.  The write goes through `ml_get`'s own pointer rather
+    // than [`crate::memline::Lines::line_mut`], which books the old text as
+    // deleted -- an undo-relevant side effect this borrow-and-restore must
+    // not have.
+    //
+    // SAFETY: `col - 1` is a byte of the cursor's own line, ours to blank
+    // out while the recognisers read it; it is put back below.
+    unsafe { *get_cursor_line_ptr().add(col - 1) = b' ' as c_char };
+    let looks_like_one = labelled(lnum);
     // SAFETY: the recognisers may have unlocked the line, so it is fetched
     // again before the colon goes back.
-    p = get_cursor_line_ptr();
-    unsafe { *p.offset(col - 1) = b':' as c_char };
+    unsafe { *get_cursor_line_ptr().add(col - 1) = b':' as c_char };
     looks_like_one
 }
 

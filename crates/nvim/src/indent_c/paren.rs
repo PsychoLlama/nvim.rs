@@ -10,6 +10,10 @@
 //!
 //! Every answer here is a `Pos` by value: the searches call `findmatch`
 //! more than once and each one used to overwrite the last answer's storage.
+//!
+//! | C | here |
+//! | --- | --- |
+//! | `cin_skip2pos` | [`first_code_col`] |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -23,36 +27,25 @@
 
 use super::*;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// The column `trypos.col` sits at once comments and strings before it are
 /// stepped over -- so a `{` inside a comment answers a column past its own,
 /// which is how the searches below reject it.
-///
-/// # Safety
-/// Reads the buffer; may unlock the current line.
-pub(crate) unsafe fn cin_skip2pos(trypos: Pos) -> c_int {
-    // SAFETY: on the main thread with a current buffer; `ml_get` hands back
-    // a NUL-terminated line, which is all the two skippers ask for, and the
-    // walk stops at its NUL.  Every step of it is a pointer operation, so one
-    // region around the whole walk is as tight as this gets.
-    let line = ml_get(trypos.lnum);
-    let mut p = line.cast_const();
-    let limit = isize::try_from(trypos.col).expect("a paren column is never negative");
-    while unsafe { *p } != 0 && unsafe { p.offset_from(line) } < limit {
-        if unsafe { cin_iscomment(p) } {
-            p = unsafe { cin_skipcomment(p) };
+pub(crate) fn first_code_col(trypos: Pos) -> c_int {
+    let mut lines = Lines::current();
+    let line = lines.line(trypos.lnum);
+    let limit = usize::try_from(trypos.col).expect("a paren column is never negative");
+    let mut at = 0usize;
+    while byte_at(line, at) != 0 && at < limit {
+        if starts_comment(line, at) {
+            at = code_at(line, at);
         } else {
-            let new_p = unsafe { skip_string(p) };
-            p = if new_p == p {
-                unsafe { p.add(1) }
-            } else {
-                new_p
-            };
+            let past = string_end_at(line, at);
+            at = if past == at { at + 1 } else { past };
         }
     }
-    let at = unsafe { p.offset_from(line) };
     c_int::try_from(at).expect("a column within a line fits an int")
 }
 
@@ -75,17 +68,16 @@ pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
         };
         Win::current().w_cursor = brace;
 
-        // SAFETY: `brace` is a position `findmatchlimit` found in the current
-        // buffer, so `cin_skip2pos` may read its line; the comment search runs
-        // only when the `{` really sits at `brace.col`, and the `&&` chain is
-        // left whole so that it keeps doing so.
+        // The comment search runs only when the `{` really sits at
+        // `brace.col`, and the `&&` chain is left whole so that it keeps
+        // doing so.
         let mut pos = None;
-        let uncommented = unsafe {
-            cin_skip2pos(brace) == brace.col && {
+        // SAFETY: on the main thread, with a current window and buffer.
+        let uncommented = first_code_col(brace) == brace.col
+            && unsafe {
                 pos = ind_find_start_comment_or_raw_string(None);
                 pos.is_none()
-            }
-        };
+            };
         if uncommented {
             break;
         }
@@ -127,10 +119,10 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> 
             break None;
         };
 
-        // Is the match inside a `//` comment?
-        // SAFETY: `trypos` is a position `findmatchlimit` found in the current
-        // buffer, so `cin_skip2pos` may read its line.
-        if unsafe { cin_skip2pos(trypos) } > trypos.col {
+        // Is the match inside a `//` comment?  `trypos` is a position
+        // `findmatchlimit` found in the current buffer, so the cache answers
+        // with the line it sits on.
+        if first_code_col(trypos) > trypos.col {
             ind_maxp_wk = ind_maxparen - (cursor_save.lnum - trypos.lnum);
             if ind_maxp_wk <= 0 {
                 break None;
@@ -191,34 +183,21 @@ pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
     }
 }
 
-/// Put `w_cursor.col` on the last unmatched `end` in `l`, answering whether
-/// there was one.  `l` must be the start of the line.
+/// Put `w_cursor.col` on the last unmatched `end` in `line`, answering
+/// whether there was one.
 ///
 /// Brackets inside comments and strings do not count, which is what the two
 /// skips at the top of the loop are for.
-///
-/// # Safety
-/// `l` must point at the start of a NUL-terminated line; writes the cursor
-/// column.
-pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bool {
+pub(crate) fn find_last_paren(line: &[u8], start: u8, end: u8) -> bool {
     let mut retval = false;
     let mut open_count = 0;
     Win::current().w_cursor.col = 0; // default is start of line
 
-    let mut i: isize = 0;
-    loop {
-        // SAFETY: the caller's promise -- `l` starts a NUL-terminated line,
-        // and neither skipper walks past its NUL, so every `i` the loop takes
-        // indexes inside that line.  The whole of the walk is unsafe, so one
-        // region around it is as tight as this gets.
-        let c = unsafe {
-            if *l.offset(i) == 0 {
-                break;
-            }
-            i = cin_skipcomment(l.offset(i)).offset_from(l); // brackets in comments
-            i = skip_string(l.offset(i)).offset_from(l); // ... and in quotes
-            (*l.offset(i)).cast_unsigned()
-        };
+    let mut at = 0usize;
+    while byte_at(line, at) != 0 {
+        at = code_at(line, at); // brackets in comments
+        at = string_end_at(line, at); // ... and in quotes
+        let c = byte_at(line, at);
         if c == start {
             open_count += 1;
         } else if c == end {
@@ -226,11 +205,11 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
                 open_count -= 1;
             } else {
                 Win::current().w_cursor.col =
-                    ColNr::try_from(i).expect("a column within a line fits a ColNr");
+                    ColNr::try_from(at).expect("a column within a line fits a ColNr");
                 retval = true;
             }
         }
-        i += 1;
+        at += 1;
     }
     retval
 }
@@ -258,19 +237,21 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         Win::current().w_cursor.lnum -= 1;
         Win::current().w_cursor.col = 0;
 
-        // SAFETY: the cursor is on a line of the current buffer, and
-        // `get_cursor_line_ptr` hands back a NUL-terminated one -- which is
-        // all the recognisers below ask for.
-        let mut look = unsafe { cin_skipcomment(get_cursor_line_ptr()) };
-        // SAFETY: `look` points inside that line.  Upstream tests the four in
-        // this order and stops at the first that answers; the chain is left
-        // whole so that it keeps doing so.
-        let interesting = unsafe {
-            cin_iselse(look)
-                || cin_isif(look)
-                || cin_isdo(look)
-                || cin_iswhileofdo(look, Win::current().w_cursor.lnum)
+        // Upstream tests the four in this order and stops at the first that
+        // answers; the `while`-of-`do` half that re-enters is asked last, so
+        // the borrow the other three take is dropped before it runs.
+        let (starts_while_of_do, interesting) = {
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum);
+            let look = code_at(line, 0);
+            (
+                starts_while(line, look),
+                is_else(line, look) || is_if(line, look) || is_do(line, look),
+            )
         };
+        // SAFETY: moves the cursor inside the current buffer and restores it.
+        let interesting = interesting
+            || (starts_while_of_do && unsafe { while_closes_do(Win::current().w_cursor.lnum) });
         if !interesting {
             continue;
         }
@@ -289,24 +270,34 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             continue;
         }
 
-        // SAFETY: as above -- `find_start_brace` may have unlocked the line,
-        // so it is fetched again.
-        look = unsafe { cin_skipcomment(get_cursor_line_ptr()) };
+        // `find_start_brace` may have unlocked the line, so it is read
+        // again -- and dropped again before the `while`-of-`do` search.
+        let (starts_while_of_do, is_else_line, plain_else, is_if_line, is_do_line) = {
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum);
+            let look = code_at(line, 0);
+            (
+                starts_while(line, look),
+                is_else(line, look),
+                // An `else` that is not an `else if` needs one more `if`.
+                // Upstream reads four bytes on from `look` itself, which for
+                // `} else` is the middle of the word; reproduced.
+                !is_if(line, code_at(line, look + 4)),
+                is_if(line, look),
+                is_do(line, look),
+            )
+        };
+
         // Looking for an `if`, ignore the `if`s and `else`s of a deeper
         // do-while loop.
         if !(lookfor == LOOKFOR_IF && whilelevel != 0) {
-            // SAFETY: `look` points inside a NUL-terminated line.
-            if unsafe { cin_iselse(look) } {
-                // An `else` that is not an `else if` needs one more `if`.
-                // SAFETY: `cin_iselse` matched `else` at or after `look`, so
-                // `look.add(4)` is no further than that word's last byte.
-                if !unsafe { cin_isif(cin_skipcomment(look.add(4))) } {
+            if is_else_line {
+                if plain_else {
                     elselevel += 1;
                 }
                 continue;
             }
-            // SAFETY: `look` points inside a NUL-terminated line.
-            if unsafe { cin_isif(look) } {
+            if is_if_line {
                 elselevel -= 1;
                 // Once the `if` is found, `while`s stop getting in the way.
                 if elselevel == 0 && lookfor == LOOKFOR_IF {
@@ -315,14 +306,12 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             }
         }
 
-        // SAFETY: `look` points inside a NUL-terminated line, and the cursor
-        // is on a line of the current buffer.
-        if unsafe { cin_iswhileofdo(look, Win::current().w_cursor.lnum) } {
+        // SAFETY: moves the cursor inside the current buffer and restores it.
+        if starts_while_of_do && unsafe { while_closes_do(Win::current().w_cursor.lnum) } {
             whilelevel += 1;
             continue;
         }
-        // SAFETY: `look` points inside a NUL-terminated line.
-        if unsafe { cin_isdo(look) } {
+        if is_do_line {
             whilelevel -= 1;
         }
 

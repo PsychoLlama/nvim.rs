@@ -783,3 +783,44 @@ unsafe fn copy_unescaped(mut src: Bytes, mut dst: *mut c_char) {
 pub fn vim_isbreak(c: c_int) -> bool {
     breakat_flags.get().has(c as uint8_t)
 }
+
+/// Fill `g_chartab` with the classification a freshly started editor has, for
+/// in-crate tests.
+///
+/// [`buf_init_chartab`] is the real thing and needs a buffer and four option
+/// strings, none of which the library test harness has. This writes the same
+/// answers for the bytes a test can ask about: the global half of that
+/// function verbatim, plus the `CT_ID_CHAR` bits 'isident's default
+/// (`@,48-57,_,192-255`) sets — `@` being the alphabetic characters, which is
+/// ASCII's letters here.
+///
+/// It runs once per test binary and synchronises every caller with the write,
+/// so a test that calls it before reading the table is not racing the others.
+/// A test that reads the table *without* calling it would be, which is why
+/// every predicate in the crate that consults it says so in its own tests.
+#[cfg(test)]
+pub(crate) fn init_chartab_for_tests() {
+    static ONCE: ::std::sync::Once = ::std::sync::Once::new();
+    ONCE.call_once(|| {
+        for c in 0..b' ' {
+            set_chartab(c, unprintable_width());
+        }
+        for c in b' '..=b'~' {
+            set_chartab(c, 1 + CT_PRINT_CHAR);
+        }
+        for c in b'~' as u16 + 1..256 {
+            let c = c as uint8_t;
+            let entry = if c >= 0xa0 {
+                (CT_PRINT_CHAR | CT_FNAME_CHAR) + 1
+            } else {
+                unprintable_width()
+            };
+            set_chartab(c, entry);
+        }
+        for c in 0..=255u8 {
+            if c.is_ascii_alphanumeric() || c == b'_' || c >= 192 {
+                set_chartab(c, chartab(c) | CT_ID_CHAR);
+            }
+        }
+    });
+}
