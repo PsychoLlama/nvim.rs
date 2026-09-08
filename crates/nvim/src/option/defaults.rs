@@ -544,7 +544,7 @@ pub(crate) fn set_init_3() {
     let named = |names: &[&CStr]| {
         names
             .iter()
-            .any(|n| unsafe { path_fnamecmp(shell, n.as_ptr()) } == 0)
+            .any(|n| unsafe { path_fnamecmp(cstr::at(shell), n) } == 0)
     };
     let is_csh = named(&CSH_LIKE);
 

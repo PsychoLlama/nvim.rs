@@ -156,6 +156,11 @@ impl Name {
         self.0[at] = byte;
     }
 
+    /// The name as the NUL-terminated string it is stored as.
+    pub(crate) fn as_cstr(&self) -> &CStr {
+        cstr::in_bytes(&self.0)
+    }
+
     pub(crate) fn as_ptr(&self) -> *const c_char {
         self.0.as_ptr().cast()
     }
@@ -274,6 +279,11 @@ impl Candidate {
         self.len = 0;
     }
 
+    /// The name so far, as the NUL-terminated string it is built as.
+    fn as_cstr(&self) -> &CStr {
+        cstr::in_bytes(&self.buf)
+    }
+
     fn as_ptr(&self) -> *const c_char {
         self.buf.as_ptr().cast()
     }
@@ -363,7 +373,7 @@ impl FindContext {
         let mut expand_empty = false;
 
         // If we have a start dir copy it in.
-        if !unsafe { vim_is_abs_name(frame.fix_path.as_ptr()) }
+        if !vim_is_abs_name(frame.fix_path.as_cstr())
             && let Some(start_dir) = &self.start_dir
         {
             if start_dir.len() + 1 >= MAXPATHL as usize {
@@ -455,7 +465,7 @@ impl FindContext {
                 ptr::null_mut()
             },
         ];
-        let files = if unsafe { path_with_url(dirptrs[0]) } != 0 {
+        let files = if unsafe { path_with_url(cstr::at(dirptrs[0])) } != 0 {
             unsafe { FileList::of_one(dirptrs[0], file_path.len) }
         } else {
             unsafe {
@@ -488,7 +498,7 @@ impl FindContext {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
             let dir = unsafe { files.get(i) };
-            if unsafe { path_with_url(dir) } == 0 && !unsafe { os_isdir(dir) } {
+            if unsafe { path_with_url(cstr::at(dir)) } == 0 && !unsafe { os_isdir(dir) } {
                 continue; // not a directory
             }
             // Prepare the filename to be checked for existence below.
@@ -513,7 +523,7 @@ impl FindContext {
                 Buf::current().b_p_sua
             };
             loop {
-                let exists = unsafe { path_with_url(file_path.as_ptr()) } != 0
+                let exists = path_with_url(file_path.as_cstr()) != 0
                     || (unsafe { os_path_exists(file_path.as_ptr()) }
                         && (self.find_what == FINDFILE_BOTH
                             || (self.find_what == FINDFILE_DIR)
@@ -526,7 +536,7 @@ impl FindContext {
                             .add(&file_path.buf[..file_path.len], b"")
                     }
                 {
-                    if unsafe { path_with_url(file_path.as_ptr()) } == 0 {
+                    if path_with_url(file_path.as_cstr()) == 0 {
                         file_path.len = unsafe { simplify_filename(file_path.as_mut_ptr()) };
                     }
                     unsafe { self.shorten(file_path) };
@@ -606,7 +616,7 @@ impl FindContext {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
             let dir = unsafe { files.get(i) };
-            if unsafe { path_fnamecmp(dir, frame.fix_path.as_ptr()) } == 0 {
+            if unsafe { path_fnamecmp(cstr::at(dir), frame.fix_path.as_cstr()) } == 0 {
                 continue; // don't repush the same directory
             }
             if !unsafe { os_isdir(dir) } {

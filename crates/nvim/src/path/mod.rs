@@ -147,7 +147,7 @@ pub unsafe fn full_name_save(fname: *const c_char, force: bool) -> *mut c_char {
 /// # Safety
 /// `name` must be a NUL-terminated string.
 pub unsafe fn save_abs_path(name: *const c_char) -> *mut c_char {
-    if unsafe { path_is_absolute(name) } {
+    if unsafe { path_is_absolute(cstr::at(name)) } {
         unsafe { xstrdup(name) }
     } else {
         unsafe { full_name_save(name, true) }
@@ -418,7 +418,7 @@ pub unsafe fn vim_full_name(
         unsafe { xstrlcpy(buf, fname, len) }; // truncate
         return Err(Failed);
     }
-    if unsafe { path_with_url(fname) } != 0 {
+    if unsafe { path_with_url(cstr::at(fname)) } != 0 {
         unsafe { xstrlcpy(buf, fname, len) };
         return Ok(());
     }
@@ -459,7 +459,7 @@ pub unsafe fn path_full_dir_name(
     }
     // The path does not exist (yet). An absolute one fails, and the
     // caller uses it as it is.
-    if unsafe { path_is_absolute(directory) } {
+    if unsafe { path_is_absolute(cstr::at(directory)) } {
         return Err(Failed);
     }
     // A relative one is taken from the current directory.
@@ -547,7 +547,7 @@ unsafe fn path_to_absolute(
     let mut end_of_path = fname;
 
     // Expand it if forced, or if it is not an absolute path.
-    if force || !unsafe { path_is_absolute(fname) } {
+    if force || !unsafe { path_is_absolute(cstr::at(fname)) } {
         let mut sep = name.iter().rposition(|&b| b == b'/');
         if sep.is_none() && name == b".." {
             // A ".." with no separator in it names a directory too.
@@ -586,7 +586,7 @@ unsafe fn path_to_absolute(
 pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize: size_t) {
     let mut candidate = [0 as c_char; MAXPATHL as usize];
     let path = unsafe { os_getenv(c"PATH".as_ptr()) };
-    if path.is_null() || unsafe { path_is_absolute(argv0) } {
+    if path.is_null() || unsafe { path_is_absolute(cstr::at(argv0)) } {
         unsafe { xstrlcpy(buf, argv0, bufsize) };
     } else if unsafe { *argv0 } == b'.' as c_char || !unsafe { strchr(argv0, PATHSEP) }.is_null() {
         // Relative to the current directory.

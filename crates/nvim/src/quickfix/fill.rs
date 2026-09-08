@@ -12,6 +12,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
@@ -184,7 +185,7 @@ unsafe fn qf_buf_add_line(
                     // speed, only for the first entry of each buffer.
                     if first_bufline
                         && (unsafe { (*errbuf).b_sfname.is_null() }
-                            || unsafe { path_is_absolute((*errbuf).b_sfname) })
+                            || unsafe { path_is_absolute(cstr::at((*errbuf).b_sfname)) })
                     {
                         // SAFETY: a live buffer and the current directory name.
                         unsafe { shorten_buf_fname(Buf::new(errbuf), dir.get(), false as c_int) };

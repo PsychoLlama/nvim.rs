@@ -66,7 +66,7 @@ unsafe fn remove_tail(path: *mut c_char, pend: *mut c_char, dirname: *const c_ch
         let len = cstr::bytes_at(dirname).len();
         let new_tail = pend.sub(len + 1);
         if new_tail >= path
-            && path_fnamencmp(new_tail, dirname, len) == 0
+            && path_fnamencmp(cstr::at(new_tail), cstr::at(dirname), len) == 0
             && (new_tail == path || after_pathsep(path, new_tail) != 0)
         {
             return new_tail;
@@ -355,7 +355,7 @@ pub unsafe fn home_replace(
             let mut len = dirlen;
             loop {
                 if len != 0
-                    && path_fnamencmp(src, p, len) == 0
+                    && path_fnamencmp(cstr::at(src), cstr::at(p), len) == 0
                     && (vim_ispathsep(*src.add(len) as c_int)
                         || (!one
                             && (*src.add(len) == b',' as c_char

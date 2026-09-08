@@ -143,7 +143,7 @@ pub(crate) unsafe fn expand_shellcmd(
         path = c".".as_ptr() as *mut c_char;
     } else {
         // For an absolute name we don't use $PATH.
-        path = if unsafe { path_is_absolute(pat) } {
+        path = if unsafe { path_is_absolute(cstr::at(pat)) } {
             ptr::null_mut()
         } else {
             unsafe { vim_getenv(c"PATH".as_ptr()) }

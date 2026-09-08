@@ -350,7 +350,8 @@ pub unsafe fn buf_write(
     fname = sfname;
 
     // Writing over the file the buffer came from?
-    let overwriting = !b.b_ffname.is_null() && unsafe { path_fnamecmp(ffname, b.b_ffname) } == 0;
+    let overwriting = !b.b_ffname.is_null()
+        && unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(b.b_ffname)) } == 0;
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
     let orig = OpMarks {

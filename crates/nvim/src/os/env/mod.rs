@@ -457,7 +457,7 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
     // SAFETY: the caller's contract; `dir` is `MAXPATHL` bytes and the
     // assertion below is what keeps the directory inside it.
     unsafe {
-        if !path_is_absolute(fname) {
+        if !path_is_absolute(cstr::at(fname)) {
             internal_error(c"os_setenv_append_path()".as_ptr());
             return false;
         }

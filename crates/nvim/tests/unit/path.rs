@@ -20,10 +20,10 @@ use std::ptr;
 use neovim::option::vars::p_fic;
 use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
-    kEqualFiles, kOneFileMissing, path_fix_case, path_full_compare, path_full_dir_name,
-    path_guess_exepath, path_is_absolute, path_next_component, path_shorten_fname, path_tail,
-    path_tail_with_sep, path_try_shorten_fname, path_with_extension, path_with_url, pathcmp,
-    shorten_dir_len, vim_full_name,
+    kEqualFiles, kOneFileMissing, path_fix_case, path_fnamecmp, path_fnamencmp, path_full_compare,
+    path_full_dir_name, path_guess_exepath, path_is_absolute, path_next_component,
+    path_shorten_fname, path_tail, path_tail_with_sep, path_try_shorten_fname, path_with_extension,
+    path_with_url, pathcmp, shorten_dir_len, vim_full_name,
 };
 use neovim::types::Failed;
 
@@ -529,14 +529,13 @@ fn appending_to_a_path_adds_a_separator_only_where_one_is_missing() {
 #[test]
 fn a_name_is_absolute_when_it_starts_with_a_separator_or_a_tilde() {
     let _sandbox = Sandbox::dir("path-absolute");
-    let absolute = |s: &str| {
-        let name = writable(s);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { path_is_absolute(name.as_ptr()) }
-    };
+    let absolute = |s: &str| path_is_absolute(&cstr(s));
     assert!(absolute("/some/directory/"));
     assert!(absolute("~/in/my/home~/directory"));
     assert!(!absolute("not/in/my/home~/directory"));
+    // The empty name has no first byte, and upstream reads its terminator.
+    assert!(!absolute(""));
+    assert!(absolute("/"), "a bare separator is still absolute");
 }
 
 /// Whether a name ends in a given extension, which `'fileignorecase'`
@@ -544,15 +543,20 @@ fn a_name_is_absolute_when_it_starts_with_a_separator_or_a_tilde() {
 #[test]
 fn an_extension_matches_case_insensitively_only_when_the_option_says_so() {
     let _sandbox = Sandbox::dir("path-extension");
-    let has = |name: &str, extension: &str| {
-        let (name, extension) = (writable(name), writable(extension));
-        // SAFETY: both are this frame's and NUL-terminated.
-        unsafe { path_with_extension(name.as_ptr(), extension.as_ptr()) }
-    };
+    let has = |name: &str, extension: &str| path_with_extension(&cstr(name), &cstr(extension));
 
     assert!(has("/some/path/file.lua", "lua"));
     assert!(!has("/some/path/file.vim", "lua"));
     assert!(!has("/some/path/file", "lua"), "no extension at all");
+    assert!(!has("", "lua"), "the empty name has no dot");
+    assert!(
+        has("/some/path/file.", ""),
+        "an empty extension after the dot"
+    );
+    assert!(
+        has("/some/path/naïve.lua", "lua"),
+        "the bytes before the dot are not read"
+    );
 
     let saved = p_fic.get();
     p_fic.set(0);
@@ -571,11 +575,7 @@ fn an_extension_matches_case_insensitively_only_when_the_option_says_so() {
 #[test]
 fn a_scheme_makes_a_name_a_url_and_says_which_separator_follows_it() {
     let _sandbox = Sandbox::dir("path-url");
-    let url = |s: &str| {
-        let name = writable(s);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { path_with_url(name.as_ptr()) }
-    };
+    let url = |s: &str| path_with_url(&cstr(s));
     /// Not a URL.
     const NO: c_int = 0;
     /// A URL written with forward slashes.
@@ -626,6 +626,42 @@ fn a_scheme_makes_a_name_a_url_and_says_which_separator_follows_it() {
     // ...and a single letter is a drive letter, not a scheme.
     assert_eq!(url("c:/xyz/foo/b5"), NO);
     assert_eq!(url("C:/xyz/foo/b5"), NO);
+    // Names with no scheme at all, the empty one included.
+    assert_eq!(url(""), NO);
+    assert_eq!(url("test"), NO, "a scheme with nothing after it");
+    assert_eq!(url("test:"), NO, "a colon with no separator");
+    assert_eq!(url("/absolute/path"), NO);
+    assert_eq!(url("naïve://xyz"), NO, "a scheme is ASCII");
+}
+
+/// `path_fnamecmp` is the file-name comparison `'fileignorecase'` decides
+/// the case-sensitivity of. It reads both names whole, so a trailing
+/// separator *is* a difference — unlike `pathcmp` below.
+#[test]
+fn comparing_two_file_names_reads_them_whole_and_folds_case_by_the_option() {
+    let _sandbox = Sandbox::globals();
+    let cmp = |a: &str, b: &str| path_fnamecmp(&cstr(a), &cstr(b)).signum();
+
+    let saved = p_fic.get();
+    p_fic.set(0);
+    assert_eq!(cmp("a/b", "a/b"), 0);
+    assert_eq!(cmp("", ""), 0, "two empty names are the same name");
+    assert_eq!(cmp("", "a"), -1, "the empty name sorts first");
+    assert_eq!(
+        cmp("a/b", "a/b/"),
+        -1,
+        "a trailing separator is a difference"
+    );
+    assert_eq!(cmp("a/B", "a/b"), -1, "and so is case, with the option off");
+    assert_eq!(cmp("naïve", "naïve"), 0, "multibyte bytes compare as bytes");
+    p_fic.set(1);
+    assert_eq!(cmp("a/B", "a/b"), 0, "with the option on, case is not");
+    p_fic.set(saved);
+
+    // The bounded form stops at `len`, or at either name's NUL first.
+    assert_eq!(path_fnamencmp(&cstr("a/bcd"), &cstr("a/bzz"), 3), 0);
+    assert_eq!(path_fnamencmp(&cstr("a/b"), &cstr("a/bzz"), 9).signum(), -1);
+    assert_eq!(path_fnamencmp(&cstr(""), &cstr(""), 4), 0);
 }
 
 /// `pathcmp` is the text-only comparison that sorts names and decides

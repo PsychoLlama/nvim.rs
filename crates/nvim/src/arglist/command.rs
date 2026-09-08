@@ -323,7 +323,7 @@ pub fn ex_argdedupe(_args: *mut ExArg) {
             // SAFETY: `j` is in range; `full_name_save` hands back an
             // owned name, freed once it has been compared.
             let second = unsafe { full_name_save((*arg(j)).ae_fname, false) };
-            let duplicate = unsafe { path_fnamecmp(first, second) } == 0;
+            let duplicate = unsafe { path_fnamecmp(cstr::at(first), cstr::at(second)) } == 0;
             unsafe { xfree(second.cast()) };
             if !duplicate {
                 j += 1;

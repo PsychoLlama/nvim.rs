@@ -36,7 +36,8 @@ pub unsafe fn find_buffer(avar: *mut TypVal) -> Option<Buf> {
             // literally instead.
             buffers().find(|b| {
                 !b.b_fname.is_null()
-                    && (unsafe { path_with_url(b.b_fname) } != 0 || buf_is_nofilename(Some(*b)))
+                    && (unsafe { path_with_url(cstr::at(b.b_fname)) } != 0
+                        || buf_is_nofilename(Some(*b)))
                     && unsafe { cstr::eq(b.b_fname, name) }
             })
         }

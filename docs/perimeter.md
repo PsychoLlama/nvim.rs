@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_lines_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **13,139** unchecked lines inside the perimeter (137 files),
-**45,387** outside it (866 files, of 1,348 measured). It was 138,877 when
+Today: **13,137** unchecked lines inside the perimeter (137 files),
+**45,358** outside it (866 files, of 1,348 measured). It was 138,877 when
 this file was written, at the end of phase 23's slice 15.
 
 ## What qualifies

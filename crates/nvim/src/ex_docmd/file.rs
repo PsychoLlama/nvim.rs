@@ -92,7 +92,7 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
         && !Buf::current().b_sfname.is_null()
         && byte(Buf::current().b_sfname) != NUL
     {
-        return unsafe { path_fnamecmp(ffname, Buf::current().b_sfname) } != 0;
+        return unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(Buf::current().b_sfname)) } != 0;
     }
     unsafe { otherfile(ffname) }
 }

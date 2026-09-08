@@ -110,7 +110,7 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *m
         if head_off > 0 {
             ptr = unsafe { ptr.sub(head_off + 1) };
         } else if unsafe { vim_isfilec(*ptr.sub(1) as u8 as c_int) }
-            || (options.has(FileNameOpts::HYP) && unsafe { path_is_url(ptr.sub(1)) } != 0)
+            || (options.has(FileNameOpts::HYP) && unsafe { path_is_url(cstr::at(ptr.sub(1))) } != 0)
         {
             ptr = unsafe { ptr.sub(1) };
         } else {
@@ -133,7 +133,7 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
     let hyp = options.has(FileNameOpts::HYP);
     // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
     // 'isfname'.
-    let mut len = if unsafe { path_has_drive_letter(name, cstr::bytes_at(name).len()) } {
+    let mut len = if path_has_drive_letter(unsafe { cstr::bytes_at(name) }) {
         2
     } else {
         0
@@ -145,13 +145,13 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
         let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
         if !(vim_isfilec(at(len) as c_int)
             || escaped_space
-            || (hyp && unsafe { path_is_url(name.add(len)) } != 0)
+            || (hyp && unsafe { path_is_url(cstr::at(name.add(len))) } != 0)
             || (is_url && !unsafe { vim_strchr(c":?&=".as_ptr(), at(len) as c_int) }.is_null()))
         {
             break;
         }
         if at(len).is_ascii_alphabetic() {
-            if in_type && unsafe { path_is_url(name.add(len + 1)) } != 0 {
+            if in_type && unsafe { path_is_url(cstr::at(name.add(len + 1))) } != 0 {
                 is_url = true;
             }
         } else {
@@ -299,7 +299,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         && unsafe { cstr::starts_with(name, b"file:/") }
         && !vim_ispathsep(unsafe { *name.add(6) } as c_int)
     {
-        let off = if unsafe { path_has_drive_letter(name.add(6), len - 6) } {
+        let off = if path_has_drive_letter(unsafe { &cstr::bytes_at(name.add(6))[..len - 6] }) {
             6
         } else {
             5

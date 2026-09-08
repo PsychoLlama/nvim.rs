@@ -159,7 +159,7 @@ unsafe fn source_matching(
 /// Whether `fname` ends in `.{ext}`.
 fn has_extension(fname: *mut c_char, ext: &CStr) -> bool {
     // SAFETY: `fname` and `ext` are NUL-terminated.
-    unsafe { path_with_extension(fname, ext.as_ptr()) }
+    unsafe { path_with_extension(cstr::at(fname), ext) }
 }
 
 /// The matches as a slice.

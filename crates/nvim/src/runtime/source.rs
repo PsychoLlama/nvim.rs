@@ -521,7 +521,7 @@ unsafe fn register_script(
     // SAFETY: `new_script_item` takes ownership of the name and answers a
     // live item; the copy replaces it for the caller.
     let si = unsafe { new_script_item(*fname_exp, sid) };
-    unsafe { (*si).sn_lua = path_with_extension(*fname_exp, c"lua".as_ptr()) };
+    unsafe { (*si).sn_lua = path_with_extension(cstr::at(*fname_exp), c"lua") };
     *fname_exp = unsafe { xstrdup((*si).sn_name) };
     if !req.ret_sid.is_null() {
         unsafe { *req.ret_sid = *sid };
@@ -576,7 +576,7 @@ unsafe fn curbuf_is_lua() -> bool {
     // SAFETY: the caller's contract.
     let ft_is_lua = unsafe { strequal(buf.b_p_ft, c"lua".as_ptr()) };
     ft_is_lua
-        || (!buf.b_fname.is_null() && unsafe { path_with_extension(buf.b_fname, c"lua".as_ptr()) })
+        || (!buf.b_fname.is_null() && unsafe { path_with_extension(cstr::at(buf.b_fname), c"lua") })
 }
 
 /// Whether treesitter parses `args`'s range of the current buffer as Lua --
@@ -704,7 +704,7 @@ unsafe fn source_bracket(
         SID_STR
     } else {
         // SAFETY: the resolved name.
-        unsafe { find_script_by_name(*fname_exp) }
+        unsafe { find_script_by_name(cstr::at(*fname_exp)) }
     };
     if sid > 0 && !req.ret_sid.is_null() {
         // Already loaded, and the caller only wanted the ID.

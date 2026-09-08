@@ -65,7 +65,7 @@ pub fn ml_setname(buffer: Buf) {
         }
 
         // Already called that: nothing to do.
-        if unsafe { path_fnamecmp(fname, mf_fname(mfp)) } == 0 {
+        if unsafe { path_fnamecmp(cstr::at(fname), cstr::at(mf_fname(mfp))) } == 0 {
             unsafe { xfree(fname.cast()) };
             success = true;
             break;
@@ -193,7 +193,7 @@ pub unsafe fn resolve_symlink(fname: *const c_char, buf: *mut c_char) -> Result<
 
         // A relative link is relative to the directory of the name it
         // was found in, so it replaces only the tail of `tmp`.
-        if unsafe { path_is_absolute(buf) } {
+        if unsafe { path_is_absolute(cstr::at(buf)) } {
             unsafe { xstrlcpy(tmp.as_mut_ptr(), buf, tmp.len()) };
         } else {
             let tail = unsafe { path_tail(tmp.as_ptr()) };
@@ -596,7 +596,9 @@ pub(crate) unsafe fn findswapname(
             break;
         }
         // A name this buffer already owns is free for it to keep.
-        if !old_fname.is_null() && unsafe { path_fnamecmp(fname, old_fname) } == 0 {
+        if !old_fname.is_null()
+            && unsafe { path_fnamecmp(cstr::at(fname), cstr::at(old_fname)) } == 0
+        {
             break;
         }
 

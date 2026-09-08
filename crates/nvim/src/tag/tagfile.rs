@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
+use crate::cstr;
 use crate::file_search::Name;
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
@@ -324,7 +325,7 @@ pub(crate) unsafe fn expand_tag_fname(
     let dir = &dir[..tail_index(dir)];
 
     let retval = if (p_tr.get() != 0 || Buf::current().b_help)
-        && !unsafe { vim_is_abs_name(fname) }
+        && !unsafe { vim_is_abs_name(cstr::at(fname)) }
         && !dir.is_empty()
     {
         let name = unsafe { CStr::from_ptr(fname) }.to_bytes();

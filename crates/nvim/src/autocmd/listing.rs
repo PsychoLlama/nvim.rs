@@ -451,7 +451,7 @@ pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
                 && (group == AUGROUP_ALL || unsafe { (*ap).group } == group)
                 && (pattern.is_null()
                     || if buflocal_buf.is_null() {
-                        unsafe { path_fnamecmp((*ap).pat, pattern) == 0 }
+                        unsafe { path_fnamecmp(cstr::at((*ap).pat), cstr::at(pattern)) == 0 }
                     } else {
                         unsafe { (*ap).buflocal_nr == (*buflocal_buf).handle }
                     })

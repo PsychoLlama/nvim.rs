@@ -296,7 +296,7 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
         let mut slang: *mut SpellLang;
         let filename;
         if len > 4
-            && unsafe { path_fnamecmp(lang.as_ptr().offset(len as isize - 4), c".spl".as_ptr()) }
+            && unsafe { path_fnamecmp(cstr::at(lang.as_ptr().offset(len as isize - 4)), c".spl") }
                 == 0
         {
             // The name is a file name; a region in it is pulled out.

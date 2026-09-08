@@ -495,7 +495,9 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
     let mut found = None;
     for buf in buffers() {
         // SAFETY: `fname` and the buffer's own name are both C strings.
-        if !buf.b_ffname.is_null() && unsafe { path_fnamecmp(fname, buf.b_ffname) } == 0 {
+        if !buf.b_ffname.is_null()
+            && unsafe { path_fnamecmp(cstr::at(fname), cstr::at(buf.b_ffname)) } == 0
+        {
             found = Some(buf);
             break;
         }

@@ -97,8 +97,7 @@ pub fn get_appname(namelike: bool) -> CString {
 /// way to escape the directory it names.
 pub fn appname_is_valid() -> bool {
     let appname = get_appname(false);
-    // SAFETY: `appname` is this frame's own NUL-terminated string.
-    if unsafe { path_is_absolute(appname.as_ptr()) } {
+    if path_is_absolute(&appname) {
         return false;
     }
     let name = appname.to_bytes();
@@ -118,10 +117,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 fn remove_duplicate_dirs(list: &CStr, sep: u8) -> Option<CString> {
     // `path_fnamecmp` rather than a byte compare: it honors
     // 'fileignorecase' and the platform's path-separator equivalences.
-    dedup_dirs(list, sep, |a, b| {
-        // SAFETY: both are NUL-terminated and outlive the call.
-        unsafe { path_fnamecmp(a.as_ptr(), b.as_ptr()) == 0 }
-    })
+    dedup_dirs(list, sep, |a, b| path_fnamecmp(a, b) == 0)
 }
 
 /// [`remove_duplicate_dirs`] with the "same directory" test injected.

@@ -74,7 +74,7 @@ unsafe fn starting_dir(
         // SAFETY: `path_tail` answers a pointer into `rel_fname` itself.
         let len = unsafe { path_tail(rel_fname.cast_mut()).offset_from(rel_fname) } as usize;
         ctx.start_dir = Some(
-            if !unsafe { vim_is_abs_name(rel_fname) } && len + 1 < MAXPATHL as usize {
+            if !unsafe { vim_is_abs_name(cstr::at(rel_fname)) } && len + 1 < MAXPATHL as usize {
                 // Make the start dir an absolute path name.
                 unsafe { full_name_of(name_of(rel_fname, len).as_ptr(), false) }
             } else {
@@ -90,7 +90,7 @@ unsafe fn starting_dir(
         });
     }
 
-    if unsafe { *path } == 0 || !unsafe { vim_is_abs_name(path) } {
+    if unsafe { *path } == 0 || !unsafe { vim_is_abs_name(cstr::at(path)) } {
         let mut curdir = [0 as c_char; MAXPATHL as usize];
         if unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as usize) }.is_err() {
             return Err(());
@@ -125,7 +125,7 @@ unsafe fn stop_directories(stopdirs: *mut c_char) -> Vec<Name> {
 
         dirs.push(
             if unsafe { *entry } != 0
-                && !unsafe { vim_is_abs_name(entry) }
+                && !unsafe { vim_is_abs_name(cstr::at(entry)) }
                 && len + 1 < MAXPATHL as usize
             {
                 // Upstream copies the entry into a scratch buffer and then

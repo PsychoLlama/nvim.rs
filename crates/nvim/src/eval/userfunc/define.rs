@@ -439,11 +439,10 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                                 p = unsafe { vim_strchr(scriptname, b'/' as c_int) };
                                 let plen = unsafe { cstr::bytes_at(p) }.len() as isize;
                                 let slen = unsafe { cstr::bytes_at(sourcing_name) }.len() as isize;
-                                if slen > plen
-                                    && unsafe {
-                                        path_fnamecmp(p, sourcing_name.offset(slen - plen))
-                                    } == 0
-                                {
+                                // SAFETY: both are NUL-terminated, and the
+                                // tail is inside `sourcing_name`.
+                                let tail = unsafe { cstr::at(sourcing_name.offset(slen - plen)) };
+                                if slen > plen && unsafe { path_fnamecmp(cstr::at(p), tail) } == 0 {
                                     j = OK;
                                 }
                                 unsafe { xfree(scriptname as *mut c_void) };

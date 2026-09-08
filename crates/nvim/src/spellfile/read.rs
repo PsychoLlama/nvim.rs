@@ -407,7 +407,7 @@ pub fn suggest_load_files() {
         // SAFETY: `sl_fname` is this language's own NUL-terminated path.
         let dotp = unsafe { strrchr(slang.sl_fname, b'.' as c_int) };
         // SAFETY: as above; `path_fnamecmp` reads two C strings.
-        if dotp.is_null() || unsafe { path_fnamecmp(dotp, c".spl".as_ptr()) } != 0 {
+        if dotp.is_null() || unsafe { path_fnamecmp(cstr::at(dotp), c".spl") } != 0 {
             continue;
         }
         // SAFETY: `dotp` points at ".spl" inside `sl_fname`, so the copy

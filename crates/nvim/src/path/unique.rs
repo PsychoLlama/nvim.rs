@@ -121,7 +121,7 @@ pub(crate) unsafe fn is_unique(maybe_unique: *mut c_char, gap: *mut GArray, i: c
             continue; // it's different when it's shorter
         }
         let rival = unsafe { other.add(other_len - candidate.len()) };
-        if unsafe { path_fnamecmp(maybe_unique, rival) } == 0
+        if unsafe { path_fnamecmp(cstr::at(maybe_unique), cstr::at(rival)) } == 0
             && (rival == other || vim_ispathsep(unsafe { *rival.sub(1) } as c_int))
         {
             return false; // match
@@ -235,7 +235,8 @@ pub(crate) unsafe fn uniquefy_paths(
         let len = unsafe { CStr::from_ptr(path) }.to_bytes().len();
         // SAFETY: `gettail_dir` answers a pointer into `path`.
         let dir_end = unsafe { gettail_dir(path).offset_from(path) } as usize;
-        if unsafe { path_fnamencmp(curdir.as_ptr(), path, dir_end as size_t) } == 0
+        if unsafe { path_fnamencmp(cstr::in_chars(&curdir), cstr::at(path), dir_end as size_t) }
+            == 0
             && curdir[dir_end] == 0
         {
             *slot = Some(unsafe { CStr::from_ptr(path) }.to_bytes_with_nul().to_vec());
@@ -273,7 +274,7 @@ pub(crate) unsafe fn uniquefy_paths(
             }
         }
 
-        if unsafe { path_is_absolute(path) } {
+        if unsafe { path_is_absolute(cstr::at(path)) } {
             // Last resort: relative to the current directory, when the
             // file is under it and the result is actually shorter.
             //
@@ -401,11 +402,11 @@ pub unsafe fn path_shorten_fname(full_path: *mut c_char, dir_name: *mut c_char) 
     let len = unsafe { CStr::from_ptr(dir_name) }.to_bytes().len();
 
     // Names that do not start alike cannot be made relative at all.
-    if unsafe { path_fnamencmp(dir_name, full_path, len as size_t) } != 0 {
+    if unsafe { path_fnamencmp(cstr::at(dir_name), cstr::at(full_path), len as size_t) } != 0 {
         return core::ptr::null_mut();
     }
     // Everything is under the head of a path.
-    if len == path_head_length() as usize && unsafe { is_path_head(dir_name) } {
+    if len == path_head_length() as usize && unsafe { is_path_head(cstr::at(dir_name)) } {
         return unsafe { full_path.add(len) };
     }
 

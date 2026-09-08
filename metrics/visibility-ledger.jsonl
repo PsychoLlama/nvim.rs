@@ -402,6 +402,8 @@
 {"path":"neovim::path::kEqualFiles","kind":"const","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::kOneFileMissing","kind":"const","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_fix_case","kind":"fn","file":"crates/nvim/src/path/compare.rs","tests":["crates/nvim/tests/unit/path.rs"]}
+{"path":"neovim::path::path_fnamecmp","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
+{"path":"neovim::path::path_fnamencmp","kind":"fn","file":"crates/nvim/src/path/names.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_full_compare","kind":"fn","file":"crates/nvim/src/path/compare.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_full_dir_name","kind":"fn","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}
 {"path":"neovim::path::path_guess_exepath","kind":"fn","file":"crates/nvim/src/path/mod.rs","tests":["crates/nvim/tests/unit/path.rs"]}

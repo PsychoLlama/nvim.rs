@@ -148,11 +148,6 @@ fn after_sep(s: &CStr, at: usize) -> bool {
     unsafe { after_pathsep(s.as_ptr(), s.as_ptr().add(at)) != 0 }
 }
 
-fn is_absolute(s: &CStr) -> bool {
-    // SAFETY: `s` is NUL-terminated.
-    unsafe { path_is_absolute(s.as_ptr()) }
-}
-
 /// Collapse `.`, `..` and duplicate separators, in place.
 fn simplify(s: *mut c_char) {
     // SAFETY: `s` is a NUL-terminated string this module owns; the result is
@@ -192,7 +187,7 @@ pub unsafe fn f_glob2regpat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn f_isabsolutepath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    result.vval.v_number = path_is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `pathshorten({path} [, {len}])`: every component but the last one cut
@@ -316,7 +311,7 @@ fn resolve(fname: &CStr) -> Option<Owned> {
                 p.set(t - 1, 0);
                 t = tail(p.cstr());
             }
-            if t > 0 && !is_absolute(buf.cstr()) {
+            if t > 0 && !path_is_absolute(buf.cstr()) {
                 // The link is relative to the directory of the name it was
                 // reached through: resolve it in that same directory.
                 p.replace_tail(buf.cstr());

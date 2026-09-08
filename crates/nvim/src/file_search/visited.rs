@@ -167,7 +167,7 @@ impl VisitedList {
         let wc_path = Name::from_bytes(wc_path);
         // For a URL we only compare the name, otherwise the
         // device/inode.
-        let url = unsafe { path_with_url(fname.as_ptr()) } != 0;
+        let url = path_with_url(fname.as_cstr()) != 0;
         let file_id = if url {
             None
         } else {
@@ -181,7 +181,7 @@ impl VisitedList {
         let known = self.entries.iter().any(|seen| {
             let same = match (&seen.file_id, &file_id) {
                 (Some(seen_id), Some(id)) => unsafe { os_fileid_equal(seen_id, id) },
-                (None, None) => unsafe { path_fnamecmp(seen.fname.as_ptr(), fname.as_ptr()) == 0 },
+                (None, None) => path_fnamecmp(seen.fname.as_cstr(), fname.as_cstr()) == 0,
                 _ => false,
             };
             same && unsafe { ff_wc_equal(seen.wc_path.as_ptr(), wc_path.as_ptr()) }
@@ -221,9 +221,10 @@ impl VisitedLists {
     pub(crate) unsafe fn select(&mut self, filename: *const c_char, filenamelen: usize) {
         let filename =
             Name::from_bytes(unsafe { slice::from_raw_parts(filename.cast::<u8>(), filenamelen) });
-        let found = self.lists.iter().position(
-            |list| unsafe { path_fnamecmp(filename.as_ptr(), list.filename.as_ptr()) } == 0,
-        );
+        let found = self
+            .lists
+            .iter()
+            .position(|list| path_fnamecmp(filename.as_cstr(), list.filename.as_cstr()) == 0);
         self.at = found.unwrap_or_else(|| {
             self.lists.push(VisitedList {
                 filename,
@@ -307,8 +308,8 @@ pub(crate) unsafe fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs:
         return true;
     }
 
-    stopdirs.iter().any(|stop| unsafe {
-        path_fnamencmp(stop.as_ptr(), path.as_ptr(), path_len) == 0
+    stopdirs.iter().any(|stop| {
+        path_fnamencmp(stop.as_cstr(), path.as_cstr(), path_len) == 0
             && (stop.len() <= path_len || vim_ispathsep(c_int::from(stop.at(path_len))))
     })
 }

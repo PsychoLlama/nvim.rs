@@ -60,7 +60,9 @@ pub unsafe fn path_full_compare(
                 )
             };
             let _ = unsafe { vim_full_name(s2, full2.as_mut_ptr(), MAXPATHL as size_t, false) };
-            if unsafe { path_fnamecmp(full1.as_mut_ptr(), full2.as_mut_ptr()) } == 0 {
+            if unsafe { path_fnamecmp(cstr::at(full1.as_mut_ptr()), cstr::at(full2.as_mut_ptr())) }
+                == 0
+            {
                 return kEqualFileNames;
             }
         }

@@ -255,7 +255,7 @@ unsafe fn find_without_path(
     // The candidate being tried. Upstream shares `NameBuff` between this
     // and `try_suffixes`, which appends to it.
     let mut candidate = [0 as c_char; MAXPATHL as usize];
-    if unsafe { path_with_url(file_to_find) } != 0 {
+    if unsafe { path_with_url(cstr::at(file_to_find)) } != 0 {
         return unsafe { xmemdupz(file_to_find.cast(), file_to_findlen) }.cast();
     }
 
@@ -443,7 +443,7 @@ pub(crate) unsafe fn find_file_in_path_option(
 ) -> *mut c_char {
     let search_ctx = search_ctx_arg.cast::<*mut FindContext>();
     // Do not attempt to search "relative" to a URL. #6009
-    let rel_fname = if !rel_fname.is_null() && unsafe { path_with_url(rel_fname) } != 0 {
+    let rel_fname = if !rel_fname.is_null() && unsafe { path_with_url(cstr::at(rel_fname)) } != 0 {
         ptr::null_mut()
     } else {
         rel_fname
@@ -460,7 +460,8 @@ pub(crate) unsafe fn find_file_in_path_option(
 
     // "..", "../path", "." and "./path" mean the current directory just
     // as an absolute name means itself: neither uses `path_option`.
-    let file_name = if unsafe { vim_is_abs_name(name) } || unsafe { rel_to_curdir(name) } {
+    let file_name = if unsafe { vim_is_abs_name(cstr::at(name)) } || unsafe { rel_to_curdir(name) }
+    {
         // If this is not a first call, return NULL: we already returned
         // a filename on the first call.
         if first {

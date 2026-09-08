@@ -35,10 +35,10 @@ pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_
     // ahead of `path_is_absolute` guards the name it reads.
     if buffer.b_fname.is_null()
         || buf_is_nofilename(Some(buffer))
-        || unsafe { path_with_url(buffer.b_fname) } != 0
+        || unsafe { path_with_url(cstr::at(buffer.b_fname)) } != 0
         || !(force != 0
             || buffer.b_sfname.is_null()
-            || unsafe { path_is_absolute(buffer.b_sfname) })
+            || unsafe { path_is_absolute(cstr::at(buffer.b_sfname)) })
     {
         return;
     }
@@ -232,7 +232,7 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     // When the names are identical there is nothing to do. When they refer
     // to the same file but the spelling differs we have to go through a
     // temp file.
-    if unsafe { path_fnamecmp(from, to) } == 0 {
+    if unsafe { path_fnamecmp(cstr::at(from), cstr::at(to)) } == 0 {
         if p_fic.get() != 0 && !unsafe { cstr::eq(path_tail(from), path_tail(to)) } {
             use_tmp_file = true;
         } else {

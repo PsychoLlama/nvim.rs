@@ -87,18 +87,14 @@ pub fn script_is_lua(sid: ScriptId) -> bool {
 /// does not work: a script that is edited and written may get a different inode
 /// even though to the user it is the same script, and a deleted script's inode
 /// may be re-used by a differently named one.
-///
-/// # Safety
-///
-/// `name` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
+pub fn find_script_by_name(name: &CStr) -> c_int {
     // Nothing in the closure sources a script, so holding the borrow over the
     // walk is sound.
     let found = script_items.with(|items| {
         items.iter().rposition(|&si| {
             // SAFETY: a registry slot always holds a live `ScriptItem`, and
             // `path_fnamecmp` only reads the two NUL-terminated names.
-            unsafe { !(*si).sn_name.is_null() && path_fnamecmp((*si).sn_name, name) == 0 }
+            unsafe { !(*si).sn_name.is_null() && path_fnamecmp(cstr::at((*si).sn_name), name) == 0 }
         })
     });
     found.map_or(-1, |idx| idx as c_int + 1)

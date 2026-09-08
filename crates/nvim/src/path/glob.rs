@@ -346,21 +346,17 @@ pub(crate) unsafe fn do_path_expand(
         while !got_int.get() {
             let name = scan.next();
             let Some(name) = name else { break };
-            let name = name.to_bytes();
-            if !name_is_wanted(name, starts_with_dot, flags)
+            // SAFETY: `dir_len` indexes `path`'s own bytes, so the component
+            // is the tail of the same NUL-terminated pattern.
+            let comp = unsafe { cstr::at(path.add(dir_len)) };
+            if !name_is_wanted(name.to_bytes(), starts_with_dot, flags)
                 || !unsafe {
-                    name_matches(
-                        &mut regmatch,
-                        name,
-                        flags,
-                        &pattern[dir_len..],
-                        split.comp_end - dir_len,
-                    )
+                    name_matches(&mut regmatch, name, flags, comp, split.comp_end - dir_len)
                 }
             {
                 continue;
             }
-            let len = dir_len + write_at(&mut buf, dir_len, &[name]);
+            let len = dir_len + write_at(&mut buf, dir_len, &[name.to_bytes()]);
             if len + 1 >= buflen {
                 continue;
             }
@@ -428,29 +424,27 @@ fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: ExpandFlags) -> boo
 }
 
 /// Does `name` match the component? Either the compiled pattern says so, or
-/// [`ExpandFlags::NOTWILD`] asked for the component's own text, `comp_len` bytes of
-/// `comp`, to be compared literally.
+/// [`ExpandFlags::NOTWILD`] asked for the component's own text — the first
+/// `comp_len` bytes of `comp` — to be compared literally.
+///
+/// Both are whole NUL-terminated strings rather than the spans compared,
+/// because `path_fnamencmp` stops at either terminator as well as at the
+/// length, and a span cannot say where its own terminator is.
 ///
 /// # Safety
-/// `comp` must hold at least `comp_len` bytes.
+/// `regmatch` must hold a program `vim_regexec` may run.
 unsafe fn name_matches(
     regmatch: &mut RegMatch,
-    name: &[u8],
+    name: &CStr,
     flags: ExpandFlags,
-    comp: &[u8],
+    comp: &CStr,
     comp_len: usize,
 ) -> bool {
-    if !regmatch.regprog.is_null() && unsafe { vim_regexec(regmatch, name.as_ptr().cast(), 0) } {
+    // SAFETY: `name` is NUL-terminated, which is all `vim_regexec` needs.
+    if !regmatch.regprog.is_null() && unsafe { vim_regexec(regmatch, name.as_ptr(), 0) } {
         return true;
     }
-    flags.has(ExpandFlags::NOTWILD)
-        && unsafe {
-            path_fnamencmp(
-                comp.as_ptr().cast(),
-                name.as_ptr().cast(),
-                comp_len as size_t,
-            )
-        } == 0
+    flags.has(ExpandFlags::NOTWILD) && path_fnamencmp(comp, name, comp_len as size_t) == 0
 }
 
 /// Does `p` hold a wildcard character only a shell can expand?
@@ -570,8 +564,8 @@ pub unsafe fn match_suffix(fname: *mut c_char) -> bool {
             if fnamelen >= setsuflen
                 && unsafe {
                     path_fnamencmp(
-                        suf_buf.as_ptr(),
-                        fname.add(fnamelen - setsuflen),
+                        cstr::in_chars(&suf_buf),
+                        cstr::at(fname.add(fnamelen - setsuflen)),
                         setsuflen as size_t,
                     )
                 } == 0

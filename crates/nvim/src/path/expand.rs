@@ -92,9 +92,9 @@ pub(crate) unsafe fn expand_path_option(
             }
             unsafe { core::ptr::copy_nonoverlapping(curdir, buf, curdirlen + 1) };
             buflen = curdirlen;
-        } else if unsafe { path_with_url(buf) } != 0 {
+        } else if unsafe { path_with_url(cstr::at(buf)) } != 0 {
             continue; // a URL can't be used here
-        } else if !unsafe { path_is_absolute(buf) } {
+        } else if !unsafe { path_is_absolute(cstr::at(buf)) } {
             // Expand a relative path to its full equivalent.
             if curdirlen == 0 {
                 curdirlen = unsafe { CStr::from_ptr(curdir) }.to_bytes().len();
@@ -222,7 +222,7 @@ const SEARCH_LIST: ExpandFlags = ExpandFlags::PATH.or(ExpandFlags::CDPATH);
 ///
 /// `p` must point at a NUL-terminated string.
 unsafe fn wants_path_search(p: *const c_char, flags: ExpandFlags) -> bool {
-    if !flags.has(SEARCH_LIST) || unsafe { path_is_absolute(p) } {
+    if !flags.has(SEARCH_LIST) || unsafe { path_is_absolute(cstr::at(p)) } {
         return false;
     }
     let here = unsafe { *p } == b'.' as c_char

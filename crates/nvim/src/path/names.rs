@@ -99,11 +99,10 @@ pub fn path_head_length() -> c_int {
 }
 
 /// Does `path` begin with the head of a path — `/` here, `D:` on Windows?
-///
-/// # Safety
-/// `path` must name at least one readable byte.
-pub unsafe fn is_path_head(path: *const c_char) -> bool {
-    unsafe { vim_ispathsep(*path as c_int) }
+pub fn is_path_head(path: &CStr) -> bool {
+    path.to_bytes()
+        .first()
+        .is_some_and(|&b| vim_ispathsep(c_int::from(b)))
 }
 
 /// One byte past the head of `path`: after its leading separators, which on
@@ -155,22 +154,19 @@ pub unsafe fn dir_of_file_exists(fname: *mut c_char) -> bool {
 ///
 /// Not exact — it knows nothing about maximum name lengths or `"../dir"`,
 /// and the file system may fold case by some other rule.
-///
-/// # Safety
-/// Both must be NUL-terminated strings.
-pub unsafe fn path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int {
-    unsafe { mb_strcmp_ic(p_fic.get() != 0, fname1, fname2) }
+pub fn path_fnamecmp(fname1: &CStr, fname2: &CStr) -> c_int {
+    // SAFETY: both are NUL-terminated and outlive the call.
+    unsafe { mb_strcmp_ic(p_fic.get() != 0, fname1.as_ptr(), fname2.as_ptr()) }
 }
 
 /// [`path_fnamecmp`] over at most `len` bytes.
-///
-/// # Safety
-/// Both must name at least `len` readable bytes, up to a NUL.
-pub unsafe fn path_fnamencmp(fname1: *const c_char, fname2: *const c_char, len: size_t) -> c_int {
+pub fn path_fnamencmp(fname1: &CStr, fname2: &CStr, len: size_t) -> c_int {
+    let (a, b) = (fname1.as_ptr(), fname2.as_ptr());
+    // SAFETY: both are NUL-terminated, and both callees stop at the NUL.
     if p_fic.get() != 0 {
-        unsafe { mb_strnicmp(fname1, fname2, len) }
+        unsafe { mb_strnicmp(a, b, len) }
     } else {
-        unsafe { cstr::prefix_cmp(fname1, fname2, len) as c_int }
+        unsafe { cstr::prefix_cmp(a, b, len) as c_int }
     }
 }
 
@@ -256,13 +252,7 @@ pub unsafe fn add_pathsep(p: *mut c_char) -> bool {
 /// Does `p` start with a Windows drive letter (`"C:/"`)?
 ///
 /// See <https://url.spec.whatwg.org/#start-with-a-windows-drive-letter>.
-///
-/// # Safety
-/// `p` must name `path_len` readable bytes.
-pub unsafe fn path_has_drive_letter(p: *const c_char, path_len: size_t) -> bool {
-    // SAFETY: the caller's promise. `p` is never NULL, which the slice needs
-    // even at length zero.
-    let p = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), path_len) };
+pub fn path_has_drive_letter(p: &[u8]) -> bool {
     p.len() >= 2
         && p[0].is_ascii_alphabetic()
         && (p[1] == b':' || p[1] == b'|')
@@ -273,12 +263,8 @@ pub unsafe fn path_has_drive_letter(p: *const c_char, path_len: size_t) -> bool 
 ///
 /// Answers [`URL_SLASH`] for `":/"` and [`URL_BACKSLASH`] for `":\\"`, which
 /// MS Internet Explorer accepts, and zero otherwise.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub unsafe fn path_is_url(p: *const c_char) -> c_int {
-    // SAFETY: the caller's promise.
-    let p = unsafe { CStr::from_ptr(p) }.to_bytes();
+pub fn path_is_url(p: &CStr) -> c_int {
+    let p = p.to_bytes();
     if p.starts_with(b":/") {
         URL_SLASH as c_int
     } else if p.starts_with(br":\\") {
@@ -291,16 +277,11 @@ pub unsafe fn path_is_url(p: *const c_char) -> c_int {
 /// Does `fname` start with `"name:/"` or `"name:\\"`?
 ///
 /// Answers what [`path_is_url`] does for the separator it found, or zero.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string.
-pub unsafe fn path_with_url(fname: *const c_char) -> c_int {
-    let bytes = unsafe { CStr::from_ptr(fname) }.to_bytes();
+pub fn path_with_url(fname: &CStr) -> c_int {
+    let bytes = fname.to_bytes();
     // A scheme starts with a letter — and a Windows drive letter, which
     // also does, is not a scheme.
-    if !bytes.first().is_some_and(u8::is_ascii_alphabetic)
-        || unsafe { path_has_drive_letter(fname, bytes.len() as size_t) }
-    {
+    if !bytes.first().is_some_and(u8::is_ascii_alphabetic) || path_has_drive_letter(bytes) {
         return 0;
     }
     // The rest of the scheme is what RFC 3986 allows, and may not end in
@@ -312,28 +293,32 @@ pub unsafe fn path_with_url(fname: *const c_char) -> c_int {
     if matches!(bytes[end - 1], b'+' | b'-' | b'.') {
         return 0;
     }
-    unsafe { path_is_url(fname.add(end)) }
+    // `end` indexes `fname`'s own bytes, so the tail past it is the same
+    // string and carries the same terminator.
+    path_is_url(cstr::in_bytes(&fname.to_bytes_with_nul()[end..]))
 }
 
 /// Does `path` end in `extension`, ignoring the dot and honouring
 /// `'fileignorecase'`?
-///
-/// # Safety
-/// Both must be NUL-terminated strings.
-pub unsafe fn path_with_extension(path: *const c_char, extension: *const c_char) -> bool {
-    let bytes = unsafe { CStr::from_ptr(path) }.to_bytes();
+pub fn path_with_extension(path: &CStr, extension: &CStr) -> bool {
+    let bytes = path.to_bytes();
     let Some(dot) = bytes.iter().rposition(|&b| b == b'.') else {
         return false;
     };
-    unsafe { mb_strcmp_ic(p_fic.get() != 0, path.add(dot + 1), extension) == 0 }
+    // SAFETY: `dot` indexes `path`'s own bytes, so the byte after it starts
+    // the tail of the same NUL-terminated string; `extension` is one too.
+    unsafe {
+        mb_strcmp_ic(
+            p_fic.get() != 0,
+            path.as_ptr().add(dot + 1),
+            extension.as_ptr(),
+        ) == 0
+    }
 }
 
 /// Is `name` a full (absolute) path name, or a URL?
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn vim_is_abs_name(name: *const c_char) -> bool {
-    unsafe { path_with_url(name) != 0 || path_is_absolute(name) }
+pub fn vim_is_abs_name(name: &CStr) -> bool {
+    path_with_url(name) != 0 || path_is_absolute(name)
 }
 
 /// Is `p` just past a path separator? `b` must be the start of the name, so
@@ -349,9 +334,6 @@ pub unsafe fn after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
 }
 
 /// Is `fname` an absolute path? `~` counts: it names the home directory.
-///
-/// # Safety
-/// `fname` must name at least one readable byte.
-pub unsafe fn path_is_absolute(fname: *const c_char) -> bool {
-    unsafe { *fname == b'/' as c_char || *fname == b'~' as c_char }
+pub fn path_is_absolute(fname: &CStr) -> bool {
+    matches!(fname.to_bytes().first(), Some(b'/' | b'~'))
 }

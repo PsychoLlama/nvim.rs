@@ -224,13 +224,6 @@ fn after_sep(s: &CStr, from: usize, i: usize) -> bool {
     unsafe { after_pathsep(s.as_ptr().add(from), s.as_ptr().add(i)) != 0 }
 }
 
-/// Whether `a` and `b` agree over `n` bytes, by the rules 'fileignorecase'
-/// sets for file names.
-fn same_prefix(a: &CStr, b: &CStr, n: usize) -> bool {
-    // SAFETY: both are NUL-terminated and `n` is within each.
-    unsafe { path_fnamencmp(a.as_ptr(), b.as_ptr(), n as size_t) == 0 }
-}
-
 /// `$VAR` and a leading `~` expanded; NULL when the expansion failed.
 fn expand_env(p: *mut c_char) -> *mut c_char {
     // SAFETY: `p` is a NUL-terminated name.
@@ -243,11 +236,6 @@ fn expand_env(p: *mut c_char) -> *mut c_char {
 fn full_name(p: *mut c_char, force: bool) -> *mut c_char {
     // SAFETY: `p` is a NUL-terminated name.
     unsafe { full_name_save(p, force) }
-}
-
-fn is_abs_name(s: &CStr) -> bool {
-    // SAFETY: `s` is NUL-terminated.
-    unsafe { vim_is_abs_name(s.as_ptr()) }
 }
 
 fn is_dir(s: &CStr) -> bool {
@@ -361,7 +349,7 @@ fn full_path_stage(f: Fname, tilde_file: bool) -> Option<()> {
         i += char_len(from(f.cstr(), i));
     }
     let has_dot = at(b, i) != 0;
-    if has_dot || !is_abs_name(f.cstr()) {
+    if has_dot || !vim_is_abs_name(f.cstr()) {
         f.adopt(full_name(f.name(), has_dot));
         if f.name().is_null() {
             return None;
@@ -415,7 +403,7 @@ fn home_stages(mods: Mods, f: Fname, has_fullname: &mut bool, has_homerelative: 
             let namelen = scratch(&dirname).to_bytes().len();
             // Not `shorten_fname`: that removes the prefix even when the path
             // does not have one.
-            if same_prefix(cstr_at(p), scratch(&dirname), namelen) {
+            if path_fnamencmp(cstr_at(p), scratch(&dirname), namelen as size_t) == 0 {
                 let rest = from(cstr_at(p), namelen).to_bytes();
                 if is_sep(rest, 0) {
                     let mut skip = 0;

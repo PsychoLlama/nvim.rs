@@ -22,6 +22,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::types::VAR_UNKNOWN;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -211,7 +212,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
     let buf_ffname = buf.map(|buf| buf.b_ffname).filter(|p| !p.is_null());
     if let Some(buf_ffname) = buf_ffname
         && !fullname.is_null()
-        && unsafe { path_fnamecmp(fullname, buf_ffname) } != 0
+        && unsafe { path_fnamecmp(cstr::at(fullname), cstr::at(buf_ffname)) } != 0
     {
         let short = unsafe { path_try_shorten_fname(fullname) };
         if !short.is_null() {

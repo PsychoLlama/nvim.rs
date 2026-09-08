@@ -14,6 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::path::tail_index;
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
@@ -505,9 +506,10 @@ pub(crate) unsafe fn swapfile_is_for_other_file(buffer: Buf, fname: *mut c_char)
         // When the swap file sits in the same directory as the file, the
         // directory names need not agree — they can be reached through
         // different mount points — so only the tails are compared.
+        let stored = cstr::as_bytes(&b0.b0_fname);
+        let stored_tail = cstr::in_bytes(&stored[tail_index(stored)..]);
         if b0.flags() & B0_SAME_DIR == 0
-            || unsafe { path_fnamecmp(path_tail(buffer.b_ffname), path_tail(b0.b0_fname.as_ptr())) }
-                != 0
+            || unsafe { path_fnamecmp(cstr::at(path_tail(buffer.b_ffname)), stored_tail) } != 0
             || !unsafe { same_directory(fname, buffer.b_ffname) }
         {
             // The name in the swap file may be "~user/path/file".

@@ -29,6 +29,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -252,7 +253,7 @@ pub unsafe fn ga_remove_duplicate_strings(gap: *mut GArray) {
     while i > 1 {
         i -= 1;
         let names = unsafe { slice::from_raw_parts_mut(fnames, as_size(ga.ga_len)) };
-        if unsafe { path_fnamecmp(names[i - 1], names[i]) } == 0 {
+        if unsafe { path_fnamecmp(cstr::at(names[i - 1]), cstr::at(names[i])) } == 0 {
             unsafe { xfree(names[i].cast::<c_void>()) };
             names.copy_within(i + 1.., i);
             ga.ga_len -= 1;

@@ -71,7 +71,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     // the name expanded first; everything else goes through `:runtime!`.
     let source = unsafe { *args.arg } as c_int == '<' as c_int
         || unsafe { *args.arg } as c_int == '$' as c_int
-        || unsafe { path_is_absolute(args.arg) };
+        || unsafe { path_is_absolute(cstr::at(args.arg)) };
     if source {
         let mut errormsg = None;
         if unsafe { expand_filename(args, syn_cmdlinep.get(), &mut errormsg) }.is_err() {

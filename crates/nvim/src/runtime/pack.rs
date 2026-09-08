@@ -174,7 +174,7 @@ unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option
         if rtp_ffname.is_null() {
             return None;
         }
-        if unsafe { path_fnamencmp(rtp_ffname, ffname, fname_len) } == 0 {
+        if unsafe { path_fnamencmp(cstr::at(rtp_ffname), cstr::at(ffname), fname_len) } == 0 {
             // Insert after this entry, and its comma.
             insp = entry;
         }
@@ -514,7 +514,7 @@ unsafe fn rtp_has_entry(fname: *mut c_char) -> bool {
                 c",".as_ptr().cast_mut(),
             )
         };
-        if unsafe { path_fnamecmp(buf.as_mut_ptr(), fname) } == 0 {
+        if unsafe { path_fnamecmp(cstr::at(buf.as_mut_ptr()), cstr::at(fname)) } == 0 {
             return true;
         }
     }

@@ -19,6 +19,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -99,7 +100,7 @@ fn is_empty_name(p: *const c_char) -> bool {
 
 fn names_equal(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: two NUL-terminated paths, both non-null by the tests above.
-    unsafe { path_fnamecmp(a, b) == 0 }
+    unsafe { path_fnamecmp(cstr::at(a), cstr::at(b)) == 0 }
 }
 
 fn current_win() -> Win {

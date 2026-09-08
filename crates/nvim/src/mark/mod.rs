@@ -30,6 +30,7 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
 use crate::charset::{ptr2cells, vim_isprintc};
+use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::fold::has_folding;
 use crate::mbyte::{utf_head_off, utf_ptr2char};
@@ -513,7 +514,10 @@ pub unsafe fn fmarks_check_names(buffer: Buf) {
 unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buffer: Buf) {
     let fname = fm.fname();
     // SAFETY: both names are NUL-terminated strings.
-    if fm.fmark().fnum() != 0 || fname.is_null() || unsafe { path_fnamecmp(name, fname) } != 0 {
+    if fm.fmark().fnum() != 0
+        || fname.is_null()
+        || unsafe { path_fnamecmp(cstr::at(name), cstr::at(fname)) } != 0
+    {
         return;
     }
     fm.fmark().set_fnum(buffer.handle as c_int);
