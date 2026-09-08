@@ -281,7 +281,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
                     msg_str(unsafe { cstr::at(augroup_name(*id)) });
                 }
                 // SAFETY: a static literal.
-                msg_str(c" ");
+                msg_str(c"  ");
             }
         });
         // SAFETY: the message buffers again.

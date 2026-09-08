@@ -357,7 +357,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
     // SAFETY: as above.
     unsafe { cleanup_jumplist(win, true) };
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    msg_title(gettext(c"\n jump line col file/text"));
+    msg_title(gettext(c"\n jump line  col file/text"));
     let mut i: c_int = 0;
     while i < win.w_jumplistlen && !got_int.get() {
         let jump = win.jump(i);
@@ -435,7 +435,7 @@ pub unsafe fn ex_changes(_args: *mut ExArg) {
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: as above.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    msg_title(gettext(c"\nchange line col text"));
+    msg_title(gettext(c"\nchange line  col text"));
     let mut i: c_int = 0;
     while i < buf.b_changelistlen && !got_int.get() {
         let change = buf.change(i);

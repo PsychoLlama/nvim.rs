@@ -121,12 +121,12 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
     }
 
     msg_putchar('\n' as c_int);
-    msg_str(c" ");
+    msg_str(c"  ");
     msg_putchar(type_0);
-    msg_str(c" ");
+    msg_str(c"  ");
     msg_putchar('"' as c_int);
     msg_putchar(name);
-    msg_str(c" ");
+    msg_str(c"   ");
 
     // The content, cut off at the window width. A line break inside the
     // register shows as `^J`.
@@ -272,7 +272,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
         // NUL-terminated.
         if named && !message_filtered(unsafe { cstr::at(fname) }) {
             // SAFETY: a NUL-terminated literal, then the name.
-            msg_str(c"\n c \"# ");
+            msg_str(c"\n  c  \"#   ");
             unsafe { dis_msg(fname, false) };
         }
     }

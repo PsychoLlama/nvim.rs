@@ -230,7 +230,7 @@ pub unsafe fn do_tags(_args: *mut ExArg) {
     let curidx = stack.curidx();
     let len = stack.len();
 
-    msg_title(gettext(c"\n # TO tag FROM line in file/text"));
+    msg_title(gettext(c"\n  # TO tag         FROM line  in file/text"));
     for (i, item) in stack.entries().iter_mut().enumerate() {
         if item.tagname.is_null() {
             continue;

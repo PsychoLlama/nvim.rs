@@ -499,7 +499,7 @@ unsafe fn show_include_name(
     while walk.depth_displayed < walk.files.depth() && !got_int.get() {
         walk.depth_displayed += 1;
         for _ in 0..walk.depth_displayed {
-            msg_str(c" ");
+            msg_str(c"  ");
         }
         msg_home_replace(
             walk.files.open[walk.depth_displayed as usize]
@@ -513,7 +513,7 @@ unsafe fn show_include_name(
         return;
     }
     for _ in 0..=walk.depth_displayed {
-        msg_str(c" ");
+        msg_str(c"  ");
     }
 
     match new_fname {
@@ -571,9 +571,9 @@ unsafe fn show_include_name(
 
     if new_fname.is_none() && action == ACTION_SHOW_ALL {
         if already_searched {
-            msg_str(gettext(c" (Already listed)"));
+            msg_str(gettext(c"  (Already listed)"));
         } else {
-            msg_str(gettext(c" NOT FOUND"));
+            msg_str(gettext(c"  NOT FOUND"));
         }
     }
 }

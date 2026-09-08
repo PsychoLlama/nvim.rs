@@ -22,6 +22,13 @@ away, this is not.
 What each piece exists to stop, all of them mistakes a sweep has actually
 shipped:
 
+`lexed`    -- the one scanner for comments and literals; `masked` and `arg`
+              both read it, because keeping two of them is how `arg` came to
+              re-space eighteen message literals a sweep had no business
+              touching.
+`arg`      -- an argument's text folded onto one line, *except* inside a
+              string or char literal, whose spacing is the program's output
+              and not the sweep's to normalise.
 `masked`   -- blanks comments, string literals and char literals byte for
               byte, so a rewriter keyed on `strlen(` does not find it in
               prose. Two dozen doc comments were rewritten before this
@@ -87,28 +94,26 @@ def rust_files(under=None):
     return [p for p in paths if under in p.parents or p == under]
 
 
-def masked(src: bytes) -> bytes:
-    """`src` with comments and string literals blanked, byte for byte.
+def lexed(src: bytes):
+    """`(kind, start, end)` for every comment and literal in `src`.
 
-    A rewriter keyed on `strlen(` finds it in prose too: the strncmp and
-    strlen passes each rewrote two dozen doc comments before this existed.
+    `kind` is `b"//"`, `b"/*"`, `b"'"` or `b'"'`. One scanner, because two of
+    them is how [`arg`] came to normalise the whitespace *inside* a string
+    literal while [`masked`] knew perfectly well where it started.
     """
-    out = bytearray(src)
-    i, n = 0, len(src)
+    out, i, n = [], 0, len(src)
     while i < n:
         c = src[i : i + 1]
         two = src[i : i + 2]
         if two == b"//":
             j = src.find(b"\n", i)
             j = n if j < 0 else j
-            out[i:j] = b" " * (j - i)
+            out.append((b"//", i, j))
             i = j
         elif two == b"/*":
             j = src.find(b"*/", i + 2)
             j = n if j < 0 else j + 2
-            for k in range(i, j):
-                if out[k] != 0x0A:
-                    out[k] = 0x20
+            out.append((b"/*", i, j))
             i = j
         elif c == b"'":
             # a char literal, or a lifetime. `'"'` is why this arm exists:
@@ -122,8 +127,7 @@ def masked(src: bytes) -> bytes:
             while src[k : k + 1] not in (b"'", b"", b"\n") and k < i + 12:
                 k += 1
             if src[k : k + 1] == b"'":
-                for q in range(i, k + 1):
-                    out[q] = 0x20
+                out.append((b"'", i, k + 1))
                 i = k + 1
             else:
                 i += 1
@@ -132,12 +136,26 @@ def masked(src: bytes) -> bytes:
             while j < n and src[j : j + 1] != b'"':
                 j += 2 if src[j : j + 1] == b"\\" else 1
             j = min(j + 1, n)
-            for k in range(i, j):
-                if out[k] != 0x0A:
-                    out[k] = 0x20
+            out.append((b'"', i, j))
             i = j
         else:
             i += 1
+    return out
+
+
+def masked(src: bytes) -> bytes:
+    """`src` with comments and string literals blanked, byte for byte.
+
+    A rewriter keyed on `strlen(` finds it in prose too: the strncmp and
+    strlen passes each rewrote two dozen doc comments before this existed.
+    """
+    out = bytearray(src)
+    for kind, lo, hi in lexed(src):
+        for k in range(lo, hi):
+            # A char literal is blanked whole, quotes and all; the others
+            # keep their newlines so line numbers survive.
+            if kind == b"'" or out[k] != 0x0A:
+                out[k] = 0x20
     return bytes(out)
 
 
@@ -205,7 +223,28 @@ def cmp_after(src: bytes, hi: int):
 
 
 def arg(src, span):
-    return b" ".join(src[span[0] : span[1]].split())
+    """The argument's text, folded onto one line.
+
+    Whitespace *inside* a string or char literal is left alone. The message
+    sweep folded it along with everything else and quietly re-spaced eighteen
+    literals -- column headers, indent runs, `"  (Already listed)"` -- which
+    nothing but the legacy suite noticed, and only twelve tests later.
+    """
+    lo, hi = span
+    out, at = [], lo
+    for kind, a, b in lexed(src[lo:hi]):
+        if kind in (b"//", b"/*"):
+            continue
+        a, b = lo + a, lo + b
+        out.append((b" ".join(src[at:a].split()), src[a:b]))
+        at = b
+    out.append((b" ".join(src[at:hi].split()), b""))
+    joined = b""
+    for code, lit in out:
+        if joined and code and not joined.endswith(b" "):
+            joined += b" "
+        joined += code + lit
+    return joined.strip()
 
 
 def edit(src: bytes, edits):

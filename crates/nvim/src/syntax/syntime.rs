@@ -139,7 +139,9 @@ fn syntime_report() {
         };
     }
 
-    msg_title(gettext(c" TOTAL COUNT MATCH SLOWEST AVERAGE NAME PATTERN"));
+    msg_title(gettext(
+        c"  TOTAL      COUNT  MATCH   SLOWEST     AVERAGE   NAME               PATTERN",
+    ));
     msg_str(c"\n");
     for entry in &entries {
         if got_int.get() {

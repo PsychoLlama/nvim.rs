@@ -151,7 +151,7 @@ pub(crate) unsafe fn au_show_for_event(
                     } else {
                         msg_str_hl(unsafe { cstr::at(last_group_name) }, HLF_T, false);
                     }
-                    msg_str(c" ");
+                    msg_str(c"  ");
                 }
                 msg_str_hl(unsafe { cstr::at(event_nr2name(event)) }, HLF_T, false);
             }

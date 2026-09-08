@@ -54,7 +54,7 @@ pub(crate) unsafe fn list_func_head(
     }
 
     if indent {
-        msg_str(c" ");
+        msg_str(c"   ");
     }
     let intro = if force {
         c"function! ".as_ptr()

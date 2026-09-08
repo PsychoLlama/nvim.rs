@@ -872,7 +872,7 @@ pub unsafe fn recover_names(
                 for &name in found.iter() {
                     file_count += 1;
                     msg_outnum(file_count);
-                    msg_str(c". ");
+                    msg_str(c".    ");
                     msg_str(unsafe { cstr::at(path_tail(name)) });
                     msg_putchar('\n' as c_int);
 

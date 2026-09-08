@@ -235,7 +235,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
         unsafe { xfree(text.cast()) };
         // The definition goes on a line of its own.
         if unsafe { *cmd.uc_rep } != NUL as c_char {
-            msg_str(c"\n ");
+            msg_str(c"\n                                               ");
         }
     }
     // The definition column is what is left of the line when the whole table

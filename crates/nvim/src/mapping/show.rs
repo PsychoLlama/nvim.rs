@@ -94,7 +94,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
     }
 
     if let Some(desc) = &rhs.desc {
-        msg_str(c"\n "); // shift to the rhs column
+        msg_str(c"\n                 "); // shift to the rhs column
         msg_str(desc.as_cstr());
     }
     if p_verbose.get() > 0 {

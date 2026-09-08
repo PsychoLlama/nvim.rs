@@ -182,7 +182,7 @@ pub(super) unsafe fn show_one_mark(
     // `IOSIZE` bytes of live storage.
     if !message_filtered(unsafe { cstr::at(name) }) {
         if !DID_TITLE.replace(true) {
-            msg_title(gettext(c"\nmark line col file/text"));
+            msg_title(gettext(c"\nmark line  col file/text"));
         }
         msg_putchar('\n' as c_int);
         if !got_int.get() {
