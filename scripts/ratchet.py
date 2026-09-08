@@ -569,6 +569,126 @@ plus these whole-tree metrics, which are not per-file:
                     taking any of them unless it is describing someone else's
                     names or standing on the perimeter.
 
+  the instruments  the C vocabulary above measures idioms; these measure the
+                    C *calling convention* and the C *shape*, which is what is
+                    left outside the perimeter once the transpiled control
+                    flow is gone. Each is a whole-tree number for the same
+                    reason the vocabulary's are — one signature retyped in one
+                    file retires call sites in forty — and each decomposes per
+                    file, so `--dimension NAME` lists where the debt sits
+                    without a second script. Each says below what retires it.
+
+                      unsafe_fns      `unsafe fn` *items* — a definition or a
+                        bodyless declaration, never a function-pointer type
+                        (`unsafe fn(..)`, whose obligation is paid where it is
+                        called) and never a declaration inside an `unsafe
+                        extern` block, whose obligation is the C library's.
+                        The same walk `missing_safety_doc` uses. This is a
+                        *consequence* number, not a target: a function is
+                        `unsafe` because something it takes is a raw pointer,
+                        so it falls when phases 29-31 retype the parameter,
+                        and driving it down any other way means a wrapper.
+                      stored_addr_handles  `Win::new`/`Buf::new`/
+                        `TabPage::new`/`FrameRef::new`/`::at`/`::from_raw`
+                        whose argument is not `<expr>.raw()`. See
+                        HANDLE_BUILDER for the rule and why it is coarse.
+                        Building a handle *reads* the object's `handle` field,
+                        so an address the C only ever compared becomes a
+                        dereference — and phase 28 closed on two
+                        heap-use-after-frees of exactly that shape, which
+                        whole-suite ASan was the only gate to see. Counted
+                        outside `winlayer/`, where the constructors live.
+                        Retires by inspection: every site is either vouched
+                        for at the point of use or fixed. Phase 29.
+                      raw_ptr_params  a parameter *directly* typed `*mut T`/
+                        `*const T`, over the parameter list alone. The C
+                        calling convention itself, and the thing every
+                        `unsafe fn` above is downstream of. Phases 29-31.
+                      raw_cstr_params · raw_cstr_returns  the same for
+                        `*mut c_char`/`*const c_char`, split at the arrow
+                        because a parameter becomes `&CStr`/`&[u8]` and a
+                        return becomes `CString`/`Vec<u8>`/a borrow, which are
+                        different rewrites with different exit clauses. These
+                        two are nesting-blind — the type is the debt wherever
+                        in the list it appears — so neither is a subset of
+                        `raw_ptr_params`. Phase 29.
+                      ml_get_raw · mbyte_raw · msg_raw · bytes_at  the four
+                        families that hand a raw pointer *back*: a buffer line
+                        (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
+                        forms only — the `_len` variants are the safe bodies
+                        and are deliberately not matched), a message
+                        (`msg_puts*`/`msg_outtrans*`), and `bytes_at`. Each
+                        has a documented FFI floor rather than a zero. Phase
+                        29.
+                      vval_raw · typval_raw_params  the C value model: reads
+                        of the `TypVal` union's `vval` arm, and `*mut TypVal`
+                        parameters. Both retire when the union becomes an
+                        enum. Phase 30.
+                      exarg_raw · cmdarg_raw  the two command-argument state
+                        structs passed by address. Phase 31.
+                      global_cells · cell_raw_ptr  C's global state: how many
+                        cells there are, and how many of them hold a raw
+                        pointer rather than owning what they name. The
+                        declaration and not the reads, because narrowing forty
+                        reads to one accessor is `cell_ptr`'s business and a
+                        read-counting metric would book it as no progress.
+                        Phase 31.
+                      api_err_params  `&mut Error` parameters — the landing
+                        place a sweep off `error_out_params` reaches for, and
+                        itself debt: the answer is a `Result<T, Error>`
+                        return. Counting both is what stops
+                        `*mut Error` -> `&mut Error` reading as the end of the
+                        job. Phase 32.
+                      char_as_c_int  `'x' as c_int` — C's character
+                        vocabulary. The one needle matched against the raw
+                        source, because `mask()` blanks a char literal, quotes
+                        and all; the `as` it captured is checked against the
+                        masked copy, so a cast written inside a comment or a
+                        string still costs nothing. Phase 32.
+                      failed_uses  `Failed`, the OK/FAIL sentinel wearing a
+                        Rust type. Retires with `ok_fail`, into a real error.
+                        Phase 32.
+                      labeled_blocks  `'label: {`/`loop`/`while`/`for` — the
+                        transpiler's rendering of C's `goto`. A lifetime bound
+                        (`'a: 'b`) cannot match: what follows the colon has to
+                        open a block. Phase 34.
+                      lua_raw_stack  `lua_push*`/`lua_pop`/`lua_to*`/
+                        `lua_get*`/`lua_set*` outside LUA_STACK_HOME, which is
+                        empty until phase 33 writes the typed `Stack`. So the
+                        count is tree-wide today, which is the honest reading:
+                        every site is outside a module that does not exist.
+                        Phase 33.
+                      long_fns  functions whose item spans more than
+                        LONG_FN_LINES lines, outside generated files — c2rust
+                        translated each C function whole, so a 700-line body
+                        is a family of operations sharing one stack frame. The
+                        generated carve-out is by marker, not by path: see
+                        GENERATED_MARKER. Phase 34, and a function split along
+                        the seams its arguments draw happens when they are
+                        retyped, not after.
+                      dup_consts  redundant copies of a constant: for every
+                        (name, value) pair declared in more than one file, the
+                        number of files past the first. Counting *copies*
+                        rather than *names* is what makes deleting one of five
+                        `NULL`s move the number; a name-counting metric would
+                        sit still until the last one went. The value is read
+                        from the raw source, because masking blanks a string
+                        literal and would make two different ones compare
+                        equal, propping the count up with a duplicate nobody
+                        could remove. Phase 34.
+                      types_files  files under `types/` — c2rust's one
+                        `types_defs.h`-sized namespace. The unit is the file
+                        and not the type: what retires it is a type moving
+                        next to the code that owns it, and the number reaches
+                        zero when the directory does. Phase 34.
+                      untested_dirs  top-level modules under crates/nvim/src
+                        with no `#[test]` anywhere beneath them and no file or
+                        directory of their name in crates/nvim/tests/unit.
+                        The ground rule is oracle-first, and this is the list
+                        of families that have no oracle at all. It shrinks
+                        every slice, by construction: a slice that touches a
+                        family writes its test before the rewrite.
+
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
 every local and CI build instead, so the counter is retired.
@@ -610,7 +730,7 @@ is only valid on a formatted tree with a current ledger, and refresh sequences
 those. Calling ratchet.py first and formatting after bakes in line counts the
 formatter is about to change.
 
-Usage: ratchet.py [--check] [--allow-growth]
+Usage: ratchet.py [--check] [--allow-growth] [--dimension NAME]
   --check         compare the tree against the committed baseline instead of
                   writing: exit 1 if any metric grew, or if the baseline is
                   stale (a metric shrank but metrics/ratchet.json wasn't
@@ -618,6 +738,9 @@ Usage: ratchet.py [--check] [--allow-growth]
   --allow-growth  write a baseline even though a metric grew. The override
                   for justified cases — the growth shows up in the
                   metrics/ratchet.json diff; explain it in the commit message.
+  --dimension NAME  print where one instrument's sites are — per file, then
+                  rolled up per directory — and write nothing. The triage
+                  mode: the baseline says how much is left, this says where.
 """
 
 import collections
@@ -635,6 +758,11 @@ VISIBILITY = ROOT / "metrics" / "visibility-ledger.jsonl"
 # list the generator dispatches, so it is also the list of signatures whose
 # parameter names are the RPC surface's -- see API_EXPORTED below.
 API_SPEC = ROOT / "tools" / "apigen" / "functions.txt"
+# The crate's source root, and the out-of-crate unit suite. `untested_dirs`
+# asks both: a top-level module is covered when something under it writes a
+# `#[test]`, or when the unit suite drives it from `crates/nvim/tests/unit`.
+CRATE_SRC = "crates/nvim/src/"
+UNIT_TESTS = ROOT / "crates" / "nvim" / "tests" / "unit"
 
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
@@ -1055,6 +1183,182 @@ ABBREV_PARAM_EXEMPT = {
 # the methods the generator dispatches are frozen, and the helpers around them
 # under `api/` are ordinary code that renames like anything else.
 API_DIR = "crates/nvim/src/api/"
+
+# --------------------------------------------------------------------------
+# The instruments. One whole-tree number per dialect of the C *calling
+# convention* -- the parameters that are pointers, the value model, the state
+# structs, the error channel and the tree's shape. See "the instruments" in
+# the doc block for what each counts and what retires it. Every one of them
+# decomposes per file, so `--dimension NAME` can list where the debt sits.
+
+# Counted over every masked file, tree-wide.
+INSTRUMENTS = {
+    # `ml_get_buf_len(` is the same needle as `ml_get_buf(` with the `_len`
+    # branch taken; both are pointer forms and both retire together.
+    "ml_get_raw": re.compile(r"\bml_get(?:_buf)?(?:_len)?\(|\bml_get_(?:pos|cursor)\("),
+    # The `(` is what keeps the *pointer* forms apart from the `_len` ones
+    # that take a slice's length and are the safe bodies underneath them:
+    # `utfc_ptr2len(` matches, `utfc_ptr2len_len(` does not.
+    "mbyte_raw": re.compile(r"\butfc?_ptr2(?:char|len|cells)\("),
+    "msg_raw": re.compile(
+        r"\bmsg_(?:puts|puts_hl|puts_title|puts_len|outtrans|outtrans_len)\("
+    ),
+    "bytes_at": re.compile(r"\bbytes_at\("),
+    "vval_raw": re.compile(r"\.vval\."),
+    # The declaration, not the reads: what phase 31 retires is a *cell*, and a
+    # metric over reads would book narrowing forty of them to one accessor as
+    # no progress at all. Any visibility may precede `static`.
+    "global_cells": re.compile(
+        r"\bstatic\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*GlobalCell\s*<"
+    ),
+    "cell_raw_ptr": re.compile(r"\bGlobalCell\s*<\s*\*(?:mut|const)\b"),
+    "failed_uses": re.compile(r"\bFailed\b"),
+    # The transpiler's `goto` residue: c2rust renders a jump as a labelled
+    # block or loop it can `break` out of. `'a: 'b` (a lifetime bound) cannot
+    # match -- what follows the colon has to open a block.
+    "labeled_blocks": re.compile(
+        r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:\{|loop\b|while\b|for\b)"
+    ),
+}
+# Phase 33's typed `Stack` over the `lua_State`, which does not exist yet.
+# When it lands, its module goes in here and `lua_raw_stack` becomes "raw
+# stack traffic outside the one module allowed to have it" -- the same shape
+# PERIMETER and WINLAYER use. Until then the home is empty and the count is
+# tree-wide, which is the honest reading: today every one of these sites is
+# outside a `Stack` that does not exist.
+LUA_STACK_HOME = {}
+# The same, but only outside a home, the shape `curwin_raw` established.
+# name -> (needle, home).
+INSTRUMENTS_OUTSIDE = {
+    "lua_raw_stack": (
+        re.compile(
+            r"\blua_(?:push[A-Za-z0-9_]*|pop|to[A-Za-z0-9_]*"
+            r"|get[A-Za-z0-9_]*|set[A-Za-z0-9_]*)\("
+        ),
+        LUA_STACK_HOME,
+    ),
+}
+# `types/`: c2rust's one `types_defs.h`-sized namespace. Phase 34 moves each
+# type next to the code that owns it, so the number is the count of *files*
+# still living there, not of the types inside them.
+TYPES_HOME = {"crates/nvim/src/types/": "the transpiler's one type namespace"}
+
+# Counted inside a `fn`'s *parameter list* only -- not the return type, which
+# `INSTRUMENTS_RETURNS` counts separately so the two never double-book a
+# `-> *mut c_char`.
+INSTRUMENTS_PARAMS = {
+    # The roadmap's needle exactly: a parameter *directly* typed as a raw
+    # pointer. A pointer nested inside another type (`Option<*mut T>`, a
+    # callback's own signature) is not counted -- retyping the outer type is
+    # what retires those, and this number is about the parameter itself.
+    "raw_ptr_params": re.compile(r":\s*\*\s*(?:mut|const)\b"),
+    # These four are nesting-blind on purpose: what is being retired is the
+    # *type*, wherever in the parameter list it appears.
+    "raw_cstr_params": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+    "typval_raw_params": re.compile(r"\*(?:mut|const)\s+TypVal\b"),
+    # api/'s error channel as a borrow rather than a pointer -- the landing
+    # place `error_out_params` retypes to, and itself debt: the answer is a
+    # `Result<T, Error>` return. Counting both is what keeps a sweep from
+    # booking `*mut Error` -> `&mut Error` as the end of the job.
+    "api_err_params": re.compile(r"&\s*mut\s+Error\b"),
+    "exarg_raw": re.compile(r"\*(?:mut|const)\s+ExArg\b"),
+    "cmdarg_raw": re.compile(r"\*(?:mut|const)\s+CmdArg\b"),
+}
+# ... and inside the declared return type only.
+INSTRUMENTS_RETURNS = {
+    "raw_cstr_returns": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+}
+
+# A character literal cast to C's `int`, in every spelling of the type
+# `c_int_returns` accepts. This is the one needle that cannot run against the
+# masked source -- `mask()` blanks a char literal, quotes and all -- so it is
+# matched against the *raw* text and confirmed as code by checking that the
+# `as` it captured survived masking. A `b'x'` keeps its `b` through masking,
+# which is why the prefix is optional here rather than required.
+CHAR_AS_C_INT = re.compile(
+    r"b?'(?:\\.|[^'\\\n])'\s*(as)\s+"
+    r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_u?int\b"
+)
+
+# The handle constructors, and the one argument shape that is not a stored
+# address. Phase 28 closed on two heap-use-after-frees of exactly this shape:
+# `Win::new`/`Buf::new` *read* the object's `handle` field, so an address that
+# the C only ever compared becomes a dereference the moment a handle is built
+# from it -- and if the object was freed by an autocommand in between, that is
+# a use-after-free ASan is the only gate that sees.
+#
+# The rule, deliberately coarse: a builder call whose argument is not
+# `<expr>.raw()` counts. `.raw()` is the address of a handle the caller
+# already holds, which means something vouched for the object being live
+# within the same statement; anything else -- a struct field, a `GlobalCell`
+# read, a local that outlived a call into user code -- is an address whose
+# liveness nobody re-checked. The exemption is generous in the unsafe
+# direction (the `.raw()` receiver could itself be a stored handle) and the
+# needle is blind to *when* the argument was loaded, so this is a guard, not a
+# proof: it says how many sites a reviewer has to look at, and it may only
+# fall. `winlayer/` is carved out the way `raw_win_buf_sigs` is -- the
+# constructors and the registry lookups live there, and they are the reason
+# the rest of the tree can be counted at all.
+HANDLE_BUILDER = re.compile(r"\b(?:Win|Buf|TabPage|FrameRef)::(?:new|from_raw|at)\s*\(")
+VOUCHED_ARGUMENT = re.compile(r"\.\s*raw\s*\(\s*\)\s*$")
+
+# A function long enough that nobody reads it: c2rust translated a C function
+# whole, and a 700-line body is a family of operations sharing one stack
+# frame. Phase 34 splits them along the seams their arguments already draw.
+LONG_FN_LINES = 200
+# Generated output is exempt -- a table apigen emits is one `fn` by
+# construction and splitting it is the generator's business, not a reviewer's.
+# The marker is the module doc line every generator writes, so a new generated
+# module is exempt the day it lands and a hand-written file cannot claim the
+# exemption by accident: `help/tags.rs` says "generated by this code" in prose
+# and is not matched, `ex_cmds/ecmd/mod.rs` says "Do not edit" in an item doc
+# (`///`, not `//!`) and is not matched either.
+GENERATED_MARKER = re.compile(
+    r"^//![^\n]*\bgenerated\b[^\n]*(?:\bby tools/|\bfile\b)", re.I | re.M
+)
+# How far into a file the marker has to sit to be the module's own header.
+GENERATED_HEAD = 2048
+
+# `const NAME: Type = value;` -- the constant families c2rust duplicated into
+# every translation unit that used them. The value is read from the *raw*
+# source rather than the masked copy, because masking blanks a string literal
+# to spaces and would make `c"foo"` and `c"bar"` compare equal, propping the
+# count up with a duplicate nobody could ever remove.
+# The value group starts immediately after the `=`, not after the whitespace
+# behind it: a masked string literal *is* whitespace, so a greedy `\s*` ate
+# every `const NAME: &str = "..."` value in the tree and made them all compare
+# equal. The span is normalised for whitespace when it is read back.
+CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^=;{}]+=([^;]*);")
+
+# Every instrument, in the order the phases retire them: the pointer
+# parameters (29-31), the value model (30), the state (31), the error channel
+# and the numbers (32), the Lua seam (33), and the shape (34).
+INSTRUMENT_KEYS = (
+    "unsafe_fns",
+    "stored_addr_handles",
+    "raw_ptr_params",
+    "raw_cstr_params",
+    "raw_cstr_returns",
+    "ml_get_raw",
+    "mbyte_raw",
+    "msg_raw",
+    "bytes_at",
+    "vval_raw",
+    "typval_raw_params",
+    "exarg_raw",
+    "cmdarg_raw",
+    "global_cells",
+    "cell_raw_ptr",
+    "api_err_params",
+    "char_as_c_int",
+    "failed_uses",
+    "labeled_blocks",
+    "lua_raw_stack",
+    "long_fns",
+    "dup_consts",
+    "types_files",
+    "untested_dirs",
+)
 
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -1756,9 +2060,14 @@ def measure():
     number of files carrying neither forbid nor the unsafe-op deny,
     number of files not carrying the cast deny,
     lint name -> number of files carrying its blanket allow,
-    repo-relative file -> its masked source, for the whole-tree checks)."""
+    repo-relative file -> its masked source, for the whole-tree checks,
+    repo-relative file -> its *raw* source, for the three needles that cannot
+    run against the masked copy -- a char literal is blanked, a generated
+    file's marker is a comment, and a duplicated constant's value may be a
+    string)."""
     stats = {}
     tree = {}
+    sources = {}
     without_deny = 0
     without_casts = 0
     allowing = dict.fromkeys(FILE_ALLOWS, 0)
@@ -1779,11 +2088,12 @@ def measure():
         counts["lines"] = len(text.splitlines()) - len(test_module_lines(masked))
         stats[str(path.relative_to(ROOT))] = counts
         tree[str(path.relative_to(ROOT))] = masked
+        sources[str(path.relative_to(ROOT))] = text
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
         without_casts += DENY_CASTS.search(masked) is None
         for lint, needle in FILE_ALLOWS.items():
             allowing[lint] += needle in masked
-    return stats, without_deny, without_casts, allowing, tree
+    return stats, without_deny, without_casts, allowing, tree, sources
 
 
 def ledgers():
@@ -1939,6 +2249,106 @@ def vocabulary(tree):
     }
 
 
+def fn_body_lines(masked, sig):
+    """The line count of a `fn` item, or 0 when the declaration has no body.
+
+    From the end of the signature the next `{` at depth zero opens the body --
+    a `where` clause may sit in between -- and its matching `}` closes it. A
+    `->` inside a `where` bound is stepped over rather than read as a closing
+    angle bracket, which is what keeps `where F: Fn() -> u32` from
+    desynchronising the depth.
+    """
+    i, depth = sig.end, 0
+    while i < len(masked):
+        char = masked[i]
+        if masked[i : i + 2] == "->":
+            i += 2
+            continue
+        if char == ";" and not depth:
+            return 0  # a bodyless declaration
+        if char in "<([":
+            depth += 1
+        elif char in ">)]":
+            depth -= 1
+        elif char == "{" and depth <= 0:
+            return masked.count("\n", sig.start, matching_brace(masked, i)) + 1
+        i += 1
+    return 0
+
+
+def instrument_sites(tree, sources):
+    """{instrument: {unit -> count}} for every instrument. See the doc block.
+
+    The unit is the repo-relative file for all but two: `dup_consts` is keyed
+    by the constant's *name*, because a duplicate is a relationship between
+    files and not a property of one, and `untested_dirs` by the directory. The
+    ratcheted number is the sum of each counter's values, and `--dimension
+    NAME` prints the counter itself, which is how a later slice finds where
+    the debt sits.
+
+    Counters are sparse: a file with none of an instrument's sites is absent
+    rather than zero, so the breakdown reads as a list of what is left.
+    """
+    sites = {name: collections.Counter() for name in INSTRUMENT_KEYS}
+    consts = {}
+    tops, tested = set(), set()
+    for file, masked in tree.items():
+        source = sources[file]
+        for name, needle in INSTRUMENTS.items():
+            if found := len(needle.findall(masked)):
+                sites[name][file] = found
+        for name, (needle, home) in INSTRUMENTS_OUTSIDE.items():
+            if in_home(file, home):
+                continue
+            if found := len(needle.findall(masked)):
+                sites[name][file] = found
+        declarations = list(fn_signatures(masked))
+        for name, needle in INSTRUMENTS_PARAMS.items():
+            if found := sum(len(needle.findall(s.params)) for s in declarations):
+                sites[name][file] = found
+        for name, needle in INSTRUMENTS_RETURNS.items():
+            if found := sum(len(needle.findall(s.returns)) for s in declarations):
+                sites[name][file] = found
+        if found := sum(1 for _ in unsafe_fn_items(masked)):
+            sites["unsafe_fns"][file] = found
+        if found := sum(
+            1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
+        ):
+            sites["char_as_c_int"][file] = found
+        if in_home(file, TYPES_HOME):
+            sites["types_files"][file] = 1
+        if not in_home(file, WINLAYER):
+            if found := sum(
+                not VOUCHED_ARGUMENT.search(
+                    masked[
+                        m.end() : balanced(masked, m.end() - 1, "(", ")") - 1
+                    ].strip()
+                )
+                for m in HANDLE_BUILDER.finditer(masked)
+            ):
+                sites["stored_addr_handles"][file] = found
+        if not GENERATED_MARKER.search(source[:GENERATED_HEAD]):
+            if found := sum(
+                fn_body_lines(masked, s) > LONG_FN_LINES for s in declarations
+            ):
+                sites["long_fns"][file] = found
+        for match in CONST_DECL.finditer(masked):
+            value = " ".join(source[match.start(2) : match.end(2)].split())
+            consts.setdefault((match.group(1), value), set()).add(file)
+        if file.startswith(CRATE_SRC) and "/" in file[len(CRATE_SRC) :]:
+            top = file[len(CRATE_SRC) :].split("/", 1)[0]
+            tops.add(top)
+            if "#[test]" in masked:
+                tested.add(top)
+    for (name, _), files in consts.items():
+        if len(files) > 1:
+            sites["dup_consts"][name] += len(files) - 1
+    for top in tops - tested:
+        if not (UNIT_TESTS / f"{top}.rs").exists() and not (UNIT_TESTS / top).is_dir():
+            sites["untested_dirs"][top] = 1
+    return sites
+
+
 def api_exported():
     """The API function names apigen dispatches, from its attribute spec.
 
@@ -1985,7 +2395,7 @@ def int_aliases(aliases):
     }
 
 
-def whole_tree(stats, tree):
+def whole_tree(stats, tree, sites):
     """The name-keyed whole-tree counts. See the doc block."""
     return {
         **cell_ptr_partition(stats, tree),
@@ -1994,6 +2404,7 @@ def whole_tree(stats, tree):
             len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
         ),
         **vocabulary(tree),
+        **{name: sum(sites[name].values()) for name in INSTRUMENT_KEYS},
     }
 
 
@@ -2132,6 +2543,31 @@ WHOLE_TREE_LABEL = {
     "mut_win_buf_refs": "&mut win/buf/tabpage borrows in fn signatures",
     "abbrev_params": "transpiler parameter abbreviations in fn signatures",
     "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
+    # The instruments, in INSTRUMENT_KEYS' order.
+    "unsafe_fns": "`unsafe fn` items",
+    "stored_addr_handles": "handles built from an address nobody re-vouched for",
+    "raw_ptr_params": "raw-pointer parameters",
+    "raw_cstr_params": "raw `c_char` pointers in a parameter list",
+    "raw_cstr_returns": "raw `c_char` pointer returns",
+    "ml_get_raw": "pointer-form ml_get* calls",
+    "mbyte_raw": "pointer-form multibyte cursor calls",
+    "msg_raw": "pointer-form message calls",
+    "bytes_at": "bytes_at() calls",
+    "vval_raw": "`.vval.` union reads",
+    "typval_raw_params": "raw `TypVal` pointers in a parameter list",
+    "exarg_raw": "raw `ExArg` pointers in a parameter list",
+    "cmdarg_raw": "raw `CmdArg` pointers in a parameter list",
+    "global_cells": "GlobalCell static declarations",
+    "cell_raw_ptr": "GlobalCells holding a raw pointer",
+    "api_err_params": "`&mut Error` out-parameters",
+    "char_as_c_int": "character literals cast to C's int",
+    "failed_uses": "`Failed`, the sentinel wearing a Rust type",
+    "labeled_blocks": "labelled blocks and loops (the transpiled goto)",
+    "lua_raw_stack": "raw lua_State stack calls outside the Stack module",
+    "long_fns": f"functions over {LONG_FN_LINES} lines outside generated files",
+    "dup_consts": "redundant copies of a constant declared in another file",
+    "types_files": "files under types/",
+    "untested_dirs": "top-level modules with no test of any kind",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
 VOCABULARY_KEYS = (
@@ -2210,6 +2646,7 @@ def summary(stats, counts, without_deny, without_casts, allowing):
     ]
     parts += [f"{n} files allowing {lint}" for lint, n in allowing.items()]
     parts += [f"{counts[name]} {name}" for name in VOCABULARY_KEYS]
+    parts += [f"{counts[name]} {name}" for name in INSTRUMENT_KEYS]
     return ", ".join(parts)
 
 
@@ -2841,6 +3278,141 @@ SELF_TEST_VOCABULARY = [
     ),
 ]
 
+# The instruments, each case naming the distinction it pins. Same shape as
+# SELF_TEST_VOCABULARY: a fake tree, and the subset of the totals it fixes.
+SELF_TEST_INSTRUMENTS = [
+    # An `unsafe fn` item counts; a function-pointer *type*, a declaration
+    # inside an `unsafe extern` block and a plain `unsafe {}` do not.
+    (
+        {
+            "crates/nvim/src/a.rs": "pub unsafe fn f() {\n}\n"
+            'pub unsafe extern "C" fn g() {\n}\n'
+            "type H = unsafe fn(x: u8);\n"
+            'unsafe extern "C" {\n    pub fn h(x: u8);\n}\n'
+            "fn i() {\n    unsafe { f() };\n}\n",
+        },
+        {"unsafe_fns": 2},
+    ),
+    # A handle built from a `.raw()` in the same statement is vouched for; a
+    # field, a global read and a bare local are not, and `winlayer/` is out.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    Win::new(other.raw());\n"
+            "    Buf::new(state.saved_buf);\n"
+            "    TabPage::from_raw(cell.get());\n"
+            "    Buf::new(buf);\n"
+            "    FrameRef::at(frame_of(win).raw());\n"
+            "}\n",
+            "crates/nvim/src/winlayer/handles.rs": "fn g() {\n    Win::new(raw);\n}\n",
+        },
+        {"stored_addr_handles": 3},
+    ),
+    # A parameter and a return are different debts and never share a count.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(name: *mut c_char) -> *const c_char {\n}\n"
+            "fn g(x: *mut u8, y: *const T, z: Option<*mut u8>) {\n}\n"
+            "fn h() -> *mut c_char {\n}\n",
+        },
+        {
+            "raw_cstr_params": 1,
+            "raw_cstr_returns": 2,
+            # `name`, `x` and `y`; the pointer nested in `z`'s `Option` is a
+            # different retype and is deliberately not counted here.
+            "raw_ptr_params": 3,
+        },
+    ),
+    # The pointer forms count and the `_len` bodies underneath them do not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n"
+            "    utf_ptr2char(p);\n    utfc_ptr2len(p);\n"
+            "    utfc_ptr2len_len(s, n);\n    utf_ptr2char_info(p);\n"
+            "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
+            "    msg_puts(s);\n    msg_puts_hl(s, hl, false);\n"
+            "    msg_puts_bytes(s);\n"
+            "}\n",
+        },
+        {"mbyte_raw": 2, "ml_get_raw": 2, "msg_raw": 2},
+    ),
+    # A char-literal cast counts; the same text in a comment or a string does
+    # not, and neither does an ordinary `as c_int` on a name.
+    (
+        {
+            "crates/nvim/src/a.rs": "const NL: c_int = '\\n' as c_int;\n"
+            "fn f() {\n"
+            "    g(b'x' as libc::c_int);\n"
+            "    h(k as c_int);\n"
+            "    // 'z' as c_int\n"
+            "    let s = \"'z' as c_int\";\n"
+            "}\n",
+        },
+        {"char_as_c_int": 2},
+    ),
+    # A labelled block or loop counts; a lifetime bound does not.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f<'a: 'b>() {\n"
+            "    'err: {\n        break 'err;\n    }\n"
+            "    'outer: loop {\n        break 'outer;\n    }\n"
+            "    'scan: while x {\n    }\n"
+            "    'each: for y in z {\n    }\n"
+            "}\n",
+        },
+        {"labeled_blocks": 4},
+    ),
+    # A constant duplicated across files counts once per copy past the first;
+    # the same name with a *different* value is not a duplicate, and two
+    # different string values must not be flattened into one by masking.
+    (
+        {
+            "crates/nvim/src/a.rs": 'const NULL: c_int = 0;\nconst NAME: &str = "a";\n',
+            "crates/nvim/src/b.rs": 'const NULL: c_int = 0;\nconst NAME: &str = "b";\n',
+            "crates/nvim/src/c.rs": "const NULL: c_int = 0;\nconst OTHER: c_int = 1;\n",
+        },
+        {"dup_consts": 2},
+    ),
+    # A long function counts unless its file says a generator wrote it. The
+    # marker has to be a module doc line naming a tool, so prose about
+    # generated data does not buy the exemption.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f() {\n" + "    g();\n" * 250 + "}\n",
+            "crates/nvim/src/b.rs": "//! GENERATED by tools/apigen; do not edit.\n"
+            "fn f() {\n" + "    g();\n" * 250 + "}\n",
+            "crates/nvim/src/c.rs": "//! The tag file is generated by this code.\n"
+            "fn f() {\n" + "    g();\n" * 250 + "}\n",
+            "crates/nvim/src/d.rs": "fn f() {\n" + "    g();\n" * 10 + "}\n",
+        },
+        {"long_fns": 2},
+    ),
+    # A module with a `#[test]` anywhere beneath it is not untested; a
+    # top-level *file* is not a directory and is not asked.
+    (
+        {
+            "crates/nvim/src/lonely/mod.rs": "fn f() {\n}\n",
+            "crates/nvim/src/lonely/more.rs": "fn g() {\n}\n",
+            "crates/nvim/src/covered/mod.rs": "#[cfg(test)]\nmod tests {\n"
+            "    #[test]\n    fn t() {}\n}\n",
+            "crates/nvim/src/alone.rs": "fn h() {\n}\n",
+        },
+        {"untested_dirs": 1},
+    ),
+    # `types/` is counted by the file, and `lua_raw_stack` is tree-wide until
+    # LUA_STACK_HOME names the module phase 33 writes.
+    (
+        {
+            "crates/nvim/src/types/eval.rs": "pub struct A;\n",
+            "crates/nvim/src/types/uv.rs": "pub struct B;\n",
+            "crates/nvim/src/lua/executor/mod.rs": "fn f() {\n"
+            "    lua_pushnil(l);\n    lua_pop(l, 1);\n    lua_tolstring(l, -1, &n);\n"
+            "    luaL_error(l);\n}\n",
+        },
+        {"types_files": 2, "lua_raw_stack": 3},
+    ),
+]
+
 
 def self_test():
     for source, expected in SELF_TEST:
@@ -2935,6 +3507,13 @@ def self_test():
         assert got == expected, (
             f"borrowed_derefs={got}, want {expected}, for {source!r}"
         )
+    for sources, expected in SELF_TEST_INSTRUMENTS:
+        sites = instrument_sites(
+            {f: mask(text) for f, text in sources.items()}, sources
+        )
+        for name, want in expected.items():
+            got = sum(sites[name].values())
+            assert got == want, f"{name}={got}, want {want}, for {sources!r}"
     for sources, expected in SELF_TEST_VOCABULARY:
         got = vocabulary({f: mask(text) for f, text in sources.items()})
         for name, want in expected.items():
@@ -2976,13 +3555,50 @@ def self_test():
         )
 
 
+def breakdown(sites, name):
+    """Print one instrument's per-file (or per-name) counts, largest first.
+
+    The listing mode exists so a slice can triage without a second script:
+    the total says how much debt there is, this says which files hold it, and
+    the directory roll-up under it says which family to take next.
+    """
+    if name not in sites:
+        sys.exit(
+            f"ratchet: no such dimension: {name}\nKnown dimensions:\n  "
+            + "\n  ".join(INSTRUMENT_KEYS)
+        )
+    counter = sites[name]
+    print(f"{name}: {sum(counter.values())} across {len(counter)} units")
+    for unit, count in counter.most_common():
+        print(f"  {count:6}  {unit}")
+    directories = collections.Counter()
+    for unit, count in counter.items():
+        directories[unit.rsplit("/", 1)[0] if "/" in unit else unit] += count
+    if len(directories) < len(counter):
+        print("by directory:")
+        for directory, count in directories.most_common():
+            print(f"  {count:6}  {directory}")
+
+
 def main():
-    args = set(sys.argv[1:])
+    argv = sys.argv[1:]
+    dimension = None
+    if "--dimension" in argv:
+        at = argv.index("--dimension")
+        if at + 1 == len(argv):
+            sys.exit("ratchet: --dimension wants a name")
+        dimension = argv[at + 1]
+        argv = argv[:at] + argv[at + 2 :]
+    args = set(argv)
     if unknown := args - {"--check", "--allow-growth"}:
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_deny, without_casts, allowing, tree = measure()
+    stats, without_deny, without_casts, allowing, tree, sources = measure()
+    sites = instrument_sites(tree, sources)
+    if dimension is not None:
+        breakdown(sites, dimension)
+        return
     check_place_writes(tree)
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
@@ -2992,7 +3608,7 @@ def main():
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
-    counts = {**ledgers(), **whole_tree(stats, tree)}
+    counts = {**ledgers(), **whole_tree(stats, tree, sites)}
     content = render(stats, counts, without_deny, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
