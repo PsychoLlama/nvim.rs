@@ -33,6 +33,7 @@ use crate::cstr;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, NUL};
 use crate::winlayer::Buf;
+use core::ffi::CStr;
 
 /// A read-only pointer to line `lnum` of the current buffer. Never NULL.
 ///
@@ -171,9 +172,49 @@ impl Lines {
     /// The escape hatch for the two shapes the borrow cannot express: a
     /// second line of the same buffer held at the same time, and text held
     /// across a call that re-enters the editor. Both are real needs and both
-    /// are a copy in C as well — upstream spells them `xstrdup(ml_get(…))`.
-    pub fn line_copy(&mut self, lnum: LineNr) -> Vec<u8> {
-        self.line(lnum).to_vec()
+    /// are a copy in C as well — upstream spells them `xstrdup(ml_get(…))`,
+    /// which is why a [`LineCopy`] carries the terminator that spelling did.
+    pub fn line_copy(&mut self, lnum: LineNr) -> LineCopy {
+        let mut bytes = Vec::with_capacity(self.line(lnum).len() + 1);
+        bytes.extend_from_slice(self.line(lnum));
+        bytes.push(NUL as u8);
+        LineCopy(bytes)
+    }
+}
+
+/// A line taken out of the cache, with the terminator the cache had after it.
+///
+/// A line read from the memline is followed by a NUL in the same allocation,
+/// and the walks over it lean on that: several deliberately look one byte
+/// *past* the last character and expect the terminator to end them
+/// ([`crate::cstr::byte_at`] is the same reader with no memory behind it, and
+/// `utf_head_off` reads the byte it is asked about before deciding anything).
+/// A bare `Vec<u8>` of the line's bytes does not have that byte, and the
+/// walks then read the vector's uninitialised capacity — which is a real bug
+/// this type exists to have made impossible once.
+///
+/// So the copy keeps the NUL, and the slice it derefs to leaves it out: the
+/// bytes are the line's, and the byte after them is a terminator, exactly as
+/// they were in the buffer.
+pub struct LineCopy(Vec<u8>);
+
+impl ::core::ops::Deref for LineCopy {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.0[..self.0.len() - 1]
+    }
+}
+
+impl LineCopy {
+    /// The copy as a C string, for the callers that still pass a pointer.
+    ///
+    /// # Panics
+    /// Never in practice: the memline stores a NUL byte as an `NL`, so a
+    /// line holds no interior NUL and the terminator this added is the only
+    /// one.
+    pub fn as_cstr(&self) -> &CStr {
+        CStr::from_bytes_with_nul(&self.0).expect("a buffer line holds no NUL")
     }
 }
 

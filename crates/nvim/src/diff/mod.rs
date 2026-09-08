@@ -64,10 +64,10 @@ use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
-    mb_get_class_tab, mb_stricmp, utf_char2bytes, utf_char2len, utf_fold, utf_head_off,
-    utf_ptr2char, utfc_ptr2len,
+    mb_get_class_tab, utf_char2bytes, utf_char2len, utf_fold, utf_head_off, utf_ptr2char,
+    utf_strnicmp, utfc_ptr2len,
 };
-use crate::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
+use crate::memline::{Lines, ml_append, ml_delete};
 use crate::memory::{memchrsub, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::{

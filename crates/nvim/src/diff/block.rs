@@ -26,7 +26,6 @@ use crate::semsg;
 use crate::types::Failed;
 use crate::winlayer::{Buf, TabPage, Win, tabs, windows};
 use core::ffi::c_int;
-use std::ffi::CStr;
 
 /// Free one block, its cached inline changes included.
 ///
@@ -434,15 +433,11 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
             } else {
                 0
             };
-            // A copy: the `ml_get_buf` below invalidates the buffer this
-            // one answers with.
+            // A copy: the loop below reads the other buffers, and one of
+            // them may be this one again on a later turn.
             let line_org = unsafe {
-                CStr::from_ptr(ml_get_buf(
-                    tabpage.diffbuf(i_org),
-                    (*dp).df_lnum[i_org] + off_org,
-                ))
-            }
-            .to_owned();
+                Lines::in_buffer(tabpage.diffbuf(i_org)).line_copy((*dp).df_lnum[i_org] + off_org)
+            };
             let mut i_new = i_org + 1;
             while i_new < DB_COUNT as usize {
                 if !tabpage.tp_diffbuf[i_new].is_null() {
@@ -454,13 +449,9 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
                     if off_new < 0 || off_new >= unsafe { (*dp).df_count[i_new] } {
                         break;
                     }
-                    let other = unsafe {
-                        CStr::from_ptr(ml_get_buf(
-                            tabpage.diffbuf(i_new),
-                            (*dp).df_lnum[i_new] + off_new,
-                        ))
-                    };
-                    if !lines_equal(&line_org, other) {
+                    let mut other = Lines::in_buffer(tabpage.diffbuf(i_new));
+                    let lnum = unsafe { (*dp).df_lnum[i_new] + off_new };
+                    if !lines_equal(&line_org, other.line(lnum)) {
                         break;
                     }
                 }

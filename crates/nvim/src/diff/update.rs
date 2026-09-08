@@ -21,7 +21,6 @@ use crate::types::{Failed, NUL};
 use crate::winlayer::{Buf, Live, TabPage, Win, buffer_at};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
-use std::ffi::CStr;
 
 /// One block of a tab page's diff list, as a pointer the caller has promised
 /// is live.
@@ -181,12 +180,9 @@ pub(crate) unsafe fn diff_write_buffer(
         return Ok(());
     }
 
+    let mut lines = buffer.lines();
     let len = (start..=end)
-        .map(|lnum| {
-            // SAFETY: a live buffer, and a line number inside it.
-            let n = unsafe { ml_get_buf_len(buffer, lnum) };
-            n as usize + 1
-        })
+        .map(|lnum| lines.line(lnum).len() + 1)
         .sum::<usize>();
     // SAFETY: `xmalloc` aborts rather than answer null.
     let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
@@ -202,8 +198,7 @@ pub(crate) unsafe fn diff_write_buffer(
 
     let mut at = 0;
     for lnum in start..=end {
-        // SAFETY: a live buffer, and a line number inside it.
-        let line = unsafe { CStr::from_ptr(ml_get_buf(buffer, lnum)) }.to_bytes();
+        let line = lines.line(lnum);
         if diff_flags.get() & DIFF_ICASE == 0 {
             out[at..at + line.len()].copy_from_slice(line);
             let from = out[at..].as_mut_ptr().cast();

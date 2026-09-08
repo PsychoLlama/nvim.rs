@@ -25,7 +25,6 @@
 use super::*;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
-use std::ffi::CStr;
 
 /// One entry per token written into the fake file, per buffer.
 type LineMap = [Vec<LinemapEntry>; DB_COUNT as usize];
@@ -182,8 +181,8 @@ unsafe fn refine_inline_word(
                 // The gap is only worth swallowing if it is *punctuation*
                 // between two changed words; a word in the gap is a real
                 // unchanged word and splitting there is the point.
-                let line = CStr::from_ptr(ml_get_buf(buf, start_lnum + entry1.lineoff as LineNr))
-                    .to_bytes();
+                let mut lines = buf.lines();
+                let line = lines.line(start_lnum + entry1.lineoff as LineNr);
                 let gap = &line[(gap_start as usize).min(line.len())..];
                 let gap = &gap[..(gap_size as usize).min(gap.len())];
                 if gap.is_empty()
@@ -239,7 +238,7 @@ unsafe fn refine_inline_word(
 /// `chartab` must point at the buffer's `b_chartab`, the 256-bit word table
 /// `buf_init_chartab` filled in — it is indexed by every byte of `line`.
 unsafe fn tokenize_line(
-    line: &CStr,
+    bytes: &[u8],
     off: c_int,
     chartab: *const uint64_t,
     word: bool,
@@ -248,7 +247,6 @@ unsafe fn tokenize_line(
 ) {
     let flags = diff_flags.get();
     let trim_eol = flags & (DIFF_IWHITEEOL | DIFF_IWHITE) != 0;
-    let bytes = line.to_bytes();
     let mut in_keyword = false;
     // Where to rewind to if the line ends in white space: the state as of
     // the first byte of the trailing run.  `None` while the run has been
@@ -458,8 +456,9 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             // Deliberately the *first* buffer's 'iskeyword', so that
             // every buffer is segmented the same way.
             let chartab = unsafe { (*tp.tp_diffbuf[file1_idx]).b_chartab.as_ptr() };
+            let mut lines = buf.lines();
             for off in 0..unsafe { (*dp).df_count[i] } {
-                let line = unsafe { CStr::from_ptr(ml_get_buf(buf, (*dp).df_lnum[i] + off)) };
+                let line = lines.line(unsafe { (*dp).df_lnum[i] + off });
                 unsafe {
                     tokenize_line(
                         line,

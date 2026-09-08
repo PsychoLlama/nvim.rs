@@ -371,11 +371,15 @@ fn diffgetput(
                 if nr > src.b_ml.ml_line_count {
                     break;
                 }
-                // SAFETY: a live buffer and a line number inside it.
-                let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
-                // SAFETY: the editor exists; `p` is our own copy of the line.
-                let _ = unsafe { ml_append(lnum + i - 1 as LineNr, p, 0 as ColNr, false) };
-                unsafe { xfree(p.cast()) };
+                // A copy, because `ml_append` writes into the buffer this
+                // line was read from. Its length counts the terminator,
+                // which is why the copy keeps one.
+                let text = Lines::in_buffer(src).line_copy(nr);
+                let (at, ptr) = (lnum + i - 1 as LineNr, text.as_cstr().as_ptr().cast_mut());
+                let len = text.len() as ColNr + 1;
+                // SAFETY: the editor exists, and `text` is this frame's own
+                // NUL-terminated copy of the line.
+                let _ = unsafe { ml_append(at, ptr, len, false) };
                 added += 1;
                 if buf_empty && Buf::current().b_ml.ml_line_count == 2 as LineNr {
                     buf_empty = false;

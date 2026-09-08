@@ -21,7 +21,6 @@ use super::*;
 use crate::cstr::byte_at;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
-use std::ffi::CStr;
 
 /// Skip a run of spaces and tabs: `charset.rs`'s `skipwhite` over a slice.
 ///
@@ -39,9 +38,16 @@ pub(crate) fn skip_white(s: &[u8]) -> &[u8] {
 /// covering it starts.  Composing characters count as part of the character
 /// they follow, which is why this is not just "skip continuation bytes".
 pub(crate) fn head_off(line: &[u8], i: usize) -> usize {
-    // SAFETY: `line` is the byte range of a NUL-terminated line, so `base`
-    // and `base + i` are both within one allocation, `i == line.len()`
-    // addressing the terminator itself.
+    // The terminator, or any other ASCII byte, is its own character and
+    // starts no cluster. Answering that here is what `utf_head_off` does
+    // with its own first test, and it means the walks that step one past
+    // the last character never reach a pointer at all.
+    if byte_at(line, i) < 0x80 {
+        return 0;
+    }
+    // SAFETY: `line` is the byte range of a line, so `base` and `base + i`
+    // are both within one allocation -- `i < line.len()` after the test
+    // above.
     let base = line.as_ptr().cast::<c_char>();
     unsafe { utf_head_off(base, base.add(i)) as usize }
 }
@@ -92,9 +98,8 @@ pub(crate) fn char_len(p1: &[u8], p2: &[u8]) -> Option<usize> {
 ///
 /// Upstream's `diff_cmp`, which answers `strcmp`'s convention; nothing reads
 /// the sign, so this answers the question instead.
-pub(crate) fn lines_equal(s1: &CStr, s2: &CStr) -> bool {
+pub(crate) fn lines_equal(b1: &[u8], b2: &[u8]) -> bool {
     let flags = diff_flags.get();
-    let (b1, b2) = (s1.to_bytes(), s2.to_bytes());
 
     // `iblank`: a line that is blank once its indent is skipped matches
     // anything at all, including a non-blank line.
@@ -105,8 +110,11 @@ pub(crate) fn lines_equal(s1: &CStr, s2: &CStr) -> bool {
         return b1 == b2;
     }
     if flags & DIFF_ICASE != 0 && flags & ALL_WHITE_DIFF == 0 {
-        // SAFETY: `CStr` guarantees both are NUL-terminated.
-        return unsafe { mb_stricmp(s1.as_ptr(), s2.as_ptr()) } == 0;
+        let (p1, p2) = (b1.as_ptr().cast::<c_char>(), b2.as_ptr().cast::<c_char>());
+        // SAFETY: each side is bounded by its own length, which is what
+        // `mb_stricmp` reaches by walking to the NUL. A buffer line holds a
+        // NUL byte as an `NL`, so the two spans are the same.
+        return unsafe { utf_strnicmp(p1, p2, b1.len(), b2.len()) } == 0;
     }
 
     let (mut p1, mut p2) = (b1, b2);
@@ -140,14 +148,16 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usi
     if unsafe { diff_check_sanity(tp, dp) }.is_err() {
         return false;
     }
+    let (mut b1, mut b2) = (
+        Lines::in_buffer(tp.diffbuf(idx1)),
+        Lines::in_buffer(tp.diffbuf(idx2)),
+    );
     for i in 0..unsafe { (*dp).df_count[idx1] } {
-        // The copy is not optional: the second `ml_get_buf` invalidates
-        // the buffer the first one answered with.
-        let line = unsafe { CStr::from_ptr(ml_get_buf(tp.diffbuf(idx1), (*dp).df_lnum[idx1] + i)) }
-            .to_owned();
-        let other =
-            unsafe { CStr::from_ptr(ml_get_buf(tp.diffbuf(idx2), (*dp).df_lnum[idx2] + i)) };
-        if !lines_equal(&line, other) {
+        // Two handles, two buffers: `tp_diffbuf`'s entries are distinct
+        // buffers, so each cache holds its own line and neither read
+        // disturbs the other.
+        let (l1, l2) = unsafe { ((*dp).df_lnum[idx1] + i, (*dp).df_lnum[idx2] + i) };
+        if !lines_equal(b1.line(l1), b2.line(l2)) {
             return false;
         }
     }

@@ -17,7 +17,6 @@ use super::*;
 use crate::cstr::byte_at;
 use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::c_int;
-use std::ffi::CStr;
 
 /// Throw away the cached inline changes of the block holding `lnum`.
 ///
@@ -186,11 +185,10 @@ fn diff_find_change_simple(
     startp: &mut c_int,
     endp: &mut c_int,
 ) -> bool {
-    // A copy: every `ml_get_buf` below invalidates the last one's buffer.
-    let line_org = (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| {
-        // SAFETY: a live window's buffer, and a line number inside it.
-        unsafe { CStr::from_ptr(ml_get_buf(window.buffer(), lnum)) }.to_owned()
-    });
+    // A copy: the loop below reads every other buffer of the diff, and it
+    // is this window's own on the turn that skips it.
+    let line_org =
+        (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| window.buffer().lines().line_copy(lnum));
     let off = lnum - dp.df_lnum[idx as usize];
     let tp = TabPage::current();
     let mut added = true;
@@ -205,11 +203,10 @@ fn diff_find_change_simple(
         let Some(line_org) = line_org.as_deref() else {
             break; // `inline:none` wants only the answer above.
         };
-        let org = line_org.to_bytes();
+        let org = line_org;
         let other = dp.df_lnum[i] + off;
-        // SAFETY: a live buffer of the diff, and a line number inside the
-        // block, so inside the buffer.
-        let new = unsafe { CStr::from_ptr(ml_get_buf(buf, other)) }.to_bytes();
+        let mut lines = buf.lines();
+        let new = lines.line(other);
 
         let (si_org, si_new) = common_prefix(org, new);
         *startp = (*startp).min(si_org as c_int);
