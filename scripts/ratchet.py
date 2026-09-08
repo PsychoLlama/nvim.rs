@@ -617,7 +617,10 @@ plus these whole-tree metrics, which are not per-file:
                         different rewrites with different exit clauses. These
                         two are nesting-blind — the type is the debt wherever
                         in the list it appears — so neither is a subset of
-                        `raw_ptr_params`. Phase 29.
+                        `raw_ptr_params`, and they match every spelling of the
+                        type (`::core::ffi::c_char`, `libc::c_char`, …) so
+                        that qualifying a forwarder cannot move the count.
+                        Phase 29.
                       ml_get_raw · mbyte_raw · msg_raw · bytes_at  the four
                         families that hand a raw pointer *back*: a buffer line
                         (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
@@ -1255,15 +1258,25 @@ TYPES_HOME = {"crates/nvim/src/types/": "the transpiler's one type namespace"}
 # Counted inside a `fn`'s *parameter list* only -- not the return type, which
 # `INSTRUMENTS_RETURNS` counts separately so the two never double-book a
 # `-> *mut c_char`.
+# Every spelling of `c_char` c2rust and the tree between them produce. The
+# needles below used the bare name alone, which made a *qualified* forwarder
+# invisible: rewriting `*mut c_char` as `*mut ::core::ffi::c_char` -- the
+# spelling every generated and every `unsafe extern` block uses -- lowered
+# `raw_cstr_params` without retiring anything, and the reverse rewrite raised
+# it. `c_int_returns` already spells the prefix this way; these now match it.
+C_CHAR = r"(?:(?:::)?(?:core|std)::ffi::|(?:::)?libc::)?c_char"
+
 INSTRUMENTS_PARAMS = {
     # The roadmap's needle exactly: a parameter *directly* typed as a raw
     # pointer. A pointer nested inside another type (`Option<*mut T>`, a
     # callback's own signature) is not counted -- retyping the outer type is
     # what retires those, and this number is about the parameter itself.
+    # Qualification lands *after* the `*mut`, so this one needs no widening:
+    # `: *const ::core::ffi::c_char` already matches.
     "raw_ptr_params": re.compile(r":\s*\*\s*(?:mut|const)\b"),
     # These four are nesting-blind on purpose: what is being retired is the
     # *type*, wherever in the parameter list it appears.
-    "raw_cstr_params": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+    "raw_cstr_params": re.compile(rf"\*(?:mut|const)\s+{C_CHAR}\b"),
     "typval_raw_params": re.compile(r"\*(?:mut|const)\s+TypVal\b"),
     # api/'s error channel as a borrow rather than a pointer -- the landing
     # place `error_out_params` retypes to, and itself debt: the answer is a
@@ -1275,7 +1288,7 @@ INSTRUMENTS_PARAMS = {
 }
 # ... and inside the declared return type only.
 INSTRUMENTS_RETURNS = {
-    "raw_cstr_returns": re.compile(r"\*(?:mut|const)\s+c_char\b"),
+    "raw_cstr_returns": re.compile(rf"\*(?:mut|const)\s+{C_CHAR}\b"),
 }
 
 # A character literal cast to C's `int`, in every spelling of the type
@@ -3392,6 +3405,23 @@ SELF_TEST_INSTRUMENTS = [
             "raw_cstr_returns": 2,
             # `name`, `x` and `y`; the pointer nested in `z`'s `Option` is a
             # different retype and is deliberately not counted here.
+            "raw_ptr_params": 3,
+        },
+    ),
+    # ... and a qualified `c_char` is the same debt as a bare one. Spelling
+    # the path is what an `unsafe extern` block and every generated file do,
+    # so a forwarder rewritten into one must not move either number.
+    (
+        {
+            "crates/nvim/src/a.rs": "fn f(\n"
+            "    name: *mut ::core::ffi::c_char,\n"
+            "    home: *const core::ffi::c_char,\n"
+            "    tail: *mut libc::c_char,\n"
+            ") -> *const ::std::ffi::c_char {\n}\n",
+        },
+        {
+            "raw_cstr_params": 3,
+            "raw_cstr_returns": 1,
             "raw_ptr_params": 3,
         },
     ),
