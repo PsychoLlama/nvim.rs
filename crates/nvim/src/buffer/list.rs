@@ -156,9 +156,7 @@ fn is_diff_mode(buffer: Buf) -> bool {
 
 /// The current buffer, which is null only before the first one is created.
 fn current_buf() -> Option<Buf> {
-    let buf = Buf::current_raw();
-    // SAFETY: non-null, hence live.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+    Buf::current_or_none()
 }
 
 fn current_win() -> Win {
@@ -170,11 +168,9 @@ fn current_last() -> Option<Buf> {
 }
 
 fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
-    let raw = buffer.raw();
-
-    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
-
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) }
+    let (none, some) = (ptr::null_mut(), Some(buffer));
+    // SAFETY: a live buffer, and no pattern to match against.
+    unsafe { apply_autocmds(event, none, none, false, some) }
 }
 
 fn copy_options_into(buffer: Buf, flags: c_int) {

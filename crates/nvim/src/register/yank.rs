@@ -488,8 +488,7 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     // The buffer must not change under the yank that is still in flight.
     let locked = Lock::text();
     let none = ::core::ptr::null_mut();
-    let buffer = Buf::current_raw();
-    let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+    let __hoisted_0 = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, __hoisted_0) };
     drop(locked);
 

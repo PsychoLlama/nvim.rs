@@ -53,23 +53,16 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     };
 
     // spell.c insists 'spell' is on, so turn it on for the duration.
-    let win = Win::current_raw();
-    // SAFETY: `curwin` is a live window whenever Lua is running.
-    let wo_spell_save = unsafe {
-        let saved = (*win).w_onebuf_opt.wo_spell;
-        if saved == 0 {
-            parse_spelllang(Win::new(win));
-            (*win).w_onebuf_opt.wo_spell = 1;
-        }
-        saved
-    };
-    // SAFETY: as above; `w_s` is the window's synblock, always set.
-    if unsafe { *(*(*win).w_s).b_p_spl } == 0 {
-        // SAFETY: as above; `e_no_spell` is a `static` message.
-        unsafe {
-            emsg(gettext(e_no_spell));
-            (*win).w_onebuf_opt.wo_spell = wo_spell_save;
-        }
+    let mut win = Win::current();
+    let wo_spell_save = win.w_onebuf_opt.wo_spell;
+    if wo_spell_save == 0 {
+        parse_spelllang(win);
+        win.w_onebuf_opt.wo_spell = 1;
+    }
+    // SAFETY: `w_s` is the window's synblock, always set.
+    if unsafe { *(*win.w_s).b_p_spl } == 0 {
+        emsg(gettext(e_no_spell));
+        win.w_onebuf_opt.wo_spell = wo_spell_save;
         return 0;
     }
 
@@ -84,8 +77,6 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     while unsafe { *word } != 0 {
         let mut attr: Hlf = HLF_COUNT;
         // SAFETY: a live window.
-        let win = unsafe { Win::new(win) };
-        // SAFETY: as above, with a live window.
         let len =
             unsafe { spell_check(win, word.cast_mut(), &raw mut attr, &raw mut capcol, false) };
         debug_assert!(len <= c_int::MAX as size_t);
@@ -118,8 +109,8 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
         capcol -= c_int::try_from(len).expect("a spell_check length fits an int");
     }
 
-    // SAFETY: as above; 'spell' goes back to what it was.
-    unsafe { (*win).w_onebuf_opt.wo_spell = wo_spell_save };
+    // 'spell' goes back to what it was.
+    win.w_onebuf_opt.wo_spell = wo_spell_save;
     1
 }
 

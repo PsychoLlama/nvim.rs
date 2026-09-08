@@ -379,11 +379,10 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     let old_value = unsafe { cstr::at_opt(old_value) }.map(CStr::to_owned);
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
-    let buf = Buf::current_raw();
-    // SAFETY: the editor's current buffer.
-    let fname = unsafe { (*buf).b_fname };
-    let arg = args.arg;
-    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Buf::from_raw(buf)) };
+    let buffer = Buf::current();
+    let (fname, arg) = (buffer.b_fname, args.arg);
+    // SAFETY: a live buffer, and the command's own NUL-terminated argument.
+    unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 
     // Move the value of b:current_syntax to w:current_syntax.
     let new_value = unsafe { get_var_value(c"b:current_syntax".as_ptr(), &mut numbuf) };

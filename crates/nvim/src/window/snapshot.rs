@@ -43,11 +43,10 @@ use crate::winlayer::{
 /// `nested` means an outer call has already saved them, so only the
 /// corrections are recorded.
 fn check_lnums_both(do_curwin: bool, nested: bool) {
-    let buf = Buf::current_raw();
-    // SAFETY: `curbuf` is set from startup to exit.
-    let line_count = unsafe { Buf::new(buf) }.line_count();
+    let buf = Buf::current();
+    let line_count = buf.line_count();
     for mut wp in tab_windows() {
-        if (!do_curwin && wp.is_current()) || wp.w_buffer != buf {
+        if (!do_curwin && wp.is_current()) || wp.w_buffer != buf.raw() {
             continue;
         }
         if !nested {

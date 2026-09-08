@@ -100,9 +100,9 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    AdditionalData, ApiDict, Arena, Array, ArrayBuilder, BlnFlags, Boolean, Buffer, BufferHandle,
-    Channel, ChannelStreamType, Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo,
-    Handle, HlAttrs, HlMessage, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts,
+    AdditionalData, ApiDict, Arena, Array, ArrayBuilder, BlnFlags, Boolean, BufferHandle, Channel,
+    ChannelStreamType, Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle,
+    HlAttrs, HlMessage, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts,
     KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns,
     KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime,
     KeyValuePair, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,

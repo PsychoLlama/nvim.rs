@@ -53,7 +53,7 @@ use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::terminal_check_size;
 use crate::types::{
     ChangedtickDictItem, CmdModFlags, ColNr, DictItem, Failed, LineNr, NUL, OptInt, ShmFlag,
-    Terminal, TypVal, VAR_NUMBER, VarLock, Window, time_t, typval_vval_union, uint8_t, uint64_t,
+    Terminal, TypVal, VAR_NUMBER, VarLock, time_t, typval_vval_union, uint8_t, uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
@@ -313,11 +313,8 @@ fn leave_prevbuf(
     {
         sync_undo();
     }
-    let win = if prevbuf.raw() == Win::current().w_buffer {
-        Win::current_raw()
-    } else {
-        ptr::null_mut::<Window>()
-    };
+    // The window `prevbuf` is leaving, when it is the current one.
+    let window = Win::current_or_none().filter(|win| prevbuf.raw() == win.w_buffer);
     let how = if unload {
         action
     } else if action == DOBUF_GOTO as c_int && !may_hide(prevbuf) && !is_changed(prevbuf) {
@@ -326,9 +323,7 @@ fn leave_prevbuf(
         0
     };
 
-    let __hoisted_0 = unsafe { Win::from_raw(win) };
-
-    unsafe { close_buffer(__hoisted_0, Buf::new(prevbuf.raw()), how, false, false) };
+    close_buffer(window, prevbuf, how, false, false);
     if Win::current_raw() != previouswin
         && let Some(previous) = window_at(previouswin)
     {

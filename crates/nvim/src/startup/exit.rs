@@ -169,9 +169,8 @@ pub fn getout(mut exitval: c_int) -> ! {
         while let Some(buf) = cur {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
-                let (name, raw) = (buf.b_fname, buf.raw());
-                let __hoisted_0 = unsafe { Buf::from_raw(raw) };
-                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, __hoisted_0) };
+                let (name, some) = (buf.b_fname, Some(buf));
+                unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, some) };
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing
                     // on, so the `b_next` link is gone with it.
@@ -230,8 +229,7 @@ unsafe fn with_autocmds_unblocked(event: AutoEvent) {
     if blocked {
         unblock_autocmds();
     }
-    let buffer = Buf::current_raw();
-    let __hoisted_1 = unsafe { Buf::from_raw(buffer) };
+    let __hoisted_1 = Buf::current_or_none();
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_1) };
     if blocked {
         block_autocmds();

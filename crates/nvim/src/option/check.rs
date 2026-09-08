@@ -85,15 +85,14 @@ pub(crate) fn did_set_title() {
 pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFlags) {
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
-    // SAFETY: `curbuf` is live.
-    let buf = Buf::current_raw();
+    let mut buf = Buf::current();
     if newval {
         if !oldval {
             if local {
-                unsafe { (*buf).b_p_tw_nobin = (*buf).b_p_tw };
-                unsafe { (*buf).b_p_wm_nobin = (*buf).b_p_wm };
-                unsafe { (*buf).b_p_ml_nobin = (*buf).b_p_ml };
-                unsafe { (*buf).b_p_et_nobin = (*buf).b_p_et };
+                buf.b_p_tw_nobin = buf.b_p_tw;
+                buf.b_p_wm_nobin = buf.b_p_wm;
+                buf.b_p_ml_nobin = buf.b_p_ml;
+                buf.b_p_et_nobin = buf.b_p_et;
             }
             if global {
                 p_tw_nobin.set(p_tw.get());
@@ -103,10 +102,10 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
             }
         }
         if local {
-            unsafe { (*buf).b_p_tw = 0 };
-            unsafe { (*buf).b_p_wm = 0 };
-            unsafe { (*buf).b_p_ml = 0 };
-            unsafe { (*buf).b_p_et = 0 };
+            buf.b_p_tw = 0;
+            buf.b_p_wm = 0;
+            buf.b_p_ml = 0;
+            buf.b_p_et = 0;
         }
         if global {
             p_tw.set(0);
@@ -117,10 +116,10 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
         }
     } else if oldval {
         if local {
-            unsafe { (*buf).b_p_tw = (*buf).b_p_tw_nobin };
-            unsafe { (*buf).b_p_wm = (*buf).b_p_wm_nobin };
-            unsafe { (*buf).b_p_ml = (*buf).b_p_ml_nobin };
-            unsafe { (*buf).b_p_et = (*buf).b_p_et_nobin };
+            buf.b_p_tw = buf.b_p_tw_nobin;
+            buf.b_p_wm = buf.b_p_wm_nobin;
+            buf.b_p_ml = buf.b_p_ml_nobin;
+            buf.b_p_et = buf.b_p_et_nobin;
         }
         if global {
             p_tw.set(p_tw_nobin.get());
@@ -156,18 +155,18 @@ pub(crate) fn didset_options() {
 pub(crate) fn didset_options2() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
     unsafe { highlight_changed() };
-    let win = Win::current_raw();
+    let win = Win::current();
     let no_err = ptr::null_mut::<c_char>();
-    let fcs = unsafe { (*win).w_onebuf_opt.wo_fcs };
-    unsafe { set_chars_option(Win::new(win), fcs, kFillchars, true, no_err, 0) };
-    let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
-    unsafe { set_chars_option(Win::new(win), lcs, kListchars, true, no_err, 0) };
+    let fcs = win.w_onebuf_opt.wo_fcs;
+    unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
+    let lcs = win.w_onebuf_opt.wo_lcs;
+    unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
     let _ = check_opt_wim();
-    let buf = Buf::current_raw();
-    unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
-    unsafe { tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array) };
-    unsafe { xfree((*buf).b_p_vts_array.cast::<c_void>()) };
-    unsafe { tabstop_set((*buf).b_p_vts, &raw mut (*buf).b_p_vts_array) };
+    let mut buf = Buf::current();
+    unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
+    unsafe { tabstop_set(buf.b_p_vsts, &raw mut buf.b_p_vsts_array) };
+    unsafe { xfree(buf.b_p_vts_array.cast::<c_void>()) };
+    unsafe { tabstop_set(buf.b_p_vts, &raw mut buf.b_p_vts_array) };
 }
 
 /// Replace a null string option with the shared empty string, for every

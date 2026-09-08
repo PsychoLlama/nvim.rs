@@ -37,26 +37,25 @@ use crate::winlayer::Win;
 /// # Safety
 /// There must be a current window and buffer.
 pub unsafe fn get_expr_indent() -> c_int {
-    let win = Win::current_raw();
-    let buf = Buf::current_raw();
+    let mut win = Win::current();
+    let buf = Buf::current();
     // SAFETY: the caller's contract; `curwin` and `curbuf` are the current
     // window and buffer for the whole of this call.
-    let use_sandbox =
-        unsafe { was_set_insecurely(Win::new(win), kOptIndentexpr, OptionSetFlags::LOCAL) };
+    let use_sandbox = was_set_insecurely(win, kOptIndentexpr, OptionSetFlags::LOCAL);
     let save_sctx = current_sctx.get();
     // Saved because the expression can move the cursor via `:normal`.
     let (save_pos, save_curswant, save_set_curswant) =
-        unsafe { ((*win).w_cursor, (*win).w_curswant, (*win).w_set_curswant) };
+        (win.w_cursor, win.w_curswant, win.w_set_curswant);
     set_vim_var_nr(Vv::Lnum, save_pos.lnum as VarNumber);
 
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
         // SAFETY: as above.
-        current_sctx.set(unsafe { (*buf).b_p_script_ctx[kBufOptIndentexpr as usize] });
+        current_sctx.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
         // SAFETY: as above. The expression is evaluated from a copy, because
         // 'indentexpr' can be changed while it is running.
-        let inde_copy = unsafe { xstrdup((*buf).b_p_inde) };
+        let inde_copy = unsafe { xstrdup(buf.b_p_inde) };
         let answer = unsafe { eval_to_number(inde_copy, true) } as c_int;
         unsafe { xfree(inde_copy.cast()) };
         answer
@@ -68,11 +67,10 @@ pub unsafe fn get_expr_indent() -> c_int {
     // "o" command.
     let save_state = State.get();
     State.set(MODE_INSERT);
-    // SAFETY: as above.
-    unsafe { (*win).w_cursor = save_pos };
-    unsafe { (*win).w_curswant = save_curswant };
-    unsafe { (*win).w_set_curswant = save_set_curswant };
-    check_cursor(unsafe { Win::new(win) });
+    win.w_cursor = save_pos;
+    win.w_curswant = save_curswant;
+    win.w_set_curswant = save_set_curswant;
+    check_cursor(win);
     State.set(save_state);
 
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
@@ -164,14 +162,14 @@ unsafe fn enclosing_open() -> Option<Pos> {
 unsafe fn same_level_indent(open: &Pos) -> Option<c_int> {
     // SAFETY: the caller's contract; the cursor stays on a real line because
     // the walk stops at `open`, which `findmatch` answered.
-    let win = Win::current_raw();
+    let mut win = Win::current();
     let mut parencount = 0;
     loop {
-        unsafe { (*win).w_cursor.lnum -= 1 };
-        if unsafe { (*win).w_cursor.lnum } < open.lnum {
+        win.w_cursor.lnum -= 1;
+        if win.w_cursor.lnum < open.lnum {
             return None;
         }
-        if unsafe { linewhite((*win).w_cursor.lnum) } {
+        if linewhite(win.w_cursor.lnum) {
             continue;
         }
         count_parens(
@@ -214,12 +212,12 @@ unsafe fn skip_white_measuring(
 unsafe fn indent_after_open(open: &Pos) -> c_int {
     // SAFETY: the caller's position; the cursor is moved onto it first, so
     // `get_cursor_line_ptr` is the line `open.col` indexes into.
-    let win = Win::current_raw();
-    unsafe { (*win).w_cursor.lnum = open.lnum };
-    unsafe { (*win).w_cursor.col = open.col };
+    let mut win = Win::current();
+    win.w_cursor.lnum = open.lnum;
+    win.w_cursor.col = open.col;
     let line = get_cursor_line_ptr();
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(win), open.lnum, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, win, open.lnum, line) };
 
     // Walk to `open`'s column, measuring what is before it.
     let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
@@ -344,9 +342,9 @@ unsafe fn measure_first_argument(
 pub unsafe fn get_lisp_indent() -> c_int {
     // SAFETY: the caller's contract; the cursor is put back before returning
     // whichever path answers.
-    let win = Win::current_raw();
-    let realpos = unsafe { (*win).w_cursor };
-    unsafe { (*win).w_cursor.col = 0 };
+    let mut win = Win::current();
+    let realpos = win.w_cursor;
+    win.w_cursor.col = 0;
     let amount = match unsafe { enclosing_open() } {
         // No enclosing '(' or '[': no indent.
         None => 0,
@@ -355,7 +353,7 @@ pub unsafe fn get_lisp_indent() -> c_int {
             None => unsafe { indent_after_open(&open) },
         },
     };
-    unsafe { (*win).w_cursor = realpos };
+    win.w_cursor = realpos;
     amount
 }
 
@@ -418,10 +416,8 @@ pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
 /// There must be a current buffer.
 pub unsafe fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
-    let buf = Buf::current_raw();
-    unsafe {
-        (*buf).b_p_lisp != 0 && *(*buf).b_p_inde != 0 && cstr::eq_bytes((*buf).b_p_lop, b"expr:1")
-    }
+    let buf = Buf::current();
+    unsafe { buf.b_p_lisp != 0 && *buf.b_p_inde != 0 && cstr::eq_bytes(buf.b_p_lop, b"expr:1") }
 }
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.
@@ -433,8 +429,8 @@ pub unsafe fn fix_indent() {
         return; // no auto-indenting when 'paste' is set
     }
     // SAFETY: the caller's contract.
-    let buf = Buf::current_raw();
-    if unsafe { (*buf).b_p_lisp } != 0 && unsafe { (*buf).b_p_ai } != 0 {
+    let buf = Buf::current();
+    if buf.b_p_lisp != 0 && buf.b_p_ai != 0 {
         if unsafe { use_indentexpr_for_lisp() } {
             unsafe { do_c_expr_indent() };
         } else {
@@ -467,14 +463,14 @@ pub unsafe fn f_indent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 pub unsafe fn f_lispindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals; the cursor is moved onto the asked-for
     // line and put back.
-    let win = Win::current_raw();
-    let pos = unsafe { (*win).w_cursor };
+    let mut win = Win::current();
+    let pos = win.w_cursor;
     let lnum = unsafe { tv_get_lnum(args) };
     unsafe {
         (*result).vval.v_number = if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-            (*win).w_cursor.lnum = lnum;
+            win.w_cursor.lnum = lnum;
             let amount = get_lisp_indent() as VarNumber;
-            (*win).w_cursor = pos;
+            win.w_cursor = pos;
             amount
         } else {
             -1

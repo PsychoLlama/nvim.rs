@@ -29,7 +29,7 @@ pub unsafe fn nvim_exec_autocmds(
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
-    let mut b: *mut Buffer = Buf::current_raw();
+    let mut buffer: Option<Buf> = Buf::current_or_none();
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let event_array: Array = unsafe {
         unpack_string_or_array(
@@ -101,7 +101,7 @@ pub unsafe fn nvim_exec_autocmds(
             error = err_conflict(c"pattern", c"buf");
             return ().reported(error);
         }
-        b = find_buffer_by_handle(buf, &mut error).map_or(::core::ptr::null_mut(), Buf::raw);
+        buffer = find_buffer_by_handle(buf, &mut error);
         if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return ().reported(error);
         }
@@ -163,7 +163,7 @@ pub unsafe fn nvim_exec_autocmds(
                         ::core::ptr::null_mut::<::core::ffi::c_char>(),
                         true,
                         au_group,
-                        Buf::from_raw(b),
+                        buffer,
                         ::core::ptr::null_mut::<ExArg>(),
                         data,
                     )

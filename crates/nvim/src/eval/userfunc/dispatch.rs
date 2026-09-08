@@ -10,7 +10,6 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -283,9 +282,8 @@ pub unsafe fn call_func(
 
                 // Trigger FuncUndefined, which may load the function.
                 let event = AutoEvent::FuncUndefined;
-                let no_buf = ptr::null_mut();
                 if fp.is_null()
-                    && unsafe { apply_autocmds(event, rfname, rfname, true, Buf::from_raw(no_buf)) }
+                    && unsafe { apply_autocmds(event, rfname, rfname, true, None) }
                     && !aborting()
                 {
                     fp = unsafe { find_func(rfname) };

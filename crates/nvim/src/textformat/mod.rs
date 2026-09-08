@@ -96,23 +96,23 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// # Safety
 /// There must be a current window and buffer.
 pub unsafe fn comp_textwidth(ff: bool) -> c_int {
-    let win = Win::current_raw();
+    let win = Win::current();
     let mut textwidth = c_int::try_from(Buf::current().b_p_tw).unwrap_or(c_int::MAX);
     if textwidth == 0 && Buf::current().b_p_wm != 0 {
         let margin = c_int::try_from(Buf::current().b_p_wm).unwrap_or(c_int::MAX);
-        textwidth = unsafe { (*win).w_view_width } - margin;
+        textwidth = win.w_view_width - margin;
         if cmdwin_buf.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;
         }
-        textwidth -= unsafe { win_fdccol_count(Win::new(win)) };
-        textwidth -= unsafe { (*win).w_scwidth };
-        if unsafe { (*win).w_onebuf_opt.wo_nu } != 0 || unsafe { (*win).w_onebuf_opt.wo_rnu } != 0 {
+        textwidth -= win_fdccol_count(win);
+        textwidth -= win.w_scwidth;
+        if win.w_onebuf_opt.wo_nu != 0 || win.w_onebuf_opt.wo_rnu != 0 {
             textwidth -= 8;
         }
     }
     textwidth = textwidth.max(0);
     if ff && textwidth == 0 {
-        textwidth = (unsafe { (*win).w_view_width } - 1).min(79);
+        textwidth = (win.w_view_width - 1).min(79);
     }
     textwidth
 }

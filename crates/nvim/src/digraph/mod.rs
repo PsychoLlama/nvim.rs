@@ -665,12 +665,12 @@ const MAPTYPE_UNMAP: c_int = 1;
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Option<&'static CStr> {
-    let buf = Buf::current_raw();
+    let mut buf = Buf::current();
     // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
     // NUL-terminated option string.
     let keymap = unsafe {
-        (*buf).b_kmap_state &= !(KEYMAP_INIT as int16_t);
-        CStr::from_ptr((*buf).b_p_keymap).to_bytes().to_vec()
+        buf.b_kmap_state &= !(KEYMAP_INIT as int16_t);
+        CStr::from_ptr(buf.b_p_keymap).to_bytes().to_vec()
     };
     if keymap.is_empty() {
         // Stop any active keymap and clear the b:keymap_name variable.
@@ -726,22 +726,20 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     }
     // Stop any active keymap and load the new entries.
     keymap_unload();
-    let buf = Buf::current_raw();
-    // SAFETY: curbuf is valid and `keymap_unload` left its keymap garray
-    // cleared.
-    unsafe { (*buf).b_kmap_state = 0 };
-    unsafe { (*buf).b_kmap_ga.clear() };
+    // `keymap_unload` left the keymap garray cleared.
+    let mut buf = Buf::current();
+    buf.b_kmap_state = 0;
+    buf.b_kmap_ga.clear();
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
-    unsafe { read_keymap_entries(args, Buf::new(buf)) };
+    unsafe { read_keymap_entries(args, buf) };
     // SAFETY: the entries just read own two NUL-terminated strings each.
-    unsafe { apply_keymap_entries(Buf::new(buf)) };
+    unsafe { apply_keymap_entries(buf) };
     p_cpo.set(save_cpo);
-    // SAFETY: curbuf is still valid.
-    unsafe { (*buf).b_kmap_state |= KEYMAP_LOADED as int16_t };
+    buf.b_kmap_state |= KEYMAP_LOADED as int16_t;
     status_redraw_curbuf();
 }
 
@@ -828,17 +826,17 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
 
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
-    let buf = Buf::current_raw();
-    // SAFETY: curbuf is valid.
-    if unsafe { (*buf).b_kmap_state } as c_int & KEYMAP_LOADED == 0 {
+    let mut buf = Buf::current();
+    if buf.b_kmap_state as c_int & KEYMAP_LOADED == 0 {
         return;
     }
     // Set 'cpoptions' to "C" to avoid line continuation.
     let save_cpo = p_cpo.get();
     p_cpo.set(c"C".as_ptr() as *mut c_char);
-    // SAFETY: curbuf is valid. The commands are built before any of them
-    // runs, so `do_map` cannot be reading the list it is driven by.
-    let cmds: Vec<Vec<u8>> = unsafe { &(*buf).b_kmap_ga }
+    // The commands are built before any of them runs, so `do_map` cannot be
+    // reading the list it is driven by.
+    let cmds: Vec<Vec<u8>> = buf
+        .b_kmap_ga
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, None))
         .collect();
@@ -854,9 +852,9 @@ fn keymap_unload() {
         };
     }
     p_cpo.set(save_cpo);
-    // SAFETY: curbuf is valid; the entries own their two strings.
-    unsafe { (*buf).b_kmap_ga = Vec::new() };
-    unsafe { (*buf).b_kmap_state &= !(KEYMAP_LOADED as int16_t) };
+    // The entries own their two strings.
+    buf.b_kmap_ga = Vec::new();
+    buf.b_kmap_state &= !(KEYMAP_LOADED as int16_t);
     status_redraw_curbuf();
 }
 

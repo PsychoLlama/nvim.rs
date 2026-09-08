@@ -386,9 +386,8 @@ unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     // allowed from here.
     let locked = Lock::all_buffers();
     let name = buffer.b_fname;
-    let (no_io, no_buf) = (core::ptr::null_mut(), core::ptr::null_mut());
-    let __hoisted_0 = unsafe { Buf::from_raw(no_buf) };
-    unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, __hoisted_0) };
+    let no_io = core::ptr::null_mut();
+    unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, None) };
     drop(locked);
 
     unsafe { set_vim_var_string(Vv::Swapname, core::ptr::null(), -1) };

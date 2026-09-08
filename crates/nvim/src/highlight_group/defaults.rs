@@ -580,11 +580,10 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     }
     RECURSIVE.set(true);
 
-    let buf = Buf::current_raw();
-    // SAFETY: the editor's current buffer.
-    let fname = unsafe { (*buf).b_fname };
-    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
-    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, __hoisted_0) };
+    let buffer = Buf::current();
+    let fname = buffer.b_fname;
+    // SAFETY: the current buffer, and a NUL-terminated colour scheme name.
+    unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, Some(buffer)) };
     let mut pattern = [
         b"colors/",
         unsafe { CStr::from_ptr(name) }.to_bytes(),
@@ -595,11 +594,10 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     // SAFETY: a NUL-terminated pattern this frame owns.
     let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
     if retval.is_ok() {
-        let buf = Buf::current_raw();
-        // SAFETY: the editor's current buffer.
-        let fname = unsafe { (*buf).b_fname };
-        let __hoisted_1 = unsafe { Buf::from_raw(buf) };
-        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, __hoisted_1) };
+        let buffer = Buf::current();
+        let fname = buffer.b_fname;
+        // SAFETY: as above; the scheme's own file may have changed it.
+        unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, Some(buffer)) };
     }
 
     RECURSIVE.set(false);

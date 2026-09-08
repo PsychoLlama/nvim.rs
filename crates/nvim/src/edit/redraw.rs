@@ -130,8 +130,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         && !pum_visible()
     {
         let none = ::core::ptr::null_mut();
-        let buffer = Buf::current_raw();
-        let __hoisted_0 = unsafe { Buf::from_raw(buffer) };
+        let __hoisted_0 = Buf::current_or_none();
         unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, __hoisted_0) };
         Buf::current().b_changed_invalid = false;
     }

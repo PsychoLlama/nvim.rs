@@ -712,7 +712,7 @@ pub unsafe fn pum_redraw() {
     let mut grid = pum_grid_ref();
     // SAFETY: the placement functions have filled the state cells and the
     // item array is live.
-    let win = Win::current_raw();
+    let win = Win::current();
 
     // Room for one padding cell beside the text, when there is any.
     let mut grid_width = pum_width.get();
@@ -721,7 +721,7 @@ pub unsafe fn pum_redraw() {
     if pum_rl.get() {
         col_off = pum_width.get() - 1;
         debug_assert!(State.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
-        let win_end_col = unsafe { (*win).w_wincol } + unsafe { (*win).w_width };
+        let win_end_col = win.w_wincol + win.w_width;
         if pum_col.get() < win_end_col - 1 {
             grid_width += 1;
             extra_space = true;
@@ -815,12 +815,12 @@ pub unsafe fn pum_redraw() {
         col_off,
         extra_space,
         fcs_trunc: if pum_rl.get() {
-            unsafe { (*win).w_p_fcs_chars.truncrl }
+            win.w_p_fcs_chars.truncrl
         } else {
-            unsafe { (*win).w_p_fcs_chars.trunc }
+            win.w_p_fcs_chars.trunc
         },
-        attr_scroll: unsafe { win_hl_attr(Win::new(win), HLF_PSB) },
-        attr_thumb: unsafe { win_hl_attr(Win::new(win), HLF_PST) },
+        attr_scroll: unsafe { win_hl_attr(win, HLF_PSB) },
+        attr_thumb: unsafe { win_hl_attr(win, HLF_PST) },
         border_scroll: if border.width > 0 && !config.shadow {
             border.scrollbar
         } else {

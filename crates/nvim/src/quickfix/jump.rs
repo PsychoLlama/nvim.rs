@@ -394,7 +394,9 @@ unsafe fn qf_jump_to_buffer(
 ) -> Jumped {
     // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
-    let old_curbuf = Buf::current_raw();
+    // Held, not re-derived: `qf_jump_edit_buffer` below runs autocommands
+    // that can wipe this buffer, and everything downstream only compares it.
+    let old_curbuf = Buf::current();
     let old_lnum = Win::current().w_cursor.lnum;
 
     if qf_ptr.qf_fnum != 0 {
@@ -405,7 +407,7 @@ unsafe fn qf_jump_to_buffer(
         }
     }
     // Staying in the same buffer still sets the previous-context mark.
-    if Buf::current_raw() == old_curbuf {
+    if Buf::current_raw() == old_curbuf.raw() {
         setpcmark();
     }
     let lnum2 = qf_ptr.qf_lnum;
@@ -417,7 +419,7 @@ unsafe fn qf_jump_to_buffer(
         fold_open_cursor();
     }
     if print_message {
-        unsafe { qf_jump_print_msg(qi, qf_index, qf_ptr.raw(), Buf::new(old_curbuf), old_lnum) };
+        unsafe { qf_jump_print_msg(qi, qf_index, qf_ptr.raw(), old_curbuf, old_lnum) };
     }
     Jumped::Done
 }

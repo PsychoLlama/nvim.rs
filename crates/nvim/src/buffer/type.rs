@@ -235,9 +235,7 @@ pub fn set_buflisted(on: c_int) {
     } else {
         AutoEvent::BufDelete
     };
-    let raw = Buf::current_raw();
-
-    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
+    let __hoisted_0 = Buf::current_or_none();
 
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, __hoisted_0) };
 }

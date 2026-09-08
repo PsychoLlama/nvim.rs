@@ -522,12 +522,11 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // Pre-bound so that the eight-argument call still fits on one line.
     let (data, none) = (&mut event, ::core::ptr::null_mut());
     let (exarg, exited) = (::core::ptr::null_mut::<ExArg>(), status >= 0);
-    let (group, buf) = (AUGROUP_ALL, buf.raw());
+    let (group, buf) = (AUGROUP_ALL, Some(buf));
     // SAFETY: TermClose against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermClose;
-    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
-    unsafe { apply_autocmds_group(event, none, none, exited, group, __hoisted_0, exarg, data) };
+    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, exarg, data) };
     // SAFETY: paired with the `get_v_event` above.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 }

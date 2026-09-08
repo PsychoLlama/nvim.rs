@@ -13,7 +13,6 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
-use core::ptr;
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> Handle {
@@ -29,29 +28,29 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 ///
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
-    let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
-        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
-    } else {
-        ::core::ptr::null_mut::<Buffer>()
-    };
+    let existing = (cmdpreview_bufnr.get() != 0)
+        .then(|| find_buf(cmdpreview_bufnr.get()))
+        .flatten();
 
     // If the preview buffer doesn't exist, open one.
-    if cmdpreview_buf.is_null() {
-        let created = nvim_create_buf(false, true);
-        let Ok(bufnr) = created else {
-            return None;
-        };
-        cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |b| b.raw());
-    }
+    let cmdpreview_buf = match existing {
+        Some(buffer) => buffer,
+        None => {
+            let Ok(bufnr) = nvim_create_buf(false, true) else {
+                return None;
+            };
+            find_buf(bufnr)?
+        }
+    };
 
     // The preview buffer cannot preview itself.
-    if cmdpreview_buf == Buf::current_raw() {
+    if cmdpreview_buf == Buf::current() {
         return None;
     }
 
     // Rename the preview buffer.
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(cmdpreview_buf)) };
+    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
     let retv = unsafe { rename_buffer(c"[Preview]".as_ptr().cast_mut()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
 
@@ -60,16 +59,16 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
     }
 
     // Temporarily switch to the preview buffer to set it up.
-    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(cmdpreview_buf)) };
+    unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
     buf_clear();
     Buf::current().b_p_ma = 1;
     Buf::current().b_p_ul = -1;
     // Reset 'textwidth', which a ftplugin may have set.
     Buf::current().b_p_tw = 0;
     unsafe { aucmd_restbuf(&raw mut aco) };
-    cmdpreview_bufnr.set(unsafe { (*cmdpreview_buf).handle });
+    cmdpreview_bufnr.set(cmdpreview_buf.handle);
 
-    unsafe { Buf::from_raw(cmdpreview_buf) }
+    Some(cmdpreview_buf)
 }
 
 /// Open the command preview window, if it is not already open, and return to
@@ -86,7 +85,9 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
         return None;
     }
 
-    let preview_win = Win::current_raw();
+    // `do_buffer` below can run autocommands that close this window, so the
+    // identity is what survives the call; the address would not.
+    let preview_win = Win::current().id();
     let mut err: Error = Error::none();
 
     // Switch to the preview buffer. C's TRY_WRAP.
@@ -112,18 +113,15 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     Win::current().w_onebuf_opt.wo_fen = 0;
 
     win_enter(save_curwin, false);
-    unsafe { Win::from_raw(preview_win) }
+    preview_win.get()
 }
 
 /// Close any open command preview windows.
 pub(crate) fn cmdpreview_close_win() {
-    let buf = if cmdpreview_bufnr.get() != 0 {
-        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
-    } else {
-        ::core::ptr::null_mut::<Buffer>()
-    };
-    if !buf.is_null() {
-        unsafe { close_windows(Buf::new(buf), false) };
+    if cmdpreview_bufnr.get() != 0
+        && let Some(buffer) = find_buf(cmdpreview_bufnr.get())
+    {
+        close_windows(buffer, false);
     }
 }
 
@@ -402,8 +400,8 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // 'inccommand' = "split"
         let mut icm_split =
             unsafe { *p_icm.get() } as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
-        let mut cmdpreview_buf = ::core::ptr::null_mut::<Buffer>();
-        let mut cmdpreview_win = ::core::ptr::null_mut::<Window>();
+        let mut cmdpreview_buf: Option<Buf> = None;
+        let mut cmdpreview_win: Option<Win> = None;
 
         // Block error reporting (the command may be incomplete), but
         // still update v:errmsg; block messages, namely ones that prompt;
@@ -417,8 +415,8 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         // Open the preview buffer if 'inccommand' is "split".
         if icm_split && {
-            cmdpreview_buf = cmdpreview_open_buf().map_or(ptr::null_mut(), Buf::raw);
-            cmdpreview_buf.is_null()
+            cmdpreview_buf = cmdpreview_open_buf();
+            cmdpreview_buf.is_none()
         } {
             // Failed to create the preview buffer, so disable the preview.
             set_option_direct(
@@ -453,10 +451,8 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // With 'inccommand' = "split" and a callback answering 2, open the
         // preview window.
         if icm_split && cmdpreview_type == 2 && {
-            cmdpreview_win = unsafe {
-                cmdpreview_open_win(Buf::new(cmdpreview_buf)).map_or(ptr::null_mut(), Win::raw)
-            };
-            cmdpreview_win.is_null()
+            cmdpreview_win = cmdpreview_buf.and_then(cmdpreview_open_win);
+            cmdpreview_win.is_none()
         } {
             // Not enough room for the preview window: preview without it.
             cmdpreview_type = 1;
@@ -469,7 +465,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         }
 
         // Close the preview window if it is open.
-        if icm_split && cmdpreview_type == 2 && !cmdpreview_win.is_null() {
+        if icm_split && cmdpreview_type == 2 && cmdpreview_win.is_some() {
             cmdpreview_close_win();
         }
 

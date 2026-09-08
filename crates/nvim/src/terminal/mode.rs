@@ -408,9 +408,9 @@ pub(crate) fn terminal_enter() -> bool {
         s.term.refcount.retain();
     }
 
-    let __hoisted_0 = unsafe { Buf::from_raw(current_buf().raw()) };
+    let buffer = Some(current_buf());
 
-    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, __hoisted_0) };
+    unsafe { apply_autocmds(AutoEvent::TermLeave, none, none, false, buffer) };
     if s.close {
         s.term.refcount.release();
         let buf_handle = s.term.buf_handle;

@@ -408,7 +408,7 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
         // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
         unsafe { tv_dict_set_keys_readonly(v_event) };
 
-        let __hoisted_0 = unsafe { Buf::from_raw(buf.raw()) };
+        let __hoisted_0 = Some(buf);
 
         unsafe { apply_autocmds(AutoEvent::WinResized, name, name, false, __hoisted_0) };
     }

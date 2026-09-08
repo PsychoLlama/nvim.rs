@@ -562,10 +562,9 @@ unsafe fn keep_or_drop_dummy(
     // The Filetype autocommands and the modelines need to run now, in
     // that buffer — but not the window-local options.
     let mut aco = AcoSave::default();
-    let raw = buffer.raw();
     // SAFETY: a live buffer, entered and left again around the events.
-    unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
-    let __hoisted_0 = unsafe { Buf::from_raw(raw) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
+    let __hoisted_0 = Some(buffer);
     unsafe {
         apply_autocmds(
             AutoEvent::FileType,

@@ -408,11 +408,9 @@ pub(crate) unsafe fn find_decl(
     };
     let mut found;
     loop {
-        let wp = Win::current_raw();
-        // SAFETY: `wp` is the live window, so its cursor is live too.
-        let pos = unsafe { &raw mut (*wp).w_cursor };
-        // SAFETY: `curwin` and `curbuf` are the live window and buffer.
-        let (win, buf) = unsafe { (Some(Win::new(wp)), Buf::current()) };
+        let mut wp = Win::current();
+        let pos = &raw mut wp.w_cursor;
+        let (win, buf) = (Some(wp), Buf::current());
         let end = ptr::null_mut();
         let arg = ptr::null_mut();
         let opts = searchflags;

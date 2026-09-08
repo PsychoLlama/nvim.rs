@@ -196,9 +196,9 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: `save_v_event` is this frame's, and lives until the restore
     // below hands the saved dict back.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-    let buf = Buf::current_raw();
-    // SAFETY: `v_event` is the dict just built, the key is a static string
-    // of the length given, and `buf` is the current buffer.
+    let buffer = Buf::current();
+    // SAFETY: `v_event` is the dict just built, and the key is a static
+    // string of the length given.
     unsafe {
         let _ = tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, item);
         pum_set_event_info(v_event);
@@ -208,15 +208,13 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     recursive.set(true);
     let locked = Lock::text();
 
-    let __hoisted_0 = unsafe { Buf::from_raw(buf) };
-
     unsafe {
         apply_autocmds(
             AutoEvent::CompleteChanged,
             ptr::null_mut(),
             ptr::null_mut(),
             false,
-            __hoisted_0,
+            Some(buffer),
         );
     }
     drop(locked);
