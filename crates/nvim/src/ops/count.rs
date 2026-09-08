@@ -38,16 +38,16 @@ use crate::types::{IOSIZE, NUL};
 ///
 /// # Safety
 /// `line` must be NUL-terminated.
-unsafe fn line_count_info(
-    line: *mut c_char,
+fn line_count_info(
+    line: &[u8],
     wc: &mut VarNumber,
     cc: &mut VarNumber,
     limit: VarNumber,
     eol_size: c_int,
 ) -> VarNumber {
-    // SAFETY: the caller's promise -- the walk stops at the line's NUL, so
-    // every index it takes is inside the line.
-    let byte = |i: VarNumber| unsafe { *line.offset(i as isize) } as c_int;
+    // The walk stops at the end of the line, which `byte_at` answers as the
+    // NUL the pointer form stopped on.
+    let byte = |i: VarNumber| c_int::from(byte_at(line, i as usize));
     let mut words = 0;
     let mut chars = 0;
     let mut is_word = false;
@@ -63,7 +63,9 @@ unsafe fn line_count_info(
             is_word = true;
         }
         chars += 1;
-        i += VarNumber::from(unsafe { utfc_ptr2len(line.offset(i as isize)) });
+        // The guard above says `i` is inside the line, so the step is at
+        // least one byte and the walk terminates.
+        i += cluster_len(&line[i as usize..]) as VarNumber;
     }
 
     if is_word {
@@ -264,15 +266,15 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
                 chars_cursor: cc,
                 ..
             } = counts;
-            let line = ml_get(lnum);
-            let taken = unsafe { line_count_info(line, wc, cc, upto, eol_size) };
+            let mut lines = Lines::current();
+            let taken = line_count_info(lines.line(lnum), wc, cc, upto, eol_size);
             counts.bytes_cursor = counts.bytes + taken;
         }
 
         let PosCounts { words, chars, .. } = counts;
-        let line = ml_get(lnum);
         let all = VarNumber::from(MAXCOL);
-        counts.bytes += unsafe { line_count_info(line, words, chars, all, eol_size) };
+        let mut lines = Lines::current();
+        counts.bytes += line_count_info(lines.line(lnum), words, chars, all, eol_size);
     }
 
     // The last line has no EOL, so it was counted one byte too long.
@@ -294,19 +296,16 @@ fn count_selected_line(
     lnum: LineNr,
     eol_size: c_int,
 ) {
-    // SAFETY: `lnum` is a line of the current buffer, so `ml_get` answers a
-    // live NUL-terminated line and `start_col` is a column of it.
-    let mut s: *mut c_char = ::core::ptr::null_mut();
-    let mut len = 0;
-    if sel.mode.is_block() {
+    // `lnum` is a line of the current buffer, and `start_col` a column of it.
+    let span = if sel.mode.is_block() {
         virtual_op.set(Some(virtual_active(Win::current())));
+        // SAFETY: `sel.oparg` and `bd` are live, and `lnum` is in the region.
         unsafe { block_prep(&raw mut sel.oparg, &raw mut *bd, lnum, false) };
         virtual_op.set(None);
-        s = bd.textstart;
-        len = bd.textlen;
+        // `block_prep` puts `textstart` at `textcol` of the same line.
+        Some((bd.textcol, bd.textlen))
     } else if sel.mode.is_line() {
-        s = ml_get(lnum);
-        len = MAXCOL;
+        Some((0, MAXCOL))
     } else if sel.mode.is_char() {
         let start_col = if lnum == sel.min.lnum { sel.min.col } else { 0 };
         let end_col = if lnum == sel.max.lnum {
@@ -314,25 +313,30 @@ fn count_selected_line(
         } else {
             MAXCOL
         };
-        s = unsafe { ml_get(lnum).offset(start_col as isize) };
-        len = end_col;
-    }
+        Some((start_col, end_col))
+    } else {
+        None
+    };
 
-    if s.is_null() {
+    let Some((start_col, len)) = span else {
         return;
-    }
+    };
     let PosCounts {
         words_cursor: wc,
         chars_cursor: cc,
         ..
     } = counts;
-    let taken = unsafe { line_count_info(s, wc, cc, VarNumber::from(len), eol_size) };
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    let at = usize::try_from(start_col).unwrap_or(0).min(line.len());
+    let tail = line.len() - at;
+    let taken = line_count_info(&line[at..], wc, cc, VarNumber::from(len), eol_size);
     counts.bytes_cursor += taken;
     // The last line has no EOL, and the selection reaches its end.
     if lnum == Buf::current().line_count()
         && Buf::current().b_p_eol == 0
         && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
-        && (unsafe { cstr::bytes_at(s) }.len() as c_int) < len
+        && (tail as c_int) < len
     {
         counts.bytes_cursor -= VarNumber::from(eol_size);
     }
@@ -503,4 +507,48 @@ pub fn get_region_bytecount(
         return bytes;
     }
     bytes + end_col as BCount
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn count(line: &[u8], limit: VarNumber, eol_size: c_int) -> (VarNumber, VarNumber, VarNumber) {
+        let (mut words, mut chars) = (0, 0);
+        let bytes = line_count_info(line, &mut words, &mut chars, limit, eol_size);
+        (words, chars, bytes)
+    }
+
+    const ALL: VarNumber = MAXCOL as VarNumber;
+
+    #[test]
+    fn a_whole_line_counts_its_words_and_its_line_break() {
+        // The break is one byte and one character when the walk reaches the
+        // end of the line before the limit.
+        assert_eq!(count(b"one two three", ALL, 1), (3, 14, 14));
+        assert_eq!(count(b"", ALL, 1), (0, 1, 1));
+        // A `dos` fileformat's break is two of each.
+        assert_eq!(count(b"one", ALL, 2), (1, 5, 5));
+        // Trailing white space still ends the last word.
+        assert_eq!(count(b"one  ", ALL, 1), (1, 6, 6));
+        assert_eq!(count(b"  one", ALL, 1), (1, 6, 6));
+    }
+
+    #[test]
+    fn a_limit_stops_the_walk_before_the_break() {
+        // Four bytes of "one two": the break is not reached, so it is not
+        // counted -- which is how the cursor totals stop mid-line.
+        assert_eq!(count(b"one two", 4, 1), (1, 4, 4));
+        // Exactly the line's length: still short of the break.
+        assert_eq!(count(b"one", 3, 1), (1, 3, 3));
+    }
+
+    #[test]
+    fn a_character_counts_once_however_many_bytes_it_takes() {
+        // Two three-byte characters and a space: three characters, seven
+        // bytes, plus the break.
+        let line = "\u{4e00} \u{4e8c}".as_bytes();
+        assert_eq!(line.len(), 7);
+        assert_eq!(count(line, ALL, 1), (2, 4, 8));
+    }
 }

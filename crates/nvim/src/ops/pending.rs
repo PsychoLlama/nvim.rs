@@ -164,8 +164,14 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
 
     // Include the trailing byte of a multi-byte character.
     if op.inclusive {
-        // SAFETY: `op.end` is a position of the current buffer.
-        let l = unsafe { utfc_ptr2len(ml_get_pos(op.end().raw())) };
+        // `op.end` is a position of the current buffer, so the cache
+        // answers with the line it sits on.
+        let l = {
+            let mut lines = Lines::current();
+            let line = lines.line(op.end.lnum);
+            let col = usize::try_from(op.end.col).unwrap_or(0).min(line.len());
+            cluster_len(&line[col..]) as c_int
+        };
         if l > 1 {
             op.end.col += l - 1;
         }
@@ -373,10 +379,11 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
         if lt(visual_anchor(), Win::current().w_cursor) {
             set_visual_anchor(visual_anchor().with_col(0));
-            Win::current().w_cursor.col = ml_get_len(Win::current().w_cursor.lnum);
+            let lnum = Win::current().w_cursor.lnum;
+            Win::current().w_cursor.col = Lines::current().line_len(lnum);
         } else {
             Win::current().w_cursor.col = 0;
-            let end = ml_get_len(visual_anchor().lnum);
+            let end = Lines::current().line_len(visual_anchor().lnum);
             set_visual_anchor(visual_anchor().with_col(end));
         }
         set_visual_mode(VisualMode::CHAR);
@@ -427,8 +434,7 @@ fn order_region(mut op: Op) {
             }
             if let Some(last) = win.fold_end(op.start.lnum) {
                 op.start.lnum = last;
-                // SAFETY: a line of the current buffer.
-                op.start.col = ml_get_len(last);
+                op.start.col = Lines::current().line_len(last);
             }
         }
         op.end = op.start;
@@ -564,9 +570,13 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
         op.motion_type = kMTLineWise;
     } else if visual_mode().is_char() {
         op.motion_type = kMTCharWise;
-        // SAFETY: `op.end` is a position of the current buffer, and 'sel'
-        // is a NUL-terminated option string.
-        let ends_on_nul = unsafe { *ml_get_pos(op.end().raw()) } as c_int == NUL;
+        // `op.end` is a position of the current buffer, so the cache answers
+        // with the line it sits on; a column past its end reads as the NUL.
+        let ends_on_nul = {
+            let mut lines = Lines::current();
+            let line = lines.line(op.end.lnum);
+            byte_at(line, usize::try_from(op.end.col).unwrap_or(0)) == 0
+        };
         if ends_on_nul && (include_line_break || !op_virtual()) {
             op.inclusive = false;
             // Take the line break too, unless the operator only works on
@@ -628,8 +638,7 @@ fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
     if unsafe { inindent(0) } {
         op.motion_type = kMTLineWise;
     } else {
-        // SAFETY: a line of the current buffer.
-        op.end.col = ml_get_len(op.end.lnum);
+        op.end.col = Lines::current().line_len(op.end.lnum);
         if op.end.col != 0 {
             op.end.col -= 1;
             op.inclusive = true;

@@ -24,7 +24,7 @@
 use crate::guard::Suppress;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::edit::BeginlineOpts;
@@ -104,12 +104,15 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
         && op.motion_force == NUL
         && op.op_type == OpType::Delete
     {
-        let blank = unsafe {
-            let mut ptr = ml_get(op.end.lnum).offset(op.end.col as isize);
-            if *ptr as c_int != NUL {
-                ptr = ptr.offset(op.inclusive as isize);
+        let blank = {
+            let mut lines = Lines::current();
+            let line = lines.line(op.end.lnum);
+            let mut at = usize::try_from(op.end.col).unwrap_or(0);
+            if byte_at(line, at) != 0 {
+                at += usize::from(op.inclusive);
             }
-            *skipwhite(ptr) as c_int == NUL
+            let at = at.min(line.len());
+            skip::white(&line[at..]) == line.len() - at
         };
         if blank && unsafe { inindent(0) } {
             op.motion_type = kMTLineWise;
@@ -120,7 +123,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
     let empty_region = op.motion_type != kMTLineWise
         && op.line_count == 1
         && op.op_type == OpType::Delete
-        && unsafe { *ml_get(op.start.lnum) } as c_int == NUL;
+        && Lines::current().line(op.start.lnum).is_empty();
 
     if !empty_region {
         // Yank whatever is about to be deleted. `"_` takes nothing.
@@ -245,25 +248,37 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
                 Win::current().w_cursor.coladd = 0;
             }
 
-            // The line shrinks by the block's text minus the padding that
+            // The line loses the block's text and gains the padding that
             // replaces the characters it only partly covers -- and a
             // deleted TAB can be replaced by more spaces than it took, so
-            // `n` may be *negative* and the line grow. The arithmetic
-            // stays in `c_int` for that reason; upstream does it in
-            // `size_t` and relies on the wraparound.
-            let n = bd.textlen - bd.startspaces - bd.endspaces;
+            // the line may *grow*.  Upstream sizes the allocation as
+            // `oldlen - n` in `size_t` and relies on the wraparound when it
+            // does; here the two parts are counted separately, which needs
+            // no wraparound and is the same allocation.
             let pad = bd.startspaces + bd.endspaces;
-            // SAFETY: `newp` is sized for the line minus the block plus the
-            // padding, which is exactly what is written into it.
-            let oldp = ml_get(lnum);
-            let newp = unsafe { xmalloc((ml_get_len(lnum) - n + 1) as size_t) } as *mut c_char;
-            let into = newp.cast::<u8>();
-            unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
-            let at = unsafe { newp.offset(bd.textcol as isize) } as *mut c_void;
-            unsafe { at.cast::<u8>().write_bytes(b' ', pad as size_t) };
-            let tail = unsafe { oldp.offset((bd.textcol + bd.textlen) as isize) };
-            unsafe { strcpy(newp.offset((bd.textcol + pad) as isize), tail) };
-            let _ = unsafe { ml_replace(lnum, newp, false) };
+            // The line minus the block plus the padding.  The borrow ends
+            // before `ml_replace` writes it back.
+            let line = {
+                let mut lines = Lines::current();
+                let oldp = lines.line(lnum);
+                let at = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
+                let after = at + usize::try_from(bd.textlen).unwrap_or(0);
+                let mut line = Vec::with_capacity(oldp.len() + pad.max(0) as usize + 1);
+                line.extend_from_slice(&oldp[..at]);
+                line.resize(line.len() + pad as usize, b' ');
+                line.extend_from_slice(&oldp[after.min(oldp.len())..]);
+                line
+            };
+            // SAFETY: `line` holds exactly the bytes named, and `copy` is
+            // what hands the memline its own allocation of them.
+            let _ = unsafe {
+                ml_replace_len(
+                    lnum,
+                    line.as_ptr().cast_mut().cast::<c_char>(),
+                    line.len(),
+                    true,
+                )
+            };
             let row = lnum as c_int - 1;
             let buffer = Buf::current();
             extmark_splice_cols(buffer, row, bd.textcol, bd.textlen, pad, kExtmarkUndo);
@@ -493,11 +508,12 @@ pub(crate) unsafe fn mb_adjust_opend(op: *mut OpArg) {
     if !op.inclusive {
         return;
     }
-    let line: *const c_char = ml_get(op.end.lnum);
-    let mut ptr = unsafe { line.offset(op.end.col as isize) };
-    if unsafe { *ptr } as c_int != NUL {
-        ptr = unsafe { ptr.offset(-(utf_head_off(line, ptr) as isize)) };
-        ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) - 1) as isize) };
-        op.end.col = unsafe { ptr.offset_from(line) } as ColNr;
+    let mut lines = Lines::current();
+    let line = lines.line(op.end.lnum);
+    let at = usize::try_from(op.end.col).unwrap_or(0);
+    if byte_at(line, at) != 0 {
+        let at = at - head_off(line, at);
+        let at = at + cluster_len(&line[at..]) - 1;
+        op.end.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
     }
 }

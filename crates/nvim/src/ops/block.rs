@@ -31,7 +31,7 @@
 #![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, PosRef, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::r#move::WinValid;
@@ -46,15 +46,8 @@ use crate::types::NUL;
 /// prepares undo.
 ///
 /// # Safety
-/// `op` and `bdp` must point to live structs; `s` must be `slen` readable
-/// bytes.
-pub(crate) unsafe fn block_insert(
-    op: *mut OpArg,
-    s: *const c_char,
-    slen: size_t,
-    b_insert: bool,
-    bdp: *mut BlockDef,
-) {
+/// `op` and `bdp` must point to live structs.
+pub(crate) unsafe fn block_insert(op: *mut OpArg, s: &[u8], b_insert: bool, bdp: *mut BlockDef) {
     // SAFETY: the caller's promise -- both point to live structs.
     let (op, bdp) = unsafe { (&mut *op, &mut *bdp) };
     let old_state = State.get();
@@ -70,10 +63,6 @@ pub(crate) unsafe fn block_insert(
             lnum += 1;
             continue;
         }
-
-        // SAFETY: `lnum` is a line of the current buffer.
-        let mut oldp = ml_get(lnum);
-        let oldlen = ml_get_len(lnum) as size_t;
 
         // `spaces` is non-zero when a TAB has to be cut, and `count` the
         // extra spaces that replace it. `ts_val` is the cut character's
@@ -112,63 +101,60 @@ pub(crate) unsafe fn block_insert(
             offset = bdp.textcol + bdp.textlen;
         }
 
-        if spaces > 0 {
-            // Do not copy part of a multi-byte character.
-            // SAFETY: `offset` is a byte index into the line.
-            offset -= unsafe { utf_head_off(oldp, oldp.offset(offset as isize)) };
-        }
-        // Can go negative when the cursor was moved.
-        spaces = spaces.max(0);
-        debug_assert!(count >= 0);
-
-        // The allocation has to match exactly what is copied below.
-        let extra = if spaces > 0 && bdp.is_short == 0 {
-            (ts_val - spaces) as size_t
-        } else {
-            0
-        };
-        let size = oldlen + spaces as size_t + slen + extra + count as size_t + 1;
-        // SAFETY: `size` counts every byte the rebuild below writes, the
-        // terminating NUL included.
-        let newp = unsafe { xmalloc(size) } as *mut c_char;
-
-        let startcol = offset;
+        // The rebuilt line, and where the tail of the old one resumes. The
+        // borrow ends before `ml_replace` writes it back.
         let mut skipped = 0;
-        // SAFETY: `newp` was allocated for exactly what is written here, and
-        // `oldp` is a NUL-terminated buffer line at least `offset` bytes long.
-        // Up to the shifted part.
-        unsafe { newp.cast::<u8>().copy_from(oldp.cast(), offset as size_t) };
-        oldp = unsafe { oldp.offset(offset as isize) };
+        let (line, startcol) = {
+            let mut lines = Lines::current();
+            let oldp = lines.line(lnum);
 
-        // Pre-padding, then the new text.
-        let pad = unsafe { newp.offset(offset as isize) } as *mut c_void;
-        unsafe { pad.cast::<u8>().write_bytes(b' ', spaces as size_t) };
-        let at = unsafe { newp.offset((offset + spaces as ColNr) as isize) } as *mut c_void;
-        unsafe { at.cast::<u8>().copy_from(s.cast(), slen) };
-        offset += slen as ColNr;
-
-        if spaces > 0 && bdp.is_short == 0 {
-            if unsafe { *oldp } as c_int == TAB {
-                // Post-padding: the rest of the TAB being split, which is
-                // then dropped rather than copied.
-                let tail =
-                    unsafe { newp.offset((offset + spaces as ColNr) as isize) } as *mut c_void;
-                let into = tail.cast::<u8>();
-                unsafe { into.write_bytes(b' ', (ts_val - spaces) as size_t) };
-                oldp = unsafe { oldp.offset(1) };
-                count += 1;
-                skipped = 1;
-            } else {
-                // Not a TAB, so no extra spaces.
-                count = spaces;
+            if spaces > 0 {
+                // Do not copy part of a multi-byte character.
+                offset -= head_off(oldp, offset as usize) as ColNr;
             }
-        }
-        if spaces > 0 {
-            offset += count;
-        }
-        unsafe { strcpy(newp.offset(offset as isize), oldp) };
+            // Can go negative when the cursor was moved.
+            spaces = spaces.max(0);
+            debug_assert!(count >= 0);
 
-        let _ = unsafe { ml_replace(lnum, newp, false) };
+            let at = usize::try_from(offset).unwrap_or(0).min(oldp.len());
+            let mut line = Vec::with_capacity(oldp.len() + spaces as usize + s.len() + 1);
+            line.extend_from_slice(&oldp[..at]);
+            line.resize(line.len() + spaces as usize, b' ');
+            line.extend_from_slice(s);
+
+            let startcol = offset;
+            offset += s.len() as ColNr;
+            let mut tail = at;
+            if spaces > 0 && bdp.is_short == 0 {
+                if byte_at(oldp, at) == TAB as u8 {
+                    // Post-padding: the rest of the TAB being split, which
+                    // is then dropped rather than copied.
+                    line.resize(line.len() + (ts_val - spaces) as usize, b' ');
+                    tail = at + 1;
+                    count += 1;
+                    skipped = 1;
+                } else {
+                    // Not a TAB, so no extra spaces.
+                    count = spaces;
+                }
+            }
+            if spaces > 0 {
+                offset += count;
+            }
+            line.extend_from_slice(&oldp[tail.min(oldp.len())..]);
+            (line, startcol)
+        };
+
+        // SAFETY: `line` holds exactly the bytes named, and `copy` is what
+        // hands the memline its own allocation of them.
+        let _ = unsafe {
+            ml_replace_len(
+                lnum,
+                line.as_ptr().cast_mut().cast::<c_char>(),
+                line.len(),
+                true,
+            )
+        };
         let splice = offset - startcol;
         extmark_splice_cols(
             Buf::current(),

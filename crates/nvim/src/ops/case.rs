@@ -39,7 +39,7 @@ use super::*;
 pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // `pos` walks that region, so it names a position of the buffer at every
-    // step, which is what `swapchars`, `inc` and `ml_get_pos_len` ask for.
+    // step, which is what `swapchars` and `inc` ask for.
     let mut op = unsafe { Op::new(op) };
     let mut did_change = false;
 
@@ -65,7 +65,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         if op.motion_type == kMTLineWise {
             op.start.col = 0;
             pos.col = 0;
-            op.end.col = ml_get_len(op.end.lnum);
+            op.end.col = Lines::current().line_len(op.end.lnum);
             if op.end.col != 0 {
                 op.end.col -= 1;
             }
@@ -81,7 +81,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
                 let len = if pos.lnum == op.end.lnum {
                     op.end.col + 1
                 } else {
-                    unsafe { ml_get_pos_len(&raw mut pos) }
+                    Lines::current().line_len(pos.lnum) - pos.col
                 };
                 did_change |= unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
                 // `inc` answers -1 at the end of the buffer; either exit
@@ -131,8 +131,15 @@ unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
     let mut did_change: c_int = 0;
     let mut todo = length;
     while todo > 0 {
-        // We are counting bytes, not characters.
-        let len = unsafe { utfc_ptr2len(ml_get_pos(pos)) };
+        // We are counting bytes, not characters.  The borrow ends before
+        // `swapchar` writes the line.
+        let len = {
+            let at = unsafe { *pos };
+            let mut lines = Lines::current();
+            let line = lines.line(at.lnum);
+            let col = usize::try_from(at.col).unwrap_or(0).min(line.len());
+            c_int::try_from(cluster_len(&line[col..])).unwrap_or(1)
+        };
         if len > 0 {
             todo -= len - 1;
         }

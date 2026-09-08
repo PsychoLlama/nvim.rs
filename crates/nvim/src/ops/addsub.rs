@@ -188,21 +188,21 @@ fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
     if op.motion_type == kMTLineWise {
         Win::current().w_cursor.col = 0;
         pos.col = 0;
-        return ml_get_len(pos.lnum);
+        return Lines::current().line_len(pos.lnum);
     }
 
     // Charwise: the first and last lines are clipped to the region.
     if pos.lnum == op.start.lnum && !op.inclusive {
         unsafe { dec(&mut op.end) };
     }
-    let mut length = ml_get_len(pos.lnum);
+    let mut length = Lines::current().line_len(pos.lnum);
     pos.col = 0;
     if pos.lnum == op.start.lnum {
         pos.col += op.start.col;
         length -= op.start.col;
     }
     if pos.lnum == op.end.lnum {
-        length = ml_get_len(op.end.lnum);
+        length = Lines::current().line_len(op.end.lnum);
         op.end.col = op.end.col.min(length - 1);
         length = op.end.col - pos.col + 1;
     }
@@ -236,8 +236,12 @@ pub unsafe fn do_addsub(
     }
 
     Win::current().w_cursor = *pos;
-    let ptr = ml_get(pos.lnum);
-    let linelen = ml_get_len(pos.lnum);
+    // A copy: the number is *replaced* below, by deletions and insertions
+    // that re-enter the editor, and the scan's reads of the line have to
+    // survive them.  The copy keeps the line's terminator, which every walk
+    // here stops on.
+    let text = Lines::current().line_copy(pos.lnum);
+    let linelen = ColNr::try_from(text.len()).unwrap_or(ColNr::MAX);
     let mut col = pos.col;
 
     let mut did_change = false;
@@ -247,9 +251,9 @@ pub unsafe fn do_addsub(
         let mut blank_unsigned = false;
 
         if !visual {
-            col = unsafe { find_number_start(ptr, pos.col, &fmt) };
+            col = find_number_start(&text, pos.col, &fmt);
         } else {
-            match unsafe { visual_skip_to_number(ptr, col, length, &fmt) } {
+            match visual_skip_to_number(&text, col, length, &fmt) {
                 Some((c, l)) => {
                     col = c;
                     length = l;
@@ -257,7 +261,7 @@ pub unsafe fn do_addsub(
                 // The selection holds no number at all.
                 None => return finish_addsub(visual, false, save_cursor, save_coladd),
             }
-            match unsafe { minus_before(ptr, col, pos.col, &fmt) } {
+            match minus_before(&text, col, pos.col, &fmt) {
                 Minus::Absent => {}
                 Minus::Negative => {
                     negative = true;
@@ -267,7 +271,7 @@ pub unsafe fn do_addsub(
             }
         }
 
-        let firstdigit = unsafe { *ptr.offset(col as isize) } as u8 as c_int;
+        let firstdigit = c_int::from(byte_at(&text, col as usize));
         let is_alpha = fmt.alpha && ascii_isalpha(firstdigit);
         if !ascii_isdigit(firstdigit) && !is_alpha {
             beep_flush();
@@ -276,7 +280,7 @@ pub unsafe fn do_addsub(
                 unsafe { bump_alpha_char(firstdigit, op_type, prenum1, col) }
             } else {
                 let scan = Scan {
-                    ptr,
+                    text: &text,
                     linelen,
                     col,
                     firstdigit,
@@ -325,23 +329,21 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: 
 /// falls back to searching forwards for a digit and then backwards to that
 /// number's first one.
 ///
-/// # Safety
-/// `text` must be a NUL-terminated line and `start_col` a column in it.
-unsafe fn find_number_start(text: *mut c_char, start_col: ColNr, fmt: &NrFormats) -> ColNr {
-    // SAFETY: the caller's promise -- every column the walks below reach is
-    // one of `text`'s, the terminating NUL included, and the walks stop there.
-    let byte = |c: ColNr| unsafe { *text.offset(c as isize) } as c_int;
+fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
+    // Every column the walks below reach is one of `text`'s, the terminator
+    // included -- which `byte_at` answers as NUL -- and the walks stop there.
+    let byte = |c: ColNr| c_int::from(byte_at(text, c as usize));
     // Step back one character, not one byte.
     let back = |c: ColNr| {
         let c = c - 1;
-        c - unsafe { utf_head_off(text, text.offset(c as isize)) }
+        c - head_off(text, c as usize) as ColNr
     };
     // `0x`/`0b` at `col`, with a digit of that base after it.
     let prefixed_at = |c: ColNr, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
         c > 0
             && (byte(c) == c_int::from(upper) || byte(c) == c_int::from(lower))
             && byte(c - 1) == '0' as c_int
-            && unsafe { utf_head_off(text, text.offset(c as isize).offset(-1)) } == 0
+            && head_off(text, (c - 1) as usize) == 0
             && digit(byte(c + 1))
     };
 
@@ -389,22 +391,19 @@ unsafe fn find_number_start(text: *mut c_char, start_col: ColNr, fmt: &NrFormats
 /// Answers the column it starts at and how much of the selection is left, or
 /// `None` when the selection runs out first.
 ///
-/// # Safety
-/// `text` must be a NUL-terminated line and `col` a column in it.
-unsafe fn visual_skip_to_number(
-    text: *mut c_char,
+fn visual_skip_to_number(
+    text: &[u8],
     mut col: ColNr,
     mut length: c_int,
     fmt: &NrFormats,
 ) -> Option<(ColNr, c_int)> {
-    // SAFETY: the caller's promise -- `col` stays a column of `text`.
-    let byte = |c: ColNr| unsafe { *text.offset(c as isize) } as c_int;
+    let byte = |c: ColNr| c_int::from(byte_at(text, c as usize));
     while byte(col) != NUL
         && length > 0
         && !ascii_isdigit(byte(col))
         && !(fmt.alpha && ascii_isalpha(byte(col)))
     {
-        let mb_len = unsafe { utfc_ptr2len(text.offset(col as isize)) };
+        let mb_len = cluster_len(&text[(col as usize).min(text.len())..]) as c_int;
         col += mb_len;
         length -= mb_len;
     }
@@ -416,20 +415,16 @@ unsafe fn visual_skip_to_number(
 /// `min_col` is the first column the caller is willing to look before: the
 /// selection's start in Visual mode, 0 outside it.
 ///
-/// # Safety
-/// `text` must be a NUL-terminated line and `col` a column in it.
-unsafe fn minus_before(text: *mut c_char, col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
-    // SAFETY: the caller's promise -- `col` is a column of `text`, and each
-    // read below is guarded by the bound that keeps it inside the line.
+fn minus_before(text: &[u8], col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
+    // Each read below is guarded by the bound that keeps it inside the line.
     if !(col > min_col
-        && unsafe { *text.offset((col - 1) as isize) } as c_int == '-' as c_int
-        && unsafe { utf_head_off(text, text.offset(col as isize).offset(-1)) } == 0
+        && byte_at(text, (col - 1) as usize) == b'-'
+        && head_off(text, (col - 1) as usize) == 0
         && !fmt.unsigned)
     {
         return Minus::Absent;
     }
-    if fmt.blank && col >= 2 && !ascii_iswhite(unsafe { *text.offset((col - 2) as isize) } as c_int)
-    {
+    if fmt.blank && col >= 2 && !ascii_iswhite(c_int::from(byte_at(text, (col - 2) as usize))) {
         Minus::BlankUnsigned
     } else {
         Minus::Negative
@@ -481,9 +476,9 @@ unsafe fn bump_alpha_char(
 }
 
 /// What the scan for the number found, handed to [`replace_number`].
-struct Scan {
-    /// The line the number is in.
-    ptr: *mut c_char,
+struct Scan<'a> {
+    /// The line the number is in, copied out of the buffer.
+    text: &'a [u8],
     /// Its length in bytes.
     linelen: c_int,
     /// Column the number starts at.
@@ -506,8 +501,8 @@ struct Scan {
 /// Answers the `'[`/`']` positions.
 ///
 /// # Safety
-/// `scan.ptr` must be the current buffer's line at `pos.lnum`, and the cursor
-/// must be on it.
+/// `scan.text` must be a copy of the cursor's line, and the cursor must be
+/// on it.
 unsafe fn replace_number(
     op_type: OpType,
     length: &mut c_int,
@@ -516,7 +511,7 @@ unsafe fn replace_number(
     scan: Scan,
 ) -> (Pos, Pos) {
     let Scan {
-        ptr,
+        text,
         linelen,
         mut col,
         firstdigit,
@@ -526,10 +521,8 @@ unsafe fn replace_number(
         mut blank_unsigned,
     } = scan;
 
-    // SAFETY: the caller's promise -- `scan.ptr` is the cursor's line and
-    // `col` a column of it, which is what every call below asks for.
     if !visual {
-        match unsafe { minus_before(ptr, col, 0, fmt) } {
+        match minus_before(text, col, 0, fmt) {
             Minus::Absent => {}
             Minus::Negative => {
                 col -= 1;
@@ -559,9 +552,15 @@ unsafe fn replace_number(
         | Str2NrBases::OCT.when(fmt.oct)
         | Str2NrBases::HEX.when(fmt.hex);
     let none = ::core::ptr::null_mut();
-    let at = unsafe { ptr.offset(col as isize) };
     let (prep, np, op) = (&raw mut pre, &raw mut n, &raw mut overflow);
-    unsafe { vim_str2nr(at, prep, length, bases, none, np, maxlen, false, op) };
+    // SAFETY: `text` is a copy of the line that kept its terminator, so the
+    // byte at `col` starts a NUL-terminated string -- which is all
+    // `vim_str2nr` reads, and it reads it before anything below changes the
+    // buffer.
+    unsafe {
+        let at = text.as_ptr().add(col as usize).cast::<c_char>();
+        vim_str2nr(at, prep, length, bases, none, np, maxlen, false, op);
+    };
 
     // A leading `-` is not a sign for hex, octal or binary.
     if pre != 0 && negative {
@@ -767,4 +766,99 @@ fn format_binary(n: UVarNumber, out: &mut [c_char; NUMBUFLEN as usize]) -> c_int
     }
     out[len] = NUL as c_char;
     len as c_int
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 'nrformats' with only the bases named, which is what keeps
+    /// [`find_number_start`] out of its `bin`-and-`hex` rescan -- the one
+    /// branch that reads the cursor, and so the one the library harness
+    /// cannot reach.
+    fn formats(hex: bool, bin: bool) -> NrFormats {
+        NrFormats {
+            hex,
+            oct: false,
+            bin,
+            alpha: false,
+            unsigned: false,
+            blank: false,
+        }
+    }
+
+    #[test]
+    fn a_number_starts_where_its_digits_do() {
+        let fmt = formats(true, false);
+        // From inside the number, back to its first digit.
+        assert_eq!(find_number_start(b"x = 123;", 5, &fmt), 4);
+        assert_eq!(find_number_start(b"x = 123;", 4, &fmt), 4);
+        // From before it, forwards to the first digit.
+        assert_eq!(find_number_start(b"x = 123;", 0, &fmt), 4);
+        // A `0x` prefix is part of the number.
+        assert_eq!(find_number_start(b"n = 0x1f;", 7, &fmt), 4);
+        // Without `x` in 'nrformats' the letter is not a prefix and the
+        // backwards scans do not run at all: the answer is the first digit
+        // at or after the column, and the `f` of `1f` is not one.
+        assert_eq!(
+            find_number_start(b"n = 0x1f;", 6, &formats(false, false)),
+            6
+        );
+        assert_eq!(
+            find_number_start(b"n = 0x1f;", 7, &formats(false, false)),
+            9
+        );
+    }
+
+    #[test]
+    fn a_binary_prefix_is_recognised_on_its_own() {
+        let fmt = formats(false, true);
+        assert_eq!(find_number_start(b"n = 0b101;", 8, &fmt), 4);
+    }
+
+    #[test]
+    fn the_selection_skips_forward_to_a_number() {
+        let fmt = formats(true, false);
+        // Six bytes of "ab 12": the digits start at 3.
+        assert_eq!(visual_skip_to_number(b"ab 12", 0, 5, &fmt), Some((3, 2)));
+        // The selection runs out first.
+        assert_eq!(visual_skip_to_number(b"abcd 1", 0, 4, &fmt), None);
+        // A multibyte character is one step, not one byte.
+        let line = "\u{4e00}9".as_bytes();
+        assert_eq!(visual_skip_to_number(line, 0, 4, &fmt), Some((3, 1)));
+    }
+
+    #[test]
+    fn a_minus_belongs_to_the_number_unless_the_option_says_not() {
+        let plain = formats(true, false);
+        assert!(matches!(
+            minus_before(b"x -12", 3, 0, &plain),
+            Minus::Negative
+        ));
+        // No `-` there at all.
+        assert!(matches!(minus_before(b"x 12", 2, 0, &plain), Minus::Absent));
+        // `min_col` is how far back the caller allows the look.
+        assert!(matches!(
+            minus_before(b"x -12", 3, 3, &plain),
+            Minus::Absent
+        ));
+        // 'nrformats' `u`: a `-` is never a sign.
+        let mut unsigned = formats(true, false);
+        unsigned.unsigned = true;
+        assert!(matches!(
+            minus_before(b"x -12", 3, 0, &unsigned),
+            Minus::Absent
+        ));
+        // 'nrformats' `k`: a `-` is only a sign after white space.
+        let mut blank = formats(true, false);
+        blank.blank = true;
+        assert!(matches!(
+            minus_before(b"x -12", 3, 0, &blank),
+            Minus::Negative
+        ));
+        assert!(matches!(
+            minus_before(b"xx-12", 3, 0, &blank),
+            Minus::BlankUnsigned
+        ));
+    }
 }

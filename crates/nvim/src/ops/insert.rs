@@ -29,7 +29,7 @@
 
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::types::NUL;
@@ -137,7 +137,7 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
     }
 
     unsafe { block_prep(op.raw(), &raw mut *bd, op.start.lnum, true) };
-    let mut pre_textlen = ml_get_len(op.start.lnum) - bd.textcol;
+    let mut pre_textlen = Lines::current().line_len(op.start.lnum) - bd.textcol;
     if op.op_type == OpType::Append {
         pre_textlen -= bd.textlen;
     }
@@ -176,9 +176,8 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
         Win::current().w_cursor = op.end;
         check_cursor_col(Win::current());
         // Works just like `i` on the next character.
-        if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int != NUL
-            && op.start_vcol != op.end_vcol
-        {
+        let lnum = Win::current().w_cursor.lnum;
+        if !Lines::current().line(lnum).is_empty() && op.start_vcol != op.end_vcol {
             inc_cursor();
         }
     }
@@ -260,10 +259,9 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
         bd.textlen = bd2.textlen;
     }
 
-    // A later `ml_get` flushes the line data, so the inserted text has to
-    // be copied out before anything else touches the buffer.
-    let mut firstline = ml_get(op.start.lnum);
-    let mut len = ml_get_len(op.start.lnum);
+    // A later read flushes the line data, so the inserted text has to be
+    // copied out before anything else touches the buffer.
+    let mut len = Lines::current().line_len(op.start.lnum);
     let mut add = bd.textcol;
     // How far the cursor was moved during the insert.
     let mut offset: ColNr = 0;
@@ -284,23 +282,30 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
             op.end_vcol -= offset + 1;
         }
     }
-    // A short line: point at the NUL.
+    // A short line: start at its end.
     add = add.min(len);
-    firstline = unsafe { firstline.offset(add as isize) };
     len -= add;
 
     let ins_len = len - pre.pre_textlen - offset;
     if pre.pre_textlen >= 0 && ins_len > 0 {
-        let n = ins_len as size_t;
-        let ins_text = unsafe { xmemdupz(firstline as *const c_void, n) } as *mut c_char;
+        // The arithmetic above says the span is inside the line; clamped
+        // anyway, because a wrong `pre_textlen` would otherwise panic where
+        // upstream read past the end.
+        let ins_text = {
+            let mut lines = Lines::current();
+            let firstline = lines.line(op.start.lnum);
+            let at = usize::try_from(add).unwrap_or(0).min(firstline.len());
+            let end = (at + ins_len as usize).min(firstline.len());
+            firstline[at..end].to_vec()
+        };
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
         if u_save(first, last).is_ok() {
             let insert = op.op_type == OpType::Insert;
-            unsafe { block_insert(op.raw(), ins_text, n, insert, &raw mut *bd) };
+            // SAFETY: `op` and `bd` are live, and the text is this scope's.
+            unsafe { block_insert(op.raw(), &ins_text, insert, &raw mut *bd) };
         }
         Win::current().w_cursor.col = op.start.col;
         check_cursor(Win::current());
-        unsafe { xfree(ins_text as *mut c_void) };
     }
 }
 
@@ -332,8 +337,9 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
         return 0;
     }
 
+    let cursor_lnum = Win::current().w_cursor.lnum;
     if l > Win::current().w_cursor.col
-        && unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int != NUL
+        && !Lines::current().line(cursor_lnum).is_empty()
         && !op_virtual()
     {
         inc_cursor();
@@ -347,9 +353,10 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
         if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
             unsafe { coladvance_force(getviscol()) };
         }
-        let firstline = ml_get(op.start.lnum);
-        pre_textlen = ml_get_len(op.start.lnum);
-        pre_indent = unsafe { getwhitecols(firstline) } as c_int;
+        let mut lines = Lines::current();
+        let firstline = lines.line(op.start.lnum);
+        pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX);
+        pre_indent = skip::white(firstline) as c_int;
         bd.textcol = Win::current().w_cursor.col;
     }
 
@@ -378,28 +385,32 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
 ///
 /// `op` must be blockwise, and `bd.textcol` the column the insert started at.
 fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: c_int) {
-    // SAFETY: every line the walk reaches is one of the region's, so it is a
-    // line of the current buffer.
-    let firstline = ml_get(op.start.lnum);
-    // Auto-indenting may have changed the indent. If the cursor was past
-    // the indent, that change is not part of the inserted text.
-    if bd.textcol > pre_indent {
-        let new_indent = unsafe { getwhitecols(firstline) } as c_int;
-        pre_textlen += new_indent - pre_indent;
-        bd.textcol += new_indent - pre_indent;
-    }
-
-    let ins_len = ml_get_len(op.start.lnum) - pre_textlen;
-    if ins_len <= 0 {
-        return;
-    }
-
-    // A later `ml_get` flushes the line data, so take a copy first.
-    // SAFETY: `ins_text` has room for `ins_len` bytes and the NUL, and
-    // `bd.textcol` is a column of `firstline`.
-    let ins_text = unsafe { xmalloc(ins_len as size_t + 1) } as *mut c_char;
-    let at = unsafe { firstline.offset(bd.textcol as isize) } as *const c_void;
-    unsafe { xmemcpyz(ins_text as *mut c_void, at, ins_len as size_t) };
+    // Every line the walk reaches is one of the region's, so it is a line of
+    // the current buffer.  A later read flushes the line data, so the
+    // inserted text is copied out before anything else touches the buffer.
+    let (ins_len, ins_text) = {
+        let mut lines = Lines::current();
+        let firstline = lines.line(op.start.lnum);
+        // Auto-indenting may have changed the indent. If the cursor was past
+        // the indent, that change is not part of the inserted text.
+        if bd.textcol > pre_indent {
+            let new_indent = skip::white(firstline) as c_int;
+            pre_textlen += new_indent - pre_indent;
+            bd.textcol += new_indent - pre_indent;
+        }
+        let ins_len = firstline.len() as c_int - pre_textlen;
+        if ins_len <= 0 {
+            return;
+        }
+        // Clamped for the same reason as in `copy_first_line_to_block`, and
+        // the length taken from what was copied so the two cannot disagree.
+        let at = usize::try_from(bd.textcol)
+            .unwrap_or(0)
+            .min(firstline.len());
+        let end = (at + ins_len as usize).min(firstline.len());
+        let text = firstline[at..end].to_vec();
+        (text.len() as c_int, text)
+    };
 
     let mut linenr = op.start.lnum + 1;
     while linenr <= op.end.lnum {
@@ -418,30 +429,31 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
                 unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), op.start_vcol) };
             }
 
-            // SAFETY: `newp` is sized for the old line, the pad and the
-            // inserted text, which is exactly what is written into it.
-            let oldp = ml_get(linenr);
-            let old_len = ml_get_len(linenr) as size_t;
-            let size = old_len + vpos.coladd as size_t + ins_len as size_t + 1;
-            let newp = unsafe { xmalloc(size) } as *mut c_char;
-            // Up to the block's column, then the pad, then the text.
-            let into = newp.cast::<u8>();
-            unsafe { into.copy_from(oldp.cast(), bd.textcol as size_t) };
-            let mut newlen = bd.textcol;
-            let pad = unsafe { newp.offset(newlen as isize) } as *mut c_void;
-            unsafe { pad.cast::<u8>().write_bytes(b' ', vpos.coladd as size_t) };
-            newlen += vpos.coladd;
-            let at = unsafe { newp.offset(newlen as isize) } as *mut c_void;
-            let into = at.cast::<u8>();
-            unsafe { into.copy_from(ins_text.cast(), ins_len as size_t) };
-            newlen += ins_len;
-            unsafe {
-                strcpy(
-                    newp.offset(newlen as isize),
-                    oldp.offset(bd.textcol as isize),
+            // Up to the block's column, then the pad, then the text, then
+            // the rest of the old line.  The borrow ends before
+            // `ml_replace` writes it back.
+            let line = {
+                let mut lines = Lines::current();
+                let oldp = lines.line(linenr);
+                let at = usize::try_from(bd.textcol).unwrap_or(0).min(oldp.len());
+                let mut line =
+                    Vec::with_capacity(oldp.len() + vpos.coladd as usize + ins_len as usize + 1);
+                line.extend_from_slice(&oldp[..at]);
+                line.resize(line.len() + vpos.coladd as usize, b' ');
+                line.extend_from_slice(&ins_text);
+                line.extend_from_slice(&oldp[at..]);
+                line
+            };
+            // SAFETY: `line` holds exactly the bytes named, and `copy` is
+            // what hands the memline its own allocation of them.
+            let _ = unsafe {
+                ml_replace_len(
+                    linenr,
+                    line.as_ptr().cast_mut().cast::<c_char>(),
+                    line.len(),
+                    true,
                 )
             };
-            let _ = unsafe { ml_replace(linenr, newp, false) };
             let splice = vpos.coladd + ins_len;
             let row = linenr as c_int - 1;
             let buffer = Buf::current();
@@ -453,7 +465,6 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
     let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
     check_cursor(Win::current());
     changed_lines(Buf::current(), first, 0, last, 0, true);
-    unsafe { xfree(ins_text as *mut c_void) };
 }
 
 /// Move the cursor left off the NUL past the end of the line, when it should

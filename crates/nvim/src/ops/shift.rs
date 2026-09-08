@@ -119,7 +119,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = op.start;
         Buf::current().b_op_end.lnum = op.end.lnum;
-        Buf::current().b_op_end.col = ml_get_len(op.end.lnum);
+        Buf::current().b_op_end.col = Lines::current().line_len(op.end.lnum);
         if Buf::current().b_op_end.col > 0 {
             Buf::current().b_op_end.col -= 1;
         }

@@ -22,7 +22,8 @@ use crate::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
     get_last_leader_offset, get_leader_len, ins_char, ins_str, truncate_line,
 };
-use crate::charset::{getwhitecols, getwhitecols_curline, skipwhite, vim_str2nr};
+use crate::charset::{getwhitecols_curline, skip, skipwhite, vim_str2nr};
+use crate::cstr::byte_at;
 use crate::cursor::{
     check_cursor, check_cursor_col, check_pos, coladvance_force, dec_cursor, gchar_cursor,
     get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr, getviscol, getviscol2, getvpos,
@@ -52,15 +53,15 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
-    bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
-    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info,
-    utfc_next, utfc_ptr2len,
+    bomb_size, cluster_len, head_off, mb_islower, mb_isupper, mb_tolower, mb_toupper,
+    utf_char2bytes, utf_char2cells, utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char,
+    utf_ptr2len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len,
 };
 use crate::memline::{
-    dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_mut, ml_get_len, ml_get_pos,
-    ml_get_pos_len, ml_replace, ml_replace_len,
+    Lines, dec, decl, gchar_pos, inc, ml_append, ml_get, ml_get_buf_mut, ml_get_len, ml_replace,
+    ml_replace_len,
 };
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz};
 use crate::message::state::{msg_scroll, no_lines_msg};
 use crate::message::{e_invarg, e_modifiable};
 use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};

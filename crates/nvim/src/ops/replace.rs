@@ -271,7 +271,7 @@ fn replace_chars(mut op: Op, c: c_int) {
     if op.motion_type == kMTLineWise {
         op.start.col = 0;
         Win::current().w_cursor.col = 0;
-        op.end.col = ml_get_len(op.end.lnum);
+        op.end.col = Lines::current().line_len(op.end.lnum);
         if op.end.col != 0 {
             op.end.col -= 1;
         }
