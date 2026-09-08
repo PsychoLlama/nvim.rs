@@ -13,10 +13,10 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::change::get_leader_len;
-use crate::charset::skipwhite;
+use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::indent::get_number_indent;
-use crate::memline::{ml_get, ml_get_len};
+use crate::memline::Lines;
 use crate::textobject::starts_para;
 use crate::types::{LineNr, NUL};
 
@@ -80,31 +80,30 @@ impl Leader {
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub(crate) unsafe fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool) -> bool {
-    let ptr = ml_get(lnum);
-    leader.len = if do_comments {
-        unsafe { get_leader_len(ptr, &raw mut leader.flags, false, true) }
-    } else {
-        0
+    // The borrow is over before `starts_para`, which walks the buffer.
+    let nothing_but_leader = {
+        let mut lines = Lines::current();
+        let line = lines.line(lnum);
+        leader.len = if do_comments {
+            // SAFETY: a line out of the cache, which is NUL-terminated
+            // where the cache put it, and the caller's out-parameter.
+            unsafe { get_leader_len(line.as_ptr().cast(), &raw mut leader.flags, false, true) }
+        } else {
+            0
+        };
+        let after = &line[(leader.len as usize).min(line.len())..];
+        byte_at(after, skip::white(after)) == NUL as u8
     };
     let ends_a_comment = leader.len > 0 && unsafe { leader.has_flag(COM_END) };
-    unsafe {
-        *skipwhite(ptr.offset(leader.len as isize)) as c_int == NUL
-            || ends_a_comment
-            || starts_para(lnum, NUL, false)
-    }
+    nothing_but_leader || ends_a_comment || unsafe { starts_para(lnum, NUL, false) }
 }
 
-/// Whether line `lnum` ends in a white character.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn ends_in_white(lnum: LineNr) -> bool {
-    let s = ml_get(lnum);
-    if unsafe { *s } as c_int == NUL {
-        return false;
-    }
-    let last = ml_get_len(lnum) - 1;
-    ascii_iswhite(unsafe { *s.offset(last as isize) } as u8 as c_int)
+/// Whether line `lnum` ends in a white character. An empty line does not.
+pub(crate) fn ends_in_white(lnum: LineNr) -> bool {
+    Lines::current()
+        .line(lnum)
+        .last()
+        .is_some_and(|&c| ascii_iswhite(c_int::from(c)))
 }
 
 /// Whether the leaders of line `lnum` and the line after it are the same, so
@@ -135,7 +134,7 @@ pub(crate) unsafe fn same_leader(lnum: LineNr, first: Leader, second: Leader) ->
                     // A comment's opening line joins the next one only
                     // when it has text of its own and the next line's
                     // item is the comment's middle.
-                    if ml_get_len(lnum) <= first.len {
+                    if Lines::current().line_len(lnum) <= first.len {
                         return false;
                     }
                     if second.flags.is_null() || second.len == 0 {
@@ -151,28 +150,39 @@ pub(crate) unsafe fn same_leader(lnum: LineNr, first: Leader, second: Leader) ->
 
     // Compare the two leaders as text. The first line has to be copied:
     // only one line can be locked at a time.
-    let line1: Vec<u8> = unsafe {
-        ::core::slice::from_raw_parts(ml_get(lnum) as *const u8, ml_get_len(lnum) as usize)
-    }
-    .to_vec();
+    let mut lines = Lines::current();
+    let line1 = lines.line_copy(lnum);
+    let line2 = lines.line(lnum + 1);
+    leaders_match(&line1, first.len as usize, line2, second.len as usize)
+}
+
+/// Whether `second`'s leading `second_len` bytes are the same leader as
+/// `first`'s leading `first_len`, once white space is allowed to differ.
+///
+/// The two walks are not symmetric. `second` is read a byte at a time up to
+/// its length; a white byte there matches a whole *run* of white space in
+/// `first`, and anything else has to match exactly. It is a match when both
+/// walks land on the end of their own leader at the same moment — a first
+/// leader that has more to it, or a second byte that differs, is not one.
+/// Leading white space in `first` is skipped before either walk starts,
+/// because `get_leader_len` counts it as part of the leader and the caller's
+/// `first_len` therefore includes it.
+fn leaders_match(first: &[u8], first_len: usize, second: &[u8], second_len: usize) -> bool {
     let mut idx1 = 0usize;
-    while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
+    while ascii_iswhite(c_int::from(byte_at(first, idx1))) {
         idx1 += 1;
     }
-    let line2 = unsafe {
-        ::core::slice::from_raw_parts(ml_get(lnum + 1) as *const u8, ml_get_len(lnum + 1) as usize)
-    };
     let mut idx2 = 0usize;
-    while idx2 < second.len as usize {
-        let c = byte_at(line2, idx2);
+    while idx2 < second_len {
+        let c = byte_at(second, idx2);
         if ascii_iswhite(c_int::from(c)) {
             // White space in the second leader matches any run of it in
             // the first.
-            while ascii_iswhite(c_int::from(byte_at(&line1, idx1))) {
+            while ascii_iswhite(c_int::from(byte_at(first, idx1))) {
                 idx1 += 1;
             }
         } else {
-            let c1 = byte_at(&line1, idx1);
+            let c1 = byte_at(first, idx1);
             idx1 += 1;
             if c1 != c {
                 break;
@@ -180,7 +190,7 @@ pub(crate) unsafe fn same_leader(lnum: LineNr, first: Leader, second: Leader) ->
         }
         idx2 += 1;
     }
-    idx2 == second.len as usize && idx1 == first.len as usize
+    idx2 == second_len && idx1 == first_len
 }
 
 /// Whether a paragraph starts at line `lnum` -- that is, whether the line
@@ -192,7 +202,7 @@ pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
     if lnum <= 1 {
         return true; // start of the file
     }
-    if unsafe { *ml_get(lnum - 1) } as c_int == NUL {
+    if Lines::current().line(lnum - 1).is_empty() {
         return true; // after an empty line
     }
     let do_comments = has_format_option(FoFlag::Q_COMS);
@@ -204,7 +214,7 @@ pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
     if unsafe { fmt_check_par(lnum, &mut this, do_comments) } {
         return true; // `lnum` is not a paragraph line
     }
-    if has_format_option(FoFlag::WHITE_PAR) && !unsafe { ends_in_white(lnum - 1) } {
+    if has_format_option(FoFlag::WHITE_PAR) && !ends_in_white(lnum - 1) {
         return true; // the previous line is missing its trailing space
     }
     if has_format_option(FoFlag::Q_NUMBER) && unsafe { get_number_indent(lnum) } > 0 {
@@ -212,4 +222,66 @@ pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
     }
     // A change of comment leader.
     !unsafe { same_leader(lnum - 1, prev, this) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `same_leader`'s comparison, asked the way it asks it: the first
+    /// line's whole leader against the second's, both measured by
+    /// `get_leader_len` and so both counting the white space in front.
+    fn matches(first: &[u8], first_len: usize, second: &[u8], second_len: usize) -> bool {
+        leaders_match(first, first_len, second, second_len)
+    }
+
+    #[test]
+    fn the_same_leader_twice_matches() {
+        assert!(matches(b" * one", 3, b" * two", 3));
+        assert!(matches(b"// one", 3, b"// two", 3));
+    }
+
+    #[test]
+    fn a_different_leader_does_not() {
+        assert!(!matches(b" * one", 3, b" # two", 3));
+        // The first leader has more to it than the second matched.
+        assert!(!matches(b" ** one", 4, b" * two", 3));
+    }
+
+    #[test]
+    fn white_space_in_the_second_leader_swallows_a_run_in_the_first() {
+        // Two spaces after the star on the left, one on the right.
+        assert!(matches(b" *  one", 4, b" * two", 3));
+        // And none on the right at all: the run is still swallowed, but
+        // then the first walk has not reached `first_len`.
+        assert!(!matches(b" *  one", 4, b" *two", 2));
+    }
+
+    #[test]
+    fn leading_white_space_is_skipped_before_either_walk() {
+        // Three spaces on the left, none on the right. `first_len` counts
+        // the spaces -- `get_leader_len` measures from column 0 -- so the
+        // walk that skipped them still has to end on it.
+        assert!(matches(b"   * one", 4, b"* two", 1));
+        assert!(!matches(b"   * one", 5, b"* two", 1));
+    }
+
+    #[test]
+    fn an_empty_second_leader_matches_only_an_empty_first() {
+        assert!(matches(b"", 0, b"", 0));
+        assert!(!matches(b" * one", 3, b"two", 0));
+        // A blank first line with a zero length is not a match: the skip
+        // runs off the end and `idx1` is the line's length, not 0. It is
+        // also unreachable -- `same_leader` answers `second.len == 0`
+        // before it gets here -- and pinned so that stays visible.
+        assert!(!matches(b"   ", 0, b"", 0));
+    }
+
+    #[test]
+    fn a_leader_the_line_is_too_short_for_reads_the_terminator() {
+        // Neither walk may step outside its slice; past the end is NUL,
+        // which matches nothing and ends the comparison.
+        assert!(!matches(b"//", 2, b"//x", 3));
+        assert!(!matches(b"/", 2, b"//", 2));
+    }
 }

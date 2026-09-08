@@ -30,7 +30,7 @@ use crate::indent::{
 };
 use crate::indent_c::{cindent_on, get_c_indent};
 use crate::mark::mark_col_adjust;
-use crate::memline::{Lines, ml_get};
+use crate::memline::Lines;
 use crate::memory::{xfree, xstrdup};
 use crate::message::msgmore;
 use crate::ops::{Op, do_join};
@@ -274,7 +274,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
         unsafe { fmt_check_par(Win::current().w_cursor.lnum, &mut next_leader, do_comments) };
     let mut is_end_par = is_not_par || next_is_not_par;
     if !is_end_par && do_trail_white {
-        is_end_par = !unsafe { ends_in_white(Win::current().w_cursor.lnum - 1) };
+        is_end_par = !ends_in_white(Win::current().w_cursor.lnum - 1);
     }
 
     Win::current().w_cursor.lnum -= 1;
@@ -302,7 +302,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
         advance = true;
         is_end_par = is_not_par || next_is_not_par || next_is_start_par;
         if !is_end_par && do_trail_white {
-            is_end_par = !unsafe { ends_in_white(Win::current().w_cursor.lnum) };
+            is_end_par = !ends_in_white(Win::current().w_cursor.lnum);
         }
 
         if is_not_par {
@@ -320,7 +320,9 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
             {
                 let no_comment = leader.len == 0 && next_leader.len == 0;
                 if do_second_indent
-                    && unsafe { *ml_get(Win::current().w_cursor.lnum + 1) } as c_int != NUL
+                    && !Lines::current()
+                        .line(Win::current().w_cursor.lnum + 1)
+                        .is_empty()
                 {
                     if no_comment {
                         second_indent = get_indent_lnum(Win::current().w_cursor.lnum + 1);

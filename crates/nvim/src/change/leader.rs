@@ -37,13 +37,13 @@ use crate::winlayer::Buf;
 /// never step past the terminating NUL -- so the one unchecked step is
 /// *taking* the pointer, and every read after it is ordinary code.
 #[derive(Clone, Copy)]
-struct Scan(*mut c_char);
+struct Scan(*const c_char);
 
 impl Scan {
     /// # Safety
     /// `s` must stay a NUL-terminated string for as long as the value is
     /// used.
-    unsafe fn new(s: *mut c_char) -> Self {
+    unsafe fn new(s: *const c_char) -> Self {
         Self(s)
     }
 
@@ -69,7 +69,7 @@ impl Scan {
     }
 
     /// The string, `at` bytes in.
-    fn from(self, at: c_int) -> *mut c_char {
+    fn from(self, at: c_int) -> *const c_char {
         self.0.wrapping_offset(at as isize)
     }
 
@@ -183,7 +183,7 @@ fn blank_after(line: Scan, at: c_int) -> bool {
 /// # Safety
 /// `line` must be NUL-terminated. `flags` must be null or writable.
 pub unsafe fn get_leader_len(
-    line: *mut c_char,
+    line: *const c_char,
     flags: *mut *mut c_char,
     backward: bool,
     include_space: bool,
