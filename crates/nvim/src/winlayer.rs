@@ -667,6 +667,17 @@ impl Buf {
         self.b_ml.ml_line_count
     }
 
+    /// This buffer's line cache, through which lines are read as `&[u8]`.
+    ///
+    /// The one entry point for reading text: `buf.lines().line(lnum)` does
+    /// not compile (the handle is a temporary), which is deliberate -- bind
+    /// the handle, and the slices it hands out are bounded by it. See
+    /// [`Lines`](crate::memline::Lines) for the borrow story.
+    #[inline(always)]
+    pub fn lines(self) -> crate::memline::Lines {
+        crate::memline::Lines::in_buffer(self)
+    }
+
     /// # Safety
     /// `lnum` must be a line of this buffer.
     #[inline(always)]

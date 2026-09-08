@@ -5,6 +5,21 @@
 //! `ml_replace` left pending, check the line number, dispatch. The one
 //! thing that lives here in its own right is the `DB_MARKED` bit, which
 //! `:global` uses to remember which lines it still has to visit.
+//!
+//! # Reading a line
+//!
+//! [`Lines`] is the way, and [`Buf::lines`] the way to one:
+//!
+//! ```ignore
+//! let mut lines = buffer.lines();
+//! let text = lines.line(lnum); // &[u8], the line without its NUL
+//! ```
+//!
+//! [`Lines`]'s own documentation carries the borrow story — how long the
+//! slice is valid, what invalidates it, and what to do about the two shapes
+//! the borrow cannot express. In one sentence: the slice lives exactly as
+//! long as the `&mut Lines` it came from, so the next line, any `ml_*`
+//! mutation and any re-entry into the editor all need it dropped first.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -62,15 +77,32 @@ pub unsafe fn ml_get_buf_mut(buffer: Buf, lnum: LineNr) -> *mut ::core::ffi::c_c
 ///
 /// What the compiler still cannot see is a call *out* of here that reads
 /// another line behind the handle's back — `ml_replace`, `ml_append`,
-/// `ml_delete`, or anything that redraws. Not one of them takes a borrow
-/// this handle could conflict with, so that half of the contract is the
-/// caller's, which is why acquiring the handle is `unsafe` and reading
-/// through it is not.
+/// `ml_delete`, or anything that redraws or runs user code. Not one of them
+/// takes a borrow this handle could conflict with, so that half of the
+/// contract is the caller's, and it is one rule: **the borrow ends before
+/// the call**. A walk that has to re-enter the editor takes the line, does
+/// its indexing, drops the slice, and calls; a walk that has to hold text
+/// across the call takes [`line_copy`](Self::line_copy).
+///
+/// A caller that genuinely needs two lines of the *same* buffer at once —
+/// `:diffget`'s comparison, `'foldmarker'`'s start-and-end scan — is asking
+/// for something the cache cannot give, and copies one of them. That is not
+/// a limitation of this type; it is the memline's, made visible.
 ///
 /// The slices are the line's bytes **without** the terminating NUL, which is
-/// the length `ml_get_len` reports and the length every caller wants.
+/// the length `ml_get_len` reports and the length every caller wants. A
+/// memline line stores a NUL byte as an `NL`, so the bytes may hold either
+/// and never hold a terminator — which is exactly why the answer is `&[u8]`
+/// and not `&CStr` ([`crate::cstr`] § the parameter convention). Walks that
+/// used to step one past the last character and read the terminator want
+/// [`crate::cstr::byte_at`], which answers `NUL` past the end.
+///
 /// [`Buf::line`] is the same read as a raw pointer, for callers that still
-/// want one.
+/// want one; [`ml_get`] and kin are the free-function spelling. Both stay
+/// while any caller still holds a line as a pointer, and
+/// `ml_get_placeholder`'s `static` — the `???` an out-of-range line answers
+/// — goes with them: it is a pointer with nowhere to live otherwise, and
+/// nothing here can retire it before the last pointer caller does.
 pub struct Lines(Buf);
 
 impl Lines {
@@ -82,6 +114,16 @@ impl Lines {
     /// Borrow `buffer`'s line cache.
     pub fn in_buffer(buffer: Buf) -> Self {
         Lines(buffer)
+    }
+
+    /// The buffer whose cache this is.
+    pub fn buffer(&self) -> Buf {
+        self.0
+    }
+
+    /// How many lines the buffer has.
+    pub fn count(&self) -> LineNr {
+        self.0.b_ml.ml_line_count
     }
 
     /// Line `lnum`, without its NUL.
@@ -119,6 +161,16 @@ impl Lines {
             let text = ml_get_buf_mut(buf, lnum).cast::<u8>();
             ::core::slice::from_raw_parts_mut(text, to_len(ml_get_buf_len(buf, lnum)))
         }
+    }
+
+    /// Line `lnum`, copied out of the cache.
+    ///
+    /// The escape hatch for the two shapes the borrow cannot express: a
+    /// second line of the same buffer held at the same time, and text held
+    /// across a call that re-enters the editor. Both are real needs and both
+    /// are a copy in C as well — upstream spells them `xstrdup(ml_get(…))`.
+    pub fn line_copy(&mut self, lnum: LineNr) -> Vec<u8> {
+        self.line(lnum).to_vec()
     }
 }
 

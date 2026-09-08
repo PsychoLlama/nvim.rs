@@ -18,6 +18,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr::byte_at;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -32,15 +33,6 @@ pub(crate) fn skip_white(s: &[u8]) -> &[u8] {
         .position(|&b| b != b' ' && b != b'\t')
         .unwrap_or(s.len());
     &s[n..]
-}
-
-/// The byte at `i`, answering NUL past the end.
-///
-/// The C reads these lines through a pointer, so an index at or past the
-/// terminator reads the NUL rather than going out of bounds; several of the
-/// walks below deliberately step one past the last character.
-pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
-    s.get(i).copied().unwrap_or(0)
 }
 
 /// `utf_head_off` over a slice: how far back from byte `i` the character
@@ -164,7 +156,8 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usi
 
 #[cfg(test)]
 mod tests {
-    use super::{byte_at, skip_white};
+    use super::skip_white;
+    use crate::cstr::byte_at;
 
     #[test]
     fn skip_white_takes_spaces_and_tabs_only() {

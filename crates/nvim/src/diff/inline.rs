@@ -14,6 +14,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cstr::byte_at;
 use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::c_int;
 use std::ffi::CStr;

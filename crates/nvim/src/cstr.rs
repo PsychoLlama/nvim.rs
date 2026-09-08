@@ -346,6 +346,23 @@ pub(crate) fn as_bytes(buf: &[c_char]) -> &[u8] {
     unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) }
 }
 
+/// The byte at `i`, answering `NUL` past the end.
+///
+/// The one adaptation almost every pointer walk needs when it becomes an
+/// index walk: the C read a NUL-terminated string, so `p[i]` at or past the
+/// length was the terminator and the loop stopped there. A slice has no
+/// terminator, so `s[i]` would panic and `s.get(i)` would need a match at
+/// every step. This is the reader that behaves like the pointer did —
+/// the bytes, then `NUL` forever.
+///
+/// It is *not* for deciding a walk's bounds. A loop that can say
+/// `i < s.len()` should say it; this is for the sites that genuinely look
+/// one past the end, and for translating a `while (*p != NUL)` whose bound
+/// is the terminator itself.
+pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
+    s.get(i).copied().unwrap_or(0)
+}
+
 /// `bytes` as an owned C string.
 ///
 /// # Panics
