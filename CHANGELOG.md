@@ -9,6 +9,10 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote the C indenter (`'cindent'`, `'cinoptions'`, `'cinkeys'` and
+  `cindent()`) and the blockwise operators (`I`, `A`, `c`, `d`, `CTRL-A`) to
+  work over the line's bytes rather than pointers into it. Behaviour is
+  unchanged, quirks included.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
