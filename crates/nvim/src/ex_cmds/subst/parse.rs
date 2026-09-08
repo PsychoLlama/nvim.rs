@@ -6,8 +6,7 @@
 //! ones that would be ambiguous), [`sub_parse_flags`] turns the trailing
 //! letters into `SubFlags`, and [`old_sub`] is the `~` replacement text
 //! carried from the last `:s`.  [`sub_joining_lines`] is the `\n`-in-the-
-//! pattern case, which joins rather than substitutes, and [`sub_grow_buf`] is
-//! the output buffer's growth policy.
+//! pattern case, which joins rather than substitutes.
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
@@ -18,7 +17,6 @@
 
 use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
-use crate::cstr;
 use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, SubFlags, kSubHonorOptions,
     kSubIgnoreCase, kSubMatchCase,
@@ -27,7 +25,7 @@ use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xcalloc, xfree, xrealloc};
+use crate::memory::xfree;
 use crate::message::emsg;
 use crate::ops::do_join;
 use crate::option::magic_isset;
@@ -173,55 +171,6 @@ pub(crate) unsafe fn sub_joining_lines(
         );
     }
     true
-}
-
-/// Make room for `needed_len` more bytes of replacement text, answering where
-/// to write them.
-///
-/// A little more than is strictly necessary is allocated, to keep the
-/// reallocation out of the inner loop.  `new_start` is null on the first
-/// call and owns the buffer afterwards.
-///
-/// # Safety
-/// `*new_start` must be null or an `xmalloc`ed NUL-terminated buffer of
-/// `*new_start_len` bytes.
-pub(crate) unsafe fn sub_grow_buf(
-    new_start: &mut *mut c_char,
-    new_start_len: &mut c_int,
-    mut needed_len: c_int,
-) -> *mut c_char {
-    if new_start.is_null() {
-        // Get space for a temporary buffer to substitute into, with extra to
-        // avoid too many calls to xmalloc()/free().
-        *new_start_len = needed_len + 50 as c_int;
-        // SAFETY: a fresh zeroed allocation of the size just chosen.
-        *new_start = unsafe { xcalloc(1 as size_t, *new_start_len as size_t) } as *mut c_char;
-        unsafe { **new_start = NUL as c_char };
-        return *new_start;
-    }
-
-    // Check whether the temporary buffer is long enough to substitute into.
-    // If not, make it larger (again with a bit extra).
-    // SAFETY: caller's contract -- a NUL-terminated buffer.
-    let len = unsafe { cstr::bytes_at(*new_start) }.len();
-    needed_len += len as c_int;
-    if needed_len > *new_start_len {
-        let prev_new_start_len = *new_start_len as size_t;
-        *new_start_len = needed_len + 50 as c_int;
-        let added_len = (*new_start_len as size_t).wrapping_sub(prev_new_start_len);
-        // SAFETY: the buffer is ours to grow, and the tail past the old
-        // length is what `memset` clears.
-        *new_start =
-            unsafe { xrealloc(*new_start as *mut c_void, *new_start_len as size_t) } as *mut c_char;
-        unsafe {
-            (*new_start)
-                .add(prev_new_start_len)
-                .cast::<u8>()
-                .write_bytes((0 as c_int) as u8, added_len)
-        };
-    }
-    // SAFETY: `len` is the buffer's own string length.
-    unsafe { (*new_start).add(len) }
 }
 
 /// Read `:substitute`'s trailing `{flags}` into `subflags`, answering where

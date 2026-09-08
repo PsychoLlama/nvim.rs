@@ -10,9 +10,11 @@
 //!
 //! [`Sub`] is the state those stages share.  Its comments are upstream's
 //! description of how the new text is built up piece by piece, which is the
-//! part of `:s` that is genuinely hard: `sub_firstline` is the old text
-//! unmodified, `copycol` how far it has been copied, `matchcol` where to look
-//! for the next match, and `new_start`/`new_end` the text produced so far.
+//! part of `:s` that is genuinely hard: [`Sub::old_line`] is the old text
+//! unmodified (upstream's `sub_firstline`), `copied` how far it has been
+//! copied over (`copycol`), `matchcol` where to look for the next match, and
+//! [`Sub::new_line`] the text produced so far (`new_start`, and the
+//! `new_start_len` its growth policy needed).
 //!
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
@@ -23,11 +25,10 @@
 
 use super::args::{SubSetup, parse_sub};
 use super::confirm::{Confirm, ask_confirm};
-use super::replace::{build_replacement, commit_line};
+use super::replace::{SubLine, build_replacement, commit_line};
 use super::{do_sub_msg, global_need_beginline, show_sub, static_cstr_optval, subflags};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
-use crate::cstr;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
@@ -40,9 +41,8 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
 use crate::mark::setpcmark;
-use crate::mbyte::utfc_ptr2len;
-use crate::memline::{ml_get, ml_get_len};
-use crate::memory::{xfree, xstrdup};
+use crate::mbyte::cluster_len;
+use crate::memory::xfree;
 use crate::message::e_interr;
 use crate::message::{emsg, msg};
 use crate::message_fmt::c_str;
@@ -57,7 +57,6 @@ use crate::profile::profile_passed_limit;
 use crate::regexp::{vim_regexec_multi, vim_regfree};
 use crate::search::get_search_pat;
 use crate::semsg;
-use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptionSetFlags, Pos, ProfTime,
@@ -131,23 +130,23 @@ pub(super) struct Sub {
     /// How many lines the last regexp match spanned, or -1 when it has to be
     /// searched for again.
     pub nmatch: c_int,
-    /// An allocated copy of the first line of the match, unmodified.
-    pub sub_firstline: *mut c_char,
+    /// A copy of the first line of the match, unmodified.  Absent until the
+    /// line it names is loaded.
+    pub old_line: Option<SubLine>,
     /// The line in the buffer to look for a match in.  Differs from `lnum`
     /// when the pattern or the replacement contains line breaks.
     pub sub_firstlnum: LineNr,
-    /// Column of the old text from which text still has to be copied over.
-    pub copycol: ColNr,
+    /// Offset into the old text from which text still has to be copied over.
+    pub copied: usize,
     /// Column of the old text to look for the next match at: just after the
     /// previous match, or one further.
     pub matchcol: ColNr,
     /// Column just after the previous match, if any.  Equal to `matchcol`
     /// except for the first match and after skipping an empty one.
     pub prev_matchcol: ColNr,
-    /// The new text, all that has been produced so far.
-    pub new_start: *mut c_char,
-    /// Bytes allocated at `new_start`.
-    pub new_start_len: c_int,
+    /// The new text, all that has been produced so far.  Absent until the
+    /// first substitution on this line has been built.
+    pub new_line: Option<SubLine>,
     /// Length of the substitution, including its NUL.
     pub sublen: c_int,
     pub did_sub: bool,
@@ -164,29 +163,33 @@ pub(super) struct Sub {
 }
 
 impl Sub {
-    /// Take a fresh copy of the buffer line `sub_firstlnum` names, so that it
-    /// cannot be taken away by a screen update or a multi-line match.
-    ///
-    /// # Safety
-    /// `sub_firstlnum` must be a line of the current buffer.
-    pub(super) unsafe fn load_firstline(&mut self) {
-        // SAFETY: caller's contract.
-        self.sub_firstline = unsafe {
-            xstrnsave(
-                ml_get(self.sub_firstlnum),
-                ml_get_len(self.sub_firstlnum) as size_t,
-            )
-        };
+    /// The copy of the old line, which every read of it happens after it was
+    /// loaded.
+    pub(super) fn old_line(&self) -> &SubLine {
+        self.old_line
+            .as_ref()
+            .expect("the old line is loaded before a match is looked for")
     }
 
-    /// Drop the copy of the old line.
-    ///
-    /// # Safety
-    /// Main thread; the copy is this module's own allocation.
-    pub(super) unsafe fn clear_firstline(&mut self) {
-        // SAFETY: caller's contract.
-        unsafe { xfree(self.sub_firstline as *mut c_void) };
-        self.sub_firstline = ptr::null_mut();
+    /// The line being rebuilt, which every read of it happens after the
+    /// first substitution on the line was built.
+    pub(super) fn new_line(&self) -> &SubLine {
+        self.new_line
+            .as_ref()
+            .expect("a substitution has been built on this line")
+    }
+
+    /// [`Sub::new_line`], writable.
+    pub(super) fn new_line_mut(&mut self) -> &mut SubLine {
+        self.new_line
+            .as_mut()
+            .expect("a substitution has been built on this line")
+    }
+
+    /// Take a fresh copy of the buffer line `sub_firstlnum` names, so that it
+    /// cannot be taken away by a screen update or a multi-line match.
+    pub(super) fn load_firstline(&mut self) {
+        self.old_line = Some(SubLine::from_line(self.sub_firstlnum));
     }
 
     /// After a multi-line match, continue in a copy of the *last* matched
@@ -197,9 +200,7 @@ impl Sub {
     pub(super) unsafe fn adjust_sub_firstlnum(&mut self) {
         if self.nmatch > 1 as c_int {
             self.sub_firstlnum += self.nmatch as LineNr - 1 as LineNr;
-            // SAFETY: caller's contract.
-            unsafe { self.clear_firstline() };
-            unsafe { self.load_firstline() };
+            self.load_firstline();
             // When going beyond the last line, stop substituting.
             if self.sub_firstlnum <= self.line2 {
                 self.do_again = true;
@@ -210,10 +211,8 @@ impl Sub {
         if self.skip_match {
             // Already hit the end of the buffer: sub_firstlnum is one less
             // than it ought to be.
-            // SAFETY: caller's contract.
-            unsafe { self.clear_firstline() };
-            self.sub_firstline = unsafe { xstrdup(c"".as_ptr()) };
-            self.copycol = 0 as ColNr;
+            self.old_line = Some(SubLine::default());
+            self.copied = 0;
         }
     }
 }
@@ -269,17 +268,14 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
         && st.regmatch.endpos[0].lnum == 0 as LineNr
         && st.matchcol == st.regmatch.endpos[0].col
     {
-        // SAFETY: `matchcol` is a column of the copied line.
-        let at = unsafe { st.sub_firstline.add(st.matchcol as usize) };
-        // SAFETY: as above.
-        if unsafe { *at } as c_int == NUL {
+        let old = st.old_line().bytes();
+        if st.matchcol as usize >= old.len() {
             // Already at the end of the line: don't look for a match in this
             // line again.
             st.skip_match = true;
         } else {
             // Search for a match at the next column.
-            // SAFETY: as above.
-            st.matchcol += unsafe { utfc_ptr2len(at) };
+            st.matchcol += cluster_len(&old[st.matchcol as usize..]) as ColNr;
         }
         // The match will be pushed to preview_lines: bring it into a proper
         // state first.
@@ -299,8 +295,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
         // line and set nmatch to one, so that we continue looking for a match
         // on the next line.  Avoids that ":s/\nB\@=//gc" gets stuck.
         if st.nmatch > 1 as c_int {
-            // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as ColNr;
+            st.matchcol = st.old_line().len() as ColNr;
             st.nmatch = 1 as c_int;
             st.skip_match = true;
         }
@@ -380,13 +375,13 @@ unsafe fn is_last_match(st: &Sub) -> bool {
     // Upstream only reads the byte at `matchcol` once the tests above have
     // all failed, and it must stay that way: after a multi-line match that
     // took the `goto skip` before the line was adjusted, `matchcol` is a
-    // column of a *different* line and can be past this one's end.
-    // SAFETY: caller's contract.
-    unsafe {
-        *st.sub_firstline.add(st.matchcol as usize) as c_int == NUL
-            && st.nmatch <= 1 as c_int
-            && !re_multiline(st.regmatch.regprog)
-    }
+    // column of a *different* line and can be past this one's end -- which
+    // here answers "at the end of the line" rather than reading out of
+    // bounds, and is why the answer is a length comparison.
+    // SAFETY: caller's contract -- the compiled program is live.
+    st.matchcol as usize >= st.old_line().len()
+        && st.nmatch <= 1 as c_int
+        && !unsafe { re_multiline(st.regmatch.regprog) }
 }
 
 /// Loop until there is nothing more to replace on this line.
@@ -414,8 +409,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
             st.lnum += st.regmatch.startpos[0].lnum;
             st.sub_firstlnum += st.regmatch.startpos[0].lnum;
             st.nmatch -= st.regmatch.startpos[0].lnum as c_int;
-            // SAFETY: the copy is ours.
-            unsafe { st.clear_firstline() };
+            st.old_line = None;
         }
 
         // Now we are at the line where the pattern match starts.  If this is
@@ -428,9 +422,8 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         if st.lnum > Buf::current().b_ml.ml_line_count {
             break;
         }
-        if st.sub_firstline.is_null() {
-            // SAFETY: `sub_firstlnum` is a line of the buffer.
-            unsafe { st.load_firstline() };
+        if st.old_line.is_none() {
+            st.load_firstline();
         }
 
         // Save the line number of the last change for the final cursor
@@ -464,7 +457,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         };
 
         if no_more {
-            if !st.new_start.is_null() {
+            if st.new_line.is_some() {
                 // SAFETY: the rebuilt line and the buffer are live.
                 if !unsafe { commit_line(st) } {
                     break;
@@ -502,15 +495,14 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
 /// Main thread; `st.lnum` must be a line of the current buffer.
 unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
     st.prev_matchcol = MAXCOL as ColNr;
-    st.new_start = ptr::null_mut();
-    st.new_start_len = 0 as c_int;
+    st.new_line = None;
     st.did_sub = false;
     st.nmatch_tl = 0 as LineNr;
     st.skip_match = false;
     st.lnum_start = 0 as LineNr;
     st.line_matches.clear();
     st.sub_firstlnum = st.lnum;
-    st.copycol = 0 as ColNr;
+    st.copied = 0;
     st.matchcol = 0 as ColNr;
 
     // At the first match, remember the current cursor position.
@@ -526,11 +518,10 @@ unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
     if st.did_sub {
         sub_nlines.set(sub_nlines.get() + 1);
     }
-    // SAFETY: both are this module's own allocations; `new_start` is only
-    // still set when the substitution was cancelled.
-    unsafe { xfree(st.new_start as *mut c_void) };
-    st.new_start = ptr::null_mut();
-    unsafe { st.clear_firstline() };
+    // The rebuilt line is only still here when the substitution was
+    // cancelled, and the old line is this line's.
+    st.new_line = None;
+    st.old_line = None;
     st.line_matches.clear();
 }
 
@@ -595,9 +586,8 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         buf_updates_send_changes(buffer, st.first_line, num_added, num_removed);
     }
 
-    // May have to free the allocated copy of the line.
-    // SAFETY: our own allocation.
-    unsafe { st.clear_firstline() };
+    // May still be holding the copy of the line.
+    st.old_line = None;
 
     // ":s/pat//n" doesn't move the cursor.
     if subflags.with(|flags| flags.do_count) {
@@ -786,13 +776,12 @@ pub(crate) unsafe fn do_sub(
         last_line: 0 as LineNr,
         preview_lines: PreviewLines::default(),
         nmatch: 0 as c_int,
-        sub_firstline: ptr::null_mut(),
+        old_line: None,
         sub_firstlnum: 0 as LineNr,
-        copycol: 0 as ColNr,
+        copied: 0,
         matchcol: 0 as ColNr,
         prev_matchcol: 0 as ColNr,
-        new_start: ptr::null_mut(),
-        new_start_len: 0 as c_int,
+        new_line: None,
         sublen: 0 as c_int,
         did_sub: false,
         nmatch_tl: 0 as LineNr,

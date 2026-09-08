@@ -39,7 +39,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
 use crate::state::mode::{State, exmode_active};
-use crate::strings::{concat_str, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
 use crate::ui::ui_has;
@@ -177,21 +177,27 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // Avoid calling update_screen() in vgetorpeek().
     p_lz.set(0);
 
-    if !st.new_start.is_null() {
+    if st.new_line.is_some() {
         // There already was a substitution and we would like to show it, but
         // we cannot really update the line -- that would change what matches.
         // Replace it temporarily and change it back afterwards.
-        // SAFETY: `lnum` is a line of the buffer and the pieces are live.
+        // SAFETY: `lnum` is a line of the buffer.
         orig_line = unsafe { xstrnsave(ml_get(st.lnum), ml_get_len(st.lnum) as size_t) };
-        let new_line =
-            unsafe { concat_str(st.new_start, st.sub_firstline.add(st.copycol as usize)) };
+        // The line as it would look: what has been rebuilt so far, and the
+        // rest of the old text after it.
+        let mut shown = st.new_line().bytes().to_vec();
+        shown.extend_from_slice(&st.old_line().bytes()[st.copied..]);
+        shown.push(NUL as u8);
         // Position the cursor relative to the end of the line: the
         // previous substitute may have inserted or deleted characters
         // before it.
-        len_change = unsafe { cstr::bytes_at(new_line) }.len() as c_int
-            - unsafe { cstr::bytes_at(orig_line) }.len() as c_int;
+        // SAFETY: the saved text is NUL-terminated.
+        len_change =
+            (shown.len() - 1) as c_int - unsafe { cstr::bytes_at(orig_line) }.len() as c_int;
         Win::current().w_cursor.col += len_change;
-        let _ = unsafe { ml_replace(st.lnum, new_line, false) };
+        // SAFETY: `lnum` is a line of the buffer, and `shown` is a live C
+        // string `ml_replace` is told to copy.
+        let _ = unsafe { ml_replace(st.lnum, shown.as_mut_ptr().cast::<c_char>(), true) };
     }
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
@@ -309,8 +315,7 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
         // on the next line.  Avoids that ":%s/\nB\@=//gc" and ":%s/\n/,\r/gc"
         // get stuck when pressing 'n'.
         if st.nmatch > 1 as c_int {
-            // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as ColNr;
+            st.matchcol = st.old_line().len() as ColNr;
             st.skip_match = true;
         }
         return Confirm::Skip;
