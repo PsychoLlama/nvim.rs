@@ -26,6 +26,43 @@
 //! signature.** Nine are FFI'd from the LuaJIT unit specs; `utf8len_tab` and
 //! `utf_ptr2char_info_impl` are compiled *against* by `unit-fixtures.so`, so
 //! changing either is a C compile failure inside `just unittest`.
+//!
+//! # The slice API
+//!
+//! The multibyte cursor is the thing every other family reads text through,
+//! and its C spelling is a pointer into a NUL-terminated string. The forms a
+//! caller should reach for take a `&[u8]` instead, and carry Rust names; the
+//! `utf_ptr2*`/`mb_*` spellings are what upstream called them, kept while
+//! their callers convert and (for four of them) because something outside
+//! the crate resolves the symbol.
+//!
+//! | upstream | slice form | answers |
+//! | --- | --- | --- |
+//! | `utf_ptr2char` | [`char_at`] | the codepoint, or the lead byte's own value |
+//! | `utf_ptr2char_info_impl` | [`strict_char_at`] | the codepoint, or a negative "not a character" |
+//! | `utf_ptr2char_info` | [`char_info_at`] | both of the above, as a [`CharInfo`] |
+//! | `utf_ptr2len` | [`char_len`] | bytes in the character, never past the end |
+//! | `utf_ptr2len_len` | [`promised_char_len`] | bytes the lead byte *promised* |
+//! | `utfc_ptr2len`, `utfc_ptr2len_len` | [`cluster_len`] | bytes in the whole grapheme cluster |
+//! | `utf_ptr2cells` | [`cells_at`] | screen cells the character occupies |
+//! | `mb_string2cells`, `..._len` | [`string_cells`] | screen cells the whole text occupies |
+//! | `mb_charlen`, `mb_charlen_len` | [`char_count`] | grapheme clusters in the text |
+//! | `utf_cp_bounds`, `utf_cp_bounds_len` | [`cp_bounds`] | both ends of the codepoint covering a byte |
+//! | `utf_iscomposing` | [`iscomposing`] | whether two codepoints cluster |
+//! | the `MB_PTR_ADV` loop | [`clusters`], [`chars`] | one item per cluster |
+//!
+//! One rule covers the whole table, and it is the only behavioural
+//! difference: **the end of the slice is the end of the string**. A NUL
+//! inside a slice is an ordinary byte -- one character, one cell -- where the
+//! pointer forms would stop there. That is what keeps a walk written against
+//! these moving instead of standing still on an embedded NUL, and it is the
+//! reason a caller passes the bytes it *means*, terminator excluded.
+//!
+//! Two pointer forms are not on the table because they are not twins of
+//! anything here. [`utf_ptr2cells_len`] reports a sequence its `size` cuts
+//! short by decoding it out of the bytes that follow, so it is a different
+//! function from [`cells_at`] rather than a pointer spelling of it, and
+//! [`utf_head_off`] still walks backwards through a pointer.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]

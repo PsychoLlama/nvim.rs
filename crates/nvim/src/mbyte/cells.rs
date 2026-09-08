@@ -151,6 +151,71 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
     cells
 }
 
+/// How many cells the character at the start of `bytes` occupies.
+///
+/// The slice form of [`utf_ptr2cells`], and the answer for an *empty* slice
+/// is 1 -- what the pointer form answers at a NUL, because nothing to print
+/// still occupies the cell the cursor sits in.
+///
+/// Not the slice form of [`utf_ptr2cells_len`], which is a different
+/// function: that one reports a sequence its `size` cuts short by decoding it
+/// out of whatever bytes follow. Here the slice is the string, so a cut
+/// sequence is an illegal one, drawn as `<xx>`.
+///
+/// # Safety
+///
+/// Reads `'ambiwidth'`, `'emoji'` and `'isprint'` through their globals, so
+/// it is only callable once options exist.
+pub unsafe fn cells_at(bytes: &[u8]) -> c_int {
+    let Some(&first) = bytes.first() else {
+        return 1;
+    };
+    if first < 0x80 {
+        return 1;
+    }
+    let c = strict_char_at(bytes);
+    // An illegal byte, an incomplete sequence, or an overlong encoding of
+    // NUL: all displayed as <xx>.
+    if c <= 0 {
+        return 4;
+    }
+    // An ASCII answer from a multibyte lead byte means an overlong
+    // sequence, which is displayed the way that ASCII character is.
+    if c < 0x80 {
+        return unsafe { char2cells(c) };
+    }
+    let cells = unsafe { utf_char2cells(c) };
+    let rest = &bytes[usize::from(utf8len_tab[usize::from(first)])..];
+    if cells == 1
+        && p_emoji.get() != 0
+        && prop_is_emojilike(utf8proc_get_property(c))
+        && char_at(rest) == VS16
+    {
+        return 2;
+    }
+    cells
+}
+
+/// The total width of `bytes`.
+///
+/// The slice form of [`mb_string2cells`]. A NUL inside the slice is an
+/// ordinary byte, one cell wide, rather than the end of the string.
+///
+/// # Safety
+///
+/// The same option globals [`cells_at`] reads.
+pub unsafe fn string_cells(bytes: &[u8]) -> usize {
+    let mut cells = 0;
+    let mut at = 0;
+    while at < bytes.len() {
+        let rest = &bytes[at..];
+        // A width is never negative, and a cluster is never empty here.
+        cells += unsafe { cells_at(rest) }.cast_unsigned() as usize;
+        at += cluster_len(rest);
+    }
+    cells
+}
+
 /// [`utf_ptr2cells`] over a string that is `size` bytes long rather than
 /// NUL-terminated.
 ///

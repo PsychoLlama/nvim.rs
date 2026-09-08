@@ -36,7 +36,9 @@ use core::ffi::{CStr, c_char, c_int};
 mod slice;
 mod tables;
 
-pub use self::slice::{char_at, char_len, encode_char};
+pub use self::slice::{
+    char_at, char_info_at, char_len, encode_char, promised_char_len, strict_char_at,
+};
 pub use self::tables::*;
 
 /// The characters of a NUL-terminated string, as `MB_PTR_ADV` steps over
@@ -296,7 +298,13 @@ pub unsafe fn utf_composinglike(
 /// the calls of one walk.
 pub unsafe fn utf_iscomposing(c1: c_int, c2: c_int, state: *mut GraphemeState) -> bool {
     // SAFETY: the caller's obligation.
-    let state = unsafe { state.as_mut() };
+    iscomposing(c1, c2, unsafe { state.as_mut() })
+}
+
+/// [`utf_iscomposing`] with the walk state borrowed rather than pointed at,
+/// which is all the pointer ever meant. `None` is a walk with no state to
+/// carry -- the caller is asking about two characters in isolation.
+pub fn iscomposing(c1: c_int, c2: c_int, state: Option<&mut GraphemeState>) -> bool {
     !utf8proc_grapheme_break_stateful(c1 as utf8proc_int32_t, c2 as utf8proc_int32_t, state)
         || crate::arabic::arabic_combine(c1, c2)
 }
@@ -413,16 +421,19 @@ pub fn utf_byte2len(b: c_int) -> c_int {
 ///
 /// `p` must point at at least one readable byte, and at `min(size, len)`.
 pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    let len = utf8len_tab[unsafe { *p } as u8 as usize] as c_int;
-    if len == 1 {
-        return 1;
-    }
-    for i in 1..len.min(size) {
-        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) } as u8) {
-            return 1;
-        }
-    }
-    len
+    // Only the bytes the caller promised: the lead byte says how many the
+    // sequence wants, `size` how many are there, and the smaller of the two
+    // is all that may be read.
+    let first = unsafe { *p.cast::<u8>() };
+    let readable = usize::from(utf8len_tab[usize::from(first)]).min(clamp_size(size).max(1));
+    // SAFETY: the caller's promise, spelled as the slice it describes.
+    let bytes = unsafe { cstr::slice_at(p, readable) };
+    c_int::try_from(promised_char_len(bytes)).expect("a sequence is at most six bytes")
+}
+
+/// A C `int` byte count as a slice length; a negative one is no bytes.
+fn clamp_size(size: c_int) -> usize {
+    usize::try_from(size).unwrap_or(0)
 }
 
 /// How many bytes the whole grapheme cluster at `p` occupies — the base
@@ -470,49 +481,33 @@ pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
     if size < 1 || unsafe { *p } == 0 {
         return 0;
     }
-    let first = unsafe { *p } as u8;
-    if first < 0x80 && (size == 1 || (unsafe { *p.offset(1) } as u8) < 0x80) {
-        return 1;
-    }
-    let mut len = unsafe { utf_ptr2len_len(p, size) };
-    if (len == 1 && first >= 0x80) || len > size {
-        return 1;
-    }
-    let mut prevlen = 0;
-    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    while len < size {
-        let next = unsafe { p.offset(len as isize) };
-        if (unsafe { *next } as u8) < 0x80 {
-            break;
-        }
-        let next_len = unsafe { utf_ptr2len_len(next, size - len) };
-        if next_len > size - len {
-            break; // truncated by `size`, not part of this cluster
-        }
-        if !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) } {
-            break;
-        }
-        prevlen = len;
-        len += next_len;
-    }
-    len
+    // SAFETY: the caller's promise, spelled as the slice it describes.
+    let bytes = unsafe { cstr::slice_at(p, clamp_size(size)) };
+    c_int::try_from(cluster_len(bytes)).expect("a cluster is no longer than the slice")
+}
+
+/// Is the character at the start of `next` part of the same grapheme cluster
+/// as the one at the start of `cur`?
+///
+/// The slice form of [`utf_composinglike`], and its body.
+fn composes_onto(cur: &[u8], next: &[u8], state: &mut GraphemeState) -> bool {
+    // ASCII never combines, and this is the hot answer.
+    next.first().is_some_and(|&byte| byte >= 128)
+        && iscomposing(char_at(cur), char_at(next), Some(state))
 }
 
 /// How many bytes the grapheme cluster at the start of `bytes` occupies --
 /// the base character plus every composing character following it -- or 0 if
 /// `bytes` is empty.
 ///
-/// The slice form of [`utfc_ptr2len`], and the cluster twin of
-/// [`char_len`]. The bound the slice carries does the work the pointer
-/// form's NUL did, so the answer is never larger than `bytes.len()`; a
-/// composing character only partly inside the slice is left out, because the
-/// rest of it may still arrive.
+/// The slice form of [`utfc_ptr2len`], the body of [`utfc_ptr2len_len`], and
+/// the cluster twin of [`char_len`]. The bound the slice carries does the
+/// work the pointer form's NUL did, so the answer is never larger than
+/// `bytes.len()`; a composing character only partly inside the slice is left
+/// out, because the rest of it may still arrive.
 ///
-/// Unlike its siblings in [`mod@slice`] this one is not itself safe code: it
-/// delegates to [`utfc_ptr2len_len`], whose composing-character rules are
-/// pointer-shaped all the way down into `utf_composinglike`. The one
-/// difference the slice forms carry is applied here rather than inherited --
-/// a NUL is a byte, one character long, not the end of the string.
+/// The difference the slice forms all carry applies here too: a NUL is an
+/// ordinary byte, one character long, not the end of the string.
 pub fn cluster_len(bytes: &[u8]) -> usize {
     let Some(&first) = bytes.first() else {
         return 0;
@@ -520,10 +515,61 @@ pub fn cluster_len(bytes: &[u8]) -> usize {
     if first == 0 {
         return 1; // an embedded NUL is an ordinary byte here
     }
-    let size = c_int::try_from(bytes.len()).unwrap_or(c_int::MAX);
-    // SAFETY: `size` readable bytes at the pointer, which is the slice.
-    let len = unsafe { utfc_ptr2len_len(bytes.as_ptr().cast::<c_char>(), size) };
-    usize::try_from(len).expect("utfc_ptr2len_len answers a length")
+    // Two ASCII bytes: nothing can be combining, answer without decoding.
+    if first < 0x80 && (bytes.len() == 1 || bytes[1] < 0x80) {
+        return 1;
+    }
+    let mut len = promised_char_len(bytes);
+    if (len == 1 && first >= 0x80) || len > bytes.len() {
+        return 1;
+    }
+    let mut prev = 0;
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    while len < bytes.len() {
+        let next = &bytes[len..];
+        let next_len = promised_char_len(next);
+        if next_len > next.len() {
+            break; // cut short by the end of the slice: not part of this
+        }
+        if !composes_onto(&bytes[prev..], next, &mut state) {
+            break;
+        }
+        prev = len;
+        len += next_len;
+    }
+    len
+}
+
+/// The grapheme clusters of `bytes`, as `(byte offset, codepoint)`.
+///
+/// The slice twin of [`Chars`]: the safe spelling of a `while (*p) { c =
+/// utf_ptr2char(p); MB_PTR_ADV(p); }` loop for a caller that has the text
+/// rather than a pointer into it. Every byte of `bytes` is visited, an
+/// embedded NUL included.
+pub struct Clusters<'a> {
+    bytes: &'a [u8],
+    /// Byte offset of the next cluster.
+    at: usize,
+}
+
+/// The grapheme clusters of `bytes`; see [`Clusters`].
+pub fn clusters(bytes: &[u8]) -> Clusters<'_> {
+    Clusters { bytes, at: 0 }
+}
+
+impl Iterator for Clusters<'_> {
+    /// The byte offset the cluster starts at, and its base codepoint.
+    type Item = (usize, c_int);
+
+    fn next(&mut self) -> Option<(usize, c_int)> {
+        let rest = self.bytes.get(self.at..)?;
+        if rest.is_empty() {
+            return None;
+        }
+        let at = self.at;
+        self.at = at + cluster_len(rest);
+        Some((at, char_at(rest)))
+    }
 }
 
 /// How many bytes `c` encodes to.

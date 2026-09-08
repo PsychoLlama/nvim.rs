@@ -296,12 +296,63 @@ pub unsafe fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
     unsafe { utfc_ptr2len(p.offset(-(head_off as isize))) - head_off }
 }
 
-/// Both ends of the codepoint covering `p`, as offsets from it.
+/// Both ends of the codepoint covering byte `at` of `bytes`, as offsets from
+/// it.
 ///
-/// The answer for anything that is not a valid sequence is `(0, 1)` — "this
-/// byte, on its own" — which is what makes every caller's arithmetic safe on
+/// The answer for anything that is not a valid sequence is `(0, 1)` -- "this
+/// byte, on its own" -- which is what makes every caller's arithmetic safe on
 /// arbitrary bytes. Unlike [`utf_head_off`] this is about the *codepoint*,
 /// not the cluster: composing characters are separate.
+///
+/// The slice form of [`utf_cp_bounds_len`], and its body. `bytes` is the text
+/// the walk may not leave in either direction: it never looks before its
+/// start, and never past its end.
+///
+/// # Panics
+///
+/// If `at` is not a byte of `bytes`.
+pub fn cp_bounds(bytes: &[u8], at: usize) -> CharBoundsOff {
+    /// "This byte is its own character."
+    const JUST_THIS_BYTE: CharBoundsOff = CharBoundsOff {
+        begin_off: 0,
+        end_off: 1,
+    };
+    let rest = &bytes[at..];
+    assert!(!rest.is_empty(), "`at` is a byte of `bytes`");
+    if rest[0] < 0x80 {
+        return JUST_THIS_BYTE;
+    }
+
+    // How far back the lead byte may be: never before the start, and never
+    // more than a sequence's worth.
+    let max_back = at.min(MB_MAXCHAR - 1);
+    let mut back = 0;
+    while utf_is_trail_byte(bytes[at - back]) {
+        if back == max_back {
+            return JUST_THIS_BYTE;
+        }
+        back += 1;
+    }
+
+    // The sequence has to be complete *and* within what is left.
+    let end_off = usize::from(utf8len_tab[usize::from(bytes[at - back])]);
+    if end_off <= back || end_off - back > rest.len() {
+        return JUST_THIS_BYTE;
+    }
+    if !bytes[at - back + 1..at - back + end_off]
+        .iter()
+        .all(|&byte| utf_is_trail_byte(byte))
+    {
+        return JUST_THIS_BYTE;
+    }
+    CharBoundsOff {
+        begin_off: int8_t::try_from(back).expect("at most a sequence back"),
+        end_off: int8_t::try_from(end_off - back).expect("at most a sequence forward"),
+    }
+}
+
+/// Both ends of the codepoint covering `p`, as offsets from it; see
+/// [`cp_bounds`], which is the body.
 ///
 /// # Safety
 ///
@@ -311,44 +362,15 @@ pub unsafe fn utf_cp_bounds_len(
     p_in: *const c_char,
     p_len: c_int,
 ) -> CharBoundsOff {
-    /// "This byte is its own character."
-    const JUST_THIS_BYTE: CharBoundsOff = CharBoundsOff {
-        begin_off: 0,
-        end_off: 1,
-    };
     debug_assert!(base <= p_in && p_len > 0, "base <= p_in && p_len > 0");
-    let b = base as *const u8;
-    let p = p_in as *const u8;
-    if unsafe { *p } < 0x80 {
-        return JUST_THIS_BYTE;
-    }
-
-    // How far back the lead byte may be: never before `base`, and never
-    // more than a sequence's worth.
-    let max_first_off = -unsafe { p.offset_from(b) }.min(MB_MAXCHAR as isize - 1) as c_int;
-    let mut first_off: c_int = 0;
-    while utf_is_trail_byte(unsafe { *p.offset(first_off as isize) }) {
-        if first_off == max_first_off {
-            return JUST_THIS_BYTE;
-        }
-        first_off -= 1;
-    }
-
-    // The sequence has to be complete *and* within `p_len`.
-    let max_end_off =
-        utf8len_tab[unsafe { *p.offset(first_off as isize) } as usize] as c_int + first_off;
-    if max_end_off <= 0 || max_end_off > p_len {
-        return JUST_THIS_BYTE;
-    }
-    for end_off in 1..max_end_off {
-        if !utf_is_trail_byte(unsafe { *p.offset(end_off as isize) }) {
-            return JUST_THIS_BYTE;
-        }
-    }
-    CharBoundsOff {
-        begin_off: -first_off as int8_t,
-        end_off: max_end_off as int8_t,
-    }
+    // SAFETY: the caller's promise. Only a sequence's worth forward is ever
+    // read, so a `p_len` larger than that -- `INT_MAX`, from
+    // [`utf_cp_bounds`] -- may be clamped to it without changing an answer:
+    // the "complete within what is left" test can only fail beyond it.
+    let at = unsafe { p_in.offset_from(base) }.cast_unsigned();
+    let forward = usize::try_from(p_len).unwrap_or(0).min(MB_MAXCHAR);
+    let bytes = unsafe { cstr::slice_at(base, at + forward) };
+    cp_bounds(bytes, at)
 }
 
 /// [`utf_cp_bounds_len`] over a NUL-terminated string, where the length does
@@ -446,13 +468,19 @@ pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
 ///
 /// `str` must point at `len` readable bytes.
 pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
-    let mut p = str;
-    let mut count = 0;
-    while unsafe { *p } != NUL as c_char && p < unsafe { str.offset(len as isize) } {
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        count += 1;
-    }
-    count
+    // SAFETY: the caller's promise; `prefix_at` stops at the NUL as the
+    // pointer walk did, so the count is over the same bytes.
+    let bytes = unsafe { cstr::prefix_at(str, usize::try_from(len).unwrap_or(0)) };
+    c_int::try_from(char_count(bytes)).expect("a count of bytes fits a count of characters")
+}
+
+/// How many grapheme clusters `bytes` holds.
+///
+/// The slice form of [`mb_charlen`] and the body of [`mb_charlen_len`]. A NUL
+/// inside the slice is an ordinary byte and counts as a character, rather
+/// than ending the count.
+pub fn char_count(bytes: &[u8]) -> usize {
+    clusters(bytes).count()
 }
 
 /// `text` paired with its codepoint: the start of a character and the

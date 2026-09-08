@@ -17,10 +17,12 @@ use std::ffi::{c_char, c_int};
 use neovim::charset::{vim_iswordc, vim_iswordp};
 use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::mbyte::{
-    char_at, char_len, cluster_len, encode_char, mb_charlen, mb_charlen_len, mb_off_next,
-    mb_prevptr, mb_string2cells, mb_string2cells_len, utf_char2bytes, utf_char2len,
+    cells_at, char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
+    mb_charlen, mb_charlen_len, mb_off_next, mb_prevptr, mb_string2cells, mb_string2cells_len,
+    promised_char_len, strict_char_at, string_cells, utf_char2bytes, utf_char2len,
     utf_cp_bounds_len, utf_fold, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
-    utf_ptr2len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len, utfc_ptr2schar,
+    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utfc_next,
+    utfc_ptr2len, utfc_ptr2schar,
 };
 use neovim::option::vars::p_arshape;
 
@@ -794,4 +796,104 @@ fn the_character_walk_steps_over_whole_clusters() {
         &[(0, 0x2764, 3), (6, 122, 1)],
         &[0, 0, 0, 0, 0, 0, 0, 6],
     );
+}
+
+/// The rest of the `&[u8]` API answers what its pointer twin answers, over
+/// the same fixtures the codec equivalence uses.
+///
+/// Everything here is measured against the *NUL-terminated* pointer form,
+/// because "the end of the slice is the end of the string" is the slice
+/// convention. `utf_ptr2cells_len` is deliberately absent: it is not the
+/// pointer twin of [`cells_at`] but a different function, as
+/// [`a_sequence_cut_short_is_measured_past_the_cut`] shows.
+#[test]
+fn the_slice_api_answers_what_the_pointer_api_answers() {
+    let _editor = editor_lock();
+    for case in SLICE_CASES {
+        let buf = cbuf(case);
+        let size = c_int::try_from(case.len()).expect("the fixtures are short");
+        // SAFETY: `buf` is NUL-terminated and holds `case.len()` bytes, which
+        // is what every form below is given.
+        unsafe {
+            assert_eq!(
+                cells_at(case),
+                utf_ptr2cells(buf.as_ptr()),
+                "cells {case:x?}"
+            );
+            assert_eq!(
+                string_cells(case),
+                mb_string2cells(buf.as_ptr()),
+                "string_cells {case:x?}"
+            );
+            assert_eq!(
+                char_count(case),
+                usize::try_from(mb_charlen(buf.as_ptr())).expect("never negative"),
+                "char_count {case:x?}"
+            );
+            if !case.is_empty() {
+                assert_eq!(
+                    promised_char_len(case),
+                    usize::try_from(utf_ptr2len_len(buf.as_ptr(), size)).expect("positive"),
+                    "promised_char_len {case:x?}"
+                );
+                let info = utf_ptr2char_info(buf.as_ptr());
+                assert_eq!(char_info_at(case).value, info.value, "value {case:x?}");
+                assert_eq!(char_info_at(case).len, info.len, "info len {case:x?}");
+            }
+        }
+    }
+}
+
+/// `strict_char_at` is the decoder that says "not a character": negative for
+/// an incomplete sequence, a bad continuation byte, or a byte that leads
+/// nothing, and the codepoint otherwise. `char_at` answers the lead byte's
+/// own value for all three, which is the pair the module documents.
+#[test]
+fn the_strict_decoder_rejects_what_the_forgiving_one_passes_through() {
+    for (case, want) in [
+        (b"a".as_slice(), 0x61),
+        (b"\x7f", 0x7f),
+        (b"\xc3\xa9", 0xe9),
+        (b"\xe2\x82\xac", 0x20ac),
+        (b"\xf0\x9f\x92\xa9", 0x1f4a9),
+        (b"\xc0\x80", 0), // an overlong NUL decodes, to zero
+    ] {
+        assert_eq!(strict_char_at(case), want, "{case:x?}");
+    }
+    for case in [
+        b"".as_slice(),
+        b"\x80", // a continuation byte leads nothing
+        b"\xfe", // never a lead byte
+        b"\xc3", // incomplete
+        b"\xe2\x82",
+        b"\xc3z", // a bad continuation byte
+    ] {
+        assert!(strict_char_at(case) < 0, "{case:x?}");
+        assert_eq!(char_at(case), i32::from(case.first().copied().unwrap_or(0)));
+    }
+}
+
+/// `cp_bounds` answers what `utf_cp_bounds_len` answers, for every byte of
+/// the three fixtures [`the_codepoint_bounds_of_every_byte`] pins.
+#[test]
+fn the_slice_bounds_answer_what_the_pointer_bounds_answer() {
+    let _editor = editor_lock();
+    for raw in [
+        b"i\xc3\x80ii\xe2\xb1\xa0i\xe2\xb1\xa0\xe2\xb1\xa0\xf0\x90\x80\x80i".as_slice(),
+        b"i\xc3i\xc3\x80\xe2\xb1\xa0i\xc3\x80\xe2\xb1\xe2\xb1\xa0\xf0\x90\x80",
+        b"i\xc3\x80\xa0\xe2\xb1\xa0\xa0\xe2\xb1\xa0\xf0\x90\x80\x80\xa0i",
+    ] {
+        let buf = cbuf(raw);
+        for at in 0..raw.len() {
+            let left = c_int::try_from(raw.len() - at).expect("the fixtures are short");
+            // SAFETY: `buf` holds `raw.len()` bytes plus a terminator.
+            let want = unsafe { utf_cp_bounds_len(buf.as_ptr(), buf.as_ptr().add(at), left) };
+            let got = cp_bounds(raw, at);
+            assert_eq!(
+                (got.begin_off, got.end_off),
+                (want.begin_off, want.end_off),
+                "byte {at} of {raw:x?}"
+            );
+        }
+    }
 }

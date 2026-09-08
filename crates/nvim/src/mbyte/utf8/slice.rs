@@ -26,7 +26,8 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{LEAD_PAYLOAD, LEAD_PREFIX, utf_char2len, utf_is_trail_byte, utf8len_tab};
+use super::{CORRECTIONS, LEAD_PAYLOAD, LEAD_PREFIX, utf_char2len, utf_is_trail_byte, utf8len_tab};
+use crate::types::CharInfo;
 
 /// How many bytes the character at the start of `bytes` occupies, or 0 if
 /// there is no character there because `bytes` is empty.
@@ -46,6 +47,89 @@ pub fn char_len(bytes: &[u8]) -> usize {
         return 1;
     }
     len
+}
+
+/// The length the lead byte at the start of `bytes` announces, whether or not
+/// the slice holds that much.
+///
+/// The slice form of [`utf_ptr2len_len`](super::utf_ptr2len_len), and its
+/// body. The one answer that is *not* the announced length is 1, for a byte
+/// that leads nothing (ASCII, a continuation byte, `0xFE`/`0xFF`) or a
+/// sequence with a bad continuation byte inside the slice.
+///
+/// The difference from [`char_len`] is what the caller learns about a
+/// sequence the slice cuts short: this reports what the lead byte promised,
+/// so `promised_char_len(bytes) > bytes.len()` says "incomplete, and this is
+/// how much more it wants", where [`char_len`] would say 1 and keep a walk
+/// moving. A caller stepping through text wants [`char_len`]; one deciding
+/// whether to wait for more bytes wants this.
+pub fn promised_char_len(bytes: &[u8]) -> usize {
+    let Some(&first) = bytes.first() else {
+        return 0;
+    };
+    let len = usize::from(utf8len_tab[usize::from(first)]);
+    if len == 1 {
+        return 1;
+    }
+    if !bytes[1..len.min(bytes.len())]
+        .iter()
+        .all(|&byte| utf_is_trail_byte(byte))
+    {
+        return 1;
+    }
+    len
+}
+
+/// The codepoint at the start of `bytes`, or a **negative** number when there
+/// is no character there -- an incomplete sequence, a bad continuation byte,
+/// or a byte that leads nothing at all.
+///
+/// The slice form of [`utf_ptr2char_info_impl`](super::utf_ptr2char_info_impl),
+/// and the strict half of the pair this module's parent documents: where
+/// [`char_at`] answers the lead byte's own value for anything it cannot
+/// decode, this says "not a character" and lets the caller draw the byte.
+/// Unlike the pointer form it does handle ASCII, because a slice can say how
+/// many bytes it has and a pointer cannot.
+pub fn strict_char_at(bytes: &[u8]) -> i32 {
+    let Some(&first) = bytes.first() else {
+        return -1;
+    };
+    if first < 0x80 {
+        return i32::from(first);
+    }
+    let len = usize::from(utf8len_tab[usize::from(first)]);
+    // The pointer form reads a second byte even for a length of 0 or 1 and
+    // lets the correction make the answer negative; here the length alone
+    // settles it, which is the same answer without the read.
+    if len < 2 || len > bytes.len() {
+        return -1;
+    }
+    let mut code_point = u32::from(first);
+    for &cur in &bytes[1..len] {
+        if !utf_is_trail_byte(cur) {
+            return -1;
+        }
+        code_point = (code_point << 6).wrapping_add(u32::from(cur));
+    }
+    // Six bytes carry 31 bits, so the sum always fits once the framing is
+    // subtracted back off.
+    code_point.wrapping_add(CORRECTIONS[len]).cast_signed()
+}
+
+/// The character at the start of `bytes`, as the codepoint-and-length pair
+/// the drawing path walks with. A byte that is not a character reports its
+/// negative value with a length of one, so a walk still advances.
+///
+/// The slice form of [`utf_ptr2char_info`](super::utf_ptr2char_info).
+pub fn char_info_at(bytes: &[u8]) -> CharInfo {
+    let value = strict_char_at(bytes);
+    if value < 0 {
+        return CharInfo { value, len: 1 };
+    }
+    CharInfo {
+        value,
+        len: i32::from(utf8len_tab[usize::from(bytes[0])]),
+    }
 }
 
 /// The codepoint at the start of `bytes`, or the first byte's own value if
