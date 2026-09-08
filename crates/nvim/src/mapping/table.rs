@@ -33,6 +33,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::sourcing_lnum;
 use crate::keycodes::Ctrl_C;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -472,7 +473,7 @@ pub(crate) unsafe fn map_to_exists(
     let mut mode = 0;
     for (ch, flags) in MODE_CHARS {
         // SAFETY: the caller's promise — `modechars` is NUL-terminated.
-        if !unsafe { strchr(modechars, c_int::from(ch)) }.is_null() {
+        if has_char(unsafe { cstr::at(modechars) }, c_int::from(ch)) {
             mode |= flags;
         }
     }

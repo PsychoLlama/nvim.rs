@@ -11,6 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::os::cshim::strchr;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
@@ -468,9 +469,7 @@ pub(crate) unsafe fn find_cmd_after_substitute_cmd(mut arg: *const c_char) -> *c
             }
         }
     }
-    while unsafe { *arg } as c_int != 0
-        && unsafe { strchr(c"|\"#".as_ptr(), *arg as c_int) }.is_null()
-    {
+    while unsafe { *arg } as c_int != 0 && !has_char(c"|\"#", unsafe { *arg } as c_int) {
         arg = unsafe { arg.add(1) };
     }
     if unsafe { *arg } as c_int != NUL {
@@ -512,9 +511,7 @@ pub(crate) unsafe fn find_cmd_after_isearch_cmd(
         arg = unsafe { skipwhite(arg.add(1)) };
 
         // Check for trailing illegal characters.
-        if unsafe { *arg } as c_int == NUL
-            || unsafe { strchr(c"|\"\n".as_ptr(), *arg as c_int) }.is_null()
-        {
+        if unsafe { *arg } as c_int == NUL || !has_char(c"|\"\n", unsafe { *arg } as c_int) {
             expand.xp_context = ExpandContext::Nothing;
         } else {
             return arg;

@@ -8,6 +8,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_bytes;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
@@ -42,7 +43,6 @@ use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptEncoding, kOptFileencoding,
     kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
-use crate::os::cshim::strstr;
 use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
@@ -270,7 +270,7 @@ pub unsafe fn did_set_comments(args: &mut OptSet) -> Option<&CStr> {
 pub unsafe fn did_set_commentstring(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { *varp(args) };
-    if c_int::from(unsafe { *value }) != NUL && unsafe { strstr(value, c"%s".as_ptr()) }.is_null() {
+    if c_int::from(unsafe { *value }) != NUL && !has_bytes(unsafe { cstr::at(value) }, b"%s") {
         return Some(c"E537: 'commentstring' must be empty or contain %s");
     }
     None

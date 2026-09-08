@@ -16,11 +16,12 @@ use crate::message::{e_exists, e_invarg};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_msm, p_verbose};
-use crate::os::cshim::{gettext, strstr};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
 use crate::semsg;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
+use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
@@ -499,10 +500,16 @@ pub unsafe fn mkspell(
     let wfname = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<::core::ffi::c_char>();
     if fcount >= 1 {
         incount = unsafe { output_name(wfname, fnames, fcount, spin.si_ascii != 0, incount) };
-        if !unsafe { strstr(path_tail(wfname), SPL_FNAME_ASCII.as_ptr()) }.is_null() {
+        if has_bytes(
+            unsafe { cstr::at(path_tail(wfname)) },
+            SPL_FNAME_ASCII.to_bytes(),
+        ) {
             spin.si_ascii = 1;
         }
-        if !unsafe { strstr(path_tail(wfname), SPL_FNAME_ADD.as_ptr()) }.is_null() {
+        if has_bytes(
+            unsafe { cstr::at(path_tail(wfname)) },
+            SPL_FNAME_ADD.to_bytes(),
+        ) {
             spin.si_add = 1;
         }
     }

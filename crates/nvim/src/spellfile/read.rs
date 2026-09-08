@@ -35,6 +35,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
+use crate::strings::has_bytes;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
@@ -50,7 +51,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
 use crate::option::vars::p_verbose;
-use crate::os::cshim::{gettext, gettext_ptr, strstr};
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::fast_breakcheck;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::runtime::{estack_pop, estack_push};
@@ -201,7 +202,7 @@ unsafe fn load_spl(
         // ".add.spl" files add to an existing language rather than
         // defining one.
         // SAFETY: as above.
-        unsafe { (*lp).sl_add = !strstr(path_tail(fname), SPL_FNAME_ADD.as_ptr()).is_null() };
+        unsafe { (*lp).sl_add = has_bytes(cstr::at(path_tail(fname)), SPL_FNAME_ADD.to_bytes()) };
         lp
     } else {
         old_lp

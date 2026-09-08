@@ -23,7 +23,7 @@ use crate::lua::ffi::{
 use crate::lua::state::tslua_query_parse_count;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrlcpy};
-use crate::os::cshim::{__ctype_b_loc, snprintf, strchr};
+use crate::os::cshim::{__ctype_b_loc, snprintf};
 use crate::os::time::os_hrtime;
 use crate::registry::{IdMap, id_map};
 use crate::strings::vim_snprintf;

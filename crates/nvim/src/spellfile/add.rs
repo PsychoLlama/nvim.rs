@@ -31,6 +31,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long, c_void};
@@ -46,7 +47,7 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
-use crate::os::cshim::{gettext, gettext_ptr, strstr};
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
@@ -348,13 +349,12 @@ fn init_spellfile() {
     // the ASCII build of the language rather than the current encoding.
     let fname =
         unsafe { (*(*((*Win::current().w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
-    let enc_suffix = if !fname.is_null()
-        && !unsafe { strstr(path_tail(fname), c".ascii.".as_ptr()) }.is_null()
-    {
-        c"ascii".as_ptr()
-    } else {
-        spell_enc() as *const c_char
-    };
+    let enc_suffix =
+        if !fname.is_null() && has_bytes(unsafe { cstr::at(path_tail(fname)) }, b".ascii.") {
+            c"ascii".as_ptr()
+        } else {
+            spell_enc() as *const c_char
+        };
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
     unsafe { vim_snprintf(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };

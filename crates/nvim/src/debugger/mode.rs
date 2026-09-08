@@ -27,6 +27,7 @@ use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Allow, Bump, Saved, Suppress};
 use crate::message::msg_ptr;
 use crate::message_fmt::{c_str, report_msg};
+use crate::os::cshim::strstr;
 use crate::smsg;
 use crate::tr_c;
 use crate::types::{ExpandContext, NUL};

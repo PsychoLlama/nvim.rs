@@ -87,7 +87,7 @@ use crate::options::{
     kOptCotFlagNearest, kOptCotFlagNoinsert, kOptCotFlagNoselect, kOptCotFlagNosort,
     kOptCotFlagPreinsert,
 };
-use crate::os::cshim::{gettext, strchr, strncasecmp};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::os::time::{os_delay, os_hrtime};

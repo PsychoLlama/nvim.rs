@@ -19,6 +19,7 @@ use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
 use crate::message::emsg_ptr;
 use crate::option::boolean_optval;
+use crate::os::cshim::strchr;
 use crate::pos::MAXCOL;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Win;

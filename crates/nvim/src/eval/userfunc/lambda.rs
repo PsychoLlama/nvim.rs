@@ -11,9 +11,11 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
 use core::ptr;
@@ -199,7 +201,7 @@ pub unsafe fn get_lambda_tv(
             // `start` to `end` inside the caller's expression.
             let len = unsafe { end.offset_from(start) } as size_t;
             unsafe { xmemcpyz(expr as *mut c_void, start as *const c_void, len) };
-            if unsafe { strstr(expr, c"a:".as_ptr()) }.is_null() {
+            if !has_bytes(unsafe { cstr::at(expr) }, b"a:") {
                 // No a: variables are used for sure.
                 flags |= FuncFlags::NOARGS;
             }

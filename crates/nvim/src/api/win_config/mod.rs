@@ -20,7 +20,6 @@ use crate::message::{e_cmdwin, e_textlock};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::option::{copy_option_part, didset_window_options};
-use crate::os::cshim::strchr;
 use crate::strings::striequal;
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;

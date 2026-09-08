@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::has_char;
 use crate::types::{NUL, OK, VarLock};
 use crate::winlayer::{Buf, Win};
 
@@ -300,7 +301,7 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     let mut cp_str = shown.cp_str.data();
     let mut cp_str_len = shown.cp_str.len();
     let leader_len = ins_compl_leader_len();
-    let has_multiple = !unsafe { strchr(cp_str, '\n' as c_int) }.is_null();
+    let has_multiple = has_char(unsafe { cstr::at(cp_str) }, '\n' as c_int);
 
     if insert_prefix {
         cp_str = unsafe { find_common_prefix(&raw mut cp_str_len, false) };

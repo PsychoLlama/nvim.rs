@@ -21,6 +21,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -368,7 +370,7 @@ pub unsafe fn parse_winborder(
         return false;
     }
     // SAFETY: the caller's option value.
-    let listed = !unsafe { strchr(border_opt, ',' as c_int) }.is_null();
+    let listed = has_char(unsafe { cstr::at(border_opt) }, ',' as c_int);
     let style = if listed {
         // SAFETY: as above.
         match unsafe { border_cell_list(border_opt) } {

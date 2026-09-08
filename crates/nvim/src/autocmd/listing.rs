@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::os::cshim::strchr;
 use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 

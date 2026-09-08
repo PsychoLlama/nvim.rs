@@ -18,6 +18,7 @@ use crate::highlight_group::{HLF_D, HLF_R};
 use crate::message_fmt::c_str;
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
+use crate::strings::has_bytes;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
 use crate::window::valid_win;
 use crate::winlayer::WinId;
@@ -258,7 +259,7 @@ unsafe fn include_option() -> *mut c_char {
 /// # Safety
 /// `inc_opt` must be NUL-terminated.
 unsafe fn include_uses_zs(inc_opt: *mut c_char) -> bool {
-    unsafe { !strstr(inc_opt, c"\\zs".as_ptr()).is_null() }
+    has_bytes(unsafe { cstr::at(inc_opt) }, b"\\zs")
 }
 
 /// Copy line `lnum` into `buf`.

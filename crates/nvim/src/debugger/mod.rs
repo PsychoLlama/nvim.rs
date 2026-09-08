@@ -56,7 +56,6 @@ use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
 use crate::message_fmt::c_str;
-use crate::os::cshim::strstr;
 use crate::os::env::{expand_env_save, home_replace};
 use crate::path::fix_fname;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_prog, vim_regfree};
@@ -65,6 +64,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::state::mode::State;
+use crate::strings::has_bytes;
 use crate::types::CmdIdx;
 use crate::types::{
     Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
@@ -382,9 +382,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
     // SAFETY: `p` is inside `arg`.
     let malformed = unsafe {
         let empty = *p as c_int == NUL;
-        (!here && empty)
-            || (here && !empty)
-            || (kind == DBG_FUNC && !strstr(p, c"()".as_ptr()).is_null())
+        (!here && empty) || (here && !empty) || (kind == DBG_FUNC && has_bytes(cstr::at(p), b"()"))
     };
     if malformed {
         // SAFETY: caller contract.

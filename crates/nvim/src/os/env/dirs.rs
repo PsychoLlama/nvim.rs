@@ -16,6 +16,7 @@ use crate::eval::fs::modify_fname;
 use crate::eval::vars::get_vim_var_str;
 use crate::memory::xmemrchr;
 use crate::option::vars::p_hf;
+use crate::os::cshim::strchr;
 use crate::os::fs::os_isdir;
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};

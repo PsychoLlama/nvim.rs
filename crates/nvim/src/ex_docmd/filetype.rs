@@ -15,6 +15,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::smsg;
+use crate::strings::has_bytes;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -36,7 +37,6 @@ use crate::option::vars::p_rtp;
 
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;
-use crate::os::cshim::strstr;
 
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
@@ -299,7 +299,7 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let vimruntime = unsafe { os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env) };
     if vimruntime.is_null() {
         emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
-    } else if !unsafe { strstr(p_rtp.get(), vimruntime) }.is_null() {
+    } else if unsafe { has_bytes(cstr::at(p_rtp.get()), cstr::bytes_at(vimruntime)) } {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.

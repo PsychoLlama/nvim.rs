@@ -14,6 +14,7 @@ use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::keycodes::Ctrl_V;
+use crate::os::cshim::strchr;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
@@ -656,7 +657,7 @@ pub(crate) unsafe fn set_one_cmd_context(
 
     if !ea.argt.has(ExArgt::EXTRA)
         && unsafe { *arg } as c_int != NUL
-        && unsafe { strchr(c"|\"".as_ptr(), *arg as c_int) }.is_null()
+        && !has_char(c"|\"", unsafe { *arg } as c_int)
     {
         // No arguments allowed but there is something.
         return ptr::null();

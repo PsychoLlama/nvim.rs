@@ -53,7 +53,7 @@ use crate::options::{
     kOptSwbFlagVsplit,
 };
 use crate::optionstr::free_string_option;
-use crate::os::cshim::{gettext, snprintf, strstr};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{

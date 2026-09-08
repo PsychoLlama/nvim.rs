@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::os::cshim::strstr;
 use crate::path::ExpandFlags;
 
 use crate::types::{FAIL, Failed, MAXPATHL, OK, OptionSetFlags};

@@ -16,6 +16,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
+use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -36,7 +38,7 @@ use crate::message::state::{
     emsg_assert_fails_msg, emsg_on_display, in_assert_fails, lines_left, msg_col, need_wait_return,
 };
 use crate::message::{emsg, msg_reset_scroll};
-use crate::os::cshim::{gettext, strstr};
+use crate::os::cshim::gettext;
 use crate::types::{
     EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
     typval_vval_union,
@@ -119,7 +121,9 @@ unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> F
     match unsafe { arg_type(args, 1) } {
         VAR_STRING => {
             let expected = unsafe { tv_get_string_buf_chk(arg(args, 1), buf.as_mut_ptr()) };
-            if !expected.is_null() && !unsafe { strstr(actual, expected) }.is_null() {
+            if !expected.is_null()
+                && unsafe { has_bytes(cstr::at(actual), cstr::bytes_at(expected)) }
+            {
                 return FailsCheck::Matched;
             }
             FailsCheck::Mismatch(FailsMismatch {

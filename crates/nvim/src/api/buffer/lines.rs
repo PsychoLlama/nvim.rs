@@ -14,6 +14,7 @@ use super::*;
 use crate::api::private::helpers::{Reported, array_add};
 use crate::cstr;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
+use crate::strings::has_char;
 use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
 
@@ -430,7 +431,7 @@ unsafe fn push_linestr(
     if !lstate.is_null() {
         if !s.is_null()
             && replace_nl as ::core::ffi::c_int != 0
-            && !unsafe { strchr(s, '\n' as ::core::ffi::c_int) }.is_null()
+            && has_char(unsafe { cstr::at(s) }, '\n' as ::core::ffi::c_int)
         {
             let tmp: *mut ::core::ffi::c_char =
                 unsafe { xmemdupz(s as *const ::core::ffi::c_void, len) }

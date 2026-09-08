@@ -18,6 +18,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -37,7 +38,6 @@ use crate::mbyte::{
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy};
 use crate::option::copy_option_part;
 use crate::option::vars::{p_cdpath, p_fic, p_path, p_su, p_wig};
-use crate::os::cshim::strchr;
 use crate::os::env::{expand_env, expand_env_save_opt, os_getenv, vim_env_iter};
 use crate::os::fs::{
     os_can_exe, os_closedir, os_dirname, os_file_is_readable, os_fileid, os_fileid_equal,
@@ -588,7 +588,7 @@ pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize
     let path = unsafe { os_getenv(c"PATH".as_ptr()) };
     if path.is_null() || unsafe { path_is_absolute(cstr::at(argv0)) } {
         unsafe { xstrlcpy(buf, argv0, bufsize) };
-    } else if unsafe { *argv0 } == b'.' as c_char || !unsafe { strchr(argv0, PATHSEP) }.is_null() {
+    } else if unsafe { *argv0 } == b'.' as c_char || has_char(unsafe { cstr::at(argv0) }, PATHSEP) {
         // Relative to the current directory.
         if unsafe { os_dirname(buf, MAXPATHL as size_t) }.is_err() {
             unsafe { *buf = 0 };

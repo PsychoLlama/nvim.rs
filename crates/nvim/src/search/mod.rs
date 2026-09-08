@@ -69,7 +69,7 @@ use crate::option::vars::{
 };
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
-use crate::os::cshim::{gettext, snprintf, strstr};
+use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::os_fopen;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::os::time::{os_delay, os_time};

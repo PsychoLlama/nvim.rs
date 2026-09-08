@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};
 
@@ -29,7 +30,7 @@ use crate::ui::state::current_ui;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
 
-use crate::strings::concat_str;
+use crate::strings::{concat_str, has_bytes};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
@@ -128,11 +129,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
         if i > 0 && strequal(arg, c"--listen".as_ptr()) {
             let next_li = unsafe { (*li).li_next };
             if !next_li.is_null() {
+                // SAFETY: the list entry is live and `string` answers a
+                // NUL-terminated buffer that outlives the loop.
                 let addr = unsafe { numbuf2.string(&raw const (*next_li).li_tv) };
-                if !strstr(addr, c":".as_ptr()).is_null()
-                    || !strstr(addr, c"/".as_ptr()).is_null()
-                    || !strstr(addr, c"\\".as_ptr()).is_null()
-                {
+                let text = unsafe { cstr::at(addr) };
+                if has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\") {
                     listen_arg = addr;
                 }
             }
@@ -466,15 +467,6 @@ fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 fn strequal(a: *const c_char, b: *const c_char) -> bool {
     // SAFETY: two NUL-terminated strings, or null.
     unsafe { crate::memory::strequal(a, b) }
-}
-
-/// `strstr()` as checked code.
-fn strstr(
-    __haystack: *const ::core::ffi::c_char,
-    __needle: *const ::core::ffi::c_char,
-) -> *mut ::core::ffi::c_char {
-    // SAFETY: two NUL-terminated strings.
-    unsafe { crate::os::cshim::strstr(__haystack, __needle) }
 }
 
 /// `xstrdup()` as checked code.

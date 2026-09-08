@@ -18,6 +18,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -34,7 +35,7 @@ use crate::memory::{xfree, xstrlcpy};
 use crate::message::e_cant_read_file_str;
 use crate::message::emsg;
 use crate::message::state::{emsg_on_display, emsg_silent};
-use crate::os::cshim::{gettext, strstr};
+use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
@@ -575,13 +576,13 @@ pub(crate) unsafe fn f_assert_exception(
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
     let error = unsafe { numbuf.string_chk(arg(args, 0)) };
-    if unsafe { *get_vim_var_str(Vv::Exception) } == 0 {
+    let thrown = unsafe { cstr::at(get_vim_var_str(Vv::Exception)) };
+    if thrown.is_empty() {
         let mut ga = unsafe { prepare_assert_error() };
         ga_concat_lit(&mut ga, c"v:exception is not set");
         report_assert_error(&ga);
         unsafe { (*result).vval.v_number = 1 };
-    } else if !error.is_null() && unsafe { strstr(get_vim_var_str(Vv::Exception), error) }.is_null()
-    {
+    } else if !error.is_null() && !has_bytes(thrown, unsafe { cstr::bytes_at(error) }) {
         let mut ga = unsafe { prepare_assert_error() };
         unsafe {
             fill_assert_error(

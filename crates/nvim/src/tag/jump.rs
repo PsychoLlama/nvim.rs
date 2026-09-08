@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
+use crate::os::cshim::strstr;
 use crate::search::SEARCH_KEEP;
 use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, FAIL, Failed, OK};

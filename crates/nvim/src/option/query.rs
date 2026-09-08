@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
@@ -29,7 +30,6 @@ use crate::option::vars::{
 };
 use crate::options::*;
 use crate::optionstr::empty_option;
-use crate::os::cshim::strstr;
 use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
@@ -427,13 +427,13 @@ pub(crate) unsafe fn copy_option_part(
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    unsafe { !strstr(path_tail(p_sh.get()), c"csh".as_ptr()).is_null() }
+    has_bytes(unsafe { cstr::at(path_tail(p_sh.get())) }, b"csh")
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
 pub(crate) fn fish_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    unsafe { !strstr(path_tail(p_sh.get()), c"fish".as_ptr()).is_null() }
+    has_bytes(unsafe { cstr::at(path_tail(p_sh.get())) }, b"fish")
 }
 
 /// Every buffer-local (or window-local) option of the current buffer and

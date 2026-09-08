@@ -4,9 +4,8 @@
 use crate::cstr;
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
-use crate::mbyte::{cluster_len, encode_char, utf_char2bytes};
+use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::{xmalloc, xmallocz};
-use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
 use crate::types::{KeyValue, MB_MAXCHAR, TypVal, VAR_UNKNOWN, size_t};
 use ::libc::{qsort, strcasecmp};
@@ -199,21 +198,36 @@ pub(crate) fn has_char(set: &CStr, c: c_int) -> bool {
     find_char(set.to_bytes(), c).is_some()
 }
 
+/// The byte offset at which `needle` occurs in `haystack`, or `None`.
+///
+/// The safe form of C's `strstr()`, its empty-needle answer included: every
+/// string starts with the empty one, so an empty needle is found at 0.
+pub(crate) fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+/// Whether `needle` occurs anywhere in `haystack` — the membership half of
+/// [`find_bytes`], as [`has_char`] is of [`find_char`].
+pub(crate) fn has_bytes(haystack: &CStr, needle: &[u8]) -> bool {
+    find_bytes(haystack.to_bytes(), needle).is_some()
+}
+
 /// Find character `c` (a codepoint, not a byte) in `string`.
 ///
 /// # Safety
 ///
 /// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
-    if c <= 0 {
-        ptr::null_mut()
-    } else if c < 0x80 {
-        unsafe { strchr(string, c) }
-    } else {
-        let mut u8char = [0 as c_char; 22];
-        let len = unsafe { utf_char2bytes(c, u8char.as_mut_ptr()) };
-        u8char[len as usize] = 0;
-        unsafe { strstr(string, u8char.as_ptr()) }
+    // SAFETY: the caller's NUL-terminated string, and an offset `find_char`
+    // answered from within it.
+    match find_char(unsafe { cstr::bytes_at(string) }, c) {
+        Some(at) => unsafe { string.add(at) }.cast_mut(),
+        None => ptr::null_mut(),
     }
 }
 
@@ -298,17 +312,14 @@ pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
 /// `src` must point at a NUL-terminated string. `what` must point at a NUL-
 /// terminated string. `rep` must point at a NUL-terminated string.
 pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char) -> *mut c_char {
-    let what_len = unsafe { cstr::bytes_at(what) }.len();
-
+    // SAFETY: the caller's NUL-terminated strings; `find_bytes` answers an
+    // offset inside `rest`, and the walk only ever moves forward in it.
+    let (mut rest, what_bytes) = unsafe { (cstr::bytes_at(src), cstr::bytes_at(what)) };
+    let what_len = what_bytes.len();
     let mut count: size_t = 0;
-    let mut pos = src;
-    loop {
-        pos = unsafe { strstr(pos, what) };
-        if pos.is_null() {
-            break;
-        }
+    while let Some(at) = find_bytes(rest, what_bytes) {
         count += 1;
-        pos = unsafe { pos.add(what_len) };
+        rest = &rest[at + what_len..];
     }
     if count == 0 {
         return ptr::null_mut();
@@ -325,17 +336,14 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
 
     let mut src = src;
     let mut out = ret;
-    loop {
-        pos = unsafe { strstr(src, what) };
-        if pos.is_null() {
-            break;
-        }
-        let prefix = unsafe { pos.offset_from(src) as size_t };
+    // SAFETY: as above for `src`; `ret` is the `size` bytes just allocated,
+    // and the loop writes exactly the prefix and replacement it measured.
+    while let Some(prefix) = find_bytes(unsafe { cstr::bytes_at(src) }, what_bytes) {
         unsafe { ptr::copy_nonoverlapping(src, out, prefix) };
         out = unsafe { out.add(prefix) };
         unsafe { ptr::copy_nonoverlapping(rep, out, rep_len) };
         out = unsafe { out.add(rep_len) };
-        src = unsafe { pos.add(what_len) };
+        src = unsafe { src.add(prefix + what_len) };
     }
     let tail = unsafe { cstr::bytes_at(src) }.len();
     unsafe { ptr::copy_nonoverlapping(src, out, tail + 1) };
@@ -363,8 +371,8 @@ pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core
 #[cfg(test)]
 mod tests {
     use super::{
-        any_non_ascii, ascii_upcase, find_char, has_char, strnicmp_asc, trailing_spaces_start,
-        unquote,
+        any_non_ascii, ascii_upcase, find_bytes, find_char, has_bytes, has_char, strnicmp_asc,
+        trailing_spaces_start, unquote,
     };
 
     #[test]
@@ -410,6 +418,27 @@ mod tests {
         assert!(!has_char(c"", i32::from(b'a')));
         assert!(!has_char(c"abc", 0)); // the terminator is not a member
         assert!(has_char(c"a\u{ab}b", 0xAB));
+    }
+
+    #[test]
+    fn find_bytes_is_strstr_over_slices() {
+        assert_eq!(find_bytes(b"abcabc", b"ca"), Some(2));
+        assert_eq!(find_bytes(b"abc", b"abc"), Some(0));
+        assert_eq!(find_bytes(b"abc", b"abcd"), None); // needle longer
+        assert_eq!(find_bytes(b"", b"a"), None);
+        // Every string starts with the empty one, as `strstr` answers.
+        assert_eq!(find_bytes(b"abc", b""), Some(0));
+        assert_eq!(find_bytes(b"", b""), Some(0));
+        // A NUL is an ordinary byte here, which is where a slice and a C
+        // string part company.
+        assert_eq!(find_bytes(b"a\0b", b"\0b"), Some(1));
+    }
+
+    #[test]
+    fn has_bytes_stops_at_the_terminator() {
+        assert!(has_bytes(c"runtime/after", b"after"));
+        assert!(!has_bytes(c"runtime", b"after"));
+        assert!(has_bytes(c"", b""));
     }
 
     fn unquote_all(src: &[u8]) -> Vec<u8> {

@@ -15,6 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::global_cell::ConstTable;
 use crate::luaL_reg_table;
+use crate::os::cshim::strchr;
 
 pub(crate) static query_meta: ConstTable<[luaL_Reg; 6]> = luaL_reg_table![
     c"__gc" => query_gc,

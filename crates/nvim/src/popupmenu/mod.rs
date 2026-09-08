@@ -54,7 +54,7 @@ use crate::options::{
     kOptBufhidden, kOptBuflisted, kOptBuftype, kOptCotFlagFuzzy, kOptCotFlagPopup,
     kOptCotFlagPreview, kOptDiff, kOptSwapfile,
 };
-use crate::os::cshim::{gettext, strchr};
+use crate::os::cshim::gettext;
 use crate::plines::{plines_m_win, win_linetabsize};
 use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;

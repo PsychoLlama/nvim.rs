@@ -53,7 +53,7 @@ use crate::message::{
 use crate::option::set_option_direct;
 use crate::option::vars::{p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
-use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp};
+use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::os::env::expand_env_save;
 use crate::os::input::line_breakcheck;
 use crate::os::state::globaldir;
