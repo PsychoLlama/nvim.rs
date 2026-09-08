@@ -84,9 +84,9 @@ pub unsafe fn spell_soundfold(
         unsafe { spell_soundfold_wsal(slang, inword, res) };
     } else {
         let mut fword = [0 as c_char; MAXWLEN];
-        let (win, out) = (Win::current_raw(), fword.as_mut_ptr());
+        let (win, out) = (Win::current(), fword.as_mut_ptr());
         let len = unsafe { cstr::bytes_at(inword) }.len() as c_int;
-        let _ = unsafe { spell_casefold(Win::new(win), inword, len, out, MAXWLEN as c_int) };
+        let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
     }
 }

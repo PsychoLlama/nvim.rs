@@ -431,18 +431,17 @@ fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
 /// **Nothing derived from a window or buffer survives this call**: the event
 /// may close windows, switch tab pages or wipe the buffer.
 fn fire(event: AutoEvent, buffer: Buf) -> bool {
-    let (none, raw) = (ptr::null_mut(), buffer.raw());
+    let none = ptr::null_mut();
     // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, none, none, false, Buf::from_raw(raw)) }
+    unsafe { apply_autocmds(event, none, none, false, Some(buffer)) }
 }
 
 /// [`fire`] with a name, which the event reports as `<afile>` and matches
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
 fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buffer: Option<Buf>) -> bool {
-    let buffer = buffer.map_or(ptr::null_mut(), Buf::raw);
-    // SAFETY: a live buffer or null, and a NUL-terminated name or null.
-    unsafe { apply_autocmds(event, name, name, false, Buf::from_raw(buffer)) }
+    // SAFETY: a live buffer or none, and a NUL-terminated name or null.
+    unsafe { apply_autocmds(event, name, name, false, buffer) }
 }
 
 /// Ring the bell and drop the typeahead, the family's answer to a move that

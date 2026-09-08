@@ -181,9 +181,9 @@ pub enum Loaded {
 /// One of the buffer-lifecycle autocommands this file fires about the current
 /// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
 fn autocmd_for_curbuf(event: AutoEvent) {
-    let (nofile, cb) = (ptr::null_mut(), Buf::current_raw());
+    let (nofile, cb) = (ptr::null_mut(), Buf::current_or_none());
     // SAFETY: the current buffer is live, and the event takes no file name.
-    unsafe { apply_autocmds(event, nofile, nofile, false, Buf::from_raw(cb)) };
+    unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
 }
 static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(c"E812: Autocommands changed buffer or buffer name".as_ptr());

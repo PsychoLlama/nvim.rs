@@ -562,10 +562,10 @@ pub(crate) unsafe fn get_next_default_completion(
         // Don't want messages for wrapscan.
         let silenced = Suppress::messages();
         if in_fuzzy_collect {
-            let (buf, at, dir) = (ins_buf.raw(), match_pos.raw(), compl_direction.get());
+            let (at, dir) = (match_pos.raw(), compl_direction.get());
             // SAFETY: `at` is a position in `buf` and `leader` is
             // NUL-terminated; `start_pos` is the caller's own position.
-            let hit = unsafe { search_for_fuzzy_match(Buf::new(buf), at, leader, dir, start_pos) };
+            let hit = unsafe { search_for_fuzzy_match(ins_buf, at, leader, dir, start_pos) };
             found_new_match = Err(Failed);
             if let Some(hit) = hit {
                 (ptr, len) = (hit.ptr, hit.len);

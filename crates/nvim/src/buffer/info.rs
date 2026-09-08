@@ -250,9 +250,9 @@ fn fill_name(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
         unsafe { xstrlcpy(name.as_mut_ptr(), special, MAXPATHL as usize) };
         return;
     }
-    let (raw, fname, dst) = (buffer.raw(), buffer.b_fname, name.as_mut_ptr());
+    let (fname, dst) = (buffer.b_fname, name.as_mut_ptr());
     // SAFETY: a live buffer, its name, and `MAXPATHL` writable bytes.
-    unsafe { home_replace(Buf::from_raw(raw), fname, dst, MAXPATHL as size_t, true) };
+    unsafe { home_replace(Some(buffer), fname, dst, MAXPATHL as size_t, true) };
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to

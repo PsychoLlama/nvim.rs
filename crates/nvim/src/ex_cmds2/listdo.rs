@@ -407,9 +407,9 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
                     )
                 };
             } else {
-                let (syn, name, raw) = (buf.b_p_syn, buf.b_fname, buf.raw());
-                unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(raw)) };
-                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, Buf::from_raw(raw)) };
+                let (syn, name) = (buf.b_p_syn, buf.b_fname);
+                unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, Some(buf)) };
                 unsafe { aucmd_restbuf(&raw mut aco) };
             }
             // Start over, in case autocommands messed things up.

@@ -267,10 +267,10 @@ impl StlJob<'_> {
             tabtab: clk,
             stcp,
         };
-        let (w, f, fc, mw) = (self.win.raw(), self.fmt.text, self.fillchar, self.maxwidth);
+        let (w, f, fc, mw) = (self.win, self.fmt.text, self.fillchar, self.maxwidth);
         // SAFETY: `fmt` is NUL-terminated by [`Fmt`]'s constructors, the
         // window is live, and every sink is null or a local of this frame.
-        let width = unsafe { build_stl_str_hl(Win::new(w), out, f, from, fc, mw, sinks) };
+        let width = unsafe { build_stl_str_hl(w, out, f, from, fc, mw, sinks) };
         StlBuilt {
             width,
             hl: (self.hl == HlDest::Runs).then_some(HlRuns(runs)),

@@ -368,8 +368,8 @@ pub unsafe fn utf_cp_bounds(base: *const c_char, p_in: *const c_char) -> CharBou
 ///
 /// The editor's globals must be live.
 pub unsafe fn mb_adjust_cursor() {
-    let (buffer, cursor) = (Buf::current_raw(), Win::current().cursor().raw());
-    unsafe { mark_mb_adjustpos(Buf::new(buffer), cursor) }
+    let (buffer, cursor) = (Buf::current(), Win::current().cursor().raw());
+    unsafe { mark_mb_adjustpos(buffer, cursor) }
 }
 
 /// Pull `win`'s cursor back onto a character start, and clear a `coladd` that

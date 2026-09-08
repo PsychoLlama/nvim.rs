@@ -270,20 +270,20 @@ unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_pr
         };
     // The splice both arms report is the same shape: the whole of what was
     // there, replaced by the new prompt.
-    let (raw, row) = (buffer.raw(), prompt_lno - 1);
+    let row = prompt_lno - 1;
     let splice = |old_len: c_int| {
         extmark_splice_cols(buffer, row, 0, old_len, new_prompt_len, kExtmarkNoUndo);
     };
     if intact {
         let new_line = unsafe { concat_str(new_prompt, at(prompt_col)) };
-        if unsafe { ml_replace_buf(Buf::new(raw), prompt_lno, new_line, false, false) }.is_err() {
+        if unsafe { ml_replace_buf(buffer, prompt_lno, new_line, false, false) }.is_err() {
             unsafe { xfree(new_line.cast()) };
         }
         splice(prompt_col);
         cursor_col += new_prompt_len - prompt_col;
     } else {
         let whole = new_prompt.cast_mut();
-        let _ = unsafe { ml_replace_buf(Buf::new(raw), prompt_lno, whole, true, false) };
+        let _ = unsafe { ml_replace_buf(buffer, prompt_lno, whole, true, false) };
         splice(old_line_len);
         cursor_col = new_prompt_len;
     }

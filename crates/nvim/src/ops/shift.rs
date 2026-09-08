@@ -350,8 +350,8 @@ fn shift_block(op: Op, amount: c_int) {
     let _ = unsafe { ml_replace(lnum, shifted.line, false) };
     unsafe { changed_bytes(lnum, bd.textcol) };
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
-    let (buffer, row) = (Buf::current_raw(), lnum as c_int - 1);
-    unsafe { extmark_splice_cols(Buf::new(buffer), row, at, old, new, kExtmarkUndo) };
+    let (buffer, row) = (Buf::current(), lnum as c_int - 1);
+    extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo);
 
     State.set(old_state);
     Win::current().w_cursor.col = old_col;

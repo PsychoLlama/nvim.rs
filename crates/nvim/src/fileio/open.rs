@@ -53,12 +53,12 @@ unsafe fn read_autocmd(
     for_file: bool,
 ) -> bool {
     let (iofile, buf) = if for_file {
-        (sfname, ptr::null_mut())
+        (sfname, None)
     } else {
-        (ptr::null_mut(), Buf::current_raw())
+        (ptr::null_mut(), Buf::current_or_none())
     };
     // SAFETY: the current buffer is live and `args` is the caller's command.
-    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, Buf::from_raw(buf), args) }
+    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, args) }
 }
 
 /// The file, open and ready to read.

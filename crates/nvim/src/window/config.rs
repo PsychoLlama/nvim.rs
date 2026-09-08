@@ -358,11 +358,11 @@ fn anchor_to_window(
         coladd: 0 as ColNr,
     };
     let (mut trow, mut tcol, mut tcolc, mut tcole) = (0, 0, 0, 0);
-    let (win, at) = (parent.raw(), &raw mut pos);
+    let at = &raw mut pos;
     let (r, c1, c2, c3) = (&raw mut trow, &raw mut tcol, &raw mut tcolc, &raw mut tcole);
     // SAFETY: a live window and a position in its buffer, plus four
     // out-parameters of ours.
-    unsafe { textpos2screenpos(Win::new(win), at, r, c1, c2, c3, true) };
+    unsafe { textpos2screenpos(parent, at, r, c1, c2, c3, true) };
     *row += (trow - 1) as Float;
     *col += (tcol - 1) as Float;
 }

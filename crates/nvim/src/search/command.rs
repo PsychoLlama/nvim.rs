@@ -646,9 +646,8 @@ pub unsafe fn do_search(
                 let inexact = count != 1
                     || has_offset
                     || (fdo_flags.get() & kOptFdoFlagSearch == 0 && {
-                        let (w, lnum) = (Win::current_raw(), Win::current().w_cursor.lnum);
-                        // SAFETY: `curwin` is live and no bounds are asked for.
-                        unsafe { has_folding(Win::new(w), lnum, None, None) }
+                        let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
+                        has_folding(w, lnum, None, None)
                     });
                 let (at, cursor) = (&raw mut pos, Win::current().cursor().raw());
                 let (msg, msglen) = (echo.buf.as_ptr(), echo.len);
@@ -753,9 +752,9 @@ pub unsafe fn showmatch(c: c_int) {
 
     let mut vcol: ColNr = 0;
     if Win::current().w_onebuf_opt.wo_wrap == 0 {
-        let (w, at, col) = (Win::current_raw(), &raw mut lpos, &raw mut vcol);
+        let (w, at, col) = (Win::current(), &raw mut lpos, &raw mut vcol);
         // SAFETY: `lpos` is this frame's position in the live window.
-        unsafe { getvcol(Win::new(w), at, ptr::null_mut(), col, ptr::null_mut()) };
+        unsafe { getvcol(w, at, ptr::null_mut(), col, ptr::null_mut()) };
         if !(vcol >= Win::current().w_leftcol
             && vcol < Win::current().w_leftcol + Win::current().w_view_width)
         {

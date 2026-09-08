@@ -275,10 +275,10 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
 fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array {
     let ar = &raw mut *arena;
     let mut linedata = arena_array(ar, n);
-    let (b, out, none) = (buffer.raw(), &raw mut linedata, ptr::null_mut());
+    let (out, none) = (&raw mut linedata, ptr::null_mut());
     // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
     // array of `n` slots in the same arena the callee fills from.
-    unsafe { buf_collect_lines(Buf::new(b), n, first, 0, true, out, none, ar) };
+    unsafe { buf_collect_lines(buffer, n, first, 0, true, out, none, ar) };
     linedata
 }
 

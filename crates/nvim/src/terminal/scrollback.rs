@@ -226,12 +226,12 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
             let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
             term.sb.drop_oldest();
         }
-        let (buf, diff) = (buffer.raw(), diff as LineNr);
+        let diff = diff as LineNr;
         // SAFETY: as above; the marks that pointed into the deleted lines
         // move with them.
-        unsafe { mark_adjust_term(Buf::new(buf), 1 as LineNr, diff, -diff) };
-        // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(Buf::new(buf), 1 as LineNr, diff) };
+        unsafe { mark_adjust_term(buffer, 1 as LineNr, diff, -diff) };
+        // Report what the deletion took away.
+        deleted_lines_buf(buffer, 1 as LineNr, diff);
     }
     term.sb.set_capacity(limit);
 }

@@ -108,14 +108,9 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
     // pairs before any is pushed.
     let mut retval = arena_dict(arena, kOptCount as size_t);
     for opt_idx in kOptAleph..kOptCount {
-        let (scope, buf, win) = (
-            OptionSetFlags::GLOBAL,
-            Buf::current_raw(),
-            Win::current_raw(),
-        );
+        let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
         // SAFETY: the caller's arena, and `curbuf`/`curwin` are live.
-        let opt_dict =
-            unsafe { vimoption2dict(opt_idx, scope, Buf::new(buf), Win::new(win), arena) };
+        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win, arena) };
         let pair = key_value_pair {
             // SAFETY: the option table's names are static C strings.
             key: unsafe { cstr_as_string(get_option(opt_idx).fullname) },

@@ -403,18 +403,18 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
-    let (name, raw) = (buffer.b_fname, buffer.raw());
+    let name = buffer.b_fname;
     // SAFETY: a live buffer and its own file name.
-    unsafe { apply_autocmds(event, name, name, false, Buf::from_raw(raw)) }
+    unsafe { apply_autocmds(event, name, name, false, Some(buffer)) }
 }
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
 pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<T, Failed>) {
-    let (none, raw) = (ptr::null_mut(), buffer.raw());
+    let none = ptr::null_mut();
     let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.
-    unsafe { apply_autocmds_retval(event, none, none, false, Buf::new(raw), &raw mut status) };
+    unsafe { apply_autocmds_retval(event, none, none, false, buffer, &raw mut status) };
     // The event can only *lose* the read, never claim one: `FAIL` is the
     // only value `apply_autocmds_retval` writes.
     if status == FAIL {

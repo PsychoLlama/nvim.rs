@@ -321,8 +321,8 @@ pub(super) unsafe fn store_word(
         return Err(Failed);
     }
 
-    let (win, out) = (Win::current_raw(), foldword.as_mut_ptr());
-    let _ = unsafe { spell_casefold(Win::new(win), word, len, out, MAXWLEN as c_int) };
+    let (win, out) = (Win::current(), foldword.as_mut_ptr());
+    let _ = unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
 
     let root = spin.si_foldroot;
     let folded = foldword.as_ptr();

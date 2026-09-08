@@ -202,20 +202,11 @@ unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Optio
     // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally; `count`
     // says how many neighbours to step. The comparison is `strequal`'s, which
     // is a whole-string one.
-    let (tpr, twr) = (tabpage.raw(), twin.raw());
     let direction = match rest.map(CStr::to_bytes) {
-        Some(b"j") => {
-            Some(unsafe { win_vert_neighbor(TabPage::new(tpr), Win::new(twr), false, count) })
-        }
-        Some(b"k") => {
-            Some(unsafe { win_vert_neighbor(TabPage::new(tpr), Win::new(twr), true, count) })
-        }
-        Some(b"h") => {
-            Some(unsafe { win_horz_neighbor(TabPage::new(tpr), Win::new(twr), true, count) })
-        }
-        Some(b"l") => {
-            Some(unsafe { win_horz_neighbor(TabPage::new(tpr), Win::new(twr), false, count) })
-        }
+        Some(b"j") => Some(win_vert_neighbor(tabpage, twin, false, count)),
+        Some(b"k") => Some(win_vert_neighbor(tabpage, twin, true, count)),
+        Some(b"h") => Some(win_horz_neighbor(tabpage, twin, true, count)),
+        Some(b"l") => Some(win_horz_neighbor(tabpage, twin, false, count)),
         _ => None,
     };
     match direction {

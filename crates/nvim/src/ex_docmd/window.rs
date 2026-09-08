@@ -321,10 +321,10 @@ fn open_tabpage(ea: Ex, old_curwin: Win) {
         return;
     }
     edit(ea, Some(old_curwin));
-    let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_raw());
+    let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_or_none());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
-    unsafe { apply_autocmds(ev, no_fname, no_file, false, Buf::from_raw(buf)) };
+    unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
@@ -503,11 +503,11 @@ fn list_tab_windows(
 /// its file name with the home directory folded back to `~`.
 fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
     let special = buf_spname(buffer);
-    let (raw, fname) = (buffer.raw(), buffer.b_fname);
+    let fname = buffer.b_fname;
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
         // SAFETY: a live buffer and its own file name, into the buffer.
-        unsafe { home_replace(Buf::from_raw(raw), fname, out, size, true) };
+        unsafe { home_replace(Some(buffer), fname, out, size, true) };
     } else {
         // SAFETY: a NUL-terminated name, into the buffer.
         unsafe { xstrlcpy(out, special, size) };

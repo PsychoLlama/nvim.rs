@@ -578,9 +578,8 @@ fn check_tabpage_windows(old_curtab: TabPage) {
 
 /// Re-place a floating window under its own configuration.
 fn config_float(window: Win) {
-    let (raw, config) = (window.raw(), window.w_config.clone());
-    // SAFETY: a live window and its own configuration.
-    unsafe { win_config_float(Win::new(raw), config) };
+    let config = window.w_config.clone();
+    win_config_float(window, config);
 }
 
 pub fn goto_tabpage(n: c_int) {
