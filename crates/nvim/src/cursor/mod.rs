@@ -48,7 +48,7 @@ use crate::pos::MAXCOL;
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrChar, int64_t,
+    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrCharInfo, int64_t,
 };
 use crate::winlayer::{Buf, Line, PosRef, Win};
 
@@ -164,9 +164,9 @@ struct Measure {
 impl Measure {
     /// Cells the character at `ci` takes, starting from virtual column `vcol`.
     #[inline(always)]
-    fn char_size(&mut self, vcol: c_int, ci: StrChar) -> CharSize {
+    fn char_size(&mut self, vcol: c_int, ci: StrCharInfo) -> CharSize {
         // SAFETY: `ci` is a character of the line `measure` was prepared for.
-        unsafe { win_charsize(self.kind, vcol, ci.address(), ci.value, &mut self.arg) }
+        unsafe { win_charsize(self.kind, vcol, ci.ptr, ci.chr.value, &mut self.arg) }
     }
 }
 
@@ -327,12 +327,12 @@ unsafe fn coladvance2(
         let mut measure = win.measure(pos.lnum(), line);
         let mut ci = line.first_char();
         let mut head: c_int = 0;
-        while col <= wcol && !line.ended(ci) {
+        while col <= wcol && !unsafe { line.ended(ci) } {
             let cs = measure.char_size(col, ci);
             csize = cs.width;
             head = cs.head;
             col += cs.width;
-            ci = line.next_char(ci);
+            ci = unsafe { line.next_char(ci) };
         }
         idx = line.index_of(ci);
         // The walk stepped one character too far, unless it stopped on the

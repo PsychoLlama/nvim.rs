@@ -277,23 +277,23 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     let mut incr = 0;
     let mut csarg = CharsizeArg::default();
     let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
-    let mut ci: StrChar = unsafe { str_char_at(line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
-    while vcol < op.start_vcol && !ci.at_end() {
-        incr = unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
+    while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
+        incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
         vcol += incr;
-        if ascii_iswhite(ci.value) {
+        if ascii_iswhite(ci.chr.value) {
             bdp.pre_whitesp += incr;
             bdp.pre_whitesp_c += 1;
         } else {
             bdp.pre_whitesp = 0;
             bdp.pre_whitesp_c = 0;
         }
-        prev_pstart = ci.address();
-        ci = utfc_next(ci);
+        prev_pstart = ci.ptr;
+        ci = unsafe { utfc_next(ci) };
     }
     bdp.start_vcol = vcol;
-    let mut pstart = ci.address();
+    let mut pstart = ci.ptr;
     bdp.start_char_vcols = incr;
 
     if bdp.start_vcol < op.start_vcol {
@@ -331,18 +331,18 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
         } else {
             // Walk on to the block's right edge.
             cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
-            ci = unsafe { str_char_at(pend) };
+            ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;
-            while vcol <= op.end_vcol && !ci.at_end() {
-                prev_pend = ci.address();
+            while vcol <= op.end_vcol && unsafe { *ci.ptr } as c_int != NUL {
+                prev_pend = ci.ptr;
                 incr =
-                    unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
+                    unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
                 vcol += incr;
-                ci = utfc_next(ci);
+                ci = unsafe { utfc_next(ci) };
             }
             bdp.end_vcol = vcol;
-            pend = ci.address();
+            pend = ci.ptr;
 
             if bdp.end_vcol <= op.end_vcol
                 && (!is_del || op.op_type == OpType::Append || op.op_type == OpType::Replace)

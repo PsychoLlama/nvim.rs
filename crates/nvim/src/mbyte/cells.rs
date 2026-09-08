@@ -262,8 +262,13 @@ pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
 ///
 /// `str` must point at a NUL-terminated string.
 pub unsafe fn mb_string2cells(str: *const c_char) -> size_t {
-    // SAFETY: the caller's promise, measured once rather than walked to.
-    unsafe { string_cells(cstr::bytes_at(str)) }
+    let mut cells: size_t = 0;
+    let mut p = str;
+    while unsafe { *p } != NUL as c_char {
+        cells += unsafe { utf_ptr2cells(p) } as size_t;
+        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
+    }
+    cells
 }
 
 /// The total width of at most `size` bytes, stopping early at a NUL.

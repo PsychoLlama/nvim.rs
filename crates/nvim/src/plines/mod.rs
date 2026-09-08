@@ -26,7 +26,7 @@ use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
-use crate::mbyte::{str_char_at, utf_ptr2char, utfc_next, utfc_ptr2len};
+use crate::mbyte::{utf_ptr2char, utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::win_col_off2;
 use crate::option::get_showbreak_value;
@@ -35,7 +35,7 @@ use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrChar,
+    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,
     VirtLines, int32_t, int64_t, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
@@ -754,17 +754,14 @@ pub(crate) unsafe fn linesize_regular(
     let mut vcol = vcol_arg as int64_t;
 
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
-    let mut ci: StrChar = unsafe { str_char_at(line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
-    while unsafe { ci.address().offset_from(line) } < len as isize
-        && unsafe { byte_at(ci.address()) } != 0
-    {
+    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { byte_at(ci.ptr) } != 0 {
         // SAFETY: as above.
-        vcol +=
-            unsafe { charsize_regular(csarg, ci.address(), vcol_arg, ci.value) }.width as int64_t;
+        vcol += unsafe { charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value) }.width as int64_t;
         // SAFETY: as above.
-        ci = utfc_next(ci);
+        ci = unsafe { utfc_next(ci) };
         if vcol > MAXCOL as int64_t {
             vcol_arg = MAXCOL;
             break;
@@ -774,9 +771,9 @@ pub(crate) unsafe fn linesize_regular(
 
     // Inline virtual text after the end of the line.
     // SAFETY: as above.
-    if len == MAXCOL && csarg.virt_row >= 0 && unsafe { byte_at(ci.address()) } == 0 {
+    if len == MAXCOL && csarg.virt_row >= 0 && unsafe { byte_at(ci.ptr) } == 0 {
         // SAFETY: as above.
-        let head = unsafe { charsize_regular(csarg, ci.address(), vcol_arg, ci.value) }.head;
+        let head = unsafe { charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value) }.head;
         vcol += (csarg.cur_text_width_left + csarg.cur_text_width_right + head) as int64_t;
         vcol_arg = if vcol > MAXCOL as int64_t {
             MAXCOL
@@ -806,15 +803,16 @@ pub(crate) unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len
     // SAFETY: `csarg` is initialised, so `csarg.win` is a live window.
     let wp = unsafe { Win::new(csarg.win) };
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
-    let mut ci: StrChar = unsafe { str_char_at(line) };
+    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are
     // inside it.
-    while unsafe { ci.address().offset_from(line) } < len as isize && !ci.at_end() {
+    while unsafe { ci.ptr.offset_from(line) } < len as isize && unsafe { *ci.ptr } != NUL as c_char
+    {
         // SAFETY: the live window above, and the line `ci` walks.
-        vcol += unsafe { charsize_fast_impl(wp, ci.address(), use_tabstop, vcol_arg, ci.value) }
-            .width as int64_t;
+        vcol += unsafe { charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value) }.width
+            as int64_t;
         // SAFETY: as above.
-        ci = utfc_next(ci);
+        ci = unsafe { utfc_next(ci) };
         if vcol > MAXCOL as int64_t {
             vcol_arg = MAXCOL;
             break;

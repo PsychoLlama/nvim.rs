@@ -18,7 +18,7 @@ use crate::ex_docmd::handle_did_throw;
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
-use crate::mbyte::{str_char_at, utfc_next};
+use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::memory::{xfree, xstrdup};
 use crate::option::vars::{p_debug, p_lispwords, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
@@ -220,16 +220,15 @@ unsafe fn indent_after_open(open: &Pos) -> c_int {
     let cstype = unsafe { init_charsize_arg(&mut csarg, win, open.lnum, line) };
 
     // Walk to `open`'s column, measuring what is before it.
-    let mut sci: StrChar = unsafe { str_char_at(line) };
+    let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut amount = 0;
     let mut col = open.col;
-    while !sci.at_end() && col > 0 {
-        amount +=
-            unsafe { win_charsize(cstype, amount, sci.address(), sci.value, &mut csarg) }.width;
-        sci = utfc_next(sci);
+    while unsafe { *sci.ptr } != 0 && col > 0 {
+        amount += unsafe { win_charsize(cstype, amount, sci.ptr, sci.chr.value, &mut csarg) }.width;
+        sci = unsafe { utfc_next(sci) };
         col -= 1;
     }
-    let mut that = sci.address();
+    let mut that = sci.ptr;
 
     // Some keywords indent their body rather than their arguments (the
     // non-standard-Lisp ones are Scheme special forms):
@@ -282,8 +281,9 @@ unsafe fn measure_first_argument(
     cstype: CharsizeKind,
     csarg: &mut CharsizeArg,
 ) -> c_int {
-    // SAFETY: the caller's line, measured once and then walked as a slice.
-    let mut ci = unsafe { str_char_at(*that) };
+    // SAFETY: the caller's line, walked one character at a time by
+    // `utfc_next` and stopped by the NUL.
+    let mut ci: CharInfo = unsafe { utf_ptr2char_info(*that) };
     if ci.value == '"' as int32_t
         || ci.value == '\'' as int32_t
         || ci.value == '#' as int32_t
@@ -293,7 +293,8 @@ unsafe fn measure_first_argument(
     }
     let mut parencount = 0;
     let mut quotecount = 0;
-    while !ci.at_end() && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
+    while unsafe { **that } != 0
+        && (!ascii_iswhite(ci.value as c_int) || quotecount != 0 || parencount != 0)
     {
         if ci.value == '"' as int32_t {
             quotecount = (quotecount == 0) as c_int;
@@ -306,17 +307,27 @@ unsafe fn measure_first_argument(
             }
         }
         // A backslash and the character it escapes are one step.
-        if ci.value == '\\' as int32_t && ci.rest.len() > 1 {
-            // SAFETY: `ci` is a character of the caller's line, which
-            // `csarg` describes.
-            amount += unsafe { win_charsize(cstype, amount, ci.address(), ci.value, csarg) }.width;
-            ci = utfc_next(ci);
+        if ci.value == '\\' as int32_t && unsafe { *that.add(1) } != 0 {
+            amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+            let next = unsafe {
+                utfc_next(StrCharInfo {
+                    ptr: *that,
+                    chr: ci,
+                })
+            };
+            *that = next.ptr;
+            ci = next.chr;
         }
-        // SAFETY: as above.
-        amount += unsafe { win_charsize(cstype, amount, ci.address(), ci.value, csarg) }.width;
-        ci = utfc_next(ci);
+        amount += unsafe { win_charsize(cstype, amount, *that, ci.value, csarg) }.width;
+        let next = unsafe {
+            utfc_next(StrCharInfo {
+                ptr: *that,
+                chr: ci,
+            })
+        };
+        *that = next.ptr;
+        ci = next.chr;
     }
-    *that = ci.address();
     amount
 }
 

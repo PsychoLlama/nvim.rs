@@ -25,40 +25,11 @@ pub struct CharInfo {
     pub len: ::core::ffi::c_int,
 }
 pub type GraphemeState = utf8proc_int32_t;
-/// A character of some text, paired with the text from it onward.
-///
-/// The cursor a `MB_PTR_ADV` walk carries. Stepping it is subslicing `rest`,
-/// so "how far in are we" is `line.len() - rest.len()` rather than pointer
-/// arithmetic, and the walk cannot leave the text it was given.
 #[derive(Copy, Clone)]
-pub struct StrChar<'a> {
-    /// The text from this character to the end.
-    pub rest: &'a [u8],
-    /// The codepoint, or a **negative** number for a byte that is not a
-    /// character. Zero at the end of the text.
-    pub value: int32_t,
-    /// How many bytes of [`rest`](Self::rest) the character occupies -- one
-    /// for a byte that is not a character, so a walk always advances.
-    pub len: usize,
-}
-
-impl StrChar<'_> {
-    /// Whether the walk has run out of text.
-    #[inline(always)]
-    pub fn at_end(self) -> bool {
-        self.rest.is_empty()
-    }
-
-    /// The address this character starts at, for the measures that still
-    /// take a pointer into a NUL-terminated line.
-    ///
-    /// **Read-only.** The `*mut` is what those measures' transpiled
-    /// signatures ask for, not permission: the address is derived from a
-    /// shared borrow, so writing through it is undefined.
-    #[inline(always)]
-    pub fn address(self) -> *mut ::core::ffi::c_char {
-        self.rest.as_ptr().cast::<::core::ffi::c_char>().cast_mut()
-    }
+#[repr(C)]
+pub struct StrCharInfo {
+    pub ptr: *mut ::core::ffi::c_char,
+    pub chr: CharInfo,
 }
 /// Not `Copy`: `vc_fd` is an iconv descriptor that has to be closed once.
 #[derive(Clone)]

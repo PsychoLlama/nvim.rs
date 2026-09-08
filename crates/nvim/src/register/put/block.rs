@@ -48,14 +48,14 @@ unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     // SAFETY (all four): `ci` starts at `oldp` and `utfc_next` steps over one
     // whole character at a time, so it stays inside the NUL-terminated line;
     // the `!= NUL` test in front of the walk is what stops it there.
-    let mut ci = unsafe { str_char_at(oldp) };
+    let mut ci = unsafe { utf_ptr2str_char_info(oldp) };
     let (mut vcol, mut incr) = (0, 0);
-    while vcol < col && !ci.at_end() {
-        incr = unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
+    while vcol < col && unsafe { c_int::from(*ci.ptr) } != NUL {
+        incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
         vcol += incr;
-        ci = utfc_next(ci);
+        ci = unsafe { utfc_next(ci) };
     }
-    let ptr = ci.address();
+    let ptr = ci.ptr;
 
     // SAFETY: `ptr` is a position in `oldp`'s NUL-terminated line, so the
     // distance back to `oldp` is a column of it and the byte there readable.
@@ -103,11 +103,11 @@ unsafe fn right_padding(line: *mut c_char, y_width: c_int) -> c_int {
     // SAFETY (all four): `ci` starts at `line` and `utfc_next` steps over one
     // whole character at a time, so it stays inside it; the `!= NUL` test in
     // front of the walk is what stops it at the end.
-    let mut ci = unsafe { str_char_at(line) };
+    let mut ci = unsafe { utf_ptr2str_char_info(line) };
     let mut spaces = y_width + 1;
-    while !ci.at_end() {
-        spaces -= unsafe { win_charsize(cstype, 0, ci.address(), ci.value, &mut csarg) }.width;
-        ci = utfc_next(ci);
+    while unsafe { c_int::from(*ci.ptr) } != NUL {
+        spaces -= unsafe { win_charsize(cstype, 0, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        ci = unsafe { utfc_next(ci) };
     }
     spaces.max(0)
 }

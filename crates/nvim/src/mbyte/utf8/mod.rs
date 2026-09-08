@@ -375,19 +375,16 @@ pub fn utf_byte2len(b: c_int) -> c_int {
 ///
 /// `p` must point at at least one readable byte, and at `min(size, len)`.
 pub unsafe fn utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
-    // Only the bytes the caller promised: the lead byte says how many the
-    // sequence wants, `size` how many are there, and the smaller of the two
-    // is all that may be read.
-    let first = unsafe { *p.cast::<u8>() };
-    let readable = usize::from(utf8len_tab[usize::from(first)]).min(clamp_size(size).max(1));
-    // SAFETY: the caller's promise, spelled as the slice it describes.
-    let bytes = unsafe { cstr::slice_at(p, readable) };
-    c_int::try_from(promised_char_len(bytes)).expect("a sequence is at most six bytes")
-}
-
-/// A C `int` byte count as a slice length; a negative one is no bytes.
-fn clamp_size(size: c_int) -> usize {
-    usize::try_from(size).unwrap_or(0)
+    let len = utf8len_tab[unsafe { *p } as u8 as usize] as c_int;
+    if len == 1 {
+        return 1;
+    }
+    for i in 1..len.min(size) {
+        if !utf_is_trail_byte(unsafe { *p.offset(i as isize) } as u8) {
+            return 1;
+        }
+    }
+    len
 }
 
 /// How many bytes the whole grapheme cluster at `p` occupies — the base
@@ -435,9 +432,32 @@ pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
     if size < 1 || unsafe { *p } == 0 {
         return 0;
     }
-    // SAFETY: the caller's promise, spelled as the slice it describes.
-    let bytes = unsafe { cstr::slice_at(p, clamp_size(size)) };
-    c_int::try_from(cluster_len(bytes)).expect("a cluster is no longer than the slice")
+    let first = unsafe { *p } as u8;
+    if first < 0x80 && (size == 1 || (unsafe { *p.offset(1) } as u8) < 0x80) {
+        return 1;
+    }
+    let mut len = unsafe { utf_ptr2len_len(p, size) };
+    if (len == 1 && first >= 0x80) || len > size {
+        return 1;
+    }
+    let mut prevlen = 0;
+    let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
+    while len < size {
+        let next = unsafe { p.offset(len as isize) };
+        if (unsafe { *next } as u8) < 0x80 {
+            break;
+        }
+        let next_len = unsafe { utf_ptr2len_len(next, size - len) };
+        if next_len > size - len {
+            break; // truncated by `size`, not part of this cluster
+        }
+        if !unsafe { utf_composinglike(p.offset(prevlen as isize), next, &raw mut state) } {
+            break;
+        }
+        prevlen = len;
+        len += next_len;
+    }
+    len
 }
 
 /// Is the character at the start of `next` part of the same grapheme cluster
@@ -503,10 +523,10 @@ pub fn cluster_len(bytes: &[u8]) -> usize {
 
 /// The grapheme clusters of `bytes`, as `(byte offset, codepoint)`.
 ///
-/// The slice twin of [`Chars`]: the safe spelling of a `while (*p) { c =
-/// utf_ptr2char(p); MB_PTR_ADV(p); }` loop for a caller that has the text
-/// rather than a pointer into it. Every byte of `bytes` is visited, an
-/// embedded NUL included.
+/// The safe spelling of a `while (*p) { c = utf_ptr2char(p); MB_PTR_ADV(p); }`
+/// loop, for a caller that has the text rather than a pointer into it. Every
+/// byte of `bytes` is visited, an embedded NUL included; [`chars`] is the
+/// same walk over a [`CStr`].
 pub struct Clusters<'a> {
     bytes: &'a [u8],
     /// Byte offset of the next cluster.

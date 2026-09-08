@@ -19,9 +19,10 @@ use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::mbyte::{
     cells_at, char_at, char_count, char_info_at, char_len, cluster_len, cp_bounds, encode_char,
     mb_charlen, mb_charlen_len, mb_off_next, mb_prevptr, mb_string2cells, mb_string2cells_len,
-    promised_char_len, str_char_at, strict_char_at, string_cells, utf_char2bytes, utf_char2len,
+    promised_char_len, strict_char_at, string_cells, utf_char2bytes, utf_char2len,
     utf_cp_bounds_len, utf_fold, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
-    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utfc_next, utfc_ptr2len, utfc_ptr2schar,
+    utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utfc_next,
+    utfc_ptr2len, utfc_ptr2schar,
 };
 use neovim::option::vars::p_arshape;
 
@@ -729,7 +730,7 @@ fn counting_characters_and_cells_across_a_string() {
     check(b"\xf0\x9f\x91\xa8\xe2\x80\x8d\xf0\x9f\x91\xa9!", 2, 3); // ZWJ
 }
 
-/// The character walk: `str_char_at` opens it and `utfc_next` steps
+/// The character walk: `utf_ptr2str_char_info` opens it and `utfc_next` steps
 /// it, one step per *cluster* but carrying the *base* character's codepoint
 /// and length. `mb_off_next` and `mb_prevptr` are the same geometry asked
 /// from a byte in the middle.
@@ -747,13 +748,9 @@ fn the_character_walk_steps_over_whole_clusters() {
         // SAFETY: `buf` is NUL-terminated and every position below is a
         // character start within it.
         unsafe {
-            let mut ci = str_char_at(buf.as_ptr());
-            while !ci.at_end() {
-                walk.push((
-                    ci.address().offset_from(buf.as_ptr()),
-                    ci.value,
-                    c_int::try_from(ci.len).expect("a character's length is small"),
-                ));
+            let mut ci = utf_ptr2str_char_info(buf.as_ptr().cast_mut());
+            while *ci.ptr != 0 {
+                walk.push((ci.ptr.offset_from(buf.as_ptr()), ci.chr.value, ci.chr.len));
                 ci = utfc_next(ci);
             }
         }
