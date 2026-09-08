@@ -38,6 +38,7 @@ use crate::types::CharInfo;
 /// [`utf_ptr2len_len`](super::utf_ptr2len_len), which reports a truncated
 /// sequence's full length so its caller can tell "incomplete" from
 /// "invalid", the answer here is never larger than `bytes.len()`.
+#[inline]
 pub fn char_len(bytes: &[u8]) -> usize {
     let Some(&first) = bytes.first() else {
         return 0;
@@ -63,6 +64,7 @@ pub fn char_len(bytes: &[u8]) -> usize {
 /// how much more it wants", where [`char_len`] would say 1 and keep a walk
 /// moving. A caller stepping through text wants [`char_len`]; one deciding
 /// whether to wait for more bytes wants this.
+#[inline]
 pub fn promised_char_len(bytes: &[u8]) -> usize {
     let Some(&first) = bytes.first() else {
         return 0;
@@ -90,6 +92,7 @@ pub fn promised_char_len(bytes: &[u8]) -> usize {
 /// decode, this says "not a character" and lets the caller draw the byte.
 /// Unlike the pointer form it does handle ASCII, because a slice can say how
 /// many bytes it has and a pointer cannot.
+#[inline]
 pub fn strict_char_at(bytes: &[u8]) -> i32 {
     let Some(&first) = bytes.first() else {
         return -1;
@@ -121,6 +124,7 @@ pub fn strict_char_at(bytes: &[u8]) -> i32 {
 /// negative value with a length of one, so a walk still advances.
 ///
 /// The slice form of [`utf_ptr2char_info`](super::utf_ptr2char_info).
+#[inline]
 pub fn char_info_at(bytes: &[u8]) -> CharInfo {
     let value = strict_char_at(bytes);
     if value < 0 {
@@ -138,6 +142,7 @@ pub fn char_info_at(bytes: &[u8]) -> CharInfo {
 /// The slice form of [`utf_ptr2char`](super::utf_ptr2char). Forgiving in the
 /// same way: nothing is ever an error, so a walk over arbitrary bytes always
 /// gets something back.
+#[inline]
 pub fn char_at(bytes: &[u8]) -> i32 {
     let Some(&first) = bytes.first() else {
         return 0;

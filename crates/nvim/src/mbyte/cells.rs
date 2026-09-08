@@ -166,6 +166,7 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
 ///
 /// Reads `'ambiwidth'`, `'emoji'` and `'isprint'` through their globals, so
 /// it is only callable once options exist.
+#[inline]
 pub unsafe fn cells_at(bytes: &[u8]) -> c_int {
     let Some(&first) = bytes.first() else {
         return 1;

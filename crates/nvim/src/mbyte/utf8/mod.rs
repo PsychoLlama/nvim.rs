@@ -444,6 +444,7 @@ pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
 /// as the one at the start of `cur`?
 ///
 /// The slice form of [`utf_composinglike`], and its body.
+#[inline]
 fn composes_onto(cur: &[u8], next: &[u8], state: &mut GraphemeState) -> bool {
     // ASCII never combines, and this is the hot answer.
     next.first().is_some_and(|&byte| byte >= 128)
@@ -462,6 +463,7 @@ fn composes_onto(cur: &[u8], next: &[u8], state: &mut GraphemeState) -> bool {
 ///
 /// The difference the slice forms all carry applies here too: a NUL is an
 /// ordinary byte, one character long, not the end of the string.
+#[inline]
 pub fn cluster_len(bytes: &[u8]) -> usize {
     let Some(&first) = bytes.first() else {
         return 0;
@@ -481,6 +483,11 @@ pub fn cluster_len(bytes: &[u8]) -> usize {
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
     while len < bytes.len() {
         let next = &bytes[len..];
+        // ASCII never combines, and this is the hot answer -- asked before
+        // anything is decoded, as the pointer form asked it.
+        if next[0] < 0x80 {
+            break;
+        }
         let next_len = promised_char_len(next);
         if next_len > next.len() {
             break; // cut short by the end of the slice: not part of this
