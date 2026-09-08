@@ -137,6 +137,22 @@ lint-tools:
 lint *args: lint-tools
   @scripts/lint.py {{ args }}
 
+# Build the crate's rustdoc and fail on a broken intra-doc link.
+#
+# `[`foo`]` in a doc comment is a claim that `foo` exists and is reachable
+# from here; rustdoc leaves a broken one as literal text, so the prose keeps
+# naming a function that was renamed or moved and nothing says so. Denied,
+# not warned, because the baseline is zero and a ratchet would be a worse
+# instrument than a gate for a number that small.
+#
+# `--no-deps` because the dependencies' docs are not ours to fix, and `--lib`
+# because the binaries carry no prose of their own. Private items are NOT
+# documented, so `private_intra_doc_links` stays a warning: a link into a
+# private item is legitimate here — most of the crate is private — and
+# denying it would mean deleting links that read correctly in the source.
+doc *args:
+  @RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links" cargo doc --workspace --no-deps --lib --quiet {{ args }}
+
 # Run the crate's Rust tests: the #[cfg(test)] modules (safe cores' pure
 # logic below the C-ABI shims) plus the integration tests under tests/
 # (ports of former test/unit specs; they call the same exported surface the
@@ -243,4 +259,9 @@ refresh *args: apigen keycodes-lua fmt ffigen abi-ledger visibility-ledger (ratc
 # compiles with `debug_assertions` off: a `#[cfg(debug_assertions)]` block can
 # leave an import or a helper unused in release, which `-D warnings` rejects,
 # and that break once sat unnoticed for a whole phase. It costs ~40 s.
-minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test
+# `lint` and `doc` come last: the clippy pass is the slowest step here by
+# minutes, and rustdoc's ~10 s wants the crate already compiled. `lint-tools`
+# stays listed on its own so the seconds-long generator lint still runs before
+# anything expensive; just runs a recipe once per invocation, so naming it
+# twice costs nothing.
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test lint doc
