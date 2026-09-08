@@ -471,7 +471,7 @@ impl Walk {
         line_breakcheck();
         // Does this line hold a single-line comment?
         if comment_dir != 0 || self.lisp {
-            self.comment_col = unsafe { check_linecomment(self.linep) };
+            self.comment_col = check_linecomment(unsafe { cstr::bytes_at(self.linep) });
         }
         if self.lisp && self.comment_col != MAXCOL {
             self.pos.col = self.comment_col; // skip the comment
@@ -510,7 +510,7 @@ impl Walk {
         self.do_quotes = -1;
         line_breakcheck();
         if self.lisp {
-            self.comment_col = unsafe { check_linecomment(self.linep) }; // in the new line
+            self.comment_col = check_linecomment(unsafe { cstr::bytes_at(self.linep) }); // in the new line
         }
         true
     }
@@ -555,7 +555,9 @@ impl Walk {
                 } else {
                     Win::current().w_cursor
                 };
-                if !unsafe { find_rawstring_end(linep, &raw mut self.pos, &raw mut end) } {
+                if !unsafe {
+                    find_rawstring_end(cstr::bytes_at(linep), &raw mut self.pos, &raw mut end)
+                } {
                     self.count += 1;
                     self.match_pos = self.pos;
                     self.match_pos.col -= 1;
@@ -650,11 +652,10 @@ impl Walk {
         if self.pos.lnum <= 1 {
             return;
         }
-        let prev = ml_get(self.pos.lnum - 1);
-        if unsafe { *prev } as c_int != NUL
-            && unsafe { *prev.offset(ml_get_len(self.pos.lnum - 1) as isize - 1) } as c_int
-                == '\\' as c_int
-        {
+        // The borrow ends here: `linep` is re-read from the cache below,
+        // and this is the only thing the line before is asked.
+        let continued = Lines::current().line(self.pos.lnum - 1).last() == Some(&b'\\');
+        if continued {
             self.do_quotes = 1;
             if self.start_in_quotes.is_none() {
                 self.inquote = at_start != 0;
@@ -852,7 +853,7 @@ unsafe fn find_match(
 
     // Backward search: does this line hold a single-line comment?
     if (walk.backwards && target.comment_dir != 0) || lisp {
-        walk.comment_col = unsafe { check_linecomment(walk.linep) };
+        walk.comment_col = check_linecomment(unsafe { cstr::bytes_at(walk.linep) });
     }
     if lisp && walk.comment_col != MAXCOL && walk.pos.col > walk.comment_col {
         walk.lispcomm = true; // find the match inside this comment

@@ -63,7 +63,8 @@ pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
         // end of the line above for a comment start.
         // SAFETY: the test in front says `lnum - 1` is at least 1, so it is a
         // line of the buffer, and `ml_get` hands back a NUL-terminated one.
-        let col = unsafe { check_linecomment(ml_get(Win::current().w_cursor.lnum - 1)) };
+        let lnum = Win::current().w_cursor.lnum - 1;
+        let col = check_linecomment(Lines::current().line(lnum));
         if col != MAXCOL {
             let lnum = Win::current().w_cursor.lnum - 1;
             trypos = Some(Pos {

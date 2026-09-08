@@ -12,12 +12,11 @@
 
 use super::*;
 use crate::charset::skip;
-use crate::cstr;
+use crate::cstr::byte_at;
 use crate::memline::Lines;
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_int;
 
 /// Whether a raw string starting at `linep[startpos.col - 1]` ends
 /// between `startpos` and `endpos`.
@@ -26,53 +25,44 @@ use core::ffi::{c_char, c_int, c_void};
 /// `linep` must be the line `startpos` is on; `startpos` and `endpos`
 /// must be positions in the current buffer.
 pub(crate) unsafe fn find_rawstring_end(
-    linep: *mut c_char,
+    linep: &[u8],
     startpos: *mut Pos,
     endpos: *mut Pos,
 ) -> bool {
-    let start_col = unsafe { (*startpos).col };
-    // The delimiter runs from just after the quote to the '('.
-    let mut p = unsafe { linep.offset(start_col as isize + 1) };
-    while unsafe { *p } as c_int != NUL && unsafe { *p } as c_int != '(' as c_int {
-        p = unsafe { p.offset(1) };
-    }
-    let delim_len = (unsafe { p.offset_from(linep) } - start_col as isize - 1) as size_t;
-    // SAFETY: `delim_len` bytes starting one past `start_col` are inside the
-    // line the caller found the `(` on.
-    let delim = unsafe {
-        let from = linep.offset(start_col as isize + 1) as *const c_void;
-        xmemdupz(from, delim_len)
-    } as *mut c_char;
+    // SAFETY: the caller's two positions.
+    let (start_lnum, start_col) = unsafe { ((*startpos).lnum, (*startpos).col as usize) };
+    let (end_lnum, end_col) = unsafe { ((*endpos).lnum, (*endpos).col as usize) };
+    // The delimiter runs from just after the quote to the '(' -- or, when
+    // the line has none, to its end. A copy, because the scan below reads
+    // other lines out of the same cache.
+    let from = (start_col + 1).min(linep.len());
+    let tail = &linep[from..];
+    let delim = tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec();
 
-    let mut found = false;
-    let mut lnum = unsafe { (*startpos).lnum };
-    while lnum <= unsafe { (*endpos).lnum } && !found {
-        let line = ml_get(lnum);
-        let from = if lnum == unsafe { (*startpos).lnum } {
-            start_col + 1
+    let mut lines = Lines::current();
+    for lnum in start_lnum..=end_lnum {
+        let line = lines.line(lnum);
+        let mut at = if lnum == start_lnum {
+            (start_col + 1).min(line.len())
         } else {
             0
         };
-        let mut p = unsafe { line.offset(from as isize) };
-        while unsafe { *p } as c_int != NUL {
-            if lnum == unsafe { (*endpos).lnum }
-                && unsafe { p.offset_from(line) } as ColNr >= unsafe { (*endpos).col }
+        let stop = if lnum == end_lnum {
+            end_col.min(line.len())
+        } else {
+            line.len()
+        };
+        while at < stop {
+            if line[at] == b')'
+                && line[at + 1..].starts_with(&delim)
+                && byte_at(line, at + 1 + delim.len()) == b'"'
             {
-                break;
+                return true;
             }
-            if unsafe { *p } as c_int == ')' as c_int
-                && unsafe { cstr::prefix_eq(delim, p.offset(1), delim_len) }
-                && unsafe { *p.offset(delim_len as isize + 1) } as c_int == '"' as c_int
-            {
-                found = true;
-                break;
-            }
-            p = unsafe { p.offset(1) };
+            at += 1;
         }
-        lnum += 1;
     }
-    unsafe { xfree(delim as *mut c_void) };
-    found
+    false
 }
 
 // ---------------------------------------------------------------------
@@ -83,67 +73,60 @@ pub(crate) unsafe fn find_rawstring_end(
 ///
 /// With `'lisp'` set the comment character is `;` instead, and neither a
 /// `#\;` nor a `;` inside a string counts.
-///
-/// # Safety
-/// `line` must be NUL-terminated.
-pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
-    let mut p = line; // scan from the start
+pub fn check_linecomment(line: &[u8]) -> c_int {
+    // `at` scans from the start; a byte read past the end is the line's own
+    // terminator, which stops every test below.
+    let mut at = 0usize;
     if Buf::current().b_p_lisp != 0 {
         // Skip Lispish one-line comments.
-        if unsafe { vim_strchr(p, ';' as c_int) }.is_null() {
+        if !line.contains(&b';') {
             return MAXCOL; // there are no comments
         }
         let mut in_str = false; // inside of a string
         loop {
-            p = unsafe { strpbrk(p, c"\";".as_ptr()) };
-            if p.is_null() {
+            let Some(off) = line[at..].iter().position(|&b| b == b'"' || b == b';') else {
                 return MAXCOL;
-            }
-            if unsafe { *p } as c_int == '"' as c_int {
+            };
+            at += off;
+            if line[at] == b'"' {
                 if in_str {
-                    if unsafe { *p.offset(-1) } as c_int != '\\' as c_int {
+                    if at == 0 || line[at - 1] != b'\\' {
                         in_str = false; // skip an escaped quote
                     }
-                } else if p == line
-                    || (unsafe { p.offset_from(line) } >= 2
-                        // skip the #\" form
-                        && unsafe { *p.offset(-1) } as c_int != '\\' as c_int
-                        && unsafe { *p.offset(-2) } as c_int != '#' as c_int)
+                } else if at == 0
+                    // skip the #\" form
+                    || (at >= 2 && line[at - 1] != b'\\' && line[at - 2] != b'#')
                 {
                     in_str = true;
                 }
             } else if !in_str
-                && (unsafe { p.offset_from(line) } < 2
-                    || (unsafe { *p.offset(-1) } as c_int != '\\' as c_int
-                        && unsafe { *p.offset(-2) } as c_int != '#' as c_int))
-                && !unsafe { is_pos_in_string(line, p.offset_from(line) as ColNr) }
+                && (at < 2 || (line[at - 1] != b'\\' && line[at - 2] != b'#'))
+                && !is_pos_in_string(line, at as ColNr)
             {
                 break; // found!
             }
-            p = unsafe { p.offset(1) };
+            at += 1;
         }
     } else {
         loop {
-            p = unsafe { vim_strchr(p, '/' as c_int) };
-            if p.is_null() {
+            let Some(off) = line[at..].iter().position(|&b| b == b'/') else {
                 return MAXCOL;
-            }
+            };
+            at += off;
             // Accept a double '/', unless it is preceded by '*' and
             // followed by '*', because "*//*" ends one comment and
             // starts the next. Only accept the position when it is
             // not inside a string.
-            if unsafe { *p.offset(1) } as c_int == '/' as c_int
-                && (p == line
-                    || unsafe { *p.offset(-1) } as c_int != '*' as c_int
-                    || unsafe { *p.offset(2) } as c_int != '*' as c_int)
-                && !unsafe { is_pos_in_string(line, p.offset_from(line) as ColNr) }
+            if byte_at(line, at + 1) == b'/'
+                && (at == 0 || line[at - 1] != b'*' || byte_at(line, at + 2) != b'*')
+                && !is_pos_in_string(line, at as ColNr)
             {
                 break;
             }
-            p = unsafe { p.offset(1) };
+            at += 1;
         }
     }
-    unsafe { p.offset_from(line) as c_int }
+    at as c_int
 }
 
 /// Whether line `lnum` is empty or holds nothing but white space.

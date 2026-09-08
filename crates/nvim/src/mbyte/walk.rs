@@ -141,6 +141,30 @@ fn boundclass(code: int32_t) -> c_int {
     utf8proc_get_property(code).boundclass as c_int
 }
 
+/// How far back from byte `at` the grapheme cluster covering it starts.
+///
+/// The slice form of [`utf_head_off`], and the shape a walk that holds a line
+/// and an offset wants. Composing characters count as part of the character
+/// they follow, so this is not just "step back over continuation bytes".
+///
+/// `at` may be `text.len()`: a walk that steps one past the last character is
+/// asking about the terminator, which is ASCII and starts no cluster. That is
+/// also [`utf_head_off`]'s own first test, so the answer is the same one.
+///
+/// `text` is a buffer line's bytes, or a copy that kept the line's
+/// terminator: the backwards walk stays inside the slice, but the decode it
+/// does on the way can look at the bytes of a sequence the slice cuts short.
+pub(crate) fn head_off(text: &[u8], at: usize) -> usize {
+    if crate::cstr::byte_at(text, at) < 0x80 {
+        return 0;
+    }
+    // SAFETY: `at < text.len()` after the test above, so `base` and
+    // `base + at` are in one allocation, and the caller's slice is a line.
+    let base = text.as_ptr().cast::<c_char>();
+    let off = unsafe { utf_head_off(base, base.add(at)) };
+    usize::try_from(off).unwrap_or(0)
+}
+
 /// How far back from `p` the grapheme cluster covering it starts.
 ///
 /// Three answers, in the order they are looked for: 0 if `p` is ASCII or part

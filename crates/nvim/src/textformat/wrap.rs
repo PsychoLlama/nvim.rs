@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -287,7 +288,8 @@ unsafe fn wrap_leader_len() -> ColNr {
     let mut leader_len =
         unsafe { get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true) };
     if leader_len == 0 && Buf::current().b_p_cin != 0 {
-        let comment_start = unsafe { check_linecomment(line) };
+        // SAFETY: the cursor's line, NUL-terminated.
+        let comment_start = check_linecomment(unsafe { cstr::bytes_at(line) });
         if comment_start != MAXCOL {
             leader_len = unsafe {
                 get_leader_len(

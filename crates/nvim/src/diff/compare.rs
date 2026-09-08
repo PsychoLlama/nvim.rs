@@ -34,24 +34,6 @@ pub(crate) fn skip_white(s: &[u8]) -> &[u8] {
     &s[n..]
 }
 
-/// `utf_head_off` over a slice: how far back from byte `i` the character
-/// covering it starts.  Composing characters count as part of the character
-/// they follow, which is why this is not just "skip continuation bytes".
-pub(crate) fn head_off(line: &[u8], i: usize) -> usize {
-    // The terminator, or any other ASCII byte, is its own character and
-    // starts no cluster. Answering that here is what `utf_head_off` does
-    // with its own first test, and it means the walks that step one past
-    // the last character never reach a pointer at all.
-    if byte_at(line, i) < 0x80 {
-        return 0;
-    }
-    // SAFETY: `line` is the byte range of a line, so `base` and `base + i`
-    // are both within one allocation -- `i < line.len()` after the test
-    // above.
-    let base = line.as_ptr().cast::<c_char>();
-    unsafe { utf_head_off(base, base.add(i)) as usize }
-}
-
 /// The length of the character both slices start with, if they are the same
 /// character under `'diffopt'`'s `icase`.
 ///

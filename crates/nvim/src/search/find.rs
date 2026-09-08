@@ -109,13 +109,20 @@ impl Searcher {
         }
     }
 
-    /// Text of line `lnum`.
+    /// Text of line `lnum`, as the pointer `vim_regexec_multi` wants.
     ///
     /// # Safety
     /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
     unsafe fn line(&self, lnum: LineNr) -> *mut c_char {
         unsafe { ml_get_buf(self.buf, lnum) }
+    }
+
+    /// The buffer's line cache, for the places that read text rather than
+    /// hand it to the regexp engine.
+    #[inline(always)]
+    fn lines(&self) -> Lines {
+        self.buf.lines()
     }
 
     /// Whether an error was reported or the timeout was passed — either
@@ -316,13 +323,16 @@ impl Searcher {
                 // line before.
                 if unsafe { (*pos).lnum } > 1 {
                     unsafe { (*pos).lnum -= 1 };
-                    unsafe { (*pos).col = ml_get_buf_len(self.buf, (*pos).lnum) };
+                    unsafe { (*pos).col = self.lines().line_len((*pos).lnum) };
                 }
             } else {
                 unsafe { (*pos).col -= 1 };
                 if unsafe { (*pos).lnum } <= self.buf.b_ml.ml_line_count {
-                    let line = unsafe { self.line((*pos).lnum) };
-                    unsafe { (*pos).col -= utf_head_off(line, line.offset((*pos).col as isize)) };
+                    // Step back off a trail byte onto the character's own
+                    // first byte.
+                    let (lnum, col) = unsafe { ((*pos).lnum, (*pos).col as usize) };
+                    let back = head_off(self.lines().line(lnum), col);
+                    unsafe { (*pos).col -= back as ColNr };
                 }
             }
             if !end_pos.is_null() {
@@ -439,11 +449,13 @@ pub unsafe fn searchit(
             && unsafe { (*pos).col } < MAXCOL as c_int - 2
         {
             // Watch out for "col" being MAXCOL - 2, used in a closed fold.
-            let line = unsafe { s.line((*pos).lnum) };
-            if unsafe { ml_get_buf_len(buffer, (*pos).lnum) } <= unsafe { (*pos).col } {
+            let (lnum, col) = unsafe { ((*pos).lnum, (*pos).col as usize) };
+            let mut lines = buffer.lines();
+            let line = lines.line(lnum);
+            if line.len() <= col {
                 1
             } else {
-                unsafe { utfc_ptr2len(line.offset((*pos).col as isize)) }
+                cluster_len(&line[col..]) as c_int
             }
         } else {
             1
@@ -659,7 +671,7 @@ pub unsafe fn searchit(
     // A pattern like "\n\zs" may go past the last line.
     if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
         unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
-        unsafe { (*pos).col = ml_get_buf_len(buffer, (*pos).lnum) };
+        unsafe { (*pos).col = buffer.lines().line_len((*pos).lnum) };
         if unsafe { (*pos).col } > 0 {
             unsafe { (*pos).col -= 1 };
         }
@@ -733,9 +745,14 @@ pub unsafe fn search_for_exact_line(
             start = unsafe { (*pos).lnum };
         }
 
-        let line = unsafe { ml_get_buf(buffer, (*pos).lnum) };
-        let text = unsafe { skipwhite(line) };
-        unsafe { (*pos).col = text.offset_from(line) as ColNr };
+        let mut lines = buffer.lines();
+        let line = lines.line(unsafe { (*pos).lnum });
+        let at = skip::white(line);
+        unsafe { (*pos).col = at as ColNr };
+        // The three comparisons below are still `strcmp`-shaped, so they
+        // want the tail as a pointer; a line's bytes are followed by its own
+        // terminator, which is what ends them.
+        let text = line[at..].as_ptr().cast::<c_char>();
 
         if compl_status_adding() && !compl_status_sol() {
             // When adding lines the matching line may be empty; it is
@@ -744,7 +761,7 @@ pub unsafe fn search_for_exact_line(
             if unsafe { mb_strcmp_ic(p_ic.get() != 0, text, pat) } == 0 {
                 return Ok(());
             }
-        } else if unsafe { *text } as c_int != NUL {
+        } else if at < line.len() {
             // Expanding lines or words; ignore empty lines.
             debug_assert!(compl_len >= 0);
             let same = if p_ic.get() != 0 {

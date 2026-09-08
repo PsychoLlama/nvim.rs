@@ -15,7 +15,7 @@ use crate::ascii::ascii_isdigit;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::change::get_leader_len;
-use crate::charset::{skipwhite, vim_isfilec, vim_iswordc, vim_iswordp};
+use crate::charset::{skip, skipwhite, vim_isfilec, vim_iswordc, vim_iswordp};
 use crate::cmdhist::add_to_history;
 use crate::cursor::{
     check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, inc_cursor,
@@ -46,11 +46,11 @@ use crate::insexpand::{
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
-    mb_isupper, mb_strcmp_ic, mb_strnicmp, utf_char2bytes, utf_head_off, utf_iscomposing_first,
-    utf_ptr2char, utfc_ptr2len,
+    cluster_len, head_off, mb_isupper, mb_strcmp_ic, mb_strnicmp, utf_char2bytes, utf_head_off,
+    utf_iscomposing_first, utf_ptr2char, utfc_ptr2len,
 };
-use crate::memline::{decl, inc, incl, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrlcpy};
+use crate::memline::{Lines, decl, inc, incl, ml_get, ml_get_buf, ml_get_len};
+use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::state::{
     bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
     msg_scrolled, msg_silent, top_bot_msg,
@@ -97,7 +97,7 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split};
-use ::libc::{atol, fclose, strpbrk};
+use ::libc::{atol, fclose};
 /// `searchit`/`do_search` flags plus the search-stat sizing constants.
 pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0;
 pub const SEARCH_NFMSG: ::core::ffi::c_int = 8;

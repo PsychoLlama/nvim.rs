@@ -409,7 +409,8 @@ pub unsafe fn open_line(
             && (!has_format_option(FoFlag::NO_OPEN_COMS) || flags & OPENLINE_FORMAT != 0)
         {
             // A line comment after code: `code(); // why`.
-            comment_start = unsafe { check_linecomment(saved_line) };
+            // SAFETY: this frame's NUL-terminated copy of the line.
+            comment_start = check_linecomment(unsafe { cstr::bytes_at(saved_line) });
             if comment_start != MAXCOL {
                 let at = saved_line.wrapping_offset(comment_start as isize);
                 let out = &raw mut lead_flags;

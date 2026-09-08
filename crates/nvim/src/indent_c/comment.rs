@@ -50,9 +50,9 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
                 cur_maxcomment,
             )
         }?;
-        // SAFETY: `findmatchlimit` found `pos` in the current buffer, so
-        // `ml_get` answers with the line it sits on.
-        if !unsafe { is_pos_in_string(ml_get(pos.lnum), pos.col) } {
+        // `findmatchlimit` found `pos` in the current buffer, so the cache
+        // answers with the line it sits on.
+        if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
         cur_maxcomment = int64_t::from(Win::current().w_cursor.lnum - pos.lnum - 1);
@@ -78,9 +78,9 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> 
                 int64_t::from(cur_maxcomment),
             )
         }?;
-        // SAFETY: `findmatchlimit` found `pos` in the current buffer, so
-        // `ml_get` answers with the line it sits on.
-        if !unsafe { is_pos_in_string(ml_get(pos.lnum), pos.col) } {
+        // `findmatchlimit` found `pos` in the current buffer, so the cache
+        // answers with the line it sits on.
+        if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
         cur_maxcomment = (Win::current().w_cursor.lnum - pos.lnum - 1) as c_int;
@@ -215,11 +215,7 @@ pub(crate) unsafe fn skip_string(p: *const c_char) -> *const c_char {
 }
 
 /// Whether `line[col]` is inside a C string.
-///
-/// # Safety
-/// `line` must point at a NUL-terminated string.
-pub unsafe fn is_pos_in_string(line: *const c_char, col: ColNr) -> bool {
-    let s = unsafe { CStr::from_ptr(line).to_bytes() };
+pub fn is_pos_in_string(s: &[u8], col: ColNr) -> bool {
     let mut p = 0usize;
     while p < s.len() && (p as ColNr) < col {
         // `p < s.len()` is upstream's `*p`, so the tail is non-empty and the

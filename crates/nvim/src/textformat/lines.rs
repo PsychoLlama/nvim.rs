@@ -16,9 +16,7 @@ use super::*;
 use crate::ascii::ascii_isspace;
 use crate::change::del_bytes;
 use crate::charset::getwhitecols_curline;
-use crate::cursor::{
-    check_cursor, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr,
-};
+use crate::cursor::{check_cursor, coladvance, dec_cursor, gchar_cursor, get_cursor_line_len};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline, insertchar};
 use crate::eval::eval_to_number;
@@ -32,7 +30,7 @@ use crate::indent::{
 };
 use crate::indent_c::{cindent_on, get_c_indent};
 use crate::mark::mark_col_adjust;
-use crate::memline::ml_get;
+use crate::memline::{Lines, ml_get};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msgmore;
 use crate::ops::{Op, do_join};
@@ -352,7 +350,8 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 // paragraph does not really end.
                 if next_leader.flags.is_null()
                     || !unsafe { cstr::starts_with(next_leader.flags, b"://") }
-                    || unsafe { check_linecomment(get_cursor_line_ptr()) } == MAXCOL
+                    || check_linecomment(Lines::current().line(Win::current().w_cursor.lnum))
+                        == MAXCOL
                 {
                     is_end_par = true;
                 }

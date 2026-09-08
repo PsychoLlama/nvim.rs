@@ -48,6 +48,7 @@
 //! | `mb_string2cells`, `..._len` | [`string_cells`] | screen cells the whole text occupies |
 //! | `mb_charlen`, `mb_charlen_len` | [`char_count`] | grapheme clusters in the text |
 //! | `utf_cp_bounds`, `utf_cp_bounds_len` | [`cp_bounds`] | both ends of the codepoint covering a byte |
+//! | `utf_head_off` | [`head_off`] | how far back the cluster covering a byte starts |
 //! | `utf_iscomposing` | [`iscomposing`] | whether two codepoints cluster |
 //! | the `MB_PTR_ADV` loop | [`clusters`], [`chars`] | one item per cluster |
 //!
