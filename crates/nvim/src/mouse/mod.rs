@@ -28,6 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::strings::has_char;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_char, c_int};
@@ -47,7 +48,6 @@ use crate::search::BACKWARD;
 use crate::state::virtual_active;
 use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
-use crate::strings::vim_strchr;
 use crate::types::{
     CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, Tabpage, TypVal,
     VarNumber, Window, size_t,
@@ -339,8 +339,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
     // characters to be considered as a single word.  These are things like
     // "->", "/ *", "*=", "+=", "&=", "<=", ">=", "!=" etc.  Otherwise, each
     // character is in its own class.
-    // SAFETY: a NUL-terminated literal.
-    if c != NUL && unsafe { !vim_strchr(c"-+*/%<>&|^!=".as_ptr(), c).is_null() } {
+    if c != NUL && has_char(c"-+*/%<>&|^!=", c) {
         return 1;
     }
     c

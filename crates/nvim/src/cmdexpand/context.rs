@@ -11,6 +11,8 @@
 use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
 use crate::types::{ExpandContext, NUL};
 use core::ffi::{c_char, c_int};
@@ -153,7 +155,7 @@ pub(crate) unsafe fn set_cmd_index(
             p = skip_alpha(unsafe { p.add(1) });
         }
         // Check for non-alpha command.
-        if p == cmd && !unsafe { vim_strchr(c"@*!=><&~#".as_ptr(), *p as u8 as c_int) }.is_null() {
+        if p == cmd && has_char(c"@*!=><&~#", unsafe { *p } as u8 as c_int) {
             p = unsafe { p.add(1) };
         }
         let len = unsafe { p.offset_from(cmd) } as size_t;
@@ -182,7 +184,7 @@ pub(crate) unsafe fn set_cmd_index(
 
     if unsafe { (*args).cmdidx } == CmdIdx::SIZE {
         if unsafe { *cmd } as c_int == 's' as c_int
-            && !unsafe { vim_strchr(c"cgriI".as_ptr(), *cmd.add(1) as u8 as c_int) }.is_null()
+            && has_char(c"cgriI", unsafe { *cmd.add(1) } as u8 as c_int)
         {
             unsafe { (*args).cmdidx = CmdIdx::substitute };
             p = unsafe { cmd.add(1) };

@@ -9,6 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -25,7 +27,6 @@ use crate::normal::{
 };
 use crate::option::vars::p_sel;
 use crate::pos::{equalpos, lt};
-use crate::strings::vim_strchr;
 use crate::types::{ColNr, NUL, OpArg};
 
 /// The column of the next `quotechar` at or after `col`, or -1 when there is
@@ -52,7 +53,7 @@ unsafe fn find_next_quote(
         }
         // SAFETY: `escape` is null or NUL-terminated; the `&&` guards the
         // call and is left whole.
-        if !escape.is_null() && unsafe { !vim_strchr(escape, c).is_null() } {
+        if !escape.is_null() && unsafe { has_char(cstr::at(escape), c) } {
             col += 1;
             // SAFETY: `c` was not the NUL, so `col` is still within the line.
             if unsafe { *line.offset(col as isize) } as c_int == NUL {
@@ -92,11 +93,10 @@ unsafe fn find_prev_quote(
             // the chain is the proof and is left whole.
             while unsafe {
                 col_start - n > 0
-                    && !vim_strchr(
-                        escape,
+                    && has_char(
+                        cstr::at(escape),
                         *line.offset((col_start - n - 1) as isize) as u8 as c_int,
                     )
-                    .is_null()
             } {
                 n += 1;
             }

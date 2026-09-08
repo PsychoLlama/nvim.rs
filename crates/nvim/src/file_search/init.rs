@@ -15,6 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::option::cpo_has;
 use crate::semsg;
+use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, MAXPATHL};
 use ::libc::strtol;
 use core::ffi::{c_char, c_int, c_void};

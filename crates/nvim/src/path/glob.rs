@@ -17,6 +17,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
@@ -556,7 +558,7 @@ pub unsafe fn match_suffix(fname: *mut c_char) -> bool {
         } as usize;
         if setsuflen == 0 {
             // An empty entry matches a name without a '.' in it.
-            if unsafe { vim_strchr(path_tail(fname), c_int::from(b'.')) }.is_null() {
+            if !has_char(unsafe { cstr::at(path_tail(fname)) }, c_int::from(b'.')) {
                 setsuflen = 1;
                 break;
             }

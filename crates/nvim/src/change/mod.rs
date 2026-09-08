@@ -88,7 +88,7 @@ use crate::state::mode::{
     orig_line_count, restart_edit, vr_lines_changed,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
-use crate::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::strings::{concat_str, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};
 use crate::types::AutoEvent;
 use crate::types::TAB;

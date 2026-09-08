@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -35,7 +36,6 @@ use crate::option::vars::{
 use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::state::mode::{km_startsel, km_stopsel};
-use crate::strings::vim_strchr;
 use crate::types::{
     BreakAt, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptSet, OptionSetFlags,
     VirtText, WinConfig, kFloatRelativeEditor,
@@ -282,9 +282,9 @@ pub unsafe fn did_set_keymodel(args: &mut OptSet) -> Option<&CStr> {
     if errmsg.is_some() {
         return errmsg;
     }
-    // SAFETY: the option's C string value; `vim_strchr` only reads it.
-    km_stopsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'o')) }.is_null());
-    km_startsel.set(!unsafe { vim_strchr(p_km.get(), c_int::from(b'a')) }.is_null());
+    // SAFETY: the option's C string value, only read here.
+    km_stopsel.set(has_char(unsafe { cstr::at(p_km.get()) }, c_int::from(b'o')));
+    km_startsel.set(has_char(unsafe { cstr::at(p_km.get()) }, c_int::from(b'a')));
     None
 }
 

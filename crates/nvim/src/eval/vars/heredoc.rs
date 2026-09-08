@@ -11,6 +11,7 @@ use crate::cstr;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use core::slice;

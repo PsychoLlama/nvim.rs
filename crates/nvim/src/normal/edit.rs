@@ -7,6 +7,7 @@
 use crate::cstr;
 use crate::keycodes::{Ctrl_A, Ctrl_E, Ctrl_Q, Ctrl_V, Ctrl_Y, Key};
 use crate::memline::MlFlags;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -52,7 +53,6 @@ use crate::register::{copy_register, do_put, free_register};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
-use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
     CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
@@ -328,7 +328,7 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
     }
     // An empty line has nothing to swap unless 'whichwrap' lets `~` move
     // to the next one.
-    let wraps = !unsafe { vim_strchr(p_ww.get(), '~' as c_int) }.is_null();
+    let wraps = has_char(unsafe { cstr::at(p_ww.get()) }, '~' as c_int);
     if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL && !wraps {
         clear_op_beep(ca.op());
         return;

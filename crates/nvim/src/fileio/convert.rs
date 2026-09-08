@@ -21,6 +21,8 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CStr;
 
@@ -706,9 +708,9 @@ pub(crate) struct FormatGuess {
 impl FormatGuess {
     pub(crate) fn from_ffs() -> Self {
         FormatGuess {
-            try_dos: !unsafe { vim_strchr(p_ffs.get(), b'd' as c_int) }.is_null(),
-            try_unix: !unsafe { vim_strchr(p_ffs.get(), b'x' as c_int) }.is_null() as c_int,
-            try_mac: !unsafe { vim_strchr(p_ffs.get(), b'm' as c_int) }.is_null() as c_int,
+            try_dos: has_char(unsafe { cstr::at(p_ffs.get()) }, b'd' as c_int),
+            try_unix: has_char(unsafe { cstr::at(p_ffs.get()) }, b'x' as c_int) as c_int,
+            try_mac: has_char(unsafe { cstr::at(p_ffs.get()) }, b'm' as c_int) as c_int,
         }
     }
 

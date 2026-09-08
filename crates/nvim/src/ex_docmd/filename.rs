@@ -158,7 +158,7 @@ pub(crate) unsafe fn expand_filename(
             }
             continue;
         }
-        if unsafe { vim_strchr(c"%#<".as_ptr(), *p as uint8_t as c_int) }.is_null() {
+        if !has_char(c"%#<".as_ptr(), byte(p) as uint8_t as c_int) {
             p = unsafe { p.add(1) };
             continue;
         }
@@ -185,7 +185,7 @@ pub(crate) unsafe fn expand_filename(
             continue;
         }
 
-        if !vim_strchr(repl, '$' as c_int).is_null() || !vim_strchr(repl, '~' as c_int).is_null() {
+        if has_char(repl, '$' as c_int) || has_char(repl, '~' as c_int) {
             let old = repl;
             repl = unsafe { expand_env_save(repl) };
             xfree(old as *mut c_void);
@@ -210,7 +210,7 @@ pub(crate) unsafe fn expand_filename(
         {
             let mut l = repl;
             while unsafe { *l } != 0 {
-                if !unsafe { vim_strchr(escape_chars.get(), *l as uint8_t as c_int) }.is_null() {
+                if has_char(escape_chars.get(), byte(l) as uint8_t as c_int) {
                     let escaped_repl = vim_strsave_escaped(repl, escape_chars.get());
                     xfree(repl as *mut c_void);
                     repl = escaped_repl;
@@ -242,9 +242,7 @@ pub(crate) unsafe fn expand_filename(
     if has_wildcards {
         // Environment variables first: they may hold the wildcards, or
         // may be all that looked like one.
-        if !vim_strchr(ea.arg, '$' as c_int).is_null()
-            || !vim_strchr(ea.arg, '~' as c_int).is_null()
-        {
+        if has_char(ea.arg, '$' as c_int) || has_char(ea.arg, '~' as c_int) {
             let out = expanded.as_mut_ptr();
             unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
@@ -799,10 +797,10 @@ fn path_has_wildcard(p: *const c_char) -> bool {
     unsafe { crate::path::path_has_wildcard(p) }
 }
 
-/// `vim_strchr()` as checked code.
-fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+/// `vim_strchr()`'s membership test as checked code.
+fn has_char(set: *const c_char, c: c_int) -> bool {
     // SAFETY: a NUL-terminated string.
-    unsafe { crate::strings::vim_strchr(string, c) }
+    unsafe { crate::strings::has_char(cstr::at(set), c) }
 }
 
 /// `vim_strsave_escaped()` as checked code.

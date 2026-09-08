@@ -80,7 +80,6 @@ use crate::state::{
     MODE_SELECT, MODE_TERMINAL, MODE_VISUAL, get_real_state, state_handle_k_event,
     state_no_longer_safe,
 };
-use crate::strings::vim_strchr;
 use crate::types::CAR;
 use crate::types::DEL;
 use crate::types::ESC;

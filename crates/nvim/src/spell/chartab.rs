@@ -22,7 +22,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::spell::WordFlags;
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
@@ -31,7 +33,6 @@ use crate::mbyte::{
     utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::xstrlcpy;
-use crate::strings::vim_strchr;
 use crate::types::{Failed, MB_MAXBYTES, NUL, SpellTab, uint8_t};
 use ::libc::strcpy;
 
@@ -151,8 +152,7 @@ pub unsafe fn spell_iswordp(p: *const c_char, window: Win) -> bool {
         let midword = if c < 256 {
             syn.b_spell_ismw[c as usize]
         } else {
-            !syn.b_spell_ismw_mb.is_null()
-                && !unsafe { vim_strchr(syn.b_spell_ismw_mb, c) }.is_null()
+            !syn.b_spell_ismw_mb.is_null() && has_char(unsafe { cstr::at(syn.b_spell_ismw_mb) }, c)
         };
         if midword {
             s = unsafe { p.offset(l as isize) };
@@ -204,8 +204,7 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     let midword = if w[0] < 256 {
         syn.b_spell_ismw[w[0] as usize]
     } else {
-        !syn.b_spell_ismw_mb.is_null()
-            && !unsafe { vim_strchr(syn.b_spell_ismw_mb, w[0]) }.is_null()
+        !syn.b_spell_ismw_mb.is_null() && has_char(unsafe { cstr::at(syn.b_spell_ismw_mb) }, w[0])
     };
     let c = if midword { w[1] } else { w[0] };
 

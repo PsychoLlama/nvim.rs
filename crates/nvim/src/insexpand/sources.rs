@@ -15,6 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
+use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
 
@@ -108,7 +109,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                     count = -1;
                 } else {
                     // SAFETY: as above.
-                    let backtick = !unsafe { vim_strchr(buf, '`' as c_int) }.is_null();
+                    let backtick = has_char(unsafe { cstr::at(buf) }, '`' as c_int);
                     let failed = !backtick && {
                         let flags = ExpandFlags::FILE | ExpandFlags::SILENT;
                         let (n, out) = (&raw mut count, &raw mut files);

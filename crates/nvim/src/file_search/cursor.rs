@@ -16,6 +16,7 @@ use crate::guard::Script;
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
 use crate::semsg;
+use crate::strings::has_char;
 use crate::types::{FAIL, OptionSetFlags, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_long};
@@ -146,7 +147,7 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
         if !(vim_isfilec(at(len) as c_int)
             || escaped_space
             || (hyp && unsafe { path_is_url(cstr::at(name.add(len))) } != 0)
-            || (is_url && !unsafe { vim_strchr(c":?&=".as_ptr(), at(len) as c_int) }.is_null()))
+            || (is_url && has_char(c":?&=", at(len) as c_int)))
         {
             break;
         }
@@ -166,7 +167,7 @@ unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
     // If there is trailing punctuation, remove it. But don't remove "..",
     // which could be a directory name.
     if len > 2
-        && !unsafe { vim_strchr(c".,:;!".as_ptr(), *name.add(len - 1) as u8 as c_int) }.is_null()
+        && has_char(c".,:;!", unsafe { *name.add(len - 1) } as u8 as c_int)
         && unsafe { *name.add(len - 2) } != b'.' as c_char
     {
         len -= 1;

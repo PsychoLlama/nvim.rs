@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::has_char;
 use crate::types::{ExpandContext, MAXPATHL, NUL};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -361,7 +362,7 @@ pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
         // separator, on DOS the '*' "path\*\file" must not be skipped.
         if unsafe { rem_backslash(s) } {
             s = unsafe { s.add(1) };
-        } else if !unsafe { vim_strchr(c"*?[".as_ptr(), *s as u8 as c_int) }.is_null() {
+        } else if has_char(c"*?[", unsafe { *s } as u8 as c_int) {
             return false;
         }
         s = unsafe { s.add(1) };
@@ -507,8 +508,8 @@ pub unsafe fn addstar(fname: *mut c_char, mut len: size_t, context: ExpandContex
     }
     if (unsafe { *retval } as c_int != '~' as c_int || tail != retval)
         && !ends_in_star
-        && unsafe { vim_strchr(tail, '$' as c_int) }.is_null()
-        && unsafe { vim_strchr(retval, '`' as c_int) }.is_null()
+        && !has_char(unsafe { cstr::at(tail) }, '$' as c_int)
+        && !has_char(unsafe { cstr::at(retval) }, '`' as c_int)
     {
         unsafe { *retval.add(len) = '*' as c_char };
         len += 1;

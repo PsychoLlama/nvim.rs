@@ -42,6 +42,7 @@ use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
 use crate::api::ui::remote_ui_option_set;
 use crate::autocmd::do_autocmd_uienter;
 use crate::buffer::resettitle;
+use crate::cstr;
 use crate::cursor_shape::{
     SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_entry,
 };
@@ -70,7 +71,7 @@ use crate::os::time::{os_hrtime, os_sleep};
 use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::types::builders::static_string;
 use crate::types::ui::{
     kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
@@ -405,7 +406,7 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
             }
         }
     }
-    if !unsafe { vim_strchr(p_debug.get(), 'e' as c_int) }.is_null() {
+    if has_char(unsafe { cstr::at(p_debug.get()) }, 'e' as c_int) {
         unsafe { msg_source(HLF_W) };
         msg(gettext(c"Beep!"), HLF_W);
     }

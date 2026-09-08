@@ -20,6 +20,7 @@ use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
+use crate::strings::vim_strchr;
 use crate::tr_c;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

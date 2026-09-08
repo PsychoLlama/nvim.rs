@@ -8,6 +8,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
 
@@ -233,7 +234,7 @@ pub unsafe fn did_set_comments(args: &mut OptSet) -> Option<&CStr> {
     while unsafe { *s } != 0 {
         // The flag letters, up to the colon.
         while unsafe { *s } != 0 && unsafe { *s } != b':' as c_char {
-            if unsafe { vim_strchr(COM_ALL.as_ptr(), c_int::from(*s as u8)) }.is_null()
+            if !has_char(COM_ALL, c_int::from(unsafe { *s } as u8))
                 && !ascii_isdigit(c_int::from(unsafe { *s }))
                 && unsafe { *s } != b'-' as c_char
             {
@@ -317,7 +318,7 @@ pub unsafe fn did_set_encoding(args: &mut OptSet) -> Option<&CStr> {
             return Some(e_modifiable);
         }
         // 'fileencoding' is one encoding, not a list.
-        if !unsafe { vim_strchr(*varp, c_int::from(b',')) }.is_null() {
+        if has_char(unsafe { cstr::at(*varp) }, c_int::from(b',')) {
             return invalid();
         }
         redraw_titles();

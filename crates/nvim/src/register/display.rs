@@ -22,6 +22,7 @@
 )]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -81,7 +82,7 @@ unsafe fn dis_special(
     }
     // SAFETY: `arg`, tested non-null, is the NUL-terminated `:registers`
     // argument.
-    if !arg.is_null() && unsafe { vim_strchr(arg, name) }.is_null() {
+    if !arg.is_null() && !has_char(unsafe { cstr::at(arg) }, name) {
         return;
     }
     // SAFETY: `text` is NUL-terminated, tested non-null above.
@@ -197,7 +198,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
     while i < NUM_REGISTERS && !got_int.get() {
         let name = get_register_name(i);
         // SAFETY: `arg` is null or the NUL-terminated `:registers` argument.
-        if arg.is_null() || !unsafe { vim_strchr(arg, name) }.is_null() {
+        if arg.is_null() || has_char(unsafe { cstr::at(arg) }, name) {
             // Before `get_clipboard` below, because for `"*`/`"+` this
             // queries the provider itself, and upstream's order of the
             // two queries is what the messages depend on.
@@ -262,7 +263,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
 
     // `"#` is listed under the `%` argument, as upstream has it.
     // SAFETY: `arg` is null or the NUL-terminated `:registers` argument.
-    let want_alt = arg.is_null() || !unsafe { vim_strchr(arg, '%' as c_int) }.is_null();
+    let want_alt = arg.is_null() || has_char(unsafe { cstr::at(arg) }, '%' as c_int);
     if want_alt && !got_int.get() {
         let mut fname: *mut c_char = ::core::ptr::null_mut();
         let mut dummy: LineNr = 0;

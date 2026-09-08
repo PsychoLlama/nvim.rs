@@ -174,7 +174,7 @@ use crate::state::{
     REPLACE_FLAG, VREPLACE_FLAG, may_trigger_modechanged, may_trigger_safestate, state_enter,
     state_handle_k_event, virtual_active,
 };
-use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
+use crate::strings::{vim_snprintf, xstrnsave};
 use crate::syntax::syntax_present;
 use crate::terminal::terminal_enter;
 use crate::textformat::{

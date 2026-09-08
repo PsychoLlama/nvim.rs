@@ -115,7 +115,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat};
 use crate::state::mode::restart_edit;
-use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen};
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::builders::static_cstring;

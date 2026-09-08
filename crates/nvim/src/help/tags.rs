@@ -39,6 +39,7 @@ use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg;
+use crate::strings::has_char;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
 use ::libc::{fclose, fprintf, fputs, strcasecmp};
@@ -374,7 +375,7 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
     while !unsafe { vim_fgets(iobuff, IOSIZE, fd) } && !got_int.get() {
         if in_example {
             // Skip the example; a non-white in the first column ends it.
-            if !unsafe { vim_strchr(c" \t\n\r".as_ptr(), *iobuff as uint8_t as c_int) }.is_null() {
+            if has_char(c" \t\n\r", unsafe { *iobuff } as uint8_t as c_int) {
                 continue;
             }
             in_example = false;
@@ -401,10 +402,7 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
                     && (p1 == iobuff
                         || unsafe { *p1.offset(-1) } == b' ' as c_char
                         || unsafe { *p1.offset(-1) } == b'\t' as c_char)
-                    && (!unsafe {
-                        vim_strchr(c" \t\n\r".as_ptr(), *s.offset(1) as uint8_t as c_int)
-                    }
-                    .is_null()
+                    && (has_char(c" \t\n\r", unsafe { *s.offset(1) } as uint8_t as c_int)
                         || unsafe { *s.offset(1) } == NUL as c_char)
                 {
                     unsafe { *p2 = NUL as c_char };

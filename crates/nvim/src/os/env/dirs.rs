@@ -19,7 +19,7 @@ use crate::option::vars::p_hf;
 use crate::os::fs::os_isdir;
 use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::types::{MAXPATHL, Vv};
 use crate::winlayer::Buf;
 
@@ -202,7 +202,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
         let mut exe_name: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if vim_path.is_null() {
             let from_helpfile =
-                !p_hf.get().is_null() && vim_strchr(p_hf.get(), '$' as c_int).is_null();
+                !p_hf.get().is_null() && !has_char(cstr::at(p_hf.get()), '$' as c_int);
             if from_helpfile {
                 vim_path = p_hf.get();
             } else {

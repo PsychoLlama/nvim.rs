@@ -24,6 +24,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int};
 
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup, hash_reset};
@@ -33,7 +34,6 @@ use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
-use crate::strings::vim_strchr;
 use crate::types::{
     HashValue, NUL, RegProg, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t,
 };
@@ -410,7 +410,7 @@ pub(super) unsafe fn read_compound(
         // Collect the set of all flags, and the set that may start a
         // compound, skipping the regexp punctuation.
         // SAFETY: a literal, NUL-terminated string.
-        if unsafe { vim_strchr(c"?*+[]/".as_ptr(), c) }.is_null() && !byte_in_flags(&all, b) {
+        if !has_char(c"?*+[]/", c) && !byte_in_flags(&all, b) {
             all.push(b);
         }
         if atstart != 0 {

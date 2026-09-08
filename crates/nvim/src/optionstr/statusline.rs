@@ -14,6 +14,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
@@ -30,7 +32,7 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::stl_syntax;
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::types::{LineNr, NUL, OptSet, OptionSetFlags, StlSyntax};
 use crate::winfloat::win_config_float;
 
@@ -66,7 +68,7 @@ pub(crate) unsafe fn did_set_titleiconstring(
     let value = unsafe { *varp(args) };
     // SAFETY: as above; the checker walks it to its terminator.
     let formatted = unsafe {
-        !vim_strchr(value, c_int::from(b'%')).is_null() && check_stl_option(value).is_none()
+        has_char(cstr::at(value), c_int::from(b'%')) && check_stl_option(value).is_none()
     };
     let mut syntax = stl_syntax.get();
     if formatted {

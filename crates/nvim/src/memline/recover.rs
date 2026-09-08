@@ -21,6 +21,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_long, c_uint};
 
 use super::*;
@@ -384,13 +385,10 @@ unsafe fn looks_like_swapfile(fname: *mut c_char) -> bool {
     let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
     len >= 4
         && unsafe { strncasecmp(fname.offset(len - 4), c".s".as_ptr(), 2) } == 0
-        && !unsafe {
-            vim_strchr(
-                c"abcdefghijklmnopqrstuvw".as_ptr(),
-                (*fname.offset(len - 2) as u8).to_ascii_lowercase() as c_int,
-            )
-        }
-        .is_null()
+        && has_char(
+            c"abcdefghijklmnopqrstuvw",
+            (unsafe { *fname.offset(len - 2) } as u8).to_ascii_lowercase() as c_int,
+        )
         && (unsafe { *fname.offset(len - 1) } as u8).is_ascii_alphabetic()
 }
 

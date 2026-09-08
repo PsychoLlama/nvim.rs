@@ -14,6 +14,8 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -162,7 +164,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
     let mut p = ea.arg;
     let mut name =
         unsafe { save_function_name(&raw mut p, ea.skip != 0, TFN_NO_AUTOLOAD, &raw mut fudi) };
-    let paren = !unsafe { vim_strchr(p, b'(' as c_int) }.is_null();
+    let paren = has_char(unsafe { cstr::at(p) }, b'(' as c_int);
     if name.is_null() && (fudi.fd_dict.is_null() || !paren) && ea.skip == 0 {
         // Return on an invalid expression in braces, unless the
         // evaluation was cancelled by an aborting error, an interrupt or
@@ -200,7 +202,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                 break 'ret_free;
             }
             // Attempt to carry on by skipping some text.
-            if !unsafe { vim_strchr(p, b'(' as c_int) }.is_null() {
+            if has_char(unsafe { cstr::at(p) }, b'(' as c_int) {
                 p = unsafe { vim_strchr(p, b'(' as c_int) };
             }
         }
@@ -427,7 +429,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
 
                     if fp.is_null() {
                         if fudi.fd_dict.is_null()
-                            && !unsafe { vim_strchr(name, AUTOLOAD_CHAR) }.is_null()
+                            && has_char(unsafe { cstr::at(name) }, AUTOLOAD_CHAR)
                         {
                             // Check that the autoload name matches the
                             // script name.

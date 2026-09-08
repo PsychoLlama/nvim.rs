@@ -27,7 +27,7 @@ use crate::os::fs::{os_can_exe, os_isdir, os_path_exists, os_remove};
 use crate::os::time::os_delay;
 use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildcard, path_tail};
 use crate::semsg;
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::types::{Failed, READBIN};
 use crate::ui::state::Rows;
 use core::ops::Range;
@@ -112,7 +112,7 @@ unsafe fn have_wildcard(num: c_int, file: *mut *mut c_char) -> bool {
 /// `file[0..num]` must be NUL-terminated strings.
 unsafe fn have_dollars(num: c_int, file: *mut *mut c_char) -> bool {
     // SAFETY: the caller's contract.
-    unsafe { (0..num as isize).any(|i| !vim_strchr(*file.offset(i), '$' as c_int).is_null()) }
+    unsafe { (0..num as isize).any(|i| has_char(cstr::at(*file.offset(i)), '$' as c_int)) }
 }
 
 /// Which style the current `'shell'` wants, given the patterns.
@@ -381,7 +381,7 @@ pub unsafe fn os_expand_wildcards(
         }
         if secure.get() != 0 {
             for i in 0..num_pat as isize {
-                if !vim_strchr(*pat.offset(i), '`' as c_int).is_null() && check_secure() {
+                if has_char(cstr::at(*pat.offset(i)), '`' as c_int) && check_secure() {
                     return Err(Failed);
                 }
             }

@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
 use crate::memory::handoff::owned_cstr;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
@@ -116,7 +117,7 @@ pub(crate) unsafe fn translate_mapping(str_in: &[u8], cpo_val: *const c_char) ->
     let mut out = Vec::<u8>::new();
 
     // SAFETY: the caller's promise — `cpo_val` is NUL-terminated.
-    let cpo_bslash = !unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
+    let cpo_bslash = has_char(unsafe { cstr::at(cpo_val) }, CpoFlag::BSLASH.as_c_int());
     let mut at = 0;
     while at < str_in.len() {
         let mut c = c_int::from(str_in[at]);

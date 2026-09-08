@@ -20,6 +20,7 @@
 
 use crate::cstr;
 use crate::memline::MlFlags;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -48,7 +49,7 @@ use crate::plines::win_get_fill;
 use crate::state::mode::restart_edit;
 use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
@@ -95,9 +96,9 @@ fn current_win() -> Win {
 /// Whether `arg` contains the flag character `c` -- `:ls`'s argument is a
 /// set of them.
 fn has_flag(arg: *const c_char, c: u8) -> bool {
-    // SAFETY: `:ls`'s argument, a NUL-terminated string; `vim_strchr` takes
-    // a codepoint.
-    !unsafe { vim_strchr(arg, c as c_int) }.is_null()
+    // SAFETY: `:ls`'s argument, a NUL-terminated string. `has_char` takes a
+    // codepoint, which every flag letter is.
+    has_char(unsafe { cstr::at(arg) }, c as c_int)
 }
 
 fn buf_changed(buffer: Buf) -> bool {

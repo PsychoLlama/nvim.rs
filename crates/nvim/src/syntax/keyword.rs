@@ -11,6 +11,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;

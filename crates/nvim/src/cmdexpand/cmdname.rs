@@ -14,6 +14,8 @@ use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::keycodes::Ctrl_V;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
 use crate::types::{ExArgt, ExpandContext, NUL, OptionSetFlags};
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -501,7 +503,7 @@ pub(crate) unsafe fn set_one_cmd_context(
 
     // 1. skip comment lines and leading space, colons or bars
     let mut cmd: *const c_char = buff;
-    while !unsafe { vim_strchr(c" \t:|".as_ptr(), *cmd as u8 as c_int) }.is_null() {
+    while has_char(c" \t:|", unsafe { *cmd } as u8 as c_int) {
         cmd = unsafe { cmd.add(1) };
     }
     expand.xp_pattern = cmd as *mut c_char;

@@ -22,6 +22,7 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::strings::has_char;
 use crate::types::BS;
 use crate::types::DEL;
 use crate::types::TAB;
@@ -40,7 +41,6 @@ use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::runtime::state::current_sctx;
-use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, size_t};
 
 mod codes;
@@ -678,7 +678,7 @@ pub unsafe fn replace_termcodes(
     let end = src.skip(from_len as isize - 1);
     // A backslash is a special character unless 'cpoptions' contains B.
     // SAFETY: `cpo_val` is the caller's NUL-terminated option string.
-    let do_backslash = unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
+    let do_backslash = !has_char(unsafe { cstr::at(cpo_val) }, CpoFlag::BSLASH.as_c_int());
     let do_special = flags & REPTERM_NO_SPECIAL == 0;
     // SAFETY: the caller's promise -- `bufp` is readable and writable.
     let given = unsafe { *bufp };

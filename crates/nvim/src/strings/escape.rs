@@ -12,10 +12,10 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
-use super::vim_strchr;
 use crate::charset::rem_backslash;
 use crate::ex_docmd::find_cmdline_var;
 use crate::mbyte::{mb_copy_char, utfc_ptr2len};
@@ -76,7 +76,7 @@ pub unsafe fn vim_strsave_escaped_ext(
             p = unsafe { p.add(l) };
             continue;
         }
-        if !unsafe { vim_strchr(esc_chars, *p as u8 as c_int) }.is_null()
+        if has_char(unsafe { cstr::at(esc_chars) }, unsafe { *p } as u8 as c_int)
             || (bsl && unsafe { rem_backslash(p) })
         {
             length = length.wrapping_add(1);
@@ -96,7 +96,7 @@ pub unsafe fn vim_strsave_escaped_ext(
             p = unsafe { p.add(l) };
             continue;
         }
-        if !unsafe { vim_strchr(esc_chars, *p as u8 as c_int) }.is_null()
+        if has_char(unsafe { cstr::at(esc_chars) }, unsafe { *p } as u8 as c_int)
             || (bsl && unsafe { rem_backslash(p) })
         {
             unsafe { *p2 = cc };

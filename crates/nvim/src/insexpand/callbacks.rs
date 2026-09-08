@@ -12,6 +12,7 @@
 use super::*;
 use crate::guard::Lock;
 use crate::semsg;
+use crate::strings::vim_strchr;
 use crate::types::{
     Failed, IOSIZE, NUL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };

@@ -36,7 +36,7 @@ use crate::pos::MAXCOL;
 use crate::regexp::{RE_LAST, RE_SEARCH, RE_SUBST, regtilde, skip_regexp_ex};
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::semsg;
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{AdditionalData, ExArg, LineNr, NUL, RegMMatch, SubReplacementString, size_t};
 use crate::winlayer::Buf;
@@ -103,7 +103,7 @@ unsafe fn read_pattern(
         *args.cmd as u8 == b's'
             && *cmd as c_int != NUL
             && !ascii_iswhite(*cmd as c_int)
-            && vim_strchr(c"0123456789cegriIp|\"".as_ptr(), *cmd as u8 as c_int).is_null()
+            && !has_char(c"0123456789cegriIp|\"", *cmd as u8 as c_int)
     };
     if !fresh {
         // Use the previous pattern and substitution.
@@ -154,7 +154,7 @@ unsafe fn read_pattern(
         // search pattern (almost like "//sub/r"), "\&sub&" the last
         // substitute pattern (like "//sub/").
         cmd = unsafe { cmd.add(1) };
-        if unsafe { vim_strchr(c"/?&".as_ptr(), *cmd as u8 as c_int) }.is_null() {
+        if !has_char(c"/?&", unsafe { *cmd } as u8 as c_int) {
             emsg(gettext(e_backslash));
             return None;
         }

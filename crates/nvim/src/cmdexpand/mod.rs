@@ -101,7 +101,7 @@ use crate::search::{
 };
 use crate::sign::{get_sign_name, set_context_in_sign_cmd};
 use crate::statusline::fillchar_status;
-use crate::strings::{sort_strings, strcase_save, vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::strings::{sort_strings, strcase_save, vim_strsave_escaped, xstrnsave};
 use crate::syntax::{
     get_syntax_name, get_syntime_arg, reset_expand_highlight, set_context_in_echohl_cmd,
     set_context_in_syntax_cmd,

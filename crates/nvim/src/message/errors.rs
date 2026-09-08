@@ -27,6 +27,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::log::logmsg;
 use crate::message_fmt::c_str;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
@@ -157,8 +158,8 @@ pub unsafe fn msg_source(hl_id: c_int) {
 /// Only that `'debug'` holds a valid string.
 pub(crate) unsafe fn emsg_not_now() -> bool {
     (emsg_off.get() > 0
-        && unsafe { vim_strchr(p_debug.get(), b'm' as c_int) }.is_null()
-        && unsafe { vim_strchr(p_debug.get(), b't' as c_int) }.is_null())
+        && !has_char(unsafe { cstr::at(p_debug.get()) }, b'm' as c_int)
+        && !has_char(unsafe { cstr::at(p_debug.get()) }, b't' as c_int))
         || emsg_skip.get() > 0
 }
 
@@ -185,7 +186,7 @@ pub unsafe fn emsg_multiline(
     let severe = emsg_severe.get();
     emsg_severe.set(false);
 
-    if emsg_off.get() == 0 || !unsafe { vim_strchr(p_debug.get(), b't' as c_int) }.is_null() {
+    if emsg_off.get() == 0 || has_char(unsafe { cstr::at(p_debug.get()) }, b't' as c_int) {
         // Cause a throw of an error exception if appropriate. Don't display
         // the error message in this case.
         let mut ignore = false;

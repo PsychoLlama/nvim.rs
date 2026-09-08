@@ -149,7 +149,7 @@ use crate::startup::{
 };
 use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
+use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::AutoEvent;
 use crate::types::BS;
 use crate::types::CAR;

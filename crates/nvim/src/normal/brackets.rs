@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::keycodes::Key;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ptr;
@@ -27,7 +28,6 @@ use crate::os::cshim::__ctype_b_loc;
 use crate::pos::MAXLNUM;
 use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
-use crate::strings::vim_strchr;
 use crate::textobject::findpar;
 use crate::types::{CmdArg, FileMark, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
@@ -348,9 +348,9 @@ pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
 
     if nchar == 'f' as c_int {
         unsafe { nv_gotofile(cmd_arg) };
-    } else if !unsafe { vim_strchr(c"iI\tdD\x04".as_ptr(), nchar) }.is_null() {
+    } else if has_char(c"iI\tdD\x04", nchar) {
         unsafe { nv_bracket_ident(cmd_arg) };
-    } else if !unsafe { vim_strchr(block_chars.as_ptr(), nchar) }.is_null() {
+    } else if has_char(block_chars, nchar) {
         unsafe { nv_bracket_block(cmd_arg, &raw const old_pos) };
     } else if nchar == '[' as c_int || nchar == ']' as c_int {
         // `[[` and `]]` look for a section start, `[]` and `][` for its

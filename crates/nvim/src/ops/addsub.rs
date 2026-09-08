@@ -27,9 +27,11 @@
 #![allow(unsafe_code)]
 
 use crate::charset::Str2NrBases;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
+use crate::strings::has_char;
 use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
@@ -69,7 +71,7 @@ impl NrFormats {
     unsafe fn current() -> Self {
         // SAFETY: the caller's promise -- 'nrformats' is a NUL-terminated
         // option string.
-        let has = |c: u8| !unsafe { vim_strchr(Buf::current().b_p_nf, c_int::from(c)) }.is_null();
+        let has = |c: u8| has_char(unsafe { cstr::at(Buf::current().b_p_nf) }, c_int::from(c));
         NrFormats {
             hex: has(b'x'),
             oct: has(b'o'),

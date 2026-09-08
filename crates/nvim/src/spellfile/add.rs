@@ -31,6 +31,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
@@ -51,7 +52,7 @@ use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
 use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::spell::{int_wordlist, spell_enc};
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::types::{
     FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
 };
@@ -302,9 +303,7 @@ fn init_spellfile() {
     let mut lstart = Buf::current().b_s.b_p_spl;
     let mut lend = unsafe { (*Win::current().w_s).b_p_spl };
     let mut aspath = false;
-    while unsafe { *lend } != 0
-        && unsafe { vim_strchr(c",._".as_ptr(), *lend as uint8_t as c_int) }.is_null()
-    {
+    while unsafe { *lend } != 0 && !has_char(c",._", unsafe { *lend } as uint8_t as c_int) {
         if vim_ispathsep(unsafe { *lend } as c_int) {
             aspath = true;
             lstart = unsafe { lend.offset(1) };

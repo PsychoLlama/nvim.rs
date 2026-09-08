@@ -12,6 +12,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::strings::has_char;
 use crate::types::{BackslashEscape, ExpandContext};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -148,7 +149,7 @@ pub(crate) unsafe fn wildescape(
                 let escaped = unsafe { vim_strsave_escaped(*slot, pat.as_ptr()) };
                 put(slot, escaped);
             } else if expand.xp_backslash.has(BackslashEscape::COMMA)
-                && !unsafe { vim_strchr(*slot, ',' as c_int) }.is_null()
+                && has_char(unsafe { cstr::at(*slot) }, ',' as c_int)
             {
                 let escaped = unsafe { vim_strsave_escaped(*slot, c",".as_ptr()) };
                 put(slot, escaped);

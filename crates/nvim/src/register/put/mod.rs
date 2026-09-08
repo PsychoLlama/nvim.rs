@@ -24,6 +24,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int};
 
 /// What reading the next line produced.

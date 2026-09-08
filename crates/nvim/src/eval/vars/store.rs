@@ -16,6 +16,8 @@
 
 use crate::cstr;
 use crate::semsg;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use crate::tr_plural;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -309,7 +311,7 @@ pub unsafe fn var_wrong_func_name(name: *const c_char, new_var: bool) -> bool {
 
     if !func_scope
         && !first.is_ascii_uppercase()
-        && unsafe { vim_strchr(name, b'#' as c_int) }.is_null()
+        && !has_char(unsafe { cstr::at(name) }, b'#' as c_int)
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(name) };

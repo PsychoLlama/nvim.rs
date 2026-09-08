@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::normal::visual_active;
 use crate::option::vars::p_mouse;
@@ -25,7 +26,7 @@ use crate::state::mode::State;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -88,7 +89,7 @@ pub unsafe fn ui_mouse_has(mode: c_int) -> bool {
         let matched = match flag {
             // `a` is every mode but the hit-return prompt.
             _ if flag == c_int::from(b'a') => {
-                !unsafe { vim_strchr(MOUSE_A.as_ptr().cast_mut(), mode) }.is_null()
+                has_char(unsafe { cstr::at(MOUSE_A.as_ptr().cast_mut()) }, mode)
             }
             MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
             _ => mode == flag,

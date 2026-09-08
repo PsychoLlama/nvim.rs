@@ -28,6 +28,7 @@ use crate::guard::Keys;
 use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;
 use crate::message_fmt::c_str;
+use crate::strings::has_char;
 use crate::types::NUL;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -230,10 +231,7 @@ pub unsafe fn wait_return(redraw: c_int) {
                     | Key::X2mouse)
             ) {
                 unsafe { jump_to_mouse(MOUSE_SETPOS as c_int, ptr::null_mut(), 0) };
-            } else if unsafe { vim_strchr(c"\r\n ".as_ptr(), c) }.is_null()
-                && c != Ctrl_C
-                && c != KEY_Q
-            {
+            } else if !has_char(c"\r\n ", c) && c != Ctrl_C && c != KEY_Q {
                 // Put the character back in the typeahead buffer. Not the
                 // stuff buffer, because lmaps wouldn't work.
                 unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };

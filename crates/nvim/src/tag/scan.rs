@@ -22,6 +22,8 @@ use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use crate::types::{CONV_NONE, Failed, NUL, OK};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -117,7 +119,7 @@ impl Pattern {
             self.headlen = 0;
             loop {
                 let at = unsafe { *self.head.offset(self.headlen as isize) } as u8;
-                if at == 0 || !unsafe { vim_strchr(meta.as_ptr(), at as c_int) }.is_null() {
+                if at == 0 || has_char(meta, at as c_int) {
                     break;
                 }
                 self.headlen += 1;

@@ -21,7 +21,8 @@ use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
 use crate::semsg;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::has_char;
+use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
@@ -637,7 +638,10 @@ unsafe fn output_is_writable(
     // SAFETY: the caller promises the path.
     if incount <= 0 {
         emsg(gettext(e_invarg));
-    } else if !unsafe { vim_strchr(path_tail(wfname), '_' as ::core::ffi::c_int) }.is_null() {
+    } else if has_char(
+        unsafe { cstr::at(path_tail(wfname)) },
+        '_' as ::core::ffi::c_int,
+    ) {
         emsg(gettext(c"E751: Output file name must not have region name"));
     } else if incount > MAXREGIONS as ::core::ffi::c_int {
         semsg!(

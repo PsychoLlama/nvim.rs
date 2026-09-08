@@ -21,6 +21,7 @@
 use super::*;
 use crate::cstr;
 use crate::narrow::number_as_int;
+use crate::strings::vim_strchr;
 use crate::types::ExpandContext;
 
 /// What [`get_sign_name`] should enumerate.

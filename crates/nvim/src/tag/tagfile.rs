@@ -22,6 +22,7 @@ use crate::cstr;
 use crate::file_search::Name;
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
+use crate::strings::has_char;
 use crate::types::{DoInRuntimepathCBFn, ExpandContext, MAXPATHL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -307,7 +308,7 @@ pub(crate) unsafe fn expand_tag_fname(
     let mut expanded = ptr::null_mut::<c_char>();
     if expand
         && unsafe { path_has_wildcard(fname) }
-        && unsafe { vim_strchr(fname, '`' as c_int) }.is_null()
+        && !has_char(unsafe { cstr::at(fname) }, '`' as c_int)
     {
         let mut xpc: Expand = unsafe { core::mem::zeroed() };
         unsafe { expand_init(&raw mut xpc) };

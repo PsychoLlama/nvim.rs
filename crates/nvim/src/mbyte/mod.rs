@@ -101,7 +101,6 @@ use crate::optionstr::check_chars_options;
 use crate::os::cshim::{__ctype_b_loc, gettext, strchr, strncasecmp};
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::pos::MAXCOL;
-use crate::strings::vim_strchr;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,

@@ -142,7 +142,7 @@ use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, may_trigger_modechanged,
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
-use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::strings::{vim_strsave_escaped, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;

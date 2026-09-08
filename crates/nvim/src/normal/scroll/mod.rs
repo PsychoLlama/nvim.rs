@@ -8,7 +8,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -25,7 +27,6 @@ use crate::normal::{
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
 use crate::state::mode::did_syncbind;
-use crate::strings::vim_strchr;
 use crate::types::{Buffer, CmdArg, ColNr, Direction, LineNr, Window};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
@@ -72,7 +73,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
                 let down = vtopline as LineNr - old_vtopline.get();
                 check_scrollbind(down, win.w_leftcol - old_leftcol.get());
             }
-        } else if !unsafe { vim_strchr(p_sbo.get(), 'j' as c_int) }.is_null() {
+        } else if has_char(unsafe { cstr::at(p_sbo.get()) }, 'j' as c_int) {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
             check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0);
@@ -101,8 +102,8 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // Two windows in diff mode are always bound vertically; otherwise
     // 'scrollopt' says so.
     let want_ver = old_curwin.w_onebuf_opt.wo_diff != 0
-        || (!unsafe { vim_strchr(p_sbo.get(), 'v' as c_int) }.is_null() && vtopline_diff != 0);
-    let want_hor = !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null()
+        || (has_char(unsafe { cstr::at(p_sbo.get()) }, 'v' as c_int) && vtopline_diff != 0);
+    let want_hor = has_char(unsafe { cstr::at(p_sbo.get()) }, 'h' as c_int)
         && (leftcol_diff != 0 || vtopline_diff != 0);
     set_visual_active(false);
     set_visual_select(visual_active());

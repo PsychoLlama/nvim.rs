@@ -21,6 +21,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -320,7 +321,7 @@ pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char)
             // but only the first of a run.
             let c = unsafe { utf_ptr2char(p) };
             len = unsafe { utfc_ptr2len(p) };
-            if unsafe { vim_strchr((*slang).sl_syllable, c) }.is_null() {
+            if !has_char(unsafe { cstr::at((*slang).sl_syllable) }, c) {
                 skip = false;
             } else if !skip {
                 cnt += 1;

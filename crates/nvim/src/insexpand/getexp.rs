@@ -14,6 +14,7 @@ use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::path::ExpandFlags;
+use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::winlayer::{Buf, buffer_at, buffers};
 
@@ -221,8 +222,7 @@ pub(crate) unsafe fn process_next_cpt_value(
             unsafe { (*st).set_match_pos = true };
         } else if !skip_source
             && !compl_time_slice_expired.get()
-            && !unsafe { vim_strchr(c"buwU".as_ptr(), (*st).cpt.at() as uint8_t as c_int) }
-                .is_null()
+            && has_char(c"buwU", unsafe { (*st).cpt.at() } as uint8_t as c_int)
             && {
                 // The scan's buffer outlives every autocommand and user
                 // function a pass through this loop runs, so it may have been

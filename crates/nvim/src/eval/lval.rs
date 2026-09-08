@@ -27,6 +27,7 @@
 use crate::cstr;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -61,7 +62,6 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::state::emsg_severe;
 use crate::message::{e_cannot_mod, e_listreq};
-use crate::strings::vim_strchr;
 use crate::types::{
     Dict, DictItem, FAIL, Failed, HashTab, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE,
     VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
@@ -103,9 +103,7 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
         if c == b':' as c_char {
             // A `:` continues the name only as the one namespace letter.
             // SAFETY: `NAMESPACES` is a NUL-terminated literal.
-            let namespaced = use_namespace
-                && p == start
-                && !unsafe { vim_strchr(NAMESPACES.as_ptr(), first as c_int) }.is_null();
+            let namespaced = use_namespace && p == start && has_char(NAMESPACES, first as c_int);
             if !namespaced {
                 break;
             }

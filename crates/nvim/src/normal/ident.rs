@@ -8,6 +8,7 @@ use super::identfind::find_ident_under_cursor;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -39,7 +40,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
-use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
+use crate::strings::{vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::tag::state::g_tag_at_cursor;
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpArg, int64_t, size_t, uint8_t};
@@ -283,7 +284,7 @@ unsafe fn append_escaped(
         // SAFETY: `p` walks the identifier, which is NUL-terminated.
         let c = unsafe { **p } as uint8_t as c_int;
         // SAFETY: `escapes` is a NUL-terminated literal.
-        if !unsafe { vim_strchr(escapes.as_ptr(), c) }.is_null() {
+        if has_char(escapes, c) {
             // SAFETY: the caller promises the room.
             unsafe { *out = '\\' as c_char };
             out = unsafe { out.offset(1) };

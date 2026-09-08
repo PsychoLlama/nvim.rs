@@ -34,6 +34,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
@@ -41,7 +42,6 @@ use crate::charset::getdigits_int;
 use crate::hashtab::{hash_add, hash_clear, hash_find};
 use crate::mbyte::mb_ptr2char_adv;
 use crate::memory::{xfree, xmemcpyz};
-use crate::strings::vim_strchr;
 use crate::types::{NUL, size_t, uint8_t};
 use ::libc::{strcat, strcpy};
 
@@ -129,7 +129,7 @@ pub(super) unsafe fn affitem2flag(
 pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag: c_uint) -> bool {
     // SAFETY: the caller promises the string; every walk stops at its NUL.
     match flagtype {
-        AFT_CHAR => !unsafe { vim_strchr(afflist, flag as c_int) }.is_null(),
+        AFT_CHAR => has_char(unsafe { cstr::at(afflist) }, flag as c_int),
         AFT_LONG | AFT_CAPLONG => {
             let mut p = afflist;
             while unsafe { *p } as c_int != NUL {
@@ -240,7 +240,7 @@ pub(super) unsafe fn process_compflags(
     let mut key: [c_char; 17] = [0; 17];
     while unsafe { *p } as c_int != NUL {
         // Pattern punctuation passes straight through.
-        if !unsafe { vim_strchr(c"/?*+[]".as_ptr(), *p as uint8_t as c_int) }.is_null() {
+        if has_char(c"/?*+[]", unsafe { *p } as uint8_t as c_int) {
             unsafe { *tp = *p as uint8_t };
             tp = unsafe { tp.add(1) };
             p = unsafe { p.add(1) };
@@ -270,7 +270,7 @@ pub(super) unsafe fn process_compflags(
                     check_renumber(spin);
                     let id = spin.si_newcomp_id;
                     spin.si_newcomp_id -= 1;
-                    if unsafe { vim_strchr(c"/?*+[]\\-^".as_ptr(), id) }.is_null() {
+                    if !has_char(c"/?*+[]\\-^", id) {
                         break id;
                     }
                 };

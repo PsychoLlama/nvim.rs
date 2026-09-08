@@ -11,6 +11,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_isdigit;
@@ -24,7 +25,7 @@ use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::types::{
     NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv, size_t, uint8_t,
 };
@@ -79,7 +80,7 @@ pub unsafe fn get_id_len(arg: *mut *const c_char) -> c_int {
             // SAFETY: the string's first byte is readable.
             let scope = unsafe { *start } as uint8_t as c_int;
             // SAFETY: `namespace_char` is a NUL-terminated literal.
-            let scoped = unsafe { vim_strchr(namespace_char.as_ptr(), scope) }.is_null();
+            let scoped = !has_char(namespace_char, scope);
             if len > 1 || (len == 1 && scoped) {
                 break;
             }
@@ -308,7 +309,7 @@ pub unsafe fn find_name_end(
             // SAFETY: the string's first byte is readable.
             let scope = unsafe { *arg } as uint8_t as c_int;
             // SAFETY: `namespace_char` is a NUL-terminated literal.
-            let scoped = unsafe { vim_strchr(namespace_char.as_ptr(), scope) }.is_null();
+            let scoped = !has_char(namespace_char, scope);
             if after_brace || (len == 1 && scoped) {
                 break;
             }

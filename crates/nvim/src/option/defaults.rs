@@ -16,6 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -50,7 +51,7 @@ use crate::path::{after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispath
 use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::types::{
     GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, size_t, uint32_t,
 };
@@ -113,7 +114,7 @@ fn set_init_default_shell() {
     if shell.is_null() {
         return;
     }
-    if unsafe { vim_strchr(shell, ' ' as c_int) }.is_null() {
+    if !has_char(unsafe { cstr::at(shell) }, ' ' as c_int) {
         unsafe { set_string_default(kOptShell, shell, false) };
     } else {
         let len = unsafe { cstr::bytes_at(shell) }.len().wrapping_add(3);

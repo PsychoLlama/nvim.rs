@@ -68,7 +68,6 @@ use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, s
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
-use crate::strings::vim_strchr;
 use crate::syntax::{
     SynFlags, get_syntax_attr, get_syntax_info, syn_get_sub_char, syntax_present, syntax_start,
 };

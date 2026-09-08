@@ -4,11 +4,11 @@
 use crate::cstr;
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
-use crate::mbyte::{cluster_len, utf_char2bytes};
+use crate::mbyte::{cluster_len, encode_char, utf_char2bytes};
 use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
-use crate::types::{KeyValue, TypVal, VAR_UNKNOWN, size_t};
+use crate::types::{KeyValue, MB_MAXCHAR, TypVal, VAR_UNKNOWN, size_t};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -164,6 +164,39 @@ pub unsafe fn vim_strnicmp_asc(s1: *const c_char, s2: *const c_char, len: size_t
         unsafe { CStr::from_ptr(s2) }.to_bytes(),
         len,
     )
+}
+
+/// The byte offset of codepoint `c` in `haystack`, or `None`.
+///
+/// `c` is a *codepoint*, not a byte: below `0x80` this is a byte search,
+/// and above it the needle is `c`'s UTF-8 encoding, so the answer is where
+/// that whole sequence starts. A non-positive `c` is never found — upstream
+/// spells `strchr(s, 0)` when it wants the terminator, and that offset is
+/// `haystack.len()`, which this deliberately does not answer.
+pub(crate) fn find_char(haystack: &[u8], c: c_int) -> Option<usize> {
+    if c <= 0 {
+        return None;
+    }
+    let mut encoded = [0u8; MB_MAXCHAR];
+    let len = encode_char(c, &mut encoded);
+    if len == 1 {
+        let byte = encoded[0];
+        haystack.iter().position(|&b| b == byte)
+    } else {
+        haystack
+            .windows(len)
+            .position(|window| window == &encoded[..len])
+    }
+}
+
+/// Whether codepoint `c` occurs in `set`.
+///
+/// The membership half of [`find_char`], and by a wide margin what
+/// upstream's `vim_strchr()` is for: two thirds of its call sites are a
+/// `!= NULL` test over an option's value or a literal run of characters,
+/// and none of those wants a pointer.
+pub(crate) fn has_char(set: &CStr, c: c_int) -> bool {
+    find_char(set.to_bytes(), c).is_some()
 }
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
@@ -329,7 +362,55 @@ pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core
 }
 #[cfg(test)]
 mod tests {
-    use super::{any_non_ascii, ascii_upcase, strnicmp_asc, trailing_spaces_start, unquote};
+    use super::{
+        any_non_ascii, ascii_upcase, find_char, has_char, strnicmp_asc, trailing_spaces_start,
+        unquote,
+    };
+
+    #[test]
+    fn find_char_answers_a_byte_offset_and_never_the_terminator() {
+        assert_eq!(find_char(b"abc", i32::from(b'a')), Some(0));
+        assert_eq!(find_char(b"abc", i32::from(b'c')), Some(2));
+        assert_eq!(find_char(b"abc", i32::from(b'z')), None);
+        // `strchr(s, 0)` answers the terminator; the slice has none.
+        assert_eq!(find_char(b"abc", 0), None);
+        assert_eq!(find_char(b"abc", -1), None);
+        // An empty set has no members, and a NUL *inside* the bytes is a
+        // member like any other -- which the pointer form could not see.
+        assert_eq!(find_char(b"", i32::from(b'a')), None);
+        assert_eq!(find_char(b"a\0b", 0), None);
+        assert_eq!(find_char(b"a\0b", i32::from(b'b')), Some(2));
+    }
+
+    #[test]
+    fn find_char_matches_a_multibyte_character_whole() {
+        // The needle above 0x7f is the character's UTF-8 encoding, so the
+        // offset is where the sequence starts and a lone lead byte misses.
+        assert_eq!(find_char("a\u{ab}b".as_bytes(), 0xAB), Some(1));
+        assert_eq!(
+            find_char("\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(), 0xAB),
+            Some(3)
+        );
+        assert_eq!(
+            find_char("\u{201e}\u{ab}\u{bb}\u{201c}".as_bytes(), 0x201C),
+            Some(7)
+        );
+        // 0xC2 is '\u{ab}''s first byte, and is not itself in the string.
+        assert_eq!(find_char("\u{ab}\u{bb}".as_bytes(), 0xC2), None);
+        // A lone 0xAB byte is not valid UTF-8 for U+00AB.
+        assert_eq!(find_char(b"\xAB", 0xAB), None);
+        // A needle longer than the haystack cannot match.
+        assert_eq!(find_char(b"a", 0x201C), None);
+    }
+
+    #[test]
+    fn has_char_is_find_char_over_a_c_string() {
+        assert!(has_char(c"abc", i32::from(b'b')));
+        assert!(!has_char(c"abc", i32::from(b'z')));
+        assert!(!has_char(c"", i32::from(b'a')));
+        assert!(!has_char(c"abc", 0)); // the terminator is not a member
+        assert!(has_char(c"a\u{ab}b", 0xAB));
+    }
 
     fn unquote_all(src: &[u8]) -> Vec<u8> {
         let mut out = Vec::new();

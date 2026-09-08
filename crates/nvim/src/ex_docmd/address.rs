@@ -18,6 +18,7 @@ use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 
@@ -47,7 +48,6 @@ use crate::quickfix::qf_get_size;
 
 use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
-use crate::strings::vim_strchr;
 use crate::types::{
     CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
     MarkMove, NUL, OK, Pos, size_t,
@@ -300,9 +300,7 @@ fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
 /// `ExpandContext`, unaliased for the call.
 pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_char {
     let mut cmd = cmd;
-    while !unsafe { vim_strchr(c" \t0123456789.$%'/?-+,;\\".as_ptr(), *cmd as u8 as c_int) }
-        .is_null()
-    {
+    while has_char(c" \t0123456789.$%'/?-+,;\\", unsafe { *cmd } as u8 as c_int) {
         if byte(cmd) == '\\' as c_int {
             // Only `\/`, `\?` and `\&` are addresses; any other
             // backslash ends the range.

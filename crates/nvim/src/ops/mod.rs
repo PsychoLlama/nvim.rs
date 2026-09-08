@@ -91,7 +91,7 @@ use crate::state::mode::{
     restart_edit, virtual_op,
 };
 use crate::state::{MODE_INSERT, MODE_REPLACE, VREPLACE_FLAG, virtual_active};
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::textformat::{auto_format, has_format_option, op_format, op_formatexpr};
 use crate::types::CAR;
 use crate::types::NL;

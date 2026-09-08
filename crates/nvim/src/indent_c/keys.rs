@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::vim_strchr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};

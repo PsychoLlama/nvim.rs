@@ -17,7 +17,8 @@ use crate::cstr;
 use crate::eval::skip_expr;
 use crate::os::users::os_get_userdir;
 use crate::path::after_pathsep;
-use crate::strings::{vim_strchr, vim_strsave_escaped};
+use crate::strings::has_char;
+use crate::strings::vim_strsave_escaped;
 use crate::types::{Expand, ExpandContext, MAXPATHL};
 
 /// [`expand_env`] into a newly allocated `MAXPATHL` buffer.
@@ -237,7 +238,7 @@ pub unsafe fn expand_env_esc(
                     resolve_env_var(src, dst, dstlen)
                 } else if *src.add(1) == 0
                     || vim_ispathsep(*src.add(1) as c_int)
-                    || !vim_strchr(c" ,\t\n".as_ptr(), *src.add(1) as u8 as c_int).is_null()
+                    || has_char(c" ,\t\n", *src.add(1) as u8 as c_int)
                 {
                     // The home directory itself.
                     Expansion {

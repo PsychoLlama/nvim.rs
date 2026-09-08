@@ -29,6 +29,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -352,8 +353,8 @@ pub(crate) unsafe fn stropt_handle_keymatch(
     _flags: uint32_t,
 ) -> bool {
     // SAFETY: the caller's buffer and value, as documented above.
-    if unsafe { vim_strchr(newval, c_int::from(b':')) }.is_null()
-        && unsafe { vim_strchr(newval, c_int::from(b',')) }.is_null()
+    if !has_char(unsafe { cstr::at(newval) }, c_int::from(b':'))
+        && !has_char(unsafe { cstr::at(newval) }, c_int::from(b','))
     {
         return false;
     }
@@ -459,10 +460,10 @@ pub(crate) unsafe fn stropt_remove_dupflags(newval: *mut c_char, flags: uint32_t
         let drop = if one_comma {
             (unsafe { *s }) != b',' as c_char
                 && unsafe { *s.add(1) } == b',' as c_char
-                && !unsafe { vim_strchr(s.add(2), letter) }.is_null()
+                && has_char(unsafe { cstr::at(s.add(2)) }, letter)
         } else {
             (!comma_list || unsafe { *s } != b',' as c_char)
-                && !unsafe { vim_strchr(s.add(1), letter) }.is_null()
+                && has_char(unsafe { cstr::at(s.add(1)) }, letter)
         };
         if !drop {
             s = unsafe { s.add(1) };

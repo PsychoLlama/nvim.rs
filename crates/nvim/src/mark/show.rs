@@ -35,7 +35,8 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
-use crate::strings::{vim_strchr, xstrnsave};
+use crate::strings::has_char;
+use crate::strings::xstrnsave;
 use crate::ui::state::Columns;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -164,7 +165,7 @@ pub(super) unsafe fn show_one_mark(
     current: c_int,
 ) {
     // SAFETY: the caller promised a NUL-terminated `arg` or null.
-    let wanted = unsafe { arg.is_null() || !vim_strchr(arg, c).is_null() };
+    let wanted = unsafe { arg.is_null() || has_char(cstr::at(arg), c) };
     if got_int.get() || !wanted || pos.lnum == 0 {
         return;
     }

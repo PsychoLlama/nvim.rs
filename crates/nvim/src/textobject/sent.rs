@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -31,7 +32,6 @@ use crate::option::cpo_has;
 use crate::option::vars::p_sel;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
-use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, Direction, Failed, NUL, OpArg, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
@@ -99,9 +99,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             loop {
                 // SAFETY: as above.
                 let c = unsafe { gchar_pos(&raw mut pos) };
-                // SAFETY: the literal is a NUL-terminated string.
-                if !(ascii_iswhite(c) || unsafe { !vim_strchr(c".!?)]\"'".as_ptr(), c).is_null() })
-                {
+                if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
                     break;
                 }
                 let mut tpos = pos;
@@ -115,16 +113,13 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 if found_dot {
                     break;
                 }
-                // SAFETY: the literal is a NUL-terminated string.
-                if unsafe { !vim_strchr(c".!?".as_ptr(), c).is_null() } {
+                if has_char(c".!?", c) {
                     found_dot = true;
                 }
-                // SAFETY: the literals are NUL-terminated, and `tpos` is a
-                // position of the current buffer.
-                if unsafe {
-                    !vim_strchr(c")]\"'".as_ptr(), c).is_null()
-                        && vim_strchr(c".!?)]\"'".as_ptr(), gchar_pos(&raw mut tpos)).is_null()
-                } {
+                if has_char(c")]\"'", c)
+                    // SAFETY: `tpos` is a position of the current buffer.
+                    && !has_char(c".!?)]\"'", unsafe { gchar_pos(&raw mut tpos) })
+                {
                     break;
                 }
                 // SAFETY: as above.
@@ -157,7 +152,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                         }
                         // SAFETY: as above; the literal is NUL-terminated.
                         c = unsafe { gchar_pos(&raw mut tpos) };
-                        if unsafe { vim_strchr(c")]\"'".as_ptr(), c).is_null() } {
+                        if !has_char(c")]\"'", c) {
                             break;
                         }
                     }

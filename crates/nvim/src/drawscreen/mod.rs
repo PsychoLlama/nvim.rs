@@ -4,6 +4,8 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
+use crate::cstr;
+use crate::strings::has_char;
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 
@@ -99,7 +101,7 @@ use crate::statusline::{
     draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
     win_redr_winbar,
 };
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,
@@ -759,7 +761,10 @@ pub fn conceal_cursor_line(window: Win) -> bool {
     } else {
         return false;
     };
-    !unsafe { vim_strchr(window.w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
+    has_char(
+        unsafe { cstr::at(window.w_onebuf_opt.wo_cocu) },
+        mode as c_int,
+    )
 }
 
 /// Whether the cursor line of window `window` is drawn differently from any other.

@@ -17,6 +17,7 @@
 
 use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -42,7 +43,6 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
-use crate::strings::vim_strchr;
 use crate::types::{
     FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
 };
@@ -474,7 +474,7 @@ unsafe fn needs_splitting(value_str: *const c_char, flags: uint32_t) -> bool {
     // SAFETY: the caller's string.
     unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1) >= MAXPATHL as size_t
         && flags & kOptFlagComma as uint32_t != 0
-        && !unsafe { vim_strchr(value_str, ',' as c_int) }.is_null()
+        && has_char(unsafe { cstr::at(value_str) }, ',' as c_int)
 }
 
 /// Write a string option's value, with `$HOME` folded back to `~` for the

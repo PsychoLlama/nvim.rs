@@ -6,6 +6,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
@@ -18,7 +20,6 @@ use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
-use crate::strings::vim_strchr;
 use crate::types::{NUL, OptSet, OptionSetFlags};
 
 use super::frame::{errbuf, invalid, varp, win};
@@ -69,15 +70,20 @@ pub unsafe fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
         let part = &part[..into];
 
         let source = part.first().copied().unwrap_or(0);
-        if unsafe { vim_strchr(CPT_SOURCES.as_ptr(), c_int::from(source)) }.is_null() {
+        if !has_char(
+            unsafe { cstr::at(CPT_SOURCES.as_ptr()) },
+            c_int::from(source),
+        ) {
             return Some(unsafe { illegal_char(buf, buflen, c_int::from(source)) });
         }
 
         // Anything after the source letter is either that source's
         // argument or a `^<count>`; anything else names a character the
         // source does not take.
-        let takes_argument =
-            !unsafe { vim_strchr(CPT_WITH_ARGUMENT.as_ptr(), c_int::from(source)) }.is_null();
+        let takes_argument = has_char(
+            unsafe { cstr::at(CPT_WITH_ARGUMENT.as_ptr()) },
+            c_int::from(source),
+        );
         let char_before = if !takes_argument && part.len() > 1 && part[1] != b'^' {
             Some(source)
         } else {

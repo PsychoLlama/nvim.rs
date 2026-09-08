@@ -47,7 +47,7 @@ use crate::path::{
     path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
     path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
 };
-use crate::strings::{vim_snprintf, vim_strchr, xstrnsave};
+use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::{
     BoolVarValue, CdCause, CdScope, CmdArg, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,

@@ -90,7 +90,7 @@ use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::full_name_save;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
-use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsave};
+use crate::strings::{vim_snprintf, vim_strsave_shellescape, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{

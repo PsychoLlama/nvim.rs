@@ -26,6 +26,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -222,7 +223,7 @@ fn end_pending_comment(c: c_int) {
     let mut p: *mut c_char = ::core::ptr::null_mut();
     let line = get_cursor_line_ptr();
     let mut i = unsafe { get_leader_len(line, &raw mut p, false, true) };
-    if i <= 0 || unsafe { vim_strchr(p, COM_MIDDLE) }.is_null() {
+    if i <= 0 || !has_char(unsafe { cstr::at(p) }, COM_MIDDLE) {
         return; // just checking
     }
 

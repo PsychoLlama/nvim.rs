@@ -85,7 +85,7 @@ use crate::runtime::{
 };
 use crate::search::set_search_direction;
 use crate::search::state::no_hlsearch;
-use crate::strings::{concat_str, vim_strchr};
+use crate::strings::concat_str;
 use crate::types::{
     AcoSave, BoolVarValue, Dict, DictItem, EvalArg, EvalFuncData, ExArg, Expand, Failed, GRegFlags,
     HashTab, LVal, List, ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount,

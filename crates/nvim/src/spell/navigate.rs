@@ -29,6 +29,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::mem;
@@ -51,7 +52,6 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
-use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, size_t, uint8_t};
 
@@ -368,7 +368,7 @@ pub unsafe fn spell_move_to(
 /// writable, unaliased for the call.
 pub unsafe fn spell_cat_line(buf: *mut c_char, line: *mut c_char, maxlen: c_int) {
     let mut p = unsafe { skipwhite(line) };
-    while !unsafe { vim_strchr(c"*#/\"\t".as_ptr(), *p as uint8_t as c_int) }.is_null() {
+    while has_char(c"*#/\"\t", unsafe { *p } as uint8_t as c_int) {
         p = unsafe { skipwhite(p.offset(1)) };
     }
 

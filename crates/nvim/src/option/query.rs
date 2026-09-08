@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::ptr;
@@ -34,7 +35,6 @@ use crate::path::{full_name_save, path_tail};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
 use crate::search::state::magic_overruled;
 use crate::state::mode::State;
-use crate::strings::vim_strchr;
 use crate::types::{
     BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
     ShmFlag, TypVal, VAR_STRING, int64_t, size_t, uint8_t,
@@ -390,6 +390,7 @@ pub(crate) unsafe fn copy_option_part(
     // SAFETY: the caller's pointers are valid for the lengths documented.
     let mut len: size_t = 0;
     let mut p = unsafe { *option };
+    let seps = unsafe { cstr::at(sep_chars) };
     // A leading '.' is copied without being tested against the
     // separators, so `.` can start a path entry.
     if unsafe { *p } == b'.' as c_char {
@@ -397,11 +398,14 @@ pub(crate) unsafe fn copy_option_part(
         p = unsafe { p.add(1) };
         len = 1;
     }
-    while unsafe { *p } != 0 && unsafe { vim_strchr(sep_chars, *p as uint8_t as c_int) }.is_null() {
-        // A backslash escapes a separator, and is dropped.
-        if unsafe { *p } == b'\\' as c_char
-            && !unsafe { vim_strchr(sep_chars, *p.add(1) as uint8_t as c_int) }.is_null()
-        {
+    loop {
+        let c = unsafe { *p };
+        if c == 0 || has_char(seps, c_int::from(c as uint8_t)) {
+            break;
+        }
+        // A backslash escapes a separator, and is dropped. Reading the byte
+        // after `c` is in bounds because `c` is not the terminator.
+        if c == b'\\' as c_char && has_char(seps, c_int::from(unsafe { *p.add(1) } as uint8_t)) {
             p = unsafe { p.add(1) };
         }
         if len < maxlen.wrapping_sub(1) {

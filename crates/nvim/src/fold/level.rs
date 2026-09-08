@@ -14,6 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::charset::skip;
+use crate::cstr;
 use crate::cstr::byte_at;
 use crate::diff::diff_infold;
 use crate::diff::state::diff_context;
@@ -24,7 +25,7 @@ use crate::getchar::state::{KeyTyped, got_int};
 use crate::indent::{get_indent_buf, get_sw_value};
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::syntax::syn_get_foldlevel;
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
@@ -650,7 +651,10 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
     if c_int::from(first) == NUL
-        || !unsafe { vim_strchr(line.win().w_onebuf_opt.wo_fdi, c_int::from(first)) }.is_null()
+        || has_char(
+            unsafe { cstr::at(line.win().w_onebuf_opt.wo_fdi) },
+            c_int::from(first),
+        )
     {
         line.set_lvl(if lnum == 1 || lnum == buf.b_ml.ml_line_count {
             0

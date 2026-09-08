@@ -28,6 +28,7 @@
 )]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -41,7 +42,6 @@ use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
 use crate::os::cshim::snprintf;
-use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
     ColNr, CompleteListItemGetter, Expand, Failed, NUL, OptExpand, RegMatch, size_t,
@@ -273,11 +273,11 @@ pub(crate) unsafe fn expand_set_opt_listflag(
     for (at, &flag) in flags.iter().enumerate() {
         // With `+=`, a letter the value already carries cannot be added
         // again.
-        // SAFETY: both are C strings; `vim_strchr` only reads them.
-        if append && !unsafe { vim_strchr(option_val, c_int::from(flag)) }.is_null() {
+        // SAFETY: the option's value is a C string, only read here.
+        if append && has_char(unsafe { cstr::at(option_val) }, c_int::from(flag)) {
             continue;
         }
-        if !unsafe { vim_strchr(cmdline_val, c_int::from(flag)) }.is_null() {
+        if has_char(unsafe { cstr::at(cmdline_val) }, c_int::from(flag)) {
             continue;
         }
         // A one-letter value is already the first completion; do not offer

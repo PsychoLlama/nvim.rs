@@ -13,6 +13,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -47,7 +48,7 @@ unsafe fn op_char(op: *const c_char) -> Option<u8> {
 /// and a register both refuse with E734.
 fn is_arithmetic(op: Option<u8>) -> bool {
     // SAFETY: `ARITHMETIC` is a NUL-terminated literal.
-    op.is_some_and(|c| !unsafe { vim_strchr(ARITHMETIC.as_ptr(), c.into()) }.is_null())
+    op.is_some_and(|c| has_char(ARITHMETIC, c.into()))
 }
 
 /// Whether what follows the target is one of the characters that may.
@@ -55,9 +56,12 @@ fn is_arithmetic(op: Option<u8>) -> bool {
 /// # Safety
 /// `endchars` is NULL or NUL-terminated, and `p` is NUL-terminated.
 unsafe fn ends_target(endchars: *const c_char, p: *const c_char) -> bool {
+    if endchars.is_null() {
+        return true;
+    }
     // SAFETY: the caller's obligation; `skipwhite` stops at the NUL.
-    endchars.is_null()
-        || !unsafe { vim_strchr(endchars, *skipwhite(p) as uint8_t as c_int) }.is_null()
+    let (set, byte) = unsafe { (cstr::at(endchars), *skipwhite(p)) };
+    has_char(set, c_int::from(byte as uint8_t))
 }
 
 /// `:let`, `:const` and (with no `=`) the listing forms.
@@ -85,8 +89,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     let concat = unsafe { cstr::starts_with(expr, b"..=") };
     let lead = unsafe { *expr } as u8;
     let has_assign = lead == b'='
-        || (!unsafe { vim_strchr(OPERATORS.as_ptr(), lead.into()) }.is_null()
-            && unsafe { *expr.add(1) } == b'=' as c_char);
+        || (has_char(OPERATORS, lead.into()) && unsafe { *expr.add(1) } == b'=' as c_char);
 
     if !has_assign && !concat {
         // ":let" with no "=": list variables.
@@ -154,7 +157,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     let mut op = [b'=' as c_char, NUL as c_char];
     if lead != b'=' {
         // SAFETY: as above -- `expr` is NUL-terminated.
-        if !unsafe { vim_strchr(OPERATORS.as_ptr(), lead.into()) }.is_null() {
+        if has_char(OPERATORS, lead.into()) {
             // "+=", "-=", "*=", "/=", "%=" or ".="
             op[0] = lead as c_char;
             if lead == b'.' && unsafe { *expr.add(1) } == b'.' as c_char {

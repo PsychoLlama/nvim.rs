@@ -17,6 +17,7 @@ use crate::cstr::byte_at;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
+use crate::strings::has_char;
 use crate::types::{CpoFlag, NUL};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -751,7 +752,7 @@ impl Walk {
         // For Lisp skip over backslashed (), {} and [] — actually
         // over "#\(" and friends.
         if Buf::current().b_p_lisp != 0
-            && !unsafe { vim_strchr(c"(){}[]".as_ptr(), c) }.is_null()
+            && has_char(c"(){}[]", c)
             && col > 1
             && check_prevcol(self.lines.line(self.pos.lnum), col, b'\\', None)
             && check_prevcol(self.lines.line(self.pos.lnum), col - 1, b'#', None)
@@ -827,9 +828,7 @@ unsafe fn find_match(
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.
-    if Win::current().w_onebuf_opt.wo_rl != 0
-        && !unsafe { vim_strchr(c"()[]{}<>".as_ptr(), target.initc) }.is_null()
-    {
+    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", target.initc) {
         target.backwards = !target.backwards;
     }
 

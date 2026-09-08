@@ -59,7 +59,6 @@ use crate::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,
 };
-use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, DictItem,
     FileDescriptor, FileInfo, FileMark, FileMarkView, HistoryType, Integer,

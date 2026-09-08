@@ -9,7 +9,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::ops::Op;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -45,7 +47,6 @@ use crate::state::mode::{
     resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
 };
 use crate::state::{may_trigger_modechanged, virtual_active};
-use crate::strings::vim_strchr;
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
@@ -616,7 +617,7 @@ pub(crate) fn start_selection() {
 /// only counts as typed when nothing is being replayed.
 pub(crate) fn may_start_select(c: c_int) {
     // SAFETY: 'selectmode' is a C string option.
-    let by_selectmode = !unsafe { vim_strchr(p_slm.get(), c) }.is_null();
+    let by_selectmode = has_char(unsafe { cstr::at(p_slm.get()) }, c);
     let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
 }

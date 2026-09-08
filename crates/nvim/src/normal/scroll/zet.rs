@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::keycodes::Key;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
 
@@ -32,7 +33,6 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::state::mode::finish_op;
-use crate::strings::vim_strchr;
 use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t, size_t};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
@@ -124,7 +124,7 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
     let mut undo = false;
     if nchar == 'u' as c_int {
         nchar = read_command_char();
-        if unsafe { vim_strchr(c"gGwW".as_ptr(), nchar) }.is_null() {
+        if !has_char(c"gGwW", nchar) {
             clear_op_beep(ca.op());
             return Ok(());
         }
@@ -423,7 +423,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
     // a pending operator themselves; the rest refuse one.
     if ca.nchar != 'f' as c_int
         && ca.nchar != 'F' as c_int
-        && !(visual_active() && !unsafe { vim_strchr(c"dcCoO".as_ptr(), ca.nchar) }.is_null())
+        && !(visual_active() && has_char(c"dcCoO", ca.nchar))
         && ca.nchar != 'j' as c_int
         && ca.nchar != 'k' as c_int
         && check_clear_op(ca.op())
@@ -432,9 +432,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
     }
     // For the positioning commands a count names the line to position,
     // not how many of anything.
-    if !unsafe { vim_strchr(c"+\r\nt.z^-b".as_ptr(), nchar) }.is_null()
-        && ca.count0 != 0
-        && ca.count0 as LineNr != win.w_cursor.lnum
+    if has_char(c"+\r\nt.z^-b", nchar) && ca.count0 != 0 && ca.count0 as LineNr != win.w_cursor.lnum
     {
         setpcmark();
         let count0 = ca.count0 as LineNr;

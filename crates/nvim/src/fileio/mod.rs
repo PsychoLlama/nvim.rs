@@ -86,7 +86,7 @@ use crate::shada::check_marks_read;
 use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
-use crate::strings::{sort_strings, vim_strchr};
+use crate::strings::sort_strings;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;

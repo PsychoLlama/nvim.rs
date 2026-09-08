@@ -4,9 +4,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_H, Key};
 use crate::ops::Op;
+use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 
 use crate::ascii::ascii_iswhite;
@@ -40,7 +42,6 @@ use crate::quickfix::qf_view_result;
 use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
-use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
 use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpArg, OpType};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
@@ -344,7 +345,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
         };
         if at_end {
             if wrap_flag != NUL
-                && !unsafe { vim_strchr(p_ww.get(), wrap_flag) }.is_null()
+                && has_char(unsafe { cstr::at(p_ww.get()) }, wrap_flag)
                 && win.w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {
                 // A pending exclusive operator eats the line break by
@@ -430,7 +431,7 @@ pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
     while n > 0 {
         if unsafe { oneleft() }.is_err() {
             if wrap_flag != NUL
-                && !unsafe { vim_strchr(p_ww.get(), wrap_flag) }.is_null()
+                && has_char(unsafe { cstr::at(p_ww.get()) }, wrap_flag)
                 && win.w_cursor.lnum > 1
             {
                 win.w_cursor.lnum -= 1;

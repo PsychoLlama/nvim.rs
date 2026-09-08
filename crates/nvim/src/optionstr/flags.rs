@@ -27,12 +27,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::message::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
-use crate::strings::vim_strchr;
 use crate::types::{FAIL, Failed, OK, OptIndex, OptSet, size_t};
 
 use super::illegal_char;
@@ -165,8 +166,8 @@ pub(crate) unsafe fn did_set_option_listflag<'a>(
 ) -> Option<&'a CStr> {
     // SAFETY: the caller guarantees a C string.
     for &byte in unsafe { CStr::from_ptr(val) }.to_bytes() {
-        // SAFETY: `flags` is a C string; `vim_strchr` only reads it.
-        if unsafe { vim_strchr(flags, c_int::from(byte)) }.is_null() {
+        // SAFETY: `flags` is a C string, only read here.
+        if !has_char(unsafe { cstr::at(flags) }, c_int::from(byte)) {
             // SAFETY: the caller's buffer, as documented above.
             return Some(unsafe { illegal_char(errbuf, errbuflen, c_int::from(byte)) });
         }

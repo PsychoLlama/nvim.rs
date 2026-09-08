@@ -19,6 +19,7 @@
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
+use crate::strings::has_char;
 use crate::types::{FAIL, Failed, MB_MAXBYTES, NUL, OK};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
@@ -414,7 +415,7 @@ pub unsafe fn start_redo_ins() -> Result<(), Failed> {
         if c == NUL {
             break;
         }
-        if !unsafe { vim_strchr(c"AaIiRrOo".as_ptr(), c) }.is_null() {
+        if has_char(c"AaIiRrOo", c) {
             if c == 'O' as c_int || c == 'o' as c_int {
                 // `o`/`O` opened the line; repeating the insert alone
                 // needs the newline put back.

@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
 use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::types::{
     EvalFuncData, FuncDict, GArray, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, uint8_t,
@@ -405,7 +405,7 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
     // An autoload name is left alone: it may not be loaded yet, and
     // checking would load it.
     let mut trans_name = Owned(ptr::null_mut());
-    if (use_string && unsafe { vim_strchr(s, AUTOLOAD_CHAR) }.is_null()) || is_funcref {
+    if (use_string && !has_char(unsafe { cstr::at(s) }, AUTOLOAD_CHAR)) || is_funcref {
         let mut name = s;
         let out = &raw mut name;
         let flags = TFN_INT as c_int

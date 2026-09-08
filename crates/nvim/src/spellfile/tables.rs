@@ -16,12 +16,12 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{char_at, char_len, mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
-use crate::strings::vim_strchr;
 use crate::types::{NUL, RepItem};
 use ::libc::{strcat, strcpy};
 
@@ -155,8 +155,8 @@ pub(super) unsafe fn handle_map(
     while unsafe { *p } as c_int != NUL {
         let c = unsafe { mb_ptr2char_adv((&raw mut p).cast::<*const c_char>()) };
         // The groups collected so far are bytes rather than a C string now,
-        // so the membership test decodes them instead of `vim_strchr`.
-        if chars_of(&spin.si_map).any(|seen| seen == c) || !unsafe { vim_strchr(p, c) }.is_null() {
+        // so the membership test decodes them instead of asking `has_char`.
+        if chars_of(&spin.si_map).any(|seen| seen == c) || has_char(unsafe { cstr::at(p) }, c) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "Duplicate character in MAP in {fname} line {}", lnum);

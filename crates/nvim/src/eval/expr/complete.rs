@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 
@@ -13,7 +14,6 @@ use crate::winlayer::Live;
 
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
-use crate::strings::vim_strchr;
 use crate::types::{Expand, ExpandContext, NUL};
 use ::libc::strpbrk;
 
@@ -98,7 +98,7 @@ pub(crate) unsafe fn set_context_for_expression(
             break;
         } else if (c == '<' as c_int || c == '#' as c_int)
             && xpand.xp_context == ExpandContext::Functions
-            && unsafe { vim_strchr(xpand.xp_pattern, '(' as c_int) }.is_null()
+            && !has_char(unsafe { cstr::at(xpand.xp_pattern) }, '(' as c_int)
         {
             // A function name can start with "<SNR>" and contain '#'.
             break;

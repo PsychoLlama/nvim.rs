@@ -78,7 +78,7 @@ use crate::semsg;
 use crate::spell::spell_delete_wordlist;
 use crate::startup::{getout, recoverymode};
 use crate::statusline::get_trans_bufname;
-use crate::strings::{vim_strchr, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     BlockHdr, BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileInfo,

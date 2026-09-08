@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
 
@@ -28,7 +29,6 @@ use crate::runtime::state::current_sctx;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, did_ai};
-use crate::strings::vim_strchr;
 use crate::winlayer::Win;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
@@ -76,7 +76,7 @@ pub unsafe fn get_expr_indent() -> c_int {
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
     // SAFETY: 'debug' is a NUL-terminated option string.
-    let debug_throw = !unsafe { vim_strchr(p_debug.get(), 't' as c_int) }.is_null();
+    let debug_throw = has_char(unsafe { cstr::at(p_debug.get()) }, 't' as c_int);
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
         handle_did_throw();
         did_throw.set(false);

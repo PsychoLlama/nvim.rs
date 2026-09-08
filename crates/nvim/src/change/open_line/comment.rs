@@ -15,6 +15,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::change::*;
@@ -623,7 +624,7 @@ pub(crate) unsafe fn build_leader(
             && lead_len > 0
             && c_int::from(unsafe { *leader.offset((lead_len - 1) as isize) }) == ' ' as c_int
         {
-            if !unsafe { vim_strchr(skipwhite(leader), '\t' as c_int) }.is_null() {
+            if has_char(unsafe { cstr::at(skipwhite(leader)) }, '\t' as c_int) {
                 break;
             }
             lead_len -= 1;

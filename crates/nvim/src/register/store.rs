@@ -24,6 +24,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -71,7 +72,7 @@ pub fn get_y_previous() -> *mut YankReg {
 /// Reads 'comments'-independent globals only; main thread only.
 pub unsafe fn valid_yank_reg(regname: c_int, writing: bool) -> bool {
     regname > 0 && (is_ascii_letter(regname) || ascii_isdigit(regname))
-        || !writing && !unsafe { vim_strchr(c"/.%:=".as_ptr(), regname) }.is_null()
+        || !writing && has_char(c"/.%:=", regname)
         || regname == '#' as c_int
         || regname == '"' as c_int
         || regname == '-' as c_int

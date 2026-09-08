@@ -15,6 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::strings::has_char;
 use crate::types::{Failed, RefcountSize};
 use crate::winlayer::TabPage;
 use crate::winlayer::{Live, Win, tabs};
@@ -75,8 +76,8 @@ pub unsafe fn do_autocmd(
             cmd = unsafe { cmd.add(1) };
         }
 
-        if !unsafe { vim_strchr(pat, '$' as ::core::ffi::c_int) }.is_null()
-            || !unsafe { vim_strchr(pat, '~' as ::core::ffi::c_int) }.is_null()
+        if has_char(unsafe { cstr::at(pat) }, '$' as ::core::ffi::c_int)
+            || has_char(unsafe { cstr::at(pat) }, '~' as ::core::ffi::c_int)
         {
             envpat = unsafe { expand_env_save(pat) };
             if !envpat.is_null() {

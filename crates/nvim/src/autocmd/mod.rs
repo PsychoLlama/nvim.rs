@@ -69,7 +69,7 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::startup::{main_loop, starting};
 use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
-use crate::strings::{vim_strchr, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,

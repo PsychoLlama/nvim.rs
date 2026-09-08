@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::graph::{switch_to, switch_window};
@@ -354,7 +355,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     // SAFETY: a live window, in all three calls.
     fold_update_all(window);
     changed_window_setting(window);
-    if unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
+    if !has_char(unsafe { cstr::at(p_sbo.get()) }, 'h' as c_int) {
         let _ = unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
     }
     window.w_onebuf_opt.wo_diff_saved = 1;
@@ -453,7 +454,7 @@ pub unsafe fn ex_diffoff(args: *mut ExArg) {
         diff_clear(tp);
     }
     // SAFETY: `p_sbo` is the `'scrollopt'` option string.
-    if !diffwin && !unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
+    if !diffwin && has_char(unsafe { cstr::at(p_sbo.get()) }, 'h' as c_int) {
         // SAFETY: a static command line.
         let _ = unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
     }

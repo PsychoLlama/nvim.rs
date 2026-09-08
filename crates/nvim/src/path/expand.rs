@@ -12,6 +12,7 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -58,7 +59,7 @@ pub(crate) unsafe fn expand_path_option(
         };
 
         // Do not expand backticks: this could have been set by a modeline.
-        if !unsafe { vim_strchr(buf, c_int::from(b'`')) }.is_null() {
+        if has_char(unsafe { cstr::at(buf) }, c_int::from(b'`')) {
             continue;
         }
 

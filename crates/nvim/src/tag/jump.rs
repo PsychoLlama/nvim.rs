@@ -16,6 +16,7 @@ use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
 use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
+use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
 use crate::window::tab_index;

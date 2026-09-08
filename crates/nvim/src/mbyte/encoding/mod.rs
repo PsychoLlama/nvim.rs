@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::vim_strchr;
 use crate::winlayer::Buf;
 use ::libc::nl_langinfo;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

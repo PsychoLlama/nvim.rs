@@ -11,12 +11,14 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cstr;
 use crate::guard::Suppress;
 use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key, NotAKey,
 };
 use crate::os::cshim::gettext_ptr;
+use crate::strings::has_char;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
@@ -335,7 +337,7 @@ pub(crate) fn ins_compl_leader_len() -> size_t {
 /// `compl_shown_match` here without checking it.
 pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
     // SAFETY: the caller's promise, and a match's text is NUL-terminated.
-    unsafe { !vim_strchr((*compl_shown_match.get()).cp_str.data(), NL).is_null() }
+    unsafe { has_char(cstr::at((*compl_shown_match.get()).cp_str.data()), NL) }
 }
 
 /// `lnum` is one of the lines a multi-line match is being inserted over.

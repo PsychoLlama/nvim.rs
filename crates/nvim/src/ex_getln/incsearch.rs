@@ -11,6 +11,8 @@
 
 use super::*;
 use crate::cstr;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 
 use crate::guard::Suppress;
@@ -143,8 +145,7 @@ pub unsafe fn parse_pattern_and_range(
 
     // Skip over the range to find the command.
     let cmd = unsafe { skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>()) };
-    if unsafe { vim_strchr(c"sgvlu".as_ptr(), at(cmd) as uint8_t as ::core::ffi::c_int) }.is_null()
-    {
+    if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
         return false;
     }
 

@@ -39,7 +39,7 @@ use crate::popupmenu::{pum_set_event_info, pum_visible};
 use crate::startup::{starting, stdin_isatty, stdout_isatty};
 use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
-use crate::strings::vim_strchr;
+use crate::strings::has_char;
 use crate::syntax::syntax_present;
 use crate::types::{
     Arena, Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, TypVal, VAR_STRING, VarNumber,
@@ -456,7 +456,7 @@ pub unsafe fn f_state(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         ptr::null()
     };
     let mut add = |c: u8| {
-        if include.is_null() || !unsafe { vim_strchr(include, c as c_int) }.is_null() {
+        if include.is_null() || has_char(unsafe { cstr::at(include) }, c as c_int) {
             flags.push(c);
         }
     };

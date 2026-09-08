@@ -90,7 +90,7 @@ use crate::runtime::{
     script_id_valid,
 };
 use crate::search::{restore_search_patterns, save_search_patterns};
-use crate::strings::{concat_str, vim_strchr, xstrnsave};
+use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EStack, EvalArg, ExArg, ExceptionState, Expand, FuncCall,

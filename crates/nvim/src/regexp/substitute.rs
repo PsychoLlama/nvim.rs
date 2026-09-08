@@ -21,6 +21,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -44,7 +45,7 @@ use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
+use crate::strings::{vim_strsave_escaped, xstrnsave};
 use crate::types::{
     FuncExe, LineNr, NUL, Partial, RegMMatch, RegMatch, StaticList10, TypVal, VAR_FUNC, VAR_LIST,
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
@@ -670,7 +671,7 @@ unsafe fn expand_replacement(
             } else if (unsafe { *src } as u8).is_ascii_digit() {
                 no = unsafe { *src } as c_int - '0' as c_int;
                 src = unsafe { src.offset(1) };
-            } else if !unsafe { vim_strchr(c"uUlLeE".as_ptr(), *src as u8 as c_int) }.is_null() {
+            } else if has_char(c"uUlLeE", unsafe { *src } as u8 as c_int) {
                 let hook = unsafe { *src } as u8;
                 src = unsafe { src.offset(1) };
                 match hook {

@@ -13,6 +13,7 @@ use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
+use crate::strings::vim_strchr;
 use crate::types::{
     ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
     VAR_UNKNOWN, VarLock,

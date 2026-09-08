@@ -21,6 +21,7 @@ use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, find_special_key};
+use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -46,7 +47,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext_ptr;
 use crate::startup::silent_mode;
-use crate::strings::{vim_snprintf, vim_strchr};
+use crate::strings::vim_snprintf;
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
     size_t, uint8_t, uint32_t,
@@ -457,7 +458,7 @@ unsafe fn do_one_set_option(
         return;
     }
 
-    if !unsafe { vim_strchr(c"?=:!&<".as_ptr(), nextchar) }.is_null() {
+    if has_char(c"?=:!&<", nextchar) {
         *argp = p;
         // `:set opt&vi` and `:set opt&vim` both mean `:set opt&` here;
         // nvim has no separate Vi default.
@@ -473,7 +474,7 @@ unsafe fn do_one_set_option(
             *argp = unsafe { argp.add(step) };
         }
         // Nothing may follow the ones that take no value.
-        if !unsafe { vim_strchr(c"?!&<".as_ptr(), nextchar) }.is_null()
+        if has_char(c"?!&<", nextchar)
             && unsafe { *argp.add(1) } != NUL as c_char
             && !ascii_iswhite(unsafe { *argp.add(1) } as c_int)
         {
@@ -486,7 +487,7 @@ unsafe fn do_one_set_option(
     // shows the value rather than setting it.
     let showing = nextchar == '?' as c_int
         || (prefix == Prefix::None
-            && unsafe { vim_strchr(c"=:&<".as_ptr(), nextchar) }.is_null()
+            && !has_char(c"=:&<", nextchar)
             && !option_has_type(opt_idx, kOptValTypeBoolean));
     if showing {
         unsafe { show_one(opt_idx, opt_flags, varp, did_show) };
@@ -501,18 +502,18 @@ unsafe fn do_one_set_option(
 
     if option_has_type(opt_idx, kOptValTypeBoolean) {
         // A boolean takes no value, and nothing may follow it.
-        if !unsafe { vim_strchr(c"=:".as_ptr(), nextchar) }.is_null() {
+        if has_char(c"=:", nextchar) {
             *errmsg = e_invarg.as_ptr();
             return;
         }
-        if unsafe { vim_strchr(c"!&<".as_ptr(), nextchar) }.is_null()
+        if !has_char(c"!&<", nextchar)
             && nextchar != NUL as c_int
             && !ascii_iswhite(afterchar as c_int)
         {
             *errmsg = e_trailing.as_ptr();
             return;
         }
-    } else if unsafe { vim_strchr(c"=:&<".as_ptr(), nextchar) }.is_null() {
+    } else if !has_char(c"=:&<", nextchar) {
         *errmsg = e_invarg.as_ptr();
         return;
     }

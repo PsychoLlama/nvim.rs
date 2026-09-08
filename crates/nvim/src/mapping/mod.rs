@@ -82,7 +82,7 @@ use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
 };
-use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::strings::{sort_strings, vim_snprintf};
 use crate::types::{
     ApiDict, Arena, Array, ArrayBuilder, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand,
     FILE, FuzMatchStr, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback,

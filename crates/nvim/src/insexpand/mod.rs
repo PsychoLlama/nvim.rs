@@ -112,7 +112,7 @@ use crate::state::mode::{
     edit_submode_highl, edit_submode_pre,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
-use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
+use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;

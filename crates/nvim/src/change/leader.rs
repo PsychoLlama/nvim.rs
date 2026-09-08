@@ -25,6 +25,8 @@
 
 use crate::cstr;
 use crate::narrow::len_as_int;
+use crate::strings::has_char;
+use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -136,7 +138,7 @@ impl ComItem {
     fn has(&mut self, flag: c_int) -> bool {
         // SAFETY: `buf` is NUL-terminated -- `copy_option_part` writes the
         // NUL, and `take` only turns the `:` inside it into another one.
-        unsafe { !vim_strchr(self.as_ptr(), flag).is_null() }
+        unsafe { has_char(cstr::at(self.as_ptr()), flag) }
     }
 }
 
