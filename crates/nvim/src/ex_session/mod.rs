@@ -622,7 +622,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
     // caller's.
     let dirnow = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
     if unsafe { os_dirname(dirnow, MAXPATHL as size_t) }.is_err()
-        || unsafe { os_chdir(dirnow) } != 0
+        || unsafe { os_chdir(cstr::at(dirnow)) } != 0
     {
         unsafe { *dirnow = NUL as c_char };
     }
@@ -634,7 +634,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
         if unsafe { vim_chdirfile(fname, flag::kCdCauseOther) }.is_ok() {
             shorten_fnames(1);
         }
-    } else if to_globaldir && unsafe { os_chdir(globaldir.get()) } == 0 {
+    } else if to_globaldir && unsafe { os_chdir(cstr::at(globaldir.get())) } == 0 {
         shorten_fnames(1);
     }
 
@@ -642,7 +642,7 @@ unsafe fn write_session(out: SessionFile, fname: *mut c_char) -> bool {
 
     // Restore the original directory.
     if to_sesdir || to_globaldir {
-        if unsafe { os_chdir(dirnow) } != 0 {
+        if unsafe { os_chdir(cstr::at(dirnow)) } != 0 {
             emsg(gettext(e_prev_dir));
         }
         shorten_fnames(1);

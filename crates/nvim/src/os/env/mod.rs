@@ -375,6 +375,7 @@ pub fn init_homedir() {
     let mut uv_home = env_buf();
     let mut resolved = [0 as c_char; IOSIZE as usize];
     let mut cwd = env_buf();
+    let buf = resolved.as_mut_ptr();
     // SAFETY: every path below is a NUL-terminated string, and each of the
     // three buffers is as long as the call filling it is told it is.
     unsafe {
@@ -389,7 +390,7 @@ pub fn init_homedir() {
             var = os_uv_homedir(&mut uv_home);
         }
         // Resolve links, so the answer is the "real" directory.
-        if !var.is_null() && !os_realpath(var, resolved.as_mut_ptr(), IOSIZE as usize).is_null() {
+        if !var.is_null() && !os_realpath(cstr::at(var), buf, IOSIZE as usize).is_null() {
             var = resolved.as_mut_ptr();
         }
         // Last resort: wherever nvim was started.

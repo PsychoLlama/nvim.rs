@@ -30,6 +30,7 @@ use crate::buffer::{
 };
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::channel::channel_job_running;
+use crate::cstr;
 use crate::cursor::check_cursor_lnum;
 use crate::drawscreen::state::redraw_tabline;
 use crate::edit::{BeginlineOpts, beginline};
@@ -213,10 +214,11 @@ pub unsafe fn ex_write(args: *mut ExArg) {
 /// written like one, may be a write target.
 ///
 /// # Safety
-/// `fname` must be live, or NULL.
+/// `fname` must be a live NUL-terminated name. The one caller reaches this
+/// only past `check_fname`, which rejects a buffer with no file name.
 unsafe fn check_writable(fname: *const c_char) -> Result<(), Failed> {
     // SAFETY: caller's contract; one `%s` for one string.
-    if unsafe { os_nodetype(fname) } == NODE_OTHER {
+    if unsafe { os_nodetype(cstr::at(fname)) } == NODE_OTHER {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E503: \"{fname}\" is not a file or writable device");
@@ -754,10 +756,11 @@ unsafe fn check_readonly(forceit: *mut c_int, buffer: Buf) -> bool {
     // Handle a file being readonly when the 'readonly' option is set or when
     // the file exists and permissions are read-only.
     // SAFETY: caller's contract, and the buffer's own file name.
+    let file = buffer.b_ffname;
     let readonly = unsafe {
         *forceit == 0
             && (buffer.b_p_ro != 0
-                || os_path_exists(buffer.b_ffname) && os_file_is_writable(buffer.b_ffname) == 0)
+                || os_path_exists(file) && os_file_is_writable(cstr::at(file)) == 0)
     };
     if !readonly {
         return false;

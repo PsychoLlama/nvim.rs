@@ -461,7 +461,7 @@ unsafe fn resolve_swapfile_clash(
         SEA_CHOICE_READONLY => buffer.b_p_ro = 1,
         SEA_CHOICE_RECOVER => swap_exists_action.set(SEA_RECOVER),
         SEA_CHOICE_DELETE => {
-            unsafe { os_remove(fname) };
+            unsafe { os_remove(cstr::at(fname)) };
         }
         SEA_CHOICE_QUIT => swap_exists_action.set(SEA_QUIT),
         SEA_CHOICE_ABORT => {

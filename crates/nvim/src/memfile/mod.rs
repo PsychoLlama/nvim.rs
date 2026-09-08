@@ -51,6 +51,7 @@
 #![allow(non_upper_case_globals)]
 
 mod swapfile;
+use crate::cstr;
 pub(crate) use swapfile::*;
 use swapfile::{mf_do_open, perror_msg};
 
@@ -409,7 +410,7 @@ pub(crate) unsafe fn mf_close(mfp: *mut MemFile, del_file: bool) {
             emsg(gettext(e_swapclose));
         }
         if del_file && !mf_fname(mfp).is_null() {
-            os_remove(mf_fname(mfp));
+            os_remove(cstr::at(mf_fname(mfp)));
         }
         mf_free_fnames(mfp);
         // Dropping the memfile drops every block it still owns.
@@ -441,7 +442,7 @@ pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
         (*mfp).mf_fd = -1;
 
         if !mf_fname(mfp).is_null() {
-            os_remove(mf_fname(mfp));
+            os_remove(cstr::at(mf_fname(mfp)));
             mf_free_fnames(mfp);
         }
     }

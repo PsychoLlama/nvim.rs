@@ -82,7 +82,7 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
         unsafe { xfree(args.save_sfname.cast()) };
         do_autochdir();
     } else if args.cwd_status.is_ok() {
-        unsafe { os_chdir(args.cwd.as_mut_ptr()) };
+        unsafe { os_chdir(cstr::at(args.cwd.as_mut_ptr())) };
         if !args.save_sfname.is_null() {
             let mut buf = Buf::current();
             unsafe { xfree(buf.b_sfname.cast()) };

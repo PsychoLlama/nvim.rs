@@ -12,18 +12,30 @@
 //! the current directory, executability, and the read/write/copy calls that
 //! are libc rather than libuv.
 //!
-//! **Nothing here is exported by name any more**, but the entry points are
-//! still raw-pointer functions: `crates/nvim/tests/unit/fs.rs` drives them
-//! from outside the crate, and every surviving `unsafe` unit is a libuv or
-//! libc call that has no Rust equivalent, so the deny buys no narrower
-//! obligation on those. What it does buy is the *rest* of each body — the
-//! mode arithmetic, the `$PATH` walk, the short-read loops — as checked
-//! code, which is where this file's unchecked lines actually lived.
+//! **Nothing here is exported by name any more**, and a file name is a
+//! [`CStr`] rather than a pointer: the OS wants a NUL-terminated string and
+//! nothing else, so that is the parameter type, and the call is then safe
+//! from the caller's side however the body reaches libuv.
+//!
+//! The exceptions are the calls whose contract *includes* null — `os_stat`,
+//! `os_getperm`, `os_isdir`, `os_path_exists`, `os_open`, `os_fopen`,
+//! `os_fileinfo`, `os_fileinfo_link`, `os_fileid` and `os_copy_xattr` each
+//! answer "no" for a null name rather than crashing, and their callers pass
+//! buffer names that really can be null. A slice cannot carry that, so they
+//! keep the pointer until their callers stop holding one; [`dir_exists`] is
+//! the string front door for the commonest of them.
+//!
+//! Every surviving `unsafe` unit is a libuv or libc call that has no Rust
+//! equivalent, so the deny buys no narrower obligation on those. What it
+//! does buy is the *rest* of each body — the mode arithmetic, the `$PATH`
+//! walk, the short-read loops — as checked code, which is where this file's
+//! unchecked lines actually lived.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -238,24 +250,21 @@ fn take_errno() -> c_int {
 /// Changes the current directory to `path`.
 ///
 /// Answers 0, or a negative libuv error code.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_chdir(path: *const c_char) -> c_int {
+pub fn os_chdir(path: &CStr) -> c_int {
     if p_verbose.get() >= 5 as OptInt {
-        // SAFETY: the caller's NUL-terminated path, and `%s` is the one
-        // conversion the format string asks for.
+        // SAFETY: `path` is NUL-terminated, and `%s` is the one conversion
+        // the format string asks for.
         unsafe {
             verbose_enter();
-            smsg!(0, "chdir({})", c_str(path));
+            smsg!(0, "chdir({})", c_str(path.as_ptr()));
             verbose_leave();
         }
     }
-    // SAFETY: the caller's NUL-terminated path.
-    let err = unsafe { uv_chdir(path) };
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    let err = unsafe { uv_chdir(path.as_ptr()) };
     if err == 0 {
         // SAFETY: same; `cstr_as_string` borrows it for the length only.
-        ui_call_chdir(unsafe { cstr_as_string(path) });
+        ui_call_chdir(unsafe { cstr_as_string(path.as_ptr()) });
     }
     err
 }
@@ -281,15 +290,12 @@ pub unsafe fn os_dirname(buf: *mut c_char, mut len: size_t) -> Result<(), Failed
 }
 
 /// Whether `name` is a directory and *not* a symlink to one.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_isrealdir(name: *const c_char) -> bool {
+pub fn os_isrealdir(name: &CStr) -> bool {
     // `lstat`, not `stat`: a symlink to a directory is not one, though
     // `os_isdir` says it is.
     fs_request(
-        // SAFETY: the caller's NUL-terminated path.
-        |request| unsafe { uv_fs_lstat(NO_LOOP, request, name, None) },
+        // SAFETY: `name` is NUL-terminated and outlives the call.
+        |request| unsafe { uv_fs_lstat(NO_LOOP, request, name.as_ptr(), None) },
         |result, request| result == LIBUV_SUCCESS && is_dir(request.statbuf.st_mode),
     )
 }
@@ -306,13 +312,10 @@ pub unsafe fn os_isdir(name: *const c_char) -> bool {
 
 /// What `name` is: an ordinary file or directory (or nothing at all), a
 /// writable device, or something else.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_nodetype(name: *const c_char) -> c_int {
+pub fn os_nodetype(name: &CStr) -> c_int {
     let mut statbuf = UV_STAT_T_INIT;
-    // SAFETY: the caller's NUL-terminated path; `statbuf` is this frame's.
-    if unsafe { os_stat(name, &raw mut statbuf) } != 0 {
+    // SAFETY: `name` is NUL-terminated; `statbuf` is this frame's.
+    if unsafe { os_stat(name.as_ptr(), &raw mut statbuf) } != 0 {
         return NODE_NORMAL; // The file does not exist.
     }
     // Read the mode rather than asking `uv_guess_handle`, which does not
@@ -342,11 +345,11 @@ pub unsafe fn os_exepath(buffer: *mut c_char, size: *mut size_t) -> c_int {
 /// A non-null `abspath` receives the resolved path, allocated.
 ///
 /// # Safety
-/// `name` must be a NUL-terminated string, and `abspath` null or writable.
-pub unsafe fn os_can_exe(name: *const c_char, abspath: *mut *mut c_char, use_path: bool) -> bool {
+/// `abspath` must be null or writable.
+pub unsafe fn os_can_exe(name: &CStr, abspath: *mut *mut c_char, use_path: bool) -> bool {
     // SAFETY: the caller's contract, passed straight through.
     unsafe {
-        let has_dir = gettail_dir(name) != name;
+        let has_dir = gettail_dir(name.as_ptr()) != name.as_ptr();
         if !use_path || has_dir {
             // A bare name has to come from `$PATH`: files in the current
             // directory are not executable by name.
@@ -360,21 +363,21 @@ pub unsafe fn os_can_exe(name: *const c_char, abspath: *mut *mut c_char, use_pat
 /// resolved absolute path through a non-null `abspath`.
 ///
 /// # Safety
-/// `name` must be a NUL-terminated string, and `abspath` null or writable.
-unsafe fn is_executable(name: *const c_char, abspath: *mut *mut c_char) -> bool {
-    // SAFETY: the caller's NUL-terminated name.
-    let mode = unsafe { os_getperm(name) };
+/// `abspath` must be null or writable.
+unsafe fn is_executable(name: &CStr, abspath: *mut *mut c_char) -> bool {
+    // SAFETY: `name` is NUL-terminated and outlives the call.
+    let mode = unsafe { os_getperm(name.as_ptr()) };
     if mode < 0 {
         return false;
     }
     // Only a regular file is worth asking `access(2)` about.
     let ok = mode as u64 & S_IFMT == S_IFREG
-        // SAFETY: the caller's NUL-terminated name.
-        && fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name, X_OK, None) }) == 0;
+        // SAFETY: as above.
+        && fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name.as_ptr(), X_OK, None) }) == 0;
     if ok && !abspath.is_null() {
         // SAFETY: the caller's out-parameter, checked non-null; it takes
         // ownership of the allocation.
-        unsafe { *abspath = save_abs_path(name) };
+        unsafe { *abspath = save_abs_path(name.as_ptr()) };
     }
     ok
 }
@@ -383,8 +386,8 @@ unsafe fn is_executable(name: *const c_char, abspath: *mut *mut c_char) -> bool 
 /// order `$PATH` lists them.
 ///
 /// # Safety
-/// `name` must be a NUL-terminated string, and `abspath` null or writable.
-unsafe fn is_executable_in_path(name: *const c_char, abspath: *mut *mut c_char) -> bool {
+/// `abspath` must be null or writable.
+unsafe fn is_executable_in_path(name: &CStr, abspath: *mut *mut c_char) -> bool {
     // SAFETY: `os_getenv` answers an owned NUL-terminated string or null.
     let path_env = unsafe { os_getenv(c"PATH".as_ptr()) };
     if path_env.is_null() {
@@ -393,8 +396,7 @@ unsafe fn is_executable_in_path(name: *const c_char, abspath: *mut *mut c_char) 
     // SAFETY: non-null, and `os_getenv`'s answer is NUL-terminated. Copied
     // out because `is_executable` below can reach code that reads `$PATH`.
     let path = unsafe { CStr::from_ptr(path_env) }.to_bytes().to_vec();
-    // SAFETY: the caller's NUL-terminated name.
-    let name_len = unsafe { CStr::from_ptr(name) }.to_bytes().len();
+    let name_len = name.to_bytes().len();
     // Longest case: the whole of `$PATH` as one entry, a separator, `name`
     // and the NUL.
     let mut buf = vec![0u8; name_len + path.len() + 2];
@@ -406,9 +408,10 @@ unsafe fn is_executable_in_path(name: *const c_char, abspath: *mut *mut c_char) 
         buf[entry.len()] = 0;
         // SAFETY: `buf` is NUL-terminated at `entry.len()` and holds the
         // length passed, which is long enough for any entry plus `name`.
-        let _ = unsafe { append_path(buf.as_mut_ptr().cast(), name, buf.len()) };
-        // SAFETY: `buf` is NUL-terminated, and `abspath` is the caller's.
-        if unsafe { is_executable(buf.as_ptr().cast(), abspath) } {
+        let _ = unsafe { append_path(buf.as_mut_ptr().cast(), name.as_ptr(), buf.len()) };
+        // SAFETY: `buf` is NUL-terminated at or before its end, and
+        // `abspath` is the caller's.
+        if unsafe { is_executable(cstr::in_bytes(&buf), abspath) } {
             rv = true;
             break;
         }
@@ -719,12 +722,10 @@ pub unsafe fn os_write(
 }
 
 /// Copies `path` onto `new_path` with libuv's `copyfile` flags.
-///
-/// # Safety
-/// Both paths must be NUL-terminated strings.
-pub unsafe fn os_copy(path: *const c_char, new_path: *const c_char, flags: c_int) -> c_int {
-    // SAFETY: the caller's NUL-terminated paths.
-    fs_result(|req| unsafe { uv_fs_copyfile(NO_LOOP, req, path, new_path, flags, None) })
+pub fn os_copy(path: &CStr, new_path: &CStr, flags: c_int) -> c_int {
+    let (from, to) = (path.as_ptr(), new_path.as_ptr());
+    // SAFETY: both are NUL-terminated and outlive the call.
+    fs_result(|req| unsafe { uv_fs_copyfile(NO_LOOP, req, from, to, flags, None) })
 }
 
 /// Flushes `fd` to disk, counting the call in `nvim__stats()`.
@@ -742,14 +743,13 @@ pub unsafe fn os_fsync(fd: c_int) -> c_int {
 /// a fresh `len`-byte allocation otherwise. Answers null on failure.
 ///
 /// # Safety
-/// `buf` must be null or address `len` writable bytes, and `name` must be a
-/// NUL-terminated string.
-pub unsafe fn os_realpath(name: *const c_char, mut buf: *mut c_char, len: size_t) -> *mut c_char {
+/// `buf` must be null or address `len` writable bytes.
+pub unsafe fn os_realpath(name: &CStr, mut buf: *mut c_char, len: size_t) -> *mut c_char {
     // `request.ptr` is the resolved path and `uv_fs_req_cleanup` frees
     // it, so the copy has to happen inside the read.
     fs_request(
-        // SAFETY: the caller's NUL-terminated name.
-        |request| unsafe { uv_fs_realpath(NO_LOOP, request, name, None) },
+        // SAFETY: `name` is NUL-terminated and outlives the call.
+        |request| unsafe { uv_fs_realpath(NO_LOOP, request, name.as_ptr(), None) },
         |result, request| {
             if result != LIBUV_SUCCESS {
                 return ptr::null_mut();

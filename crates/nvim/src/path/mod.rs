@@ -454,7 +454,7 @@ pub unsafe fn path_full_dir_name(
     if unsafe { *directory } == 0 {
         return unsafe { os_dirname(buffer, len) };
     }
-    if !unsafe { os_realpath(directory, buffer, len) }.is_null() {
+    if !unsafe { os_realpath(cstr::at(directory), buffer, len) }.is_null() {
         return Ok(());
     }
     // The path does not exist (yet). An absolute one fails, and the
@@ -619,7 +619,7 @@ pub unsafe fn path_guess_exepath(argv0: *const c_char, buf: *mut c_char, bufsize
                 unsafe { xmemcpyz(name.cast(), dir.cast(), dir_len) };
                 unsafe { xstrlcat(name, PATHSEPSTR.as_ptr(), size) };
                 unsafe { xstrlcat(name, argv0, size) };
-                if unsafe { os_can_exe(name, core::ptr::null_mut(), false) } {
+                if unsafe { os_can_exe(cstr::at(name), core::ptr::null_mut(), false) } {
                     unsafe { xstrlcpy(buf, name, bufsize) };
                     return;
                 }

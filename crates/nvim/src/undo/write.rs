@@ -80,7 +80,7 @@ unsafe fn write_undo_file(
             return;
         }
         // SAFETY: as above.
-        unsafe { os_remove(file_name) };
+        unsafe { os_remove(cstr::at(file_name)) };
     }
     if buffer.b_u_numhead == 0 && buffer.b_u_line_ptr.is_null() {
         if p_verbose.get() > 0 {
@@ -112,7 +112,7 @@ unsafe fn write_undo_file(
         return;
     }
     // SAFETY: a NUL-terminated path, by the contract above.
-    unsafe { os_setperm(file_name, perm) };
+    unsafe { os_setperm(cstr::at(file_name), perm) };
     // Always under 'verbose', even when the user named the file.
     verbosely(true, || {
         // SAFETY: a NUL-terminated literal and path.
@@ -130,7 +130,7 @@ unsafe fn write_undo_file(
         let shown = unsafe { c_str(file_name) };
         semsg!("E828: Cannot open undo file for writing: {shown}");
         unsafe { close(fd) };
-        unsafe { os_remove(file_name) };
+        unsafe { os_remove(cstr::at(file_name)) };
         return;
     }
     u_sync(true);
@@ -224,7 +224,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
         // The group could not be changed: make sure it cannot read the
         // undo file either.
         // SAFETY: a NUL-terminated path, by the contract above.
-        unsafe { os_setperm(file_name, perm & 0o707 | (perm & 0o7) << 3) };
+        unsafe { os_setperm(cstr::at(file_name), perm & 0o707 | (perm & 0o7) << 3) };
     }
 }
 

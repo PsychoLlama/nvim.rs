@@ -251,7 +251,7 @@ impl TempFile {
 impl Drop for TempFile {
     fn drop(&mut self) {
         // SAFETY: our own `vim_tempname` allocation.
-        unsafe { os_remove(self.0) };
+        unsafe { os_remove(cstr::at(self.0)) };
         unsafe { xfree(self.0.cast()) };
     }
 }

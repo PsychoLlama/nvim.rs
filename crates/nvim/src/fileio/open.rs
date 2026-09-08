@@ -281,7 +281,7 @@ pub(crate) unsafe fn open_source(
         if !how.newfile
             || readonlymode.get()
             || perm & 0o222 == 0
-            || unsafe { os_file_is_writable(fname) } == 0
+            || unsafe { os_file_is_writable(cstr::at(fname)) } == 0
         {
             file_readonly = true;
         }
@@ -405,7 +405,7 @@ pub(crate) unsafe fn open_source(
                     swap_mode &= 0o600;
                 }
             }
-            unsafe { os_setperm(swap_fname, swap_mode) };
+            unsafe { os_setperm(cstr::at(swap_fname), swap_mode) };
         }
     }
 

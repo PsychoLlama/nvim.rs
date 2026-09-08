@@ -293,7 +293,7 @@ pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             mode |= 1 << (8 - i);
         }
     }
-    result.vval.v_number = (unsafe { os_setperm(fname, mode) } == OK) as VarNumber;
+    result.vval.v_number = (unsafe { os_setperm(cstr::at(fname), mode) } == OK) as VarNumber;
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search

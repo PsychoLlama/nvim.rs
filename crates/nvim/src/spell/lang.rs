@@ -601,9 +601,9 @@ pub fn spell_delete_wordlist() {
     }
 
     let mut fname = [0 as c_char; MAXPATHL as usize];
-    unsafe { os_remove(int_wordlist.get()) };
+    unsafe { os_remove(cstr::at(int_wordlist.get())) };
     unsafe { int_wordlist_spl(fname.as_mut_ptr()) };
-    unsafe { os_remove(fname.as_mut_ptr()) };
+    unsafe { os_remove(cstr::at(fname.as_mut_ptr())) };
     unsafe { xfree(int_wordlist.get() as *mut c_void) };
     int_wordlist.set(core::ptr::null_mut());
 }

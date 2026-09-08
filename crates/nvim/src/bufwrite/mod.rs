@@ -490,7 +490,7 @@ pub unsafe fn buf_write(
                 && !cpo_has(CpoFlag::FWRITE)
             {
                 target.perm |= 0o200;
-                unsafe { os_setperm(fname, target.perm) };
+                unsafe { os_setperm(cstr::at(fname), target.perm) };
                 target.made_writable = true;
             }
             // With ":w!" over the current file, 'readonly' makes no
@@ -690,7 +690,7 @@ pub unsafe fn buf_write(
                             writer.conv_error = true;
                             end = 0;
                         }
-                        unsafe { os_remove(wfname) };
+                        unsafe { os_remove(cstr::at(wfname)) };
                         unsafe { xfree(wfname.cast()) };
                     }
                 }
@@ -767,7 +767,7 @@ pub unsafe fn buf_write(
                 if p_bk.get() == 0
                     && !backup.path.is_null()
                     && !writer.conv_error
-                    && unsafe { os_remove(backup.path) } != 0
+                    && unsafe { os_remove(cstr::at(backup.path)) } != 0
                 {
                     emsg(translate(c"E207: Can't delete backup file"));
                 }

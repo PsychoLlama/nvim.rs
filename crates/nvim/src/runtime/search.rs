@@ -622,7 +622,7 @@ unsafe fn runtime_get_named_common(
                     pattern.data(),
                 )
             } as size_t;
-            if size >= buf.len() || !unsafe { os_file_is_readable(buf.as_mut_ptr()) } {
+            if size >= buf.len() || !unsafe { os_file_is_readable(cstr::at(buf.as_mut_ptr())) } {
                 continue;
             }
             unsafe {

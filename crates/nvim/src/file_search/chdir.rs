@@ -135,7 +135,7 @@ pub(crate) unsafe fn vim_chdirfile(fname: *mut c_char, cause: CdCause) -> Result
     if announce {
         unsafe { do_autocmd_dirchanged(dir.as_mut_ptr(), kCdScopeWindow, cause, true) };
     }
-    if unsafe { os_chdir(dir.as_ptr()) } != 0 {
+    if os_chdir(cstr::in_chars(&dir)) != 0 {
         return Err(Failed);
     }
     if announce {
@@ -169,7 +169,7 @@ pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
     if dir_name.is_null() {
         return -1;
     }
-    let r = unsafe { os_chdir(dir_name) };
+    let r = unsafe { os_chdir(cstr::at(dir_name)) };
     unsafe { xfree(dir_name.cast()) };
     r
 }

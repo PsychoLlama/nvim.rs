@@ -53,21 +53,15 @@ pub unsafe fn os_path_exists(path: *const c_char) -> bool {
 }
 
 /// Renames `path` to `new_path`. Answers `OK` or `FAIL`.
-///
-/// # Safety
-/// Both must be NUL-terminated strings.
-pub unsafe fn os_rename(path: *const c_char, new_path: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated paths.
-    fs_ok(|req| unsafe { uv_fs_rename(NO_LOOP, req, path, new_path, None) })
+pub fn os_rename(path: &CStr, new_path: &CStr) -> c_int {
+    // SAFETY: both are NUL-terminated and outlive the call.
+    fs_ok(|req| unsafe { uv_fs_rename(NO_LOOP, req, path.as_ptr(), new_path.as_ptr(), None) })
 }
 
 /// Makes one directory. Answers 0 or a libuv error code.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_mkdir(path: *const c_char, mode: int32_t) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_mkdir(NO_LOOP, req, path, mode as c_int, None) })
+pub fn os_mkdir(path: &CStr, mode: int32_t) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_mkdir(NO_LOOP, req, path.as_ptr(), mode as c_int, None) })
 }
 
 /// Makes `dir` and every missing directory above it. Answers 0, or the
@@ -137,8 +131,10 @@ pub unsafe fn os_mkdir_recurse(
             // The path ends with something like "////". Ignore this.
             break;
         }
-        // SAFETY: `curdir` is NUL-terminated at `e`.
-        let ret = unsafe { os_mkdir(curdir.as_ptr().cast(), mode) };
+        // `curdir` is NUL-terminated at `e`, and the whole of it at
+        // `real_end`, so the walk always finds a terminator.
+        let so_far = CStr::from_bytes_until_nul(&curdir).unwrap_or(c"");
+        let ret = os_mkdir(so_far, mode);
         if ret != 0 {
             // SAFETY: the caller's out-parameter, which takes the copy over.
             unsafe { *failed_dir = xmemdupz(curdir.as_ptr().cast(), e).cast() };
@@ -195,13 +191,12 @@ pub unsafe fn os_file_mkdir(fname: *mut c_char, mode: int32_t) -> c_int {
 /// `XXXXXX` is replaced, and writes its path into `path`.
 ///
 /// # Safety
-/// `templ` must be a NUL-terminated string and `path` must address
-/// [`TEMP_FILE_PATH_MAXLEN`] writable bytes.
-pub unsafe fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
+/// `path` must address [`TEMP_FILE_PATH_MAXLEN`] writable bytes.
+pub unsafe fn os_mkdtemp(templ: &CStr, path: *mut c_char) -> c_int {
     // `request.path` is the directory libuv made, and cleanup frees it.
     fs_request(
-        // SAFETY: the caller's NUL-terminated template.
-        |request| unsafe { uv_fs_mkdtemp(NO_LOOP, request, templ, None) },
+        // SAFETY: `templ` is NUL-terminated and outlives the call.
+        |request| unsafe { uv_fs_mkdtemp(NO_LOOP, request, templ.as_ptr(), None) },
         |result, request| {
             if result == LIBUV_SUCCESS {
                 // SAFETY: `request.path` is libuv's NUL-terminated answer,
@@ -214,12 +209,9 @@ pub unsafe fn os_mkdtemp(templ: *const c_char, path: *mut c_char) -> c_int {
 }
 
 /// Removes an empty directory. Answers 0 or a libuv error code.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_rmdir(path: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_rmdir(NO_LOOP, req, path, None) })
+pub fn os_rmdir(path: &CStr) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_rmdir(NO_LOOP, req, path.as_ptr(), None) })
 }
 
 /// Opens `path` for walking, answering whether it holds anything.
@@ -227,50 +219,41 @@ pub unsafe fn os_rmdir(path: *const c_char) -> c_int {
 /// The `Directory` owns a live `uv_fs_t` until [`os_closedir`] runs, which
 /// is why this one is not an [`fs_request`].
 ///
-/// # Safety
-/// `dir` must be writable and `path` a NUL-terminated string.
-pub unsafe fn os_scandir(dir: *mut Directory, path: *const c_char) -> bool {
-    // SAFETY: the caller's `Directory` and NUL-terminated path.
-    let r = unsafe { uv_fs_scandir(NO_LOOP, &raw mut (*dir).request, path, 0, None) };
+pub fn os_scandir(dir: &mut Directory, path: &CStr) -> bool {
+    // SAFETY: the request is `dir`'s own, and `path` is NUL-terminated.
+    let r = unsafe { uv_fs_scandir(NO_LOOP, &raw mut dir.request, path.as_ptr(), 0, None) };
     if r < 0 {
-        // SAFETY: the request is the one just started, however it went.
-        unsafe { os_closedir(dir) };
+        os_closedir(dir);
     }
     r >= 0
 }
 
-/// The next entry's name, or null when the walk is over.
+/// The next entry's name, or null when the walk is over. The name lives in
+/// `dir`'s request until the next call.
 ///
 /// # Safety
 /// `dir` must be a `Directory` [`os_scandir`] succeeded on.
-pub unsafe fn os_scandir_next(dir: *mut Directory) -> *const c_char {
+pub unsafe fn os_scandir_next(dir: &mut Directory) -> *const c_char {
     // SAFETY: the caller's open `Directory`; the name lives in its request.
-    unsafe {
-        let err = uv_fs_scandir_next(&raw mut (*dir).request, &raw mut (*dir).ent);
-        if err != UV_EOF {
-            (*dir).ent.name
-        } else {
-            ptr::null()
-        }
+    let err = unsafe { uv_fs_scandir_next(&raw mut dir.request, &raw mut dir.ent) };
+    if err != UV_EOF {
+        dir.ent.name
+    } else {
+        ptr::null()
     }
 }
 
 /// Releases what [`os_scandir`] allocated.
-///
-/// # Safety
-/// `dir` must be a `Directory` [`os_scandir`] was called on.
-pub unsafe fn os_closedir(dir: *mut Directory) {
-    // SAFETY: the caller's `Directory`, whose request is theirs to clean up.
-    unsafe { uv_fs_req_cleanup(&raw mut (*dir).request) };
+pub fn os_closedir(dir: &mut Directory) {
+    // SAFETY: the request is `dir`'s own, and cleaning a request that was
+    // never started is libuv's own no-op.
+    unsafe { uv_fs_req_cleanup(&raw mut dir.request) };
 }
 
 /// Removes a file. Answers 0 or a libuv error code.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_remove(path: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path, None) })
+pub fn os_remove(path: &CStr) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path.as_ptr(), None) })
 }
 
 /// Why [`mkdir_recurse`] gave up: libuv's code, the directory that could not

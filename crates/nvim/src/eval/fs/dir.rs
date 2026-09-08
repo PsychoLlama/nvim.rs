@@ -27,6 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::{__S_IFMT, Args, FAIL, Owned, frame, no_fileinfo, ret_string, str_arg, str_arg_chk};
+use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk, tv_get_string_buf};
 use crate::eval::userfunc::{add_defer, can_add_defer};
@@ -345,8 +346,8 @@ pub unsafe fn f_delete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let done = |ret: c_int| -> VarNumber { if ret == 0 { 0 } else { -1 } };
     result.vval.v_number = match flags.to_bytes() {
         // SAFETY: `name` is NUL-terminated; each callee only reads it.
-        b"" => done(unsafe { os_remove(name) }),
-        b"d" => done(unsafe { os_rmdir(name) }),
+        b"" => done(unsafe { os_remove(cstr::at(name)) }),
+        b"d" => done(unsafe { os_rmdir(cstr::at(name)) }),
         b"rf" => VarNumber::from(unsafe { delete_recursive(name) }),
         _ => {
             err1(e_invexpr2, flags.as_ptr());

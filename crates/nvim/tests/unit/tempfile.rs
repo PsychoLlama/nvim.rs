@@ -45,7 +45,7 @@ fn fresh() -> Sandbox {
 fn is_writable_dir(path: &Path) -> bool {
     let owned = cstr(path.to_str().unwrap());
     // 2 is "a directory we may write into"; 1 is a writable file.
-    let kind = unsafe { os_file_is_writable(owned.as_ptr()) };
+    let kind = os_file_is_writable(&owned);
     kind == 2
 }
 

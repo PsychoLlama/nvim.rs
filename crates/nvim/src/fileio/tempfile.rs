@@ -71,6 +71,13 @@ impl Template {
         self.buf.as_ptr().cast()
     }
 
+    /// The path as a string. Read from the buffer's own terminator rather
+    /// than from `len`, because `os_mkdtemp` writes the name in without
+    /// telling this type how long it made it.
+    fn as_cstr(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.buf).unwrap_or(c"")
+    }
+
     fn as_mut_ptr(&mut self) -> *mut c_char {
         self.buf.as_mut_ptr().cast()
     }
@@ -146,8 +153,8 @@ fn vim_mktempdir() {
         }
         tmp.push(b"nvim.");
         tmp.push(user);
-        unsafe { os_mkdir(tmp.as_ptr(), 0o700) }; // Always create, to avoid a race.
-        let owned = unsafe { os_file_owned(tmp.as_ptr()) };
+        os_mkdir(tmp.as_cstr(), 0o700); // Always create, to avoid a race.
+        let owned = os_file_owned(tmp.as_cstr());
         let isdir = unsafe { os_isdir(tmp.as_ptr()) };
         // XDG_RUNTIME_DIR must be owned by the user, mode 0700.
         let perm = unsafe { os_getperm(tmp.as_ptr()) } as c_int;
@@ -185,7 +192,7 @@ fn vim_mktempdir() {
         // mkdtemp template, replaced with random alphanumeric characters.
         tmp.push(b"XXXXXX");
         let mut path = Template::new();
-        let r = unsafe { os_mkdtemp(tmp.as_ptr(), path.as_mut_ptr()) };
+        let r = unsafe { os_mkdtemp(tmp.as_cstr(), path.as_mut_ptr()) };
         if r != 0 {
             // SAFETY: libuv's error strings are static; `tmp` is this
             // frame's NUL-terminated path.
@@ -200,7 +207,7 @@ fn vim_mktempdir() {
             break;
         }
         // Couldn't set the temp dir to `path`, so remove what we made.
-        unsafe { os_rmdir(path.as_ptr()) };
+        os_rmdir(path.as_cstr());
     }
     unsafe { umask(umask_save) };
 }
@@ -228,7 +235,7 @@ pub unsafe fn readdir_core(
     unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, 20) };
 
     let mut dir = Directory::default();
-    if !unsafe { os_scandir(&raw mut dir, path) } {
+    if !unsafe { os_scandir(&mut dir, cstr::at(path)) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let path = unsafe { c_str(path) };
         smsg!(0, "E484: Can't open file {path}");
@@ -236,7 +243,7 @@ pub unsafe fn readdir_core(
     }
 
     loop {
-        let p = unsafe { os_scandir_next(&raw mut dir) };
+        let p = unsafe { os_scandir_next(&mut dir) };
         if p.is_null() {
             break;
         }
@@ -259,7 +266,7 @@ pub unsafe fn readdir_core(
         }
     }
 
-    unsafe { os_closedir(&raw mut dir) };
+    os_closedir(&mut dir);
 
     if unsafe { (*gap).ga_len } > 0 {
         unsafe { sort_strings((*gap).ga_data as *mut *mut c_char, (*gap).ga_len) };
@@ -287,13 +294,9 @@ pub unsafe fn delete_recursive(name: *const c_char) -> c_int {
 /// the `MAXPATHL` limit on how deep a tree can be deleted.
 fn delete_tree(name: &[u8]) -> c_int {
     let path = CString::new(name).unwrap_or_default();
-    if !unsafe { os_isrealdir(path.as_ptr()) } {
+    if !os_isrealdir(&path) {
         // Delete symlink only.
-        return if unsafe { os_remove(path.as_ptr()) } == 0 {
-            0
-        } else {
-            -1
-        };
+        return if os_remove(&path) == 0 { 0 } else { -1 };
     }
 
     let mut ga = GArray::default();
@@ -316,7 +319,7 @@ fn delete_tree(name: &[u8]) -> c_int {
         }
     }
     unsafe { ga_clear_strings(&raw mut ga) };
-    if unsafe { os_rmdir(path.as_ptr()) } != 0 {
+    if os_rmdir(&path) != 0 {
         result = -1;
     }
     result

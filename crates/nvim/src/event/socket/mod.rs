@@ -27,6 +27,7 @@
 
 pub mod address;
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -397,7 +398,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
         unsafe { c_str(addr) }
     );
     // SAFETY: the watcher's own address.
-    let rm_result = unsafe { os_remove(addr) };
+    let rm_result = unsafe { os_remove(cstr::at(addr)) };
     if rm_result != 0 {
         // SAFETY: libuv's error strings are static.
         let why = unsafe { uv_strerror(rm_result) };

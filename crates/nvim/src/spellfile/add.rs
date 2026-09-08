@@ -168,7 +168,7 @@ pub unsafe fn spell_add_word(
             if !unsafe { dir_of_file_exists(fname) } && p != fname {
                 let c = unsafe { *p };
                 unsafe { *p = NUL as c_char };
-                unsafe { os_mkdir(fname, 0o755 as int32_t) };
+                unsafe { os_mkdir(cstr::at(fname), 0o755 as int32_t) };
                 unsafe { *p = c };
                 fd = unsafe { os_fopen(fname, c"a".as_ptr()) };
             }

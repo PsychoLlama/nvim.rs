@@ -305,7 +305,7 @@ pub(crate) unsafe fn readfile(
                     }
                 }
                 if !tmpname.is_null() {
-                    unsafe { os_remove(tmpname) }; // delete the converted file
+                    unsafe { os_remove(cstr::at(tmpname)) }; // delete the converted file
                     unsafe { xfree(tmpname.cast()) };
                     tmpname = ptr::null_mut();
                 }
@@ -794,7 +794,7 @@ pub(crate) unsafe fn readfile(
         }
 
         if !tmpname.is_null() {
-            unsafe { os_remove(tmpname) }; // delete the converted file
+            unsafe { os_remove(cstr::at(tmpname)) }; // delete the converted file
             unsafe { xfree(tmpname.cast()) };
         }
         no_wait_return.set(no_wait_return.get() - 1); // may wait for return now

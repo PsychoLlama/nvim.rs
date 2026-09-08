@@ -46,7 +46,7 @@ fn free_str(p: *mut c_char) {
 fn remove_and_free(path: *mut c_char) {
     if !path.is_null() {
         // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(path) };
+        unsafe { os_remove(cstr::at(path)) };
     }
     free_str(path);
 }
@@ -107,7 +107,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
                 tempdir
             };
             // SAFETY: a NUL-terminated directory name; the editor exists.
-            unsafe { os_chdir(tempdir) };
+            unsafe { os_chdir(cstr::at(tempdir)) };
             shorten_fnames(1);
         }
 
@@ -127,7 +127,7 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
 
         if saved_dir {
             // SAFETY: the directory name `save_cwd` filled in.
-            if unsafe { os_chdir(dirbuf.as_mut_ptr()) } != 0 {
+            if unsafe { os_chdir(cstr::at(dirbuf.as_mut_ptr())) } != 0 {
                 emsg_gettext(e_prev_dir.as_ptr());
             }
             shorten_fnames(1);
@@ -204,7 +204,7 @@ fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
     let at = dirbuf.as_mut_ptr();
     // SAFETY: `dirbuf` holds `MAXPATHL` bytes, which is what `os_dirname` is
     // told, and `os_chdir` gets the NUL-terminated name it wrote there.
-    let ok = unsafe { os_dirname(at, MAXPATHL as size_t).is_ok() && os_chdir(at) == 0 };
+    let ok = unsafe { os_dirname(at, MAXPATHL as size_t).is_ok() && os_chdir(cstr::at(at)) == 0 };
     if !ok {
         dirbuf[0] = c_char::try_from(NUL).expect("NUL is zero");
     }
@@ -218,7 +218,7 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
     // inputs are NUL-terminated.
     unsafe { strcpy(buf, name) };
     unsafe { strcat(buf, suffix) };
-    unsafe { os_remove(buf) };
+    unsafe { os_remove(cstr::at(buf)) };
 }
 
 /// `:diffsplit {file}`: open `file` in a new window and diff it against the

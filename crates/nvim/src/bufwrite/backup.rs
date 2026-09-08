@@ -112,7 +112,7 @@ unsafe fn get_fileinfo_os(
         (mode as c_int, false, false)
     } else if mode & __S_IFMT as uint64_t == S_IFDIR {
         return Err(WriteError::numbered(c"E502", c"is a directory"));
-    } else if unsafe { os_nodetype(fname) } != NODE_WRITABLE {
+    } else if unsafe { os_nodetype(cstr::at(fname)) } != NODE_WRITABLE {
         return Err(WriteError::numbered(
             c"E503",
             c"is not a file or writable device",
@@ -155,7 +155,7 @@ pub(crate) unsafe fn get_fileinfo(
 
     // Check now whether the file is really writable: renaming it to make
     // a backup would otherwise hide the problem until it is too late.
-    target.readonly = unsafe { os_file_is_writable(fname) } == 0;
+    target.readonly = unsafe { os_file_is_writable(cstr::at(fname)) } == 0;
     if !forceit && target.readonly {
         return Err(Some(if cpo_has(CpoFlag::FWRITE) {
             WriteError::numbered(c"E504", E_READONLY_CPO)
@@ -299,7 +299,7 @@ unsafe fn want_backup_copy(
         || file_info.stat.st_mode as c_int != perm;
     // Close before removing: on Windows an open file cannot be deleted.
     unsafe { close(fd) };
-    unsafe { os_remove(tmp_fname.as_mut_ptr()) };
+    unsafe { os_remove(cstr::at(tmp_fname.as_mut_ptr())) };
     copy
 }
 
@@ -466,8 +466,8 @@ unsafe fn backup_by_copy(
             continue;
         }
 
-        unsafe { os_remove(backup) }; // remove an old backup, if present
-        if unsafe { os_copy(fname, backup, UV_FS_COPYFILE_FICLONE) } != 0 {
+        unsafe { os_remove(cstr::at(backup)) }; // remove an old backup, if present
+        if unsafe { os_copy(cstr::at(fname), cstr::at(backup), UV_FS_COPYFILE_FICLONE) } != 0 {
             err = Some(cannot_create());
             unsafe { xfree(backup.cast()) };
             backup = core::ptr::null_mut();
@@ -475,18 +475,18 @@ unsafe fn backup_by_copy(
         }
 
         // Same protection as the original file, minus the s-bit.
-        unsafe { os_setperm(backup, perm & 0o777) };
+        unsafe { os_setperm(cstr::at(backup), perm & 0o777) };
         // Try to give the backup the original's group. Failing that, give
         // the group the same bits as others.
         let gid = unsafe { (*file_info_old).stat.st_gid };
         if file_info_new.stat.st_gid != gid
-            && unsafe { os_chown(backup, -1i32 as uv_uid_t, gid as uv_gid_t) } != 0
+            && unsafe { os_chown(cstr::at(backup), -1i32 as uv_uid_t, gid as uv_gid_t) } != 0
         {
-            unsafe { os_setperm(backup, (perm & 0o707) | ((perm & 0o7) << 3)) };
+            unsafe { os_setperm(cstr::at(backup), (perm & 0o707) | ((perm & 0o7) << 3)) };
         }
         let atime = unsafe { (*file_info_old).stat.st_atim.tv_sec } as f64;
         let mtime = unsafe { (*file_info_old).stat.st_mtim.tv_sec } as f64;
-        unsafe { os_file_settime(backup, atime, mtime) };
+        unsafe { os_file_settime(cstr::at(backup), atime, mtime) };
         os_set_acl(backup, acl);
         unsafe { os_copy_xattr(fname, backup) };
         err = None;
@@ -582,7 +582,7 @@ pub(crate) unsafe fn restore_backup(
             }
             // If the original does exist, throw the copy away.
             if unsafe { os_path_exists(fname) } {
-                unsafe { os_remove(backup.path) };
+                unsafe { os_remove(cstr::at(backup.path)) };
             }
         } else {
             unsafe { vim_rename(backup.path, fname) };
@@ -613,7 +613,9 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
         msg(gettext(e_interr), 0);
         unsafe { ui_flush() };
     }
-    unsafe { os_copy(backup.path, fname, UV_FS_COPYFILE_FICLONE) == 0 }
+    // SAFETY: both are the caller's NUL-terminated names.
+    let (from, to) = unsafe { (cstr::at(backup.path), cstr::at(fname)) };
+    os_copy(from, to, UV_FS_COPYFILE_FICLONE) == 0
 }
 
 /// `'patchmode'`: keep the file as it was before the write, under a name of
@@ -641,7 +643,7 @@ pub(crate) unsafe fn apply_patchmode(
             backup.path = core::ptr::null_mut();
             let atime = file_info_old.stat.st_atim.tv_sec as f64;
             let mtime = file_info_old.stat.st_mtim.tv_sec as f64;
-            unsafe { os_file_settime(org, atime, mtime) };
+            unsafe { os_file_settime(cstr::at(org), atime, mtime) };
         }
     } else {
         // No backup, so remember that a (new) file was created.
@@ -661,7 +663,7 @@ pub(crate) unsafe fn apply_patchmode(
         }
     }
     if !org.is_null() {
-        unsafe { os_setperm(org, os_getperm(fname) as c_int & 0o777) };
+        unsafe { os_setperm(cstr::at(org), os_getperm(fname) as c_int & 0o777) };
         unsafe { xfree(org.cast()) };
     }
 }
@@ -749,7 +751,7 @@ pub(crate) unsafe fn open_write_file(
             target.perm &= 0o777;
         }
         if !req.append {
-            unsafe { os_remove(wfname) }; // don't remove when appending
+            unsafe { os_remove(cstr::at(wfname)) }; // don't remove when appending
         }
     }
 }
@@ -807,7 +809,7 @@ pub(crate) unsafe fn finish_write(
             let gid = unsafe { (*file_info_old).stat.st_gid } as uv_gid_t;
             unsafe { os_fchown(fd, uid, gid) };
             if target.perm >= 0 {
-                unsafe { os_setperm(wfname, target.perm) }; // may have changed
+                unsafe { os_setperm(cstr::at(wfname), target.perm) }; // may have changed
             }
         }
         buf_set_file_id(buffer);
@@ -825,7 +827,7 @@ pub(crate) unsafe fn finish_write(
         perm &= !0o200; // reset the 'w' bit for security reasons
     }
     if perm >= 0 {
-        unsafe { os_setperm(wfname, perm) }; // same permissions as the old file
+        unsafe { os_setperm(cstr::at(wfname), perm) }; // same permissions as the old file
     }
     // The ACL goes on before the user changes: an ACL cannot be set on a
     // file the user does not own.

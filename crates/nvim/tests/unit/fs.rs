@@ -110,8 +110,7 @@ fn getperm(name: &str) -> c_int {
 
 fn setperm(name: &str, perm: c_int) -> c_int {
     let name = cname(name);
-    // SAFETY: as above.
-    unsafe { os_setperm(name.as_ptr(), perm) }
+    os_setperm(&name, perm)
 }
 
 /// A zeroed `FileInfo`, which every accessor fills in completely.
@@ -166,8 +165,7 @@ fn the_working_directory_is_reported_and_cannot_be_set_to_a_tilde() {
     assert!(!isdir("~"), "sanity check: no literal ~ directory");
     for name in ["~", "~/"] {
         let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        assert_ne!(unsafe { os_chdir(name.as_ptr()) }, 0, "chdir to a tilde");
+        assert_ne!(os_chdir(&name), 0, "chdir to a tilde");
     }
     assert_eq!(dirname(here.len() + 1), (Ok(()), here));
 }
@@ -198,7 +196,7 @@ fn an_executable_is_found_by_path_or_relative_to_here() {
         // SAFETY: `name` is this frame's; `resolved` receives an owned
         // string, or is left null.
         unsafe {
-            if os_can_exe(name.as_ptr(), &raw mut resolved, true) {
+            if os_can_exe(&name, &raw mut resolved, true) {
                 assert!(!resolved.is_null(), "a true answer must set the path");
                 Some(internalize(resolved))
             } else {
@@ -267,8 +265,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     // that is not there at all.
     let readable = |name: &str| {
         let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_file_is_readable(name.as_ptr()) }
+        os_file_is_readable(&name)
     };
     assert!(readable(file));
     assert!(!readable("unit-test-directory/what_are_you_smoking.gif"));
@@ -279,8 +276,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     // Writable answers 1 for a file, 2 for a directory and 0 for neither.
     let writable = |name: &str| {
         let name = cname(name);
-        // SAFETY: as above.
-        unsafe { os_file_is_writable(name.as_ptr()) }
+        os_file_is_writable(&name)
     };
     assert_eq!(writable(file), 1);
     assert_eq!(writable("unit-test-directory"), 2);
@@ -351,8 +347,7 @@ fn renaming_moves_a_file_and_overwrites_what_is_there() {
     let fixture = Fixture::new("rename");
     let rename = |from: &str, to: &str| {
         let (from, to) = (cname(from), cname(to));
-        // SAFETY: both names are this frame's and NUL-terminated.
-        unsafe { os_rename(from.as_ptr(), to.as_ptr()) }
+        os_rename(&from, &to)
     };
     let test = "unit-test-directory/test.file";
     let absent = "unit-test-directory/not_exist.file";
@@ -376,8 +371,7 @@ fn removing_a_file_needs_it_to_be_there() {
     let fixture = Fixture::new("remove");
     let remove = |name: &str| {
         let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_remove(name.as_ptr()) }
+        os_remove(&name)
     };
     assert_ne!(remove("non-existing-file"), 0);
     let doomed = "unit-test-directory/test_remove.file";
@@ -630,8 +624,7 @@ fn a_name_that_is_not_there_is_a_normal_node() {
     let _fixture = Fixture::new("nodetype");
     let nodetype = |name: &str| {
         let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_nodetype(name.as_ptr()) }
+        os_nodetype(&name)
     };
     assert_eq!(nodetype("non-existing-file"), NODE_NORMAL);
 
@@ -649,13 +642,11 @@ fn making_and_removing_a_directory() {
     let _fixture = Fixture::new("mkdir");
     let mkdir = |name: &str| {
         let name = cname(name);
-        // SAFETY: `name` is this frame's and NUL-terminated.
-        unsafe { os_mkdir(name.as_ptr(), RWX) }
+        os_mkdir(&name, RWX)
     };
     let rmdir = |name: &str| {
         let name = cname(name);
-        // SAFETY: as above.
-        unsafe { os_rmdir(name.as_ptr()) }
+        os_rmdir(&name)
     };
 
     assert_ne!(mkdir("unit-test-directory"), 0, "it is already there");

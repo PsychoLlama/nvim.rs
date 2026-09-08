@@ -18,7 +18,7 @@ use core::ffi::{CStr, c_char, c_double, c_int, c_void};
 use core::ptr;
 
 use super::{
-    LIBUV_SUCCESS, NO_LOOP, R_OK, UV_STAT_T_INIT, W_OK, fs_ok, fs_request, fs_result, os_isdir,
+    LIBUV_SUCCESS, NO_LOOP, R_OK, UV_STAT_T_INIT, W_OK, dir_exists, fs_ok, fs_request, fs_result,
 };
 use crate::event::libuv::{
     uv_fs_access, uv_fs_chmod, uv_fs_chown, uv_fs_fchown, uv_fs_fstat, uv_fs_lstat, uv_fs_stat,
@@ -86,12 +86,9 @@ pub unsafe fn os_getperm(name: *const c_char) -> int32_t {
 }
 
 /// Sets `name`'s permission bits. Answers `OK` or `FAIL`.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_setperm(name: *const c_char, perm: c_int) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_ok(|req| unsafe { uv_fs_chmod(NO_LOOP, req, name, perm, None) })
+pub fn os_setperm(name: &CStr, perm: c_int) -> c_int {
+    // SAFETY: `name` is NUL-terminated and outlives the call.
+    fs_ok(|req| unsafe { uv_fs_chmod(NO_LOOP, req, name.as_ptr(), perm, None) })
 }
 
 /// The keys `listxattr` answered, which is a run of NUL-terminated names.
@@ -208,29 +205,25 @@ pub fn os_free_acl(_aclent: VimAcl) {}
 ///
 /// Asks through both `stat` and `lstat` — the answer has to hold for the
 /// link as well as its target, which is what makes it worth trusting.
-///
-/// # Safety
-/// `fname` must be a NUL-terminated string.
-pub unsafe fn os_file_owned(fname: *const c_char) -> bool {
-    // SAFETY: `getuid` cannot fail, and `fname` is the caller's path.
+pub fn os_file_owned(fname: &CStr) -> bool {
+    // SAFETY: `getuid` cannot fail; `fname` is NUL-terminated and `finfo`
+    // is this frame's.
     unsafe {
         let uid = getuid() as uint64_t;
         let mut finfo = FileInfo {
             stat: UV_STAT_T_INIT,
         };
-        let file_owned = os_fileinfo(fname, &raw mut finfo) && finfo.stat.st_uid == uid;
-        let link_owned = os_fileinfo_link(fname, &raw mut finfo) && finfo.stat.st_uid == uid;
+        let file_owned = os_fileinfo(fname.as_ptr(), &raw mut finfo) && finfo.stat.st_uid == uid;
+        let link_owned =
+            os_fileinfo_link(fname.as_ptr(), &raw mut finfo) && finfo.stat.st_uid == uid;
         file_owned && link_owned
     }
 }
 
 /// `chown(2)`. An owner or group of -1 leaves that ID alone.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_chown(path: *const c_char, owner: uv_uid_t, group: uv_gid_t) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_chown(NO_LOOP, req, path, owner, group, None) })
+pub fn os_chown(path: &CStr, owner: uv_uid_t, group: uv_gid_t) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_chown(NO_LOOP, req, path.as_ptr(), owner, group, None) })
 }
 
 /// `fchown(2)`. An owner or group of -1 leaves that ID alone.
@@ -243,35 +236,25 @@ pub unsafe fn os_fchown(fd: c_int, owner: uv_uid_t, group: uv_gid_t) -> c_int {
 }
 
 /// Sets `path`'s access and modification times, in seconds since the epoch.
-///
-/// # Safety
-/// `path` must be a NUL-terminated string.
-pub unsafe fn os_file_settime(path: *const c_char, atime: c_double, mtime: c_double) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_utime(NO_LOOP, req, path, atime, mtime, None) })
+pub fn os_file_settime(path: &CStr, atime: c_double, mtime: c_double) -> c_int {
+    // SAFETY: `path` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_utime(NO_LOOP, req, path.as_ptr(), atime, mtime, None) })
 }
 
 /// Whether `name` may be read.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_file_is_readable(name: *const c_char) -> bool {
-    // SAFETY: the caller's NUL-terminated path.
-    fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name, R_OK, None) }) == 0
+pub fn os_file_is_readable(name: &CStr) -> bool {
+    // SAFETY: `name` is NUL-terminated and outlives the call.
+    fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name.as_ptr(), R_OK, None) }) == 0
 }
 
 /// Whether `name` may be written: 0 not at all, 1 as a file, 2 as a
 /// directory.
-///
-/// # Safety
-/// `name` must be a NUL-terminated string.
-pub unsafe fn os_file_is_writable(name: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated path.
-    if fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name, W_OK, None) }) != 0 {
+pub fn os_file_is_writable(name: &CStr) -> c_int {
+    // SAFETY: `name` is NUL-terminated and outlives the call.
+    if fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name.as_ptr(), W_OK, None) }) != 0 {
         return 0;
     }
-    // SAFETY: same.
-    if unsafe { os_isdir(name) } { 2 } else { 1 }
+    if dir_exists(name) { 2 } else { 1 }
 }
 
 /// Fills `file_info` from `path`, answering whether it could.

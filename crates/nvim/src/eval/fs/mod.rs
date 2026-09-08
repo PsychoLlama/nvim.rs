@@ -320,7 +320,7 @@ fn is_nonempty_string_arg(args: Args<'_>, i: usize) -> bool {
 /// directly, so that a directory name answers too.
 fn can_exe(p: &CStr) -> bool {
     // SAFETY: `p` is NUL-terminated; a null out-parameter asks for no path.
-    unsafe { os_can_exe(p.as_ptr(), ptr::null_mut(), true) }
+    unsafe { os_can_exe(p, ptr::null_mut(), true) }
 }
 
 /// Where `p`'s executable was found, or NULL when it is not one.
@@ -328,25 +328,13 @@ fn exe_path(p: &CStr) -> *mut c_char {
     let mut path = ptr::null_mut();
     // SAFETY: `p` is NUL-terminated and `path` is this frame's own; the
     // answer is a string in nvim's heap, or NULL.
-    unsafe { os_can_exe(p.as_ptr(), &raw mut path, true) };
+    unsafe { os_can_exe(p, &raw mut path, true) };
     path
 }
 
 fn is_dir(p: &CStr) -> bool {
     // SAFETY: `p` is NUL-terminated.
     unsafe { os_isdir(p.as_ptr()) }
-}
-
-fn is_readable(p: &CStr) -> bool {
-    // SAFETY: `p` is NUL-terminated.
-    unsafe { os_file_is_readable(p.as_ptr()) }
-}
-
-/// 0 for not writable, 1 for a writable file, 2 for a directory that can be
-/// written into.
-fn writability(p: &CStr) -> c_int {
-    // SAFETY: `p` is NUL-terminated.
-    unsafe { os_file_is_writable(p.as_ptr()) }
 }
 
 /// The permission bits of `p`, or a negative number when it has none.
@@ -412,7 +400,7 @@ pub unsafe fn f_filereadable(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     let p = str_arg(args, 0, &mut numbuf);
-    let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
+    let readable = !p.to_bytes().is_empty() && !is_dir(p) && os_file_is_readable(p);
     result.vval.v_number = readable as VarNumber;
 }
 
@@ -424,7 +412,7 @@ pub unsafe fn f_filereadable(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 pub unsafe fn f_filewritable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = writability(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    result.vval.v_number = os_file_is_writable(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string

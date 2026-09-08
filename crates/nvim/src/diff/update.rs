@@ -14,6 +14,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
@@ -135,7 +136,7 @@ unsafe fn clear_diffin(din: *mut DiffIn) {
         din.din_mmfile.ptr = ::core::ptr::null_mut();
     } else {
         // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(din.din_fname) };
+        unsafe { os_remove(cstr::at(din.din_fname)) };
     }
 }
 
@@ -151,7 +152,7 @@ pub(crate) unsafe fn clear_diffout(dout: *mut DiffOut) {
         dout.dout_ga = Vec::new();
     } else {
         // SAFETY: one of this module's own temp file names.
-        unsafe { os_remove(dout.dout_fname) };
+        unsafe { os_remove(cstr::at(dout.dout_fname)) };
     }
 }
 

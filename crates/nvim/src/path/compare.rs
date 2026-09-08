@@ -100,7 +100,7 @@ pub unsafe fn path_fix_case(name: *mut c_char) {
         .rposition(|&b| b == b'/');
     let tail = match at {
         None => {
-            if !unsafe { os_scandir(&raw mut dir, c".".as_ptr()) } {
+            if !os_scandir(&mut dir, c".") {
                 return;
             }
             name
@@ -108,7 +108,7 @@ pub unsafe fn path_fix_case(name: *mut c_char) {
         Some(at) => {
             let slash = unsafe { name.add(at) };
             unsafe { *slash = 0 };
-            let ok = unsafe { os_scandir(&raw mut dir, name) };
+            let ok = unsafe { os_scandir(&mut dir, cstr::at(name)) };
             unsafe { *slash = b'/' as c_char };
             if !ok {
                 return;
@@ -120,7 +120,7 @@ pub unsafe fn path_fix_case(name: *mut c_char) {
     let head = unsafe { tail.offset_from(name) } as usize;
     let taillen = unsafe { CStr::from_ptr(tail) }.to_bytes().len();
     loop {
-        let entry = unsafe { os_scandir_next(&raw mut dir) };
+        let entry = unsafe { os_scandir_next(&mut dir) };
         if entry.is_null() {
             break;
         }
@@ -150,7 +150,7 @@ pub unsafe fn path_fix_case(name: *mut c_char) {
             break;
         }
     }
-    unsafe { os_closedir(&raw mut dir) };
+    os_closedir(&mut dir);
 }
 
 /// Are `f1` and `f2` in the same directory? `f1` may be a short name; `f2`

@@ -500,7 +500,7 @@ unsafe fn replace_original(
         );
         return false;
     }
-    unsafe { os_remove(tempname.as_ptr()) };
+    os_remove(tempname);
     true
 }
 

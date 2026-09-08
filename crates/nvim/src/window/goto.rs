@@ -446,7 +446,7 @@ fn chdir_to(dir: *mut c_char, scope: CdScope, cwd: *const c_char) {
         dirchanged(dir, scope, true);
     }
     // SAFETY: a NUL-terminated path.
-    if unsafe { os_chdir(dir) } == 0 && announce {
+    if unsafe { os_chdir(cstr::at(dir)) } == 0 && announce {
         dirchanged(dir, scope, false);
     }
 }

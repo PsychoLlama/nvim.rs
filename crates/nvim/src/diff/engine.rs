@@ -76,10 +76,10 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
                     }
                     unsafe { fclose(fd) };
                 }
-                unsafe { os_remove(out) };
-                unsafe { os_remove(new) };
+                unsafe { os_remove(cstr::at(out)) };
+                unsafe { os_remove(cstr::at(new)) };
             }
-            unsafe { os_remove(orig) };
+            unsafe { os_remove(cstr::at(orig)) };
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
         if unsafe { *p_dex.get() } != 0 || diff_a_works.get().is_some() {

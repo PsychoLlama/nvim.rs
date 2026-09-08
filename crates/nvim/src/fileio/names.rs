@@ -200,17 +200,17 @@ unsafe fn rename_with_tmp(from: *const c_char, to: *const c_char) -> c_int {
         if unsafe { os_path_exists(tempname.as_ptr()) } {
             continue;
         }
-        if unsafe { os_rename(from, tempname.as_ptr()) } != OK {
+        if unsafe { os_rename(cstr::at(from), cstr::in_chars(&tempname)) } != OK {
             // If it fails for one temp name it will most likely fail for
             // any temp name, so give up.
             return -1;
         }
-        if unsafe { os_rename(tempname.as_ptr(), to) } == OK {
+        if unsafe { os_rename(cstr::in_chars(&tempname), cstr::at(to)) } == OK {
             return 0;
         }
         // Strange, the second step failed. Try moving the file back and
         // report the failure.
-        unsafe { os_rename(tempname.as_ptr(), from) };
+        unsafe { os_rename(cstr::in_chars(&tempname), cstr::at(from)) };
         return -1;
     }
     -1
@@ -263,10 +263,10 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     // Delete the "to" file. This is required on some systems to make the
     // rename work, and on others it makes sure we don't end up with two
     // files when the rename fails.
-    unsafe { os_remove(to) };
+    unsafe { os_remove(cstr::at(to)) };
 
     // First try a normal rename, and return if it works.
-    if unsafe { os_rename(from, to) } == OK {
+    if unsafe { os_rename(cstr::at(from), cstr::at(to)) } == OK {
         return 0;
     }
 
@@ -275,7 +275,7 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
         return -1;
     }
     if unsafe { os_fileinfo(from, &raw mut from_info) } {
-        unsafe { os_remove(from) };
+        unsafe { os_remove(cstr::at(from)) };
     }
     0
 }
@@ -310,7 +310,7 @@ pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
 
     // For systems that support ACL: get the ACL from the original file.
     let acl = os_get_acl(from);
-    if unsafe { os_copy(from, to, UV_FS_COPYFILE_EXCL) } != 0 {
+    if unsafe { os_copy(cstr::at(from), cstr::at(to), UV_FS_COPYFILE_EXCL) } != 0 {
         os_free_acl(acl);
         return FAIL;
     }

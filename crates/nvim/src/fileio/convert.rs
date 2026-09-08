@@ -110,7 +110,7 @@ pub(crate) unsafe fn readfile_charconvert(
         // type of conversion might still work.
         msg(errmsg, 0);
         if !tmpname.is_null() {
-            unsafe { os_remove(tmpname) }; // delete converted file
+            unsafe { os_remove(cstr::at(tmpname)) }; // delete converted file
             unsafe { xfree(tmpname.cast()) };
             tmpname = ptr::null_mut();
         }

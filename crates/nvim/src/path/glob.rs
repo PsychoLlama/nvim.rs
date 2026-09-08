@@ -124,8 +124,10 @@ impl ScanWithDots {
     /// # Safety
     /// `path` must be a NUL-terminated string.
     unsafe fn open(path: *const c_char) -> Option<Self> {
+        // SAFETY: the caller's NUL-terminated path.
+        let path = unsafe { cstr::at(path) };
         let mut dir = Directory::default();
-        if !unsafe { os_file_is_readable(path) } || !unsafe { os_scandir(&raw mut dir, path) } {
+        if !os_file_is_readable(path) || !os_scandir(&mut dir, path) {
             return None;
         }
         Some(ScanWithDots { dir, count: 0 })
@@ -137,7 +139,7 @@ impl ScanWithDots {
         let name = match self.count {
             1 => c".".as_ptr(),
             2 => c"..".as_ptr(),
-            _ => unsafe { os_scandir_next(&raw mut self.dir) },
+            _ => unsafe { os_scandir_next(&mut self.dir) },
         };
         (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) })
     }
@@ -145,8 +147,7 @@ impl ScanWithDots {
 
 impl Drop for ScanWithDots {
     fn drop(&mut self) {
-        // SAFETY: the request was filled by a successful `os_scandir`.
-        unsafe { os_closedir(&raw mut self.dir) }
+        os_closedir(&mut self.dir)
     }
 }
 
@@ -516,9 +517,12 @@ pub unsafe fn addfile(gap: *mut GArray, f: *mut c_char, flags: ExpandFlags) {
     }
     // Directories are accepted whether or not they are executable. When
     // this is `expand_shellcmd` looking, do not use $PATH.
+    let use_path = !flags.has(ExpandFlags::SHELLCMD);
     if !isdir
         && flags.has(ExpandFlags::EXEC)
-        && !unsafe { os_can_exe(f, core::ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD)) }
+        // SAFETY: the caller's NUL-terminated name; a null out-parameter
+        // asks for no resolved path.
+        && !unsafe { os_can_exe(cstr::at(f), core::ptr::null_mut(), use_path) }
     {
         return;
     }

@@ -358,6 +358,9 @@ pub unsafe fn os_expand_wildcards(
     file: *mut *mut *mut c_char,
     flags: ExpandFlags,
 ) -> Result<(), Failed> {
+    // Whether an executable may be looked for along `$PATH`: not when this
+    // is `expand_shellcmd` doing the looking.
+    let use_path = !flags.has(ExpandFlags::SHELLCMD);
     // SAFETY: the caller's contract, for the whole body. Every pattern is
     // read as a `CStr`, and every pointer written out is freshly allocated.
     unsafe {
@@ -421,7 +424,7 @@ pub unsafe fn os_expand_wildcards(
         }
 
         if failed {
-            os_remove(tempname);
+            os_remove(cstr::at(tempname));
             xfree(tempname.cast());
             // With interactive completion the message is not printed.
             if !flags.has(ExpandFlags::SILENT) {
@@ -502,7 +505,7 @@ pub unsafe fn os_expand_wildcards(
             // Skip what is not executable, when that is being checked for.
             if !dir
                 && flags.has(ExpandFlags::EXEC)
-                && !os_can_exe(name, ptr::null_mut(), !flags.has(ExpandFlags::SHELLCMD))
+                && !os_can_exe(cstr::at(name), ptr::null_mut(), use_path)
             {
                 continue;
             }
@@ -574,7 +577,7 @@ unsafe fn read_temp_file(tempname: *mut c_char, flags: ExpandFlags) -> Read {
         let mut buffer: Vec<u8> = vec![0; len];
         let readlen = fread(buffer.as_mut_ptr().cast(), 1, len, fd);
         fclose(fd);
-        os_remove(tempname);
+        os_remove(cstr::at(tempname));
         if readlen as usize != len {
             semsg!("E485: Can't read file {}", c_str(tempname));
             xfree(tempname.cast());

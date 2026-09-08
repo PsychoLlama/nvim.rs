@@ -388,7 +388,7 @@ unsafe fn read_output(tempname: *mut c_char, ret_len: *mut size_t) -> *mut c_cha
         let buffer = xmalloc(len + 1) as *mut c_char;
         let read = fread(buffer.cast(), 1, len, fd);
         fclose(fd);
-        os_remove(tempname);
+        os_remove(cstr::at(tempname));
         if read as usize != len {
             semsg!("E485: Can't read file {}", c_str(tempname));
             xfree(buffer.cast());

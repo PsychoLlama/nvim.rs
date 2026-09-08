@@ -95,7 +95,8 @@ pub unsafe fn tv_to_argv(
     let arg0 = unsafe { numbuf2.string_chk(&raw mut (*tv_list_first(argl)).li_tv) };
     let mut exe_resolved: *mut c_char = null_mut();
     // SAFETY: `arg0` is NUL-terminated and `exe_resolved` is this frame's.
-    let runnable = !arg0.is_null() && unsafe { os_can_exe(arg0, &raw mut exe_resolved, true) };
+    let runnable =
+        !arg0.is_null() && unsafe { os_can_exe(cstr::at(arg0), &raw mut exe_resolved, true) };
     if !runnable {
         if !arg0.is_null() && !executable.is_null() {
             let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];

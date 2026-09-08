@@ -132,7 +132,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
         return;
     }
     // In case the name is not unique after all.
-    unsafe { os_remove(fname) };
+    unsafe { os_remove(cstr::at(fname)) };
 
     let cmd = unsafe { make_get_fullcmd(args.arg, fname) };
     unsafe { do_shell(cmd, ShellOpts::NONE) };
@@ -180,7 +180,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     }
 
     qf_busy_end();
-    unsafe { os_remove(fname) };
+    unsafe { os_remove(cstr::at(fname)) };
     unsafe { xfree(fname.cast()) };
     unsafe { xfree(cmd.cast()) };
 }
