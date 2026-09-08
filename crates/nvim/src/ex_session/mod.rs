@@ -531,9 +531,8 @@ pub(crate) unsafe fn ex_mkrc(args: *mut ExArg) {
         }
     }
     unsafe { xfree(view_file.cast::<c_void>()) };
-    let buffer = Buf::current_raw();
     let (none, post) = (ptr::null_mut(), AutoEvent::SessionWritePost);
-    unsafe { apply_autocmds(post, none, none, false, Buf::from_raw(buffer)) };
+    unsafe { apply_autocmds(post, none, none, false, Buf::current_or_none()) };
 }
 
 /// The body of [`ex_mkrc`] once the file is open: answers whether anything

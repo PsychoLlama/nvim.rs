@@ -38,7 +38,7 @@ use crate::options::{
 use crate::pos::MAXCOL;
 use crate::types::{NUL, OptionSetFlags, int64_t};
 use crate::winlayer::graph::switch_to;
-use crate::winlayer::{Buf, TabPage, Win};
+use crate::winlayer::{TabPage, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -112,7 +112,7 @@ pub(crate) unsafe fn put_view(
 
     // Local mappings and abbreviations.
     if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-        && unsafe { makemap(out.raw(), Buf::from_raw(window.w_buffer)) }.is_err()
+        && unsafe { makemap(out.raw(), window.buffer_or_none()) }.is_err()
     {
         return false;
     }
@@ -155,13 +155,12 @@ pub(crate) unsafe fn put_view(
 /// `window` is live.
 unsafe fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
     // SAFETY: caller contract; `fname_esc` is owned and freed on every path.
-    let buf = window.w_buffer;
-    let fname_esc = unsafe { ses_escape_fname(ses_get_fname(Buf::new(buf), opts)) };
-    let outcome = if buf_is_help(unsafe { Buf::from_raw(buf) }) {
+    let buffer = window.buffer();
+    let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buffer, opts)) };
+    let outcome = if buf_is_help(window.buffer_or_none()) {
         unsafe { put_help_edit(out, window) }.then_some(true)
-    } else if !unsafe { (*buf).b_ffname }.is_null()
-        && (!buf_is_nofilename(unsafe { Buf::from_raw(buf) })
-            || !unsafe { (*buf).terminal }.is_null())
+    } else if !buffer.b_ffname.is_null()
+        && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal.is_null())
     {
         // Editing a file. This may have side effects -- a compressed or
         // network file -- and if a buffer for it already exists we
@@ -182,7 +181,7 @@ unsafe fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<b
     } else {
         // No file in this buffer: make it empty. It may still have a
         // name that is not a file name.
-        let named = !unsafe { (*buf).b_ffname }.is_null();
+        let named = !buffer.b_ffname.is_null();
         let ok = out.line(c"enew")
             && (!named || (out.puts(c"file ") && unsafe { out.bytes(fname_esc) } && out.eol()));
         ok.then_some(false)
@@ -226,9 +225,11 @@ unsafe fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> boo
         && restorable
         // Not a terminal, unless terminals are in 'sessionoptions'.
         && !(buf_is_terminal(alt) && ssop_flags.get() & kOptSsopFlagTerminal == 0);
-    let raw = alt.map_or(core::ptr::null_mut(), Buf::raw);
-    // SAFETY: a live buffer or null, and a live session file.
-    !wanted || (out.puts(c"balt ") && unsafe { ses_fname(out, Buf::new(raw), opts, true) })
+    let Some(alt) = alt.filter(|_| wanted) else {
+        return true;
+    };
+    // SAFETY: a live buffer, and a live session file.
+    out.puts(c"balt ") && unsafe { ses_fname(out, alt, opts, true) }
 }
 
 /// Write the window's local options or, when options are not wanted at all,
