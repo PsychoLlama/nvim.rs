@@ -12,10 +12,11 @@ use crate::charset::CharDisplay;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, MAX_KEY_NAME_LEN, SpecialKeyName, termcap_key, termcap_name};
+use crate::mbyte::{cells_at, char_at, cluster_len};
 use crate::memory::handoff::owned_cstr;
 use crate::types::MB_MAXCHAR;
 use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::{ptr, slice};
 
 /// The `<xx>` form of an unprintable byte gets its own highlight so it can be
 /// told apart from the same characters typed literally.
@@ -118,10 +119,6 @@ pub unsafe fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: bool) -> *c
 /// Show `len` bytes of `msgstr`, NULs included, translating what cannot be
 /// displayed.
 ///
-/// Printable runs are handed to [`msg_puts_len`] whole; only the characters
-/// that need a `<xx>` or `<C-X>` rendering are emitted one at a time, in the
-/// `SPECIAL_HL` highlight.
-///
 /// Answers how many screen cells it took.
 ///
 /// # Safety
@@ -132,76 +129,122 @@ pub unsafe fn msg_outtrans_len(
     hl_id: c_int,
     hist: bool,
 ) -> c_int {
-    let mut cells = 0;
-    let mut str = msgstr;
-    // Start of the run of printable bytes not yet emitted.
-    let mut plain_start = msgstr;
+    debug_assert!(len >= 0, "a negative length has no pointer form left");
+    // SAFETY: the caller's contract.
+    let bytes = unsafe { slice::from_raw_parts(msgstr.cast::<u8>(), len.cast_unsigned() as usize) };
+    msg_display_bytes(bytes, hl_id, hist)
+}
+
+/// Show `bytes`, NULs included, translating what cannot be displayed.
+///
+/// Printable runs are handed to [`msg_puts_len`] whole; only the characters
+/// that need a `^X` or `<xx>` rendering are emitted one at a time, in the
+/// `SPECIAL_HL` highlight.
+///
+/// Answers how many screen cells it took.
+pub fn msg_display_bytes(bytes: &[u8], hl_id: c_int, hist: bool) -> c_int {
     // Only quit when got_int was set in here.
     let save_got_int = got_int.get();
     got_int.set(false);
 
     if hist {
-        unsafe { msg_hist_add(str, len, hl_id) };
+        // SAFETY: `bytes` is readable for its own length.
+        unsafe { msg_hist_add(bytes.as_ptr().cast(), bytes.len() as c_int, hl_id) };
     }
 
     // When drawing over the command line there is no need to clear it
     // later or to remove the mode message.
-    if msg_silent.get() == 0 && len > 0 && msg_row.get() >= cmdline_row.get() && msg_col.get() == 0
+    if msg_silent.get() == 0
+        && !bytes.is_empty()
+        && msg_row.get() >= cmdline_row.get()
+        && msg_col.get() == 0
     {
         clear_cmdline.set(false);
         mode_displayed.set(false);
     }
 
-    // `left` is how many bytes follow the one being looked at, which is
-    // what utfc_ptr2len_len needs as its bound.
-    let mut left = len;
-    loop {
-        left -= 1;
-        if left < 0 || got_int.get() {
-            break;
+    let cells = walk_display(bytes, &mut |shown| match shown {
+        Shown::Plain(run) => {
+            // SAFETY: `run` is a subslice of `bytes`, so it is readable for
+            // its own length.
+            unsafe { msg_puts_len(run.as_ptr().cast(), run.len() as ptrdiff_t, hl_id, hist) };
         }
-        let flush_plain = |upto: *const c_char, plain_start: *const c_char| {
-            if upto > plain_start {
-                unsafe { msg_puts_len(plain_start, upto.offset_from(plain_start), hl_id, hist) };
-            }
-        };
-        // Don't include composing chars after the end.
-        let mb_len = unsafe { utfc_ptr2len_len(str, left + 1) };
-        if mb_len > 1 {
-            let c = unsafe { utf_ptr2char(str) };
+        Shown::Instead(text) => {
+            // SAFETY: a `CharDisplay` is NUL-terminated.
+            unsafe { msg_puts_hl(text.as_ptr(), special_hl(hl_id), false) };
+        }
+    });
+
+    got_int.set(got_int.get() | save_got_int);
+    cells
+}
+
+/// One run of a message on its way to the screen.
+enum Shown<'a> {
+    /// Bytes that display as themselves.
+    Plain(&'a [u8]),
+    /// The `^X` / `<xx>` rendering standing in for one character that does
+    /// not.
+    Instead(CharDisplay),
+}
+
+/// Hand `emit` each run of `bytes` in the order it is shown, and answer how
+/// many screen cells they take.
+///
+/// Printable characters accumulate into a run that is emitted whole; one
+/// that cannot be displayed ends the run, comes out on its own as its
+/// rendering, and starts the next. An *empty* message emits one empty run,
+/// which is what clears the message line, and is why the emptiness test
+/// below asks whether anything was ever replaced rather than whether the run
+/// is empty.
+///
+/// The walk stops at an interrupt, and then so does the message: a run left
+/// pending when `got_int` arrives is dropped rather than shown.
+fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
+    let mut cells = 0;
+    // Start of the run of printable bytes not yet emitted.
+    let mut run = 0;
+    let mut at = 0;
+    while at < bytes.len() && !got_int.get() {
+        let rest = &bytes[at..];
+        // A composing character only partly inside `bytes` is left out.
+        let len = cluster_len(rest);
+        if len > 1 {
+            let c = char_at(rest);
             if vim_isprintc(c) {
-                cells += unsafe { utf_ptr2cells(str) };
+                // SAFETY: a message is shown long after options exist.
+                cells += unsafe { cells_at(rest) };
             } else {
-                flush_plain(str, plain_start);
-                plain_start = unsafe { str.add(mb_len as usize) };
-                let display = transchar_buf(None, c);
-                unsafe { msg_puts_hl(display.as_ptr(), special_hl(hl_id), false) };
+                if at > run {
+                    emit(Shown::Plain(&bytes[run..at]));
+                }
+                emit(Shown::Instead(transchar_buf(None, c)));
+                // SAFETY: as above.
                 cells += unsafe { char2cells(c) };
+                run = at + len;
             }
-            left -= mb_len - 1;
-            str = unsafe { str.add(mb_len as usize) };
+            at += len;
         } else {
-            let rendered = unsafe { transchar_byte_buf(None, *str as u8 as c_int) };
+            let rendered = transchar_byte_buf(None, c_int::from(rest[0]));
             if rendered[1] != 0 {
-                // Unprintable: emit the printable run so far, then it.
-                flush_plain(str, plain_start);
-                plain_start = unsafe { str.add(1) };
-                unsafe { msg_puts_hl(rendered.as_ptr(), special_hl(hl_id), false) };
-                cells += unsafe { cstr::bytes_at(rendered.as_ptr()).len() as c_int };
+                if at > run {
+                    emit(Shown::Plain(&bytes[run..at]));
+                }
+                cells += cstr::in_chars(&rendered).count_bytes() as c_int;
+                emit(Shown::Instead(rendered));
+                run = at + 1;
             } else {
                 cells += 1;
             }
-            str = unsafe { str.add(1) };
+            at += 1;
         }
     }
 
-    // The printable characters at the end -- or, for an empty string, the
-    // empty message the callers rely on being emitted.
-    if (str > plain_start || plain_start == msgstr) && !got_int.get() {
-        unsafe { msg_puts_len(plain_start, str.offset_from(plain_start), hl_id, hist) };
+    // The printable characters at the end -- or, for a message that reached
+    // here with nothing replaced, the empty run the callers rely on.
+    if (at > run || run == 0) && !got_int.get() {
+        emit(Shown::Plain(&bytes[run..at]));
     }
-
-    got_int.set(got_int.get() | save_got_int);
     cells
 }
 
@@ -449,4 +492,104 @@ pub unsafe fn msg_outtrans_long(longstr: *const c_char, hl_id: c_int) {
         unsafe { msg_puts_hl(c"...".as_ptr(), SPECIAL_HL, false) };
     }
     unsafe { msg_outtrans_len(longstr.offset((len - tail) as isize), tail, hl_id, false) };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The runs [`walk_display`] emits, as text, and the cells it counted.
+    ///
+    /// The lib harness has no editor behind it, so `chartab` is all zeros.
+    /// That is not a hole: `transchar`'s own fallback trusts printable ASCII
+    /// before the table exists and treats everything else as unprintable,
+    /// which for a *byte* is the answer a live table gives too — a byte is
+    /// never taken for a printable Latin-1 character. The cases below stay
+    /// away from the one thing the table really decides, the width of an
+    /// ambiguous-width character, by using one that is unambiguously wide.
+    fn shown(bytes: &[u8]) -> (Vec<String>, c_int) {
+        let mut runs = Vec::new();
+        let cells = walk_display(bytes, &mut |shown| {
+            let text = match shown {
+                Shown::Plain(run) => run.to_vec(),
+                Shown::Instead(rendered) => cstr::in_chars(&rendered).to_bytes().to_vec(),
+            };
+            runs.push(String::from_utf8_lossy(&text).into_owned());
+        });
+        (runs, cells)
+    }
+
+    #[track_caller]
+    fn assert_shown(bytes: &[u8], runs: &[&str], cells: c_int) {
+        let (got_runs, got_cells) = shown(bytes);
+        assert_eq!(got_runs, runs, "runs of {bytes:?}");
+        assert_eq!(got_cells, cells, "cells of {bytes:?}");
+    }
+
+    #[test]
+    fn a_printable_run_comes_out_whole() {
+        assert_shown(b"hello", &["hello"], 5);
+    }
+
+    #[test]
+    fn an_empty_message_still_emits_one_empty_run() {
+        // What clears the message line, and what every caller that shows an
+        // empty string relies on.
+        assert_shown(b"", &[""], 0);
+    }
+
+    #[test]
+    fn a_control_character_interrupts_the_run() {
+        assert_shown(b"a\tb", &["a", "^I", "b"], 4);
+        assert_shown(b"\x1bc", &["^[", "c"], 3);
+        assert_shown(b"c\x1b", &["c", "^["], 3);
+    }
+
+    #[test]
+    fn a_newline_and_a_nul_share_the_caret_form() {
+        // The memline stores a NUL as a newline, so the rendering folds the
+        // two together and neither reaches the screen as itself.
+        assert_shown(b"\n", &["^@"], 2);
+        assert_shown(b"\0", &["^@"], 2);
+    }
+
+    #[test]
+    fn an_interior_nul_is_an_ordinary_byte() {
+        // The length is the slice's, so a NUL in the middle is shown rather
+        // than ending the message.
+        assert_shown(b"a\0b", &["a", "^@", "b"], 4);
+    }
+
+    #[test]
+    fn del_and_the_high_bytes_take_their_own_forms() {
+        assert_shown(b"\x7f", &["^?"], 2);
+        assert_shown(b"\xff", &["<ff>"], 4);
+    }
+
+    #[test]
+    fn an_incomplete_sequence_is_shown_byte_by_byte() {
+        // Two thirds of a three-byte character: each byte is illegal on its
+        // own and gets its own `<xx>`.
+        assert_shown(b"\xe4\xb8", &["<e4>", "<b8>"], 8);
+    }
+
+    #[test]
+    fn a_wide_character_stays_in_the_run_and_counts_two_cells() {
+        assert_shown("一".as_bytes(), &["一"], 2);
+        assert_shown("a一b".as_bytes(), &["a一b"], 4);
+    }
+
+    #[test]
+    fn an_unprintable_character_is_replaced_by_its_hex_form() {
+        // U+200B ZERO WIDTH SPACE: printable to Unicode, not to Vim.
+        assert_shown("\u{200b}".as_bytes(), &["<200b>"], 6);
+        assert_shown("a\u{200b}b".as_bytes(), &["a", "<200b>", "b"], 8);
+    }
+
+    #[test]
+    fn the_slice_is_the_string() {
+        // No `-1` and no terminator: the walk stops where the slice does,
+        // even though the bytes after it are readable and printable.
+        assert_shown(&b"abcdef"[..3], &["abc"], 3);
+    }
 }
