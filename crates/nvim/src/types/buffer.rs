@@ -55,7 +55,7 @@ pub const kFloatRelativeMouse: FloatRelative = 3;
 pub const kFloatRelativeTabline: FloatRelative = 4;
 pub const kFloatRelativeLaststatus: FloatRelative = 5;
 /// Not `Copy`: the two virtual-text chunk arrays are owned, and
-/// [`crate::window::config::merge_win_config`] decides which of two configs
+/// `window::config::merge_win_config` decides which of two configs
 /// keeps them by comparing the `items` pointers. A `clone` is the shallow
 /// copy that comparison expects; it duplicates no allocation.
 #[derive(Clone)]

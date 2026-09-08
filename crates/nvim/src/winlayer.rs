@@ -85,7 +85,7 @@
 //! The other half of that hazard remains. A caller holding a bare
 //! `*mut Window` an autocommand may have freed still may not wrap it —
 //! [`Win::new`] is exactly the read a list walk exists to avoid — so
-//! [`window_at`], [`buffer_at`] and [`tabpage_at`] compare the address
+//! [`window_at`] and [`buffer_at`] compare the address
 //! against the live lists instead. Shapes worth copying: `buffer::BufRef`
 //! (upstream's `BufferRef`), a saved `Handle` plus a registry lookup
 //! (`autocmd::aucmdwin`), a [`WinId`] in a struct (`terminal::mode`), and

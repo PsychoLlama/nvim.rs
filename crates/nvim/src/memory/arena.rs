@@ -112,7 +112,7 @@ pub unsafe fn arena_finish(arena: *mut Arena) -> ArenaMem {
 ///
 /// # Safety
 ///
-/// As [`try_malloc`].
+/// As [`super::try_malloc`].
 pub unsafe fn alloc_block() -> *mut c_void {
     // SAFETY: the reuse list holds this module's own blocks.
     match unsafe { pop_reuse_blk() } {
@@ -129,7 +129,7 @@ pub unsafe fn alloc_block() -> *mut c_void {
 ///
 /// # Safety
 ///
-/// `arena` points to a live `Arena`; otherwise as [`try_malloc`].
+/// `arena` points to a live `Arena`; otherwise as [`super::try_malloc`].
 pub unsafe fn arena_alloc_block(arena: *mut Arena) {
     // SAFETY: the caller's arena. The header the block opens with is the
     // first thing allocated out of it, so `blk` is that block's own start.
@@ -210,7 +210,8 @@ fn plan(pos: usize, size: usize, block_size: usize, align: bool) -> Bump {
 ///
 /// # Safety
 ///
-/// `arena` is null or points to a live `Arena`; otherwise as [`try_malloc`].
+/// `arena` is null or points to a live `Arena`; otherwise as
+/// [`super::try_malloc`].
 pub unsafe fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void {
     if arena.is_null() {
         // SAFETY: as `try_malloc`.

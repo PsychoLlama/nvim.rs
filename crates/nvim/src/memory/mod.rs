@@ -746,11 +746,11 @@ pub unsafe fn mergesort_list(
     head
 }
 
-/// The arena allocator, re-exported: every caller in the tree spells it
-/// `crate::memory::arena_*`, and it is the same allocation family.
 pub mod alloc_log;
 pub mod arena;
 pub(crate) mod handoff;
+/// The arena allocator, re-exported: every caller in the tree spells it
+/// `crate::memory::arena_*`, and it is the same allocation family.
 pub use arena::*;
 
 pub(crate) static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);

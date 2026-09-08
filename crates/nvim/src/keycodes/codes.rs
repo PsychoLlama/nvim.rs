@@ -217,7 +217,7 @@ pub const KE_WILD: KeyExtra = 108;
 /// for and no code point stands for.
 ///
 /// The discriminants are the key codes themselves, written the way
-/// upstream writes them -- a `KS_EXTRA` byte plus a [`key_extra`] code, or a
+/// upstream writes them -- a `KS_EXTRA` byte plus a [`KeyExtra`] code, or a
 /// two-character termcap name -- so the enum *is* the definition and not a
 /// second copy of it. They are all negative, which is what [`is_special`]
 /// tests and what lets a key and a character share one `c_int`: `vgetc` and

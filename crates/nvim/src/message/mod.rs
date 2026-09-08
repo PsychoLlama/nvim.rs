@@ -701,8 +701,8 @@ pub unsafe fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, b
     }
 }
 
-/// How much of a message the `*_c!` macros that format through
-/// [`msg_iobuff`] keep.
+/// How much of a message the `*_c!` macros keep: the length of upstream's
+/// shared `IObuff`, which is what they used to format through.
 pub const MSG_IOBUFF_LEN: size_t = IOSIZE as size_t;
 
 /// Show `s`, truncated at the head if it does not fit the message area.

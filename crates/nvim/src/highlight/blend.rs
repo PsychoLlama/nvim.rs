@@ -14,7 +14,7 @@
 //! which cell of the window below is under this cell of the float, and the
 //! answer depends on both. So [`hl_blend_attrs`] takes the two ids, mixes
 //! their colours by the front set's `hl_blend` percentage, and hands back an
-//! attribute id for the result, memoised per pair (see [`cache`]).
+//! attribute id for the result, memoised per pair (see [`super::cache`]).
 //!
 //! `through` is the second axis. A blended cell that is *blank* lets the
 //! character below show through, which means the result keeps the back set's

@@ -213,7 +213,7 @@ pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 crate::flag_set! {
     /// What a buffer's memline is holding right now -- upstream's `ML_*`,
-    /// the bits [`MemLine::ml_flags`] carries.
+    /// the bits [`crate::types::MemLine::ml_flags`] carries.
     ///
     /// c2rust emitted these as a bare `int` and re-emitted the `#define`s
     /// once per translation unit: seventeen copies of `ML_EMPTY` alone, in

@@ -21,7 +21,8 @@
 //! way. A long-lived `&mut` would make each of those a distinct, conflicting
 //! borrow. The narrow `unsafe` blocks below are therefore per-access, and the
 //! module's globals are reached through the two named raw accessors
-//! ([`channel_map`] and [`main_events`]) rather than `GlobalCell::with_mut`,
+//! ([`main_loop_ptr`] and [`main_loop_events`]) rather than
+//! `GlobalCell::with_mut`,
 //! whose borrow tracking cannot be held across an event-loop turn.
 //!
 //! [`msgpack_rpc::channel`]: crate::msgpack_rpc::channel

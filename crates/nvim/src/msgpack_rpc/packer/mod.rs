@@ -16,7 +16,7 @@
 //! guarantees room for two whole items, and the header/scalar writers spend at
 //! most one of those, so a caller only has to call it once per item.
 //!
-//! The encodings themselves live in [`format`], which is pure and tested
+//! The encodings themselves live in [`mod@format`], which is pure and tested
 //! against fixed byte sequences.
 
 use core::ffi::{c_char, c_double, c_int, c_void};

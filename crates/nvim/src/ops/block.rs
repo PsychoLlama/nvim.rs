@@ -210,7 +210,7 @@ pub(crate) unsafe fn block_insert(
 /// `getvcol` answers.
 ///
 /// Safe: the only thing it touches is the current window, which is what
-/// [`cur_win`] already promises.
+/// [`Win::current`] already promises.
 pub fn reset_lbr() -> bool {
     if Win::current().w_onebuf_opt.wo_lbr == 0 {
         return false;

@@ -7,7 +7,7 @@
 //! happening a cell at a time.
 //!
 //! The wrappers are why a flush writes three buffers rather than one -- a
-//! prologue, the staged bytes, an epilogue -- and why [`flush_buf`] is the
+//! prologue, the staged bytes, an epilogue -- and why [`flush`] is the
 //! only function here that talks to libuv.
 
 #![deny(unsafe_op_in_unsafe_fn)]

@@ -2,7 +2,7 @@
 //!
 //! Everything here is a `lua_CFunction` registered onto the `vim` table by
 //! [`nlua_state_add_stdlib`], plus the two pieces of plumbing they share: the
-//! zero values for an [`Error`] and a [`TryState`], and
+//! zero values for a [`crate::types::Error`] and a [`TryState`], and
 //! [`nlua_push_errstr`](register::nlua_push_errstr), which is `luaL_error`
 //! split in half so a caller can clean up between formatting the message and
 //! throwing it.

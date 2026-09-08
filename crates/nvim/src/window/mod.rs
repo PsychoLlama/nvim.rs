@@ -6,10 +6,10 @@
 //! | --- | --- |
 //! | [`cmd`] | `do_window()` -- the CTRL-W commands |
 //! | [`config`] | which buffer a window shows, and what the UI is told |
-//! | [`split`] | `win_split_ins()` -- making a new window |
+//! | [`mod@split`] | `win_split_ins()` -- making a new window |
 //! | [`order`] | exchange, rotate, move to an edge |
-//! | [`equal`] | `win_equal()` and `'equalalways'` |
-//! | [`close`] | may this window close, and `:only` |
+//! | [`mod@equal`] | `win_equal()` and `'equalalways'` |
+//! | [`mod@close`] | may this window close, and `:only` |
 //! | [`winclose`] | `win_close()` -- closing one window |
 //! | [`frame`] | the frame tree: remove a leaf, give its room away |
 //! | [`framesize`] | frame arithmetic and the minimum sizes |

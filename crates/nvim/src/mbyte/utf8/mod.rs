@@ -508,7 +508,7 @@ pub unsafe fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
 /// composing character only partly inside the slice is left out, because the
 /// rest of it may still arrive.
 ///
-/// Unlike its siblings in [`slice`] this one is not itself safe code: it
+/// Unlike its siblings in [`mod@slice`] this one is not itself safe code: it
 /// delegates to [`utfc_ptr2len_len`], whose composing-character rules are
 /// pointer-shaped all the way down into `utf_composinglike`. The one
 /// difference the slice forms carry is applied here rather than inherited --

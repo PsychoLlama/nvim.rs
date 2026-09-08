@@ -230,7 +230,7 @@ pub unsafe fn stream_init(
 /// Mark `stream` closed, and close its handle once nothing is outstanding.
 ///
 /// Requests still in flight keep the handle alive; whichever of them finishes
-/// last calls [`stream_close_handle`] itself.
+/// last calls [`close_handle`] itself.
 ///
 /// # Safety
 /// `stream` has been through [`stream_init`].
@@ -258,7 +258,7 @@ pub fn may_close(mut stream: Conn) {
     }
 }
 
-/// [`stream_close_handle`] with the handle already built.
+/// Close the stream's libuv handle, running the before-close hook first.
 pub fn close_handle(mut stream: Conn) {
     let handle = match stream.uv_stream() {
         None => stream.idle().cast::<uv_handle_t>(),

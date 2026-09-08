@@ -18,7 +18,7 @@
 //! number scanners.
 //!
 //! Two upstream settings are hard here. `decode_invalid_numbers` is 1,
-//! which means [`is_invalid_number`] is consulted **only** to decide
+//! which means [`Parser::is_invalid_number`] is consulted **only** to decide
 //! whether a token starting with `i`/`n`/`+` is worth handing to
 //! [`strtod`]; a token starting with a digit or `-` goes straight there, so
 //! the whole C `strtod` grammar — hex floats included — is reachable

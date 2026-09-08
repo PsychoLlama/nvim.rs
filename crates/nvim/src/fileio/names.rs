@@ -85,7 +85,7 @@ pub fn shorten_fnames(force: c_int) {
 /// @param prepend_dot  Prefix the basename with a dot. Does nothing if it
 ///                     already starts with one, or if `fname` was empty.
 ///
-/// @return [allocated] The new name, guaranteed to end with `ext`, to have a
+/// @return \[allocated\] The new name, guaranteed to end with `ext`, to have a
 ///                     basename of at most `BASENAMELEN` characters, and to
 ///                     differ from `fname` — basename characters are replaced
 ///                     with `_` if that is what it takes, and if the whole
@@ -428,7 +428,7 @@ pub unsafe fn match_file_list(list: *mut c_char, sfname: *mut c_char, ffname: *m
 /// @param no_bslash   don't use a backward slash as a path separator (only
 ///                    makes a difference on Windows, so never here)
 ///
-/// @return            [allocated] the regexp, or NULL when the braces in the
+/// @return            \[allocated\] the regexp, or NULL when the braces in the
 ///                    pattern do not balance.
 pub unsafe fn file_pat_to_reg_pat(
     pat: *const c_char,

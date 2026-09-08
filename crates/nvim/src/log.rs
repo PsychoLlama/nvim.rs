@@ -19,8 +19,9 @@
 //! the lock is a real cross-thread lock and it has to be re-entrant: a log
 //! call made from inside a log call must reach the recursion guard rather
 //! than deadlock on the way to it. That was a `uv_mutex_t` reached by
-//! address, which was this module's last raw pointer; [`ReentrantLock`] is
-//! the same contract with the address kept private.
+//! address, which was this module's last raw pointer; [`LOG_LOCK`] plus the
+//! recursion guard beside it is the same contract with the address kept
+//! private.
 //!
 //! Everything else followed from writing the line as bytes instead of
 //! through `fprintf`: the prefix is one `write!` into a `Vec<u8>`, the

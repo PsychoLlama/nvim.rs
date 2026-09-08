@@ -179,7 +179,7 @@ impl HashTab {
     }
 
     /// Every slot, in index order -- empty ones and tombstones included.
-    /// The live entries alone are [`crate::hashtab::hash_items`].
+    /// The live entries alone are [`HashTab::items`].
     pub fn slots(&self) -> &[HashItem] {
         self.slots.as_slice()
     }

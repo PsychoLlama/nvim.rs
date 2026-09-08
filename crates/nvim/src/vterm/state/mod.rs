@@ -4,15 +4,16 @@
 //! where the cursor is, which modes are set, what the scroll region and the
 //! tab stops are, which character sets are mapped — and hands every visible
 //! effect to the callback table its consumer installed with
-//! [`vterm_state_set_callbacks`], which in practice is
+//! [`entry::vterm_state_set_callbacks`], which in practice is
 //! [`crate::vterm::screen`].
 //!
 //! This file owns the boundary. Callback tables, the out-of-line line-mark and
 //! tab-stop arrays and the allocator all arrive as raw pointers, so they are
 //! wrapped here exactly once, as safe methods on [`VTermState`]. The sequence
-//! handling itself lives in sibling modules — [`text`] for printable text and
-//! the C0/C1 controls, [`csi`] for control sequences, [`mode`] for modes and
-//! properties, [`selection`] for OSC, [`dcs`] for the other control strings,
+//! handling itself lives in sibling modules — [`super::text`] for printable
+//! text and the C0/C1 controls, [`super::csi`] for control sequences,
+//! [`super::mode`] for modes and properties, [`super::selection`] for OSC,
+//! [`super::dcs`] for the other control strings,
 //! and `geometry` for the shape of the screen — all of which are written
 //! against those methods and do no pointer work of their own. The state
 //! machine's own lifetime and the `extern "C"` entry points, which cannot be

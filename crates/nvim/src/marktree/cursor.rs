@@ -9,7 +9,8 @@
 //!
 //! # Why two raw pointers and not two references
 //!
-//! Both halves are re-derived for the duration of one call, in [`parts`], and
+//! Both halves are re-derived for the duration of one call, in
+//! [`Cursor::parts`], and
 //! never held across one. That is deliberate, and it is the same trade
 //! `Rex` makes in `regexp/rex.rs`:
 //!

@@ -44,7 +44,7 @@ pub struct ExprASTNode {
     pub len: size_t,
     pub data: ExprNodeData,
 }
-/// The payload of an [`expr_ast_node`], as its [`ExprASTNodeType`] selects.
+/// The payload of an [`ExprASTNode`], as its [`ExprASTNodeType`] selects.
 ///
 /// Upstream this is a union with no tag of its own: the node's `type_0` says
 /// which member is live and every read has to agree. Here the tag is the

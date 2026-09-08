@@ -4,7 +4,7 @@
 //! nvim's internal encoding is always UTF-8; this family is what makes that
 //! true at the edges and useful in the middle.
 //!
-//! - [`utf8`] is the codec, and [`utf8::tables`] the byte-length tables the
+//! - [`utf8`] is the codec, and its `tables` child the byte-length tables the
 //!   whole tree indexes.
 //! - [`walk`] moves around a buffer: character starts, grapheme clusters,
 //!   cursor adjustment.

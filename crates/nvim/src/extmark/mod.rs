@@ -5,7 +5,7 @@
 //! | child | what |
 //! | --- | --- |
 //! | [`set`] | `extmark_set()` -- placing a mark |
-//! | [`del`] | removing one mark, or a namespace's worth |
+//! | [`mod@del`] | removing one mark, or a namespace's worth |
 //! | [`get`] | reading marks back, and freeing them all |
 //! | [`undo`] | recording and replaying a change's effect on marks |
 //! | [`splice`] | moving marks when the text moves |

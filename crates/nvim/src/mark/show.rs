@@ -206,7 +206,7 @@ pub(super) unsafe fn show_one_mark(
     }
 }
 
-/// ":delmarks[!] [marks]"
+/// `:delmarks[!] [marks]`
 ///
 /// # Safety
 /// `args` must be a live `ExArg` and the editor's globals must be live.

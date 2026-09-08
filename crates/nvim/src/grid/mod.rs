@@ -18,7 +18,7 @@
 //! Split for size:
 //!
 //! * [`schar`] -- the glyph encoding and its intern cache.
-//! * [`line`] -- building one line and diffing it onto the grid.
+//! * [`mod@line`] -- building one line and diffing it onto the grid.
 //! * [`border`] -- the frame around a floating window.
 //!
 //! # Grids are named, not borrowed

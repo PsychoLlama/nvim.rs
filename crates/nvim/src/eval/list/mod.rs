@@ -25,7 +25,7 @@
 //! Nothing here caches anything across a call that can run Vimscript, and
 //! the four walks run one per item.  [`Item::next`] re-reads `li_next`
 //! *after* the callback has run, exactly where upstream reads it;
-//! [`Dict::items`] holds only the two locals upstream's `TV_DICT_ITER`
+//! [`DictRef::items`] holds only the two locals upstream's `TV_DICT_ITER`
 //! holds; and an item's value crosses into the evaluator as a [`TvRef`]
 //! rather than a borrow that would have to survive the call.
 //!

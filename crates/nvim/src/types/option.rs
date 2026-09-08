@@ -185,7 +185,7 @@ pub struct OptSet {
 /// tying them together: `var` was a `*mut c_void` filled in from whichever
 /// global the metadata named. Here the arm carries the cell itself, so a
 /// row cannot point a string option at a number and still compile, and
-/// [`crate::option::scope::option_var`] is the one place that
+/// `option::scope::option_var` is the one place that
 /// turns any of it back into an address.
 #[derive(Copy, Clone)]
 pub enum OptVar {
@@ -361,7 +361,7 @@ crate::char_flags! {
     const MOD = b'm';
     /// `l`: "L" instead of "lines".
     const LINES = b'l';
-    /// `w`: "[w]" instead of "written".
+    /// `w`: `[w]` instead of "written".
     const WRI = b'w';
     /// `a`: shorten all of [`RO`](Self::RO), [`MOD`](Self::MOD),
     /// [`LINES`](Self::LINES) and [`WRI`](Self::WRI), and nothing else.

@@ -9,7 +9,7 @@
 //! **Every instance owns a private registry table.** Values in flight during
 //! a walk have to outlive the call that produced them, and the walk cannot
 //! use the Lua stack for that because it suspends. So each instance holds
-//! one `luaL_ref` into the real registry, and [`reference`] / [`geti`] /
+//! one `luaL_ref` into the real registry, and [`reference()`] / [`geti`] /
 //! [`unreference`] are `luaL_ref` / `lua_rawgeti` / `luaL_unref` scoped to
 //! that table. Collecting the instance drops the table and everything in it,
 //! which is the only reason this is tractable at all.
@@ -146,10 +146,10 @@ pub unsafe fn reference(state: *mut lua_State, reg: c_int) -> c_int {
     }
 }
 
-/// Release a reference taken by [`reference`].
+/// Release a reference taken by [`reference()`].
 ///
 /// # Safety
-/// See [`reference`].
+/// See [`reference()`].
 pub unsafe fn unreference(state: *mut lua_State, reg: c_int, handle: c_int) {
     unsafe {
         lua_rawgeti(state, LUA_REGISTRYINDEX, reg);
@@ -161,7 +161,7 @@ pub unsafe fn unreference(state: *mut lua_State, reg: c_int, handle: c_int) {
 /// Push the value a reference names.
 ///
 /// # Safety
-/// See [`reference`].
+/// See [`reference()`].
 pub unsafe fn geti(state: *mut lua_State, reg: c_int, handle: c_int) {
     unsafe {
         lua_rawgeti(state, LUA_REGISTRYINDEX, reg); // [reg]

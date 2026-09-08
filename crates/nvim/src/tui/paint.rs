@@ -1,7 +1,8 @@
 //! Getting the editor's screen onto the terminal.
 //!
 //! The editor describes what the screen should look like; the TUI keeps a
-//! shadow copy of what it believes is already there ([`UGrid`]) and writes
+//! shadow copy of what it believes is already there ([`crate::types::UGrid`])
+//! and writes
 //! only the difference. Two costs shape everything here: bytes on the wire,
 //! and the terminal's own work. So the cursor is moved with whatever
 //! sequence is shortest ([`cursor_goto`]), runs of blanks at the end of a
