@@ -17,8 +17,10 @@ use std::ffi::{c_char, c_int};
 use neovim::charset::{vim_iswordc, vim_iswordp};
 use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
 use neovim::mbyte::{
-    char_at, char_len, cluster_len, encode_char, utf_char2bytes, utf_char2len, utf_cp_bounds_len,
-    utf_fold, utf_head_off, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2schar,
+    char_at, char_len, cluster_len, encode_char, mb_charlen, mb_charlen_len, mb_off_next,
+    mb_prevptr, mb_string2cells, mb_string2cells_len, utf_char2bytes, utf_char2len,
+    utf_cp_bounds_len, utf_fold, utf_head_off, utf_ptr2cells, utf_ptr2cells_len, utf_ptr2char,
+    utf_ptr2len, utf_ptr2str_char_info, utfc_next, utfc_ptr2len, utfc_ptr2schar,
 };
 use neovim::option::vars::p_arshape;
 
@@ -585,4 +587,211 @@ fn the_slice_encoder_writes_what_the_pointer_encoder_writes() {
             assert_eq!(got[i], want[i] as u8, "byte {i} of {c:#x}");
         }
     }
+}
+
+/// How wide one character is drawn, for every shape the width rules answer
+/// differently: plain ASCII, a control character, an ambiguous-width
+/// character under the default `'ambiwidth'`, an East Asian wide one, a
+/// combining mark (which is *one* cell on its own -- it only vanishes when it
+/// is part of a cluster), an emoji, an emoji requested with VS-16, and the
+/// three ways a byte can fail to be a character.
+///
+/// Bounded widths come with it: `utf_ptr2cells_len` is asked for every prefix
+/// length, which is where its truncation rule shows. That rule is not the one
+/// its comment claims -- see [`a_sequence_cut_short_is_measured_past_the_cut`].
+#[test]
+fn the_cells_a_character_occupies() {
+    let _editor = editor_lock();
+    #[track_caller]
+    fn check(raw: &[u8], want: c_int) {
+        let buf = cbuf(raw);
+        // SAFETY: `buf` is NUL-terminated and `size` never exceeds its bytes.
+        let got = unsafe { utf_ptr2cells(buf.as_ptr()) };
+        assert_eq!(got, want, "utf_ptr2cells {raw:x?}");
+        let size = c_int::try_from(raw.len()).expect("the fixtures are short");
+        let bounded = unsafe { utf_ptr2cells_len(buf.as_ptr(), size) };
+        assert_eq!(bounded, want, "utf_ptr2cells_len {raw:x?}");
+    }
+
+    check(b"a", 1);
+    check(b"\x01", 1); // the escape's width is `char2cells`', not this one's
+    check(b"\xc2\xa9", 1); // (c) U+00A9, ambiguous: 'ambiwidth' is "single"
+    check(b"\xe4\xb8\xad", 2); // U+4E2D, East Asian wide
+    check(b"\xef\xbc\xa1", 2); // U+FF21, fullwidth
+    check(b"\xcc\x81", 1); // a lone combining acute is still a character
+    check(b"\xf0\x9f\x92\xa9", 2); // U+1F4A9, emoji
+    check(b"\xe2\x98\x80", 1); // U+2600, ambiguous rather than emoji-wide
+    check(b"\xe2\x9d\xa4\xef\xb8\x8f", 2); // U+2764 + VS-16 asks for emoji
+    check(b"\x80", 4); // a continuation byte on its own: <80>
+    check(b"\xfe", 4); // never a lead byte: <fe>
+    check(b"\xc0\x80", 4); // overlong NUL: not a character at all
+    check(b"\xe0\x80\x80", 4); // overlong, decoding to NUL again
+    check(b"\xc1\xbf", 2); // overlong U+007F, drawn as the escape ^?
+}
+
+/// The one place the bounded width parts company with the terminated one: a
+/// sequence the size cuts short.
+///
+/// `utf_ptr2cells_len`'s comment says such a sequence answers 1, and it
+/// cannot: `utf_ptr2len_len` reports a truncated sequence's *full* length, so
+/// the `len < utf8len_tab[*p]` test never fires for one, and the decode that
+/// follows reads past the cut. Upstream has the same body. What the size
+/// really bounds is therefore only the VS-16 lookahead; the character itself
+/// is measured out of whatever bytes are there.
+#[test]
+fn a_sequence_cut_short_is_measured_past_the_cut() {
+    let _editor = editor_lock();
+    // The bytes are all present, so cutting the size does not change the
+    // answer -- the decode reads them anyway.
+    let whole = cbuf(b"\xe4\xb8\xad");
+    for size in 1..=3 {
+        // SAFETY: `whole` holds three bytes plus a terminator.
+        assert_eq!(
+            unsafe { utf_ptr2cells_len(whole.as_ptr(), size) },
+            2,
+            "{size}"
+        );
+    }
+    // Cut in the buffer rather than by the size: now the byte the decode
+    // reaches is the terminator, and the sequence is illegal.
+    let cut = cbuf(b"\xe4\xb8");
+    for size in 1..=2 {
+        // SAFETY: `cut` holds two bytes plus a terminator.
+        assert_eq!(
+            unsafe { utf_ptr2cells_len(cut.as_ptr(), size) },
+            4,
+            "{size}"
+        );
+    }
+    // The VS-16 lookahead is bounded only by whether it *starts* inside the
+    // size: `size > len` is the whole test, and the same full-length report
+    // then lets the decode read the rest of it.
+    let heart = cbuf(b"\xe2\x9d\xa4\xef\xb8\x8f");
+    for size in 1..=3 {
+        // SAFETY: `heart` holds six bytes plus a terminator.
+        assert_eq!(
+            unsafe { utf_ptr2cells_len(heart.as_ptr(), size) },
+            1,
+            "{size}"
+        );
+    }
+    for size in 4..=6 {
+        // SAFETY: as above.
+        assert_eq!(
+            unsafe { utf_ptr2cells_len(heart.as_ptr(), size) },
+            2,
+            "{size}"
+        );
+    }
+}
+
+/// Characters and cells over a whole string, in both the NUL-terminated and
+/// the bounded spelling.
+///
+/// The counters walk in *clusters*: a combining mark, a VS-16 and a ZWJ
+/// sequence each count once and contribute their base character's width.
+/// Bytes that are not characters count one each and are drawn as `<xx>`.
+#[test]
+fn counting_characters_and_cells_across_a_string() {
+    let _editor = editor_lock();
+    #[track_caller]
+    fn check(raw: &[u8], want_chars: c_int, want_cells: usize) {
+        let buf = cbuf(raw);
+        let size = c_int::try_from(raw.len()).expect("the fixtures are short");
+        // SAFETY: `buf` is NUL-terminated and holds `raw.len()` bytes.
+        unsafe {
+            assert_eq!(mb_charlen(buf.as_ptr()), want_chars, "mb_charlen {raw:x?}");
+            assert_eq!(
+                mb_charlen_len(buf.as_ptr(), size),
+                want_chars,
+                "mb_charlen_len {raw:x?}"
+            );
+            assert_eq!(
+                mb_string2cells(buf.as_ptr()),
+                want_cells,
+                "mb_string2cells {raw:x?}"
+            );
+            assert_eq!(
+                mb_string2cells_len(buf.as_ptr(), raw.len()),
+                want_cells,
+                "mb_string2cells_len {raw:x?}"
+            );
+        }
+    }
+
+    check(b"", 0, 0);
+    check(b"abc", 3, 3);
+    check(b"a\xe4\xb8\xadb", 3, 4);
+    check(b"e\xcc\x81x", 2, 2); // e + combining acute is one cluster
+    check(b"\xe2\x9d\xa4\xef\xb8\x8fz", 2, 3); // the VS-16 joins the heart
+    check(b"\x80\xfe\xc3", 3, 12); // three <xx> escapes
+    check(b"\xf0\x9f\x91\xa8\xe2\x80\x8d\xf0\x9f\x91\xa9!", 2, 3); // ZWJ
+}
+
+/// The character walk: `utf_ptr2str_char_info` opens it and `utfc_next` steps
+/// it, one step per *cluster* but carrying the *base* character's codepoint
+/// and length. `mb_off_next` and `mb_prevptr` are the same geometry asked
+/// from a byte in the middle.
+///
+/// The last fixture is the one that says the two lengths are different
+/// questions: the step from the heart to the `z` is six bytes, and the
+/// `CharInfo` it carries says three.
+#[test]
+fn the_character_walk_steps_over_whole_clusters() {
+    let _editor = editor_lock();
+    #[track_caller]
+    fn check(raw: &[u8], want_walk: &[(isize, i32, c_int)], want_prev: &[isize]) {
+        let buf = cbuf(raw);
+        let mut walk = Vec::new();
+        // SAFETY: `buf` is NUL-terminated and every position below is a
+        // character start within it.
+        unsafe {
+            let mut ci = utf_ptr2str_char_info(buf.as_ptr().cast_mut());
+            while *ci.ptr != 0 {
+                walk.push((ci.ptr.offset_from(buf.as_ptr()), ci.chr.value, ci.chr.len));
+                ci = utfc_next(ci);
+            }
+        }
+        assert_eq!(walk, want_walk, "the walk over {raw:x?}");
+
+        // `mb_prevptr` from every byte, the terminator included, and
+        // `mb_off_next` from every byte: how far the *next* character start
+        // is, which is zero at a character start.
+        let starts: Vec<isize> = walk.iter().map(|&(at, _, _)| at).collect();
+        let mut prev = Vec::new();
+        for i in 0..=raw.len() {
+            // SAFETY: `buf` holds `raw.len()` bytes plus the terminator.
+            let q = unsafe { mb_prevptr(buf.as_ptr().cast_mut(), buf.as_ptr().cast_mut().add(i)) };
+            prev.push(unsafe { q.offset_from(buf.as_ptr()) });
+        }
+        assert_eq!(prev, want_prev, "mb_prevptr over {raw:x?}");
+
+        for i in 0..raw.len() {
+            // SAFETY: as above.
+            let off = unsafe { mb_off_next(buf.as_ptr(), buf.as_ptr().add(i)) };
+            let next = starts.iter().copied().find(|&s| s >= i as isize);
+            let want = next.map_or(0, |s| c_int::try_from(s - i as isize).expect("short"));
+            assert_eq!(off, want, "mb_off_next at {i} of {raw:x?}");
+        }
+    }
+
+    check(b"abc", &[(0, 97, 1), (1, 98, 1), (2, 99, 1)], &[0, 0, 1, 2]);
+    check(
+        b"a\xe4\xb8\xadb",
+        &[(0, 97, 1), (1, 0x4e2d, 3), (4, 98, 1)],
+        &[0, 0, 1, 1, 1, 4],
+    );
+    check(b"e\xcc\x81x", &[(0, 101, 1), (3, 120, 1)], &[0, 0, 0, 0, 3]);
+    // Not a character anywhere: every byte is its own, and the strict
+    // decoder reports each as negative.
+    check(
+        b"\x80\xfe\xc3",
+        &[(0, -1, 1), (1, -1, 1), (2, -1, 1)],
+        &[0, 0, 1, 2],
+    );
+    check(
+        b"\xe2\x9d\xa4\xef\xb8\x8fz",
+        &[(0, 0x2764, 3), (6, 122, 1)],
+        &[0, 0, 0, 0, 0, 0, 0, 6],
+    );
 }
