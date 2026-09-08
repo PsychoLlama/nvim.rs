@@ -47,7 +47,6 @@ unsafe fn op_char(op: *const c_char) -> Option<u8> {
 /// Whether the operator is an arithmetic one, which an environment variable
 /// and a register both refuse with E734.
 fn is_arithmetic(op: Option<u8>) -> bool {
-    // SAFETY: `ARITHMETIC` is a NUL-terminated literal.
     op.is_some_and(|c| has_char(ARITHMETIC, c.into()))
 }
 
@@ -156,10 +155,10 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     // The operator, if any, and the expression past it.
     let mut op = [b'=' as c_char, NUL as c_char];
     if lead != b'=' {
-        // SAFETY: as above -- `expr` is NUL-terminated.
         if has_char(OPERATORS, lead.into()) {
             // "+=", "-=", "*=", "/=", "%=" or ".="
             op[0] = lead as c_char;
+            // SAFETY: `lead` is not the terminator, so `expr[1]` is readable.
             if lead == b'.' && unsafe { *expr.add(1) } == b'.' as c_char {
                 // "..=" -- one character longer than the rest.
                 expr = unsafe { expr.add(1) };

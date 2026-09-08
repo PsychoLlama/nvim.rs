@@ -79,7 +79,6 @@ pub unsafe fn get_id_len(arg: *mut *const c_char) -> c_int {
             let len = unsafe { p.offset_from(start) } as c_int;
             // SAFETY: the string's first byte is readable.
             let scope = unsafe { *start } as uint8_t as c_int;
-            // SAFETY: `namespace_char` is a NUL-terminated literal.
             let scoped = !has_char(namespace_char, scope);
             if len > 1 || (len == 1 && scoped) {
                 break;
@@ -308,7 +307,6 @@ pub unsafe fn find_name_end(
             let after_brace = len > 1 && unsafe { *p.offset(-1) } != b'}' as c_char;
             // SAFETY: the string's first byte is readable.
             let scope = unsafe { *arg } as uint8_t as c_int;
-            // SAFETY: `namespace_char` is a NUL-terminated literal.
             let scoped = !has_char(namespace_char, scope);
             if after_brace || (len == 1 && scoped) {
                 break;

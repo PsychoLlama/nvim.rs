@@ -409,7 +409,6 @@ pub(super) unsafe fn read_compound(
 
         // Collect the set of all flags, and the set that may start a
         // compound, skipping the regexp punctuation.
-        // SAFETY: a literal, NUL-terminated string.
         if !has_char(c"?*+[]/", c) && !byte_in_flags(&all, b) {
             all.push(b);
         }

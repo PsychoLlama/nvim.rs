@@ -102,7 +102,6 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
         }
         if c == b':' as c_char {
             // A `:` continues the name only as the one namespace letter.
-            // SAFETY: `NAMESPACES` is a NUL-terminated literal.
             let namespaced = use_namespace && p == start && has_char(NAMESPACES, first as c_int);
             if !namespaced {
                 break;
