@@ -85,6 +85,7 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
 
     /// `<inttypes.h>`, which the `libc` crate does not cover.
+    #[cfg(not(miri))]
     pub fn strtoimax(
         __nptr: *const ::core::ffi::c_char,
         __endptr: *mut *mut ::core::ffi::c_char,
@@ -241,6 +242,89 @@ pub unsafe fn memmove(
 ) -> *mut ::core::ffi::c_void {
     unsafe { ::core::ptr::copy(__src as *const u8, __dest as *mut u8, __n) };
     __dest
+}
+
+/// Base-ten `strtoimax`, for Miri, which cannot call the C library's.
+///
+/// The digits, `errno` and the end pointer behave as C's does, saturating at
+/// `intmax_t`'s bounds with `ERANGE` — which is exactly what
+/// [`try_getdigits`](crate::charset::try_getdigits) reads back.
+///
+/// # Safety
+///
+/// `__nptr` must point at a NUL-terminated string; `__endptr` must be null or
+/// point at a writable slot.
+#[cfg(miri)]
+pub unsafe fn strtoimax(
+    __nptr: *const ::core::ffi::c_char,
+    __endptr: *mut *mut ::core::ffi::c_char,
+    __base: ::core::ffi::c_int,
+) -> intmax_t {
+    assert_eq!(__base, 10, "nothing in this tree asks for another base");
+    // SAFETY: the caller's NUL-terminated string.
+    let text = unsafe { ::core::ffi::CStr::from_ptr(__nptr) }.to_bytes();
+    let (value, consumed, out_of_range) = parse_imax(text);
+    if out_of_range {
+        // SAFETY: the C library's own thread-local, which Miri does provide.
+        unsafe { *::libc::__errno_location() = ::libc::ERANGE };
+    }
+    if !__endptr.is_null() {
+        // SAFETY: a writable slot per the caller, and `consumed` is an offset
+        // inside the string.
+        unsafe { *__endptr = __nptr.add(consumed).cast_mut() };
+    }
+    value
+}
+
+/// The decimal number `text` starts with, how many bytes it took, and whether
+/// it saturated. Nothing is consumed when there are no digits, which is how C
+/// reports "no conversion".
+#[cfg(miri)]
+fn parse_imax(text: &[u8]) -> (intmax_t, usize, bool) {
+    let mut at = 0;
+    while matches!(
+        text.get(at),
+        Some(b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
+    ) {
+        at += 1;
+    }
+    let negative = match text.get(at) {
+        Some(b'-') => {
+            at += 1;
+            true
+        }
+        Some(b'+') => {
+            at += 1;
+            false
+        }
+        _ => false,
+    };
+    let first_digit = at;
+    let mut value: intmax_t = 0;
+    let mut out_of_range = false;
+    while let Some(&byte) = text.get(at).filter(|b| b.is_ascii_digit()) {
+        let digit = intmax_t::from(byte - b'0');
+        let next = value.checked_mul(10).and_then(|shifted| {
+            if negative {
+                shifted.checked_sub(digit)
+            } else {
+                shifted.checked_add(digit)
+            }
+        });
+        value = next.unwrap_or_else(|| {
+            out_of_range = true;
+            if negative {
+                intmax_t::MIN
+            } else {
+                intmax_t::MAX
+            }
+        });
+        at += 1;
+    }
+    if at == first_digit {
+        return (0, 0, false); // no conversion: the end pointer stays put
+    }
+    (value, at, out_of_range)
 }
 
 /// # Safety
