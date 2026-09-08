@@ -7,8 +7,7 @@
 //! counts from one that does not; `check_linecomment` is also what the
 //! formatting and C-indent code ask.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::charset::skip;
