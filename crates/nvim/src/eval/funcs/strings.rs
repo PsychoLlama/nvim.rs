@@ -418,17 +418,17 @@ fn with_spell(body: impl FnOnce()) {
     // SAFETY throughout: `curwin` names a live window from startup to exit, and the
     // spell state hanging off it is initialised with the window.
     let mut win = Win::current();
-    let saved = (*win).w_onebuf_opt.wo_spell;
-    if (*win).w_onebuf_opt.wo_spell == 0 {
+    let saved = win.w_onebuf_opt.wo_spell;
+    if win.w_onebuf_opt.wo_spell == 0 {
         parse_spelllang(win);
-        (*win).w_onebuf_opt.wo_spell = 1;
+        win.w_onebuf_opt.wo_spell = 1;
     }
-    if unsafe { *(*(*win).w_s).b_p_spl } == NUL as c_char {
+    if unsafe { *(*win.w_s).b_p_spl } == NUL as c_char {
         emsg(gettext(e_no_spell));
     } else {
         body();
     }
-    (*win).w_onebuf_opt.wo_spell = saved;
+    win.w_onebuf_opt.wo_spell = saved;
 }
 
 /// `spellbadword([{sentence}])` — the first misspelling and why it is one.

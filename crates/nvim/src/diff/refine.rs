@@ -188,7 +188,7 @@ unsafe fn refine_inline_word(
                 let gap = &gap[..(gap_size as usize).min(gap.len())];
                 if gap.is_empty()
                     || gap.iter().enumerate().any(|(i, _)| {
-                        mb_get_class_tab(gap.as_ptr().add(i).cast(), (*buf).b_chartab.as_ptr())
+                        mb_get_class_tab(gap.as_ptr().add(i).cast(), buf.b_chartab.as_ptr())
                             == CLASS_WORD
                     })
                 {

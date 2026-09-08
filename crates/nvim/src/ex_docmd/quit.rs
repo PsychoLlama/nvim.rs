@@ -377,7 +377,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     // The window's buffer, held rather than re-derived: `dialog_changed`
     // below runs autocommands that can wipe it, and upstream reads the
     // address on regardless (`buf_hide(buf)` at the bottom).
-    let mut buffer = Some(win.buffer());
+    let mut buffer = win.buffer_or_none();
     // Only the last window on a changed buffer has to ask.
     let mut need_hide = buffer.is_some_and(|b| buf_is_changed(b) && b.b_nwindows <= 1);
     if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
