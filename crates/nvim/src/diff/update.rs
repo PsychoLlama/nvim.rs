@@ -386,10 +386,9 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
                 let mut buf_num_anchors = 0;
                 let into = anchors[idx].as_mut_ptr();
                 let count = &raw mut buf_num_anchors;
-                let buf = tp.tp_diffbuf[idx];
                 // SAFETY: a live buffer, and two locals of this frame with
                 // room for `MAX_DIFF_ANCHORS` line numbers.
-                let ok = unsafe { parse_diffanchors(false, Buf::new(buf), into, count) };
+                let ok = unsafe { parse_diffanchors(false, tp.diffbuf(idx), into, count) };
                 if ok.is_err() {
                     let msg = e_failed_to_find_all_diff_anchors.as_ptr();
                     // SAFETY: a static message string.
@@ -446,14 +445,13 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
                 break 'theend;
             }
             for idx_new in idx_orig + 1..DB_COUNT as usize {
-                let buf = tp.tp_diffbuf[idx_new];
-                // SAFETY: a live buffer of the diff, or null.
-                if buf.is_null() || unsafe { (*buf).b_ml.ml_mfp.is_null() } {
+                let buf = tp.diffbuf(idx_new);
+                if buf.raw().is_null() || buf.b_ml.ml_mfp.is_null() {
                     continue;
                 }
                 let (start, end) = segment(idx_new);
                 // SAFETY: a live buffer, and `dio`'s own sides.
-                if unsafe { diff_write(Buf::new(buf), new_in, start, end) }.is_ok()
+                if unsafe { diff_write(buf, new_in, start, end) }.is_ok()
                     && unsafe { diff_file(dio.raw()) }.is_ok()
                 {
                     unsafe { diff_read(idx_orig as c_int, idx_new as c_int, dio.raw()) };

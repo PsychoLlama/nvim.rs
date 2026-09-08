@@ -35,17 +35,14 @@ use crate::winlayer::Buf;
 /// # Safety
 /// `window` must have a live buffer, and `start`/`end` must be lines inside it.
 pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
-    let buf = window.w_buffer;
-    // SAFETY: a live buffer.
-    if unsafe { (*buf).b_p_ma } == 0 {
+    let buf = window.buffer();
+    if buf.b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return;
     }
     let num_changed = (1 + end.lnum - start.lnum) as int64_t;
     // SAFETY: the caller's promise; both lines are inside the buffer.
     parse_marker(window);
-    // SAFETY: a live buffer.
-    let buf = unsafe { Buf::new(buf) };
     unsafe {
         fold_add_marker(
             buf,

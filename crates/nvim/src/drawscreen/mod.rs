@@ -5,7 +5,6 @@
 
 pub mod state;
 use crate::types::AutoEvent;
-use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use crate::autocmd::apply_autocmds;
@@ -291,17 +290,17 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     for wp in winlayer::windows() {
         unsafe { update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed) };
 
-        let buf = wp.w_buffer;
-        if !unsafe { (*buf).b_mod_set } {
+        let mut buf = wp.buffer();
+        if !buf.b_mod_set {
             continue;
         }
-        if unsafe { (*buf).b_mod_tick_syn } < display_tick.get() && syntax_present(wp) {
-            unsafe { syn_stack_apply_changes(Buf::new(buf)) };
-            unsafe { (*buf).b_mod_tick_syn = display_tick.get() };
+        if buf.b_mod_tick_syn < display_tick.get() && syntax_present(wp) {
+            syn_stack_apply_changes(buf);
+            buf.b_mod_tick_syn = display_tick.get();
         }
-        if unsafe { (*buf).b_mod_tick_decor } < display_tick.get() {
-            unsafe { decor_providers_invoke_buf(Buf::new(buf)) };
-            unsafe { (*buf).b_mod_tick_decor = display_tick.get() };
+        if buf.b_mod_tick_decor < display_tick.get() {
+            unsafe { decor_providers_invoke_buf(buf) };
+            buf.b_mod_tick_decor = display_tick.get();
         }
     }
 }

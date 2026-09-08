@@ -434,8 +434,7 @@ impl Jump {
                 buf_is_help(
                     self.saved_win
                         .and_then(WinId::get)
-                        // SAFETY: reading a live window's buffer pointer.
-                        .and_then(|w| unsafe { Buf::from_raw(w.w_buffer) }),
+                        .and_then(|w| w.buffer_or_none()),
                 )
             } else {
                 Buf::current().b_help

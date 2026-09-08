@@ -643,24 +643,20 @@ pub(super) unsafe fn fold_update_computed_recurse(
 pub(super) unsafe fn foldlevel_indent(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window has a live buffer, and `lnum` is inside it.
-    let buf = line.win().w_buffer;
-    let s = unsafe { skipwhite(ml_get_buf(Buf::new(buf), lnum)) };
+    let buf = line.win().buffer();
+    let s = unsafe { skipwhite(ml_get_buf(buf, lnum)) };
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
     if unsafe { *s } as c_int == NUL
         || !unsafe { vim_strchr(line.win().w_onebuf_opt.wo_fdi, *s as uint8_t as c_int) }.is_null()
     {
-        line.set_lvl(
-            if lnum == 1 || lnum == unsafe { (*buf).b_ml.ml_line_count } {
-                0
-            } else {
-                -1
-            },
-        );
+        line.set_lvl(if lnum == 1 || lnum == buf.b_ml.ml_line_count {
+            0
+        } else {
+            -1
+        });
     } else {
-        line.set_lvl(
-            unsafe { get_indent_buf(Buf::new(buf), lnum) } / unsafe { get_sw_value(Buf::new(buf)) },
-        );
+        line.set_lvl(unsafe { get_indent_buf(buf, lnum) } / unsafe { get_sw_value(buf) });
     }
     let foldnestmax = line.win().w_onebuf_opt.wo_fdn.max(0) as c_int;
     line.set_lvl(line.lvl().min(foldnestmax));

@@ -109,7 +109,7 @@ pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: 
         ptr::null_mut(),
         ptr::null_mut(),
         false,
-        unsafe { Buf::from_raw(window.w_buffer) },
+        window.buffer_or_none(),
     );
     // The buffer is read *through* `window`, and only after `win_valid`
     // has said `window` is still there — QuitPre may have closed it.
@@ -374,16 +374,21 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
         return;
     }
 
-    let buf = win.w_buffer;
+    // The window's buffer, held rather than re-derived: `dialog_changed`
+    // below runs autocommands that can wipe it, and upstream reads the
+    // address on regardless (`buf_hide(buf)` at the bottom).
+    let mut buffer = Some(win.buffer());
     // Only the last window on a changed buffer has to ask.
-    let mut need_hide =
-        buf_is_changed(unsafe { Buf::new(buf) }) && unsafe { (*buf).b_nwindows } <= 1;
-    if need_hide && !buf_hide(unsafe { Buf::new(buf) }) && forceit == 0 {
+    let mut need_hide = buffer.is_some_and(|b| buf_is_changed(b) && b.b_nwindows <= 1);
+    if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
         if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
-            let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-            unsafe { dialog_changed(Buf::new(buf), false) };
+            let bufref = BufRef::of_opt(buffer);
+            // SAFETY: a live buffer; the dialog may wipe it, which is what
+            // the reference above is for.
+            unsafe { dialog_changed(buffer.expect("checked above"), false) };
             // The dialog may have wiped the buffer, or written it.
-            if bufref.valid() && buf_is_changed(unsafe { Buf::new(buf) }) {
+            buffer = bufref.get();
+            if buffer.is_some_and(buf_is_changed) {
                 return;
             }
             need_hide = false;
@@ -393,7 +398,8 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
         }
     }
 
-    let hide = !need_hide && !buf_hide(unsafe { Buf::new(buf) });
+    // A wiped buffer is not one to free again, so `hide` stays false.
+    let hide = !need_hide && buffer.is_some_and(|b| !buf_hide(b));
     match tabpage {
         None => {
             win_close(w, hide, forceit != 0);

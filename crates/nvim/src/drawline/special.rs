@@ -406,9 +406,8 @@ impl Cells {
     /// # Safety
     /// `window` must be a live window.
     pub(super) unsafe fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window; `transchar_buf` answers a static
-        // NUL-terminated buffer.
-        wlv.escape_buf = unsafe { transchar_buf(Buf::from_raw(window.w_buffer), self.char_code) };
+        // `transchar_buf` answers a static NUL-terminated buffer.
+        wlv.escape_buf = transchar_buf(window.buffer_or_none(), self.char_code);
         wlv.extra_text = wlv.escape_buf.as_mut_ptr();
         if wlv.extra_todo == 0 {
             wlv.extra_todo = byte2cells(self.char_code) - 1;

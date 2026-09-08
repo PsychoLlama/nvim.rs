@@ -23,7 +23,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::winlayer::Buf;
 use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
@@ -171,7 +170,7 @@ unsafe fn refine_inline_word(
     idx1: usize,
     start_lnum: LineNr,
 ) {
-    let buf = TabPage::current().tp_diffbuf[idx1];
+    let buf = TabPage::current().diffbuf(idx1);
     for _ in 0..4 {
         unsafe {
             merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
@@ -183,11 +182,8 @@ unsafe fn refine_inline_word(
                 // The gap is only worth swallowing if it is *punctuation*
                 // between two changed words; a word in the gap is a real
                 // unchanged word and splitting there is the point.
-                let line = CStr::from_ptr(ml_get_buf(
-                    Buf::new(buf),
-                    start_lnum + entry1.lineoff as LineNr,
-                ))
-                .to_bytes();
+                let line = CStr::from_ptr(ml_get_buf(buf, start_lnum + entry1.lineoff as LineNr))
+                    .to_bytes();
                 let gap = &line[(gap_start as usize).min(line.len())..];
                 let gap = &gap[..(gap_size as usize).min(gap.len())];
                 if gap.is_empty()
@@ -443,8 +439,8 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
             dio.dio_diff.dout_ga.clear();
-            let buf = tp.tp_diffbuf[i];
-            if buf.is_null() || unsafe { (*buf).b_ml.ml_mfp }.is_null() {
+            let buf = tp.diffbuf(i);
+            if buf.raw().is_null() || buf.b_ml.ml_mfp.is_null() {
                 continue; // not loaded
             }
             if unsafe { (*dp).df_count[i] } == 0 {
@@ -463,8 +459,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             // every buffer is segmented the same way.
             let chartab = unsafe { (*tp.tp_diffbuf[file1_idx]).b_chartab.as_ptr() };
             for off in 0..unsafe { (*dp).df_count[i] } {
-                let line =
-                    unsafe { CStr::from_ptr(ml_get_buf(Buf::new(buf), (*dp).df_lnum[i] + off)) };
+                let line = unsafe { CStr::from_ptr(ml_get_buf(buf, (*dp).df_lnum[i] + off)) };
                 unsafe {
                     tokenize_line(
                         line,

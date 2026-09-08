@@ -194,10 +194,10 @@ fn diff_find_change_simple(
     let tp = TabPage::current();
     let mut added = true;
     for i in 0..DB_COUNT as usize {
-        let buf = tp.tp_diffbuf[i];
+        let buf = tp.diffbuf(i);
         // A line past the other buffer's count is a filler line there,
         // which says nothing about this one.
-        if buf.is_null() || i as c_int == idx || off >= dp.df_count[i] {
+        if buf.raw().is_null() || i as c_int == idx || off >= dp.df_count[i] {
             continue;
         }
         added = false;
@@ -208,7 +208,7 @@ fn diff_find_change_simple(
         let other = dp.df_lnum[i] + off;
         // SAFETY: a live buffer of the diff, and a line number inside the
         // block, so inside the buffer.
-        let new = unsafe { CStr::from_ptr(ml_get_buf(Buf::new(buf), other)) }.to_bytes();
+        let new = unsafe { CStr::from_ptr(ml_get_buf(buf, other)) }.to_bytes();
 
         let (si_org, si_new) = common_prefix(org, new);
         *startp = (*startp).min(si_org as c_int);

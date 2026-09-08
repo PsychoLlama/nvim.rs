@@ -75,13 +75,12 @@ use crate::syntax::{
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, FoldInfo, GridView,
-    HlMode, Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars,
+    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, FoldInfo, GridView, HlMode,
+    Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars,
     StatusCol, VarNumber, VirtLines, VirtText, WinExtmark, Window, ptrdiff_t, size_t, ssize_t,
     uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 use ::libc::abs;
@@ -195,9 +194,6 @@ pub unsafe fn win_line(
         color_cols: ::core::ptr::null_mut::<::core::ffi::c_int>(),
     };
 
-    // SAFETY: the caller's window, line and spell state.
-    let buf: *mut Buffer = window.w_buffer;
-
     // The two scratch buffers the loop needs but never owns: the spell
     // look-ahead, filled by the setup half, and the fold text.
     let mut nextline: SpellLookahead = [0; SPELL_LOOKAHEAD * 2];
@@ -222,7 +218,7 @@ pub unsafe fn win_line(
     if setup.has_terminal {
         unsafe {
             terminal_get_line_attributes(
-                (*window.w_buffer).terminal,
+                window.buffer().terminal,
                 window,
                 lnum,
                 term_attrs.as_mut_ptr(),
@@ -245,7 +241,7 @@ pub unsafe fn win_line(
         nextline: nextline.as_mut_ptr(),
         fold_buf: fold_buf.as_mut_ptr(),
     };
-    unsafe { Cells::new(setup).run(&mut wlv, window, Buf::new(buf), &frame) }
+    unsafe { Cells::new(setup).run(&mut wlv, window, window.buffer(), &frame) }
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so

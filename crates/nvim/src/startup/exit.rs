@@ -143,16 +143,16 @@ pub fn getout(mut exitval: c_int) -> ! {
             };
             while let Some(wp) = win {
                 // An autocommand may already have closed the buffer, so the
-                // address is compared and never read.
-                let buf = wp.w_buffer;
-                let live = buffer_at(buf);
-                if live.is_some_and(|b| buf_get_changedtick(b) != -1) {
-                    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-                    let fname = unsafe { (*buf).b_fname };
+                // address is put back on the buffer list before it is read.
+                let live = buffer_at(wp.w_buffer);
+                if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
+                    let bufref = BufRef::of(buffer);
+                    let fname = buffer.b_fname;
                     let event = AutoEvent::BufWinLeave;
-                    unsafe { apply_autocmds(event, fname, fname, false, Buf::from_raw(buf)) };
-                    if bufref.valid() {
-                        unsafe { buf_set_changedtick(Buf::new(buf), -1) };
+                    unsafe { apply_autocmds(event, fname, fname, false, Some(buffer)) };
+                    // The event may have wiped it; ask again before writing.
+                    if let Some(buffer) = bufref.get() {
+                        buf_set_changedtick(buffer, -1);
                     }
                     // The autocommands may have rearranged both lists;
                     // start the whole walk again.

@@ -134,7 +134,7 @@ pub(crate) fn win_update(window: Win) {
         return;
     }
 
-    let buf = win.w_buffer;
+    let mut buf = win.buffer();
 
     // Reset `got_int`, otherwise the regexp engine will not work.
     let save_got_int = got_int.get();
@@ -154,17 +154,17 @@ pub(crate) fn win_update(window: Win) {
     decor_redraw_reset(window, decor);
     unsafe { decor_providers_invoke_win(window, decor) };
 
-    unsafe { add_suspended_terminal_note(Buf::new(buf), decor) };
+    unsafe { add_suspended_terminal_note(buf, decor) };
 
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
     for win in winlayer::windows() {
-        if win.w_buffer == buf && win_redraw_signcols(win) {
+        if win.w_buffer == buf.raw() && win_redraw_signcols(win) {
             changed_line_abv_curs_win(win);
             redraw_later(win, UPD_NOT_VALID);
         }
     }
-    unsafe { (*buf).b_signcols.last_max = (*buf).b_signcols.max };
+    buf.b_signcols.last_max = buf.b_signcols.max;
 
     // Validate `w_virtcol` here: it can change the redraw type, which is
     // why the type is read again from the window afterwards.
@@ -190,7 +190,7 @@ pub(crate) fn win_update(window: Win) {
         changed_line_abv_curs_win(win);
         win.w_nrwidth = nrwidth_new;
     } else {
-        unsafe { find_changed_lines(win, Buf::new(buf), &mut rg) };
+        unsafe { find_changed_lines(win, buf, &mut rg) };
     }
 
     win.w_redraw_top = 0; // reset for next time
@@ -215,15 +215,15 @@ pub(crate) fn win_update(window: Win) {
         };
     }
 
-    unsafe { plan_scroll(win, Buf::new(buf), &mut rg) };
+    unsafe { plan_scroll(win, buf, &mut rg) };
 
     if rg.redr_type == UPD_SOME_VALID {
         rg.redraw_all(window);
         rg.redr_type = UPD_NOT_VALID;
     }
 
-    unsafe { plan_visual_area(win, Buf::new(buf), &mut rg) };
-    unsafe { remember_visual_area(window, Buf::new(buf)) };
+    unsafe { plan_visual_area(win, buf, &mut rg) };
+    remember_visual_area(window, buf);
 
     let mut cursorline_fi = FoldInfo::default();
     unsafe { win_update_cursorline(window, &raw mut cursorline_fi) };
@@ -234,8 +234,6 @@ pub(crate) fn win_update(window: Win) {
     unsafe { win_check_ns_hl(Some(window)) };
 
     let mut spv = SpellVars::default();
-    // SAFETY: a live buffer.
-    let buf = unsafe { Buf::new(buf) };
     if spell_check_window(window) {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;

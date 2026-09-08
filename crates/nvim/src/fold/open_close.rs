@@ -19,7 +19,7 @@ use crate::message::emsg;
 use crate::r#move::changed_window_setting;
 use crate::option::vars::p_fcl;
 use crate::os::cshim::{gettext, gettext_ptr};
-use crate::winlayer::{Buf, TabPage, Win, windows_in_tab};
+use crate::winlayer::{TabPage, Win, windows_in_tab};
 use core::ffi::c_int;
 use core::ptr;
 
@@ -397,10 +397,9 @@ pub unsafe fn delete_fold(
     }
     if last_lnum > 0 {
         let num_changed = (last_lnum - first_lnum) as int64_t;
-        // SAFETY: the caller's promise; the range is inside the buffer.
-        let buf = win.w_buffer;
-        unsafe { changed_lines(Buf::new(buf), first_lnum, 0, last_lnum, 0, false) };
-        unsafe { buf_updates_send_changes(Buf::new(buf), first_lnum, num_changed, num_changed) };
+        let buf = win.buffer();
+        changed_lines(buf, first_lnum, 0, last_lnum, 0, false);
+        buf_updates_send_changes(buf, first_lnum, num_changed, num_changed);
     }
 }
 

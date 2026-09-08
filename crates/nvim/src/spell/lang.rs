@@ -266,7 +266,7 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
     let mut nobreak = false;
     let mut ret_msg: Option<&'static CStr> = None;
 
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(window.w_buffer) });
+    let bufref = BufRef::of_opt(window.buffer_or_none());
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, size_of::<LangP>() as c_int, 2) };

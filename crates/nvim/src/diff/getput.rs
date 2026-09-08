@@ -122,9 +122,9 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;
         while idx_other < DB_COUNT {
-            let buf = tp.tp_diffbuf[idx_other as usize];
-            if buf != Buf::current_raw() && !buf.is_null() {
-                if writable_target(unsafe { Buf::new(buf) }, cmdidx) {
+            let buf = tp.diffbuf(idx_other as usize);
+            if buf.raw() != Buf::current_raw() && !buf.raw().is_null() {
+                if writable_target(buf, cmdidx) {
                     break;
                 }
                 found_not_ma = true;
@@ -140,10 +140,10 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
             return;
         }
         for i in idx_other + 1..DB_COUNT {
-            let buf = tp.tp_diffbuf[i as usize];
-            if buf != Buf::current_raw()
-                && !buf.is_null()
-                && writable_target(unsafe { Buf::new(buf) }, cmdidx)
+            let buf = tp.diffbuf(i as usize);
+            if buf.raw() != Buf::current_raw()
+                && !buf.raw().is_null()
+                && writable_target(buf, cmdidx)
             {
                 let msg = c"E101: More than two buffers in diff mode, don't know which one to use";
                 emsg_gettext(msg.as_ptr());
@@ -220,9 +220,8 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
     let mut aco = AcoSave::default();
     let put = cmdidx != CmdIdx::diffget;
     if put {
-        let other = tp.tp_diffbuf[idx_other as usize];
         // SAFETY: `aco` is a local, and `other` a live buffer of the diff.
-        unsafe { aucmd_prepbuf(&raw mut aco, Buf::new(other)) };
+        unsafe { aucmd_prepbuf(&raw mut aco, tp.diffbuf(idx_other as usize)) };
     }
     let (idx_from, idx_to) = if put {
         (idx_cur, idx_other)
@@ -367,14 +366,13 @@ fn diffgetput(
             }
             let mut i = 0 as LineNr;
             while i < dp.df_count[idx_from] - start_skip - end_skip {
-                let src = tp.tp_diffbuf[idx_from];
+                let src = tp.diffbuf(idx_from);
                 let nr = dp.df_lnum[idx_from] + start_skip + i;
-                // SAFETY: a live buffer of the diff.
-                if nr > unsafe { (*src).b_ml.ml_line_count } {
+                if nr > src.b_ml.ml_line_count {
                     break;
                 }
                 // SAFETY: a live buffer and a line number inside it.
-                let p = unsafe { xstrdup(ml_get_buf(Buf::new(src), nr)) };
+                let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
                 // SAFETY: the editor exists; `p` is our own copy of the line.
                 let _ = unsafe { ml_append(lnum + i - 1 as LineNr, p, 0 as ColNr, false) };
                 unsafe { xfree(p.cast()) };
