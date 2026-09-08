@@ -40,27 +40,21 @@ pub unsafe fn mb_utflen(
     codepoints: *mut size_t,
     codeunits: *mut size_t,
 ) {
-    // SAFETY: the caller's promise, spelled as the slice it describes.
-    let (count, surrogate_pairs) = counted(unsafe { cstr::slice_at(s, len) });
-    // SAFETY: the caller's counters.
-    unsafe { *codepoints += count };
-    unsafe { *codeunits += count + surrogate_pairs };
-}
-
-/// How many characters `bytes` holds, and how many of them need a UTF-16
-/// surrogate pair.
-fn counted(bytes: &[u8]) -> (size_t, size_t) {
-    let (mut count, mut surrogate_pairs) = (0, 0);
-    let mut at = 0;
-    while at < bytes.len() {
-        let (c, clen) = char_and_len(&bytes[at..]);
+    let mut count: size_t = 0;
+    let mut surrogate_pairs: size_t = 0;
+    let mut i: size_t = 0;
+    while i < len {
+        // SAFETY: `i` is inside the caller's `len` bytes.
+        let (c, clen) = unsafe { char_and_len(s.add(i), len - i) };
         count += 1;
         if c > 0xffff {
             surrogate_pairs += 1;
         }
-        at += clen;
+        i += clen;
     }
-    (count, surrogate_pairs)
+    // SAFETY: the caller's counters.
+    unsafe { *codepoints += count };
+    unsafe { *codeunits += count + surrogate_pairs };
 }
 
 /// The byte offset just past the character at index `index`, counted in
@@ -78,34 +72,47 @@ pub unsafe fn mb_utf_index_to_bytes(
     if index == 0 {
         return 0;
     }
-    // SAFETY: the caller's promise, spelled as the slice it describes.
-    let bytes = unsafe { cstr::slice_at(s, len) };
     let mut count: size_t = 0;
-    let mut at = 0;
-    while at < bytes.len() {
-        let (c, clen) = char_and_len(&bytes[at..]);
+    let mut i: size_t = 0;
+    while i < len {
+        // SAFETY: `i` is inside the caller's `len` bytes.
+        let (c, clen) = unsafe { char_and_len(s.add(i), len - i) };
         count += 1;
         if use_utf16_units && c > 0xffff {
             count += 1;
         }
         if count >= index {
-            return (at + clen) as ssize_t;
+            return (i + clen) as ssize_t;
         }
-        at += clen;
+        i += clen;
     }
     -1
 }
 
-/// The codepoint at the start of `bytes`, and how many bytes it occupies.
+/// The codepoint at `p`, and how many bytes it occupies out of the `left`
+/// that remain.
 ///
 /// A single byte is taken at face value rather than decoded, which is what
 /// makes an invalid byte count as one character.
-fn char_and_len(bytes: &[u8]) -> (c_int, size_t) {
-    let clen = promised_char_len(bytes);
+///
+/// **Not a slice walk, deliberately.** A sequence `left` cuts short still
+/// reports its full length, and the decode that follows then reads the rest
+/// of it from *past* `left` -- which is how a four-byte character straddling
+/// the cut is still counted as a UTF-16 surrogate pair, as
+/// `test/functional/lua/vim_spec.lua`'s `str_utfindex` table requires.
+/// Upstream's body does the same. A slice form would answer the lead byte's
+/// own value there and lose the pair.
+///
+/// # Safety
+///
+/// `p` must point at `left` readable bytes, inside a longer string when a
+/// sequence at its end is incomplete.
+unsafe fn char_and_len(p: *const c_char, left: size_t) -> (c_int, size_t) {
+    let clen = unsafe { utf_ptr2len_len(p, left as c_int) } as size_t;
     let c = if clen > 1 {
-        char_at(bytes)
+        unsafe { utf_ptr2char(p) }
     } else {
-        c_int::from(bytes[0])
+        unsafe { *p as u8 as c_int }
     };
     (c, clen)
 }
