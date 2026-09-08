@@ -41,8 +41,8 @@ use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::buf_get_changedtick;
 use crate::charset::{
-    buf_init_chartab, getdigits_int, getdigits_int32, skiptowhite, skipwhite, str_foldcase,
-    vim_isprintc, vim_iswordp_buf,
+    buf_init_chartab, getdigits_int_at, getdigits_int32, skip, skiptowhite, skipwhite,
+    str_foldcase, vim_isprintc, vim_iswordp_buf,
 };
 use crate::cstr;
 use crate::drawscreen::state::display_tick;
@@ -64,7 +64,7 @@ use crate::highlight_group::{
     syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
 };
 use crate::indent_c::find_start_comment;
-use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::message::state::msg_col;
@@ -97,7 +97,7 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
-use ::libc::{qsort, strcpy, strpbrk};
+use ::libc::{qsort, strcpy};
 
 mod flags;
 pub(crate) use self::flags::*;

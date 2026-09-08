@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
@@ -159,15 +159,18 @@ const CLUSTER_OPS: [(&CStr, c_int); 3] = [
 /// # Safety
 ///
 /// `rest` must point at a NUL-terminated string.
-unsafe fn cluster_op(rest: *const c_char) -> Option<(c_int, c_int)> {
+fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
     for (name, op) in CLUSTER_OPS {
-        let len = name.count_bytes();
-        if unsafe { strncasecmp(rest, name.as_ptr(), len) } != 0 {
+        let name = name.to_bytes();
+        if !rest
+            .get(..name.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(name))
+        {
             continue;
         }
-        let after = unsafe { *rest.add(len) } as c_int;
+        let after = c_int::from(cstr::byte_at(rest, name.len()));
         if ascii_iswhite(after) || after == '=' as c_int {
-            return Some((len as c_int, op));
+            return Some((name.len(), op));
         }
     }
     None
@@ -176,7 +179,6 @@ unsafe fn cluster_op(rest: *const c_char) -> Option<(c_int, c_int)> {
 /// `:syntax cluster {name} [contains=..] [add=..] [remove=..]`.
 pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
     let arg = args.arg;
-    let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut got_clstr = false;
 
     args.nextcmd = unsafe { find_nextcmd(arg) };
@@ -184,9 +186,12 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
         return;
     }
 
-    let mut rest = unsafe { get_group_name(arg, &mut group_name_end) };
-    if !rest.is_null() {
-        let scl_id = unsafe { syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int) };
+    // SAFETY: the rest of the command line, which nothing below writes to.
+    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let mut end: Option<usize> = None;
+    if let Some(name) = split_group_name(&line) {
+        // SAFETY: the cluster name at the head of the command line.
+        let scl_id = unsafe { syn_check_cluster(arg, name.len as c_int) };
         if scl_id == 0 {
             return;
         }
@@ -195,15 +200,18 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
         // tests `scl_id >= 0` here and frees the list on the other branch;
         // that branch is unreachable.
         let scl_id = scl_id - SYNID_CLUSTER;
+        let mut cursor = name.rest;
 
-        while let Some((opt_len, list_op)) = unsafe { cluster_op(rest) } {
+        while let Some((keylen, list_op)) = cluster_op(&line[cursor..]) {
             let mut clstr_list = IdList::NONE;
-            if unsafe { get_id_list(&mut rest, opt_len, &mut clstr_list, args.skip != 0) }.is_err()
-            {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let rest = unsafe { c_str(rest) };
-                semsg!("E475: Invalid argument: {rest}");
-                break;
+            match read_id_list(&line, cursor, keylen, &mut clstr_list, args.skip != 0) {
+                Ok(next) => cursor = next,
+                Err(next) => {
+                    let shown = msg_bytes(&line[next..]);
+                    semsg!("E475: Invalid argument: {shown}");
+                    cursor = next;
+                    break;
+                }
             }
             let mut block = cur_syn_block();
             let list = &mut block.clusters_mut()[scl_id as usize].scl_list;
@@ -215,14 +223,14 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
             redraw_curbuf_later(UPD_SOME_VALID);
             syn_stack_free_all(cur_syn_block()); // Need to recompute all.
         }
+        end = Some(cursor);
     }
 
     if !got_clstr {
         emsg(gettext(c"E400: No cluster specified"));
     }
-    if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) == 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
+    if !end.is_some_and(|at| ends_excmd(c_int::from(cstr::byte_at(&line, at))) != 0) {
+        let shown = msg_bytes(&line);
+        semsg!("E475: Invalid argument: {shown}");
     }
 }

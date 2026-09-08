@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int, c_void};
@@ -262,22 +262,25 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
 pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
     let arg = args.arg;
-    let mut group_name_end = ::core::ptr::null_mut::<c_char>();
+    // SAFETY: the rest of the command line, which nothing below writes to.
+    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
     let mut conceal_char: c_int = NUL;
 
-    let mut rest = unsafe { get_group_name(arg, &mut group_name_end) };
-    if !rest.is_null() {
+    let name = split_group_name(&line);
+    let mut end = name.as_ref().map(|name| name.rest);
+    if let Some(name) = &name {
         let syn_id = if args.skip != 0 {
             -1
         } else {
-            unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) }
+            // SAFETY: the group name at the head of the command line.
+            unsafe { syn_check_group(arg, name.len as size_t) }
         };
         if syn_id != 0 {
             // A buffer for the keywords with their backslashes removed;
             // it can only shrink, so the argument's length is enough. The
             // two passes below write into it and shift bytes around inside
             // it, so it is handed on as a pointer.
-            let mut buf = vec![0u8; unsafe { cstr::bytes_at(rest) }.len() + 1];
+            let mut buf = vec![0u8; line.len() - name.rest + 1];
             let keyword_copy: *mut c_char = buf.as_mut_ptr().cast();
             let mut opt = SynOptArg {
                 flags: SynFlags::NONE,
@@ -294,27 +297,27 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             // to be read before any keyword can be created. Pass 1
             // collects them and copies the keywords into the buffer.
             let mut cnt = 0;
-            let mut p = keyword_copy;
-            while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
-                rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, args.skip) };
-                if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) != 0 {
-                    break;
+            let mut out = 0;
+            let byte = |at: usize| c_int::from(cstr::byte_at(&line, at));
+            while let Some(mut at) = end.filter(|&at| ends_excmd(byte(at)) == 0) {
+                end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip != 0);
+                match end {
+                    Some(next) if ends_excmd(byte(next)) == 0 => at = next,
+                    _ => break,
                 }
-                while unsafe { *rest } as c_int != NUL && !ascii_iswhite(unsafe { *rest } as c_int)
-                {
-                    if unsafe { *rest } as c_int == '\\' as c_int
-                        && unsafe { *rest.add(1) } as c_int != NUL
-                    {
-                        rest = unsafe { rest.add(1) };
+                while byte(at) != NUL && !ascii_iswhite(byte(at)) {
+                    // A backslash hides the byte after it, itself included.
+                    if byte(at) == '\\' as c_int && byte(at + 1) != NUL {
+                        at += 1;
                     }
-                    unsafe { *p = *rest };
-                    p = unsafe { p.add(1) };
-                    rest = unsafe { rest.add(1) };
+                    buf[out] = line[at];
+                    out += 1;
+                    at += 1;
                 }
-                unsafe { *p = NUL as c_char };
-                p = unsafe { p.add(1) };
+                buf[out] = NUL as u8;
+                out += 1;
                 cnt += 1;
-                rest = unsafe { skipwhite(rest) };
+                end = Some(at + skip::white(&line[at..]));
             }
 
             // Pass 2: an entry per keyword.
@@ -343,12 +346,13 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
         }
     }
 
-    if rest.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
-    } else {
-        args.nextcmd = unsafe { check_nextcmd(rest) };
+    match end {
+        None => {
+            let shown = msg_bytes(&line);
+            semsg!("E475: Invalid argument: {shown}");
+        }
+        // SAFETY: an offset within the command line the caller still owns.
+        Some(at) => args.nextcmd = unsafe { check_nextcmd(arg.add(at)) },
     }
 
     redraw_curbuf_later(UPD_SOME_VALID);

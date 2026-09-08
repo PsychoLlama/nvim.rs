@@ -194,6 +194,38 @@ pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) 
     c_int::try_from(number).unwrap_or(def)
 }
 
+/// [`getdigits_int`] as an offset walk: the number `buffer[at..]` starts with,
+/// and the offset past what it consumed.
+///
+/// The offset form a converted command-line parse wants. `buffer` is a
+/// writable NUL-terminated buffer the caller owns -- nothing here writes to
+/// it, but a `&mut` is what gives the walk a pointer it may hold -- and this
+/// keeps `strtoimax`'s exact contract, leading blanks and a sign included,
+/// which a hand-written digit scanner would have to guess at.
+///
+/// # Panics
+/// If `buffer` holds no NUL at or after `at`.
+pub(crate) fn getdigits_int_at(
+    buffer: &mut [u8],
+    at: usize,
+    strict: bool,
+    def: c_int,
+) -> (c_int, usize) {
+    assert!(
+        buffer[at..].contains(&0),
+        "the walk needs a terminator to stop at"
+    );
+    let base = buffer.as_mut_ptr();
+    // SAFETY: `at` is in bounds of `buffer`, which the assert above says is
+    // NUL-terminated from there.
+    let mut cursor = unsafe { base.add(at) }.cast::<c_char>();
+    // SAFETY: as above; `getdigits_int` leaves the cursor within the string.
+    let number = unsafe { getdigits_int(&raw mut cursor, strict, def) };
+    // SAFETY: both pointers are into `buffer`, the base first.
+    let past = unsafe { cursor.cast::<uint8_t>().offset_from(base) };
+    (number, past.cast_unsigned())
+}
+
 /// [`getdigits`] narrowed to an `int32_t`, with [`getdigits_int`]'s shape.
 ///
 /// # Safety

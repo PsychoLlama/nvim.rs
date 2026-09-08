@@ -10,36 +10,51 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::message_fmt::c_str;
+use crate::charset::skip;
+use crate::cstr;
+use crate::mbyte::{char_at, cluster_len};
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::regexp::RE_MAGIC;
-use crate::types::{Failed, NUL};
+use crate::types::NUL;
 use crate::winlayer::Win;
+
+/// Where a `:syntax` command's group name ends and its next argument begins.
+pub(crate) struct GroupName {
+    /// How many bytes of the line the name itself takes.
+    pub(crate) len: usize,
+    /// Offset of the first argument after the name.
+    pub(crate) rest: usize,
+}
 
 /// Split off a `:syntax` command's group-name argument.
 ///
-/// `name_end` is left at the end of the name; the answer is the first argument
-/// after it, or NULL when the command ended instead. The first argument may be
-/// a pattern, in which which `|` is allowed, so only a NUL counts as the end.
-///
-/// # Safety
-///
-/// `arg` must point at the NUL-terminated rest of the command line.
-/// `name_end` is written through and needs nothing.
-pub(crate) unsafe fn get_group_name(arg: *mut c_char, name_end: &mut *mut c_char) -> *mut c_char {
-    *name_end = unsafe { skiptowhite(arg) };
-    let rest = unsafe { skipwhite(*name_end) };
-    if ends_excmd(unsafe { *arg } as c_int) != 0 || unsafe { *rest } as c_int == NUL {
-        return ::core::ptr::null_mut();
+/// `line` is the rest of the command line. Answers `None` when the command
+/// ended instead of naming an argument; the argument may be a pattern, in
+/// which `|` is allowed, so only a NUL counts as the end.
+pub(crate) fn split_group_name(line: &[u8]) -> Option<GroupName> {
+    let len = skip::to_white(line);
+    let rest = len + skip::white(&line[len..]);
+    if ends_excmd(byte(line, 0)) != 0 || byte(line, rest) == NUL {
+        return None;
     }
-    rest
+    Some(GroupName { len, rest })
+}
+
+/// The byte at `at`, as the pointer walk this replaces read it.
+///
+/// `line` is the rest of a command line, so its length *is* the terminator's
+/// offset and a read at or past it answers NUL — which is what every
+/// `ends_excmd`/`ascii_iswhite` test below is asking about.
+fn byte(line: &[u8], at: usize) -> c_int {
+    c_int::from(cstr::byte_at(line, at))
 }
 
 /// What an option word takes after its name.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum OptArg {
     /// Nothing: a bare flag word that ORs its `HL_*` into the item's flags.
     Flag,
@@ -116,23 +131,21 @@ fn starts_option(c: u8) -> bool {
     )
 }
 
-/// Does `arg` begin with `f`'s name, followed by what `f` requires?
+/// Does `rest` begin with `f`'s name, followed by what `f` requires?
 ///
 /// The comparison is ASCII-case-insensitive, which is what upstream's
 /// doubled-case name table (`"cCoOnNtTaAiInNeEdD"`) spells out a byte at a
-/// time. A NUL never matches a letter, so the walk stops at the terminator.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
+/// time. The end of the line never matches a letter, so a name that runs
+/// past it is no match.
+fn flag_matches(rest: &[u8], f: &SynFlag) -> bool {
     let name = f.name.to_bytes();
-    for (i, &want) in name.iter().enumerate() {
-        if !(unsafe { *arg.add(i) } as u8).eq_ignore_ascii_case(&want) {
-            return false;
-        }
+    if !rest
+        .get(..name.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(name))
+    {
+        return false;
     }
-    let after = unsafe { *arg.add(name.len()) } as c_int;
+    let after = byte(rest, name.len());
     ascii_iswhite(after)
         || if f.arg.takes_value() {
             after == '=' as c_int
@@ -141,20 +154,13 @@ unsafe fn flag_matches(arg: *const c_char, f: &SynFlag) -> bool {
         }
 }
 
-/// Which option word `arg` names, if any.
+/// Which option word `rest` starts with, if any.
 ///
 /// `keyword` is set while parsing `:syntax keyword`, where `display`, `fold`
 /// and `extend` are keywords rather than options — a match on one of those is
 /// reported as no match at all, which stops option parsing right there.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFlag> {
-    let f = FLAG_TAB
-        .iter()
-        .rev()
-        .find(|f| unsafe { flag_matches(arg, f) })?;
+fn find_flag(rest: &[u8], keyword: bool) -> Option<&'static SynFlag> {
+    let f = FLAG_TAB.iter().rev().find(|f| flag_matches(rest, f))?;
     if keyword
         && (f.flags == SynFlags::DISPLAY
             || f.flags == SynFlags::FOLD
@@ -165,108 +171,99 @@ unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFla
     Some(f)
 }
 
-/// Read the item options at `arg`, answering the first argument that is not
-/// one, or NULL on any error.
+/// Read the item options at `line[at..]`, answering the offset of the first
+/// argument that is not one, or `None` once an error has been reported.
 ///
 /// Callable at any point in an argument list and repeatedly, so that options
 /// before, between and after the patterns of a `:syntax region` all land in
 /// the same [`SynOptArg`].
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_syn_options(
-    mut arg: *mut c_char,
+pub(crate) fn read_item_options(
+    line: &[u8],
+    mut at: usize,
     opt: &mut SynOptArg,
     conceal_char: &mut c_int,
-    skip: c_int,
-) -> *mut c_char {
-    if arg.is_null() {
-        return ::core::ptr::null_mut(); // already detected error
-    }
+    skip: bool,
+) -> Option<usize> {
     if cur_syn_block().b_syn_conceal != 0 {
         opt.flags |= SynFlags::CONCEAL;
     }
 
-    while starts_option(unsafe { *arg } as u8) {
-        let Some(f) = (unsafe { find_flag(arg, opt.keyword) }) else {
+    while starts_option(cstr::byte_at(line, at)) {
+        let Some(f) = find_flag(&line[at..], opt.keyword) else {
+            // Not an option word after all: the caller reads whatever this
+            // is. A `:syntax keyword` argument reaches here for every
+            // keyword that happens to start with an option's first letter.
             break;
         };
         match f.arg {
             OptArg::Contains => {
                 if !opt.has_cont_list {
                     emsg(gettext(E_CONTAINS_NOT_ACCEPTED_HERE));
-                    return ::core::ptr::null_mut();
+                    return None;
                 }
-                if unsafe { get_id_list(&mut arg, 8, &mut opt.cont_list, skip != 0) }.is_err() {
-                    return ::core::ptr::null_mut();
-                }
+                at = read_id_list(line, at, 8, &mut opt.cont_list, skip).ok()?;
             }
             OptArg::ContainedIn => {
-                if unsafe { get_id_list(&mut arg, 11, &mut opt.cont_in_list, skip != 0) }.is_err() {
-                    return ::core::ptr::null_mut();
-                }
+                at = read_id_list(line, at, 11, &mut opt.cont_in_list, skip).ok()?;
             }
             OptArg::NextGroup => {
-                if unsafe { get_id_list(&mut arg, 9, &mut opt.next_list, skip != 0) }.is_err() {
-                    return ::core::ptr::null_mut();
-                }
+                at = read_id_list(line, at, 9, &mut opt.next_list, skip).ok()?;
             }
             OptArg::Cchar => {
                 // `cchar` is five letters and `flag_matches` already
-                // required the `=`, so the character starts at arg[6].
-                *conceal_char = unsafe { utf_ptr2char(arg.add(6)) };
-                arg = unsafe { arg.add(utfc_ptr2len(arg.add(6)) as usize - 1) };
+                // required the `=`, so the character starts at `at + 6`.
+                let cchar = &line[(at + 6).min(line.len())..];
+                *conceal_char = char_at(cchar);
                 if !vim_isprintc(*conceal_char) {
                     emsg(gettext(E_INVALID_CCHAR_VALUE));
-                    return ::core::ptr::null_mut();
+                    return None;
                 }
-                arg = unsafe { skipwhite(arg.add(7)) };
+                // Upstream advances by `utfc_ptr2len(arg + 6) - 1` *before*
+                // this test and by seven after it; at the end of the line
+                // that length is zero and the intermediate pointer is one
+                // before the argument, which nothing reads. Ordering the
+                // test first says the same thing without the underflow.
+                at += 6 + cluster_len(cchar);
+                at += skip::white(&line[at.min(line.len())..]);
             }
             OptArg::Flag => {
                 opt.flags |= f.flags;
-                arg = unsafe { skipwhite(arg.add(f.name.count_bytes())) };
+                at += f.name.count_bytes();
+                at += skip::white(&line[at..]);
                 if f.flags == SynFlags::SYNC_HERE || f.flags == SynFlags::SYNC_THERE {
-                    arg = unsafe { sync_group_arg(arg, opt) };
-                    if arg.is_null() {
-                        return ::core::ptr::null_mut();
-                    }
+                    at = read_sync_group(line, at, opt)?;
                 } else if f.flags == SynFlags::FOLD && foldmethod_is_syntax(Win::current()) {
                     fold_update_all(Win::current()); // Need to update folds later.
                 }
             }
         }
     }
-    arg
+    Some(at)
 }
 
 /// Read the group name after `grouphere`/`groupthere` and record the pattern
 /// index it names in `opt.sync_idx`.
 ///
-/// Answers what follows it, or NULL after reporting an error.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut SynOptArg) -> *mut c_char {
+/// Answers the offset of what follows it, or `None` after reporting an error.
+fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Option<usize> {
     if !opt.takes_sync_idx {
         emsg(gettext(c"E393: group[t]here not accepted here"));
-        return ::core::ptr::null_mut();
+        return None;
     }
-    let gname_start = arg;
-    arg = unsafe { skiptowhite(arg) };
-    if gname_start == arg {
-        return ::core::ptr::null_mut();
+    let end = at + skip::to_white(&line[at..]);
+    if end == at {
+        return None;
     }
-    // SAFETY: the bytes between the two pointers, both into the command line.
-    let gname = unsafe { name_at(gname_start, arg.offset_from(gname_start) as usize) };
+    let name = &line[at..end];
 
-    if gname.to_bytes() == b"NONE" {
+    if name == b"NONE" {
         opt.sync_idx = NONE_IDX;
     } else {
         // The named group has to already have a region START item: this is
         // an index into the pattern array, not an id.
-        let syn_id = unsafe { syn_name2id(gname.as_ptr()) };
+        let owned = cstr::owned(name);
+        // SAFETY: an owned NUL-terminated copy of the name.
+        let syn_id = unsafe { syn_name2id(owned.as_ptr()) };
         let block = cur_syn_block();
         let found = block.patterns().iter().rposition(|spp| {
             spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START
@@ -274,44 +271,40 @@ unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut SynOptArg) -> *mut c_ch
         match found {
             Some(i) => opt.sync_idx = i as c_int,
             None => {
-                // SAFETY: `gname` is live for the whole message.
-                let shown = unsafe { c_str(gname.as_ptr()) };
+                let shown = msg_bytes(name);
                 semsg!("E394: Didn't find region item for {shown}");
-                return ::core::ptr::null_mut();
+                return None;
             }
         }
     }
 
-    unsafe { skipwhite(arg) }
+    Some(end + skip::white(&line[end..]))
 }
 
 /// What one pass of [`parse_id_list`] found.
 struct IdListPass {
     /// The ids, in the order the list named them.
     ids: Vec<int16_t>,
-    /// Where the scan stopped. Written back to the caller's `arg` even on
-    /// failure — `:syntax cluster` reports the error against it.
-    end: *mut c_char,
+    /// Where the scan stopped. Answered even on failure — `:syntax cluster`
+    /// reports its error against it.
+    end: usize,
     /// An error was reported and the whole list is to be discarded.
     failed: bool,
 }
 
 /// Turn a `contains=`-style group list into a list of ids.
 ///
-/// `arg` points at the keyword and is advanced past the list. The argument is
-/// modified in passing (the parse writes NULs into it). Answers `Err` on any
-/// error; an existing `*list` is kept and the new one discarded.
-///
-/// # Safety
-///
-/// `arg` must point at a cursor standing on the NUL-terminated list argument;
-/// it is read through and left past what was parsed.
-pub(crate) unsafe fn get_id_list(
-    arg: &mut *mut c_char,
-    keylen: c_int,
+/// `at` stands on the keyword; the answer is the offset past the list, in
+/// `Ok` when it parsed and in `Err` when an error was reported — both
+/// callers need the end, and only one of them cares which it is. An
+/// existing `list` is kept and the newly parsed one discarded.
+pub(crate) fn read_id_list(
+    line: &[u8],
+    at: usize,
+    keylen: usize,
     list: &mut IdList,
     skip: bool,
-) -> Result<(), Failed> {
+) -> Result<usize, usize> {
     // The list is parsed more than once. A name that is a regexp matches
     // the group table as it stands, and a *later* name in the same list
     // can create a group that the regexp would also have matched
@@ -320,7 +313,7 @@ pub(crate) unsafe fn get_id_list(
     // own counter back to round 1.
     let mut previous: Option<usize> = None;
     let pass = loop {
-        let pass = unsafe { parse_id_list(*arg, keylen, skip) };
+        let pass = parse_id_list(line, at, keylen, skip);
         if pass.failed {
             break pass;
         }
@@ -330,42 +323,37 @@ pub(crate) unsafe fn get_id_list(
         }
     };
 
-    *arg = pass.end;
     if pass.failed {
-        return Err(Failed);
+        return Err(pass.end);
     }
     // An already-parsed list is kept; upstream allocates the second one
     // and frees it again.
     if list.is_none() {
         *list = IdList::from_ids(&pass.ids);
     }
-    Ok(())
+    Ok(pass.end)
 }
 
-/// One pass over `keyword=a,b,@cl` starting at `arg`.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPass {
+/// One pass over the `keyword=a,b,@cl` at `line[at..]`.
+fn parse_id_list(line: &[u8], at: usize, keylen: usize, skip: bool) -> IdListPass {
     let mut ids: Vec<int16_t> = Vec::new();
+    let after_key = (at + keylen).min(line.len());
+    let mut p = after_key + skip::white(&line[after_key..]);
 
-    let mut p = unsafe { skipwhite(arg.offset(keylen as isize)) };
-    if unsafe { *p } as c_int != '=' as c_int {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E405: Missing equal sign: {arg}");
+    if byte(line, p) != '=' as c_int {
+        let shown = msg_bytes(&line[at..]);
+        semsg!("E405: Missing equal sign: {shown}");
         return IdListPass {
             ids,
             end: p,
             failed: true,
         };
     }
-    p = unsafe { skipwhite(p.add(1)) };
-    if ends_excmd(unsafe { *p } as c_int) != 0 {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E406: Empty argument: {arg}");
+    p += 1; // the `=` itself; it is not the terminator, so this is in range
+    p += skip::white(&line[p..]);
+    if ends_excmd(byte(line, p)) != 0 {
+        let shown = msg_bytes(&line[at..]);
+        semsg!("E406: Empty argument: {shown}");
         return IdListPass {
             ids,
             end: p,
@@ -375,14 +363,11 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 
     loop {
         let mut end = p;
-        while unsafe { *end } as c_int != 0
-            && !ascii_iswhite(unsafe { *end } as c_int)
-            && unsafe { *end } as c_int != ',' as c_int
-        {
-            end = unsafe { end.add(1) };
+        while !matches!(cstr::byte_at(line, end), 0 | b',') && !ascii_iswhite(byte(line, end)) {
+            end += 1;
         }
 
-        match unsafe { parse_id_name(arg, p, end, skip, &mut ids) } {
+        match parse_id_name(line, at, p, end, skip, &mut ids) {
             Ok(Some(id)) => ids.push(id as int16_t),
             // A regexp name pushed its own matches, or `skip` is on.
             Ok(None) => {}
@@ -395,12 +380,13 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
             }
         }
 
-        p = unsafe { skipwhite(end) };
-        if unsafe { *p } as c_int != ',' as c_int {
+        p = end + skip::white(&line[end..]);
+        if byte(line, p) != ',' as c_int {
             break;
         }
-        p = unsafe { skipwhite(p.add(1)) }; // skip comma in between arguments
-        if ends_excmd(unsafe { *p } as c_int) != 0 {
+        p += 1; // skip the comma between arguments; it is not the terminator
+        p += skip::white(&line[p..]);
+        if ends_excmd(byte(line, p)) != 0 {
             break;
         }
     }
@@ -414,28 +400,24 @@ unsafe fn parse_id_list(arg: *mut c_char, keylen: c_int, skip: bool) -> IdListPa
 
 /// Resolve one name of a group list.
 ///
-/// Answers the id to add, `None` when the name added its own (a regexp) or
-/// added nothing (`@cluster` while skipping), and `Err` when a message has
-/// been given.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call. `p`
-/// must point at a NUL-terminated string, unaliased for the call. `end` must
-/// point at a NUL-terminated string, unaliased for the call.
-unsafe fn parse_id_name(
-    arg: *mut c_char,
-    p: *mut c_char,
-    end: *mut c_char,
+/// `at` stands on the list's keyword, whose first letter decides whether
+/// `ALL`/`TOP`/... are accepted; `line[start..end]` is the name. Answers the
+/// id to add, `None` when the name added its own (a regexp) or added nothing
+/// (`@cluster` while skipping), and `Err` when a message has been given.
+fn parse_id_name(
+    line: &[u8],
+    at: usize,
+    start: usize,
+    end: usize,
     skip: bool,
     ids: &mut Vec<int16_t>,
 ) -> Result<Option<c_int>, ()> {
-    let text_len = unsafe { end.offset_from(p) } as usize;
+    let text_len = end - start;
     // Leave room in front for the `^` and behind for the `$` the regexp
     // form needs.
     let mut name: Vec<u8> = Vec::with_capacity(text_len + 3);
     name.push(b'^');
-    name.extend_from_slice(unsafe { ::core::slice::from_raw_parts(p as *const u8, text_len) });
+    name.extend_from_slice(&line[start..end]);
     name.push(0);
     let plain = unsafe { name.as_ptr().add(1) } as *const c_char;
     let text = &name[1..1 + text_len];
@@ -443,16 +425,14 @@ unsafe fn parse_id_name(
     if text == b"ALLBUT" || text == b"ALL" || text == b"TOP" || text == b"CONTAINED" {
         // Only `contains=` and `containedin=` accept these, which is what
         // upstream tests by the keyword's first letter.
-        if !(unsafe { *arg } as u8).eq_ignore_ascii_case(&b'C') {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let plain = unsafe { c_str(plain) };
-            semsg!("E407: {plain} not allowed here");
+        if !cstr::byte_at(line, at).eq_ignore_ascii_case(&b'C') {
+            let shown = msg_bytes(text);
+            semsg!("E407: {shown} not allowed here");
             return Err(());
         }
         if !ids.is_empty() {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let plain = unsafe { c_str(plain) };
-            semsg!("E408: {plain} must be first in contains list");
+            let shown = msg_bytes(text);
+            semsg!("E408: {shown} must be first in contains list");
             return Err(());
         }
         let base = match text[0] {
@@ -467,23 +447,24 @@ unsafe fn parse_id_name(
         if skip {
             return Ok(None);
         }
+        // SAFETY: `name`'s own NUL-terminated copy of the text, one byte in
+        // past the `^` and one more past the `@`.
         let id = unsafe { syn_check_cluster(plain.add(1), text_len as c_int - 1) };
         return if id == 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let p = unsafe { c_str(p) };
-            semsg!("E409: Unknown group name: {p}");
+            let shown = msg_bytes(&line[start..]);
+            semsg!("E409: Unknown group name: {shown}");
             Err(())
         } else {
             Ok(Some(id))
         };
     }
 
-    if unsafe { strpbrk(plain, c"\\.*^$~[".as_ptr()) }.is_null() {
+    if !text.iter().any(|b| b"\\.*^$~[".contains(b)) {
+        // SAFETY: `name`'s own NUL-terminated copy of the text.
         let id = unsafe { syn_check_group(plain, text_len as size_t) };
         return if id == 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let p = unsafe { c_str(p) };
-            semsg!("E409: Unknown group name: {p}");
+            let shown = msg_bytes(&line[start..]);
+            semsg!("E409: Unknown group name: {shown}");
             Err(())
         } else {
             Ok(Some(id))
@@ -515,9 +496,8 @@ unsafe fn parse_id_name(
     }
     unsafe { vim_regfree(regmatch.regprog) };
     if !matched {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let p = unsafe { c_str(p) };
-        semsg!("E409: Unknown group name: {p}");
+        let shown = msg_bytes(&line[start..]);
+        semsg!("E409: Unknown group name: {shown}");
         return Err(());
     }
     Ok(None)
@@ -665,4 +645,129 @@ unsafe fn id_list_has(mut list: *mut int16_t, ssp: sp_syn, flags: SynFlags, dept
         item = unsafe { *list };
     }
     !retval
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Which option word a command-line tail names, and what kind it is.
+    fn flag_of(rest: &str) -> Option<(&'static str, OptArg)> {
+        let f = find_flag(rest.as_bytes(), false)?;
+        Some((f.name.to_str().expect("ASCII"), f.arg))
+    }
+
+    #[test]
+    fn a_bare_flag_word_is_recognised_at_the_end_of_the_line() {
+        assert_eq!(flag_of("contained"), Some(("contained", OptArg::Flag)));
+        assert_eq!(flag_of("transparent"), Some(("transparent", OptArg::Flag)));
+        assert_eq!(flag_of("skipwhite"), Some(("skipwhite", OptArg::Flag)));
+        assert_eq!(flag_of("conceal"), Some(("conceal", OptArg::Flag)));
+        assert_eq!(flag_of("grouphere"), Some(("grouphere", OptArg::Flag)));
+    }
+
+    #[test]
+    fn a_bare_flag_word_is_recognised_before_white_space_and_a_bar() {
+        assert_eq!(flag_of("contained /x/"), Some(("contained", OptArg::Flag)));
+        assert_eq!(flag_of("fold | echo"), Some(("fold", OptArg::Flag)));
+        // `|` and `"` end the command, which is what makes them an ending
+        // for a value-less option word too.
+        assert_eq!(flag_of("fold\" a comment"), Some(("fold", OptArg::Flag)));
+    }
+
+    #[test]
+    fn case_is_ignored_and_a_prefix_is_not_a_match() {
+        assert_eq!(flag_of("CONTAINED"), Some(("contained", OptArg::Flag)));
+        assert_eq!(flag_of("Skipnl"), Some(("skipnl", OptArg::Flag)));
+        // `contain` is a prefix of two option words and is neither of them.
+        assert_eq!(flag_of("contain"), None);
+        assert_eq!(flag_of("containedinx=a"), None);
+    }
+
+    #[test]
+    fn the_names_that_are_prefixes_of_each_other_stay_apart() {
+        assert_eq!(flag_of("contained"), Some(("contained", OptArg::Flag)));
+        assert_eq!(
+            flag_of("containedin=a,b"),
+            Some(("containedin", OptArg::ContainedIn))
+        );
+        assert_eq!(flag_of("conceal"), Some(("conceal", OptArg::Flag)));
+        assert_eq!(flag_of("concealends"), Some(("concealends", OptArg::Flag)));
+        assert_eq!(flag_of("cchar=x"), Some(("cchar", OptArg::Cchar)));
+        assert_eq!(
+            flag_of("contains=@cl"),
+            Some(("contains", OptArg::Contains))
+        );
+    }
+
+    #[test]
+    fn an_option_taking_a_value_needs_its_equals_sign() {
+        // A value-less ending is not an ending for these.
+        assert_eq!(flag_of("contains"), None);
+        assert_eq!(flag_of("nextgroup"), None);
+        assert_eq!(flag_of("cchar"), None);
+        // ... but white space is, because upstream lets `contains =a` through
+        // and diagnoses the missing `=` as E405 rather than as a stray word.
+        assert_eq!(flag_of("contains =a"), Some(("contains", OptArg::Contains)));
+        assert_eq!(
+            flag_of("nextgroup=x"),
+            Some(("nextgroup", OptArg::NextGroup))
+        );
+        // An empty list still parses as the option; E406 comes later.
+        assert_eq!(flag_of("contains="), Some(("contains", OptArg::Contains)));
+    }
+
+    #[test]
+    fn an_unknown_word_is_no_option_at_all() {
+        assert_eq!(flag_of("matchgroup=Foo"), None);
+        assert_eq!(flag_of("start=/x/"), None);
+        assert_eq!(flag_of(""), None);
+        assert_eq!(flag_of("/pattern/"), None);
+    }
+
+    #[test]
+    fn keyword_mode_hides_the_three_words_that_are_keywords_there() {
+        for word in ["display", "fold", "extend"] {
+            assert!(find_flag(word.as_bytes(), false).is_some(), "{word}");
+            assert!(find_flag(word.as_bytes(), true).is_none(), "{word}");
+        }
+        // Everything else is still an option while reading `:syntax keyword`.
+        assert!(find_flag(b"contained", true).is_some());
+    }
+
+    #[test]
+    fn the_cheap_reject_lets_every_option_word_through() {
+        for f in &FLAG_TAB {
+            let first = f.name.to_bytes()[0];
+            assert!(starts_option(first), "{:?}", f.name);
+            assert!(starts_option(first.to_ascii_uppercase()), "{:?}", f.name);
+        }
+        assert!(!starts_option(b'/'));
+        assert!(!starts_option(0));
+    }
+
+    #[test]
+    fn a_group_name_is_split_from_what_follows_it() {
+        let split = split_group_name(b"myGroup /pat/ contained").expect("an argument follows");
+        assert_eq!(split.len, 7);
+        assert_eq!(split.rest, 8);
+
+        // Runs of blanks collapse; the name itself never contains one.
+        let split = split_group_name(b"g\t \t/pat/").expect("an argument follows");
+        assert_eq!(split.len, 1);
+        assert_eq!(split.rest, 4);
+    }
+
+    #[test]
+    fn a_group_name_with_nothing_after_it_is_no_argument() {
+        assert!(split_group_name(b"myGroup").is_none());
+        assert!(split_group_name(b"myGroup   ").is_none());
+        assert!(split_group_name(b"").is_none());
+        // `|` and `"` end an Ex command, so they never start the name...
+        assert!(split_group_name(b"| echo").is_none());
+        // ... but they are ordinary bytes inside the argument, because the
+        // argument may be a pattern.
+        let split = split_group_name(b"g /a|b/").expect("an argument follows");
+        assert_eq!((split.len, split.rest), (1, 2));
+    }
 }

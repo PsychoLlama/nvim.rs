@@ -1,7 +1,7 @@
 //! `:syntax match`, `:syntax region` and `:syntax include`.
 //!
 //! The three subcommands that add a pattern-based item, plus
-//! [`get_syn_pattern`], which parses one `/pat/` with its `ms=`/`me=`/... offset
+//! [`read_pattern`], which parses one `/pat/` with its `ms=`/`me=`/... offset
 //! suffixes into a `SynPat`. `:syntax include` is here too: it sources another
 //! syntax file under an inclusion tag so its toplevel items become contained
 //! ones.
@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::optionstr::empty_option;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -49,18 +49,20 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
 
     if unsafe { *arg } as c_int == '@' as c_int {
         arg = unsafe { arg.add(1) };
-        let mut group_name_end = ::core::ptr::null_mut::<c_char>();
-        let rest = unsafe { get_group_name(arg, &mut group_name_end) };
-        if rest.is_null() {
+        // SAFETY: the rest of the command line after the `@`.
+        let line = unsafe { cstr::bytes_at(arg) };
+        let Some(name) = split_group_name(line) else {
             emsg(gettext(c"E397: Filename required"));
             return;
-        }
-        sgl_id = unsafe { syn_check_cluster(arg, group_name_end.offset_from(arg) as c_int) };
+        };
+        // SAFETY: the cluster name at the head of that line.
+        sgl_id = unsafe { syn_check_cluster(arg, name.len as c_int) };
         if sgl_id == 0 {
             return;
         }
         // `separate_nextcmd` and `expand_filename` depend on this.
-        args.arg = rest;
+        // SAFETY: an offset `split_group_name` answered from within the line.
+        args.arg = unsafe { arg.add(name.rest) };
     }
 
     // Everything left, up to the next command, is the file to include.
@@ -135,31 +137,42 @@ fn item_opt(takes_sync_idx: bool) -> SynOptArg {
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
 pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let arg = args.arg;
-    let mut group_name_end = ::core::ptr::null_mut::<c_char>();
+    // SAFETY: the rest of the command line, which nothing below writes to.
+    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
     let mut conceal_char: c_int = NUL;
-
-    // Isolate the group name, check for validity.
-    let mut rest = unsafe { get_group_name(arg, &mut group_name_end) };
-
     let mut opt = item_opt(syncing != 0);
-
-    // Options before the pattern, the pattern, then options after it.
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, args.skip) };
     let mut item = EMPTY_SYNPAT;
-    rest = unsafe { get_syn_pattern(rest, &mut item) };
-    if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
-        opt.flags |= SynFlags::HAS_EOL;
-    }
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, args.skip) };
+
+    // Isolate the group name, then the options before the pattern, the
+    // pattern, and the options after it.
+    let name = split_group_name(&line);
+    let mut end = name.as_ref().and_then(|name| {
+        let at = read_item_options(
+            &line,
+            name.rest,
+            &mut opt,
+            &mut conceal_char,
+            args.skip != 0,
+        )?;
+        let at = read_pattern(&line, at, &mut item)?;
+        if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
+            opt.flags |= SynFlags::HAS_EOL;
+        }
+        read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip != 0)
+    });
 
     let mut stored = false;
-    if !rest.is_null() {
+    if let Some(at) = end {
         // Check for a trailing command and illegal trailing arguments.
-        args.nextcmd = unsafe { check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || args.skip != 0 {
-            rest = ::core::ptr::null_mut();
+        // SAFETY: `at` is an offset `line` answered, so it is within the
+        // command line the caller still owns.
+        args.nextcmd = unsafe { check_nextcmd(arg.add(at)) };
+        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip != 0 {
+            end = None;
         } else {
-            let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
+            let name_len = name.as_ref().map_or(0, |name| name.len);
+            // SAFETY: the group name at the head of the command line.
+            let syn_id = unsafe { syn_check_group(arg, name_len as size_t) };
             if syn_id != 0 {
                 syn_incl_toplevel(syn_id, &mut opt.flags);
                 // Store the pattern in the item list; the three id lists are
@@ -196,10 +209,9 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
 
     // Something failed: dropping `item` and `opt` releases the pattern text,
     // the compiled program and the three lists.
-    if !stored && rest.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
+    if !stored && end.is_none() {
+        let shown = msg_bytes(&line);
+        semsg!("E475: Invalid argument: {shown}");
     }
 }
 
@@ -218,8 +230,8 @@ struct RegionArgs {
     pats: [Vec<RegionPat>; 3],
     opt: SynOptArg,
     conceal_char: c_int,
-    /// Where parsing stopped, or NULL after an error.
-    rest: *mut c_char,
+    /// Where parsing stopped, or `None` after an error.
+    end: Option<usize>,
     /// A required argument was missing, which is E399 rather than E390.
     not_enough: bool,
 }
@@ -238,35 +250,42 @@ fn region_item(key: &[u8]) -> Option<c_int> {
 }
 
 /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
-fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
+///
+/// `line` is the whole rest of the command line and `at` the offset of the
+/// first argument after the group name.
+fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> RegionArgs {
     let mut out = RegionArgs {
         pats: [Vec::new(), Vec::new(), Vec::new()],
         opt: item_opt(false),
         conceal_char: NUL,
-        rest,
+        end: at,
         not_enough: false,
     };
     let mut matchgroup_id = 0;
     let mut illegal = false;
+    let byte = |at: usize| c_int::from(cstr::byte_at(line, at));
 
-    while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
+    let mut cursor = at;
+    while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
         // Options may appear anywhere between the patterns.
-        rest = unsafe { get_syn_options(rest, &mut out.opt, &mut out.conceal_char, args.skip) };
-        if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) != 0 {
-            break;
+        cursor = read_item_options(
+            line,
+            at,
+            &mut out.opt,
+            &mut out.conceal_char,
+            args.skip != 0,
+        );
+        match cursor {
+            Some(next) if ends_excmd(byte(next)) == 0 => at = next,
+            _ => break,
         }
 
         // Must be a pattern keyword or `matchgroup` then.
-        let mut key_end = rest;
-        while unsafe { *key_end } as c_int != 0
-            && !ascii_iswhite(unsafe { *key_end } as c_int)
-            && unsafe { *key_end } as c_int != '=' as c_int
-        {
-            key_end = unsafe { key_end.add(1) };
+        let mut key_end = at;
+        while !matches!(cstr::byte_at(line, key_end), 0 | b'=') && !ascii_iswhite(byte(key_end)) {
+            key_end += 1;
         }
-        // SAFETY: both pointers are into the command line, `rest` first.
-        let key = unsafe { cstr::slice_at(rest, key_end.offset_from(rest) as usize) };
-        let Some(item) = region_item(key) else {
+        let Some(item) = region_item(&line[at..key_end]) else {
             break;
         };
         if item == ITEM_SKIP && !out.pats[ITEM_SKIP as usize].is_empty() {
@@ -274,34 +293,35 @@ fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
             break;
         }
 
-        rest = unsafe { skipwhite(key_end) };
-        if unsafe { *rest } as c_int != '=' as c_int {
-            rest = ::core::ptr::null_mut();
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(args.arg) };
-            semsg!("E398: Missing '=': {arg}");
+        at = key_end + skip::white(&line[key_end..]);
+        if byte(at) != '=' as c_int {
+            cursor = None;
+            let shown = msg_bytes(line);
+            semsg!("E398: Missing '=': {shown}");
             break;
         }
-        rest = unsafe { skipwhite(rest.add(1)) };
-        if unsafe { *rest } as c_int == NUL {
+        at += 1;
+        at += skip::white(&line[at..]);
+        if byte(at) == NUL {
             out.not_enough = true;
             break;
         }
 
         if item == ITEM_MATCHGROUP {
-            let p = unsafe { skiptowhite(rest) };
-            if (unsafe { p.offset_from(rest) } == 4 && unsafe { cstr::starts_with(rest, b"NONE") })
-                || args.skip != 0
-            {
+            let name_end = at + skip::to_white(&line[at..]);
+            if &line[at..name_end] == b"NONE" || args.skip != 0 {
                 matchgroup_id = 0;
             } else {
-                matchgroup_id = unsafe { syn_check_group(rest, p.offset_from(rest) as size_t) };
+                let name = cstr::owned(&line[at..name_end]);
+                // SAFETY: an owned NUL-terminated copy of the group name.
+                matchgroup_id =
+                    unsafe { syn_check_group(name.as_ptr(), (name_end - at) as size_t) };
                 if matchgroup_id == 0 {
                     illegal = true;
                     break;
                 }
             }
-            rest = unsafe { skipwhite(p) };
+            cursor = Some(name_end + skip::white(&line[name_end..]));
             continue;
         }
 
@@ -309,7 +329,7 @@ fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
         // external matches, skip and end patterns use them.
         reg_do_extmatch.set(if item == ITEM_START { REX_SET } else { REX_USE });
         let mut pat = EMPTY_SYNPAT;
-        rest = unsafe { get_syn_pattern(rest, &mut pat) };
+        cursor = read_pattern(line, at, &mut pat);
         reg_do_extmatch.set(0);
         if item == ITEM_END && vim_regcomp_had_eol() != 0 && !out.opt.flags.has(SynFlags::EXCLUDENL)
         {
@@ -320,10 +340,10 @@ fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
 
     // An `illegal` stop is reported as E390, which is what upstream's
     // "rest = NULL" here and its `illegal || rest == NULL` test below say.
-    out.rest = if illegal || out.not_enough {
-        ::core::ptr::null_mut()
+    out.end = if illegal || out.not_enough {
+        None
     } else {
-        rest
+        cursor
     };
     out
 }
@@ -332,30 +352,34 @@ fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
 /// end={pat} .. [{options}]`.
 pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
     let arg = args.arg;
-    let mut group_name_end = ::core::ptr::null_mut::<c_char>();
+    // SAFETY: the rest of the command line, which nothing below writes to.
+    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
 
     // Isolate the group name, check for validity.
-    let rest = unsafe { get_group_name(arg, &mut group_name_end) };
+    let name = split_group_name(&line);
 
-    let mut parsed = parse_region_args(args, rest);
-    let mut rest = parsed.rest;
+    let mut parsed = parse_region_args(args, &line, name.as_ref().map(|name| name.rest));
+    let mut end = parsed.end;
 
     // Must have a "start" and an "end" pattern.
-    if !rest.is_null()
+    if end.is_some()
         && (parsed.pats[ITEM_START as usize].is_empty()
             || parsed.pats[ITEM_END as usize].is_empty())
     {
         parsed.not_enough = true;
-        rest = ::core::ptr::null_mut();
+        end = None;
     }
 
-    if !rest.is_null() {
+    if let Some(at) = end {
         // Check for trailing garbage or a command; if OK, add the item.
-        args.nextcmd = unsafe { check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || args.skip != 0 {
-            rest = ::core::ptr::null_mut();
+        // SAFETY: `at` is an offset within the command line the caller owns.
+        args.nextcmd = unsafe { check_nextcmd(arg.add(at)) };
+        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip != 0 {
+            end = None;
         } else {
-            let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
+            let name_len = name.as_ref().map_or(0, |name| name.len);
+            // SAFETY: the group name at the head of the command line.
+            let syn_id = unsafe { syn_check_group(arg, name_len as size_t) };
             if syn_id != 0 {
                 syn_incl_toplevel(syn_id, &mut parsed.opt.flags);
                 store_region(parsed, syn_id, syncing != 0);
@@ -368,14 +392,11 @@ pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
 
     // Nothing was stored: dropping `parsed` releases every parsed pattern, its
     // compiled program and the three lists.
+    let shown = msg_bytes(&line);
     if parsed.not_enough {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E399: Not enough arguments: syntax region {arg}");
-    } else if rest.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E475: Invalid argument: {arg}");
+        semsg!("E399: Not enough arguments: syntax region {shown}");
+    } else if end.is_none() {
+        semsg!("E475: Invalid argument: {shown}");
     }
 }
 
@@ -428,109 +449,100 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
     }
 }
 
-/// Read one delimited pattern plus its offsets into `ci`.
+/// Read the delimited pattern at `line[at..]`, plus its offsets, into `ci`.
 ///
-/// Answers what follows it, or NULL after reporting an error.
-///
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut SynPat) -> *mut c_char {
+/// Answers the offset of what follows it, or `None` after reporting an error.
+pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<usize> {
     // Need at least three characters: two delimiters and something between.
-    if arg.is_null()
-        || unsafe { *arg } as c_int == NUL
-        || unsafe { *arg.add(1) } as c_int == NUL
-        || unsafe { *arg.add(2) } as c_int == NUL
-    {
-        return ::core::ptr::null_mut();
+    let body = line.get(at..)?;
+    if body.len() < 3 {
+        return None;
     }
+    let delimiter = body[0];
 
-    let end = unsafe { skip_regexp(arg.add(1), *arg as c_int, 1) };
-    if unsafe { *end } as c_int != unsafe { *arg } as c_int {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E401: Pattern delimiter not found: {arg}");
-        return ::core::ptr::null_mut();
+    // One writable NUL-terminated copy of the rest of the line. `skip_regexp`
+    // and `getdigits_int` are pointer walks with no slice form, and this is
+    // what they walk: offsets into it are offsets into `line[at..]`, and
+    // nothing borrowed from the caller is handed to a raw pointer.
+    let mut tail: Vec<u8> = Vec::with_capacity(body.len() + 1);
+    tail.extend_from_slice(body);
+    tail.push(NUL as u8);
+
+    // SAFETY: `tail` is NUL-terminated and outlives the walk.
+    let stop = unsafe { skip_regexp(tail.as_mut_ptr().add(1).cast(), delimiter as c_int, 1) };
+    // SAFETY: both pointers are into `tail`, the base first.
+    let end = unsafe { stop.cast::<u8>().offset_from(tail.as_ptr()) } as usize;
+    if cstr::byte_at(&tail, end) != delimiter {
+        let shown = msg_bytes(body);
+        semsg!("E401: Pattern delimiter not found: {shown}");
+        return None;
     }
 
     // Store the pattern and its compiled program. 'cpoptions' is emptied
     // first, to avoid the 'l' flag.
-    // SAFETY: both pointers are into the command line, `arg` first.
-    let pattern = unsafe { name_at(arg.add(1), end.offset_from(arg) as usize - 1) };
+    let pattern = cstr::owned(&tail[1..end]);
     let cpo_save = p_cpo.get();
     p_cpo.set(empty_option());
+    // SAFETY: an owned NUL-terminated copy of the pattern text.
     ci.sp_prog = unsafe { vim_regcomp(pattern.as_ptr().cast_mut(), RE_MAGIC) };
     p_cpo.set(cpo_save);
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
-        return ::core::ptr::null_mut();
+        return None;
     }
     ci.sp_ic = cur_syn_block().b_syn_ic;
     syn_clear_time(&mut ci.sp_time);
 
-    let end = unsafe { read_pattern_offsets(ci, end.add(1)) };
-    if ends_excmd(unsafe { *end } as c_int) == 0 && !ascii_iswhite(unsafe { *end } as c_int) {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
-        semsg!("E402: Garbage after pattern: {arg}");
-        return ::core::ptr::null_mut();
+    let end = read_pattern_offsets(ci, &mut tail, end + 1);
+    let after = c_int::from(cstr::byte_at(&tail, end));
+    if ends_excmd(after) == 0 && !ascii_iswhite(after) {
+        let shown = msg_bytes(body);
+        semsg!("E402: Garbage after pattern: {shown}");
+        return None;
     }
-    unsafe { skipwhite(end) }
+    Some(at + end + skip::white(&line[at + end..]))
 }
 
 /// The offset names, indexed by `SPO_*`.
 pub(crate) static SPO_NAME_TAB: [&CStr; SPO_COUNT as usize] =
     [c"ms=", c"me=", c"hs=", c"he=", c"rs=", c"re=", c"lc="];
 
-/// Which `SPO_*` offset the three characters at `end` name.
-///
-/// # Safety
-///
-/// `end` must point at a NUL-terminated string.
-unsafe fn offset_name(end: *const c_char) -> Option<c_int> {
-    let mut idx = SPO_COUNT;
-    loop {
-        idx -= 1;
-        if idx < 0 {
-            return None;
-        }
-        if unsafe { cstr::prefix_eq(end, SPO_NAME_TAB[idx as usize].as_ptr(), 3) } {
-            return Some(idx);
-        }
-    }
+/// Which `SPO_*` offset the three bytes at `at` name.
+fn offset_name(text: &[u8], at: usize) -> Option<c_int> {
+    let head = text.get(at..at + 3)?;
+    let idx = SPO_NAME_TAB
+        .iter()
+        .rposition(|name| name.to_bytes() == head)?;
+    Some(idx as c_int)
 }
 
 /// Read the comma-separated `ms=s+1,he=e-2,lc=3` offsets after a pattern.
 ///
-/// Answers the first character that is not part of them. An unrecognised name,
-/// an unrecognised `s`/`b`/`e` suffix or a missing comma ends the list; the
-/// caller diagnoses whatever is left.
-///
-/// # Safety
-///
-/// `end` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn read_pattern_offsets(ci: &mut SynPat, mut end: *mut c_char) -> *mut c_char {
+/// Answers the offset of the first byte that is not part of them. An
+/// unrecognised name, an unrecognised `s`/`b`/`e` suffix or a missing comma
+/// ends the list; the caller diagnoses whatever is left.
+fn read_pattern_offsets(ci: &mut SynPat, text: &mut [u8], mut at: usize) -> usize {
     loop {
-        let Some(mut idx) = (unsafe { offset_name(end) }) else {
-            return end;
+        let Some(mut idx) = offset_name(text, at) else {
+            return at;
         };
         let slot = idx as usize;
 
         // An offset applies to the match's start unless it names `e`, which
         // selects the second half of the flag word.
         if idx != SPO_LC_OFF {
-            match unsafe { *end.add(3) } as u8 {
+            match cstr::byte_at(text, at + 3) {
                 b's' | b'b' => {}
                 b'e' => idx += SPO_COUNT,
-                _ => return end,
+                _ => return at,
             }
         }
         ci.sp_off_flags |= (1 << idx) as int16_t;
 
         if idx == SPO_LC_OFF {
             // lc=99
-            end = unsafe { end.add(3) };
-            let n = unsafe { getdigits_int(&raw mut end, true, 0) };
+            let (n, past) = getdigits_int_at(text, at + 3, true, 0);
+            at = past;
             ci.sp_offsets[slot] = n;
             // An "lc=" offset automatically sets the "ms=" offset.
             if ci.sp_off_flags as c_int & (1 << SPO_MS_OFF) == 0 {
@@ -539,19 +551,110 @@ unsafe fn read_pattern_offsets(ci: &mut SynPat, mut end: *mut c_char) -> *mut c_
             }
         } else {
             // yy=x+99
-            end = unsafe { end.add(4) };
-            if unsafe { *end } as c_int == '+' as c_int {
-                end = unsafe { end.add(1) };
-                ci.sp_offsets[slot] = unsafe { getdigits_int(&raw mut end, true, 0) };
-            } else if unsafe { *end } as c_int == '-' as c_int {
-                end = unsafe { end.add(1) };
-                ci.sp_offsets[slot] = -unsafe { getdigits_int(&raw mut end, true, 0) };
+            at += 4;
+            let sign = match cstr::byte_at(text, at) {
+                b'+' => 1,
+                b'-' => -1,
+                _ => 0,
+            };
+            if sign != 0 {
+                let (n, past) = getdigits_int_at(text, at + 1, true, 0);
+                at = past;
+                ci.sp_offsets[slot] = sign * n;
             }
         }
 
-        if unsafe { *end } as c_int != ',' as c_int {
-            return end;
+        if cstr::byte_at(text, at) != b',' {
+            return at;
         }
-        end = unsafe { end.add(1) };
+        at += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The offsets `text` names, read as `read_pattern` would read them.
+    fn offsets(text: &str) -> (SynPat, usize) {
+        let mut buffer: Vec<u8> = text.bytes().chain([NUL as u8]).collect();
+        let mut pat = EMPTY_SYNPAT;
+        let at = read_pattern_offsets(&mut pat, &mut buffer, 0);
+        (pat, at)
+    }
+
+    #[test]
+    fn a_start_offset_sets_its_own_slot() {
+        let (pat, at) = offsets("ms=s+1");
+        assert_eq!(at, 6);
+        assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 1);
+        assert_eq!(
+            pat.sp_off_flags as c_int & (1 << SPO_MS_OFF),
+            1 << SPO_MS_OFF
+        );
+    }
+
+    #[test]
+    fn an_end_suffix_selects_the_second_half_of_the_flag_word() {
+        let (pat, at) = offsets("he=e-2");
+        assert_eq!(at, 6);
+        assert_eq!(pat.sp_offsets[SPO_HE_OFF as usize], -2);
+        let from_end = SPO_HE_OFF + SPO_COUNT;
+        assert_eq!(pat.sp_off_flags as c_int & (1 << from_end), 1 << from_end);
+        assert_eq!(pat.sp_off_flags as c_int & (1 << SPO_HE_OFF), 0);
+    }
+
+    #[test]
+    fn several_offsets_separated_by_commas_all_land() {
+        let (pat, at) = offsets("ms=s+1,me=e-1,hs=s,re=e+3");
+        assert_eq!(at, 25);
+        assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 1);
+        assert_eq!(pat.sp_offsets[SPO_ME_OFF as usize], -1);
+        // A bare `s` with no number leaves the offset at zero.
+        assert_eq!(pat.sp_offsets[SPO_HS_OFF as usize], 0);
+        assert_eq!(pat.sp_offsets[SPO_RE_OFF as usize], 3);
+    }
+
+    #[test]
+    fn lc_takes_no_suffix_and_seeds_ms() {
+        let (pat, at) = offsets("lc=3");
+        assert_eq!(at, 4);
+        assert_eq!(pat.sp_offsets[SPO_LC_OFF as usize], 3);
+        assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 3);
+        assert_eq!(
+            pat.sp_off_flags as c_int & (1 << SPO_MS_OFF),
+            1 << SPO_MS_OFF
+        );
+    }
+
+    #[test]
+    fn an_ms_already_given_is_not_overwritten_by_lc() {
+        let (pat, _) = offsets("ms=s+9,lc=3");
+        assert_eq!(pat.sp_offsets[SPO_MS_OFF as usize], 9);
+        assert_eq!(pat.sp_offsets[SPO_LC_OFF as usize], 3);
+    }
+
+    #[test]
+    fn the_list_stops_at_anything_it_does_not_recognise() {
+        // An unknown name.
+        assert_eq!(offsets("xx=s+1").1, 0);
+        // A known name with an unknown suffix.
+        assert_eq!(offsets("ms=q+1").1, 0);
+        // No comma after a complete offset: the caller diagnoses the rest.
+        assert_eq!(offsets("ms=s+1 contained").1, 6);
+        // Nothing at all, and a name the line is too short to hold.
+        assert_eq!(offsets("").1, 0);
+        assert_eq!(offsets("ms").1, 0);
+    }
+
+    #[test]
+    fn every_region_keyword_is_recognised_ignoring_case() {
+        assert_eq!(region_item(b"matchgroup"), Some(ITEM_MATCHGROUP));
+        assert_eq!(region_item(b"MatchGroup"), Some(ITEM_MATCHGROUP));
+        assert_eq!(region_item(b"start"), Some(ITEM_START));
+        assert_eq!(region_item(b"skip"), Some(ITEM_SKIP));
+        assert_eq!(region_item(b"END"), Some(ITEM_END));
+        assert_eq!(region_item(b"contained"), None);
+        assert_eq!(region_item(b""), None);
     }
 }
