@@ -145,6 +145,16 @@ this: `files_without_forbid_unsafe` counted files that had not made a claim,
 where `files_allowing_unsafe_code` counts the ones that have made the opposite
 claim, deliberately, in a line a reviewer can see.
 
+**There are no free `forbid`s left, and there will not be until a subtree
+finishes.** Exactly 49 files carry neither attribute, and every one of them is
+a `mod.rs` (or `lib.rs`) with at least one descendant that still allows
+unsafe: `allow` under a `forbid` is `E0453`, a hard error, so writing the
+attribute on any of them fails to compile. Counting files without the
+attribute therefore says nothing about progress — the number cannot move until
+`api/`, `eval/`, `lua/`, `os/` and the other 45 roots have emptied their
+subtrees, at which point it falls in one step. This is the same rule as
+"take a `mod.rs` last", stated for the attribute rather than for the lint.
+
 ## The types the perimeter cannot hold
 
 The perimeter is measured in unchecked lines, and it prunes itself on them:
