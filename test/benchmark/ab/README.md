@@ -35,14 +35,32 @@ scrbench	Ir	28,018,423,927
 ```
 
 Do that for each side and compare the two numbers by hand. **This is the
-measurement that settles a perf question.** It is deterministic, so a 0.3 %
-difference is a real 0.3 % difference; wall clock on this machine drifts
-several percent between sessions and cannot resolve that. It costs about
-50x the wall-clock run.
+measurement that settles a perf question.** It is deterministic, so the same
+binary answers the same number to a few parts per million; wall clock on this
+machine drifts several percent between sessions and cannot resolve that. It
+costs about 50x the wall-clock run.
 
-It does not need `codegen-units = 1` and does not need both orders — there is
-no placement effect and no ordering effect in an instruction count. Build both
-sides however you like, as long as it is the same way.
+It does not need both orders — there is no ordering effect in an instruction
+count.
+
+**It does need `codegen-units = 1` on both sides.** The default release
+profile splits the crate into sixteen units, and which unit a function lands
+in decides what gets inlined into it; adding a function to a module, or
+changing the size of one three call levels away, repartitions the crate and
+moves real instructions. Measured: two commits whose diff `scrbench` never
+executes — the whole of it is in `diff/`, and no phase of the canary turns
+diff mode on — came out 170 M Ir (0.60 %) apart at the default, all of it
+inside `drawline::win_line`, and **0.01 % apart** with `codegen-units = 1`.
+So a sub-percent difference at the default is not evidence of anything. Build
+both sides with
+
+```toml
+[profile.release]
+codegen-units = 1
+```
+
+before believing a number under a percent or two, and say in the writeup
+which way the binaries were built.
 
 When a number moves and the function is not obvious, ask callgrind:
 
