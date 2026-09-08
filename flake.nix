@@ -145,6 +145,11 @@
             packages = [
               (mkToolchain pkgs)
               pkgs.just
+              # `valgrind --tool=cachegrind|callgrind` is how a perf claim in
+              # this tree is settled: instruction counts are deterministic
+              # where wall clock on this machine drifts several percent
+              # between sessions. test/benchmark/ab/README.md is the method.
+              pkgs.valgrind
               pkgs.cmake
               pkgs.ninja
               pkgs.pkg-config
