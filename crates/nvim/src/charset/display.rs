@@ -17,8 +17,8 @@ use core::{ptr, slice};
 
 use crate::garray::{ga_grow, ga_init};
 use crate::mbyte::{
-    mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells, utf_ptr2char,
-    utf_ptr2len, utfc_ptr2len,
+    cluster_len, mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells,
+    utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
@@ -139,8 +139,10 @@ pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
     let mut room = bufsize as isize - len as isize;
     let mut at = 0usize;
     while bytes[at] != 0 {
-        // SAFETY: `at` is inside the NUL-terminated string.
-        let mut step = unsafe { utfc_ptr2len(buf.add(at)) } as usize;
+        // The bytes past the terminator are the buffer's, not the string's,
+        // and a cluster never crosses a NUL: it is not a continuation byte
+        // and never combines.
+        let mut step = cluster_len(&bytes[at..]);
         if step > 1 {
             // A multibyte character is left alone.
             len -= step;

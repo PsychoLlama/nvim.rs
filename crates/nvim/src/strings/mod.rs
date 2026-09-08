@@ -4,7 +4,7 @@
 use crate::cstr;
 use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
-use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
+use crate::mbyte::{cluster_len, utf_char2bytes};
 use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
@@ -248,8 +248,8 @@ pub unsafe extern "C" fn reverse_text(s: *mut c_char) -> *mut c_char {
     let mut at = len;
     let mut i = 0;
     while i < len {
-        // Never past the terminator: `utfc_ptr2len` stops there.
-        let char_len = unsafe { utfc_ptr2len(s.add(i)) as usize };
+        // Never past the terminator: the slice ends there.
+        let char_len = cluster_len(&src[i..]);
         at -= char_len;
         dst[at..at + char_len].copy_from_slice(&src[i..i + char_len]);
         i += char_len;

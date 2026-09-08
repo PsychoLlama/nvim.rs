@@ -25,7 +25,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_number_arg, tv_check_for_opt_bool_arg, tv_check_for_opt_number_arg,
     tv_check_for_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
 };
-use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
+use crate::mbyte::{char_at, char_len, cluster_len, mb_cptr2char_adv, mb_ptr2char_adv};
 use crate::memory::xmemdupz;
 use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, int64_t, size_t};
 
@@ -38,44 +38,32 @@ use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, int64_t, size_t}
 /// did.
 #[derive(Clone, Copy)]
 struct CharLen {
-    count_composing: bool,
+    separate_composing: bool,
 }
 
 impl CharLen {
-    fn new(count_composing: bool) -> CharLen {
-        CharLen { count_composing }
+    fn new(separate_composing: bool) -> CharLen {
+        CharLen { separate_composing }
     }
 
-    /// The length of the character at `p` under this rule.
-    ///
-    /// # Safety
-    ///
-    /// `p` must point at a NUL-terminated string.
-    unsafe fn of(self, p: *const c_char) -> c_int {
-        if self.count_composing {
-            // SAFETY: the caller's contract.
-            unsafe { utf_ptr2len(p) }
+    /// The length of the character at the start of `bytes` under this rule.
+    fn of(self, bytes: &[u8]) -> usize {
+        if self.separate_composing {
+            char_len(bytes)
         } else {
-            // SAFETY: the caller's contract.
-            unsafe { utfc_ptr2len(p) }
+            cluster_len(bytes)
         }
     }
 }
 
-/// The code point at `p`, as the C reads it: through `utf_ptr2char` for a
+/// The code point at the start of `bytes`, as the C reads it: decoded for a
 /// multi-byte character and as a **signed** `char` otherwise, so a stray
 /// byte over 0x7f is negative and never counts as a surrogate pair.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
+fn code_point(bytes: &[u8], char_len: usize) -> c_int {
     if char_len > 1 {
-        // SAFETY: the caller's contract.
-        unsafe { utf_ptr2char(p) }
+        char_at(bytes)
     } else {
-        // SAFETY: as above; one readable byte is enough here.
-        unsafe { *p as c_int }
+        c_int::from(bytes[0].cast_signed())
     }
 }
 
@@ -110,27 +98,29 @@ unsafe fn byteidx_common(args: *mut TypVal, result: *mut TypVal, comp: bool) {
     };
 
     let char_len = CharLen::new(comp);
-    let mut t = str;
+    // SAFETY: `string_chk` answered a NUL-terminated string.
+    let bytes = unsafe { cstr::bytes_at(str) };
+    let mut at = 0;
     while idx > 0 {
-        if unsafe { *t } == 0 {
+        let Some(rest) = bytes.get(at..).filter(|rest| !rest.is_empty()) else {
             return; // End of string before the index was reached.
-        }
+        };
         if utf16idx {
-            let clen = unsafe { char_len.of(t) };
-            if unsafe { code_point(t, clen) } > 0xffff {
+            let clen = char_len.of(rest);
+            if code_point(rest, clen) > 0xffff {
                 idx -= 1;
             }
-            // The last unit of a surrogate pair leaves `t` on the
+            // The last unit of a surrogate pair leaves the cursor on the
             // character it belongs to, which is the answer.
             if idx > 0 {
-                t = unsafe { t.offset(clen as isize) };
+                at += clen;
             }
         } else {
-            t = unsafe { t.offset(char_len.of(t) as isize) };
+            at += char_len.of(rest);
         }
         idx -= 1;
     }
-    unsafe { (*result).vval.v_number = t.offset_from(str) as VarNumber };
+    unsafe { (*result).vval.v_number = at as VarNumber };
 }
 
 /// "byteidx()" function
@@ -194,32 +184,28 @@ pub unsafe fn f_charidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     }
 
     let char_len = CharLen::new(countcc);
-    let mut p = str;
+    // SAFETY: the argument was checked to be a string, so it is
+    // NUL-terminated.
+    let bytes = unsafe { cstr::bytes_at(str) };
+    let mut at: VarNumber = 0;
     let mut len: c_int = 0;
-    while if utf16idx {
-        idx >= 0
-    } else {
-        p <= unsafe { str.offset(idx as isize) }
-    } {
-        if unsafe { *p } == 0 {
+    while if utf16idx { idx >= 0 } else { at <= idx } {
+        let rest = &bytes[at as usize..];
+        if rest.is_empty() {
             // An index of exactly the string's length in bytes (or
             // UTF-16 units) answers the string's length in characters.
-            if if utf16idx {
-                idx == 0
-            } else {
-                p == unsafe { str.offset(idx as isize) }
-            } {
-                unsafe { (*result).vval.v_number = len as VarNumber };
+            if if utf16idx { idx == 0 } else { at == idx } {
+                unsafe { (*result).vval.v_number = VarNumber::from(len) };
             }
             return;
         }
         if utf16idx {
             idx -= 1;
-            if unsafe { code_point(p, char_len.of(p)) } > 0xffff {
+            if code_point(rest, char_len.of(rest)) > 0xffff {
                 idx -= 1;
             }
         }
-        p = unsafe { p.offset(char_len.of(p) as isize) };
+        at += char_len.of(rest) as VarNumber;
         len += 1;
     }
 
@@ -248,15 +234,16 @@ pub unsafe fn f_strgetchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         return;
     }
 
-    let len = unsafe { cstr::bytes_at(str) }.len();
+    // SAFETY: `string_chk` answered a NUL-terminated string.
+    let bytes = unsafe { cstr::bytes_at(str) };
     let mut byteidx: size_t = 0;
-    while charidx >= 0 && byteidx < len {
+    while charidx >= 0 && byteidx < bytes.len() {
         if charidx == 0 {
-            unsafe { (*result).vval.v_number = utf_ptr2char(str.add(byteidx)) as VarNumber };
+            unsafe { (*result).vval.v_number = VarNumber::from(char_at(&bytes[byteidx..])) };
             break;
         }
         charidx -= 1;
-        byteidx += unsafe { utf_ptr2len(str.add(byteidx)) as size_t };
+        byteidx += char_len(&bytes[byteidx..]);
     }
 }
 
@@ -305,7 +292,9 @@ pub unsafe fn f_strutf16len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let p = unsafe { numbuf.string(args) };
-    let slen = unsafe { cstr::bytes_at(p) }.len();
+    // SAFETY: the argument was converted to a NUL-terminated string.
+    let bytes = unsafe { cstr::bytes_at(p) };
+    let slen = bytes.len();
 
     let mut nbyte: c_int = 0;
     let mut skipcc = false;
@@ -321,7 +310,7 @@ pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         if nchar > 0 {
             // Walk `nchar` characters in to find the byte offset.
             while nchar > 0 && (nbyte as size_t) < slen {
-                nbyte += unsafe { CharLen::new(!skipcc).of(p.offset(nbyte as isize)) };
+                nbyte += CharLen::new(!skipcc).of(&bytes[nbyte as usize..]) as c_int;
                 nchar -= 1;
             }
         } else {
@@ -341,7 +330,7 @@ pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
             len += if off < 0 {
                 1
             } else {
-                unsafe { CharLen::new(!skipcc).of(p.offset(off as isize)) }
+                CharLen::new(!skipcc).of(&bytes[off as usize..]) as c_int
             };
             charlen -= 1;
         }
@@ -382,7 +371,9 @@ pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let mut numbuf = NumBuf::new();
     let mut error = false;
     let p = unsafe { numbuf.string(args) };
-    let slen = unsafe { cstr::bytes_at(p).len() as VarNumber };
+    // SAFETY: the argument was converted to a NUL-terminated string.
+    let bytes = unsafe { cstr::bytes_at(p) };
+    let slen = bytes.len() as VarNumber;
 
     let mut n = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     let mut len = if error {
@@ -410,7 +401,7 @@ pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         // `len` was a character count after all: re-measure it.
         let mut off = n as int64_t;
         while off < slen as int64_t && len > 0 {
-            off += unsafe { utfc_ptr2len(p.offset(off as isize)) as int64_t };
+            off += cluster_len(&bytes[off as usize..]) as int64_t;
             len -= 1;
         }
         len = (off - n as int64_t) as VarNumber;
@@ -459,34 +450,30 @@ pub unsafe fn f_utf16idx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     }
 
     let char_len = CharLen::new(countcc);
-    let mut p = str;
+    // SAFETY: the argument was checked to be a string, so it is
+    // NUL-terminated.
+    let bytes = unsafe { cstr::bytes_at(str) };
     let mut len: c_int = 0;
     // The answer is the index of the *start* of the character the offset
     // lands in, so it trails `len` by one iteration.
     let mut utf16idx: c_int = 0;
-    while if charidx {
-        idx >= 0
-    } else {
-        p <= unsafe { str.offset(idx as isize) }
-    } {
-        if unsafe { *p } == 0 {
+    let mut at: VarNumber = 0;
+    while if charidx { idx >= 0 } else { at <= idx } {
+        let rest = &bytes[at as usize..];
+        if rest.is_empty() {
             // An index of exactly the string's length in bytes (or
             // characters) answers its length in UTF-16 units.
-            if if charidx {
-                idx == 0
-            } else {
-                p == unsafe { str.offset(idx as isize) }
-            } {
-                unsafe { (*result).vval.v_number = len as VarNumber };
+            if if charidx { idx == 0 } else { at == idx } {
+                unsafe { (*result).vval.v_number = VarNumber::from(len) };
             }
             return;
         }
         utf16idx = len;
-        let clen = unsafe { char_len.of(p) };
-        if unsafe { code_point(p, clen) } > 0xffff {
+        let clen = char_len.of(rest);
+        if code_point(rest, clen) > 0xffff {
             len += 1;
         }
-        p = unsafe { p.offset(clen as isize) };
+        at += clen as VarNumber;
         if charidx {
             idx -= 1;
         }

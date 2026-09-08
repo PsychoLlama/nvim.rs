@@ -33,7 +33,7 @@ use super::spec::{
 };
 use super::{TMP_LEN, tv_float, tv_nr, tv_ptr, tv_str};
 use crate::ascii::ascii_isdigit;
-use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
+use crate::mbyte::{cells_at, cluster_len};
 use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf};
@@ -538,17 +538,22 @@ unsafe fn render_string(
             };
 
             if c.fmt_spec == b'S' {
+                // SAFETY: the caller's argument is a NUL-terminated string.
+                let bytes = unsafe { cstr::bytes_at(str_arg) };
                 let mut cells: size_t = 0;
-                let mut end = str_arg;
-                while unsafe { *end } != 0 {
-                    let cell = unsafe { utf_ptr2cells(end) as size_t };
+                let mut at = 0;
+                while at < bytes.len() {
+                    let rest = &bytes[at..];
+                    // SAFETY: the width options exist by the time anything
+                    // is formatted for the screen.
+                    let cell = unsafe { cells_at(rest) }.cast_unsigned() as size_t;
                     if c.precision_specified && cells + cell > c.precision {
                         break;
                     }
                     cells += cell;
-                    end = unsafe { end.offset(utfc_ptr2len(end) as isize) };
+                    at += cluster_len(rest);
                 }
-                str_arg_l = unsafe { end.offset_from(str_arg) as size_t };
+                str_arg_l = at;
                 if c.min_field_width != 0 {
                     // Pad to a *cell* width: the field width is stated
                     // in cells and the padder counts bytes, so the

@@ -14,7 +14,6 @@ use crate::cstr;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
-use core::slice;
 
 use super::{given, strcase_save, strict_bool_arg, xstrnsave};
 use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
@@ -24,8 +23,8 @@ use crate::eval::typval::{
     tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::mbyte::{
-    mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
-    utfc_ptr2len,
+    char_at, char_count, char_len, cluster_len, clusters, mb_cptr2char_adv, mb_ptr2char_adv,
+    mb_string2cells, utf_head_off,
 };
 use crate::memory::handoff::owned_cstr;
 use crate::message::e_invarg;
@@ -33,9 +32,8 @@ use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
-use crate::types::{
-    EvalFuncData, TypVal, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
-};
+use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t};
+use core::ffi::CStr;
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
 /// `NUMBUFLEN` in the C.
@@ -52,10 +50,13 @@ const NUMBUFLEN: usize = 65;
 pub unsafe fn f_str2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
-    let mut p = unsafe { numbuf.string(args) };
-    while unsafe { *p } != 0 {
-        unsafe { tv_list_append_number((*result).vval.v_list, utf_ptr2char(p) as VarNumber) };
-        p = unsafe { p.offset(utf_ptr2len(p) as isize) };
+    // SAFETY: the argument was converted to a NUL-terminated string.
+    let bytes = unsafe { cstr::bytes_at(numbuf.string(args)) };
+    let mut at = 0;
+    while at < bytes.len() {
+        let rest = &bytes[at..];
+        unsafe { tv_list_append_number((*result).vval.v_list, VarNumber::from(char_at(rest))) };
+        at += char_len(rest);
     }
 }
 
@@ -385,7 +386,7 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
     let mut buf2 = [0 as c_char; NUMBUFLEN];
-    let mut in_str = unsafe { numbuf.string(args) };
+    let in_str = unsafe { numbuf.string(args) };
     let fromstr = unsafe { tv_get_string_buf_chk(args.add(1), buf.as_mut_ptr()) };
     let tostr = unsafe { tv_get_string_buf_chk(args.add(2), buf2.as_mut_ptr()) };
 
@@ -395,53 +396,51 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
         return; // Type error; the message is already out.
     }
 
-    // The `n`-th character of a set, as (start, byte length).
-    let nth_char = |set: *const c_char, n: c_int| -> Option<(*const c_char, c_int)> {
-        let mut p = set;
-        let mut left = n;
-        while unsafe { *p } != 0 {
-            let len = unsafe { utfc_ptr2len(p) };
-            if left == 0 {
-                return Some((p, len));
-            }
-            left -= 1;
-            p = unsafe { p.offset(len as isize) };
-        }
-        None
+    // SAFETY: all three were converted to NUL-terminated strings above.
+    let (in_bytes, from_bytes, to_bytes) = unsafe {
+        (
+            cstr::bytes_at(in_str),
+            cstr::bytes_at(fromstr),
+            cstr::bytes_at(tostr),
+        )
     };
-    let count_chars = |set: *const c_char| -> c_int {
-        let mut p = set;
-        let mut n = 0;
-        while unsafe { *p } != 0 {
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-            n += 1;
+
+    /// The `n`-th character of a set, as its bytes.
+    fn nth_char(set: &[u8], n: usize) -> Option<&[u8]> {
+        let mut at = 0;
+        for _ in 0..n {
+            at += cluster_len(set.get(at..).filter(|rest| !rest.is_empty())?);
         }
-        n
-    };
+        let rest = set.get(at..).filter(|rest| !rest.is_empty())?;
+        Some(&rest[..cluster_len(rest)])
+    }
 
     let mut out = Vec::<u8>::new();
 
     let mut lengths_checked = false;
+    let mut at = 0;
     'error: {
-        while unsafe { *in_str } != 0 {
-            let inlen = unsafe { utfc_ptr2len(in_str) };
+        while at < in_bytes.len() {
+            let cur = &in_bytes[at..];
+            let ch = &cur[..cluster_len(cur)];
 
             // Which character of `fromstr` is this, if any?
             let mut idx = 0;
             let mut found = false;
-            let mut p = fromstr;
-            while unsafe { *p } != 0 {
-                let fromlen = unsafe { utfc_ptr2len(p) };
-                if fromlen == inlen && unsafe { cstr::prefix_eq(in_str, p, inlen as size_t) } {
+            let mut from_at = 0;
+            while from_at < from_bytes.len() {
+                let from_rest = &from_bytes[from_at..];
+                let from_ch = &from_rest[..cluster_len(from_rest)];
+                if from_ch == ch {
                     found = true;
                     break;
                 }
                 idx += 1;
-                p = unsafe { p.offset(fromlen as isize) };
+                from_at += from_ch.len();
             }
 
-            let (cpstr, cplen) = if found {
-                match nth_char(tostr, idx) {
+            let replacement = if found {
+                match nth_char(to_bytes, idx) {
                     Some(hit) => hit,
                     None => break 'error, // tostr is shorter than fromstr
                 }
@@ -449,19 +448,15 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
                 if !lengths_checked {
                     lengths_checked = true;
                     // `idx` is now `fromstr`'s character count.
-                    if count_chars(tostr) != idx {
+                    if char_count(to_bytes) != idx {
                         break 'error;
                     }
                 }
-                (in_str, inlen)
+                ch
             };
 
-            // SAFETY: `cpstr` names `cplen` readable bytes of one of the
-            // three caller-owned strings.
-            out.extend_from_slice(unsafe {
-                slice::from_raw_parts(cpstr.cast::<u8>(), cplen as usize)
-            });
-            in_str = unsafe { in_str.offset(inlen as isize) };
+            out.extend_from_slice(replacement);
+            at += ch.len();
         }
         unsafe { (*result).vval.v_string = owned_cstr(out) };
         return;
@@ -488,7 +483,7 @@ pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     let mut numbuf = NumBuf::new();
     let mut buf1 = [0 as c_char; NUMBUFLEN];
     let mut buf2 = [0 as c_char; NUMBUFLEN];
-    let mut head = unsafe { tv_get_string_buf_chk(args, buf1.as_mut_ptr()) };
+    let head = unsafe { tv_get_string_buf_chk(args, buf1.as_mut_ptr()) };
     let mut mask = ptr::null::<c_char>();
     let mut dir = 0;
 
@@ -518,40 +513,41 @@ pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         }
     }
 
+    // SAFETY: both were converted to NUL-terminated strings above, and the
+    // mask may be absent.
+    let bytes = unsafe { cstr::bytes_at(head) };
+    let mask = unsafe { cstr::at_opt(mask) }.map(CStr::to_bytes);
+
     // Whitespace and NBSP by default, else exactly the mask's set.
     let trimmable = |c: c_int| -> bool {
-        if mask.is_null() {
-            return c <= b' ' as c_int || c == 0xa0;
-        }
-        let mut p = mask;
-        while unsafe { *p } != 0 {
-            if c == unsafe { utf_ptr2char(p) } {
-                return true;
-            }
-            p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        }
-        false
+        let Some(mask) = mask else {
+            return c <= c_int::from(b' ') || c == 0xa0;
+        };
+        clusters(mask).any(|(_, mask_char)| mask_char == c)
     };
 
+    let mut start = 0;
     if dir == 0 || dir == 1 {
-        while unsafe { *head } != 0 && trimmable(unsafe { utf_ptr2char(head) }) {
-            head = unsafe { head.offset(utfc_ptr2len(head) as isize) };
+        while start < bytes.len() && trimmable(char_at(&bytes[start..])) {
+            start += cluster_len(&bytes[start..]);
         }
     }
 
-    let mut tail = unsafe { head.add(cstr::bytes_at(head).len()) };
+    let mut end = bytes.len();
     if dir == 0 || dir == 2 {
-        while tail > head {
+        while end > start {
             // Step back over one whole character.
-            let prev = unsafe {
-                tail.offset(-(utf_head_off(head as *mut c_char, tail.sub(1)) as isize) - 1)
-            };
-            if !trimmable(unsafe { utf_ptr2char(prev) }) {
+            // SAFETY: `head` is the NUL-terminated string `bytes` borrows,
+            // and `end - 1` is a byte of it.
+            let back = unsafe { utf_head_off(head.cast_mut(), head.add(end - 1)) };
+            let prev = end - 1 - usize::try_from(back).expect("never negative");
+            if !trimmable(char_at(&bytes[prev..])) {
                 break;
             }
-            tail = prev;
+            end = prev;
         }
     }
 
-    unsafe { (*result).vval.v_string = xstrnsave(head, tail.offset_from(head) as size_t) };
+    // SAFETY: `start..end` is a span of the string at `head`.
+    unsafe { (*result).vval.v_string = xstrnsave(head.add(start), end - start) };
 }
