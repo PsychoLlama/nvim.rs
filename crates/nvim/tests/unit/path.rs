@@ -22,11 +22,12 @@ use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
     kEqualFiles, kOneFileMissing, path_fix_case, path_full_compare, path_full_dir_name,
     path_guess_exepath, path_is_absolute, path_next_component, path_shorten_fname, path_tail,
-    path_tail_with_sep, path_try_shorten_fname, path_with_extension, path_with_url, vim_full_name,
+    path_tail_with_sep, path_try_shorten_fname, path_with_extension, path_with_url, pathcmp,
+    shorten_dir_len, vim_full_name,
 };
 use neovim::types::Failed;
 
-use crate::support::Sandbox;
+use crate::support::{Sandbox, cstr};
 
 /// A buffer for an entry point that writes a path into one, read back as the
 /// NUL-terminated string it left there.
@@ -625,4 +626,74 @@ fn a_scheme_makes_a_name_a_url_and_says_which_separator_follows_it() {
     // ...and a single letter is a drive letter, not a scheme.
     assert_eq!(url("c:/xyz/foo/b5"), NO);
     assert_eq!(url("C:/xyz/foo/b5"), NO);
+}
+
+/// `pathcmp` is the text-only comparison that sorts names and decides
+/// whether two of them are the same. Three rules are peculiar to it and all
+/// three are here: a path separator sorts before any other byte, a trailing
+/// separator does not make a name different, and `maxlen` cuts both sides.
+///
+/// The sign is what matters, not the magnitude — for two names that differ
+/// in an ordinary byte it is the folded difference of the two codepoints.
+#[test]
+fn comparing_names_sorts_a_separator_first_and_ignores_a_trailing_one() {
+    let _sandbox = Sandbox::globals();
+    #[track_caller]
+    fn cmp(a: &str, b: &str, maxlen: c_int) -> c_int {
+        let (a, b) = (cstr(a), cstr(b));
+        // SAFETY: both are NUL-terminated for the call.
+        unsafe { pathcmp(a.as_ptr(), b.as_ptr(), maxlen) }.signum()
+    }
+
+    assert_eq!(cmp("a/b", "a/b", -1), 0);
+    assert_eq!(cmp("", "", -1), 0);
+    // A trailing separator is not a difference; two of them are.
+    assert_eq!(cmp("a/b", "a/b/", -1), 0);
+    assert_eq!(cmp("a/b/", "a/b", -1), 0);
+    assert_eq!(cmp("a/b", "a/b//", -1), -1);
+    // A separator sorts before anything else, whichever side it is on.
+    assert_eq!(cmp("foo/bar", "foo-bar", -1), -1);
+    assert_eq!(cmp("foo-bar", "foo/bar", -1), 1);
+    // A prefix comes first, and the difference decides otherwise.
+    assert_eq!(cmp("ab", "abc", -1), -1);
+    assert_eq!(cmp("abc", "ab", -1), 1);
+    assert_eq!(cmp("abc", "abd", -1), -1);
+    // `maxlen` stops the comparison before the difference.
+    assert_eq!(cmp("abcd", "abce", 3), 0);
+    assert_eq!(cmp("abcd", "abce", 4), -1);
+    // Multibyte characters are compared as characters.
+    assert_eq!(cmp("\u{e9}", "\u{e9}", -1), 0);
+    assert_eq!(cmp("a\u{4e2d}b", "a\u{4e2d}c", -1), -1);
+    assert_eq!(cmp("\u{4e2d}/x", "\u{4e2d}-x", -1), -1);
+}
+
+/// `shorten_dir_len` keeps `trim_len` characters of every component but the
+/// last, and a leading `~` or `.` is free — it does not count towards the
+/// length, so `".bar"` keeps two characters at a `trim_len` of one.
+#[test]
+fn shortening_a_directory_keeps_the_first_characters_of_each_component() {
+    let _sandbox = Sandbox::globals();
+    #[track_caller]
+    fn shorten(name: &str, trim_len: c_int) -> String {
+        let mut buf: Vec<c_char> = cstr(name)
+            .as_bytes_with_nul()
+            .iter()
+            .map(|&b| b as c_char)
+            .collect();
+        // SAFETY: `buf` is a writable NUL-terminated string, and the
+        // shortening only ever moves bytes towards its start.
+        unsafe {
+            shorten_dir_len(buf.as_mut_ptr(), trim_len);
+            CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned()
+        }
+    }
+
+    assert_eq!(shorten("~/foo/../.bar/fname", 1), "~/f/../.b/fname");
+    assert_eq!(shorten("~/foo/../.bar/fname", 2), "~/fo/../.ba/fname");
+    assert_eq!(shorten("fname", 1), "fname");
+    assert_eq!(shorten("", 1), "");
+    assert_eq!(shorten("/a/bb/ccc/name", 1), "/a/b/c/name");
+    // A character is kept whole, however many bytes it takes.
+    assert_eq!(shorten("/\u{4e2d}\u{6587}/name", 1), "/\u{4e2d}/name");
+    assert_eq!(shorten("/e\u{301}x/name", 1), "/e\u{301}/name");
 }
