@@ -25,7 +25,7 @@ use crate::cursor::gchar_cursor;
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::mark::setpcmark;
-use crate::memline::{decl, gchar_pos, inc, incl, ml_get};
+use crate::memline::{Lines, decl, gchar_pos, inc, incl};
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::option::cpo_has;
 use crate::option::vars::p_sel;
@@ -105,13 +105,11 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                     break;
                 }
                 let mut tpos = pos;
-                // SAFETY: as above; `ml_get` is reached only once `decl` has
-                // answered that `tpos` moved, so it is still in the buffer --
-                // the `||` is the proof and is left whole.
-                if unsafe {
-                    decl(&mut tpos) == -1
-                        || (c_int::from(*ml_get(tpos.lnum)) == NUL && dir == FORWARD)
-                } {
+                // SAFETY: `tpos` is a position in the current buffer.
+                let moved = unsafe { decl(&mut tpos) };
+                // The line is read only once `decl` has answered that `tpos`
+                // moved, so it is still in the buffer.
+                if moved == -1 || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty()) {
                     break;
                 }
                 if found_dot {

@@ -33,19 +33,16 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
-use crate::charset::{getwhitecols, skipbin, skipdigits, skiphex, skipwhite};
+use crate::charset::{skip, skipbin, skipdigits, skiphex};
 use crate::cursor::get_cursor_line_ptr;
 use crate::global_cell::GlobalCell;
-use crate::mbyte::{mb_isupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
-use crate::memline::ml_get_buf;
-use crate::memory::xfree;
+use crate::mbyte::{head_off, mb_isupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::message::e_no_spell;
 use crate::message::emsg;
 use crate::options::kOptSpoFlagCamel;
 use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
-use crate::strings::concat_str;
 use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
@@ -396,57 +393,87 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
         return false;
     }
 
-    let mut need_cap = false;
-    let mut line = if col != 0 {
-        unsafe { ml_get_buf(window.buffer(), lnum) }
-    } else {
-        core::ptr::null_mut()
-    };
-    let mut line_copy: *mut c_char = core::ptr::null_mut();
-    let mut endcol: ColNr = 0;
-
-    if col == 0 || unsafe { getwhitecols(line) } >= col as isize {
-        // At the start of the line: the previous line has to be empty,
-        // or end a sentence.
-        if lnum == 1 {
-            need_cap = true;
+    // Which text the pattern runs over. Every read of the buffer happens
+    // here, one line at a time, and what comes out is owned -- the pattern
+    // walk below hands the regexp engine a pointer, and that must not be
+    // into the cache.
+    let context = {
+        let mut lines = window.buffer().lines();
+        let at_line_start = col == 0 || skip::white(lines.line(lnum)) as ColNr >= col;
+        if !at_line_start {
+            scan_before(lines.line(lnum), col as usize)
+        } else if lnum == 1 {
+            CapCheck::Needed
         } else {
-            line = unsafe { ml_get_buf(window.buffer(), lnum - 1) };
-            if unsafe { *skipwhite(line) } == 0 {
-                need_cap = true;
-            } else {
-                // A space stands in for the line break.
-                line_copy = unsafe { concat_str(line, c" ".as_ptr()) };
-                line = line_copy;
-                endcol = unsafe { cstr::bytes_at(line) }.len() as ColNr;
-            }
+            sentence_before(lines.line(lnum - 1))
         }
-    } else {
-        endcol = col;
-    }
+    };
+    let CapCheck::Scan { mut text, endcol } = context else {
+        return true;
+    };
 
-    if endcol > 0 {
-        // Does a sentence end before the word?
-        let mut regmatch: RegMatch = unsafe { mem::zeroed() };
-        regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
-        regmatch.rm_ic = false;
-        let end = unsafe { line.offset(endcol as isize) };
-        let mut p = end;
-        loop {
-            p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-            if p == line || unsafe { spell_iswordp_nmw(p, window) } {
-                break;
-            }
-            if unsafe { vim_regexec(&raw mut regmatch, p, 0) } && regmatch.endp[0] == end {
-                need_cap = true;
-                break;
-            }
+    // Does a sentence end before the word?
+    let mut need_cap = false;
+    let mut regmatch: RegMatch = unsafe { mem::zeroed() };
+    regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
+    regmatch.rm_ic = false;
+    // `text` is this frame's own NUL-terminated buffer, and `at` stays
+    // inside it: the walk starts at `endcol` and only ever moves back.
+    let base = text.as_mut_ptr().cast::<c_char>();
+    let end = base.wrapping_add(endcol);
+    let mut at = endcol;
+    loop {
+        at -= head_off(&text[..endcol], at - 1) + 1;
+        let word = base.wrapping_add(at);
+        // SAFETY: `word` is inside `text`, which is NUL-terminated.
+        if at == 0 || unsafe { spell_iswordp_nmw(word, window) } {
+            break;
         }
-        unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
+        // SAFETY: as above, and `regmatch` is this frame's.
+        if unsafe { vim_regexec(&raw mut regmatch, word, 0) } && regmatch.endp[0] == end {
+            need_cap = true;
+            break;
+        }
     }
-
-    unsafe { xfree(line_copy as *mut core::ffi::c_void) };
+    unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
     need_cap
+}
+
+/// What [`check_need_cap`] has to look at.
+enum CapCheck {
+    /// A capital is wanted outright: the word is at the start of the file,
+    /// or the line before it is blank.
+    Needed,
+    /// Run 'spellcapcheck' over `text` -- NUL-terminated, because the
+    /// regexp engine walks it as a C string -- and see whether a match ends
+    /// exactly at `endcol`.
+    Scan { text: Vec<u8>, endcol: usize },
+}
+
+/// The word is not at the start of its line, so the sentence that has to end
+/// before it ends inside the line itself: run the pattern over the line, up
+/// to the word.
+fn scan_before(line: &[u8], col: usize) -> CapCheck {
+    let mut text = line.to_vec();
+    text.push(0);
+    CapCheck::Scan { text, endcol: col }
+}
+
+/// The word is at the start of its line, so what has to end a sentence is
+/// the line before -- with a space standing in for the line break, which is
+/// what lets a pattern ending in `\s` match at all.
+///
+/// A blank line before it ends a paragraph, which needs no pattern.
+fn sentence_before(prev: &[u8]) -> CapCheck {
+    if skip::white(prev) == prev.len() {
+        return CapCheck::Needed;
+    }
+    let mut text = Vec::with_capacity(prev.len() + 2);
+    text.extend_from_slice(prev);
+    text.push(b' ');
+    let endcol = text.len();
+    text.push(0);
+    CapCheck::Scan { text, endcol }
 }
 
 /// The end of the word starting at `start`, by the spell word characters.
@@ -531,4 +558,88 @@ pub unsafe fn expand_spelling(
     unsafe { spell_suggest_list(&raw mut ga, pat, 100, spell_expand_need_cap.get(), true) };
     unsafe { *matchp = ga.ga_data as *mut *mut c_char };
     ga.ga_len
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The text `check_need_cap` would run 'spellcapcheck' over, and where
+    /// the word starts in it -- `None` when no pattern is needed because a
+    /// capital is wanted outright.
+    fn scan(check: CapCheck) -> Option<(Vec<u8>, usize)> {
+        match check {
+            CapCheck::Needed => None,
+            CapCheck::Scan { text, endcol } => Some((text, endcol)),
+        }
+    }
+
+    #[test]
+    fn a_word_inside_its_line_is_matched_against_the_line_itself() {
+        // "one. two", asking about the `t`: the pattern runs over the whole
+        // line and has to end exactly at column 5.
+        let (text, endcol) = scan(scan_before(b"one. two", 5)).expect("a scan");
+        assert_eq!(text, b"one. two\0");
+        assert_eq!(endcol, 5);
+    }
+
+    #[test]
+    fn the_line_break_before_a_word_is_a_space() {
+        // The previous line's text with a space on the end, because a
+        // 'spellcapcheck' of `[.?!]\_[\])'"\t ]\+` has to match the break.
+        let (text, endcol) = scan(sentence_before(b"one.")).expect("a scan");
+        assert_eq!(text, b"one. \0");
+        assert_eq!(endcol, 5);
+    }
+
+    #[test]
+    fn a_blank_line_before_a_word_needs_no_pattern() {
+        assert!(scan(sentence_before(b"")).is_none());
+        assert!(scan(sentence_before(b"   ")).is_none());
+        assert!(scan(sentence_before(b"\t \t")).is_none());
+        // One non-blank byte is enough to make it a scan.
+        assert!(scan(sentence_before(b"  x")).is_some());
+    }
+
+    #[test]
+    fn the_text_handed_to_the_regexp_engine_is_terminated() {
+        // Both shapes: the engine walks a C string, and the text it is
+        // given is never the cache's own line.
+        assert_eq!(scan_before_bytes(b"abc", 3).last(), Some(&0));
+        assert_eq!(
+            scan(sentence_before(b"abc")).expect("a scan").0.last(),
+            Some(&0)
+        );
+    }
+
+    fn scan_before_bytes(line: &[u8], col: usize) -> Vec<u8> {
+        scan(scan_before(line, col)).expect("a scan").0
+    }
+
+    /// `spell_valid_case` decides whether a word as written may use a tree
+    /// entry. Two arms: an all-capitals word matches an entry that is not
+    /// `FIXCAP`, and *any* word matches an entry that demands neither
+    /// all-capitals nor keep-case and whose `ONECAP` the word answers.
+    #[test]
+    fn an_all_capitals_word_takes_the_first_arm() {
+        assert!(spell_valid_case(WordFlags::ALLCAP, WordFlags::KEEPCAP));
+        assert!(spell_valid_case(WordFlags::ALLCAP, WordFlags::ALLCAP));
+        assert!(spell_valid_case(WordFlags::ALLCAP, WordFlags::ONECAP));
+        // `FIXCAP` closes that arm -- but the second one is still open,
+        // because a bare `FIXCAP` entry demands no capitals of its own.
+        assert!(spell_valid_case(WordFlags::ALLCAP, WordFlags::FIXCAP));
+        // Both arms closed: `FIXCAP` bars the first and `KEEPCAP` the
+        // second. This is the pair `FIXCAP` exists for.
+        let fixed_keep = WordFlags::FIXCAP.or(WordFlags::KEEPCAP);
+        assert!(!spell_valid_case(WordFlags::ALLCAP, fixed_keep));
+    }
+
+    #[test]
+    fn a_lower_case_word_does_not_match_an_entry_that_demands_capitals() {
+        assert!(spell_valid_case(WordFlags::NONE, WordFlags::NONE));
+        assert!(!spell_valid_case(WordFlags::NONE, WordFlags::ALLCAP));
+        assert!(!spell_valid_case(WordFlags::NONE, WordFlags::KEEPCAP));
+        assert!(!spell_valid_case(WordFlags::NONE, WordFlags::ONECAP));
+        assert!(spell_valid_case(WordFlags::ONECAP, WordFlags::ONECAP));
+    }
 }

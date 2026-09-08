@@ -9,19 +9,22 @@
 #![allow(unsafe_code)]
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
+use crate::cstr;
+use crate::cstr::byte_at;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::mark::setpcmark;
-use crate::mbyte::utf_head_off;
-use crate::memline::{ml_get, ml_get_len};
+use crate::mbyte::head_off;
+use crate::memline::Lines;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::option::vars::{p_para, p_sections};
 use crate::search::{BACKWARD, FORWARD, linewhite};
-use crate::types::{FAIL, LineNr, NUL, OK, OpArg};
+use crate::types::ColNr;
+use crate::types::{FAIL, LineNr, OK, OpArg};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.
@@ -55,7 +58,7 @@ pub unsafe fn findpar(
             // SAFETY: on the main thread with a current buffer; `ml_get`
             // checks the line number itself and hands back a NUL-terminated
             // line, so its first byte is there to read.
-            if unsafe { *ml_get(curr) } as c_int != NUL {
+            if !Lines::current().line(curr).is_empty() {
                 did_skip = true;
             }
             // Skip over a closed fold, which counts as one line.
@@ -87,8 +90,7 @@ pub unsafe fn findpar(
 
     // SAFETY: on the main thread with a current window.
     setpcmark();
-    // SAFETY: as above -- `ml_get` hands back a NUL-terminated line.
-    if both && unsafe { *ml_get(curr) } as c_int == '}' as c_int {
+    if both && Lines::current().line(curr).first() == Some(&b'}') {
         curr += 1; // include the line holding the `}`
     }
     Win::current().w_cursor.lnum = curr;
@@ -96,16 +98,12 @@ pub unsafe fn findpar(
     {
         // Put the cursor on the last character of the last line and make
         // the motion inclusive.
-        // SAFETY: on the main thread with a current buffer; `ml_get` hands
-        // back a NUL-terminated line and `ml_get_len` its length.
-        let (line, len) = (ml_get(curr), ml_get_len(curr));
-        Win::current().w_cursor.col = len;
+        let mut lines = Lines::current();
+        let line = lines.line(curr);
+        Win::current().w_cursor.col = line.len() as ColNr;
         if Win::current().w_cursor.col != 0 {
-            Win::current().w_cursor.col -= 1;
-            // SAFETY: `col` is now below `len`, so it indexes `line`, and
-            // `utf_head_off` only walks back from there towards `line`.
-            Win::current().w_cursor.col -=
-                unsafe { utf_head_off(line, line.offset(Win::current().w_cursor.col as isize)) };
+            let col = Win::current().w_cursor.col - 1;
+            Win::current().w_cursor.col = col - head_off(line, col as usize) as ColNr;
             // SAFETY: the caller guarantees `pincl` is writable.
             unsafe { *pincl = true };
         }
@@ -121,37 +119,27 @@ pub unsafe fn findpar(
 /// A space in either position matches a space in the line or the line having
 /// ended, which is how a one-letter macro is spelled.
 ///
-/// # Safety
-/// Both must be NUL-terminated.
-unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
-    let mut macro_name = opt;
-    // SAFETY: both strings are NUL-terminated, and the walk only steps past
-    // a byte it has just read as non-NUL, so it stops inside `opt`.  A
-    // second byte of either is only reached once the first compared equal to
-    // a byte that is not the other's NUL; those `&&` chains are the proof
-    // and are left whole.
-    unsafe {
-        while *macro_name != 0 {
-            if (*macro_name as c_int == *s as c_int
-                || (*macro_name as c_int == ' ' as c_int
-                    && (*s as c_int == NUL || *s as c_int == ' ' as c_int)))
-                && (*macro_name.add(1) as c_int == *s.add(1) as c_int
-                    || ((*macro_name.add(1) as c_int == NUL
-                        || *macro_name.add(1) as c_int == ' ' as c_int)
-                        && (*s as c_int == NUL
-                            || *s.add(1) as c_int == NUL
-                            || *s.add(1) as c_int == ' ' as c_int)))
-            {
-                break;
-            }
-            macro_name = macro_name.add(1);
-            if *macro_name as c_int == NUL {
-                break;
-            }
-            macro_name = macro_name.add(1);
+/// `opt` is read two bytes at a time; `s` is only ever asked for its first
+/// two, because a macro name is what a line *starts* with. Past the end of
+/// either is a NUL, which is what the "a space also matches the end" arm
+/// tests for.
+fn inmacro(opt: &[u8], s: &[u8]) -> bool {
+    let (s0, s1) = (byte_at(s, 0), byte_at(s, 1));
+    let mut at = 0usize;
+    while byte_at(opt, at) != 0 {
+        let (m0, m1) = (byte_at(opt, at), byte_at(opt, at + 1));
+        if (m0 == s0 || (m0 == b' ' && (s0 == 0 || s0 == b' ')))
+            && (m1 == s1 || ((m1 == 0 || m1 == b' ') && (s0 == 0 || s1 == 0 || s1 == b' ')))
+        {
+            break;
         }
-        *macro_name as c_int != NUL
+        at += 1;
+        if byte_at(opt, at) == 0 {
+            break;
+        }
+        at += 1;
     }
+    byte_at(opt, at) != 0
 }
 
 /// Whether line `lnum` starts a section or a paragraph.
@@ -162,23 +150,24 @@ unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
-    // SAFETY: on the main thread with a current buffer; `ml_get` checks the
-    // line number itself and hands back a NUL-terminated line.
-    let s = ml_get(lnum);
-    // SAFETY: the line has at least its NUL, so its first byte is readable.
-    let first = unsafe { *s };
-    if first as u8 as c_int == para
-        || first as c_int == '\u{c}' as c_int
-        || (both && first as c_int == '}' as c_int)
-    {
+    let mut lines = Lines::current();
+    let line = lines.line(lnum);
+    let first = byte_at(line, 0);
+    if c_int::from(first) == para || first == 0x0c || (both && first == b'}') {
         return true;
     }
-    // SAFETY: reached only with `s[0]` a `.`, so `s[1]` is still inside the
-    // line, and 'sections'/'paragraphs' are NUL-terminated option strings.
-    first as c_int == '.' as c_int
-        && unsafe {
-            inmacro(p_sections.get(), s.add(1)) || (para == 0 && inmacro(p_para.get(), s.add(1)))
-        }
+    if first != b'.' {
+        return false;
+    }
+    // SAFETY: 'sections' and 'paragraphs' are NUL-terminated option values.
+    let (sections, paragraphs) = unsafe {
+        (
+            cstr::bytes_at(p_sections.get()),
+            cstr::bytes_at(p_para.get()),
+        )
+    };
+    let name = &line[1..];
+    inmacro(sections, name) || (para == 0 && inmacro(paragraphs, name))
 }
 
 /// Grow an existing linewise Visual selection by `count` more paragraphs.
@@ -366,4 +355,81 @@ fn line_is_white(lnum: LineNr) -> bool {
 fn line_starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     // SAFETY: as above -- the line number is `ml_get`'s to check.
     unsafe { starts_para(lnum, para, both) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `'sections'`/`'paragraphs'` are two-letter macro names run together,
+    /// and `inmacro` is asked about the text *after* a line's leading `.`.
+    fn matches(opt: &[u8], after_dot: &[u8]) -> bool {
+        inmacro(opt, after_dot)
+    }
+
+    #[test]
+    fn a_two_letter_name_matches_the_line_it_names() {
+        let opt = b"SHNHH HUnhshsh";
+        assert!(matches(opt, b"SH"));
+        assert!(matches(opt, b"NH"));
+        assert!(matches(opt, b"nh"));
+        assert!(!matches(opt, b"XY"));
+    }
+
+    #[test]
+    fn only_the_first_two_bytes_of_the_line_are_looked_at() {
+        // The rest of the line is arguments to the macro -- and it is not
+        // examined at all, so a *longer* word beginning with the item's two
+        // letters matches it too. Upstream's behaviour, pinned.
+        assert!(matches(b"SH", b"SH Introduction"));
+        assert!(matches(b"SH", b"SHX"));
+    }
+
+    #[test]
+    fn a_space_in_the_item_is_a_one_letter_name() {
+        // "P " names the one-letter macro `.P`, which the line spells with
+        // nothing after it or with a space.
+        let opt = b"P LI";
+        assert!(matches(opt, b"P"));
+        assert!(matches(opt, b"P foo"));
+        assert!(matches(opt, b"LI"));
+        assert!(!matches(opt, b"PX"));
+    }
+
+    #[test]
+    fn a_space_in_the_line_matches_a_space_in_the_item() {
+        // The first byte's space arm: an item beginning with a space
+        // matches a line that has one there, or has ended.
+        assert!(matches(b" P", b" P"));
+        assert!(!matches(b" P", b"xP"));
+    }
+
+    #[test]
+    fn an_empty_option_matches_nothing() {
+        assert!(!matches(b"", b"SH"));
+        assert!(!matches(b"", b""));
+    }
+
+    #[test]
+    fn an_odd_length_option_stops_on_its_last_byte() {
+        // "SHP" is one full item and a stray letter; the walk steps two at
+        // a time, sees the NUL where the item's second byte would be, and
+        // stops -- so the stray letter is an item whose second byte is the
+        // end of the option.
+        assert!(matches(b"SHP", b"SH"));
+        assert!(matches(b"SHP", b"P"));
+        assert!(!matches(b"SHP", b"PX"));
+    }
+
+    #[test]
+    fn a_line_that_is_only_the_dot_reads_the_terminator() {
+        // `starts_para` passes the bytes after the `.`, which for a line
+        // of just "." is empty. Nothing is read past the end.
+        assert!(!matches(b"SHNH", b""));
+        // An item whose *first* byte is a space gets the "or the line
+        // having ended" arm, but its second byte then has to be a space or
+        // the end as well -- " P" does not match a bare ".".
+        assert!(!matches(b" P", b""));
+        assert!(matches(b"  ", b""));
+    }
 }

@@ -29,19 +29,18 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
-use crate::charset::{getwhitecols, skipwhite};
+use crate::charset::skip;
+use crate::charset::skipwhite;
 use crate::decoration::decor_state;
 use crate::decoration::{
     DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
-use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;
 use crate::message::state::{bot_top_msg, top_bot_msg};
@@ -55,7 +54,6 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, size_t, uint8_t};
-use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
 use super::{MAXWLEN, SMT_BAD, SMT_RARE};
@@ -144,12 +142,13 @@ pub unsafe fn spell_move_to(
     let (saved_decor_start, decor) = (decor_state.take(), unsafe { DecorStateRef::current() });
     let mut decor_lnum: LineNr = -1;
 
+    let mut lines = window.buffer().lines();
     while !got_int.get() {
-        let mut line = unsafe { ml_get_buf(window.buffer(), lnum) };
-        let mut len = unsafe { ml_get_buf_len(window.buffer(), lnum) } as size_t;
-        if buflen < len + MAXWLEN as size_t + 2 {
+        let line_len = lines.line_len(lnum) as size_t;
+        let mut len;
+        if buflen < line_len + MAXWLEN as size_t + 2 {
             unsafe { xfree(buf as *mut core::ffi::c_void) };
-            buflen = len + MAXWLEN as size_t + 2;
+            buflen = line_len + MAXWLEN as size_t + 2;
             buf = unsafe { xmalloc(buflen) } as *mut c_char;
         }
 
@@ -159,36 +158,44 @@ pub unsafe fn spell_move_to(
         }
 
         if capcol == 0 {
-            capcol = unsafe { getwhitecols(line) } as ColNr;
+            capcol = skip::white(lines.line(lnum)) as ColNr;
         } else if curline && window == Win::current() {
             // For spellbadword(): does the first word need a capital?
-            let col = unsafe { getwhitecols(line) } as ColNr;
+            // The borrow ends before the call, which reads the line above.
+            let col = skip::white(lines.line(lnum)) as ColNr;
             if check_need_cap(Win::current(), lnum, col) {
                 capcol = col;
             }
-            // check_need_cap() looked at the previous line, so the line
-            // pointer has to be taken again.
-            line = unsafe { ml_get_buf(window.buffer(), lnum) };
         }
 
-        // Copy the line and append the start of the next one. The
-        // ml_get_buf() below can invalidate "line", so the empty test
-        // comes first.
-        let empty_line = unsafe { *skipwhite(line) } == 0;
-        unsafe { strcpy(buf, line) };
+        // Copy the line and append the start of the next one.
+        let empty_line = {
+            let line = lines.line(lnum);
+            // SAFETY: `buf` holds `len + MAXWLEN + 2` bytes, which is more
+            // than the line and its terminator.
+            unsafe {
+                buf.cast::<u8>()
+                    .copy_from_nonoverlapping(line.as_ptr(), line_len);
+                *buf.add(line_len) = 0;
+            }
+            skip::white(line) == line.len()
+        };
         if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
-            let buf_len = unsafe { cstr::bytes_at(buf) }.len();
+            let next = lines.line(lnum + 1);
+            // SAFETY: `buf` has `MAXWLEN + 2` bytes spare after the line,
+            // and `next` is a cached line, NUL-terminated where the cache
+            // put it.
             unsafe {
                 spell_cat_line(
-                    buf.add(buf_len),
-                    ml_get_buf(window.buffer(), lnum + 1),
+                    buf.add(line_len),
+                    next.as_ptr().cast::<c_char>().cast_mut(),
                     MAXWLEN as c_int,
                 )
             };
         }
 
         let mut p = unsafe { buf.offset(skip as isize) };
-        let endp = unsafe { buf.add(len) };
+        let endp = unsafe { buf.add(line_len) };
         while p < endp {
             // Searching backwards, stop at the cursor — unless the search
             // already wrapped past the end of the buffer.

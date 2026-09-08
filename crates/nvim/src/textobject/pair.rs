@@ -16,6 +16,7 @@ use core::ptr;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
+use crate::cstr::byte_at;
 use crate::cursor::{
     dec_cursor, gchar_cursor, get_cursor_line_ptr, get_cursor_pos_ptr, inc_cursor,
 };
@@ -24,7 +25,7 @@ use crate::eval::funcs::do_searchpair;
 use crate::indent::inindent;
 use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
-use crate::memline::{decl, inc, incl, ml_get_pos};
+use crate::memline::{Lines, decl, inc, incl};
 use crate::memory::{xfree, xmalloc};
 use crate::option::cpo_has;
 use crate::option::vars::{p_cpo, p_sel, p_ws};
@@ -306,9 +307,8 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
         if unsafe { inc(&mut pos) } < 0 {
             return false;
         }
-        // SAFETY: `inc` left `pos` on a character of the current buffer, so
-        // `ml_get_pos` hands back a pointer to it.
-        let c = unsafe { *ml_get_pos(&raw mut pos) } as u8 as c_int;
+        // `inc` left `pos` on a character of the current buffer.
+        let c = c_int::from(byte_at(Lines::current().line(pos.lnum), pos.col as usize));
         if c == '>' as c_int {
             break;
         }

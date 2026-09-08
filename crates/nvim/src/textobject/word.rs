@@ -20,7 +20,7 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::utf_class;
-use crate::memline::{decl, incl, ml_get};
+use crate::memline::{Lines, decl, incl};
 use crate::r#move::adjust_skipcol;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
@@ -181,10 +181,10 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
                 // Skip the white space before the word, stopping on an
                 // empty line.
                 while cls() == 0 {
-                    // SAFETY: the cursor's line is a line of the buffer, and
-                    // `ml_get` hands it back NUL-terminated.
                     if Win::current().w_cursor.col == 0
-                        && unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL
+                        && Lines::current()
+                            .line(Win::current().w_cursor.lnum)
+                            .is_empty()
                     {
                         break 'finished;
                     }
@@ -265,11 +265,11 @@ pub unsafe fn end_word(
                 // At the end of a word: go to the end of the next one,
                 // skipping white space first.
                 while cls() == 0 {
-                    // SAFETY: the cursor's line is a line of the buffer, and
-                    // `ml_get` hands it back NUL-terminated.
                     if empty
                         && Win::current().w_cursor.col == 0
-                        && unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL
+                        && Lines::current()
+                            .line(Win::current().w_cursor.lnum)
+                            .is_empty()
                     {
                         break 'finished;
                     }
@@ -325,10 +325,10 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<
         }
         // Then back to the end of the previous word.
         while cls() == 0 {
-            // SAFETY: the cursor's line is a line of the buffer, and `ml_get`
-            // hands it back NUL-terminated.
             if Win::current().w_cursor.col == 0
-                && unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL
+                && Lines::current()
+                    .line(Win::current().w_cursor.lnum)
+                    .is_empty()
             {
                 break;
             }
