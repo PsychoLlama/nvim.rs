@@ -656,7 +656,7 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
             -1
         });
     } else {
-        line.set_lvl(unsafe { get_indent_buf(buf, lnum) } / unsafe { get_sw_value(buf) });
+        line.set_lvl(get_indent_buf(buf, lnum) / unsafe { get_sw_value(buf) });
     }
     let foldnestmax = line.win().w_onebuf_opt.wo_fdn.max(0) as c_int;
     line.set_lvl(line.lvl().min(foldnestmax));

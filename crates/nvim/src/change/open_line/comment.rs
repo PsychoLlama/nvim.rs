@@ -603,7 +603,9 @@ pub(crate) unsafe fn build_leader(
         // The indent may have changed with the leader.
         if Buf::current().b_p_ai != 0 || do_si {
             let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
-            newindent = unsafe { indent_size_ts(leader, ts, vts) };
+            // SAFETY: the leader this frame just built, and the buffer's
+            // own tabstop array.
+            newindent = unsafe { indent_size_ts(cstr::bytes_at(leader), ts, vts) };
         }
 
         // Add the 'comments' numeric offset.

@@ -19,7 +19,7 @@ use neovim::indent::{get_sts_value, indent_size_ts};
 use neovim::types::{ColNr, OptInt};
 use neovim::winlayer::Buf;
 
-use crate::support::{Editor, Sandbox, cstr};
+use crate::support::{Editor, Sandbox};
 
 /// Run `f` on the current buffer with the 'softtabstop' family put back
 /// afterwards, so that writing it cannot outlive the case.
@@ -70,7 +70,7 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
     });
 }
 
-/// `indent_size_ts` over a NUL-terminated line, with the 'vartabstop' array
+/// `indent_size_ts` over a line's bytes, with the 'vartabstop' array
 /// spelled the way the option code spells it: `vts[0]` is how many widths
 /// follow, and a null array or a count of zero means the uniform `ts`.
 ///
@@ -78,11 +78,10 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
 /// `debug_assert!` that a space is one cell wide, which reads the character
 /// table the editor's startup fills in.
 fn indent_size(_editor: &Editor, line: &str, ts: OptInt, vts: Option<&mut [ColNr]>) -> c_int {
-    let line = cstr(line);
     let vts = vts.map_or(std::ptr::null_mut(), <[ColNr]>::as_mut_ptr);
-    // SAFETY: `line` is this frame's and NUL-terminated; `vts` is null or a
-    // slice whose first element is the count of the ones after it.
-    unsafe { indent_size_ts(line.as_ptr(), ts, vts) }
+    // SAFETY: `vts` is null or a slice whose first element is the count of
+    // the ones after it.
+    unsafe { indent_size_ts(line.as_bytes(), ts, vts) }
 }
 
 #[test]

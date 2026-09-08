@@ -325,8 +325,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     && unsafe { *ml_get(Win::current().w_cursor.lnum + 1) } as c_int != NUL
                 {
                     if no_comment {
-                        second_indent =
-                            unsafe { get_indent_lnum(Win::current().w_cursor.lnum + 1) };
+                        second_indent = get_indent_lnum(Win::current().w_cursor.lnum + 1);
                     } else {
                         second_indent = next_leader.len;
                         do_comments_list = true;

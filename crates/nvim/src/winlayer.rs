@@ -669,10 +669,11 @@ impl Buf {
 
     /// This buffer's line cache, through which lines are read as `&[u8]`.
     ///
-    /// The one entry point for reading text: `buf.lines().line(lnum)` does
-    /// not compile (the handle is a temporary), which is deliberate -- bind
-    /// the handle, and the slices it hands out are bounded by it. See
-    /// [`Lines`](crate::memline::Lines) for the borrow story.
+    /// The one entry point for reading text. `buf.lines().line(lnum)` works
+    /// inside a single expression -- the temporary handle outlives it -- and
+    /// a walk over several lines binds the handle instead, which is what
+    /// bounds the slices. See [`Lines`](crate::memline::Lines) for the
+    /// borrow story.
     #[inline(always)]
     pub fn lines(self) -> crate::memline::Lines {
         crate::memline::Lines::in_buffer(self)

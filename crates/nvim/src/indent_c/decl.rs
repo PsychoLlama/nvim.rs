@@ -239,7 +239,7 @@ pub(crate) unsafe fn cin_ispreproc_cont(
     if unsafe { cin_ends_in_backslash(line) } {
         // SAFETY: `lnum` is the line `*pp` came from, so it is a line of the
         // current buffer.
-        candidate_amount = unsafe { get_indent_lnum(lnum) };
+        candidate_amount = get_indent_lnum(lnum);
     }
 
     loop {

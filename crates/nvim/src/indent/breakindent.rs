@@ -242,10 +242,15 @@ impl BreakindentCache {
             // A fixed column needs no measurement.
             return;
         }
+        // SAFETY: the caller's NUL-terminated line. The measurement is a
+        // cache miss's worth of work either way, and the `xstrdup` above
+        // has already walked the same bytes.
+        let bytes = unsafe { cstr::bytes_at(line) };
         self.indent = if key.no_ts {
-            unsafe { indent_size_no_ts(line) }
+            indent_size_no_ts(bytes)
         } else {
-            unsafe { indent_size_ts(line, key.ts, key.vts) }
+            // SAFETY: the key's 'vartabstop' array, the buffer's own.
+            unsafe { indent_size_ts(bytes, key.ts, key.vts) }
         };
         if window.w_briopt_list != 0 {
             unsafe { self.add_list_indent(window, line) };

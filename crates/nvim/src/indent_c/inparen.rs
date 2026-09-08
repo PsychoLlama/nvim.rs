@@ -33,7 +33,7 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int 
         // Line up with the start of the matching paren's line.
         // SAFETY: on the main thread with a current buffer; a bad line number
         // is `ml_get`'s own to report, as upstream leaves it.
-        unsafe { get_indent_lnum(Win::current().w_cursor.lnum - 1) }
+        get_indent_lnum(Win::current().w_cursor.lnum - 1)
     } else {
         // If the matching paren is more than one line away, use the
         // indent of a previous non-empty line that matches the *same*
@@ -106,7 +106,7 @@ unsafe fn previous_line_under_same_paren(
                     && trypos.col == our_paren_pos.col
                 {
                     // SAFETY: `lnum` is still a line of the current buffer.
-                    amount = unsafe { get_indent_lnum(lnum) };
+                    amount = get_indent_lnum(lnum);
                     // SAFETY: `line.theline` is still valid.
                     if unsafe { line.starts_with(b')') } {
                         if our_paren_pos.lnum != lnum && *cur_amount > amount {

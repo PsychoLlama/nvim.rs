@@ -87,7 +87,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     // SAFETY: as above.
     if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > 0 {
         // SAFETY: `lnum` is a line of the current buffer.
-        append_indent.set(unsafe { get_indent_lnum(lnum) });
+        append_indent.set(get_indent_lnum(lnum));
     }
 
     if cmdidx != CmdIdx::append {
@@ -112,7 +112,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
             if append_indent.get() >= 0 {
                 indent = append_indent.replace(-1);
             } else if lnum > 0 {
-                indent = unsafe { get_indent_lnum(lnum) };
+                indent = get_indent_lnum(lnum);
             }
         }
 
@@ -287,7 +287,7 @@ pub unsafe fn ex_change(args: *mut ExArg) {
         autoindent != 0
     } {
         // SAFETY: `line1` is a line of the current buffer.
-        append_indent.set(unsafe { get_indent_lnum(line1) });
+        append_indent.set(get_indent_lnum(line1));
     }
 
     let mut lnum = line2;

@@ -196,7 +196,7 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     };
     if let Some(trypos) = bracket {
         // SAFETY: `trypos` is a position in the current buffer.
-        return Some(unsafe { get_indent_lnum(trypos.lnum) });
+        return Some(get_indent_lnum(trypos.lnum));
     }
 
     // Inside parentheses or braces?  Upstream spells the test as

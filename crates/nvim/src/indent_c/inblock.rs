@@ -140,7 +140,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             } else if Buf::current().b_ind_js != 0 {
                 // SAFETY: `lnum` is a line of the current buffer -- either
                 // `ourscope` or the line a paren match reported.
-                unsafe { get_indent_lnum(lnum) }
+                get_indent_lnum(lnum)
             } else {
                 // SAFETY: the same line number, and `l` is a local out-parameter.
                 unsafe { skip_label(lnum, &mut l) }

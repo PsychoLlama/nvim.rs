@@ -78,7 +78,8 @@ pub use self::recog::*;
 // and `byte_at` (a NUL-terminated line read past its slice) moved to
 // `indent.rs` at B15-17, which needs both as well. Re-exported rather than
 // imported so the children keep reaching them through `use super::*`.
-pub(crate) use crate::indent::{byte_at, line_vcol};
+pub(crate) use crate::cstr::byte_at;
+pub(crate) use crate::indent::line_vcol;
 
 pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;

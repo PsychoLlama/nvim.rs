@@ -376,7 +376,7 @@ pub(crate) unsafe fn get_baseclass_amount(col: c_int) -> c_int {
         };
         if let Some(trypos) = opening {
             // SAFETY: `trypos` is a position in the current buffer.
-            amount = unsafe { get_indent_lnum(trypos.lnum) };
+            amount = get_indent_lnum(trypos.lnum);
         }
         // SAFETY: the cursor's line is NUL-terminated.
         if !unsafe { cin_ends_in(get_cursor_line_ptr(), b",") } {

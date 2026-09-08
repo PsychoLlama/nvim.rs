@@ -26,11 +26,12 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use crate::ascii::ascii_iswhite;
 use crate::change::{changed_bytes, get_leader_len};
 use crate::charset::{byte2cells, char2cells, getwhitecols_curline, skipwhite};
+use crate::cstr::byte_at;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
+use crate::memline::{Lines, ml_get, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_positive;
 use crate::message::emsg;
@@ -104,15 +105,6 @@ pub(crate) unsafe fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
         )
     };
     vcol
-}
-
-/// The byte at `i` of a NUL-terminated line held as a slice.
-///
-/// Past the end is the terminator: `CStr::to_bytes()` drops it, but the
-/// memory is still there, and upstream reaches these strings through the NUL
-/// rather than through a length.
-pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
-    s.get(i).copied().unwrap_or(0)
 }
 
 /// Borrow a 'vartabstop' array as a slice. `None` when the option is unset
@@ -315,44 +307,28 @@ pub unsafe fn get_sts_value() -> c_int {
 
 /// The screen width of the current line's indent.
 ///
-/// Safe: the only promise is that the editor exists, which `cur_buf()` and
-/// the cursor accessors carry.
+/// Safe: the only promise is that the editor exists, which `Buf::current()`
+/// and the cursor accessors carry.
 pub fn get_indent() -> c_int {
-    unsafe {
-        indent_size_ts(
-            get_cursor_line_ptr(),
-            Buf::current().b_p_ts,
-            Buf::current().b_p_vts_array,
-        )
-    }
+    get_indent_lnum(Win::current().w_cursor.lnum)
 }
 
 /// The screen width of line `lnum`'s indent, in the current buffer.
 ///
-/// # Safety
-/// `lnum` must be a valid line.
-pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
-    unsafe {
-        indent_size_ts(
-            ml_get(lnum),
-            Buf::current().b_p_ts,
-            Buf::current().b_p_vts_array,
-        )
-    }
+/// Safe: an out-of-range `lnum` reads the placeholder, whose indent is zero.
+pub fn get_indent_lnum(lnum: LineNr) -> c_int {
+    get_indent_buf(Buf::current(), lnum)
 }
 
 /// The screen width of line `lnum`'s indent, in `buffer`.
 ///
-/// # Safety
-/// `lnum` must be a valid line of `buffer`.
-pub unsafe fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
-    unsafe {
-        indent_size_ts(
-            ml_get_buf(buffer, lnum),
-            buffer.b_p_ts,
-            buffer.b_p_vts_array,
-        )
-    }
+/// Safe: as [`get_indent_lnum`]. The line is borrowed for the measurement
+/// and dropped with it, which is the whole of what the cache asks.
+pub fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
+    let (ts, vts) = (buffer.b_p_ts, buffer.b_p_vts_array);
+    let mut lines = buffer.lines();
+    // SAFETY: the buffer's own 'vartabstop' array, read while it is live.
+    unsafe { indent_size_ts(lines.line(lnum), ts, vts) }
 }
 
 /// The screen width of the indent at `text`, with every tab a fixed
@@ -361,23 +337,19 @@ pub unsafe fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
 /// That is the shape 'breakindent' wants: it asks about a line it is not
 /// going to change, so where the tabstops actually sit does not matter.
 ///
-/// # Safety
-/// `text` must point at a NUL-terminated string.
-pub unsafe fn indent_size_no_ts(text: *const c_char) -> c_int {
+pub fn indent_size_no_ts(text: &[u8]) -> c_int {
     let tab_size = byte2cells(TAB);
     let mut vcol = 0;
-    let mut text = text;
-    loop {
-        let c = unsafe { *text } as u8;
-        text = unsafe { text.add(1) };
+    for &c in text {
         if c == b' ' {
             vcol += 1;
         } else if c_int::from(c) == TAB {
             vcol += tab_size;
         } else {
-            return vcol;
+            break;
         }
     }
+    vcol
 }
 
 /// The screen width of an indent read one byte at a time, under `stops`
@@ -391,10 +363,17 @@ pub unsafe fn indent_size_no_ts(text: *const c_char) -> c_int {
 /// that walk because it repeats forever, and so becomes the uniform width the
 /// final loop runs on.
 ///
-/// `next` answers the indent's bytes and then NUL forever, which is how a
-/// pointer into a NUL-terminated line behaves and what makes this the whole
-/// arithmetic with none of the pointer.
-fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
+/// The bytes are read through [`byte_at`], so an index past the end answers
+/// NUL and ends the indent — which is how a pointer into a NUL-terminated
+/// line behaves, and what makes this the whole arithmetic with none of the
+/// pointer.
+fn indent_width(text: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
+    let mut at = 0;
+    let mut next = || {
+        let c = byte_at(text, at);
+        at += 1;
+        c
+    };
     let mut vcol: c_int = 0;
     let tabstop_width: c_int;
     let mut next_tab_vcol: c_int;
@@ -448,23 +427,14 @@ fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[ColNr]>, ts: OptIn
 /// 'vartabstop' `vts`.
 ///
 /// # Safety
-/// `text` must point at a NUL-terminated string; `vts` must be a valid
-/// tabstop array or null.
-pub unsafe fn indent_size_ts(text: *const c_char, ts: OptInt, vts: *mut ColNr) -> c_int {
+/// `vts` must be a valid tabstop array or null.
+pub unsafe fn indent_size_ts(text: &[u8], ts: OptInt, vts: *mut ColNr) -> c_int {
     debug_assert!(unsafe { char2cells(' ' as c_int) } == 1);
     // `vts[0]` is the count and `vts[1..=count]` the widths.
+    // SAFETY: the caller's array, read for the length of this call.
     let stops = (!vts.is_null() && unsafe { *vts } >= 1)
         .then(|| unsafe { ::core::slice::from_raw_parts(vts.add(1), *vts as usize) });
-    let mut text = text;
-    indent_width(
-        || {
-            let c = unsafe { *text } as u8;
-            text = unsafe { text.add(1) };
-            c
-        },
-        stops,
-        ts,
-    )
+    indent_width(text, stops, ts)
 }
 
 /// What [`set_indent`] is going to write, measured before anything is
@@ -815,7 +785,8 @@ pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
         }
         unsafe { vim_regfree(regmatch.regprog) };
     }
-    if pos.lnum == 0 || unsafe { *ml_get_pos(&raw mut pos) } as c_int == NUL {
+    // The match may have ended at the line's NUL, which is not an indent.
+    if pos.lnum == 0 || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {
         return -1;
     }
     unsafe { line_vcol(pos.lnum, pos.col) }
@@ -828,16 +799,7 @@ mod tests {
     /// Ask [`indent_width`] about a line, the way a NUL-terminated one is
     /// read: the bytes, then the terminator forever.
     fn width(line: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
-        let mut i = 0;
-        indent_width(
-            || {
-                let c = byte_at(line, i);
-                i += 1;
-                c
-            },
-            stops,
-            ts,
-        )
+        indent_width(line, stops, ts)
     }
 
     #[test]

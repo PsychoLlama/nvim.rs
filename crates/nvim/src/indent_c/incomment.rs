@@ -110,7 +110,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
         // it is a line of the current buffer.
         if !linewhite(lnum) {
             // SAFETY: the same line number.
-            return unsafe { get_indent_lnum(lnum) };
+            return get_indent_lnum(lnum);
         }
     }
 
@@ -241,10 +241,10 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
                 let above = &above[skip::white(above)..];
                 if ncmp_eq(above, &lead_start, lead_start_len) {
                     // SAFETY: the same line number.
-                    *amount = unsafe { get_indent_lnum(prev) };
+                    *amount = get_indent_lnum(prev);
                 } else if ncmp_eq(above, &lead_middle, lead_middle_len) {
                     // SAFETY: the same.
-                    *amount = unsafe { get_indent_lnum(prev) };
+                    *amount = get_indent_lnum(prev);
                     break;
                 } else {
                     // The opener does not match this item's start leader:
@@ -275,7 +275,7 @@ unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_i
         {
             // SAFETY: on the main thread with a current buffer; a bad line
             // number is `ml_get`'s own to report, as upstream leaves it.
-            *amount = unsafe { get_indent_lnum(Win::current().w_cursor.lnum - 1) };
+            *amount = get_indent_lnum(Win::current().w_cursor.lnum - 1);
             if off != 0 {
                 *amount += off;
             } else if align == COM_RIGHT {

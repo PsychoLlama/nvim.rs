@@ -12,7 +12,9 @@ use super::*;
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::change::{changed_lines, ins_bytes, ins_str};
+use crate::charset::skip;
 use crate::charset::skipwhite;
+use crate::cstr::byte_at;
 use crate::cursor::{coladvance, get_cursor_line_len, get_cursor_line_ptr};
 use crate::drawscreen::{UPD_INVERTED, UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{
@@ -25,7 +27,7 @@ use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
-use crate::memline::{ml_get, ml_get_len, ml_replace};
+use crate::memline::{Lines, ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
 use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
 use crate::message::{emsg, msg_progress};
@@ -232,20 +234,22 @@ unsafe fn si_indent_like_open_brace(pos: Pos) {
     // indent is applied.
     let mut win = Win::current();
     let old_pos = win.w_cursor;
-    let ptr = ml_get(pos.lnum);
     let mut i = pos.col as c_int;
+    // The line is read here and nowhere else: `findmatch` below walks the
+    // buffer itself, so the borrow has to be over before it is called.
+    let mut lines = Lines::current();
+    let line = lines.line(pos.lnum);
     if i > 0 {
         // Skip the blanks before the '{'.
         while {
             i -= 1;
-            i > 0 && ascii_iswhite(unsafe { *ptr.offset(i as isize) } as c_int)
+            i > 0 && ascii_iswhite(c_int::from(byte_at(line, i as usize)))
         } {}
     }
+    let after_paren = byte_at(line, i as usize) == b')';
     win.w_cursor.lnum = pos.lnum;
     win.w_cursor.col = i as ColNr;
-    if unsafe { *ptr.offset(i as isize) } == b')' as c_char
-        && let Some(open) = unsafe { findmatch(ptr::null_mut(), '(' as c_int) }
-    {
+    if after_paren && let Some(open) = unsafe { findmatch(ptr::null_mut(), '(' as c_int) } {
         win.w_cursor = open;
     }
     let indent = get_indent();
@@ -268,11 +272,13 @@ unsafe fn si_should_shift_back() -> bool {
     let mut win = Win::current();
     let old_pos = win.w_cursor;
     let here = get_indent();
+    let mut lines = Lines::current();
     while win.w_cursor.lnum > 1 {
         win.w_cursor.lnum -= 1;
-        let ptr = unsafe { skipwhite(ml_get(win.w_cursor.lnum)) };
+        let line = lines.line(win.w_cursor.lnum);
+        let first = byte_at(line, skip::white(line));
         // Ignore empty lines and lines starting with '#'.
-        if unsafe { *ptr } != b'#' as c_char && unsafe { *ptr } != 0 {
+        if first != b'#' && first != 0 {
             break;
         }
     }

@@ -360,7 +360,7 @@ pub unsafe fn open_line(
         let vts = Buf::current().b_p_vts_array;
         // SAFETY: `saved_line` is this frame's NUL-terminated copy of the
         // line, and the tabstops are the buffer's own.
-        newindent = unsafe { indent_size_ts(saved_line, ts, vts) };
+        newindent = unsafe { indent_size_ts(cstr::bytes_at(saved_line), ts, vts) };
         if newindent == 0 && flags & OPENLINE_COM_LIST == 0 {
             newindent = second_line_indent; // CTRL-D in Insert mode
         }

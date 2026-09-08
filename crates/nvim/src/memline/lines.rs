@@ -15,6 +15,10 @@
 //! let text = lines.line(lnum); // &[u8], the line without its NUL
 //! ```
 //!
+//! A single read fits in one expression — `buffer.lines().line(lnum)`, whose
+//! temporary handle lives to the end of the statement; a walk binds the
+//! handle, and every slice it hands out is bounded by it.
+//!
 //! [`Lines`]'s own documentation carries the borrow story — how long the
 //! slice is valid, what invalidates it, and what to do about the two shapes
 //! the borrow cannot express. In one sentence: the slice lives exactly as
