@@ -869,16 +869,17 @@ unsafe fn find_match(
             break;
         }
 
-        // With FM_BLOCKSTOP, stop at a '{' or '}' in column 0.
-        let first = c_int::from(byte_at(walk.lines.line(walk.pos.lnum), 0));
-        if walk.pos.col == 0
-            && flags & FM_BLOCKSTOP != 0
-            && (first == '{' as c_int || first == '}' as c_int)
-        {
-            if first == target.findc && walk.count == 0 {
-                return Some(walk.pos); // match!
+        // With FM_BLOCKSTOP, stop at a '{' or '}' in column 0. The line is
+        // read only once the column and the flag both say so; the walk
+        // steps a character at a time and this is per step.
+        if walk.pos.col == 0 && flags & FM_BLOCKSTOP != 0 {
+            let first = c_int::from(byte_at(walk.lines.line(walk.pos.lnum), 0));
+            if first == '{' as c_int || first == '}' as c_int {
+                if first == target.findc && walk.count == 0 {
+                    return Some(walk.pos); // match!
+                }
+                break; // out of scope
             }
-            break; // out of scope
         }
 
         if target.comment_dir != 0 {
