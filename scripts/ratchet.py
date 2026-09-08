@@ -1257,14 +1257,23 @@ def balanced(text, start, opens, closes):
     return i
 
 
-def fn_signatures(masked):
-    """(name, the whole signature's text, the declared return type) per `fn`.
+# One `fn` definition, as `fn_signatures` reports it. `start` is the offset of
+# the `fn` keyword and `end` the offset just past the return type, which is
+# where a body's `{` (or a `where` clause, or a `;`) begins.
+Signature = collections.namedtuple("Signature", "name text params returns start end")
 
-    Only *definitions*: a `fn` type (a function pointer) and a trait bound
-    have no parameter list after the name and are skipped. The signature runs
-    from the `fn` keyword through the return type, so a parameter rustfmt
-    wrapped onto its own line is inside it and a local of the same type is
-    not. The return type is `"()"` when none is written.
+
+def fn_signatures(masked):
+    """A `Signature` per `fn` *definition*.
+
+    Only definitions: a `fn` type (a function pointer) and a trait bound have
+    no parameter list after the name and are skipped. `text` runs from the
+    `fn` keyword through the return type, so a parameter rustfmt wrapped onto
+    its own line is inside it and a local of the same type is not; `params` is
+    the parenthesised parameter list alone and `returns` the declared return
+    type, `"()"` when none is written. The two are separate because a
+    `-> *mut c_char` is a different debt from a `*mut c_char` parameter and
+    must not be booked in both.
     """
     for match in FN_NAME.finditer(masked):
         i = match.end()
@@ -1276,12 +1285,21 @@ def fn_signatures(masked):
             i += 1
         if i >= len(masked) or masked[i] != "(":
             continue  # not a definition: a `fn` type, or a trait bound
+        opened = i
         i = balanced(masked, i, "(", ")")
-        params = i
+        params = masked[opened:i]
+        stop = i
         while i < len(masked) and masked[i].isspace():
             i += 1
         if masked[i : i + 2] != "->":
-            yield match.group(1), masked[match.start() : params], "()"
+            yield Signature(
+                match.group(1),
+                masked[match.start() : stop],
+                params,
+                "()",
+                match.start(),
+                stop,
+            )
             continue
         i += 2
         end, depth = i, 0
@@ -1294,13 +1312,20 @@ def fn_signatures(masked):
             elif depth == 0 and (char in "{;" or masked[end : end + 6] == "where "):
                 break
             end += 1
-        yield match.group(1), masked[match.start() : end], masked[i:end].strip()
+        yield Signature(
+            match.group(1),
+            masked[match.start() : end],
+            params,
+            masked[i:end].strip(),
+            match.start(),
+            end,
+        )
 
 
 def fn_returns(masked, out):
     """name -> the set of return types every `fn` of that name declares."""
-    for name, _, returns in fn_signatures(masked):
-        out.setdefault(name, set()).add(returns)
+    for sig in fn_signatures(masked):
+        out.setdefault(sig.name, set()).add(sig.returns)
 
 
 def is_place(ty, deref_mut):
@@ -1683,17 +1708,15 @@ def has_safety_doc(lines, at):
     return False
 
 
-def missing_safety_doc(text, masked):
-    """`unsafe fn`s whose doc comment has no `# Safety` section.
+def unsafe_fn_items(masked):
+    """The offset of the `unsafe` keyword of every `unsafe fn` *item*.
 
     Walks the same `unsafe` keyword occurrences `unsafe_lines` does and keeps
     the ones that introduce a *function* — a definition or a bodyless
-    declaration, never a function-pointer type and never a declaration inside
-    an `unsafe extern` block, whose obligation is the C library's.
+    declaration, never a function-pointer type (`unsafe fn(..)`, whose
+    obligation is paid where it is called) and never a declaration inside an
+    `unsafe extern` block, whose obligation is the C library's.
     """
-    lines = text.splitlines()
-    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
-    missing = 0
     skip_until = 0
     for match in UNSAFE_WORD.finditer(masked):
         if match.start() < skip_until:
@@ -1714,9 +1737,18 @@ def missing_safety_doc(text, masked):
             continue  # `unsafe {`, `unsafe impl`, `unsafe(no_mangle)`, ...
         named = WHITESPACE.match(masked, word.end()).end()
         if named < len(masked) and masked[named] == "(":
-            continue  # an `unsafe fn(..)` *type*; it has no docs to carry
-        missing += not has_safety_doc(lines, bisect_right(starts, match.start()) - 1)
-    return missing
+            continue  # an `unsafe fn(..)` *type*; it names nothing
+        yield match.start()
+
+
+def missing_safety_doc(text, masked):
+    """`unsafe fn`s whose doc comment has no `# Safety` section."""
+    lines = text.splitlines()
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+    return sum(
+        not has_safety_doc(lines, bisect_right(starts, at) - 1)
+        for at in unsafe_fn_items(masked)
+    )
 
 
 def measure():
@@ -1876,14 +1908,14 @@ def vocabulary(tree):
             aliases.setdefault(alias, set()).add(target)
         constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
         declarations = list(fn_signatures(masked))
-        spans = [sig for _, sig, _ in declarations]
+        spans = [sig.text for sig in declarations]
         if not in_home(file, WINLAYER):
             signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
             frames += sum(len(RAW_FRAME.findall(sig)) for sig in spans)
         mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             frozen = exported if file.startswith(API_DIR) else ()
-            spans = [sig for name, sig, _ in declarations if name not in frozen]
+            spans = [sig.text for sig in declarations if sig.name not in frozen]
             abbrevs += sum(len(ABBREV_PARAM.findall(sig)) for sig in spans)
             abbrevs += sum(
                 bool(BUFFER_TYPE.search(type_))
