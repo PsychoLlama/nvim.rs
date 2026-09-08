@@ -66,7 +66,7 @@ use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
     Buffer, ColNr, LineNr, NUL, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, String_0, Vv,
-    Window, ptrdiff_t, size_t, uint8_t,
+    ptrdiff_t, size_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
@@ -125,8 +125,8 @@ impl Frame {
             flags: unsafe { (*args).os_flags },
             old: unsafe { (*args).os_oldval },
             new: unsafe { (*args).os_newval },
-            win: unsafe { Win::new((*args).os_win.cast::<Window>()) },
-            buf: unsafe { Buf::new((*args).os_buf.cast::<Buffer>()) },
+            win: unsafe { (*args).os_win },
+            buf: unsafe { (*args).os_buf },
         }
     }
 

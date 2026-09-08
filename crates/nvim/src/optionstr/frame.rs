@@ -21,7 +21,7 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char};
 
 use crate::message::e_invarg;
-use crate::types::{OptSet, Window};
+use crate::types::OptSet;
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
@@ -38,8 +38,7 @@ pub(crate) fn varp(args: &OptSet) -> *mut *mut c_char {
 /// The window the set is happening in. Not necessarily the window whose
 /// value is being set — see [`local_window`].
 pub(crate) fn win(args: &OptSet) -> Win {
-    // SAFETY: the option-set frame's own window, live for the call.
-    unsafe { Win::new(args.os_win.cast::<Window>()) }
+    args.os_win
 }
 
 /// The window whose own copy of the option is being set, or null when the

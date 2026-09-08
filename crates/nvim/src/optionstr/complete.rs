@@ -19,7 +19,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{Buffer, NUL, OptSet, OptionSetFlags};
+use crate::types::{NUL, OptSet, OptionSetFlags};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
@@ -170,27 +170,23 @@ pub unsafe fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
+    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
-    // SAFETY: the frame's buffer.
-    let value = unsafe {
-        if local {
-            (*buf).b_p_cot
-        } else {
-            if !opt_flags.has(OptionSetFlags::GLOBAL) {
-                // A plain `:set` drops the buffer's own answer.
-                (*buf).b_cot_flags = 0 as c_uint;
-            }
-            p_cot.get()
+    let value = if local {
+        buf.b_p_cot
+    } else {
+        if !opt_flags.has(OptionSetFlags::GLOBAL) {
+            // A plain `:set` drops the buffer's own answer.
+            buf.b_cot_flags = 0 as c_uint;
         }
+        p_cot.get()
     };
     // SAFETY: a C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_cot_values, true) }) else {
         return invalid();
     };
     if local {
-        // SAFETY: the frame's buffer.
-        unsafe { (*buf).b_cot_flags = mask };
+        buf.b_cot_flags = mask;
     } else {
         cot_flags.set(mask);
     }
@@ -337,10 +333,9 @@ pub unsafe fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
+    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
-    // SAFETY: the frame's buffer.
-    let value = unsafe { if local { (*buf).b_p_tc } else { p_tc.get() } };
+    let value = if local { buf.b_p_tc } else { p_tc.get() };
     // An empty buffer-local value means "no override".
     // SAFETY: an option's value is a C string.
     let mask = if local && unsafe { c_int::from(*value) } == NUL {
@@ -353,8 +348,7 @@ pub unsafe fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
         }
     };
     if local {
-        // SAFETY: the frame's buffer.
-        unsafe { (*buf).b_tc_flags = mask };
+        buf.b_tc_flags = mask;
     } else {
         tc_flags.set(mask);
     }

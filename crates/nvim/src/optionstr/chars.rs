@@ -53,8 +53,8 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, Expand, FcsChars, LcsChars, NUL, OptSet, OptionSetFlags, ScreenChar, Window,
-    int64_t, size_t,
+    CharsOption, Expand, FcsChars, LcsChars, NUL, OptSet, OptionSetFlags, ScreenChar, int64_t,
+    size_t,
 };
 use crate::winlayer;
 
@@ -734,8 +734,8 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
-    let (win, varp, idx, flags, errbuf, errbuflen) = (
-        args.os_win.cast::<Window>(),
+    let (mut win, varp, idx, flags, errbuf, errbuflen) = (
+        args.os_win,
         args.os_varp.string_var(),
         args.os_idx,
         args.os_flags,
@@ -750,16 +750,11 @@ pub unsafe fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     } else {
         kFillchars
     };
-    // SAFETY: the caller's frame and window; the comparisons are of
-    // addresses only.
+    // The comparisons are of addresses only.
     if varp == option_var(idx).string_var() {
-        // SAFETY: a live window.
-        let win = unsafe { Win::new(win) };
         unsafe { did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen) }
-    } else if varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_lcs }
-        || varp == unsafe { &raw mut (*win).w_onebuf_opt.wo_fcs }
-    {
-        unsafe { set_chars_option(Win::new(win), *varp, which, true, errbuf, errbuflen) }
+    } else if varp == &raw mut win.w_onebuf_opt.wo_lcs || varp == &raw mut win.w_onebuf_opt.wo_fcs {
+        unsafe { set_chars_option(win, *varp, which, true, errbuf, errbuflen) }
     } else {
         None
     }

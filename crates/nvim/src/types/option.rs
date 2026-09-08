@@ -16,6 +16,7 @@ use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;
+use crate::winlayer::{Buf, Win};
 
 crate::flag_set! {
     /// `stl_syntax`: which of `'title'` and `'icon'` hold a *statusline
@@ -174,8 +175,13 @@ pub struct OptSet {
     pub os_restore_chartab: bool,
     pub os_errbuf: *mut ::core::ffi::c_char,
     pub os_errbuflen: size_t,
-    pub os_win: *mut ::core::ffi::c_void,
-    pub os_buf: *mut ::core::ffi::c_void,
+    /// The window and buffer the set is happening in, as handles taken
+    /// where `set_option` built the frame and both were provably live.
+    /// Upstream carried two `void *` and left every `did_set_*` callback to
+    /// rebuild a window or buffer from an address the frame had been holding
+    /// across whatever the set already ran.
+    pub os_win: Win,
+    pub os_buf: Buf,
 }
 /// Where an option keeps its global value.
 ///

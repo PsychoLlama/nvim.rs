@@ -399,8 +399,8 @@ pub(crate) unsafe fn did_set_option(
         os_restore_chartab: false,
         os_errbuf: errbuf,
         os_errbuflen: errbuflen,
-        os_win: Win::current_raw().cast::<c_void>(),
-        os_buf: Buf::current_raw().cast::<c_void>(),
+        os_win: Win::current(),
+        os_buf: Buf::current(),
     };
 
     if direct {

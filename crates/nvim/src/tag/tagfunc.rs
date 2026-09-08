@@ -50,7 +50,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 pub unsafe fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
-    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let mut buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
@@ -118,15 +118,11 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // The tag stack entry the jump came from, whose `user_data` the
     // function may want. One past the top means nothing was popped, so
     // the newest entry is the interesting one.
-    let win = Win::current_raw();
-    let from = if unsafe { (*win).w_tagstacklen } > 0 {
-        let at = unsafe { (*win).w_tagstackidx };
-        let at = if at == unsafe { (*win).w_tagstacklen } {
-            at - 1
-        } else {
-            at
-        };
-        unsafe { (*win).w_tagstack.get(at as usize) }
+    let win = Win::current();
+    let from = if win.w_tagstacklen > 0 {
+        let at = win.w_tagstackidx;
+        let at = if at == win.w_tagstacklen { at - 1 } else { at };
+        win.w_tagstack.get(at as usize)
     } else {
         None
     };

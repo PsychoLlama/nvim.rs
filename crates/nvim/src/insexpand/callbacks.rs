@@ -53,7 +53,7 @@ pub(crate) fn tsrfu_cb() -> CompleteFuncCb {
 impl CompleteFuncCb {
     /// The slot's address, which is what the C-shaped callback helpers take.
     /// It stands where a buffer-local callback would answer
-    /// `&raw mut (*buf).b_cfu_cb`.
+    /// `&raw mut buf.b_cfu_cb`.
     pub(crate) fn slot(self) -> *mut Callback {
         self.0.ptr()
     }
@@ -305,7 +305,7 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
 pub fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
-    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let mut buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
@@ -338,7 +338,7 @@ pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
 pub fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
-    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let mut buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
@@ -495,7 +495,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
 pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
-    let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
+    let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
         unsafe { option_set_callback_func(buf.b_p_tsrfu, &raw mut buf.b_tsrfu_cb) }
