@@ -17,9 +17,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 
 /// The most bytes a UTF-8 sequence can occupy in this port's decoders, which
 /// is how far back a byte's lead can possibly be.
@@ -41,19 +40,27 @@ pub unsafe fn mb_utflen(
     codepoints: *mut size_t,
     codeunits: *mut size_t,
 ) {
-    let mut count: size_t = 0;
-    let mut surrogate_pairs: size_t = 0;
-    let mut i: size_t = 0;
-    while i < len {
-        let (c, clen) = unsafe { char_at(s, i, len) };
+    // SAFETY: the caller's promise, spelled as the slice it describes.
+    let (count, surrogate_pairs) = counted(unsafe { cstr::slice_at(s, len) });
+    // SAFETY: the caller's counters.
+    unsafe { *codepoints += count };
+    unsafe { *codeunits += count + surrogate_pairs };
+}
+
+/// How many characters `bytes` holds, and how many of them need a UTF-16
+/// surrogate pair.
+fn counted(bytes: &[u8]) -> (size_t, size_t) {
+    let (mut count, mut surrogate_pairs) = (0, 0);
+    let mut at = 0;
+    while at < bytes.len() {
+        let (c, clen) = char_and_len(&bytes[at..]);
         count += 1;
         if c > 0xffff {
             surrogate_pairs += 1;
         }
-        i += clen;
+        at += clen;
     }
-    unsafe { *codepoints += count };
-    unsafe { *codeunits += count + surrogate_pairs };
+    (count, surrogate_pairs)
 }
 
 /// The byte offset just past the character at index `index`, counted in
@@ -71,37 +78,34 @@ pub unsafe fn mb_utf_index_to_bytes(
     if index == 0 {
         return 0;
     }
+    // SAFETY: the caller's promise, spelled as the slice it describes.
+    let bytes = unsafe { cstr::slice_at(s, len) };
     let mut count: size_t = 0;
-    let mut i: size_t = 0;
-    while i < len {
-        let (c, clen) = unsafe { char_at(s, i, len) };
+    let mut at = 0;
+    while at < bytes.len() {
+        let (c, clen) = char_and_len(&bytes[at..]);
         count += 1;
         if use_utf16_units && c > 0xffff {
             count += 1;
         }
         if count >= index {
-            return (i + clen) as ssize_t;
+            return (at + clen) as ssize_t;
         }
-        i += clen;
+        at += clen;
     }
     -1
 }
 
-/// The codepoint at byte `i` of `s[..len]`, and how many bytes it occupies.
+/// The codepoint at the start of `bytes`, and how many bytes it occupies.
 ///
 /// A single byte is taken at face value rather than decoded, which is what
 /// makes an invalid byte count as one character.
-///
-/// # Safety
-///
-/// `s` must point at `len` readable bytes and `i` must be less than `len`.
-unsafe fn char_at(s: *const c_char, i: size_t, len: size_t) -> (c_int, size_t) {
-    let p = unsafe { s.add(i) };
-    let clen = unsafe { utf_ptr2len_len(p, (len - i) as c_int) } as size_t;
+fn char_and_len(bytes: &[u8]) -> (c_int, size_t) {
+    let clen = promised_char_len(bytes);
     let c = if clen > 1 {
-        unsafe { utf_ptr2char(p) }
+        char_at(bytes)
     } else {
-        unsafe { *p as u8 as c_int }
+        c_int::from(bytes[0])
     };
     (c, clen)
 }
@@ -462,16 +466,9 @@ pub unsafe fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char {
 ///
 /// `str` must be null or point at a NUL-terminated string.
 pub unsafe fn mb_charlen(str: *const c_char) -> c_int {
-    if str.is_null() {
-        return 0;
-    }
-    let mut p = str;
-    let mut count = 0;
-    while unsafe { *p } != NUL as c_char {
-        p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
-        count += 1;
-    }
-    count
+    // SAFETY: the caller's promise; a null string has no characters.
+    let bytes = unsafe { cstr::at_opt(str) }.map_or(&[][..], CStr::to_bytes);
+    c_int::try_from(char_count(bytes)).expect("a count of bytes bounds a count of characters")
 }
 
 /// [`mb_charlen`] over at most `len` bytes.

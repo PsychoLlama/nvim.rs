@@ -67,6 +67,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use core::fmt::Write as _;
+
 use crate::cstr;
 use crate::types::NL;
 use crate::types::TAB;
@@ -89,13 +91,13 @@ use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::e_listreq;
-use crate::message::{emsg, msg, msg_ptr};
+use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::option::vars::fenc_default;
 use crate::option::vars::{cmp_flags, p_ambw, p_emoji, p_enc};
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
 use crate::optionstr::check_chars_options;
-use crate::os::cshim::{__ctype_b_loc, gettext, snprintf, strchr, strncasecmp};
+use crate::os::cshim::{__ctype_b_loc, gettext, strchr, strncasecmp};
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::pos::MAXCOL;
 use crate::strings::vim_strchr;
@@ -113,9 +115,7 @@ use crate::utf8proc::{
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
-use ::libc::{
-    __errno_location, iconv, iconv_close, iconv_open, setlocale, strcpy, tolower, toupper,
-};
+use ::libc::{__errno_location, iconv, iconv_close, iconv_open, setlocale, tolower, toupper};
 
 // The carve of the transpiled module; see each child's docs.
 mod case;
@@ -156,50 +156,35 @@ pub const KS_SPECIAL: c_int = 254;
 ///
 /// The editor's globals must be live.
 pub unsafe fn show_utf8() {
-    // The hex dump. Upstream shares `IObuff`, which `msg` writes again.
-    let mut hex = [0 as c_char; IOSIZE as usize];
     // The whole grapheme cluster, composing characters included.
-    let line = get_cursor_pos_ptr();
-    let len = unsafe { utfc_ptr2len(line) };
-    if len == 0 {
+    // SAFETY: the cursor line is a NUL-terminated string.
+    let line = unsafe { cstr::bytes_at(get_cursor_pos_ptr()) };
+    let cluster = &line[..cluster_len(line)];
+    if cluster.is_empty() {
         msg(c"NUL", 0);
         return;
     }
 
-    let out = hex.as_mut_ptr();
-    let mut rlen: size_t = 0;
-    let mut clen = 0;
-    for i in 0..len {
-        if clen == 0 {
-            // The start of another character in the cluster.
-            if i > 0 {
-                unsafe { strcpy(out.add(rlen), c"+ ".as_ptr().cast_mut()) };
-                rlen += 2;
-            }
-            clen = unsafe { utf_ptr2len(line.offset(i as isize)) };
+    // Each character's bytes in hex, characters separated by "+".
+    let mut hex = String::new();
+    let mut at = 0;
+    while at < cluster.len() {
+        if at > 0 {
+            hex.push_str("+ ");
         }
-        debug_assert!(IOSIZE as size_t > rlen, "IOSIZE > rlen");
-        let byte = unsafe { *line.offset(i as isize) };
-        unsafe {
-            snprintf(
-                out.add(rlen),
-                IOSIZE as size_t - rlen,
-                c"%02x ".as_ptr(),
-                // A NUL is stored in the buffer as a newline.
-                if byte as c_int == NL {
-                    NUL
-                } else {
-                    byte as u8 as c_int
-                },
-            )
-        };
-        clen -= 1;
-        rlen += unsafe { cstr::bytes_at(out.add(rlen)) }.len();
-        if rlen > (IOSIZE - 20) as size_t {
+        for &byte in &cluster[at..at + char_len(&cluster[at..])] {
+            // A NUL is stored in the buffer as a newline.
+            let byte = if c_int::from(byte) == NL { 0 } else { byte };
+            let _ = write!(hex, "{byte:02x} ");
+        }
+        at += char_len(&cluster[at..]);
+        // Upstream shares `IObuff` and stops before it overflows; a cluster
+        // has no length limit, so the same bound is kept.
+        if hex.len() > (IOSIZE - 20) as usize {
             break;
         }
     }
-    unsafe { msg_ptr(out, 0) };
+    msg(&cstr::owned(hex.as_bytes()), 0);
 }
 
 /// `8g8`: move the cursor to the next byte that is not valid UTF-8.
@@ -367,7 +352,7 @@ pub(crate) unsafe fn mb_unescape(
 
         // An illegal sequence answers 1 here, so this only fires on a
         // character that is really multibyte.
-        if unsafe { utf_ptr2len(out) } > 1 {
+        if char_len(cstr::as_bytes(&into[..buf_idx])) > 1 {
             unsafe { *cursor = (str as *const c_char).add(str_idx + 1) };
             return out;
         }
