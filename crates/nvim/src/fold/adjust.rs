@@ -19,7 +19,6 @@
 use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
-use crate::memline::ml_get_len;
 use crate::option::vars::p_sel;
 use crate::pos::{MAXLNUM, ltoreq};
 use crate::state::mode::State;
@@ -175,7 +174,7 @@ pub unsafe fn fold_adjust_visual() {
         if !has_folding(win, end.lnum, None, Some(&mut end.lnum)) {
             return false;
         }
-        end.col = ml_get_len(end.lnum);
+        end.col = win.buffer().lines().line_len(end.lnum);
         // SAFETY: 'selection' is a NUL-terminated option string.
         if end.col > 0 && c_int::from(unsafe { *p_sel.get() }) == 'o' as c_int {
             end.col -= 1;

@@ -167,6 +167,15 @@ impl Lines {
         }
     }
 
+    /// How long line `lnum` is, without its NUL.
+    ///
+    /// [`ml_get_len`] as a method, and the answer callers want when they are
+    /// about to name a column rather than read text — so it stays a `ColNr`
+    /// and no caller has to cast a `usize` back down.
+    pub fn line_len(&mut self, lnum: LineNr) -> ColNr {
+        ColNr::try_from(self.line(lnum).len()).unwrap_or(ColNr::MAX)
+    }
+
     /// Line `lnum`, copied out of the cache.
     ///
     /// The escape hatch for the two shapes the borrow cannot express: a

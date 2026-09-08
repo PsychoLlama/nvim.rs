@@ -10,13 +10,14 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::charset::skipwhite;
+use crate::charset::skip;
 use crate::cstr;
+use crate::cstr::byte_at;
 use crate::decoration::{clear_virttext, next_virt_text_chunk};
 use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
 use crate::global_cell::GlobalCell;
-use crate::memline::ml_get;
+use crate::memline::Lines;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::cshim::{ngettext, snprintf};
 use crate::search::linewhite;
@@ -105,37 +106,43 @@ pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     while lnum < foldend && linewhite(lnum) {
         lnum += 1;
     }
-    // Both are NUL-terminated: a buffer line, and 'folddashes'.
-    // SAFETY: `p` is inside one of them, at or before its terminator.
-    let at = |p: *const c_char| unsafe { *p } as c_int;
-    // SAFETY: as `at`.
-    let skip_ws = |p: *mut c_char| unsafe { skipwhite(p) };
-    // SAFETY: `lnum` is inside the buffer.
-    let line = |n: LineNr| ml_get(n);
-
-    let mut s = skip_ws(line(lnum));
-    // A comment opener is skipped, and an empty one takes the next line.
-    if at(s) == '/' as c_int
-        && (at(s.wrapping_offset(1)) == '*' as c_int || at(s.wrapping_offset(1)) == '/' as c_int)
-    {
-        s = skip_ws(s.wrapping_offset(2));
-        if at(skip_ws(s)) == NUL && (lnum + 1) < foldend {
-            s = skip_ws(line(lnum + 1));
-            if at(s) == '*' as c_int {
-                s = skip_ws(s.wrapping_offset(1));
+    // Which line the fold's title is taken from, and where in it it starts.
+    let mut lines = Lines::current();
+    let mut which = lnum;
+    let mut at = {
+        let text = lines.line(lnum);
+        let mut at = skip::white(text);
+        // A comment opener is skipped, and an empty one takes the next line.
+        if byte_at(text, at) == b'/'
+            && (byte_at(text, at + 1) == b'*' || byte_at(text, at + 1) == b'/')
+        {
+            at = (at + 2).min(text.len());
+            at += skip::white(&text[at..]);
+            if byte_at(text, at) == 0 && (lnum + 1) < foldend {
+                which = lnum + 1;
             }
         }
+        at
+    };
+    if which != lnum {
+        let text = lines.line(which);
+        at = skip::white(text);
+        if byte_at(text, at) == b'*' {
+            at += 1;
+            at += skip::white(&text[at..]);
+        }
     }
+    let title = &lines.line(which)[at..];
+
     let count = foldend - foldstart + 1;
     // SAFETY: three static format strings, and the NUL-terminated strings
-    // `dashes` and `s`; `r` is an allocation big enough for all of them.
+    // `dashes` and `s` -- `s` is the tail of a buffer line, so the line's own
+    // terminator ends it; `r` is an allocation big enough for all of them.
+    let s = title.as_ptr().cast::<c_char>();
     let one = c"+-%s%3d line: ";
     let many = c"+-%s%3d lines: ";
     let txt = ngettext(one, many, count as c_ulong);
-    let mut len = txt.count_bytes()
-        + unsafe { cstr::bytes_at(dashes) }.len()
-        + 20
-        + unsafe { cstr::bytes_at(s) }.len();
+    let mut len = txt.count_bytes() + unsafe { cstr::bytes_at(dashes) }.len() + 20 + title.len();
     let r = unsafe { xmalloc(len) } as *mut c_char;
     unsafe { snprintf(r, len, txt.as_ptr(), dashes, count) };
     len = unsafe { cstr::bytes_at(r) }.len();

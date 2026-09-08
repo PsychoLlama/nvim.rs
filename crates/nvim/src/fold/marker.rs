@@ -12,19 +12,19 @@
 use crate::ascii::ascii_isdigit;
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::changed_lines;
+use crate::charset::skip;
 use crate::cstr;
+use crate::cstr::byte_at;
 use crate::extmark::extmark_splice_cols;
-use crate::mbyte::utfc_ptr2len;
-use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace_buf};
-use crate::memory::{xmalloc, xmemcpyz};
+use crate::mbyte::cluster_len;
+use crate::memline::{Lines, ml_replace_buf_len};
 use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::ops::skip_comment;
-use crate::os::cshim::{gettext, strstr};
+use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::undo::u_save;
-use ::libc::{atoi, strcpy};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 
 use super::*;
 
@@ -41,91 +41,83 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
         return;
     }
     let num_changed = (1 + end.lnum - start.lnum) as int64_t;
-    // SAFETY: the caller's promise; both lines are inside the buffer.
+    // SAFETY: the caller's promise; both lines are inside the buffer, and
+    // `parse_marker` has just written the two markers and their lengths.
     parse_marker(window);
-    unsafe {
-        fold_add_marker(
-            buf,
-            start,
-            window.w_onebuf_opt.wo_fmr,
-            foldstartmarkerlen.get(),
+    // SAFETY: as above -- both spans are inside 'foldmarker'.
+    let (open, close) = unsafe {
+        (
+            cstr::slice_at(window.w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()),
+            cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
-    unsafe { fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get()) };
+    unsafe { fold_add_marker(buf, start, open) };
+    unsafe { fold_add_marker(buf, end, close) };
     changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
     buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
 }
 
-/// Add "marker[markerlen]" in 'commentstring' to position `pos`.
+/// Add `marker` in 'commentstring' to position `pos`.
 ///
 /// # Safety
-/// `buffer` must be a live buffer, `pos` a line inside it, and
-/// `marker[..markerlen]` readable.
-pub(super) unsafe fn fold_add_marker(
-    buffer: Buf,
-    pos: Pos,
-    marker: *const c_char,
-    markerlen: size_t,
-) {
+/// `buffer` must be a live buffer and `pos` a line inside it.
+pub(super) unsafe fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     let lnum = pos.lnum;
-    let cms = buffer.b_p_cms;
-    // Where 'commentstring' puts the text, if it has a place for it.
-    let p = unsafe { strstr(cms, c"%s".as_ptr()) };
-    let line = unsafe { ml_get_buf(buffer, lnum) };
-    let line_len = unsafe { ml_get_buf_len(buffer, lnum) } as size_t;
+    // 'commentstring', and where in it the marker's text goes.
+    // SAFETY: the buffer's own option value, NUL-terminated.
+    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms) };
+    let text_at = cms.windows(2).position(|w| w == b"%s");
     if u_save(lnum - 1, lnum + 1).is_err() {
         return;
     }
+    // A copy, because the line is rewritten from it below.
+    let text = Lines::in_buffer(buffer).line_copy(lnum);
+    // Does the line already end inside a comment?
     let mut line_is_comment = false;
-    unsafe { skip_comment(line, false, false, &raw mut line_is_comment) };
-    let newline = unsafe {
-        xmalloc(
-            line_len
-                .wrapping_add(markerlen)
-                .wrapping_add(cstr::bytes_at(cms).len())
-                .wrapping_add(1),
+    // SAFETY: the copy is NUL-terminated and the flag is this frame's.
+    unsafe {
+        skip_comment(
+            text.as_cstr().as_ptr().cast_mut(),
+            false,
+            false,
+            &raw mut line_is_comment,
         )
-    } as *mut c_char;
-    unsafe { strcpy(newline, line) };
-    let added = if p.is_null() || line_is_comment {
+    };
+
+    let mut new = Vec::with_capacity(text.len() + marker.len() + cms.len() + 1);
+    new.extend_from_slice(&text);
+    let added = match text_at {
         // No '%s' in 'commentstring', or the line already is a comment:
         // the marker goes on bare.
-        unsafe {
-            xmemcpyz(
-                newline.add(line_len) as *mut c_void,
-                marker as *const c_void,
-                markerlen,
-            )
-        };
-        markerlen
-    } else {
-        unsafe { strcpy(newline.add(line_len), cms) };
-        unsafe {
-            newline
-                .add(line_len)
-                .offset(p.offset_from(cms))
-                .cast::<u8>()
-                .copy_from_nonoverlapping(marker.cast(), markerlen)
-        };
-        unsafe {
-            strcpy(
-                newline
-                    .add(line_len)
-                    .offset(p.offset_from(cms))
-                    .add(markerlen),
-                p.offset(2),
-            )
-        };
-        markerlen
-            .wrapping_add(unsafe { cstr::bytes_at(cms) }.len())
-            .wrapping_sub(2)
+        Some(at) if !line_is_comment => {
+            new.extend_from_slice(&cms[..at]);
+            new.extend_from_slice(marker);
+            new.extend_from_slice(&cms[at + 2..]);
+            marker.len() + cms.len() - 2
+        }
+        _ => {
+            new.extend_from_slice(marker);
+            marker.len()
+        }
     };
-    let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
+    new.push(NUL as u8);
+    // SAFETY: a live buffer, a line inside it, and `new` is this frame's
+    // NUL-terminated text, which `copy` says the memline duplicates.
+    let _ = unsafe {
+        ml_replace_buf_len(
+            buffer,
+            lnum,
+            new.as_mut_ptr().cast::<c_char>(),
+            new.len() - 1,
+            true,
+            false,
+        )
+    };
     if added != 0 {
         extmark_splice_cols(
             buffer,
             lnum as c_int - 1,
-            line_len as ColNr,
+            text.len() as ColNr,
             0,
             added as ColNr,
             kExtmarkUndo,
@@ -152,98 +144,82 @@ pub(super) unsafe fn delete_fold_markers(
             unsafe { delete_fold_markers(window, child, true, lnum_off + fold.top()) };
         }
     }
-    // SAFETY: the caller's promise.
-    unsafe {
-        fold_del_marker(
-            window.buffer(),
-            fold.top() + lnum_off,
-            window.w_onebuf_opt.wo_fmr,
-            foldstartmarkerlen.get(),
+    // SAFETY: the caller's promise, which includes `parse_marker` having run.
+    // SAFETY: as above -- both spans are inside 'foldmarker'.
+    let (open, close) = unsafe {
+        (
+            cstr::slice_at(window.w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()),
+            cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
-    unsafe {
-        fold_del_marker(
-            window.buffer(),
-            fold.last() + lnum_off,
-            foldendmarker.get(),
-            foldendmarkerlen.get(),
-        )
-    };
+    unsafe { fold_del_marker(window.buffer(), fold.top() + lnum_off, open) };
+    unsafe { fold_del_marker(window.buffer(), fold.last() + lnum_off, close) };
 }
 
-/// Delete marker "marker[markerlen]" at the end of line "lnum".
-/// Delete 'commentstring' if it matches.
+/// Delete `marker` at the end of line `lnum`, and the 'commentstring' around
+/// it if that matches too.
+///
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
 ///
 /// # Safety
-/// `buffer` must be a live buffer and `marker[..markerlen]` readable.
-pub(super) unsafe fn fold_del_marker(
-    buffer: Buf,
-    lnum: LineNr,
-    marker: *mut c_char,
-    markerlen: size_t,
-) {
+/// `buffer` must be a live buffer.
+pub(super) unsafe fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     if lnum > buffer.b_ml.ml_line_count {
         return;
     }
-    // SAFETY: the caller's promise; `line` is NUL-terminated, so the walk
-    // below stops inside it.
-    let cms = buffer.b_p_cms;
-    let line = unsafe { ml_get_buf(buffer, lnum) };
-    let mut p = line;
-    while unsafe { *p } as c_int != NUL {
-        if !unsafe { cstr::prefix_eq(p, marker, markerlen) } {
-            p = unsafe { p.offset(1) };
-            continue;
-        }
-        let mut len = markerlen;
-        // A numbered marker, `{{{2`.
-        if ascii_isdigit(unsafe { *p.add(len) } as c_int) {
-            len = len.wrapping_add(1);
-        }
-        if unsafe { *cms } as c_int != NUL {
-            // The marker may be wrapped in 'commentstring'; if it is, the
-            // comment goes with it.
-            let cms2 = unsafe { strstr(cms, c"%s".as_ptr()) };
-            if !cms2.is_null()
-                && unsafe { p.offset_from(line) } >= unsafe { cms2.offset_from(cms) }
-                && unsafe {
-                    let n = cms2.offset_from(cms);
-                    cstr::prefix_eq(p.offset(-n), cms, n as size_t)
-                }
-                && unsafe { cstr::starts_with(p.add(len), cstr::bytes_at(cms2.offset(2))) }
-            {
-                p = unsafe { p.offset(-(cms2.offset_from(cms))) };
-                len = len.wrapping_add(unsafe { cstr::bytes_at(cms) }.len().wrapping_sub(2));
-            }
-        }
-        if u_save(lnum - 1, lnum + 1).is_ok() {
-            let newline = unsafe {
-                xmalloc(
-                    (ml_get_buf_len(buffer, lnum) as size_t)
-                        .wrapping_sub(len)
-                        .wrapping_add(1),
-                )
-            } as *mut c_char;
-            debug_assert!(p >= line, "p >= line");
-            let into = newline.cast::<u8>();
-            unsafe { into.copy_from_nonoverlapping(line.cast(), p.offset_from(line) as size_t) };
-            unsafe { strcpy(newline.offset(p.offset_from(line)), p.add(len)) };
-            let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
-            unsafe {
-                extmark_splice_cols(
-                    buffer,
-                    lnum as c_int - 1,
-                    p.offset_from(line) as ColNr,
-                    len as ColNr,
-                    0,
-                    kExtmarkUndo,
-                )
-            };
-        }
-        break;
+    // SAFETY: the buffer's own option value, NUL-terminated.
+    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms) };
+    let text_at = cms.windows(2).position(|w| w == b"%s");
+    // A copy, because the line is rewritten from it below and `u_save` runs
+    // in between.
+    let text = Lines::in_buffer(buffer).line_copy(lnum);
+
+    let Some(mut start) = (0..text.len()).find(|&at| text[at..].starts_with(marker)) else {
+        return;
+    };
+    let mut len = marker.len();
+    // A numbered marker, `{{{2`.
+    if ascii_isdigit(c_int::from(byte_at(&text, start + len))) {
+        len += 1;
     }
+    // The marker may be wrapped in 'commentstring'; if it is, the comment
+    // goes with it.
+    if let Some(before) = text_at
+        && start >= before
+        && text[start - before..].starts_with(&cms[..before])
+        && text[start + len..].starts_with(&cms[before + 2..])
+    {
+        start -= before;
+        len += cms.len() - 2;
+    }
+    if u_save(lnum - 1, lnum + 1).is_err() {
+        return;
+    }
+    let mut new = Vec::with_capacity(text.len() - len + 1);
+    new.extend_from_slice(&text[..start]);
+    new.extend_from_slice(&text[start + len..]);
+    new.push(NUL as u8);
+    // SAFETY: a live buffer, a line inside it, and `new` is this frame's
+    // NUL-terminated text, which `copy` says the memline duplicates.
+    let _ = unsafe {
+        ml_replace_buf_len(
+            buffer,
+            lnum,
+            new.as_mut_ptr().cast::<c_char>(),
+            new.len() - 1,
+            true,
+            false,
+        )
+    };
+    extmark_splice_cols(
+        buffer,
+        lnum as c_int - 1,
+        start as ColNr,
+        len as ColNr,
+        0,
+        kExtmarkUndo,
+    );
 }
 
 /// Parse 'foldmarker' and set "foldendmarker", "foldstartmarkerlen" and
@@ -277,61 +253,66 @@ pub(super) fn parse_marker(window: Win) {
 /// must have run for that window.
 pub(super) unsafe fn foldlevel_marker(line: FLine) {
     let flp = line.raw();
-    // SAFETY: the caller's promise; the line is NUL-terminated, so the scan
-    // below stops inside it.
-    let start_lvl = unsafe { (*flp).lvl };
-    let startmarker = unsafe { (*(*flp).wp).w_onebuf_opt.wo_fmr };
-    let cstart = unsafe { *startmarker };
-    let cend = unsafe { *foldendmarker.get() };
+    // SAFETY: the caller's promise -- a live window, and `parse_marker` has
+    // written the two markers and their lengths.
+    let (window, start_lvl) = unsafe { ((*flp).wp, (*flp).lvl) };
+    let startmarker =
+        unsafe { cstr::slice_at((*window).w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()) };
+    let endmarker = unsafe { cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()) };
     unsafe { (*flp).start = 0 };
     unsafe { (*flp).lvl_next = (*flp).lvl };
-    let mut s = unsafe { ml_get_buf(Buf::new((*(*flp).wp).w_buffer), (*flp).lnum + (*flp).off) };
-    while unsafe { *s } != 0 {
-        if unsafe { *s } as c_int == cstart as c_int
-            && unsafe {
-                cstr::prefix_eq(
-                    s.offset(1),
-                    startmarker.offset(1),
-                    foldstartmarkerlen.get().wrapping_sub(1),
-                )
-            }
-        {
-            s = unsafe { s.add(foldstartmarkerlen.get()) };
-            if ascii_isdigit(unsafe { *s } as c_int) {
+
+    // SAFETY: the window's own buffer, and the line the caller named.
+    let buffer = unsafe { Buf::new((*window).w_buffer) };
+    let lnum = unsafe { (*flp).lnum + (*flp).off };
+    let mut lines = buffer.lines();
+    let text = lines.line(lnum);
+
+    let mut at = 0;
+    while at < text.len() {
+        let rest = &text[at..];
+        // The first byte is compared before the rest of the marker, which is
+        // what makes this a scan and not a search.
+        if rest.first() == startmarker.first() && rest.starts_with(startmarker) {
+            at += startmarker.len();
+            match marker_number(&text[at..]) {
                 // `{{{N` sets the level outright.
-                let n = unsafe { atoi(s) };
-                if n > 0 {
-                    unsafe { (*flp).lvl = n };
-                    unsafe { (*flp).lvl_next = n };
-                    unsafe { (*flp).start = if n - start_lvl > 1 { n - start_lvl } else { 1 } };
-                }
-            } else {
-                unsafe { (*flp).lvl += 1 };
-                unsafe { (*flp).lvl_next += 1 };
-                unsafe { (*flp).start += 1 };
+                Some(n) => unsafe {
+                    (*flp).lvl = n;
+                    (*flp).lvl_next = n;
+                    (*flp).start = if n - start_lvl > 1 { n - start_lvl } else { 1 };
+                },
+                None => unsafe {
+                    (*flp).lvl += 1;
+                    (*flp).lvl_next += 1;
+                    (*flp).start += 1;
+                },
             }
-        } else if unsafe { *s } as c_int == cend as c_int
-            && unsafe {
-                cstr::prefix_eq(
-                    s.offset(1),
-                    foldendmarker.get().offset(1),
-                    foldendmarkerlen.get().wrapping_sub(1),
-                )
-            }
-        {
-            s = unsafe { s.add(foldendmarkerlen.get()) };
-            if ascii_isdigit(unsafe { *s } as c_int) {
-                let n = unsafe { atoi(s) };
-                if n > 0 {
-                    unsafe { (*flp).lvl = n };
-                    unsafe { (*flp).lvl_next = (n - 1).min(start_lvl) };
-                }
-            } else {
-                unsafe { (*flp).lvl_next -= 1 };
+        } else if rest.first() == endmarker.first() && rest.starts_with(endmarker) {
+            at += endmarker.len();
+            match marker_number(&text[at..]) {
+                Some(n) => unsafe {
+                    (*flp).lvl = n;
+                    (*flp).lvl_next = (n - 1).min(start_lvl);
+                },
+                None => unsafe { (*flp).lvl_next -= 1 },
             }
         } else {
-            s = unsafe { s.offset(utfc_ptr2len(s) as isize) };
+            at += cluster_len(rest);
         }
     }
     unsafe { (*flp).lvl_next = (*flp).lvl_next.max(0) };
+}
+
+/// The positive number a `{{{N` marker carries, if it carries one.
+///
+/// Upstream reads it with `atoi`, whose answer for a run of digits that
+/// overflows an `int` is undefined; this saturates instead. A fold level that
+/// large is nonsense either way, and the clamp is the only difference.
+fn marker_number(rest: &[u8]) -> Option<c_int> {
+    let digits = &rest[..skip::digits(rest)];
+    let n = digits.iter().fold(0 as c_int, |n, &b| {
+        n.saturating_mul(10).saturating_add(c_int::from(b - b'0'))
+    });
+    (n > 0).then_some(n)
 }

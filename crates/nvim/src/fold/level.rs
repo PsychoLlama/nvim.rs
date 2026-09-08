@@ -13,7 +13,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::charset::skipwhite;
+use crate::charset::skip;
+use crate::cstr::byte_at;
 use crate::diff::diff_infold;
 use crate::diff::state::diff_context;
 use crate::drawscreen::redraw_win_range_later;
@@ -21,7 +22,6 @@ use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::indent::{get_indent_buf, get_sw_value};
-use crate::memline::ml_get_buf;
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::vim_strchr;
@@ -644,11 +644,13 @@ pub(super) unsafe fn foldlevel_indent(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window has a live buffer, and `lnum` is inside it.
     let buf = line.win().buffer();
-    let s = unsafe { skipwhite(ml_get_buf(buf, lnum)) };
+    let mut lines = buf.lines();
+    let text = lines.line(lnum);
+    let first = byte_at(text, skip::white(text));
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
-    if unsafe { *s } as c_int == NUL
-        || !unsafe { vim_strchr(line.win().w_onebuf_opt.wo_fdi, *s as uint8_t as c_int) }.is_null()
+    if c_int::from(first) == NUL
+        || !unsafe { vim_strchr(line.win().w_onebuf_opt.wo_fdi, c_int::from(first)) }.is_null()
     {
         line.set_lvl(if lnum == 1 || lnum == buf.b_ml.ml_line_count {
             0
