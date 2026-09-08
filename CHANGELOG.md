@@ -7,6 +7,22 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote how the editor hands text to the message area, which every command
+  that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
+  `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
+  `:checkpath`, `:autocmd`, `:command`, `:sign`, `:function`, `:let`,
+  `:oldfiles`, `:recover`, `:version`, `:menu` and the quickfix and spell
+  listings. Output is unchanged.
+
+### Fixed
+
+- `vim.on_print` is no longer handed the rest of the message along with the
+  chunk it was called for, so a headless message containing a control
+  character or an invalid byte reaches the callback once rather than several
+  times over.
+
 ## [2026.09.07-26d0ee304e]
 
 ### Changed

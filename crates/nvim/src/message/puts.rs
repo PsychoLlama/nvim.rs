@@ -123,12 +123,32 @@ pub fn msg_str_hl(text: &CStr, hl_id: c_int, hist: bool) {
     msg_bytes(text.to_bytes(), hl_id, hist)
 }
 
-/// Show `bytes`.
+/// Show `bytes` as a whole message.
 ///
 /// Everything displayed goes through here: this is where redirection is fed,
 /// `:silent` is honoured, the history entry is made, and the choice between
 /// the grid and plain `stderr` is taken.
+///
+/// An *empty* `bytes` is an empty message, which an `ext_messages` UI is told
+/// about — that is what `:echo ""` produces. Where an empty slice means
+/// "nothing to add" rather than "a message with no text", the caller wants
+/// [`msg_part`] instead.
 pub fn msg_bytes(bytes: &[u8], hl_id: c_int, hist: bool) {
+    put_bytes(bytes, hl_id, hist, true)
+}
+
+/// [`msg_bytes`] for one piece of a message that is already being built.
+///
+/// The difference is only what an empty slice means: nothing at all, rather
+/// than an empty message. `msg_multiline` splits its text at the control
+/// characters that need handling of their own, and two of them in a row leave
+/// an empty piece between them; upstream distinguished the two cases by
+/// reading the byte under the pointer, which a slice cannot do.
+pub(crate) fn msg_part(bytes: &[u8], hl_id: c_int, hist: bool) {
+    put_bytes(bytes, hl_id, hist, false)
+}
+
+fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
     debug_assert!(
         !bytes.contains(&0),
         "a NUL is shown as `^@` by the translating half, never put through as itself"
@@ -139,7 +159,7 @@ pub fn msg_bytes(bytes: &[u8], hl_id: c_int, hist: bool) {
 
     // Print nothing under `:silent`, or for an empty message.
     if msg_silent.get() != 0 || bytes.is_empty() {
-        if bytes.is_empty() && ui_has(kUIMessages) {
+        if bytes.is_empty() && whole_message && ui_has(kUIMessages) {
             // SAFETY: main-thread editor call.
             unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
             ui_call_msg_show(

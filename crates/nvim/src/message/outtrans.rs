@@ -118,6 +118,18 @@ pub fn msg_display_char(bytes: &[u8], hl_id: c_int, hist: bool) -> usize {
 ///
 /// Answers how many screen cells it took.
 pub fn msg_display_bytes(bytes: &[u8], hl_id: c_int, hist: bool) -> c_int {
+    display(bytes, hl_id, hist, true)
+}
+
+/// [`msg_display_bytes`] for one piece of a message already being built:
+/// an empty `bytes` adds nothing rather than being an empty message.
+/// [`msg_part`] says why the two differ. The cells are not answered because
+/// the one caller that splits a message is not counting them.
+pub(crate) fn msg_display_part(bytes: &[u8], hl_id: c_int, hist: bool) {
+    display(bytes, hl_id, hist, false);
+}
+
+fn display(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) -> c_int {
     // Only quit when got_int was set in here.
     let save_got_int = got_int.get();
     got_int.set(false);
@@ -138,7 +150,13 @@ pub fn msg_display_bytes(bytes: &[u8], hl_id: c_int, hist: bool) -> c_int {
     }
 
     let cells = walk_display(bytes, &mut |shown| match shown {
-        Shown::Plain(run) => msg_bytes(run, hl_id, hist),
+        Shown::Plain(run) => {
+            if whole_message {
+                msg_bytes(run, hl_id, hist);
+            } else {
+                msg_part(run, hl_id, hist);
+            }
+        }
         Shown::Instead(text) => msg_str_hl(cstr::in_chars(&text), special_hl(hl_id), false),
     });
 

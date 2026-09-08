@@ -41,6 +41,13 @@
 //! The `msg_display*` half is the one that renders what cannot be shown:
 //! a control character as `^X`, anything else unprintable as `<xx>`. The
 //! `msg_str*` half puts the bytes through as they are.
+//!
+//! [`msg_part`] and [`msg_display_part`] are the same two funnels for a
+//! *piece* of a message already being built, and differ in one thing: an
+//! empty piece adds nothing, where an empty *message* is something an
+//! `ext_messages` UI is told about. Upstream told them apart by reading the
+//! byte under the pointer — a zero-length span inside a longer buffer does
+//! not start at a NUL — which is exactly what a slice cannot do.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -400,7 +407,7 @@ pub unsafe fn msg_multiline(
             return;
         }
         if matches!(bytes[at], b'\n' | b'\t' | b'\r' | 0x07) {
-            msg_display_bytes(&bytes[chunk..at], hl_id, hist);
+            msg_display_part(&bytes[chunk..at], hl_id, hist);
             // SAFETY: the caller's contract -- `need_clear` is writable.
             if c_int::from(bytes[at]) != TAB && unsafe { *need_clear } {
                 // SAFETY: main-thread editor call.
@@ -418,8 +425,11 @@ pub unsafe fn msg_multiline(
         }
         at += 1;
     }
-    // The tail, and the whole of an empty message: an empty `str` still
-    // has to reach `msg_display_bytes`, which is what clears the line.
+    // The tail, and the whole of an empty message: an empty `str` still has
+    // to reach `msg_display_bytes`, which is what clears the line and tells
+    // an `ext_messages` UI that a message with no text was shown. Unlike the
+    // pieces above, an empty tail only happens when the whole message was
+    // empty -- a tail that starts at the end of the text is skipped here.
     if cstr::byte_at(bytes, chunk) != 0 || chunk == 0 {
         msg_display_bytes(&bytes[chunk..], hl_id, hist);
     }
