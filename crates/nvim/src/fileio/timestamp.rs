@@ -575,32 +575,25 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // contents. But if reading the file fails we should keep the old
     // contents. Memory alone will not do, the file might be too big, so
     // move the buffer contents to a hidden buffer.
-    let mut savebuf = ptr::null_mut::<Buffer>();
     let mut bufref = BufRef::NONE;
     if !(buf_is_empty(Buf::current()) || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
-        savebuf = unsafe {
-            buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int)
-                .map_or(ptr::null_mut(), Buf::raw)
-        };
-        // SAFETY: `buflist_new` answers a live buffer or null.
-        let scratch = unsafe { Buf::from_raw(savebuf) };
-        bufref = BufRef::of_opt(scratch);
-        if let Some(scratch) = scratch
+        let savebuf =
+            unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
+        bufref = BufRef::of_opt(savebuf);
+        if let Some(scratch) = savebuf
             && buffer.raw() == Buf::current_raw()
         {
             // Open the memline.
             scratch.make_current();
-            Win::current().w_buffer = savebuf;
+            Win::current().w_buffer = scratch.raw();
             saved = unsafe { ml_open(Buf::current()) };
             buffer.make_current();
             Win::current().w_buffer = buffer.raw();
         }
-        if savebuf.is_null()
-            || saved.is_err()
+        if saved.is_err()
             || buffer.raw() != Buf::current_raw()
-            // SAFETY: the null check above guards this one.
-            || move_lines(buffer, unsafe { Buf::new(savebuf) }) == FAIL
+            || savebuf.is_none_or(|scratch| move_lines(buffer, scratch) == FAIL)
         {
             let fname = buffer.b_fname;
             // SAFETY: a static format string with one `%s`, and the buffer's // own file name.
@@ -625,7 +618,11 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 let fname = unsafe { c_str(fname) };
                 semsg!("E321: Could not reload \"{fname}\"");
             }
-            if !savebuf.is_null() && bufref.valid() && buffer.raw() == Buf::current_raw() {
+            // `readfile` ran autocommands; ask the reference, not the
+            // address, whether the scratch buffer is still there.
+            if let Some(scratch) = bufref.get()
+                && buffer.raw() == Buf::current_raw()
+            {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
                 while !buf_is_empty(Buf::current()) {
@@ -633,8 +630,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                         break;
                     }
                 }
-                // SAFETY: `savebuf` is non-null here, and still valid.
-                move_lines(unsafe { Buf::new(savebuf) }, buffer);
+                move_lines(scratch, buffer);
             }
         } else if buffer.raw() == Buf::current_raw() {
             // "buf" is still valid. Mark the buffer as unmodified and free
@@ -652,8 +648,8 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     }
     unsafe { xfree(ea.cmd.cast()) };
 
-    if !savebuf.is_null() && bufref.valid() {
-        unsafe { wipe_buffer(Buf::new(savebuf), false) };
+    if let Some(scratch) = bufref.get() {
+        wipe_buffer(scratch, false);
     }
 
     // Invalidate diff info if necessary.

@@ -35,6 +35,7 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::api::private::helpers::cstr_as_string;
+use crate::buffer::BufRef;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
@@ -52,8 +53,7 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    Buffer, FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t,
-    uint8_t,
+    FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
@@ -93,8 +93,9 @@ pub unsafe fn spell_add_word(
     // "fnamebuf" owns the name when it came from 'spellfile'; the
     // internal word list's name is owned by the global.
     let mut fnamebuf: *mut c_char = core::ptr::null_mut();
-    // The buffer the file is open in, if the user is editing it.
-    let mut buf: *mut Buffer = core::ptr::null_mut();
+    // The buffer the file is open in, if the user is editing it. Held as a
+    // reference: `mkspell` below runs between finding it and reloading it.
+    let mut bufref = BufRef::NONE;
     let mut new_spf = false;
 
     let fname = if idx == 0 {
@@ -135,15 +136,13 @@ pub unsafe fn spell_add_word(
 
         // Refuse to write the file behind the user's back if they are
         // editing it and have unsaved changes.
-        buf = unsafe { buflist_findname_exp(fnamebuf) }.map_or(core::ptr::null_mut(), |b| b.raw());
-        if !buf.is_null() && unsafe { (*buf).b_ml.ml_mfp }.is_null() {
-            buf = core::ptr::null_mut();
-        }
-        if !buf.is_null() && buf_is_changed(unsafe { Buf::new(buf) }) {
+        let open = unsafe { buflist_findname_exp(fnamebuf) }.filter(|b| !b.b_ml.ml_mfp.is_null());
+        if open.is_some_and(buf_is_changed) {
             emsg(gettext(e_bufloaded));
             unsafe { xfree(fnamebuf as *mut c_void) };
             return;
         }
+        bufref = BufRef::of_opt(open);
 
         fnamebuf
     };
@@ -204,8 +203,8 @@ pub unsafe fn spell_add_word(
         // change takes effect without a full :mkspell.
         let mut fname = fname;
         unsafe { mkspell(1, &raw mut fname, false, true, true) };
-        if !buf.is_null() {
-            unsafe { buf_reload(Buf::new(buf), (*buf).b_orig_mode, false) };
+        if let Some(buf) = bufref.get() {
+            unsafe { buf_reload(buf, buf.b_orig_mode, false) };
         }
         redraw_all_later(UPD_SOME_VALID);
     }

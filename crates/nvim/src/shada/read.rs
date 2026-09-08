@@ -20,7 +20,7 @@ use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
 use crate::types::{VAR_UNKNOWN, Vv, kListLenUnknown};
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::{Buf, BufId, Win};
 
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
@@ -61,9 +61,13 @@ fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c_uint {
     kinds
 }
 
-/// The loaded buffer for each file name asked about, or null when there is
+/// The loaded buffer for each file name asked about, or `None` when there is
 /// none. Memoises the walk of the buffer list.
-type FnameBufs = IdMap<Box<[u8]>, *mut Buffer>;
+///
+/// A **number**, not an address: the map outlives whatever the entries
+/// between two lookups do, and a wiped buffer has to read back as gone
+/// rather than as whatever the allocator has since put there.
+type FnameBufs = IdMap<Box<[u8]>, Option<BufId>>;
 
 /// What one pass of [`shada_read`] carries between entries.
 struct Reading {
@@ -81,8 +85,8 @@ struct Reading {
     /// Buffers whose change list grew; the windows showing them are moved
     /// to the end of it once the whole file has been read.
     cl_bufs: IdSet<*mut Buffer>,
-    /// File name to the loaded buffer for it, or null when there is none.
-    /// Memoises the walk of the buffer list; the keys are owned copies.
+    /// File name to the loaded buffer for it, if there is one. Memoises the
+    /// walk of the buffer list; the keys are owned copies.
     fname_bufs: FnameBufs,
     /// One merger per history type, used only when histories are wanted.
     hms: [HistoryMergerState; HIST_COUNT as usize],
@@ -486,18 +490,18 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
     // SAFETY: the caller's file name, null or NUL-terminated.
     let key = unsafe { shada_key(fname) };
     if let Some(&memoised) = fname_bufs.get(key) {
-        return unsafe { Buf::from_raw(memoised) };
+        return memoised.and_then(BufId::get);
     }
-    let mut found = core::ptr::null_mut();
+    let mut found = None;
     for buf in buffers() {
         // SAFETY: `fname` and the buffer's own name are both C strings.
         if !buf.b_ffname.is_null() && unsafe { path_fnamecmp(fname, buf.b_ffname) } == 0 {
-            found = buf.raw();
+            found = Some(buf);
             break;
         }
     }
-    fname_bufs.insert(key.into(), found);
-    unsafe { Buf::from_raw(found) }
+    fname_bufs.insert(key.into(), found.map(Buf::id));
+    found
 }
 
 /// Put a jump into `curwin`'s jump list, which is kept oldest first.

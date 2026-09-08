@@ -118,16 +118,15 @@ pub unsafe fn f_getjumplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // SAFETY throughout: the arguments and `result` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
     let out = list_alloc_ret(result, kListLenMayKnow as isize);
-    let wp = unsafe { find_tabwin(args.ptr(0), args.ptr(1)) }.map_or(ptr::null_mut(), Win::raw);
-    if wp.is_null() {
+    let Some(wp) = (unsafe { find_tabwin(args.ptr(0), args.ptr(1)) }) else {
         return;
-    }
-    unsafe { cleanup_jumplist(Win::new(wp), true) };
-    let l = unsafe { tv_list_alloc((*wp).w_jumplistlen as isize) };
+    };
+    unsafe { cleanup_jumplist(wp, true) };
+    let l = tv_list_alloc(wp.w_jumplistlen as isize);
     unsafe { tv_list_append_list(out, l) };
-    unsafe { tv_list_append_number(out, (*wp).w_jumplistidx as VarNumber) };
-    for i in 0..unsafe { (*wp).w_jumplistlen } {
-        let entry = unsafe { &(*wp).w_jumplist[i as usize] };
+    unsafe { tv_list_append_number(out, wp.w_jumplistidx as VarNumber) };
+    for i in 0..wp.w_jumplistlen {
+        let entry = &wp.w_jumplist[i as usize];
         if entry.fmark.mark.lnum == 0 {
             continue;
         }

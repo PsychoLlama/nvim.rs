@@ -248,17 +248,13 @@ pub fn buflist_setfpos(
     col: ColNr,
     copy_options: bool,
 ) {
-    let raw_win = win.map_or(ptr::null_mut(), Win::raw);
     let mut list = WinInfos::of(&mut buffer);
 
-    let found = list
-        .entries()
-        .iter()
-        .position(|e| e.window() == unsafe { Win::from_raw(raw_win) });
+    let found = list.entries().iter().position(|e| e.window() == win);
     let mut entry = match found {
         None => {
             let mut entry = Entry::new();
-            entry.wi_win = raw_win;
+            entry.wi_win = win.map_or(ptr::null_mut(), Win::raw);
             if lnum == 0 as LineNr {
                 // Set lnum even when it is 0.
                 lnum = 1 as LineNr;
@@ -320,11 +316,11 @@ fn wininfo_other_tab_diff(entry: Entry) -> bool {
 /// `need_options` skips entries whose options were never saved;
 /// `skip_diff_buffer` skips windows whose `'diff'` is another tab page's.
 fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Option<Entry> {
-    let cur = current_win().raw();
+    let cur = Some(current_win());
     let raw_buf = buffer.raw();
     let list = WinInfos::of(buffer);
     let found = list.entries().iter().find(|e| {
-        e.window() == unsafe { Win::from_raw(cur) }
+        e.window() == cur
             && (!skip_diff_buffer || !wininfo_other_tab_diff(**e))
             && (!need_options || e.wi_optset)
     });

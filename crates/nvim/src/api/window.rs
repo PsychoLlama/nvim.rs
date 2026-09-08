@@ -19,7 +19,6 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
-use crate::winlayer::Buf;
 use crate::winlayer::TabPage;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
@@ -32,9 +31,8 @@ use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Buffer, BufferHandle, Error, Integer, KeyDict_win_text_height,
-    LineNr, LuaRef, Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t,
-    size_t,
+    ApiDict, Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height, LineNr,
+    LuaRef, Object, String_0, SwitchWin, TabpageHandle, WinExecute, WindowHandle, int64_t, size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -398,7 +396,7 @@ pub unsafe fn nvim_win_text_height(
     let Some(w) = find_window_by_handle(win, &mut err) else {
         return rv.reported(err);
     };
-    let buf: *mut Buffer = w.buffer().raw();
+    let buf = w.buffer();
     let line_count: LineNr = w.buffer().line_count();
 
     // SAFETY: `opts` is the caller's, per this function's contract; `set` and
@@ -410,13 +408,11 @@ pub unsafe fn nvim_win_text_height(
     // SAFETY: as above; `buf` is live and `oob` is this frame's own.
     if set(OPTIDX_START_ROW) {
         let row = unsafe { (*opts).start_row } as int64_t;
-        start_lnum =
-            number_as_int(unsafe { normalize_index(Buf::new(buf), row, false, &raw mut oob) });
+        start_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
     }
     if set(OPTIDX_END_ROW) {
         let row = unsafe { (*opts).end_row } as int64_t;
-        end_lnum =
-            number_as_int(unsafe { normalize_index(Buf::new(buf), row, false, &raw mut oob) });
+        end_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
     }
     if oob {
         return Err(Error::validation(c"Line index out of bounds"));

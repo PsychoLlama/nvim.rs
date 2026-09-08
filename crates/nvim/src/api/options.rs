@@ -424,18 +424,17 @@ pub unsafe fn nvim_get_option_info2(
     };
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.
+    // SAFETY: `option_target` answers the live buffer or window the scope
+    // names, and `curbuf`/`curwin` stand in for the other.
     let buf = match target.scope == kOptScopeBuf {
-        true => target.from.cast::<Buffer>(),
-        false => Buf::current_raw(),
+        true => unsafe { Buf::new(target.from.cast::<Buffer>()) },
+        false => Buf::current(),
     };
+    // SAFETY: as above.
     let win = match target.scope == kOptScopeWin {
-        true => target.from.cast(),
-        false => Win::current_raw(),
+        true => unsafe { Win::new(target.from.cast()) },
+        false => Win::current(),
     };
-    // SAFETY: a live buffer.
-    let buf = unsafe { Buf::new(buf) };
-    // SAFETY: a live window.
-    let win = unsafe { Win::new(win) };
     // SAFETY: `buf` and `win` are live, `name` and `arena` are the caller's,
     // and `err` is this frame's own.
     let info = unsafe { get_vimoption(name, target.opt_flags, buf, win, arena, &mut err) };

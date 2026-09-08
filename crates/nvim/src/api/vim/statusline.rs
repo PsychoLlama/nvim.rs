@@ -320,16 +320,8 @@ fn highlight_dicts(
 ) -> Array {
     let mut values = arena_array(arena, runs_len + 1);
     // For the tab line the default group belongs to no window.
-    let ctxwin = if opts.use_tabline {
-        ptr::null_mut()
-    } else {
-        ctx.win.raw()
-    };
-    let dfltname = get_default_stl_hl(
-        unsafe { Win::from_raw(ctxwin) },
-        opts.use_winbar,
-        ctx.stc_hl_id,
-    );
+    let ctxwin = (!opts.use_tabline).then_some(ctx.win);
+    let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id);
 
     // If the first character has no highlight of its own, the default one
     // opens the list.
@@ -355,11 +347,7 @@ fn highlight_dicts(
     let mut user_group = [0 as c_char; 15]; // "User" + "2147483647" + NUL
     for run in runs.iter() {
         let grpname = if run.userhl == 0 {
-            get_default_stl_hl(
-                unsafe { Win::from_raw(ctxwin) },
-                opts.use_winbar,
-                ctx.stc_hl_id,
-            )
+            get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id)
         } else if run.userhl < 0 {
             syn_id2name(-run.userhl)
         } else {

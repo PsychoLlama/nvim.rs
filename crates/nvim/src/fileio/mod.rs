@@ -92,7 +92,7 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, BlnFlags, Buffer, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
+    AcoSave, BlnFlags, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
     FileOffset, GArray, IOSIZE, LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg,
     ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
     uv_gid_t, uv_uid_t,

@@ -83,8 +83,8 @@ use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, ptrdiff_t, size_t,
-    ssize_t, uint64_t,
+    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
+    uint64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -574,42 +574,41 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     if first_buffer().is_none() {
         return false;
     }
-    let mut culprit = ptr::null_mut::<Buffer>();
+    let mut found = None;
     for nr in unsafe { changed_check_order() } {
-        let buf = find_buf(nr).map_or(ptr::null_mut(), |b| b.raw());
-        if buf.is_null()
-            || hidden && unsafe { (*buf).b_nwindows } != 0
-            || !buf_is_changed(unsafe { Buf::new(buf) })
-        {
+        let Some(buf) = find_buf(nr) else { continue };
+        if hidden && buf.b_nwindows != 0 || !buf_is_changed(buf) {
             continue;
         }
-        let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+        let bufref = BufRef::of(buf);
         // Try auto-writing the buffer. If that fails but the buffer no
         // longer exists it is not changed, and that is fine.
         let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
-        if unsafe { check_changed(Buf::new(buf), flags) } && bufref.valid() {
-            // Didn't save -- still changed.
-            culprit = buf;
-            break;
+        if unsafe { check_changed(buf, flags) } {
+            // Didn't save -- still changed, if it is still there at all.
+            found = bufref.get();
+            if found.is_some() {
+                break;
+            }
         }
     }
-    if culprit.is_null() {
+    let Some(culprit) = found else {
         return false;
-    }
+    };
 
     exiting.set(false);
     // With ":confirm" the dialog was the message; do not add an error.
     if !(p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) {
-        unsafe { report_unwritten(Buf::new(culprit)) };
+        unsafe { report_unwritten(culprit) };
     }
 
     // Try to find a window that already shows the buffer.
-    if culprit != Buf::current_raw() {
+    if culprit != Buf::current() {
         for (tp, wp) in tab_windows() {
-            if wp.buffer().raw() != culprit {
+            if wp.buffer() != culprit {
                 continue;
             }
-            let bufref = BufRef::of_opt(unsafe { Buf::from_raw(culprit) });
+            let bufref = BufRef::of(culprit);
             goto_tabpage_win(tp, wp);
             // Paranoia: did autocommands wipe out the changed buffer?
             if !bufref.valid() {
@@ -620,9 +619,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     }
 
     // Otherwise open the changed buffer in the current window.
-    if culprit != Buf::current_raw() {
-        // SAFETY: a live buffer.
-        let culprit = unsafe { Buf::new(culprit) };
+    if culprit != Buf::current() {
         set_curbuf(
             culprit,
             if unload { DOBUF_UNLOAD } else { DOBUF_GOTO } as c_int,

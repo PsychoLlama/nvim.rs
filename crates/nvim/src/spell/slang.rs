@@ -342,11 +342,12 @@ pub fn open_spellbuf() -> Option<Buf> {
     // `alloc_unregistered_buffer`.
     // The allocation travels as a bare address: it is stored in a
     // `SpellLang`'s `sl_sugbuf`, and `close_spellbuf` takes it back.
-    let buf = alloc_unregistered_buffer().into_raw();
+    // SAFETY: the allocation just made, live until `close_spellbuf`.
+    let mut buf = unsafe { Buf::new(alloc_unregistered_buffer().into_raw()) };
 
-    unsafe { (*buf).b_spell = true };
-    unsafe { (*buf).b_p_swf = 1 };
-    if unsafe { ml_open(Buf::new(buf)) }.is_err() {
+    buf.b_spell = true;
+    buf.b_p_swf = 1;
+    if unsafe { ml_open(buf) }.is_err() {
         logmsg!(
             LOGLVL_ERR,
             c"open_spellbuf",
@@ -354,9 +355,9 @@ pub fn open_spellbuf() -> Option<Buf> {
             "Error opening a new memline"
         );
     }
-    unsafe { ml_open_file(Buf::new(buf)) }; // create the swap file now
+    unsafe { ml_open_file(buf) }; // create the swap file now
 
-    unsafe { Buf::from_raw(buf) }
+    Some(buf)
 }
 
 /// Close a buffer from [`open_spellbuf`].

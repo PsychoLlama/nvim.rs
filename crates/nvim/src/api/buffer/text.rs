@@ -345,13 +345,11 @@ pub unsafe fn nvim_buf_set_text(
                 extra as LineNr,
                 true,
             );
-            for win in tab_windows().map(Win::raw) {
-                if unsafe { (*win).w_buffer } == b.raw() {
-                    if unsafe { (*win).w_cursor.lnum } as Integer >= start_row
-                        && unsafe { (*win).w_cursor.lnum } as Integer <= end_row
+            for win in tab_windows() {
+                if win.w_buffer == b.raw() {
+                    if win.w_cursor.lnum as Integer >= start_row
+                        && win.w_cursor.lnum as Integer <= end_row
                     {
-                        // SAFETY: a live window.
-                        let win = unsafe { Win::new(win) };
                         fix_cursor_cols(
                             win,
                             start_row as LineNr,
@@ -364,7 +362,7 @@ pub unsafe fn nvim_buf_set_text(
                     } else {
                         let (lo, hi) = (start_row as LineNr, end_row as LineNr);
                         // SAFETY: a live window showing this buffer.
-                        unsafe { fix_cursor(Win::new(win), lo, hi, extra as LineNr) };
+                        fix_cursor(win, lo, hi, extra as LineNr);
                     }
                 }
             }

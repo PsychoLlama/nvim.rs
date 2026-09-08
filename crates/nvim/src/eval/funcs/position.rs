@@ -282,21 +282,18 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         match win_and_tab_by_id(arg_number(args.get(1)) as c_int) {
             None => None,
             Some((wp, _)) => {
-                let wp = wp.raw();
                 // Resolving a position in another window moves its cursor,
                 // and 'splitkeep' decides whether that is allowed to scroll
                 // it. Diff-mode windows are always exempt because their
                 // scroll is bound to this one's.
-                // SAFETY: `wp` is the window the id resolved to, and
-                // `curwin` is live.
-                let both_diff = unsafe { (*wp).w_onebuf_opt.wo_diff } != 0
-                    && Win::current().w_onebuf_opt.wo_diff != 0;
+                let both_diff =
+                    wp.w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_diff != 0;
+                // SAFETY: `p_spk` is the option's own C string value.
                 if unsafe { *p_spk.get() } != b'c' as c_char || both_diff {
                     skip_update_topline.set(true);
                 }
-                // SAFETY: `wp` is the window the id resolved to.
-                check_cursor(unsafe { Win::new(wp) });
-                let fp = unsafe { var2fpos(args.ptr(0), true, out, false, Win::new(wp)) };
+                check_cursor(wp);
+                let fp = unsafe { var2fpos(args.ptr(0), true, out, false, wp) };
                 skip_update_topline.set(false);
                 fp
             }
@@ -357,9 +354,9 @@ pub unsafe fn f_getcursorcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: 
 /// window its argument names rather than resolving a position expression,
 /// and appends 'curswant'.
 fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bool) {
-    // SAFETY throughout: `curwin` names a live window, and every pointer
-    // read below comes back from the position parser.
-    let mut wp = Win::current_raw();
+    // SAFETY throughout: every pointer read below comes back from the
+    // position parser.
+    let mut wp = Win::current_or_none();
     let mut fnum: c_int = -1;
     let fp = if !getcurpos {
         unsafe { var2fpos(args.ptr(0), true, &raw mut fnum, charcol, Win::current()) }
@@ -368,17 +365,17 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
             // `wp` is overwritten even when the lookup fails: a
             // `getcurpos()` on a window that does not exist answers 0
             // for 'curswant' rather than the current window's.
-            wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) }.map_or(ptr::null_mut(), Win::raw);
-            (!wp.is_null()).then(|| unsafe { (*wp).w_cursor })
+            wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
+            wp.map(|wp| wp.w_cursor)
         } else {
             Some(Win::current().w_cursor)
         };
         if let Some(pos) = &mut fp
             && charcol
         {
-            pos.col =
-                unsafe { buf_byteidx_to_charidx(Buf::from_raw((*wp).w_buffer), pos.lnum, pos.col) }
-                    as ColNr;
+            let buffer = wp.and_then(Win::buffer_or_none);
+            // SAFETY: a live buffer, and a position the parser answered.
+            pos.col = unsafe { buf_byteidx_to_charidx(buffer, pos.lnum, pos.col) } as ColNr;
         }
         fp
     };
@@ -402,7 +399,7 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
     unsafe { tv_list_append_number(l, col) };
     unsafe { tv_list_append_number(l, coladd) };
     if getcurpos {
-        unsafe { append_curswant(l, Win::from_raw(wp)) };
+        unsafe { append_curswant(l, wp) };
     }
 }
 
@@ -415,11 +412,11 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
 /// `l` is a live list and `window` is a window pointer or null.
 unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
     // SAFETY throughout: the caller's obligation.
-    let cur = Win::current_raw();
-    let saved_set_curswant = unsafe { (*cur).w_set_curswant };
-    let saved_curswant = unsafe { (*cur).w_curswant };
-    let saved_virtcol = unsafe { (*cur).w_virtcol };
-    if window == unsafe { Win::from_raw(cur) } {
+    let mut cur = Win::current();
+    let saved_set_curswant = cur.w_set_curswant;
+    let saved_curswant = cur.w_curswant;
+    let saved_virtcol = cur.w_virtcol;
+    if window == Some(cur) {
         update_curswant();
     }
     // SAFETY throughout: `window` is null or the window resolved above, and `l` the list
@@ -432,11 +429,11 @@ unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
     unsafe { tv_list_append_number(l, curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
-    if window == unsafe { Win::from_raw(cur) } && saved_set_curswant {
-        unsafe { (*cur).w_set_curswant = saved_set_curswant };
-        unsafe { (*cur).w_curswant = saved_curswant };
-        unsafe { (*cur).w_virtcol = saved_virtcol };
-        unsafe { (*cur).w_valid.clear(WinValid::VIRTCOL) };
+    if window == Some(cur) && saved_set_curswant {
+        cur.w_set_curswant = saved_set_curswant;
+        cur.w_curswant = saved_curswant;
+        cur.w_virtcol = saved_virtcol;
+        cur.w_valid.clear(WinValid::VIRTCOL);
     }
 }
 

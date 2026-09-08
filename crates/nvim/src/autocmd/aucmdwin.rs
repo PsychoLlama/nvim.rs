@@ -179,7 +179,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         unsafe { (*auc_win).w_buffer = buffer.raw() };
         unsafe { (*auc_win).w_s = &raw mut buffer.b_s };
         buffer.b_nwindows += 1;
-        unsafe { win_init_empty(Win::new(auc_win)) };
+        win_init_empty(auc);
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
         // null, or `win_enter_ext` chdir()s.
@@ -197,8 +197,8 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
             // has to be in the registry or the walk stops at it.
             // `aucmd_restbuf` takes it back out, after the `win_remove`.
             register_window(auc);
-            win_append(last_window(), unsafe { Win::new(auc_win) }, None);
-            unsafe { win_config_float(Win::new(auc_win), (*auc_win).w_config.clone()) };
+            win_append(last_window(), auc, None);
+            unsafe { win_config_float(auc, (*auc_win).w_config.clone()) };
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
         // `RedrawingDisabled` keeps it from redrawing or setting the
@@ -206,7 +206,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         let save_acd = p_acd.get();
         p_acd.set(0);
         let redraw_off = Suppress::redraw();
-        unsafe { win_enter(Win::new(auc_win), false) };
+        win_enter(auc, false);
         drop(redraw_off);
         p_acd.set(save_acd);
         unblock_autocmds();
