@@ -32,7 +32,7 @@ use crate::garray::{
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{
-    mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
+    char_at, cluster_len, mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off,
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy};
 use crate::option::copy_option_part;
@@ -181,13 +181,13 @@ impl Simplify<'_> {
 
     /// Where the run of separators starting at `at` ends.
     ///
-    /// # Safety
-    /// `at` must index into the name.
-    unsafe fn past_separators(&self, mut at: usize) -> usize {
-        while vim_ispathsep(self.name[at] as c_int) {
+    /// # Panics
+    /// If `at` is past the name's NUL.
+    fn past_separators(&self, mut at: usize) -> usize {
+        while vim_ispathsep(c_int::from(self.name[at])) {
             // A separator with a composing character after it is one
             // character, and upstream steps over both.
-            at += unsafe { utfc_ptr2len(self.name.as_ptr().add(at).cast()) } as usize;
+            at += cluster_len(&self.name[at..self.end]);
         }
         at
     }
@@ -198,7 +198,7 @@ impl Simplify<'_> {
     /// `p` must index the `".."`.
     unsafe fn strip_parent(&mut self, mut p: usize) -> usize {
         // Past the ".." and any separators after it.
-        let mut tail = unsafe { self.past_separators(p + 2) };
+        let mut tail = self.past_separators(p + 2);
 
         if self.components > 0 {
             if unsafe { self.can_strip(&mut p, tail) } {
@@ -365,7 +365,7 @@ pub unsafe fn simplify_filename(filename: *mut c_char) -> size_t {
                 // or the "." alone at the start of an absolute name.
                 let mut tail = p + 1;
                 if s.name[p + 1] != 0 {
-                    tail = unsafe { s.past_separators(tail) };
+                    tail = s.past_separators(tail);
                 } else if p > s.start {
                     p -= 1;
                 }

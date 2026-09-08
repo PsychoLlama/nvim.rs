@@ -189,32 +189,35 @@ pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_in
     let limit = if maxlen < 0 {
         usize::MAX
     } else {
-        maxlen as usize
+        maxlen.cast_unsigned() as usize
     };
+    // SAFETY: the caller's promise. Each scan stops at its own terminator,
+    // so the `maxlen < 0` spelling of "no limit" is the whole name.
+    let (left, right) = unsafe { (cstr::prefix_at(p, limit), cstr::prefix_at(q, limit)) };
 
-    // Where one name ran out, and how far into it that was. Staying NULL
-    // means the comparison ran into `maxlen` with both still going.
-    let mut short: *const c_char = core::ptr::null();
+    // The name that still had bytes left when the other ran out: which one
+    // it is, and how far into it the leftovers start. `None` means neither
+    // ran out -- the comparison reached `maxlen` with both still going.
+    let mut leftover: Option<(*const c_char, &[u8], usize)> = None;
     let mut at = 0;
     let mut j = 0;
     while at < limit && j < limit {
-        let c1 = unsafe { utf_ptr2char(p.add(at)) };
-        let c2 = unsafe { utf_ptr2char(q.add(j)) };
-
-        // End of one name: the other may just have a trailing separator.
-        if c1 == NUL {
-            if c2 == NUL {
+        // The end of a slice is the name's NUL. The other name may still
+        // match, if all it has left is a trailing separator.
+        if at >= left.len() {
+            if j >= right.len() {
                 return 0;
             }
-            short = q;
-            at = j;
+            leftover = Some((q, right, j));
             break;
         }
-        if c2 == NUL {
-            short = p;
+        if j >= right.len() {
+            leftover = Some((p, left, at));
             break;
         }
 
+        let c1 = char_at(&left[at..]);
+        let c2 = char_at(&right[j..]);
         if fold(c1) != fold(c2) {
             if vim_ispathsep(c1) {
                 return -1;
@@ -224,21 +227,22 @@ pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_in
             }
             return fold(c1) - fold(c2);
         }
-        at += unsafe { utfc_ptr2len(p.add(at)) } as usize;
-        j += unsafe { utfc_ptr2len(q.add(j)) } as usize;
+        at += cluster_len(&left[at..]);
+        j += cluster_len(&right[j..]);
     }
-    if short.is_null() {
+
+    let Some((base, name, at)) = leftover else {
         return 0;
-    }
+    };
 
     // The longer name matches if all it has left is a trailing
     // separator — but "//" and ":/" are not that.
-    let rest = unsafe { short.add(at) };
-    let c1 = unsafe { utf_ptr2char(rest) };
-    let c2 = unsafe { utf_ptr2char(rest.add(utfc_ptr2len(rest) as usize)) };
-    if c2 == NUL && at > 0 && unsafe { after_pathsep(short, rest) } == 0 && c1 == c_int::from(b'/')
-    {
+    let rest = &name[at..];
+    let after = char_at(&rest[cluster_len(rest)..]);
+    // SAFETY: `base` is one of the caller's strings and `at` is inside it.
+    let mid_component = unsafe { after_pathsep(base, base.add(at)) } != 0;
+    if after == NUL && at > 0 && !mid_component && char_at(rest) == c_int::from(b'/') {
         return 0;
     }
-    if short == q { -1 } else { 1 }
+    if core::ptr::eq(base, q) { -1 } else { 1 }
 }

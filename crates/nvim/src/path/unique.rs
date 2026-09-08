@@ -15,6 +15,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 use super::*;
+use crate::mbyte::{cluster_len, utfc_ptr2len};
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::types::{MAXPATHL, PATHSEPSTR};
 
@@ -28,42 +29,48 @@ use crate::types::{MAXPATHL, PATHSEPSTR};
 /// least 1.
 pub unsafe fn shorten_dir_len(str: *mut c_char, trim_len: c_int) {
     let tail = unsafe { path_tail(str) };
-    // Where the next kept byte goes. Never past `s`, so the copy is
+    let tail_at = unsafe { tail.offset_from(str) }.cast_unsigned();
+    // SAFETY: the caller's promise. The terminator is part of the buffer and
+    // is copied like any other byte, so it is inside the slice.
+    let len = unsafe { cstr::bytes_at(str) }.len();
+    let bytes = unsafe { core::slice::from_raw_parts_mut(str.cast::<u8>(), len + 1) };
+
+    // Where the next kept byte goes. Never past `read`, so the copy is
     // always backwards over ground already read.
-    let mut d = str;
-    let mut s = str;
+    let mut write = 0;
+    let mut read = 0;
     let mut skip = false;
     let mut chunk_len = 0;
     loop {
-        if s >= tail {
+        if read >= tail_at {
             // The tail is copied whole.
-            unsafe { *d = *s };
-            d = unsafe { d.add(1) };
-            if unsafe { *s } == 0 {
+            bytes[write] = bytes[read];
+            write += 1;
+            if bytes[read] == 0 {
                 break;
             }
-        } else if vim_ispathsep(unsafe { *s } as c_int) {
+        } else if vim_ispathsep(c_int::from(bytes[read])) {
             // A separator starts a new component.
-            unsafe { *d = *s };
-            d = unsafe { d.add(1) };
+            bytes[write] = bytes[read];
+            write += 1;
             skip = false;
             chunk_len = 0;
         } else if !skip {
-            unsafe { *d = *s };
-            d = unsafe { d.add(1) };
-            if unsafe { *s } != b'~' as c_char && unsafe { *s } != b'.' as c_char {
+            bytes[write] = bytes[read];
+            write += 1;
+            if bytes[read] != b'~' && bytes[read] != b'.' {
                 // Only word characters count towards the length.
                 chunk_len += 1;
                 skip = chunk_len >= trim_len;
             }
             // A character is kept whole, however many bytes it takes.
-            for _ in 1..unsafe { utfc_ptr2len(s) } {
-                s = unsafe { s.add(1) };
-                unsafe { *d = *s };
-                d = unsafe { d.add(1) };
+            for _ in 1..cluster_len(&bytes[read..len]) {
+                read += 1;
+                bytes[write] = bytes[read];
+                write += 1;
             }
         }
-        s = unsafe { s.add(1) };
+        read += 1;
     }
 }
 
