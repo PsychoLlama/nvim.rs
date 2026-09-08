@@ -12,8 +12,8 @@ the migration's debt, counted by the ratchet as
 `unsafe_lines_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **13,201** unchecked lines inside the perimeter (135 files),
-**48,358** outside it (866 files, of 1,342 measured). It was 138,877 when
+Today: **13,168** unchecked lines inside the perimeter (137 files),
+**47,005** outside it (868 files, of 1,348 measured). It was 138,877 when
 this file was written, at the end of phase 23's slice 15.
 
 ## What qualifies
@@ -88,6 +88,11 @@ carrying its reason. Four things follow from it:
   a violation exactly as it is outside — and moving an unsafe file into a
   perimeter module shows up as a new path at full size.
 - **A file on the list says so in its own source.** See below.
+- **The "Today" line above is written, not typed.** `sync_perimeter_doc`
+  rewrites its five numbers from the same measurement, and the `--check` form
+  fails when they are stale. Hand-maintained, all five drifted — the line
+  claimed 48,358 lines outside against a real 47,002 — and a number in prose
+  that nothing checks is a number nobody can cite.
 
 To add an entry: put the path and its reason in `PERIMETER`, add the row here,
 run `just refresh`, and justify it in the commit message. The number this

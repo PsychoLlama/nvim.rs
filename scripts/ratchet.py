@@ -286,6 +286,12 @@ plus these whole-tree metrics, which are not per-file:
                     a new file included, so unchecked code appearing inside
                     the perimeter is a violation exactly as it is outside.
 
+                    docs/perimeter.md's "Today" sentence is generated from
+                    this same measurement rather than typed: this run
+                    rewrites it, `--check` fails when it is stale. It was
+                    hand-maintained for five phases and every one of its five
+                    numbers drifted.
+
   the C vocabulary  what is left outside the perimeter is no longer blanket
                     `unsafe` — it is *C vocabulary*: integer status codes
                     where `Result` belongs, raw `c_char` strings, manual
@@ -754,6 +760,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "metrics" / "ratchet.json"
 LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
 VISIBILITY = ROOT / "metrics" / "visibility-ledger.jsonl"
+# The perimeter's prose. Its "Today" sentence is measured, not written:
+# `sync_perimeter_doc` rewrites it and `--check` fails when it is stale.
+PERIMETER_DOC = ROOT / "docs" / "perimeter.md"
 # apigen's attribute spec: one line per method the API exposes. It is the
 # list the generator dispatches, so it is also the list of signatures whose
 # parameter names are the RPC surface's -- see API_EXPORTED below.
@@ -2192,6 +2201,69 @@ def check_perimeter(stats):
         )
 
 
+# The measured sentence in docs/perimeter.md, from "Today:" to the end of its
+# second sentence. Everything after it (the "It was N when this file was
+# written" line) is history and is left alone. `re.DOTALL` because the
+# paragraph is wrapped across source lines.
+PERIMETER_TODAY = re.compile(r"Today: \*\*[\d,]+\*\*.*?measured\)\.", re.DOTALL)
+
+
+def perimeter_today(stats):
+    """The "Today" sentence docs/perimeter.md should be carrying.
+
+    Five measured numbers: unchecked lines inside the perimeter and the files
+    holding them, the same outside it, and how many files were measured
+    altogether. Hand-maintained, all five went stale -- the line claimed
+    48,358 outside against a real 47,002 -- which is the argument for
+    generating it: a number in prose that nothing checks is a number nobody
+    can cite.
+
+    The line breaks are chosen here rather than by the formatter: prettier's
+    default `proseWrap` is "preserve", so whatever this writes survives
+    `just fmt` unchanged and `--check` can compare the two literally.
+    """
+    inside, outside = perimeter_lines(stats)
+    counted = [c for c in stats.values() if c["unsafe_lines"]]
+    inside_files = sum(
+        1
+        for file, counts in stats.items()
+        if counts["unsafe_lines"] and in_perimeter(file)
+    )
+    return (
+        f"Today: **{inside:,}** unchecked lines inside the perimeter "
+        f"({inside_files} files),\n"
+        f"**{outside:,}** outside it ({len(counted) - inside_files} files, "
+        f"of {len(stats):,} measured)."
+    )
+
+
+def sync_perimeter_doc(stats, check):
+    """Rewrite docs/perimeter.md's "Today" sentence, or fail when it is stale.
+
+    The doc is the perimeter's contract and the ratchet is the only thing
+    that can count; the two disagreeing is how the old line drifted by 1,356
+    lines without anyone noticing.
+    """
+    text = PERIMETER_DOC.read_text()
+    want = perimeter_today(stats)
+    if not PERIMETER_TODAY.search(text):
+        sys.exit(
+            f'ratchet: {PERIMETER_DOC.relative_to(ROOT)} has no "Today:" '
+            "sentence to write. Restore it, or update PERIMETER_TODAY."
+        )
+    fresh = PERIMETER_TODAY.sub(lambda _: want, text, count=1)
+    if check:
+        if fresh != text:
+            sys.exit(
+                f'ratchet: {PERIMETER_DOC.relative_to(ROOT)}\'s "Today" line '
+                f"is stale. It should read:\n\n{want}\n\n"
+                "Run `just refresh` and commit the result."
+            )
+        return
+    if fresh != text:
+        PERIMETER_DOC.write_text(fresh)
+
+
 def vocabulary(tree):
     """The C-vocabulary counts. See "the C vocabulary" in the doc block."""
     counts = dict.fromkeys((*VOCABULARY, *VOCABULARY_OUTSIDE, *VOCABULARY_INSIDE), 0)
@@ -3608,6 +3680,7 @@ def main():
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
+    sync_perimeter_doc(stats, "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
     content = render(stats, counts, without_deny, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
