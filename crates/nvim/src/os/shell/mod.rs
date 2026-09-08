@@ -345,15 +345,20 @@ pub unsafe fn get_cmd_output(
 
         // Add the redirection, and run it. Errors are ignored, and timestamps
         // deliberately not checked.
-        let command = make_filter_cmd(cmd, infile, tempname, false);
+        let command = make_filter_cmd(
+            cstr::at(cmd),
+            (!infile.is_null()).then(|| cstr::at(infile)),
+            Some(cstr::at(tempname)),
+            false,
+        );
         let unchecked = Suppress::timestamp_checks();
         call_shell(
-            command,
+            command.as_ptr().cast_mut(),
             ShellOpts::DO_OUT | ShellOpts::EXPAND | flags,
             ptr::null_mut(),
         );
         drop(unchecked);
-        xfree(command.cast());
+        drop(command);
 
         let buffer = read_output(tempname, ret_len);
         xfree(tempname.cast());

@@ -20,7 +20,6 @@ use super::*;
 use crate::cstr;
 use crate::types::Failed;
 use core::ffi::{c_char, c_int};
-use std::ffi::CStr;
 
 /// Diff two one-line files and see whether the answer is recognisable.
 ///
@@ -188,48 +187,47 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
         return unsafe { diff_file_internal(dio) };
     }
 
-    // "diff " plus six two-character flags, three file names, the redirect
-    // and the terminator.
-    let len = unsafe { cstr::bytes_at(tmp_orig) }.len()
-        + unsafe { cstr::bytes_at(tmp_new) }.len()
-        + unsafe { cstr::bytes_at(tmp_diff) }.len()
-        + unsafe { cstr::bytes_at(p_srr.get()) }.len()
-        + 27;
-    let cmd = unsafe { xmalloc(len) }.cast::<c_char>();
     // The user's own `diff` options would corrupt the output format.
     if unsafe { os_env_exists(c"DIFF_OPTIONS".as_ptr(), true) } {
         unsafe { os_unsetenv(c"DIFF_OPTIONS".as_ptr()) };
     }
-    let flag = |on: bool, text: &'static CStr| {
-        if on { text.as_ptr() } else { c"".as_ptr() }
-    };
+
+    // `diff`, its flags, the two input files and the output redirection.
+    // Upstream spells this as one `vim_snprintf` of nine `%s`, seven of them
+    // a flag or the empty string.
+    let mut cmd: Vec<u8> = b"diff ".to_vec();
+    let flags = diff_flags.get();
+    for (on, text) in [
+        (diff_a_works.get() != Some(false), &b"-a "[..]),
+        (flags & DIFF_IWHITE != 0, b"-b "),
+        (flags & DIFF_IWHITEALL != 0, b"-w "),
+        (flags & DIFF_IWHITEEOL != 0, b"-Z "),
+        (flags & DIFF_IBLANK != 0, b"-B "),
+        (flags & DIFF_ICASE != 0, b"-i "),
+    ] {
+        if on {
+            cmd.extend_from_slice(text);
+        }
+    }
+    // SAFETY: the three temp file names are the caller's own allocations, and
+    // 'shellredir' is a live option string.
     unsafe {
-        vim_snprintf(
-            cmd,
-            len,
-            c"diff %s%s%s%s%s%s%s%s %s".as_ptr(),
-            flag(diff_a_works.get() != Some(false), c"-a "),
-            c"".as_ptr(),
-            flag(diff_flags.get() & DIFF_IWHITE != 0, c"-b "),
-            flag(diff_flags.get() & DIFF_IWHITEALL != 0, c"-w "),
-            flag(diff_flags.get() & DIFF_IWHITEEOL != 0, c"-Z "),
-            flag(diff_flags.get() & DIFF_IBLANK != 0, c"-B "),
-            flag(diff_flags.get() & DIFF_ICASE != 0, c"-i "),
-            tmp_orig,
-            tmp_new,
-        )
-    };
-    unsafe { append_redir(cmd, len, p_srr.get(), tmp_diff) };
+        cmd.extend_from_slice(cstr::bytes_at(tmp_orig));
+        cmd.push(b' ');
+        cmd.extend_from_slice(cstr::bytes_at(tmp_new));
+        append_redir(&mut cmd, cstr::at(p_srr.get()), cstr::at(tmp_diff));
+    }
+    let cmd = cstr::owned(&cmd);
+
     block_autocmds();
     unsafe {
         call_shell(
-            cmd,
+            cmd.as_ptr().cast_mut(),
             ShellOpts::FILTER | ShellOpts::SILENT | ShellOpts::DO_OUT,
             ::core::ptr::null_mut(),
         )
     };
     unblock_autocmds();
-    unsafe { xfree(cmd.cast()) };
     Ok(())
 }
 

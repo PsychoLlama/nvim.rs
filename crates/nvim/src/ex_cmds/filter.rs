@@ -16,7 +16,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::Owned;
 use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::types::AutoEvent;
@@ -43,7 +42,7 @@ use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
 use crate::message::{
     MSG_BUF_LEN, emsg, message_filtered, msg_display, msg_ext_set_kind, msg_prt_line, msg_ptr,
@@ -69,8 +68,9 @@ use crate::ui::state::Rows;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 /// The last `:!` command, so that a later `!` in the argument can stand for
 /// it.  Owned, without a terminator; empty means there has not been one --
@@ -246,6 +246,15 @@ impl TempFile {
     fn name(this: &Option<TempFile>) -> *mut c_char {
         this.as_ref().map_or(ptr::null_mut(), |f| f.0)
     }
+
+    /// The name as a string, for the callers that no longer take a pointer.
+    ///
+    /// # Safety
+    /// The name is `vim_tempname`'s own NUL-terminated allocation.
+    unsafe fn as_cstr(this: &Option<TempFile>) -> Option<&CStr> {
+        // SAFETY: caller's contract.
+        this.as_ref().map(|f| unsafe { cstr::at(f.0) })
+    }
 }
 
 impl Drop for TempFile {
@@ -392,11 +401,15 @@ unsafe fn do_filter(
         }
 
         'error: {
-            // SAFETY: `cmd` is live and the temp names are ours; the shell
-            // line `make_filter_cmd` builds is ours to free.
-            let cmd_buf = Owned(unsafe {
-                make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in)
-            });
+            // SAFETY: `cmd` is live and the temp names are ours.
+            let cmd_buf = unsafe {
+                make_filter_cmd(
+                    cstr::at(cmd),
+                    TempFile::as_cstr(&itmp),
+                    TempFile::as_cstr(&otmp),
+                    do_in,
+                )
+            };
             ui_cursor_goto(Rows.get() - 1, 0);
 
             if do_out {
@@ -412,7 +425,13 @@ unsafe fn do_filter(
 
             // SAFETY: `cmd_buf` is a live command line and ours to free.
             // Pass on the DO_OUT flag when the output is redirected.
-            unsafe { call_shell(cmd_buf.0, ShellOpts::FILTER | shell_flags, ptr::null_mut()) };
+            unsafe {
+                call_shell(
+                    cmd_buf.as_ptr().cast_mut(),
+                    ShellOpts::FILTER | shell_flags,
+                    ptr::null_mut(),
+                )
+            };
             drop(cmd_buf);
 
             did_check_timestamps.set(false);
@@ -651,69 +670,35 @@ unsafe fn shell_kind() -> Shell {
 }
 
 /// The shell command that runs `cmd` with `itmp` as its input file and `otmp`
-/// as its output file, either of which may be NULL.  `do_in` says whether the
-/// command is fed anything on stdin at all.
+/// as its output file, either of which may be absent.  `do_in` says whether
+/// the command is fed anything on stdin at all.
+///
+/// Upstream sizes one `xmalloc`ed buffer up front and lets `append_redir`
+/// write into what is left over; the sink grows itself instead, so the
+/// arithmetic that had to predict the result's length is gone.
 ///
 /// # Safety
-/// The three strings must be live, apart from the NULLs allowed above.  The
-/// result is the caller's to `xfree`.
-pub unsafe fn make_filter_cmd(
-    cmd: *mut c_char,
-    itmp: *mut c_char,
-    otmp: *mut c_char,
+/// The 'shell' and 'shellredir' options must be live option strings.
+pub(crate) unsafe fn make_filter_cmd(
+    cmd: &CStr,
+    itmp: Option<&CStr>,
+    otmp: Option<&CStr>,
     do_in: bool,
-) -> *mut c_char {
-    // SAFETY: caller's contract, plus the live option strings.
-    let (shell, cmd_bytes, itmp_bytes, srr_len) = unsafe {
-        (
-            shell_kind(),
-            cstr::bytes_at(cmd),
-            (!itmp.is_null()).then(|| cstr::bytes_at(itmp)),
-            if otmp.is_null() {
-                0
-            } else {
-                cstr::bytes_at(p_srr.get()).len()
-            },
-        )
-    };
-
-    // Upstream sizes the buffer up front and `append_redir` writes into what
-    // is left over, so the allocation has to carry the redirection's room too
-    // even though nothing has been written there yet.  The `sizeof(...) - 1`
-    // additions upstream spells out are the literals below.
-    let mut len = cmd_bytes.len() + 1; // at least enough space for cmd + NUL
-    len += match shell {
-        Shell::Fish => b"begin; ; end".len(),
-        Shell::Pwsh => 0,
-        Shell::Posix => b"()".len(),
-    };
-    if let Some(itmp_bytes) = itmp_bytes {
-        len += itmp_bytes.len()
-            + match shell {
-                // +6: #20530
-                Shell::Pwsh => b"& { Get-Content  | &  }".len() + 6,
-                _ => b" {  <  } ".len(),
-            };
+) -> CString {
+    // SAFETY: caller's contract.
+    let shell = unsafe { shell_kind() };
+    let mut text = filter_cmd_text(
+        shell,
+        cmd.to_bytes(),
+        itmp.map(CStr::to_bytes),
+        otmp.is_some(),
+        do_in,
+    );
+    if let Some(otmp) = otmp {
+        // SAFETY: 'shellredir' is a live option string.
+        append_redir(&mut text, unsafe { cstr::at(p_srr.get()) }, otmp);
     }
-    if do_in && shell == Shell::Pwsh {
-        len += b" $input | ".len() + 1; // upstream counts the NUL here
-    }
-    if !otmp.is_null() {
-        // SAFETY: checked non-NULL.
-        len += unsafe { cstr::bytes_at(otmp) }.len() + srr_len + 2; // two extra spaces
-    }
-
-    let text = filter_cmd_text(shell, cmd_bytes, itmp_bytes, !otmp.is_null(), do_in);
-    debug_assert!(text.len() < len, "make_filter_cmd undersized its buffer");
-    // SAFETY: `len` is at least `text.len() + 1` and `append_redir` writes
-    // only within the remainder.
-    let buf = unsafe { xmalloc(len) } as *mut c_char;
-    unsafe { ptr::copy_nonoverlapping(text.as_ptr().cast::<c_char>(), buf, text.len()) };
-    unsafe { *buf.add(text.len()) = 0 };
-    if !otmp.is_null() {
-        unsafe { append_redir(buf, len, p_srr.get(), otmp) };
-    }
-    buf
+    cstr::owned(&text)
 }
 
 /// The command line itself, before any output redirection is appended.
@@ -775,29 +760,46 @@ fn wrap_group(shell: Shell, cmd: &[u8], buf: &mut Vec<u8>) {
 ///
 /// `opt` is a separator or a format string: a `%s` in it is replaced by
 /// `fname`, and otherwise a space, `opt`, a space and `fname` are appended.
-///
-/// # Safety
-/// `buf` must be a NUL-terminated string in an allocation of `buflen` bytes,
-/// with room left for what is appended; `opt` and `fname` must be live.
-pub unsafe fn append_redir(
-    buf: *mut c_char,
-    buflen: usize,
-    opt: *const c_char,
-    fname: *const c_char,
-) {
-    // SAFETY: caller's contract.
-    let used = unsafe { cstr::bytes_at(buf) }.len();
-    // SAFETY: as above.
-    let formats = has_percent_s(unsafe { cstr::bytes_at(opt) });
-    // SAFETY: `used` is inside the allocation, and the writes below stay
-    // within `buflen`.  One `%s` for one string in either format.
-    if formats {
+pub(crate) fn append_redir(buf: &mut Vec<u8>, opt: &CStr, fname: &CStr) {
+    buf.push(b' ');
+    if has_percent_s(opt.to_bytes()) {
         // not really needed?  Not with sh, ksh or bash
-        unsafe { *buf.add(used) = b' ' as c_char };
-        unsafe { vim_snprintf(buf.add(used + 1), buflen - used - 1, opt, fname) };
+        push_formatted(buf, opt, fname);
     } else {
-        unsafe { vim_snprintf(buf.add(used), buflen - used, c" %s %s".as_ptr(), opt, fname) };
+        // Upstream spells this as `vim_snprintf(" %s %s", opt, fname)`, which
+        // is the two strings with the separators around them and nothing a
+        // format can do to it.
+        buf.extend_from_slice(opt.to_bytes());
+        buf.push(b' ');
+        buf.extend_from_slice(fname.to_bytes());
     }
+}
+
+/// Append `format` with `fname` for its one `%s` to `buf`.
+///
+/// The format is a user's option value, so it goes through `vim_snprintf`
+/// rather than a substitution of our own: whatever it does with a conversion
+/// that is not the `%s` this was written for, it does exactly as before.
+fn push_formatted(buf: &mut Vec<u8>, format: &CStr, fname: &CStr) {
+    // SAFETY: a zero-length destination writes nothing and only measures; the
+    // format is the caller's and `fname` is the one string its `%s` names.
+    let needed = unsafe { vim_snprintf(ptr::null_mut(), 0, format.as_ptr(), fname.as_ptr()) };
+    let Ok(needed) = usize::try_from(needed) else {
+        return; // a format `vim_snprintf` could not render at all
+    };
+    let at = buf.len();
+    buf.resize(at + needed + 1, 0); // `vim_snprintf` writes its own NUL
+    // SAFETY: `needed + 1` writable bytes at `at`, which is what the
+    // measuring call above asked for.
+    unsafe {
+        vim_snprintf(
+            buf.as_mut_ptr().add(at).cast(),
+            needed + 1,
+            format.as_ptr(),
+            fname.as_ptr(),
+        )
+    };
+    buf.truncate(at + needed); // the sink carries no terminator of its own
 }
 
 /// Does `opt` carry a `%s` conversion?
@@ -878,4 +880,102 @@ pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool
         silent_mode.set(save_silent);
     }
     info_message.set(false);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The command line for a shell kind, as `make_filter_cmd` assembles it
+    /// before the redirection is appended.
+    fn assembled(
+        shell: Shell,
+        cmd: &str,
+        itmp: Option<&str>,
+        has_otmp: bool,
+        do_in: bool,
+    ) -> String {
+        let text = filter_cmd_text(
+            shell,
+            cmd.as_bytes(),
+            itmp.map(str::as_bytes),
+            has_otmp,
+            do_in,
+        );
+        String::from_utf8(text).expect("ASCII in, ASCII out")
+    }
+
+    /// `append_redir`'s answer on its own, starting from an empty sink.
+    fn redirected(opt: &CStr, fname: &CStr) -> String {
+        let mut buf = Vec::new();
+        append_redir(&mut buf, opt, fname);
+        String::from_utf8(buf).expect("ASCII in, ASCII out")
+    }
+
+    #[test]
+    fn a_bare_command_is_passed_through_undecorated() {
+        assert_eq!(assembled(Shell::Posix, "sort", None, false, false), "sort");
+        assert_eq!(assembled(Shell::Fish, "sort", None, false, false), "sort");
+    }
+
+    #[test]
+    fn redirection_puts_delimiters_around_the_command() {
+        // Either redirection is enough to need the grouping, because the
+        // command may itself be several commands.
+        assert_eq!(assembled(Shell::Posix, "a; b", None, true, false), "(a; b)");
+        assert_eq!(
+            assembled(Shell::Fish, "a; b", None, true, false),
+            "begin; a; b; end"
+        );
+        assert_eq!(
+            assembled(Shell::Posix, "sort", Some("/tmp/in"), false, false),
+            "(sort) < /tmp/in"
+        );
+        assert_eq!(
+            assembled(Shell::Fish, "sort", Some("/tmp/in"), true, false),
+            "begin; sort; end < /tmp/in"
+        );
+    }
+
+    #[test]
+    fn powershell_pipes_the_input_file_rather_than_redirecting_it() {
+        assert_eq!(
+            assembled(Shell::Pwsh, "sort", Some("/tmp/in"), true, false),
+            "& { Get-Content /tmp/in | & sort }"
+        );
+        // With no input file, `do_in` is what asks for stdin.
+        assert_eq!(
+            assembled(Shell::Pwsh, "sort", None, true, true),
+            " $input | sort"
+        );
+        assert_eq!(assembled(Shell::Pwsh, "sort", None, true, false), "sort");
+    }
+
+    #[test]
+    fn a_shellredir_without_a_conversion_is_a_separator() {
+        assert_eq!(redirected(c">", c"/tmp/out"), " > /tmp/out");
+        assert_eq!(redirected(c">%s 2>&1", c"/tmp/out"), " >/tmp/out 2>&1");
+    }
+
+    #[test]
+    fn a_percent_s_in_shellredir_is_where_the_file_name_goes() {
+        // The `%s` may be anywhere, and the leading space is added either way.
+        assert_eq!(
+            redirected(c"2>&1 | tee %s", c"/tmp/out"),
+            " 2>&1 | tee /tmp/out"
+        );
+        // `%%` is an escaped percent, so `%%s` is not a conversion and the
+        // whole option is treated as a separator.
+        assert!(!has_percent_s(b"%%s"));
+        assert!(has_percent_s(b"%%%s"));
+        assert!(!has_percent_s(b">"));
+        assert!(has_percent_s(b"%s"));
+    }
+
+    #[test]
+    fn the_redirection_lands_after_whatever_the_sink_already_holds() {
+        let mut buf = b"(sort) < /tmp/in".to_vec();
+        append_redir(&mut buf, c">", c"/tmp/out");
+        assert_eq!(buf, b"(sort) < /tmp/in > /tmp/out");
+    }
 }

@@ -14,6 +14,7 @@ use crate::os::shell::ShellOpts;
 use crate::types::CmdIdx;
 use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
+use std::ffi::CString;
 
 /// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
 /// set to `internal` asks for. Only the `:grep` family can say it; `:make`
@@ -57,29 +58,30 @@ fn make_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// it with `'shellquote'` and append the `'shellpipe'` redirection to
 /// `fname`. Echoes the result, so that the user sees what is being run.
 ///
-/// Answers an `xmalloc`ed string the caller frees.
-///
 /// # Safety
 ///
 /// Both strings must be NUL-terminated.
-unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut c_char {
-    // SAFETY: forwarded from the caller.
-    let quote = p_shq.get();
-    let mut len =
-        unsafe { cstr::bytes_at(quote) }.len() * 2 + unsafe { cstr::bytes_at(makecmd) }.len() + 1;
-    // If 'shellpipe' is empty the output is not redirected at all.
-    let redirect = unsafe { *p_sp.get() } as c_int != NUL;
-    if redirect {
-        len += unsafe { cstr::bytes_at(p_sp.get()) }.len()
-            + unsafe { cstr::bytes_at(fname) }.len()
-            + 3;
-    }
+unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> CString {
+    // SAFETY: forwarded from the caller, plus the live option strings.
+    let (quote, makecmd, redirect, pipe, fname) = unsafe {
+        (
+            cstr::bytes_at(p_shq.get()),
+            cstr::bytes_at(makecmd),
+            // If 'shellpipe' is empty the output is not redirected at all.
+            *p_sp.get() as c_int != NUL,
+            cstr::at(p_sp.get()),
+            cstr::at(fname),
+        )
+    };
 
-    let cmd: *mut c_char = unsafe { xmalloc(len) }.cast();
-    unsafe { snprintf(cmd, len, c"%s%s%s".as_ptr(), quote, makecmd, quote) };
+    let mut cmd: Vec<u8> = Vec::new();
+    cmd.extend_from_slice(quote);
+    cmd.extend_from_slice(makecmd);
+    cmd.extend_from_slice(quote);
     if redirect {
-        unsafe { append_redir(cmd, len, p_sp.get(), fname) };
+        append_redir(&mut cmd, pipe, fname);
     }
+    let cmd = cstr::owned(&cmd);
 
     // Display the fully formed command. Output a newline if there is
     // something else than the :make command that was typed, in which
@@ -89,7 +91,7 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut
     }
     msg_start();
     msg_str(c":!");
-    msg_display(unsafe { cstr::at(cmd) }, 0, false);
+    msg_display(&cmd, 0, false);
 
     cmd
 }
@@ -135,7 +137,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     unsafe { os_remove(cstr::at(fname)) };
 
     let cmd = unsafe { make_get_fullcmd(args.arg, fname) };
-    unsafe { do_shell(cmd, ShellOpts::NONE) };
+    unsafe { do_shell(cmd.as_ptr().cast_mut(), ShellOpts::NONE) };
 
     incr_quickfix_busy();
 
@@ -182,7 +184,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     qf_busy_end();
     unsafe { os_remove(cstr::at(fname)) };
     unsafe { xfree(fname.cast()) };
-    unsafe { xfree(cmd.cast()) };
+    drop(cmd);
 }
 
 /// The name of the error file `:make` redirects into, in allocated memory,
