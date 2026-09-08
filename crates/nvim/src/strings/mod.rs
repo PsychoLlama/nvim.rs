@@ -6,6 +6,7 @@ use crate::eval::typval::tv_get_bool_chk;
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::{xmalloc, xmallocz};
+use crate::os::cshim::strchr;
 use crate::semsg;
 use crate::types::{KeyValue, MB_MAXCHAR, TypVal, VAR_UNKNOWN, size_t};
 use ::libc::{qsort, strcasecmp};
@@ -219,10 +220,23 @@ pub(crate) fn has_bytes(haystack: &CStr, needle: &[u8]) -> bool {
 
 /// Find character `c` (a codepoint, not a byte) in `string`.
 ///
+/// The ASCII half keeps libc's `strchr`, which [`find_char`] cannot match:
+/// one early-exiting SIMD pass against a `strlen` over the *whole* string
+/// plus a scalar scan. Measured at +0.4 % of `inbench` when this body was
+/// routed through the slice form, with sixty-odd cursor callers still on
+/// the command-line path.
+///
 /// # Safety
 ///
 /// `string` must point at a NUL-terminated string.
 pub unsafe fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
+    if c <= 0 {
+        return ptr::null_mut();
+    }
+    if c < 0x80 {
+        // SAFETY: the caller's NUL-terminated string.
+        return unsafe { strchr(string, c) };
+    }
     // SAFETY: the caller's NUL-terminated string, and an offset `find_char`
     // answered from within it.
     match find_char(unsafe { cstr::bytes_at(string) }, c) {
