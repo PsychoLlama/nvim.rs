@@ -161,9 +161,9 @@ use core::ptr;
 
 use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
-use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
+use crate::mbyte::{str_char_at, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
-use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
+use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrChar, Tabpage, Window};
 use crate::winlayer::graph::{curtab, curwin};
 
 // ---------------------------------------------------------------------------
@@ -908,34 +908,31 @@ impl Line {
     }
 
     /// The first character of the line, and the walk state to step it with.
+    ///
+    /// The cursor borrows the line's bytes, which the handle promises stay
+    /// live and unwritten for as long as it is used.
     #[inline(always)]
-    pub fn first_char(self) -> StrCharInfo {
+    pub fn first_char<'a>(self) -> StrChar<'a> {
         // SAFETY: a NUL-terminated line.
-        unsafe { utf_ptr2str_char_info(self.0) }
+        unsafe { str_char_at(self.0) }
     }
 
     /// The character after `ci`.
-    ///
-    /// # Safety
-    /// `ci` must be a character of this line, and not its terminating NUL.
     #[inline(always)]
-    pub unsafe fn next_char(self, ci: StrCharInfo) -> StrCharInfo {
-        unsafe { utfc_next(ci) }
+    pub fn next_char(self, ci: StrChar<'_>) -> StrChar<'_> {
+        utfc_next(ci)
     }
 
-    /// Whether `ci` has reached the line's terminating NUL.
-    ///
-    /// # Safety
-    /// `ci` must be a character of this line.
+    /// Whether `ci` has reached the end of the line.
     #[inline(always)]
-    pub unsafe fn ended(self, ci: StrCharInfo) -> bool {
-        unsafe { *ci.ptr == 0 }
+    pub fn ended(self, ci: StrChar<'_>) -> bool {
+        ci.at_end()
     }
 
     /// How many bytes into the line `ci` sits.
     #[inline(always)]
-    pub fn index_of(self, ci: StrCharInfo) -> ::core::ffi::c_int {
-        let offset = ci.ptr.addr().wrapping_sub(self.0.addr());
+    pub fn index_of(self, ci: StrChar<'_>) -> ::core::ffi::c_int {
+        let offset = ci.address().addr().wrapping_sub(self.0.addr());
         ::core::ffi::c_int::try_from(offset).expect("`ci` is a character of this line")
     }
 }

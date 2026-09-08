@@ -52,8 +52,8 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
-    bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
-    utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char, utf_ptr2len, utf_ptr2str_char_info,
+    bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, str_char_at, utf_char2bytes,
+    utf_char2cells, utf_char2len, utf_eat_space, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_next, utfc_ptr2len,
 };
 use crate::memline::{
@@ -97,7 +97,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BlockDef, Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr,
-    MotionType, OpArg, OpType, OptInt, OptSet, Pos, StrCharInfo, TypVal, UVarNumber, VAR_STRING,
+    MotionType, OpArg, OpType, OptInt, OptSet, Pos, StrChar, TypVal, UVarNumber, VAR_STRING,
     VAR_UNKNOWN, VarLock, VarNumber, YankReg, int32_t, int64_t, size_t, ssize_t, typval_vval_union,
 };
 use crate::ui::vim_beep;

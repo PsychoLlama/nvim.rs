@@ -323,20 +323,20 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
 
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, line) };
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut ci: StrChar = unsafe { str_char_at(line) };
     let mut vcol = 0;
-    while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
-        vcol += unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+    while vcol < end_vcol && !ci.at_end() {
+        vcol += unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
         if vcol > end_vcol {
             break;
         }
-        ci = unsafe { utfc_next(ci) };
+        ci = utfc_next(ci);
     }
 
-    let c = if ci.chr.value < 0 {
-        unsafe { *ci.ptr as uint8_t as c_int }
+    let c = if ci.value < 0 {
+        unsafe { *ci.address() as uint8_t as c_int }
     } else {
-        ci.chr.value as c_int
+        ci.value as c_int
     };
     if c == NUL {
         unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };

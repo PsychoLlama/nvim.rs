@@ -156,7 +156,6 @@ typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct signal_watcher signal_watcher;
 typedef struct StaticList10 StaticList10;
-typedef struct StrCharInfo StrCharInfo;
 typedef union TermKeyKey_code TermKeyKey_code;
 typedef struct TerminalCursor TerminalCursor;
 typedef struct TerminalOptions TerminalOptions;
@@ -1502,10 +1501,6 @@ struct signal_watcher {
 struct StaticList10 {
   List sl_list;
   ListItem sl_items[10];
-};
-struct StrCharInfo {
-  char *ptr;
-  CharInfo chr;
 };
 union TermKeyKey_code {
   int codepoint;

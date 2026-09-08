@@ -136,24 +136,25 @@ pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_lon
     let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
 
     let mut vcol: ColNr = 0;
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut ci: StrChar = unsafe { str_char_at(line) };
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
-        while unsafe { *ci.ptr } != NUL as c_char && {
+        while !ci.at_end() && {
             column -= 1;
             column >= 0
         } {
-            vcol += unsafe { charsize_fast_impl(window, ci.ptr, use_tabstop, vcol, ci.chr.value) }
-                .width;
-            ci = unsafe { utfc_next(ci) };
+            vcol +=
+                unsafe { charsize_fast_impl(window, ci.address(), use_tabstop, vcol, ci.value) }
+                    .width;
+            ci = utfc_next(ci);
         }
     } else {
-        while unsafe { *ci.ptr } != NUL as c_char && {
+        while !ci.at_end() && {
             column -= 1;
             column >= 0
         } {
-            vcol += unsafe { charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value) }.width;
-            ci = unsafe { utfc_next(ci) };
+            vcol += unsafe { charsize_regular(&mut csarg, ci.address(), vcol, ci.value) }.width;
+            ci = utfc_next(ci);
         }
     }
 
@@ -162,8 +163,8 @@ pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_lon
     // only fixes an error when the TAB wraps from one screen line to the
     // next (when 'columns' is not a multiple of 'ts') -- webb.
     let mut col = vcol;
-    if ci.chr.value == TAB && State.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
-        col += unsafe { win_charsize(cstype, col, ci.ptr, ci.chr.value, &mut csarg) }.width - 1;
+    if ci.value == TAB && State.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
+        col += unsafe { win_charsize(cstype, col, ci.address(), ci.value, &mut csarg) }.width - 1;
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.

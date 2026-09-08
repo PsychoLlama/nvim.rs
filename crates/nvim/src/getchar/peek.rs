@@ -96,15 +96,16 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 
                 let mut csarg = CharsizeArg::default();
                 let cstype = unsafe { init_charsize_arg(&mut csarg, win, win.w_cursor.lnum, ptr) };
-                let mut ci = unsafe { utf_ptr2str_char_info(ptr) };
+                let mut ci = unsafe { str_char_at(ptr) };
                 let mut vcol = 0;
-                while ci.ptr < endptr {
-                    if !ascii_iswhite(ci.chr.value as c_int) {
+                while ci.address() < endptr {
+                    if !ascii_iswhite(ci.value as c_int) {
                         win.w_wcol = vcol;
                     }
-                    vcol += unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }
-                        .width;
-                    ci = unsafe { utfc_next(ci) };
+                    vcol +=
+                        unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }
+                            .width;
+                    ci = utfc_next(ci);
                 }
 
                 win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;

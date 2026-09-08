@@ -394,15 +394,15 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     let mut csarg = CharsizeArg::default();
     let lnum = Win::current().w_cursor.lnum;
     let cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), lnum, bd.textstart) };
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
+    let mut ci: StrChar = unsafe { str_char_at(bd.textstart) };
     let mut vcol = bd.start_vcol as c_int;
-    while ascii_iswhite(ci.chr.value) {
-        let incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
-        ci = unsafe { utfc_next(ci) };
+    while ascii_iswhite(ci.value) {
+        let incr = unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
+        ci = utfc_next(ci);
         total += incr;
         vcol += incr;
     }
-    bd.textstart = ci.ptr;
+    bd.textstart = ci.address();
     bd.start_vcol = vcol;
 
     // `total` is now all the white space wanted and `bd.textstart` points
@@ -499,17 +499,17 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
         verbatim_copy_width -= bd.start_char_vcols;
     }
     cstype = unsafe { init_charsize_arg(&mut csarg, Win::current(), 0, bd.textstart) };
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
+    let mut ci: StrChar = unsafe { str_char_at(bd.textstart) };
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;
-        let incr = unsafe { win_charsize(cstype, w, ci.ptr, ci.chr.value, &mut csarg) }.width;
+        let incr = unsafe { win_charsize(cstype, w, ci.address(), ci.value, &mut csarg) }.width;
         if verbatim_copy_width + incr > destination_col {
             break;
         }
         verbatim_copy_width += incr;
-        ci = unsafe { utfc_next(ci) };
+        ci = utfc_next(ci);
     }
-    let verbatim_copy_end = ci.ptr;
+    let verbatim_copy_end = ci.address();
 
     // A destination inside a TAB leaves a gap the TAB used to cover.
     debug_assert!(destination_col - verbatim_copy_width >= 0);

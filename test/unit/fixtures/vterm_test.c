@@ -206,20 +206,20 @@ static void print_schar(FILE *f, ScreenChar schar)
 {
   char buf[MAX_SCHAR_SIZE];
   schar_get(buf, schar);
-  StrCharInfo ci = utf_ptr2str_char_info(buf);
   bool did = false;
-  while (*ci.ptr != 0) {
+  for (char *p = buf; *p != 0;) {
+    CharInfo chr = utf_ptr2char_info(p);
     if (did) {
       fprintf(f, ",");
     }
 
-    if (ci.chr.len == 1 && ci.chr.value >= 0x80) {
-      fprintf(f, "??%x", ci.chr.value);
+    if (chr.len == 1 && chr.value >= 0x80) {
+      fprintf(f, "??%x", chr.value);
     } else {
-      fprintf(f, "%x", ci.chr.value);
+      fprintf(f, "%x", chr.value);
     }
     did = true;
-    ci = utf_ptr2str_char_info(ci.ptr + ci.chr.len);
+    p += chr.len;
   }
 }
 

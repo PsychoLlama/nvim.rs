@@ -727,21 +727,21 @@ impl LineSetup {
         let cstype = unsafe { init_charsize_arg(&mut csarg, window, wlv.lnum, self.line) };
         csarg.max_head_vcol = start_vcol;
         let mut vcol = wlv.vcol;
-        let mut ci = unsafe { utf_ptr2str_char_info(self.ptr) };
+        let mut ci = unsafe { str_char_at(self.ptr) };
         while vcol < start_vcol {
-            cs = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) };
+            cs = unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) };
             vcol += cs.width;
-            prev_ptr = ci.ptr;
-            if unsafe { *prev_ptr } == 0 {
+            prev_ptr = ci.address();
+            if ci.at_end() {
                 break;
             }
-            ci = unsafe { utfc_next(ci) };
+            ci = utfc_next(ci);
             if window.w_onebuf_opt.wo_list != 0 {
-                unsafe { self.track_multispace(window, prev_ptr, ci.ptr) };
+                unsafe { self.track_multispace(window, prev_ptr, ci.address()) };
             }
         }
         wlv.vcol = vcol;
-        self.ptr = ci.ptr;
+        self.ptr = ci.address();
 
         // The end of the line can be left of the first displayed column
         // when 'cursorcolumn' or 'colorcolumn' is set, when 'virtualedit'

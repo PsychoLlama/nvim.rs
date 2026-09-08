@@ -24,7 +24,7 @@ use crate::extmark::extmark_splice_cols;
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
-use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
+use crate::mbyte::{str_char_at, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
 use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
@@ -373,20 +373,20 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     if unsafe { *line } != 0 {
         let mut csarg = CharsizeArg::default();
         let cstype = unsafe { init_charsize_arg(&mut csarg, win, 0, line) };
-        let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+        let mut ci: StrChar = unsafe { str_char_at(line) };
         loop {
             let next_vcol = vcol
-                + unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+                + unsafe { win_charsize(cstype, vcol, ci.address(), ci.value, &mut csarg) }.width;
             if next_vcol > end_vcol {
                 break;
             }
             vcol = next_vcol;
-            ci = unsafe { utfc_next(ci) };
-            if unsafe { *ci.ptr } == 0 {
+            ci = utfc_next(ci);
+            if ci.at_end() {
                 break;
             }
         }
-        new_cursor_col = unsafe { ci.ptr.offset_from(line) } as c_int;
+        new_cursor_col = unsafe { ci.address().offset_from(line) } as c_int;
     }
     if vcol == win.w_virtcol as c_int {
         return new_cursor_col;

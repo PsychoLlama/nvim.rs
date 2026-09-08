@@ -233,14 +233,14 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column.
     // SAFETY: `ci` walks that line and the loop stops at its terminating NUL.
-    while cur_vcol < vcol && !unsafe { line.ended(ci) } {
+    while cur_vcol < vcol && !line.ended(ci) {
         let width =
-            unsafe { win_charsize(cstype, cur_vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
+            unsafe { win_charsize(cstype, cur_vcol, ci.address(), ci.value, &mut csarg) }.width;
         if cur_vcol + width > vcol {
             break;
         }
         cur_vcol += width;
-        ci = unsafe { line.next_char(ci) };
+        ci = line.next_char(ci);
     }
     (line.index_of(ci), vcol - cur_vcol)
 }

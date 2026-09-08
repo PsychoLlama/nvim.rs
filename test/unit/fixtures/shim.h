@@ -144,9 +144,11 @@ typedef enum {
 // targets little-endian).
 #define schar_from_ascii(x) ((ScreenChar)(x))
 
-// The `#[inline]` twins from crate::mbyte, which the crate does not export
-// (their exported dependencies -- utf8len_tab, utf_ptr2char_info_impl -- are
-// chunk prototypes).
+// The `#[inline]` twin from crate::mbyte, which the crate does not export
+// (its exported dependencies -- utf8len_tab, utf_ptr2char_info_impl -- are
+// chunk prototypes). The crate's walk cursor is a slice and a length now,
+// which no C declaration can name, so the one caller here walks with a
+// pointer and this instead.
 static inline CharInfo utf_ptr2char_info(char const *const p_in)
 {
   uint8_t const *const p = (uint8_t const *)p_in;
@@ -160,11 +162,6 @@ static inline CharInfo utf_ptr2char_info(char const *const p_in)
     len = 1;
   }
   return (CharInfo){ .value = code_point, .len = len };
-}
-
-static inline StrCharInfo utf_ptr2str_char_info(char *ptr)
-{
-  return (StrCharInfo){ .ptr = ptr, .chr = utf_ptr2char_info(ptr) };
 }
 
 #endif  // NVIM_TEST_UNIT_FIXTURES_SHIM_H

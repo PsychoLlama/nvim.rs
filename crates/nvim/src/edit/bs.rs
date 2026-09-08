@@ -370,17 +370,17 @@ fn bs_one_shiftwidth(in_indent: bool) {
     // that is preceded by non-white space.
     let mut vcol: ColNr = 0;
     let mut space_vcol: ColNr = 0;
-    let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut sci: StrChar = unsafe { str_char_at(line) };
     let mut space_sci = sci;
     let mut prev_space = false;
-    while sci.ptr < cursor_ptr {
-        let cur_space = ascii_iswhite(sci.chr.value);
+    while sci.address() < cursor_ptr {
+        let cur_space = ascii_iswhite(sci.value);
         if !prev_space && cur_space {
             space_sci = sci;
             space_vcol = vcol;
         }
         vcol += charsize_at(use_ts, vcol, sci);
-        sci = unsafe { utfc_next(sci) };
+        sci = utfc_next(sci);
         prev_space = cur_space;
     }
 
@@ -400,11 +400,11 @@ fn bs_one_shiftwidth(in_indent: bool) {
             break;
         }
         space_vcol += size;
-        space_sci = unsafe { utfc_next(space_sci) };
+        space_sci = utfc_next(space_sci);
     }
     // SAFETY: the walk never stepped past `cursor_ptr`, so `space_sci` is
     // still inside the same line as `line`.
-    let want_col = unsafe { space_sci.ptr.offset_from(line) } as ColNr;
+    let want_col = unsafe { space_sci.address().offset_from(line) } as ColNr;
 
     // Delete until at or before `want_col`.
     while Win::current().w_cursor.col > want_col {
@@ -565,7 +565,7 @@ fn cursor_char_class() -> c_int {
 /// The screen width of the character `sci` names, standing at virtual
 /// column `vcol`.  `use_ts` says whether a TAB still advances to a tab stop.
 #[inline(always)]
-fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrCharInfo) -> c_int {
+fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrChar) -> c_int {
     // SAFETY: `sci` names a character of a live line of `curbuf`.
-    unsafe { charsize_nowrap(Buf::current(), sci.ptr, use_ts, vcol, sci.chr.value) }
+    unsafe { charsize_nowrap(Buf::current(), sci.address(), use_ts, vcol, sci.value) }
 }

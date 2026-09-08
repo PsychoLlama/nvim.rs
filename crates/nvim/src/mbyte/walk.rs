@@ -232,39 +232,51 @@ pub unsafe fn utf_head_off(base_in: *const c_char, p_in: *const c_char) -> c_int
 ///
 /// The slow half of [`utfc_next`]: it has to decode each following character
 /// to find out whether it composes onto this one.
-///
-/// # Safety
-///
-/// `cur` must describe a character in a NUL-terminated string, and the byte
-/// after it must be `>= 0x80` — [`utfc_next`] guarantees both.
-pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
-    let mut prev_code = cur.chr.value;
-    let mut next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
+pub fn utfc_next_impl(cur: StrChar<'_>) -> StrChar<'_> {
+    let mut prev_code = cur.value;
+    let mut at = cur.len;
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    debug_assert!(unsafe { *next } >= 0x80, "*next >= 0x80");
     loop {
-        let next_len = utf8len_tab[unsafe { *next } as usize];
-        let next_code = unsafe { utf_ptr2char_info_impl(next, next_len as uintptr_t) };
-        if !unsafe { utf_iscomposing(prev_code, next_code, &raw mut state) } {
-            return StrCharInfo {
-                ptr: next as *mut c_char,
-                chr: CharInfo {
-                    value: next_code,
-                    len: if next_code < 0 { 1 } else { next_len as c_int },
-                },
+        let Some(next) = cur.rest.get(at..).filter(|next| !next.is_empty()) else {
+            return ended(cur.rest);
+        };
+        // The step is the length the lead byte announces even when the
+        // decode rejects the sequence, which is how the walk gets past a
+        // composing character it could not read.
+        let next_len = usize::from(utf8len_tab[usize::from(next[0])]);
+        let next_code = strict_char_at(next);
+        if !iscomposing(prev_code, next_code, Some(&mut state)) {
+            return StrChar {
+                rest: next,
+                value: next_code,
+                len: if next_code < 0 { 1 } else { next_len },
             };
         }
         prev_code = next_code;
-        next = unsafe { next.offset(next_len as isize) };
-        if unsafe { *next } < 0x80 {
-            return StrCharInfo {
-                ptr: next as *mut c_char,
-                chr: CharInfo {
-                    value: unsafe { *next } as int32_t,
-                    len: 1,
-                },
-            };
+        at += next_len;
+        match cur.rest.get(at..) {
+            None => return ended(cur.rest),
+            Some(after) => match after.first() {
+                None => return ended(after),
+                Some(&byte) if byte < 0x80 => {
+                    return StrChar {
+                        rest: after,
+                        value: int32_t::from(byte),
+                        len: 1,
+                    };
+                }
+                Some(_) => {}
+            },
         }
+    }
+}
+
+/// The cursor at the end of `text`: no character, and nothing left.
+fn ended(text: &[u8]) -> StrChar<'_> {
+    StrChar {
+        rest: &text[text.len()..],
+        value: 0,
+        len: 1,
     }
 }
 
@@ -483,18 +495,32 @@ pub fn char_count(bytes: &[u8]) -> usize {
     clusters(bytes).count()
 }
 
-/// `text` paired with its codepoint: the start of a character and the
-/// character itself. Composing characters are not consulted.
+/// The first character of `text`, paired with the text itself: the cursor a
+/// walk starts from. Composing characters are not consulted.
+#[inline(always)]
+pub fn str_char(text: &[u8]) -> StrChar<'_> {
+    let info = char_info_at(text);
+    StrChar {
+        rest: text,
+        value: info.value,
+        len: usize::try_from(info.len).expect("a character's length is positive"),
+    }
+}
+
+/// The first character of the NUL-terminated string at `p`, as a cursor over
+/// its bytes.
+///
+/// The boundary spelling of [`str_char`], for a caller that still holds a
+/// pointer rather than the text: it measures the string once, here, instead
+/// of at every step of the walk.
 ///
 /// # Safety
 ///
-/// `text` must point into a NUL-terminated string.
+/// `p` must point at a NUL-terminated string, live and unwritten for `'a`.
 #[inline(always)]
-pub unsafe fn utf_ptr2str_char_info(text: *mut c_char) -> StrCharInfo {
-    StrCharInfo {
-        ptr: text,
-        chr: unsafe { utf_ptr2char_info(text) },
-    }
+pub unsafe fn str_char_at<'a>(p: *const c_char) -> StrChar<'a> {
+    // SAFETY: the caller's promise.
+    str_char(unsafe { cstr::bytes_at(p) })
 }
 
 /// The character after `cur`, treating a following composing character as
@@ -502,21 +528,16 @@ pub unsafe fn utf_ptr2str_char_info(text: *mut c_char) -> StrCharInfo {
 ///
 /// The ASCII case is inlined because it is almost all of them; everything
 /// else defers to [`utfc_next_impl`].
-///
-/// # Safety
-///
-/// `cur.ptr` must point into a NUL-terminated string, at a character start.
 #[inline(always)]
-pub unsafe fn utfc_next(cur: StrCharInfo) -> StrCharInfo {
-    let next = unsafe { cur.ptr.offset(cur.chr.len as isize) } as *mut u8;
-    if unsafe { *next } < 0x80 {
-        return StrCharInfo {
-            ptr: next as *mut c_char,
-            chr: CharInfo {
-                value: unsafe { *next } as int32_t,
-                len: 1,
-            },
-        };
+pub fn utfc_next(cur: StrChar<'_>) -> StrChar<'_> {
+    let next = &cur.rest[cur.len.min(cur.rest.len())..];
+    match next.first() {
+        None => ended(next),
+        Some(&byte) if byte < 0x80 => StrChar {
+            rest: next,
+            value: int32_t::from(byte),
+            len: 1,
+        },
+        Some(_) => utfc_next_impl(cur),
     }
-    unsafe { utfc_next_impl(cur) }
 }

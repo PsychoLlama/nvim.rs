@@ -13,7 +13,6 @@ use core::ptr;
 
 use crate::normal::{visual_active, visual_anchor};
 use crate::pos::MAXCOL;
-use crate::types::NUL;
 use crate::winlayer::PosRef;
 
 /// Virtual column of `pos`, in up to three flavours:
@@ -45,20 +44,20 @@ pub(crate) unsafe fn getvcol(
     let mut on_nul = false;
     let mut vcol: ColNr = 0;
     let mut char_size;
-    let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
+    let mut ci: StrChar = unsafe { str_char_at(line) };
 
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
         loop {
-            if unsafe { *ci.ptr } == NUL as c_char {
+            if ci.at_end() {
                 // The cursor on a NUL is treated like a one-cell char.
                 char_size = CharSize { width: 1, head: 0 };
                 break;
             }
             char_size =
-                unsafe { charsize_fast_impl(window, ci.ptr, use_tabstop, vcol, ci.chr.value) };
-            let next = unsafe { utfc_next(ci) };
-            if unsafe { next.ptr.offset_from(line) } > end_col as isize {
+                unsafe { charsize_fast_impl(window, ci.address(), use_tabstop, vcol, ci.value) };
+            let next = utfc_next(ci);
+            if unsafe { next.address().offset_from(line) } > end_col as isize {
                 break;
             }
             ci = next;
@@ -66,17 +65,17 @@ pub(crate) unsafe fn getvcol(
         }
     } else {
         loop {
-            char_size = unsafe { charsize_regular(&mut csarg, ci.ptr, vcol, ci.chr.value) };
+            char_size = unsafe { charsize_regular(&mut csarg, ci.address(), vcol, ci.value) };
             // Don't go past the end of the line.
-            if unsafe { *ci.ptr } == NUL as c_char {
+            if ci.at_end() {
                 // A NUL at the end of the line takes one column, unless
                 // there is virtual text.
                 char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
                 on_nul = true;
                 break;
             }
-            let next = unsafe { utfc_next(ci) };
-            if unsafe { next.ptr.offset_from(line) } > end_col as isize {
+            let next = utfc_next(ci);
+            if unsafe { next.address().offset_from(line) } > end_col as isize {
                 break;
             }
             ci = next;
@@ -84,11 +83,11 @@ pub(crate) unsafe fn getvcol(
         }
     }
 
-    if unsafe { *ci.ptr } == NUL as c_char
+    if ci.at_end()
         && end_col < MAXCOL
-        && end_col as isize > unsafe { ci.ptr.offset_from(line) }
+        && end_col as isize > unsafe { ci.address().offset_from(line) }
     {
-        unsafe { (*pos).col = ci.ptr.offset_from(line) as ColNr };
+        unsafe { (*pos).col = ci.address().offset_from(line) as ColNr };
     }
 
     let head = char_size.head;
@@ -101,7 +100,7 @@ pub(crate) unsafe fn getvcol(
         unsafe { *end = vcol + incr - 1 };
     }
     if !cursor.is_null() {
-        let cursor_at_tab_end = ci.chr.value == TAB
+        let cursor_at_tab_end = ci.value == TAB
             && State.get() & MODE_NORMAL != 0
             && window.w_onebuf_opt.wo_list == 0
             && !virtual_active(window)
