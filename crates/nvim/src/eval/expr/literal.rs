@@ -257,10 +257,9 @@ pub(crate) unsafe fn eval_number(
     }
 
     if get_float {
-        let mut f: Float = 0.;
         // SAFETY: the cursor is on the first digit of the literal.
-        let used = unsafe { string2float(cur.get(), &raw mut f) };
-        cur.bump(used as usize);
+        let (f, used) = unsafe { string2float(cur.get()) };
+        cur.bump(used);
         if evaluate {
             rv.write_float(f);
         }
@@ -714,30 +713,33 @@ pub(crate) unsafe fn eval_interp_string(
     Ok(())
 }
 
-/// Read a Float out of `text`, answering how many bytes it consumed. The
-/// three named values are recognised ahead of `strtod`, which does not know
-/// them in every locale.
+/// Read a Float out of `text`, answering it and how many bytes it consumed.
+/// The three named values are recognised ahead of `strtod`, which does not
+/// know them in every locale.
+///
+/// Upstream writes the value through an out-parameter and returns only the
+/// length; a pair says the same thing without handing anyone the address of
+/// a typval's union arm.
 ///
 /// # Safety
-/// `text` must be NUL-terminated and `ret_value` valid.
-pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut Float) -> size_t {
+/// `text` must be NUL-terminated.
+pub(crate) unsafe fn string2float(text: *const c_char) -> (Float, size_t) {
     for (name, len, value) in [
         (c"inf", 3, f64::INFINITY),
         (c"-inf", 4, f64::NEG_INFINITY),
         (c"nan", 3, f64::NAN),
     ] {
         let (lhs, rhs) = (text as *mut c_char, name.as_ptr() as *mut c_char);
-        // SAFETY: the caller's promise -- `text` is NUL-terminated, `name`
-        // is a literal, and `ret_value` is valid.
+        // SAFETY: the caller's promise -- `text` is NUL-terminated and
+        // `name` is a literal.
         if unsafe { strncasecmp(lhs, rhs, len as size_t) } == 0 {
-            unsafe { *ret_value = value as Float };
-            return len as size_t;
+            return (value as Float, len as size_t);
         }
     }
     let mut s: *mut c_char = null_mut();
     // SAFETY: as above; `strtod` leaves `s` inside `text`.
-    unsafe { *ret_value = strtod(text, &raw mut s) as Float };
-    unsafe { s.offset_from(text) as size_t }
+    let value = unsafe { strtod(text, &raw mut s) as Float };
+    (value, unsafe { s.offset_from(text) as size_t })
 }
 
 /// `$NAME`, with the cursor on the `$`.

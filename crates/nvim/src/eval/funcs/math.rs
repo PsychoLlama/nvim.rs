@@ -505,12 +505,7 @@ pub unsafe fn f_str2float(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
         p = unsafe { skipwhite(p.add(1)) };
     }
-    // The tag goes on before the value is read back: `float_or_zero` answers
-    // for the tag, and upstream's trailing assignment left a window where it
-    // did not say `VAR_FLOAT` yet.
-    result.v_type = VAR_FLOAT;
-    unsafe { string2float(p, &raw mut result.vval.v_float) };
-    if negate {
-        result.write_float(-result.float_or_zero());
-    }
+    // SAFETY: `p` walks inside the NUL-terminated argument string.
+    let (parsed, _) = unsafe { string2float(p) };
+    result.write_float(if negate { -parsed } else { parsed });
 }

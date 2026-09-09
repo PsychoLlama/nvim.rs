@@ -21,7 +21,7 @@ use crate::eval::decode::decode_string;
 use crate::eval::string2float;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
-use crate::types::{NUL, TypVal, UVarNumber, VAR_FLOAT, VAR_STRING, VarNumber};
+use crate::types::{NUL, TypVal, UVarNumber, VAR_STRING, VarNumber};
 use ::libc::abort;
 
 const E474_UNFINISHED_ESCAPE: &CStr = c"E474: Unfinished escape sequence: %.*s";
@@ -312,13 +312,13 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
     let want = p - s;
     let mut tv = TypVal::number(0);
     if fracs.is_some() || exps.is_some() {
-        let got = unsafe { string2float(text, &raw mut tv.vval.v_float) };
+        let (parsed, got) = unsafe { string2float(text) };
+        tv.write_float(parsed);
         if want != got {
             // SAFETY: `text` is readable for `want` bytes.
             let shown = unsafe { c_str_len(text, want) };
             emsg_text(tr_c!(E685_FLOAT, want as c_int, shown, got, want));
         }
-        tv.v_type = VAR_FLOAT;
     } else {
         let mut nr: VarNumber = 0;
         let mut got: c_int = 0;
