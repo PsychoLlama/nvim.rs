@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::eval::typval::{
-    Bl, Di, TV_INITIAL_VALUE, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
+    Bl, Di, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
     tv_dict_item_alloc_len, tv_list_alloc, tv_list_ref,
 };
 use crate::eval::vars::msgpack_type_list;
@@ -66,11 +66,11 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
 
     let val_di: *mut DictItem =
         unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
-    unsafe { (*val_di).di_tv = val };
+    unsafe { di_tv(val_di).write(val) };
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *result = TypVal::Dict(dict) };
+    unsafe { result.write(TypVal::Dict(dict)) };
 }
 
 /// The special dictionary a map that cannot be a `Dict` decodes to.

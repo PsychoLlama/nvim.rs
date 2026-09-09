@@ -175,7 +175,9 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     let mut list: *mut List = ptr::null_mut();
     if r.is_ok() {
         if rettv.v_type() == VAR_LIST {
+            // The reference goes to the caller with the pointer.
             list = rettv.list_or_null();
+            rettv.disown();
         } else {
             clear_local(&mut rettv);
         }

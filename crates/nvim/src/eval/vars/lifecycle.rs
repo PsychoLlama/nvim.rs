@@ -9,7 +9,7 @@
 
 use crate::cstr;
 use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
+use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
@@ -80,7 +80,7 @@ pub unsafe fn evalvars_init() {
         // SAFETY: the item just allocated.
         let mut item = unsafe { Di::new(di) };
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
-        item.di_tv = TypVal::List(type_list);
+        item.di_tv.write_list(type_list);
         type_lists[i] = type_list;
         if unsafe { tv_dict_add(msgpack_types_dict, di) }.is_err() {
             // The names are distinct by construction.
@@ -173,10 +173,11 @@ pub unsafe fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
 /// Set the variable `name` to the string `value`, taking ownership of it.
 ///
 /// # Safety
-/// `name` is a NUL-terminated string and `value` an owned one.
+/// `name` and `value` are NUL-terminated strings.  `value` stays the
+/// caller's: the store copies it.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let mut tv = TypVal::String(value);
-    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut tv, true) };
+    let mut tv = ManuallyDrop::new(TypVal::String(value));
+    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut *tv, true) };
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.

@@ -25,15 +25,13 @@ use core::{mem, ptr, slice};
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
-    tv_list_ref, tv_list_unref,
+    ArgFrame, UNSET_ARG, callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
+    tv_list_append_string, tv_list_ref, tv_list_unref,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
-use crate::types::{
-    CallbackReader, Channel, List, RStream, TypVal, VarNumber, kListLenMayKnow, size_t,
-};
+use crate::types::{CallbackReader, Channel, List, RStream, VarNumber, kListLenMayKnow, size_t};
 
 use super::{channel_decref, channel_incref};
 
@@ -250,7 +248,7 @@ unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
 /// # Safety
 /// `chan` is live; `reader` is null or one of its readers.
 unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
-    let mut argv: [TypVal; 4] = [TV_INITIAL_VALUE; 4];
+    let mut argv = [UNSET_ARG; 4];
     let mut rettv = TV_INITIAL_VALUE;
 
     // SAFETY: the caller's live channel and reader. The list built for a
@@ -268,7 +266,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
         unsafe { &raw mut (*reader).cb }
     };
 
-    unsafe { callback_call(cb, 3, argv.as_mut_ptr(), &raw mut rettv) };
+    unsafe { callback_call(cb, 3, argv.args(), &raw mut rettv) };
     unsafe { tv_clear(&raw mut rettv) };
     if !reader.is_null() {
         unsafe { tv_list_unref(argv[1].list_or_null()) };

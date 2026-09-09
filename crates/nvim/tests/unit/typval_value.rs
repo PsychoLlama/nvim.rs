@@ -7,6 +7,7 @@
 #![cfg(not(miri))]
 
 use std::ffi::{CStr, CString, c_char, c_int};
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::list::kTVCstring;
@@ -38,7 +39,11 @@ fn f(n: f64) -> Tv {
 /// `typvalt(typ, vval)` — used where a case needs a value whose contents are
 /// deliberately not a real one, so that a reader of the wrong arm would
 /// answer something no honest value holds.
-fn bogus(v_type: VarType, bits: usize) -> TypVal {
+fn bogus(v_type: VarType, bits: usize) -> ManuallyDrop<TypVal> {
+    ManuallyDrop::new(bogus_inner(v_type, bits))
+}
+
+fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
     let p = ptr::without_provenance_mut::<()>(bits);
     match v_type {
         VAR_NUMBER => TypVal::Number(bits as VarNumber),
@@ -91,11 +96,12 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         tv_clear(ptr::null_mut());
         log.check(&[]);
 
-        // The scalars own nothing. A NULL string still reaches the
-        // allocator, because `xfree(NULL)` is a call.
+        // The scalars own nothing, and neither does a NULL string: an
+        // already-empty value is recognised as such and does not reach the
+        // allocator at all, where the C called `xfree(NULL)`.
         for (value, frees) in [
             (Tv::Nil, 0),
-            (Tv::NullStr, 1),
+            (Tv::NullStr, 0),
             (f(0.0), 0),
             (Tv::Int(0), 0),
             (Tv::Bool(true), 0),
@@ -1138,7 +1144,7 @@ fn the_type_checks_read_only_the_type() {
         for ((name, check), rows) in checks {
             for (v_type, msg) in rows {
                 let tv = bogus(v_type, addr);
-                let ok = check_emsg(log.editor(), || check(&raw const tv), msg);
+                let ok = check_emsg(log.editor(), || check(&raw const *tv), msg);
                 assert_eq!(ok, msg.is_none(), "{name} of {v_type}");
                 if msg.is_some() {
                     log.clear();
@@ -1157,14 +1163,19 @@ fn the_type_checks_read_only_the_type() {
 /// One row of the `describe('get')` tables: a value and the message
 /// reading it raises, if any.
 struct Row {
-    tv: TypVal,
+    /// [`ManuallyDrop`], because a row's string is the case's own `CString`
+    /// and its containers are NULL: no row owns anything to release.
+    tv: ManuallyDrop<TypVal>,
     emsg: Option<&'static str>,
 }
 
 /// The rows the number-shaped getters share, in the spec's order. The
 /// answers differ, so each case supplies its own.
 fn number_rows(number: &CString) -> Vec<Row> {
-    let row = |tv, emsg| Row { tv, emsg };
+    let row = |tv, emsg| Row {
+        tv: ManuallyDrop::new(tv),
+        emsg,
+    };
     vec![
         row(TypVal::Number(42), None),
         row(TypVal::String(number.as_ptr().cast_mut()), None),
@@ -1210,7 +1221,7 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
             let tv = row.tv;
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_number(&raw const tv), row.emsg);
+            let got = check_emsg(log.editor(), || tv_get_number(&raw const *tv), row.emsg);
             assert_eq!(got, want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
@@ -1224,7 +1235,7 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
             let mut err = false;
             let got = check_emsg(
                 log.editor(),
-                || tv_get_number_chk(&raw const tv, &raw mut err),
+                || tv_get_number_chk(&raw const *tv, &raw mut err),
                 row.emsg,
             );
             assert_eq!((got, err), (want, row.emsg.is_some()), "{}", tv.v_type());
@@ -1264,7 +1275,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         rows.insert(
             2,
             Row {
-                tv: TypVal::String(dot.as_ptr().cast_mut()),
+                tv: ManuallyDrop::new(TypVal::String(dot.as_ptr().cast_mut())),
                 emsg: None,
             },
         );
@@ -1274,7 +1285,7 @@ fn getting_a_line_number_resolves_the_cursor() {
             win.w_cursor.lnum = 46;
             let tv = row.tv;
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_lnum(&raw const tv), row.emsg);
+            let got = check_emsg(log.editor(), || tv_get_lnum(&raw const *tv), row.emsg);
             assert_eq!(i64::from(got), want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
@@ -1295,51 +1306,51 @@ fn getting_a_float_accepts_only_numbers() {
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
         let number = cstr("100500");
-        let rows: [(TypVal, Option<&str>, f64); 11] = [
-            (TypVal::Number(42), None, 42.0),
+        let rows: [(ManuallyDrop<TypVal>, Option<&str>, f64); 11] = [
+            (ManuallyDrop::new(TypVal::Number(42)), None, 42.0),
             (
-                TypVal::String(number.as_ptr().cast_mut()),
+                ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
                 Some("E892: Using a String as a Float"),
                 0.0,
             ),
-            (TypVal::Float(42.53), None, 42.53),
+            (ManuallyDrop::new(TypVal::Float(42.53)), None, 42.53),
             (
-                TypVal::Partial(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
                 Some("E891: Using a Funcref as a Float"),
                 0.0,
             ),
             (
-                TypVal::Func(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
                 Some("E891: Using a Funcref as a Float"),
                 0.0,
             ),
             (
-                TypVal::List(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::List(ptr::null_mut())),
                 Some("E893: Using a List as a Float"),
                 0.0,
             ),
             (
-                TypVal::Dict(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Dict(ptr::null_mut())),
                 Some("E894: Using a Dictionary as a Float"),
                 0.0,
             ),
             (
-                TypVal::Special(kSpecialVarNull),
+                ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
                 Some("E907: Using a special value as a Float"),
                 0.0,
             ),
             (
-                TypVal::Bool(kBoolVarTrue),
+                ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
                 Some("E362: Using a boolean value as a Float"),
                 0.0,
             ),
             (
-                TypVal::Bool(kBoolVarFalse),
+                ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
                 Some("E362: Using a boolean value as a Float"),
                 0.0,
             ),
             (
-                TypVal::Unknown,
+                ManuallyDrop::new(TypVal::Unknown),
                 Some("E685: Internal error: tv_get_float(UNKNOWN)"),
                 0.0,
             ),
@@ -1347,7 +1358,7 @@ fn getting_a_float_accepts_only_numbers() {
 
         for (tv, emsg, want) in rows {
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_float(&raw const tv), emsg);
+            let got = check_emsg(log.editor(), || tv_get_float(&raw const *tv), emsg);
             assert_eq!(got, want, "{}", tv.v_type());
             if emsg.is_some() {
                 log.clear();
@@ -1370,39 +1381,51 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
         let number = cstr("100500");
-        let rows: [(TypVal, Option<&str>, Option<&str>); 11] = [
-            (TypVal::Number(42), None, Some("42")),
+        let rows: [(ManuallyDrop<TypVal>, Option<&str>, Option<&str>); 11] = [
+            (ManuallyDrop::new(TypVal::Number(42)), None, Some("42")),
             (
-                TypVal::String(number.as_ptr().cast_mut()),
+                ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
                 None,
                 Some("100500"),
             ),
-            (TypVal::Float(42.53), None, Some("42.53")),
+            (ManuallyDrop::new(TypVal::Float(42.53)), None, Some("42.53")),
             (
-                TypVal::Partial(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),
             (
-                TypVal::Func(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),
             (
-                TypVal::List(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::List(ptr::null_mut())),
                 Some("E730: Using a List as a String"),
                 None,
             ),
             (
-                TypVal::Dict(ptr::null_mut()),
+                ManuallyDrop::new(TypVal::Dict(ptr::null_mut())),
                 Some("E731: Using a Dictionary as a String"),
                 None,
             ),
-            (TypVal::Special(kSpecialVarNull), None, Some("v:null")),
-            (TypVal::Bool(kBoolVarTrue), None, Some("v:true")),
-            (TypVal::Bool(kBoolVarFalse), None, Some("v:false")),
             (
-                TypVal::Unknown,
+                ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
+                None,
+                Some("v:null"),
+            ),
+            (
+                ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
+                None,
+                Some("v:true"),
+            ),
+            (
+                ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
+                None,
+                Some("v:false"),
+            ),
+            (
+                ManuallyDrop::new(TypVal::Unknown),
                 Some("E908: Using an invalid value as a String"),
                 None,
             ),
@@ -1436,8 +1459,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string_buf" => tv_get_string_buf(&raw const *tv, scratch),
-                        _ => tv_get_string_buf_chk(&raw const *tv, scratch),
+                        "string_buf" => tv_get_string_buf(&raw const **tv, scratch),
+                        _ => tv_get_string_buf_chk(&raw const **tv, scratch),
                     },
                     *emsg,
                 );

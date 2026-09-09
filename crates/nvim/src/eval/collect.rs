@@ -28,10 +28,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::{ManuallyDrop, offset_of, size_of};
 use core::ptr::{null, null_mut};
 
 use crate::autocmd::aucmd_wins;
@@ -78,9 +77,6 @@ use crate::types::{
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window, XFileMark, YankReg, size_t,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// How much slack the execution stack may keep before a collection trims
 /// it back.
@@ -595,10 +591,10 @@ pub(crate) unsafe fn set_ref_in_item_partial(
 
     let mut abort = unsafe { set_ref_in_func((*pt).pt_name, (*pt).pt_func, copy_id) };
     if !unsafe { (*pt).pt_dict }.is_null() {
-        // A borrowed view, not an owner: `dtv` is never cleared.
-        let mut dtv = UNSET_TV;
-        dtv.write_dict(unsafe { (*pt).pt_dict });
-        abort = abort || unsafe { set_ref_in_item(&raw mut dtv, copy_id, ht_stack, list_stack) };
+        // A borrowed view, not an owner: the partial keeps the reference,
+        // so `dtv` releases nothing.
+        let mut dtv = ManuallyDrop::new(TypVal::Dict(unsafe { (*pt).pt_dict }));
+        abort = abort || unsafe { set_ref_in_item(&raw mut *dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
     // arguments and `pt_argv` names them.

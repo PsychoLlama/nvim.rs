@@ -29,6 +29,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
+use crate::eval::typval::UNSET_ARG;
 use crate::ex_docmd::cmdmod_has;
 use crate::types::NUL;
 
@@ -168,7 +169,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         kMTBlockWise => c"block",
         _ => c"char",
     };
-    let mut argv: [TypVal; 2] = [TV_INITIAL_VALUE; 2];
+    let mut argv = [UNSET_ARG; 2];
     argv[0].write_string(kind.as_ptr() as *mut c_char);
 
     // Reset virtual_op so that 'virtualedit' can be changed in the

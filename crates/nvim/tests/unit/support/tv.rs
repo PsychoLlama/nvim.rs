@@ -23,7 +23,8 @@
 //! to write down.
 
 use std::ffi::{CStr, c_char, c_int, c_void};
-use std::mem::offset_of;
+use std::mem::{ManuallyDrop, offset_of};
+use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
@@ -214,12 +215,15 @@ impl Pt {
             unsafe { xmalloc(size_of::<TypVal>() * self.args.len()) }.cast()
         };
         for (i, arg) in self.args.iter().enumerate() {
-            unsafe { *argv.add(i) = arg.build_at(path) };
+            // Raw storage: the value is written in, not assigned over.
+            unsafe { argv.add(i).write(arg.build_at(path)) };
         }
         let dict = match &self.dict {
             None => ptr::null_mut(),
-            Some(dict) => match unsafe { dict.build_at(path) } {
-                TypVal::Dict(d) => d,
+            // The partial takes the dictionary over, so the value that
+            // built it must not release it on the way out of the match.
+            Some(dict) => match ManuallyDrop::new(unsafe { dict.build_at(path) }).deref() {
+                TypVal::Dict(d) => *d,
                 other => panic!("a partial's dict is a dict, not {}", other.v_type()),
             },
         };
@@ -488,7 +492,9 @@ pub(crate) unsafe fn li_alloc() -> *mut ListItem {
 /// # Safety
 /// The editor must be up.
 pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut List {
-    let tv = unsafe { Tv::List(items.to_vec()).build() };
+    // The list outlives the value that built it: the caller owns the
+    // reference now, so the builder must not release it.
+    let tv = ManuallyDrop::new(unsafe { Tv::List(items.to_vec()).build() });
     tv.list()
 }
 
@@ -501,7 +507,8 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
         .iter()
         .map(|(k, v)| (k.as_bytes().to_vec(), v.clone()))
         .collect();
-    let tv = unsafe { Tv::Dict(entries).build() };
+    // As `new_list`: the caller owns the reference.
+    let tv = ManuallyDrop::new(unsafe { Tv::Dict(entries).build() });
     tv.dict()
 }
 

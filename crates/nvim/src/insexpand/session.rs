@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::message_fmt::c_str;
@@ -305,7 +306,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         cb = get_insert_callback(ctrl_x_mode.get());
     }
 
-    let mut args = [TYPVAL_T_INIT; 3];
+    let mut args = [UNSET_ARG; 3];
     args[0].write_empty(VAR_NUMBER);
     args[1].write_empty(VAR_STRING);
     args[2].write_empty(VAR_UNKNOWN);
@@ -314,7 +315,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();
-    let col = unsafe { callback_call_retnr(cb, 2, args.as_mut_ptr()) } as ColNr;
+    let col = unsafe { callback_call_retnr(cb, 2, args.args()) } as ColNr;
     drop(locked);
 
     State.set(save_state);

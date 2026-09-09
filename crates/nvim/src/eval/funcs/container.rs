@@ -11,12 +11,12 @@ use super::wrappers::{
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
-    tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
-    tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy, tv_list_find,
-    tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx,
-    value_check_lock,
+    ArgFrame, NumBuf, UNSET_ARG, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg,
+    tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
+    tv_clear, tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def,
+    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy,
+    tv_list_find, tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref,
+    tv_list_uidx, value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
@@ -38,6 +38,7 @@ use crate::types::{
     kBoolVarTrue, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 /// A cleared typval, the shape both dispatchers start every slot from.
@@ -545,12 +546,12 @@ unsafe fn indexof_matches(expr: *mut TypVal) -> bool {
     // outlive the evaluation, and `newtv` is cleared before returning.
     // A frame borrowing the two `v:` slots for the length of the call.
     let mut argv = [
-        unsafe { (*get_vim_var_tv(Vv::Key)).bit_copy() },
-        unsafe { (*get_vim_var_tv(Vv::Val)).bit_copy() },
-        NIL,
+        ManuallyDrop::new(unsafe { (*get_vim_var_tv(Vv::Key)).bit_copy() }),
+        ManuallyDrop::new(unsafe { (*get_vim_var_tv(Vv::Val)).bit_copy() }),
+        UNSET_ARG,
     ];
     let mut newtv = NIL;
-    if unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, &raw mut newtv) }.is_err() {
+    if unsafe { eval_expr_typval(expr, false, argv.args(), 2, &raw mut newtv) }.is_err() {
         return false;
     }
     let mut error = false;

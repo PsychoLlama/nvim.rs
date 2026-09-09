@@ -78,8 +78,9 @@ fn tv_list_append_string_copies_then_appends() {
 
         // The spec left this to a LuaJIT finalizer, so it never said what
         // freeing costs. It is worth saying: each item releases its string
-        // — a NULL one included, since `xfree(NULL)` still reaches the
-        // allocator — before itself, and the list goes last.
+        // before itself, and the list goes last. An item holding a NULL
+        // string reaches the allocator not at all: `tv_clear` recognises an
+        // already-empty value and returns, where the C called `xfree(NULL)`.
         let items: Vec<(*mut c_char, *mut ListItem)> = {
             let mut items = Vec::new();
             let mut item = (*l).lv_first;
@@ -91,7 +92,10 @@ fn tv_list_append_string_copies_then_appends() {
         };
         let mut expected: Vec<_> = items
             .iter()
-            .flat_map(|&(string, item)| [alloc::freed(string), alloc::freed(item)])
+            .flat_map(|&(string, item)| {
+                let released = (!string.is_null()).then(|| alloc::freed(string));
+                released.into_iter().chain([alloc::freed(item)])
+            })
             .collect();
         expected.push(alloc::freed(l));
         tv_list_unref(l);

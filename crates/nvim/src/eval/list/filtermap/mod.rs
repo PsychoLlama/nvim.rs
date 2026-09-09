@@ -33,10 +33,10 @@
 use core::ffi::CStr;
 
 use super::{
-    Container, TvRef, UNKNOWN_TV, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr,
-    frame, number_of, restore_vim_var, run_cmd, save_vim_var, set_vim_var_tv, string_bytes,
-    vim_var_value,
+    Container, TvRef, clear_tv, clear_vim_var, copy_tv, err_not_container, eval_expr, frame,
+    number_of, restore_vim_var, run_cmd, save_vim_var, set_vim_var_tv, string_bytes, vim_var_value,
 };
+use crate::eval::typval::UNSET_ARG;
 use crate::message::state::did_emsg;
 use crate::types::{EvalFuncData, TypVal, VAR_UNKNOWN, Vv};
 
@@ -105,7 +105,7 @@ pub(crate) fn filter_map_one(
             retval = did_emsg.get() == 0;
             break 'theend;
         }
-        let mut argv = [UNKNOWN_TV; 3];
+        let mut argv = [UNSET_ARG; 3];
         argv[0] = vim_var_value(Vv::Key);
         argv[1] = vim_var_value(Vv::Val);
         if !eval_expr(expr, &mut argv, newtv) {

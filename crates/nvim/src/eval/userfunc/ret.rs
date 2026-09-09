@@ -21,12 +21,17 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, IOSIZE, NUL};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {
     pub dr_name: *mut c_char,
+    /// The arguments, **owned**: `:defer` is the one frame in the tree that
+    /// takes its values rather than borrowing them, and `handle_defer_one`
+    /// clears each one after the call.  The record lives in a `GArray`, so
+    /// nothing drops it.
     pub dr_argvars: [TypVal; MAX_FUNC_ARGS as usize + 1],
     pub dr_argcount: c_int,
 }
@@ -162,7 +167,7 @@ unsafe fn ex_defer_inner(
     partial: *const Partial,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
-    let mut argvars = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
+    let mut argvars = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
     let mut partial_argc = 0;
     let mut argcount = 0;
 
@@ -183,7 +188,7 @@ unsafe fn ex_defer_inner(
             // SAFETY: the partial has `partial_argc` bound arguments and
             // `argvars` has room for them.
             let bound = unsafe { (*partial).pt_argv };
-            let into = argvars.as_mut_ptr();
+            let into = argvars.args();
             for i in 0..partial_argc {
                 unsafe { tv_copy(bound.offset(i as isize), into.offset(i as isize)) };
             }
@@ -194,7 +199,7 @@ unsafe fn ex_defer_inner(
     // room already taken is accounted for by the `argvars` offset below.
     // SAFETY: `argvars` has room past the `partial_argc` slots already
     // taken, and `argcount` is this frame's local.
-    let free_slot = unsafe { argvars.as_mut_ptr().offset(partial_argc as isize) };
+    let free_slot = unsafe { argvars.args().offset(partial_argc as isize) };
     let countp = &raw mut argcount;
     let mut r = unsafe { get_func_arguments(arg, evalarg, 0, free_slot, countp) };
     argcount += partial_argc;
@@ -223,11 +228,11 @@ unsafe fn ex_defer_inner(
     if r.is_err() {
         while argcount > 0 {
             argcount -= 1;
-            unsafe { tv_clear(argvars.as_mut_ptr().offset(argcount as isize)) };
+            unsafe { tv_clear(argvars.args().offset(argcount as isize)) };
         }
         return Err(Failed);
     }
-    unsafe { add_defer(name, argcount, argvars.as_mut_ptr()) };
+    unsafe { add_defer(name, argcount, argvars.args()) };
     Ok(())
 }
 
@@ -262,7 +267,14 @@ pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, args: *mut TypVa
     unsafe { (*dr).dr_argcount = argcount };
     while argcount > 0 {
         argcount -= 1;
-        unsafe { (*dr).dr_argvars[argcount as usize] = (*args.offset(argcount as isize)).take() };
+        // `ga_append_via_ptr` hands back raw storage, so the value is
+        // *written* rather than assigned: there is nothing there to release.
+        let slot = unsafe {
+            (&raw mut (*dr).dr_argvars)
+                .cast::<TypVal>()
+                .add(argcount as usize)
+        };
+        unsafe { slot.write((*args.offset(argcount as isize)).take()) };
     }
 }
 
@@ -463,6 +475,9 @@ pub unsafe fn do_return(
     // Cleanup (and inactivate) conditionals, but stop when a `:finally`
     // is reached: the return still has to be pending until that has run.
     let idx = unsafe { cleanup_conditionals(ea.cstack, CsFlags::NONE, true) };
+    // Set when the pending slot took the value out of `result` by bit copy:
+    // the source gives it up once `report_make_pending` has rendered it.
+    let mut handed_over = false;
     if idx >= 0 {
         // A `:finally` is going to run first; remember the return value.
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_RETURN as c_char };
@@ -482,11 +497,19 @@ pub unsafe fn do_return(
                 // Store the value of the pending return.  A bit copy, not
                 // a take: the pending slot owns the value from here, but
                 // `report_make_pending` below still renders `result` for
-                // `:debug`, and blanking it would leave it a `VAR_UNKNOWN`
-                // the echo encoder refuses.
+                // `:debug`, and blanking it first would leave it a
+                // `VAR_UNKNOWN` the echo encoder refuses.  The source gives
+                // it up straight after that report instead.
                 let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe { *saved.cast::<TypVal>() = (*result.cast::<TypVal>()).bit_copy() };
+                unsafe {
+                    saved
+                        .cast::<TypVal>()
+                        .write((*result.cast::<TypVal>()).bit_copy())
+                };
+                // `reanimate` blanks `fc_rettv` just below, which is its
+                // own way of giving the value up.
+                handed_over = !reanimate;
             }
             if reanimate {
                 // The return value is not available yet.
@@ -494,6 +517,10 @@ pub unsafe fn do_return(
             }
         }
         unsafe { report_make_pending(CSTP_RETURN, result) };
+        if handed_over {
+            // Rendered; the pending slot is the only owner now.
+            unsafe { (*result.cast::<TypVal>()).disown() };
+        }
     } else {
         unsafe { (*current_funccal.get()).fc_returned = 1 };
         if !reanimate && !result.is_null() {

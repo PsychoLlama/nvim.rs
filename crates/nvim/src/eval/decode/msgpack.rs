@@ -66,7 +66,7 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 /// `result` is writable and holds no value that needs clearing.
 unsafe fn positive_integer_to_special_typval(result: *mut TypVal, val: u64) {
     if val <= VARNUMBER_MAX {
-        unsafe { *result = TypVal::Number(val as VarNumber) };
+        unsafe { result.write(TypVal::Number(val as VarNumber)) };
         return;
     }
     let list = tv_list_alloc(4);
@@ -138,16 +138,16 @@ unsafe extern "C-unwind" fn typval_parse_enter(
     let len = n.tok.length as size_t;
     match n.tok.type_0 {
         MPACK_TOKEN_NIL => {
-            unsafe { *result = TypVal::Special(kSpecialVarNull) };
+            unsafe { result.write(TypVal::Special(kSpecialVarNull)) };
         }
         MPACK_TOKEN_BOOLEAN => {
             let set = unsafe { mpack_unpack_boolean((*node).tok) };
             let v = if set { kBoolVarTrue } else { kBoolVarFalse };
-            unsafe { *result = TypVal::Bool(v) };
+            unsafe { result.write(TypVal::Bool(v)) };
         }
         MPACK_TOKEN_SINT => {
             let v = unsafe { mpack_unpack_sint((*node).tok) };
-            unsafe { *result = TypVal::Number(v) };
+            unsafe { result.write(TypVal::Number(v)) };
         }
         MPACK_TOKEN_UINT => {
             let v = unsafe { mpack_unpack_uint((*node).tok) };
@@ -155,7 +155,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         }
         MPACK_TOKEN_FLOAT => {
             let v = unsafe { mpack_unpack_float_fast((*node).tok) };
-            unsafe { *result = TypVal::Float(v) };
+            unsafe { result.write(TypVal::Float(v)) };
         }
         // Converted in typval_parse_exit, once the chunks have landed.
         MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
@@ -170,7 +170,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         MPACK_TOKEN_ARRAY => {
             let list = tv_list_alloc(len as ptrdiff_t);
             unsafe { tv_list_ref(list) };
-            unsafe { *result = TypVal::List(list) };
+            unsafe { result.write(TypVal::List(list)) };
             unsafe { (*node).data[1].p = list.cast() };
         }
         // Whether this can be a Dict is not knowable yet, so the pairs
@@ -233,7 +233,7 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
 
     let dict = unsafe { tv_dict_alloc() };
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *result = TypVal::Dict(dict) };
+    unsafe { result.write(TypVal::Dict(dict)) };
 
     for i in 0..len {
         let key = unsafe { (*pairs.add(i * 2)).string_or_null() };
@@ -284,7 +284,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
     match n.tok.type_0 {
         // The chunk buffer is handed straight to the string or blob.
         MPACK_TOKEN_BIN | MPACK_TOKEN_STR => {
-            unsafe { *result = decode_string((*node).data[1].p.cast(), len, false, true) };
+            unsafe { result.write(decode_string((*node).data[1].p.cast(), len, false, true)) };
             unsafe { (*node).data[1].p = ptr::null_mut() };
         }
         // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes into a

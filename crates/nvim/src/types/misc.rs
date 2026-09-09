@@ -12,6 +12,8 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use core::mem::ManuallyDrop;
+
 use super::*;
 
 pub struct AutoCmdVec {
@@ -39,9 +41,15 @@ pub struct ParserHighlight {
     pub init_array: [ParserHighlightChunk; 16],
 }
 /// A [`DictItem`] whose key is the one-letter scope name; see [`DictItem`].
+///
+/// The value is the scope dictionary itself, and it is
+/// `unref_var_dict` that gives up the reference -- a buffer, a window and a
+/// tab page each embed one of these and are ordinary Rust values, so without
+/// [`ManuallyDrop`](core::mem::ManuallyDrop) freeing one would release the
+/// scope twice.
 #[repr(C)]
 pub struct ScopeDictDictItem {
-    pub di_tv: TypVal,
+    pub di_tv: ManuallyDrop<TypVal>,
     pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 1],

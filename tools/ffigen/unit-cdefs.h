@@ -1414,12 +1414,6 @@ struct RegProg {
   unsigned int re_flags;
   bool re_in_use;
 };
-struct ScopeDictDictItem {
-  TypVal di_tv;
-  VarLock di_lock;
-  uint8_t di_flags;
-  char di_key[1];
-};
 struct VTermColor_indexed {
   uint8_t type;
   uint8_t idx;

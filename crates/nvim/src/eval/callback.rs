@@ -11,9 +11,9 @@
 )]
 
 use crate::cstr;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_isdigit;
@@ -36,9 +36,6 @@ use crate::types::{
     TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
 };
 use crate::winlayer::Win;
-
-/// A freshly declared typval.
-const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Build a `Callback` out of whatever the user handed a builtin.
 ///
@@ -221,10 +218,11 @@ pub unsafe fn set_ref_in_callback(
     // SAFETY: the caller's promise -- the callback outlives the call.
     match unsafe { &*callback } {
         Callback::Partial(partial) => {
-            let mut tv = UNSET_TV;
-            tv.write_partial(*partial);
+            // A borrowed view: the callback keeps the reference, so this
+            // releases nothing.
+            let mut tv = ManuallyDrop::new(TypVal::Partial(*partial));
             // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-            unsafe { set_ref_in_item(&raw mut tv, copy_id, ht_stack, list_stack) }
+            unsafe { set_ref_in_item(&raw mut *tv, copy_id, ht_stack, list_stack) }
         }
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
@@ -253,10 +251,10 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
     // SAFETY: as above.
     let self_dict = unsafe { (*reader).self_0 };
     if !self_dict.is_null() {
-        let mut tv = UNSET_TV;
-        tv.write_dict(self_dict);
+        // As above: the reader keeps the reference.
+        let mut tv = ManuallyDrop::new(TypVal::Dict(self_dict));
         // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-        return unsafe { set_ref_in_item(&raw mut tv, copy_id, ht_stack, list_stack) };
+        return unsafe { set_ref_in_item(&raw mut *tv, copy_id, ht_stack, list_stack) };
     }
     false
 }

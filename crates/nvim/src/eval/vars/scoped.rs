@@ -101,7 +101,8 @@ unsafe fn get_var_from(
                     b'w' => &raw mut w.w_winvar,
                     _ => &raw mut tp.tp_winvar,
                 };
-                unsafe { tv_copy(&raw const (*v).di_tv, result) };
+                let value: *const TypVal = unsafe { (&raw const (*v).di_tv).cast() };
+                unsafe { tv_copy(value, result) };
                 done = true;
             } else {
                 // SAFETY: each scope's own variable dictionary is live.
@@ -245,6 +246,10 @@ pub(crate) unsafe fn tv_to_optval(
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
 /// Number, which is what the old spelling of the accessors answered.
 pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
+    // The string arm *names* the `OptVal`'s bytes rather than copying them,
+    // so the answer owns what `value` owned: a caller holding a borrowed
+    // `OptVal` -- one it did not allocate, or one it frees itself -- has to
+    // keep the answer out of `Drop`'s way.
     let mut rettv = TypVal::Special(kSpecialVarNull);
     match value {
         OptVal::Boolean(word) => {

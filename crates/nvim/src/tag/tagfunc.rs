@@ -13,6 +13,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
 };
@@ -160,7 +161,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // list's.
     unsafe { (*info).dv_refcount.retain() };
 
-    let mut args = [TV_INITIAL_VALUE; 4];
+    let mut args = [UNSET_ARG; 4];
     args[0].write_string(pat);
     args[1].write_string(flag_string.as_mut_ptr());
     args[2].write_dict(info);
@@ -171,7 +172,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         callback_call(
             &raw mut (*Buf::current_raw()).b_tfu_cb,
             3,
-            args.as_mut_ptr(),
+            args.args(),
             &raw mut rettv,
         )
     } as c_int;

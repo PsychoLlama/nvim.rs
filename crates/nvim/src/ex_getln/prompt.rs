@@ -14,6 +14,7 @@ use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_UNKNOWN};
+use core::mem::ManuallyDrop;
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -108,7 +109,9 @@ pub unsafe fn get_user_input(
     let prompt: *const ::core::ffi::c_char;
     let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
     let mut cancelreturn: *mut TypVal = ::core::ptr::null_mut::<TypVal>();
-    let mut cancelreturn_strarg2 = TV_INITIAL_VALUE;
+    // Names the argument's own string or the scratch buffer below, never
+    // its own: `tv_copy` is what puts a copy in the answer.
+    let mut cancelreturn_strarg2 = ManuallyDrop::new(TV_INITIAL_VALUE);
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback = Callback::None;
     let mut prompt_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
@@ -199,7 +202,7 @@ pub unsafe fn get_user_input(
                 }
                 if inputdialog {
                     cancelreturn_strarg2.write_string(strarg2 as *mut ::core::ffi::c_char);
-                    cancelreturn = &raw mut cancelreturn_strarg2;
+                    cancelreturn = &raw mut *cancelreturn_strarg2;
                 } else {
                     xp_name = strarg2;
                 }

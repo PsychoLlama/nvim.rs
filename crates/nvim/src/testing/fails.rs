@@ -19,6 +19,7 @@
 use crate::cstr;
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 use crate::eval::pattern_match;
@@ -219,11 +220,11 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
 /// `args` has five slots and `cmd` is the command that was run.
 unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch: &FailsMismatch) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
-    let mut actual_tv = match mismatch.index {
+    let mut actual_tv = ManuallyDrop::new(match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
         4 => TypVal::String(emsg_assert_fails_context.get()),
         _ => TypVal::String(mismatch.actual),
-    };
+    });
     let mut ga = unsafe { prepare_assert_error() };
     let gap = &mut ga;
     unsafe {
@@ -232,7 +233,7 @@ unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch:
             arg(args, 2),
             mismatch.expected_str,
             arg(args, mismatch.index),
-            &raw mut actual_tv,
+            &raw mut *actual_tv,
             AssertType::Fails,
         )
     };

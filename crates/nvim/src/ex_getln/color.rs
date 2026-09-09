@@ -19,6 +19,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
 use crate::tr_plural;
 use crate::types::{NUL, VAR_LIST};
+use core::mem::ManuallyDrop;
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
@@ -186,7 +187,9 @@ msg_putchar('\n' as ::core::ffi::c_int);
     }
 
     let mut arg_allocated = false;
-    let mut arg = TypVal::String(colored_ccline.text());
+    // Either the command line's own text or, once `arg_allocated`, a copy
+    // this frame frees below; the value releases neither.
+    let mut arg = ManuallyDrop::new(TypVal::String(colored_ccline.text()));
     let mut tv = TV_INITIAL_VALUE;
 
     // Both are C function-level statics. `prev_prompt_id` starts at
@@ -265,7 +268,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
-        let cbcall_ret = unsafe { callback_call(&raw mut color_cb, 1, &raw mut arg, &raw mut tv) };
+        let cbcall_ret = unsafe { callback_call(&raw mut color_cb, 1, &raw mut *arg, &raw mut tv) };
         drop(silenced);
         msg_col.set(saved_msg_col);
         if got_int.get() {

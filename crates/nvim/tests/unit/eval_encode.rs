@@ -5,6 +5,7 @@
 
 #![cfg(not(miri))]
 
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
@@ -136,7 +137,9 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
     unsafe {
         let outer = tv_list_alloc(n as isize);
         (*outer).lv_refcount = Refcount::ONE;
-        let inner_tv = inner.build();
+        // The items share this reference -- item 0 *is* it -- so the value
+        // that built it must not release it on the way out.
+        let inner_tv = ManuallyDrop::new(inner.build());
         for i in 0..n {
             if i > 0 {
                 match inner_tv.v_type() {
@@ -149,7 +152,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             (*li).li_prev = ptr::null_mut();
             // Every item names the same container; the retain above is
             // what pays for the extra holder.
-            (*li).li_tv = tv::bit_copy(&inner_tv);
+            (&raw mut (*li).li_tv).write(tv::bit_copy(&inner_tv));
             tv_list_append(outer, li);
         }
         TypVal::List(outer)

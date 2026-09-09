@@ -13,13 +13,14 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ArgFrame, NumBuf};
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 /// The directory file names are shortened against, resolved the first time
@@ -281,11 +282,12 @@ unsafe fn call_qftf_func(
     add(c"end_idx", end_idx as VarNumber);
     unsafe { (*dict).dv_refcount.retain() };
 
-    let mut args = [TypVal::Dict(dict)];
+    // The frame borrows the retain above, which is given back below.
+    let mut args = [ManuallyDrop::new(TypVal::Dict(dict))];
     let mut rettv = TV_INITIAL_VALUE;
     let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();
-    if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {
+    if unsafe { callback_call(cb, 1, args.args(), &raw mut rettv) } {
         if rettv.v_type() == VAR_LIST {
             answer = rettv.list_or_null();
             unsafe { tv_list_ref(answer) };

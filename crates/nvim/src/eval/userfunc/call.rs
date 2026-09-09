@@ -24,6 +24,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{ArgFrame, UNSET_ARG, di_tv, li_tv};
 use crate::types::{Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
@@ -234,7 +235,7 @@ pub unsafe fn call_user_func(
             // SAFETY: `i` is inside the caller's argument array.
             unsafe { (*args.offset(i as isize)).bit_copy() }
         };
-        unsafe { (*v).di_tv = value };
+        unsafe { di_tv(v).write(value) };
         unsafe { (*v).di_lock = VarLock::Fixed };
         if isdefault {
             tv_to_free[tv_to_free_len] = unsafe { &raw mut (*v).di_tv };
@@ -256,7 +257,7 @@ pub unsafe fn call_user_func(
             let li =
                 unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
             // As `a:name` above: `a:000`'s item borrows the caller's value.
-            unsafe { (*li).li_tv = (*args.offset(i as isize)).bit_copy() };
+            unsafe { li_tv(li).write((*args.offset(i as isize)).bit_copy()) };
             unsafe { (*li).li_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
         }
@@ -558,9 +559,9 @@ pub unsafe fn call_simple_luafunc(
     // the default is number zero
     rv.write_number(0);
 
-    let mut argvars = [TV_INITIAL_VALUE; 1];
+    let mut argvars = [UNSET_ARG; 1];
     argvars[0].write_empty(VAR_UNKNOWN);
-    unsafe { nlua_typval_call(funcname, len, argvars.as_mut_ptr(), 0, result) };
+    unsafe { nlua_typval_call(funcname, len, argvars.args(), 0, result) };
     Ok(())
 }
 
@@ -606,11 +607,11 @@ pub unsafe fn call_simple_func(
     } else if unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
         error = FCERR_DELETED;
     } else {
-        let mut argvars = [TV_INITIAL_VALUE; 1];
+        let mut argvars = [UNSET_ARG; 1];
         argvars[0].write_empty(VAR_UNKNOWN);
         let mut funcexe = FUNCEXE_INIT;
         funcexe.fe_evaluate = true;
-        let (args, exe) = (argvars.as_mut_ptr(), &raw mut funcexe);
+        let (args, exe) = (argvars.args(), &raw mut funcexe);
         error = unsafe { call_user_func_check(fp, 0, args, result, exe, ptr::null_mut()) };
         if error == FCERR_NONE {
             ret = Ok(Parsed::Done);

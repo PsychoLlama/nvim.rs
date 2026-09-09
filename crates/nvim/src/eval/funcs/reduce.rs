@@ -7,11 +7,10 @@ use super::wrappers::{arg_copy, arg_string, check_arg};
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, di_of_key, di_tv, tv_blob_get, tv_blob_len, tv_check_for_number_arg,
-    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first,
-    tv_list_len, tv_list_locked, tv_list_set_lock,
+    ArgFrame, NumBuf, UNSET_ARG, di_of_key, di_tv, tv_blob_get, tv_blob_len,
+    tv_check_for_number_arg, tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_len,
+    tv_get_number_chk, tv_list_first, tv_list_len, tv_list_locked, tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -26,9 +25,7 @@ use crate::types::{
     VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 use core::ffi::{c_char, c_int, c_void};
-
-/// A cleared typval.
-const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
+use core::mem::ManuallyDrop;
 
 /// A one-character String typval owning a copy of `len` bytes at `p`.
 ///
@@ -181,7 +178,7 @@ unsafe fn fold_step(
     called_emsg_start: c_int,
 ) -> bool {
     // SAFETY throughout: the caller's obligation. `argv` outlives the call.
-    let mut argv = [EMPTY_TV; 3];
+    let mut argv = [UNSET_ARG; 3];
     // The accumulator and the item are *borrowed* by the frame; `cleanup`
     // says which of the two the callee is expected to have taken over, and
     // the caller owns whatever it does not clear here.  Upstream's shape:
@@ -191,18 +188,18 @@ unsafe fn fold_step(
     // SAFETY: the frame is this call's and is not released as a whole -- the
     // `cleanup` flags below say which of the two slots the callee took over,
     // and only that one is cleared.
-    argv[0] = unsafe { result.bit_copy() };
+    argv[0] = ManuallyDrop::new(unsafe { result.bit_copy() });
     // SAFETY: as above.
-    argv[1] = unsafe { item.bit_copy() };
+    argv[1] = ManuallyDrop::new(unsafe { item.bit_copy() });
     if cleanup.blank_rettv {
         result.write_empty(VAR_UNKNOWN);
     }
-    let r = unsafe { eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, result) };
+    let r = unsafe { eval_expr_typval(expr, true, argv.args(), 2, result) };
     if cleanup.clear_acc {
-        unsafe { tv_clear(&raw mut argv[0]) };
+        unsafe { tv_clear(&raw mut *argv[0]) };
     }
     if cleanup.clear_item {
-        unsafe { tv_clear(&raw mut argv[1]) };
+        unsafe { tv_clear(&raw mut *argv[1]) };
     }
     r.is_ok() && called_emsg.get() == called_emsg_start
 }
@@ -275,7 +272,9 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) 
     }
     while unsafe { *p } as c_int != NUL {
         let len = unsafe { utfc_ptr2len(p) };
-        let item = unsafe { owned_str(p, len) };
+        // The fold takes the character over -- `STRING_CLEANUP` clears
+        // `argv[1]` -- so this must not release it a second time.
+        let item = ManuallyDrop::new(unsafe { owned_str(p, len) });
         // SAFETY: `expr` is the caller's callback and `result` the running
         // accumulator; `item` is the character just measured.
         if !unsafe { fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) } {

@@ -28,6 +28,7 @@ use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::message_fmt::{c_str, c_str_len};
 use crate::narrow::len_as_int;
 use crate::winlayer::Win;
@@ -118,11 +119,11 @@ unsafe fn call_function_with(
         return Object::Nil;
     }
     // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
-    let mut vim_args: [TypVal; 21] = [TV_INITIAL_VALUE; 21];
+    let mut vim_args = [UNSET_ARG; 21];
     for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
         // SAFETY: `i` is below `size`, so the object is inside `items`; the
         // slot is this frame's and `err` the caller's.
-        unsafe { object_to_vim(*args.items.add(i), slot) };
+        unsafe { object_to_vim(*args.items.add(i), &raw mut **slot) };
     }
 
     let mut rv = Object::Nil;
@@ -140,7 +141,7 @@ unsafe fn call_function_with(
         // below.
         unsafe { try_enter(&raw mut tstate) };
         let (name, name_len) = (fn_0.data(), len_as_int(fn_0.len()));
-        let (argc, argv) = (len_as_int(args.size), vim_args.as_mut_ptr());
+        let (argc, argv) = (len_as_int(args.size), vim_args.args());
         let (ret, fe) = (&raw mut rettv, &raw mut funcexe);
         // SAFETY: `name` names `name_len` bytes, `argv` holds `argc`
         // converted arguments, and `rettv`/`funcexe` are this frame's.
@@ -158,7 +159,7 @@ unsafe fn call_function_with(
     // Converted arguments are cleared in reverse, as the C did.
     for i in (0..args.size).rev() {
         // SAFETY: the slot is this frame's array.
-        unsafe { tv_clear(&raw mut vim_args[i]) };
+        unsafe { tv_clear(&raw mut *vim_args[i]) };
     }
     rv
 }

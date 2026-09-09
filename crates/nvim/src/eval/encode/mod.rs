@@ -32,6 +32,7 @@
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::eval::typval::{
@@ -274,8 +275,10 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `idx` is a slot
                 // of its hash table, or one past the last.
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                let mut key_tv = TypVal::String(hi.hi_key);
-                let key = unsafe { encode_tv2string(&raw mut key_tv, core::ptr::null_mut()) };
+                // The key is the item's own inline storage, so the value
+                // that names it must not release it.
+                let mut key_tv = ManuallyDrop::new(TypVal::String(hi.hi_key));
+                let key = unsafe { encode_tv2string(&raw mut *key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
                 unsafe { xfree(key.cast::<c_void>()) };

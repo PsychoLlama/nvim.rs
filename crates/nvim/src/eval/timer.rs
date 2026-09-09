@@ -18,8 +18,8 @@ use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::eval::typval::{
-    callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_item_alloc,
-    tv_list_alloc_ret, tv_list_append_dict,
+    ArgFrame, UNSET_ARG, callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
+    tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
 };
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
@@ -149,13 +149,13 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
         unsafe { timer_stop(timer.raw()) };
     }
 
-    let mut argv = [UNSET_TV; 2];
+    let mut argv = [UNSET_ARG; 2];
     argv[0].write_number(timer.timer_id as VarNumber);
     let mut rettv = UNSET_TV;
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference
     // above; `argv` and `rettv` are this frame's.
-    unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
+    unsafe { callback_call(cb, 1, argv.args(), &raw mut rettv) };
 
     if called_emsg.get() > called_emsg_before && did_emsg.get() != 0 {
         timer.emsg_count += 1;

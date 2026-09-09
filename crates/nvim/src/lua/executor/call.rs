@@ -27,7 +27,7 @@ use super::{
 };
 use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_leave};
 use crate::api_error;
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
+use crate::eval::typval::{ArgFrame, TV_INITIAL_VALUE, UNSET_ARG, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
@@ -84,12 +84,12 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"Function called with too many arguments".as_ptr());
         }
 
-        let mut vim_args = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
+        let mut vim_args = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
         let mut i: c_int = 0;
         'free_vim_args: {
             while i < nargs {
                 lua_pushvalue(lstate, i + 2);
-                if !nlua_pop_typval(lstate, vim_args.as_mut_ptr().offset(i as isize)) {
+                if !nlua_pop_typval(lstate, vim_args.args().offset(i as isize)) {
                     let n = i + 1;
                     err = api_error!(kErrorTypeException, "error converting argument {n}");
                     break 'free_vim_args;
@@ -118,7 +118,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 len_as_int(name_len),
                 &raw mut rettv,
                 nargs,
-                vim_args.as_mut_ptr(),
+                vim_args.args(),
                 &raw mut funcexe,
             );
             try_leave(&raw mut tstate, &mut err);
@@ -132,7 +132,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
 
         while i > 0 {
             i -= 1;
-            tv_clear(vim_args.as_mut_ptr().offset(i as isize));
+            tv_clear(vim_args.args().offset(i as isize));
         }
 
         if err.is_set() {

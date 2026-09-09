@@ -311,7 +311,7 @@ pub unsafe fn json_decode_string(
                 p += 1;
             }
             if dec.stack.len() == 1 && dec.containers.is_empty() {
-                unsafe { *result = dec.stack.pop().expect("the decoded value").val };
+                unsafe { result.write(dec.stack.pop().expect("the decoded value").val) };
                 break 'done;
             }
             dec.emsg_rest(E474_UNEXPECTED_END, 0);

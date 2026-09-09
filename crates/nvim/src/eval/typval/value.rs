@@ -33,17 +33,29 @@ const TV_TRANSLATE: size_t = size_t::MAX;
 /// `TV_CSTRING`: the `name_len` sentinel that asks it to measure the name.
 const TV_CSTRING: size_t = size_t::MAX - 1;
 
-/// Release whatever `tv` holds and leave `VAR_UNKNOWN` behind.
+/// Release whatever `tv` holds, leaving the **empty value of its own kind**.
 ///
 /// The work is done by the `nothing` sink, the seventh instantiation of
 /// `typval_encode.c.h`: it walks the value iteratively, so a container that
 /// refers to itself is deep-freed without recursing.
 ///
+/// The kind survives, as upstream's does: a cleared String is a
+/// `VAR_STRING` over NULL, a cleared List a `VAR_LIST` over NULL. Several
+/// places read the kind back afterwards -- `filter()` checks the callback's
+/// answer *after* clearing it, `1.234 - 8` decides on float arithmetic from
+/// the tag the clear left behind -- and none of them is visible to a static
+/// check.
+///
+/// Clearing an already-cleared value is free: [`TypVal::is_empty`] is the
+/// fast path, and it is the one that matters, because with `Drop` live an
+/// explicit `tv_clear` followed by the value leaving scope is the ordinary
+/// case.
+///
 /// # Safety
 ///
 /// `tv` must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_clear(tv: *mut TypVal) {
-    if tv.is_null() || unsafe { (*tv).v_type() } == VAR_UNKNOWN {
+    if tv.is_null() || unsafe { (*tv).is_empty() } {
         return;
     }
 
@@ -56,6 +68,7 @@ pub unsafe fn tv_clear(tv: *mut TypVal) {
     // where it is used.
     let evn_ret = unsafe { encode_vim_to_nothing(tv, c"tv_clear() argument".as_ptr()) };
     debug_assert!(evn_ret);
+    debug_assert!(unsafe { (*tv).is_empty() });
 }
 
 /// Release what `tv` holds and free the `TypVal` itself.
@@ -91,62 +104,99 @@ pub unsafe fn tv_free(tv: *mut TypVal) {
     unsafe { xfree(tv.cast()) };
 }
 
+impl Clone for TypVal {
+    /// A shallow copy: the string is duplicated, and a container gains a
+    /// reference rather than being copied.
+    ///
+    /// This *is* `tv_copy`. `deepcopy()` is `var_item_copy`, which walks.
+    ///
+    /// The lock does not come along, because there is none to come: a lock
+    /// belongs to the slot a value sits in, and the copy is going somewhere
+    /// else.
+    fn clone(&self) -> TypVal {
+        match *self {
+            TypVal::String(text) if !text.is_null() => {
+                // SAFETY: the variant says the payload is a live
+                // NUL-terminated string.
+                TypVal::String(unsafe { xstrdup(text) })
+            }
+            TypVal::Func(name) if !name.is_null() => {
+                // SAFETY: as above -- a funcref's payload is its name.
+                let copy = unsafe { xstrdup(name) };
+                // SAFETY: the name just copied; a funcref owns a reference
+                // to the function as well as the text.
+                unsafe { func_ref(copy) };
+                TypVal::Func(copy)
+            }
+            TypVal::Partial(pt) => {
+                // SAFETY: the variant says the payload is a live partial.
+                if let Some(pt) = unsafe { pt.as_mut() } {
+                    pt.pt_refcount.retain();
+                }
+                TypVal::Partial(pt)
+            }
+            TypVal::Blob(b) => {
+                // SAFETY: as above, for a blob.
+                if let Some(blob) = unsafe { b.as_mut() } {
+                    blob.bv_refcount.retain();
+                }
+                TypVal::Blob(b)
+            }
+            TypVal::List(l) => {
+                // SAFETY: as above; `tv_list_ref` tolerates NULL.
+                unsafe { tv_list_ref(l) };
+                TypVal::List(l)
+            }
+            TypVal::Dict(d) => {
+                // SAFETY: as above, for a dictionary.
+                if let Some(dict) = unsafe { d.as_mut() } {
+                    dict.dv_refcount.retain();
+                }
+                TypVal::Dict(d)
+            }
+            TypVal::Unknown => {
+                let arg0 = "tv_copy(UNKNOWN)";
+                semsg!("E685: Internal error: {arg0}");
+                TypVal::Unknown
+            }
+            // A scalar, and the two container variants over NULL: nothing
+            // to duplicate and no reference to take.
+            // SAFETY: the arms above cover everything that owns anything,
+            // so what is left holds no reference this could duplicate.
+            ref other => unsafe { other.bit_copy() },
+        }
+    }
+}
+
+impl Drop for TypVal {
+    /// Release whatever this value holds; this *is* `tv_clear`.
+    ///
+    /// The refcount is the ownership now: dropping a `TypVal::List` gives up
+    /// one reference to the list, and the last one frees it. What it is not
+    /// is a *deep* free by recursion -- see [`tv_clear`].
+    fn drop(&mut self) {
+        // SAFETY: `self` is a live typval by construction, and the walk
+        // leaves it holding nothing.
+        unsafe { tv_clear(&raw mut *self) };
+    }
+}
+
 /// Copy `from` into `to`, taking a reference to whatever it holds.
 ///
-/// The copy is shallow and always unlocked; `deepcopy()` goes through
-/// `var_item_copy`.
+/// The raw-pointer spelling of [`Clone`]: the destination is **overwritten**,
+/// not assigned, because half the callers hand this a fresh `xmalloc`'d list
+/// item and the other half have just cleared the slot.
 ///
 /// # Safety
 ///
-/// `from` must point at an initialized typval. `to` must point at an
-/// initialized typval, unaliased for the call.
+/// `from` must point at an initialized typval. `to` must point at writable
+/// typval storage holding nothing that needs releasing, unaliased for the
+/// call.
 pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
-    // A real copy starts as a bit copy of tag and payload; each arm below
-    // then takes the reference that makes the destination an owner too.
-    unsafe { *to = (*from).bit_copy() };
-    // SAFETY: the caller's promise: a writable typval.
-    let mut dst = unsafe { Tv::new(to) };
-
-    // SAFETY: the caller's promise: a live source typval.
-    let src = unsafe { Tv::new(from.cast_mut()) };
-    match src.v_type() {
-        VAR_STRING | VAR_FUNC => {
-            let text = src.string_or_func_name();
-            if !text.is_null() {
-                // SAFETY: the tag says the string arm holds a live
-                // NUL-terminated string.
-                let copy = unsafe { xstrdup(text) };
-                if src.v_type() == VAR_FUNC {
-                    dst.write_func_name(copy);
-                    // SAFETY: the name just copied.
-                    unsafe { func_ref(copy) };
-                } else {
-                    dst.write_string(copy);
-                }
-            }
-        }
-        VAR_PARTIAL => {
-            if let Some(pt) = unsafe { (*to).partial_or_null().as_mut() } {
-                pt.pt_refcount.retain();
-            }
-        }
-        VAR_BLOB => {
-            if !src.blob_or_null().is_null() {
-                unsafe { (*(*to).blob_or_null()).bv_refcount.retain() };
-            }
-        }
-        VAR_LIST => unsafe { tv_list_ref((*to).list_or_null()) },
-        VAR_DICT => {
-            if !src.dict_or_null().is_null() {
-                unsafe { (*(*to).dict_or_null()).dv_refcount.retain() };
-            }
-        }
-        VAR_UNKNOWN => {
-            let arg0 = "tv_copy(UNKNOWN)";
-            semsg!("E685: Internal error: {arg0}");
-        }
-        _ => {}
-    }
+    // SAFETY: the caller's promise: a live source and writable storage that
+    // owes nothing, so the old bits are overwritten rather than released.
+    let copy = unsafe { (*from).clone() };
+    unsafe { to.write(copy) };
 }
 
 /// `:lockvar` / `:unlockvar` over the slot `slot_lock`/`tv` name, descending

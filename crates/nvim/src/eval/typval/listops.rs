@@ -107,7 +107,9 @@ pub unsafe fn tv_list_append_tv(l: *mut List, tv: *mut TypVal) {
 /// removes it.
 pub unsafe fn tv_list_append_owned_tv(l: *mut List, tv: TypVal) -> *mut TypVal {
     let li = tv_list_item_alloc();
-    unsafe { (*li).li_tv = tv };
+    // The item is fresh from `xmalloc`, so the value is written in rather
+    // than assigned over: there is nothing there to release.
+    unsafe { li_tv(li).write(tv) };
     unsafe { tv_list_append(l, li) };
     li_tv(li)
 }

@@ -178,7 +178,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                 }
             }
             debug_assert!(!cur.container);
-            *cur.tv = TypVal::Number(0);
+            cur.tv.write(TypVal::Number(0));
             'converted: {
                 match lua_type(lstate, -1) {
                     LUA_TNIL => {
@@ -194,7 +194,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                     LUA_TSTRING => {
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -1, &raw mut len);
-                        *cur.tv = decode_string(s, len, false, false);
+                        cur.tv.write(decode_string(s, len, false, false));
                     }
                     LUA_TNUMBER => {
                         let n = lua_tonumber(lstate, -1);

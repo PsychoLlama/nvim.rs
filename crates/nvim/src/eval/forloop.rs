@@ -110,6 +110,8 @@ pub unsafe fn eval_for_line(
                         // the whole record — `winlayer::live`'s note.
                         // SAFETY: as above.
                         unsafe { (*lw).lw_item = tv_list_first(l) };
+                        // The reference is `fi`'s now.
+                        tv.disown();
                     }
                 }
                 VAR_BLOB => {
@@ -122,6 +124,8 @@ pub unsafe fn eval_for_line(
                         unsafe { tv_blob_copy(tv.blob_or_null(), &raw mut btv) };
                         // SAFETY: the copy left a Blob in `btv`.
                         fi.fi_blob = btv.blob_or_null();
+                        // The reference the copy took is `fi`'s now.
+                        btv.disown();
                     }
                     // SAFETY: `tv` is this frame's.
                     clear_local(&mut tv);
@@ -135,6 +139,7 @@ pub unsafe fn eval_for_line(
                     // nothing clears `tv` on this path, so it is not
                     // nulled out here.
                     fi.fi_string = tv.string_or_null();
+                    tv.disown();
                     if fi.fi_string.is_null() {
                         // SAFETY: the literal is NUL-terminated.
                         fi.fi_string = unsafe { xstrdup(c"".as_ptr()) };
@@ -201,8 +206,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
         let ok = unsafe { assign(fi, arg, &raw mut tv) };
         // The typval was never handed over, so its String is ours.
-        // SAFETY: the string allocated just above.
-        unsafe { xfree(tv.string_or_null() as *mut c_void) };
+        clear_local(&mut tv);
         return ok;
     }
 

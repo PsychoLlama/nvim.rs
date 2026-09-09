@@ -38,6 +38,7 @@
 #![cfg(not(miri))]
 
 use std::ffi::CStr;
+use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::encode::{
@@ -370,9 +371,13 @@ fn each_row(mut f: impl FnMut(&Editor, &Row, *mut TypVal)) {
         // one it holds itself -- as it does for the editor, whose garbage
         // collector is what reclaims those.
         unsafe {
+            eprintln!("ROW {:?}", row.tv);
             let mut tv = row.tv.build();
+            eprintln!("  built");
             f(&editor, &row, &raw mut tv);
+            eprintln!("  ran");
             tv_clear(&raw mut tv);
+            eprintln!("  cleared");
         }
     }
 }
@@ -439,8 +444,10 @@ fn a_cycle_met_twice_is_reported_once_per_dump() {
     // itself, so it is taken apart by `tv_list_free` rather than by
     // releasing the outside one.
     unsafe {
-        let tv = Tv::List(vec![Tv::Cycle(0), Tv::Cycle(0)]).build();
-        let at = &raw const tv as *mut TypVal;
+        // The value is taken apart by hand below, so it must not release
+        // the list a second time on the way out of scope.
+        let tv = ManuallyDrop::new(Tv::List(vec![Tv::Cycle(0), Tv::Cycle(0)]).build());
+        let at = &raw const *tv as *mut TypVal;
 
         let got = check_emsg(&editor, || string(at), Some(E724));
         assert_eq!(got, "[{E724@0}, {E724@0}]", "both cycles were marked");

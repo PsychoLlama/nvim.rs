@@ -222,13 +222,15 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
             f2 = n2 as Float;
         }
     }
+    // Which arithmetic to do is decided *before* the left operand is
+    // cleared.  Upstream reads the tags afterwards, which was the same
+    // answer while `tv_clear` left the kind behind and is not now: a
+    // cleared value is `Unknown`, so `1.234 - 8` would take the integer
+    // branch and answer -8.
+    let use_float = one.v_type() == VAR_FLOAT || two.v_type() == VAR_FLOAT;
     unsafe { tv_clear(tv1) };
 
-    // Deliberately read *after* the clear, as upstream does: `tv_clear`
-    // leaves a Float's tag alone (there is nothing to free), so this
-    // still sees a Float on the left, but a List or Blob that was
-    // rejected above has become VAR_UNKNOWN.
-    if one.v_type() == VAR_FLOAT || two.v_type() == VAR_FLOAT {
+    if use_float {
         one.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
     } else {
         one.write_number(if op == b'+' {

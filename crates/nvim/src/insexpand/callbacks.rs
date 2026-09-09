@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::guard::Lock;
 use crate::semsg;
 use crate::strings::vim_strchr;
@@ -607,7 +608,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     }
 
     // Call the function to obtain the list of matches.
-    let mut args = [TYPVAL_T_INIT; 3];
+    let mut args = [UNSET_ARG; 3];
     args[0].write_empty(VAR_NUMBER);
     args[1].write_empty(VAR_STRING);
     args[2].write_empty(VAR_UNKNOWN);
@@ -628,10 +629,18 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if unsafe { callback_call(cb, 2, args.as_mut_ptr(), &raw mut rettv) } {
+    if unsafe { callback_call(cb, 2, args.args(), &raw mut rettv) } {
+        // The two container arms take the reference out of `rettv` and
+        // give it back by hand below.
         match rettv.v_type() {
-            VAR_LIST => matchlist = rettv.list_or_null(),
-            VAR_DICT => matchdict = rettv.dict_or_null(),
+            VAR_LIST => {
+                matchlist = rettv.list_or_null();
+                rettv.disown();
+            }
+            VAR_DICT => {
+                matchdict = rettv.dict_or_null();
+                rettv.disown();
+            }
             // VAR_SPECIAL falls through to the default.
             // TODO(brammool): Give error message?
             _ => unsafe { tv_clear(&raw mut rettv) },

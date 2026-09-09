@@ -43,6 +43,8 @@ use crate::types::{
     VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
     kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
+use core::mem::ManuallyDrop;
+
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
 
@@ -180,6 +182,39 @@ pub const GARRAY_EMPTY: GArray = GArray {
 /// array (`[TV_INITIAL_VALUE; 21]`, every argument frame in the interpreter)
 /// needs a constant on its left, the element type not being `Copy`.
 pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
+
+/// One slot of an argument frame, holding nothing yet.
+///
+/// **An argument frame borrows.**  `argv[i]` names the same string, the same
+/// list, the same dictionary as the expression that produced it, for exactly
+/// the length of the call, and it is the caller that releases it; a frame
+/// that *does* own a slot -- a partial's bound arguments, `reduce()`'s
+/// accumulator -- clears that one itself, by hand, at the point it chooses.
+/// Some slots are not even the heap's: a static message, a stack buffer.
+/// [`ManuallyDrop`] is what says so, and without it every one of these frames
+/// would free its caller's values on the way out of scope.
+///
+/// The whole shape retires when builtins take a `&[TypVal]` and the `a:`
+/// items are real copies.
+pub(crate) const UNSET_ARG: ManuallyDrop<TypVal> = ManuallyDrop::new(TV_INITIAL_VALUE);
+
+/// The address of an argument frame's slots, as the `*mut TypVal` every call
+/// that reads one takes.
+///
+/// [`ManuallyDrop`] is `#[repr(transparent)]`, so this is the same address
+/// under a different name; what it is not is a promise that the callee may
+/// release what it finds. See [`UNSET_ARG`].
+pub(crate) trait ArgFrame {
+    /// The frame's first slot.
+    fn args(&mut self) -> *mut TypVal;
+}
+
+impl ArgFrame for [ManuallyDrop<TypVal>] {
+    #[inline(always)]
+    fn args(&mut self) -> *mut TypVal {
+        self.as_mut_ptr().cast()
+    }
+}
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());

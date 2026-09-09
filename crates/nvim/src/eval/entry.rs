@@ -663,7 +663,10 @@ pub unsafe fn call_func_retlist(
         clear_local(&mut rettv);
         return null_mut();
     }
-    rettv.list_or_null() as *mut c_void
+    // The reference goes to the caller, which unreferences the list itself.
+    let list = rettv.list_or_null();
+    rettv.disown();
+    list as *mut c_void
 }
 
 /// Run 'foldexpr' for the window's current line. `marker` comes back holding

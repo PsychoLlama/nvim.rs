@@ -257,6 +257,30 @@ impl TypVal {
         }
     }
 
+    /// Whether this value holds nothing to release, and clearing it would
+    /// write back exactly what is already there.
+    ///
+    /// [`tv_clear`](crate::eval::typval::tv_clear)'s fast path, and the
+    /// reason `Drop` after an explicit clear costs a compare rather than a
+    /// second walk of the value.
+    #[inline(always)]
+    pub(crate) fn is_empty(&self) -> bool {
+        match *self {
+            TypVal::Unknown => true,
+            TypVal::Number(n) => n == 0,
+            // The exact `+0.0` a clear writes; `-0.0` compares equal to it
+            // and is not the same value.
+            TypVal::Float(f) => f.to_bits() == 0,
+            TypVal::Bool(b) => b == crate::types::kBoolVarFalse,
+            TypVal::Special(s) => s == kSpecialVarNull,
+            TypVal::String(p) | TypVal::Func(p) => p.is_null(),
+            TypVal::List(p) => p.is_null(),
+            TypVal::Dict(p) => p.is_null(),
+            TypVal::Partial(p) => p.is_null(),
+            TypVal::Blob(p) => p.is_null(),
+        }
+    }
+
     /// Whether this value is callable: a funcref or a partial.
     ///
     /// Upstream's `tv_is_func`, which took the whole typval by value for
@@ -397,6 +421,18 @@ impl TypVal {
         // callers own the old value's release and some of them fill storage
         // that has never held one.
         unsafe { ::core::ptr::write(self, value) };
+    }
+
+    /// Give up what this slot holds **without releasing it**: the payload
+    /// has been handed to a new owner by pointer, and this slot must not
+    /// free it.
+    ///
+    /// The C shape it replaces is a `*mut` copied out of a typval into a
+    /// struct field with the typval simply left alone, which was free while
+    /// a `TypVal` released nothing of its own accord.
+    #[inline(always)]
+    pub(crate) fn disown(&mut self) {
+        self.overwrite(TypVal::Unknown);
     }
 
     /// Overwrite this slot with the empty value of `v_type`: the kind, and a
@@ -931,13 +967,22 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
 
 #[cfg(test)]
 mod tests {
+    use ::core::mem::ManuallyDrop;
+
     use super::*;
     use crate::types::VarType;
 
     /// The value of `v_type` whose payload is `bits`, so that reading the
     /// wrong arm would answer something a real value never holds: the point
     /// of these cases is that the *kind* gates the read.
-    fn tagged(v_type: VarType, bits: usize) -> TypVal {
+    ///
+    /// [`ManuallyDrop`], because the payload is a made-up address and
+    /// releasing it would follow it.
+    fn tagged(v_type: VarType, bits: usize) -> ManuallyDrop<TypVal> {
+        ManuallyDrop::new(tagged_inner(v_type, bits))
+    }
+
+    fn tagged_inner(v_type: VarType, bits: usize) -> TypVal {
         let p = ::core::ptr::without_provenance_mut::<()>(bits);
         match v_type {
             VAR_NUMBER => TypVal::Number(VarNumber::try_from(bits).expect("a small address")),
@@ -982,7 +1027,7 @@ mod tests {
     fn a_list_reads_back_as_the_pointer_it_was_given() {
         // Any address will do: nothing here dereferences it.
         let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
-        let tv = TypVal::List(l);
+        let tv = tagged(VAR_LIST, l.addr());
         assert_eq!(tv.as_list(), Some(l));
         assert_eq!(tv.list_or_null(), l);
         // The same bits under any other tag are not a list.
@@ -992,12 +1037,12 @@ mod tests {
     #[test]
     fn the_two_kinds_that_both_hold_a_string_stay_apart() {
         let text = c"x".as_ptr().cast_mut();
-        let string = TypVal::String(text);
+        let string = ManuallyDrop::new(TypVal::String(text));
         assert_eq!(string.as_string(), Some(text));
         assert_eq!(string.as_func_name(), None);
         assert_eq!(string.string_or_func_name(), text);
 
-        let func = TypVal::Func(text);
+        let func = ManuallyDrop::new(TypVal::Func(text));
         assert_eq!(func.as_string(), None);
         assert_eq!(func.as_func_name(), Some(text));
         assert_eq!(func.string_or_func_name(), text);
@@ -1028,6 +1073,7 @@ mod tests {
             TypVal::Partial(::core::ptr::null_mut()),
             TypVal::Blob(::core::ptr::null_mut()),
         ] {
+            // Every one of these is an empty value, so dropping it is free.
             // SAFETY: `repr(C, u32)` puts the discriminant first, and it is
             // a `u32`.
             let tag = unsafe { *(&raw const tv).cast::<VarType>() };
@@ -1040,7 +1086,7 @@ mod tests {
     #[test]
     fn the_printed_address_is_the_payload_whatever_the_kind_is() {
         let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
-        assert_eq!(TypVal::List(l).payload_address().addr(), 0x1000);
+        assert_eq!(tagged(VAR_LIST, 0x1000).payload_address().addr(), l.addr());
         assert_eq!(TypVal::Number(42).payload_address().addr(), 42);
         assert_eq!(TypVal::Unknown.payload_address().addr(), 0);
     }

@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::{ptr, slice};
 
 use super::*;
@@ -120,9 +121,10 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // appending to it -- an empty string.
     let called_emsg_before = called_emsg.get();
     did_emsg.set(0);
-    let mut tv = TypVal::String(c"".as_ptr() as *mut c_char);
+    // A literal, so the value must not release it.
+    let mut tv = ManuallyDrop::new(TypVal::String(c"".as_ptr() as *mut c_char));
     let op = if append { c"." } else { c"=" };
-    let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut tv);
+    let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut *tv);
     // SAFETY: the lvalue just resolved, and a live local value.
     unsafe { set_var_lval(lv, endp, tvp, true, false, op.as_ptr()) };
     unsafe { clear_lval(redir_lval.get()) };
@@ -176,14 +178,16 @@ pub unsafe fn var_redir_stop() {
         // Store the text, unless the start failed.
         if !redir_endp.get().is_null() {
             text.push(NUL as u8);
-            let mut tv = TypVal::String(text.as_mut_ptr().cast::<c_char>());
+            // The accumulated bytes stay this frame's; the store copies
+            // or appends them, so the value releases nothing.
+            let mut tv = ManuallyDrop::new(TypVal::String(text.as_mut_ptr().cast::<c_char>()));
             // Resolve the name again: inside a Dict or List it may have
             // moved since.
             // SAFETY: as [`var_redir_start`] -- the saved name and lvalue.
             redir_endp.set(unsafe { resolve_redir_lval() });
             let (lv, endp) = (redir_lval.get(), redir_endp.get());
             if !endp.is_null() && !unsafe { (*lv).ll_name }.is_null() {
-                let tvp = &raw mut tv;
+                let tvp = &raw mut *tv;
                 unsafe { set_var_lval(lv, endp, tvp, false, false, c".".as_ptr()) };
             }
             unsafe { clear_lval(redir_lval.get()) };

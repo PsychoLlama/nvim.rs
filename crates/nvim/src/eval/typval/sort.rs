@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, NUL};
@@ -195,19 +196,19 @@ pub(crate) unsafe fn item_compare2(
 
     // Copy the values.  This is needed to be able to set v_lock to
     // VarLock::Fixed in the copy without changing the original list items.
-    let mut argv = [TV_INITIAL_VALUE; 3];
-    unsafe { tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut argv[0]) };
-    unsafe { tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut argv[1]) };
+    let mut argv = [UNSET_ARG; 3];
+    unsafe { tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut *argv[0]) };
+    unsafe { tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut *argv[1]) };
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
     funcexe.fe_selfdict = sort_info.item_compare_selfdict;
-    let argp = argv.as_mut_ptr();
+    let argp = argv.args();
     let called = unsafe { call_func(func_name, -1, &raw mut rettv, 2, argp, &raw mut funcexe) };
-    unsafe { tv_clear(&raw mut argv[0]) };
-    unsafe { tv_clear(&raw mut argv[1]) };
+    unsafe { tv_clear(&raw mut *argv[0]) };
+    unsafe { tv_clear(&raw mut *argv[1]) };
 
     let mut res;
     if called.is_err() {

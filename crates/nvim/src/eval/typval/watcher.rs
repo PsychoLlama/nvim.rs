@@ -24,6 +24,8 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
+use core::mem::ManuallyDrop;
 
 /// Free `watcher` and the callback and pattern it owns.
 ///
@@ -309,10 +311,10 @@ pub unsafe fn tv_dict_watcher_notify(
     newtv: *mut TypVal,
     oldtv: *mut TypVal,
 ) {
-    let mut argv = [TV_INITIAL_VALUE; 3];
-    argv[0] = TypVal::Dict(dict);
-    argv[1] = TypVal::String(unsafe { xstrdup(key) });
-    argv[2] = TypVal::Dict(unsafe { tv_dict_alloc() });
+    let mut argv = [UNSET_ARG; 3];
+    argv[0] = ManuallyDrop::new(TypVal::Dict(dict));
+    argv[1] = ManuallyDrop::new(TypVal::String(unsafe { xstrdup(key) }));
+    argv[2] = ManuallyDrop::new(TypVal::Dict(unsafe { tv_dict_alloc() }));
     unsafe { (*argv[2].dict_or_null()).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
@@ -353,7 +355,7 @@ pub unsafe fn tv_dict_watcher_notify(
             let mut wd = unsafe { Dw::new(watcher) };
             wd.busy = true;
             let cb = wd.field_ptr(::core::mem::offset_of!(DictWatcher, callback));
-            let argp = argv.as_mut_ptr();
+            let argp = argv.args();
             unsafe { callback_call(cb, 3, argp, &raw mut rettv) };
             wd.busy = false;
             unsafe { tv_clear(&raw mut rettv) };
@@ -381,6 +383,6 @@ pub unsafe fn tv_dict_watcher_notify(
 
     // From 1: `argv[0]` is the caller's dictionary, which it still owns.
     for tv in &mut argv[1..] {
-        unsafe { tv_clear(tv) };
+        unsafe { tv_clear(&raw mut **tv) };
     }
 }

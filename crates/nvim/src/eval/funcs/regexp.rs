@@ -15,13 +15,14 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
-    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear,
-    tv_copy, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str_len, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_callback, tv_dict_has_key, tv_dict_unref, tv_get_bool, tv_get_lnum_buf,
-    tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list,
-    tv_list_append_number, tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_first,
-    tv_list_item_remove, tv_list_uidx,
+    ArgFrame, NumBuf, UNSET_ARG, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg,
+    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list, tv_dict_add_nr,
+    tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback, tv_dict_has_key,
+    tv_dict_unref, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
+    tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_first, tv_list_item_remove,
+    tv_list_uidx,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
@@ -42,6 +43,7 @@ use crate::types::{
     kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
@@ -687,8 +689,11 @@ unsafe fn item_string(
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
             unsafe { (*(*tv).dict_or_null()).dv_refcount.retain() };
-            let mut argv = [TypVal::Dict(unsafe { (*tv).dict_or_null() }), TV_UNKNOWN];
-            let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), result) };
+            let mut argv = [
+                ManuallyDrop::new(TypVal::Dict(unsafe { (*tv).dict_or_null() })),
+                UNSET_ARG,
+            ];
+            let called = unsafe { callback_call(cb, 1, argv.args(), result) };
             unsafe { tv_dict_unref((*tv).dict_or_null()) };
             if called && unsafe { (*result).v_type() } == VAR_STRING {
                 unsafe { (*result).string_or_null() }

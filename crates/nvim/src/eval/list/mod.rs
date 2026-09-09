@@ -36,10 +36,10 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ArgFrame, TV_INITIAL_VALUE};
 use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
-use core::mem::offset_of;
+use core::mem::{ManuallyDrop, offset_of};
 use core::slice;
 
 use crate::cstr;
@@ -802,12 +802,16 @@ pub(crate) fn err_not_countable(func_name: &CStr) {
     );
 }
 
-/// The value of the `v:` variable `idx`, copied out shallowly the way
-/// `filter_map_one` builds its argument vector.
+/// The `v:` variable `idx` as an argument slot, the way `filter_map_one`
+/// builds its argument vector.
+///
+/// A *borrowed* slot: the value is the `v:` variable's, which keeps it, so
+/// the frame it goes into must release nothing.  See [`UNSET_ARG`].
 #[inline(always)]
-pub(crate) fn vim_var_value(idx: Vv) -> TypVal {
-    // SAFETY: `idx` names a `v:` variable, whose slot is always live.
-    unsafe { (*get_vim_var_tv(idx)).bit_copy() }
+pub(crate) fn vim_var_value(idx: Vv) -> ManuallyDrop<TypVal> {
+    // SAFETY: `idx` names a `v:` variable, whose slot is always live, and
+    // the answer names it rather than owning it.
+    ManuallyDrop::new(unsafe { (*get_vim_var_tv(idx)).bit_copy() })
 }
 
 /// Release whatever the `v:` variable `idx` holds.
@@ -866,9 +870,13 @@ pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
 /// family re-enters the evaluator, and so where anything may happen to the
 /// container being walked.
 #[inline(always)]
-pub(crate) fn eval_expr(expr: &mut TypVal, argv: &mut [TypVal; 3], newtv: &mut TypVal) -> bool {
+pub(crate) fn eval_expr(
+    expr: &mut TypVal,
+    argv: &mut [ManuallyDrop<TypVal>; 3],
+    newtv: &mut TypVal,
+) -> bool {
     // SAFETY: three live typvals, and `argv` holds the two the count names.
-    unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, newtv) }.is_ok()
+    unsafe { eval_expr_typval(expr, false, argv[..].args(), 2, newtv) }.is_ok()
 }
 
 /// Run `cmd` as an Ex command line -- `foreach()`'s String arm, which is not

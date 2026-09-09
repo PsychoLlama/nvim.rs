@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
-use core::mem::offset_of;
+use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
@@ -526,8 +526,10 @@ pub unsafe fn before_set_vvar(
             }
         } else {
             // Take the string over, rather than copy and free: the value
-            // leaves `tv`, so the item now owns the only copy.
-            stored.write_string(tv.take_value().string_or_null());
+            // leaves `tv`, so the item now owns the only copy -- and the
+            // take's answer must not release it on its way out of scope.
+            let taken = ManuallyDrop::new(tv.take_value());
+            stored.write_string(taken.string_or_null());
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.

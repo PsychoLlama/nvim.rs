@@ -18,10 +18,9 @@ use crate::api::private::helpers::api_free_object;
 use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret, tv_get_bool,
-    tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
+    ArgFrame, NumBuf, UNSET_ARG, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
+    tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
     tv_list_set_ret,
 };
 use crate::eval::userfunc::get_user_func_name;
@@ -47,9 +46,6 @@ use crate::types::{
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
-
-/// A cleared typval, which is what an unfilled argument slot holds.
-const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 // -- Reading an argument, writing a return value ----------------------------
 //
@@ -285,12 +281,12 @@ pub unsafe fn call_internal_method(
         return FCERR_TOOFEW as c_int;
     }
 
-    let mut argv = [EMPTY_TV; MAX_FUNC_ARGS as usize + 1];
-    let out = argv.as_mut_ptr();
+    let mut argv = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
+    let out = argv.args();
     unsafe { ptr::copy_nonoverlapping(args, out, base_index as usize) };
     // The frame borrows the caller's values: the `ptr::copy` above does
     // the same for the rest of them, and nothing here owns what it holds.
-    unsafe { *out.add(base_index as usize) = (*basetv).bit_copy() };
+    unsafe { out.add(base_index as usize).write((*basetv).bit_copy()) };
     let from = unsafe { args.add(base_index as usize) };
     let to = unsafe { out.add(base_index as usize + 1) };
     let rest = (argcount - base_index) as usize;

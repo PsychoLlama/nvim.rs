@@ -12,7 +12,7 @@ use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::{ManuallyDrop, offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
@@ -20,8 +20,8 @@ use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
-    callback_free, tv_clear, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
-    tv_list_append_string, tv_list_ref, tv_list_unref,
+    ArgFrame, UNSET_ARG, callback_free, tv_clear, tv_dict_get_callback, tv_dict_get_number,
+    tv_list_alloc, tv_list_append_string, tv_list_ref, tv_list_unref,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -244,7 +244,11 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    let mut argvars: [TypVal; 3] = [TypVal::String(method), TypVal::List(arguments), UNSET_TV];
+    let mut argvars = [
+        ManuallyDrop::new(TypVal::String(method)),
+        ManuallyDrop::new(TypVal::List(arguments)),
+        UNSET_ARG,
+    ];
     let mut rettv = UNSET_TV;
     // The argument array borrows the List, so the reference is taken
     // for the duration of the call and given back after it.
@@ -255,7 +259,7 @@ pub unsafe fn eval_call_provider(
     funcexe.fe_firstline = Win::current().w_cursor.lnum;
     funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = true;
-    let (name, args) = (func.as_mut_ptr(), argvars.as_mut_ptr());
+    let (name, args) = (func.as_mut_ptr(), argvars.args());
     // SAFETY: `name` is the NUL-terminated name rendered above, `args` the
     // two argument typvals, and `rettv` and `funcexe` are this frame's.
     let _ = unsafe { call_func(name, name_len, &raw mut rettv, 2, args, &raw mut funcexe) };
@@ -462,16 +466,16 @@ pub unsafe fn prompt_invoke_callback() {
         unsafe { xfree(user_input as *mut c_void) };
     } else {
         let mut rettv = UNSET_TV;
-        let mut argv = [UNSET_TV; 2];
+        let mut argv = [UNSET_ARG; 2];
         argv[0].write_string(user_input);
         argv[1].write_empty(VAR_UNKNOWN);
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
         // SAFETY: as above.
-        unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
+        unsafe { callback_call(cb, 1, argv.args(), &raw mut rettv) };
         // SAFETY: the argument array and the result are this frame's.
-        unsafe { tv_clear(argv.as_mut_ptr()) };
+        unsafe { tv_clear(argv.args()) };
         clear_local(&mut rettv);
     }
 
@@ -490,7 +494,7 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
         return false;
     }
     let mut rettv = UNSET_TV;
-    let mut argv = [UNSET_TV; 1];
+    let mut argv = [UNSET_ARG; 1];
     argv[0].write_empty(VAR_UNKNOWN);
     // The interrupt is consumed here; the callback decides what to do
     // about it.
@@ -499,7 +503,7 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
     // array and result are this frame's.
     let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_interrupt };
     // SAFETY: as above.
-    let ret = unsafe { callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv) };
+    let ret = unsafe { callback_call(cb, 0, argv.args(), &raw mut rettv) };
     // SAFETY: `rettv` is this frame's.
     clear_local(&mut rettv);
     ret as c_int != FAIL

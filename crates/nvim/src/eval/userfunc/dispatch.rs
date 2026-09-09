@@ -12,15 +12,17 @@
 use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
+use core::mem::ManuallyDrop;
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::types::Failed;
 
 /// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a
 /// `base->Method()` base is put in front of them.
-const ARGV_INIT: [TypVal; MAX_FUNC_ARGS as usize + 1] =
-    [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
+const ARGV_INIT: [ManuallyDrop<TypVal>; MAX_FUNC_ARGS as usize + 1] =
+    [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
 
 /// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
 /// make the call.
@@ -51,7 +53,7 @@ pub unsafe fn get_func_tv(
             (*(*funcexe).fe_partial).pt_argc
         }
     };
-    let (argpp, args, countp) = (&raw mut argp, argvars.as_mut_ptr(), &raw mut argcount);
+    let (argpp, args, countp) = (&raw mut argp, argvars.args(), &raw mut argcount);
     let mut ret = unsafe { get_func_arguments(argpp, evalarg, bound, args, countp) };
     debug_assert!(ret.is_ok() || ret.is_err());
 
@@ -60,15 +62,13 @@ pub unsafe fn get_func_tv(
         // know which variables are used on the call stack.
         let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
             funcargs.with_mut(|args| {
-                args.extend(
-                    (0..argcount).map(|i| unsafe { argvars.as_mut_ptr().offset(i as isize) }),
-                );
+                args.extend((0..argcount).map(|i| unsafe { argvars.args().offset(i as isize) }));
             });
             argcount as usize
         } else {
             0
         };
-        ret = unsafe { call_func(name, len, result, argcount, argvars.as_mut_ptr(), funcexe) };
+        ret = unsafe { call_func(name, len, result, argcount, argvars.args(), funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
         funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
     } else if !aborting() && evaluate {
@@ -81,7 +81,7 @@ pub unsafe fn get_func_tv(
 
     while argcount > 0 {
         argcount -= 1;
-        unsafe { tv_clear(argvars.as_mut_ptr().offset(argcount as isize)) };
+        unsafe { tv_clear(argvars.args().offset(argcount as isize)) };
     }
 
     unsafe { *arg = skipwhite(argp) };
@@ -119,7 +119,7 @@ pub unsafe fn func_call(
             }
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
-            let (from, into) = unsafe { (&raw mut (*item).li_tv, argv.as_mut_ptr()) };
+            let (from, into) = unsafe { (&raw mut (*item).li_tv, argv.args()) };
             unsafe { tv_copy(from, into.offset(argc as isize)) };
             argc += 1;
         }
@@ -130,12 +130,12 @@ pub unsafe fn func_call(
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = partial;
         funcexe.fe_selfdict = selfdict;
-        r = unsafe { call_func(name, -1, result, argc, argv.as_mut_ptr(), &raw mut funcexe) };
+        r = unsafe { call_func(name, -1, result, argc, argv.args(), &raw mut funcexe) };
     }
 
     while argc > 0 {
         argc -= 1;
-        unsafe { tv_clear(argv.as_mut_ptr().offset(argc as isize)) };
+        unsafe { tv_clear(argv.args().offset(argc as isize)) };
     }
     r
 }
@@ -231,14 +231,16 @@ pub unsafe fn call_func(
                     }
                     let bound = unsafe { (*partial).pt_argv };
                     let at = argv_clear as isize;
-                    unsafe { tv_copy(bound.offset(at), argv.as_mut_ptr().offset(at)) };
+                    unsafe { tv_copy(bound.offset(at), argv.args().offset(at)) };
                     argv_clear += 1;
                 }
                 for i in 0..argcount_in {
+                    // SAFETY: the caller's argument, borrowed for the
+                    // length of this call; the frame releases nothing.
                     argv[(i + argv_clear) as usize] =
-                        unsafe { (*argvars_in.offset(i as isize)).bit_copy() };
+                        ManuallyDrop::new(unsafe { (*argvars_in.offset(i as isize)).bit_copy() });
                 }
-                argvars = argv.as_mut_ptr();
+                argvars = argv.args();
                 argcount = unsafe { (*partial).pt_argc } + argcount_in;
             }
         }
@@ -265,7 +267,7 @@ pub unsafe fn call_func(
                     // three out-parameters are this frame's locals.
                     let base = unsafe { (*funcexe).fe_basetv };
                     let (argsp, countp) = (&raw mut argvars, &raw mut argcount);
-                    let (into, basep) = (argv.as_mut_ptr(), &raw mut argv_base);
+                    let (into, basep) = (argv.args(), &raw mut argv_base);
                     unsafe { argv_add_base(base, argsp, countp, into, basep) };
                     unsafe { nlua_typval_call(funcname, len as size_t, argvars, argcount, result) };
                 } else {
@@ -310,7 +312,7 @@ pub unsafe fn call_func(
                     // SAFETY: as the `v:lua` branch above.
                     let base = unsafe { (*funcexe).fe_basetv };
                     let (argsp, countp) = (&raw mut argvars, &raw mut argcount);
-                    let (into, basep) = (argv.as_mut_ptr(), &raw mut argv_base);
+                    let (into, basep) = (argv.args(), &raw mut argv_base);
                     unsafe { argv_add_base(base, argsp, countp, into, basep) };
                     let args = argvars;
                     error = unsafe {
@@ -354,7 +356,7 @@ pub unsafe fn call_func(
     // Clear the copies made from the partial.
     while argv_clear > 0 {
         argv_clear -= 1;
-        unsafe { tv_clear(argv.as_mut_ptr().offset((argv_clear + argv_base) as isize)) };
+        unsafe { tv_clear(argv.args().offset((argv_clear + argv_base) as isize)) };
     }
 
     unsafe { xfree(tofree as *mut c_void) };

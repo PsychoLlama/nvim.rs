@@ -17,9 +17,10 @@ use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
 use crate::eval::typval::{
-    tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
+    li_tv, tv_clear, tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10,
+    tv_list_ref,
 };
-use crate::memory::{xfree, xmalloc, xmemcpyz};
+use crate::memory::{xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
 use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, UserFunc};
 use crate::winlayer::Live;
@@ -153,9 +154,12 @@ pub(crate) unsafe fn fill_submatch_list(
 /// `sl` must point at a live `StaticList10`, unaliased for the call.
 pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
     // SAFETY: `sl` is the caller's list, whose items own their strings.
+    // Cleared rather than freed by hand: the list lives in the caller's
+    // frame, so its items are dropped when that frame ends and a slot left
+    // naming freed bytes would be released twice.
     let mut li = unsafe { (*sl).sl_list.lv_first };
     while !li.is_null() {
-        unsafe { xfree((*li).li_tv.string_or_null().cast()) };
+        unsafe { tv_clear(li_tv(li)) };
         li = unsafe { (*li).li_next };
     }
 }

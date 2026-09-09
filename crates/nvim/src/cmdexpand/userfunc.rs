@@ -12,6 +12,7 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::strings::vim_strchr;
@@ -274,7 +275,7 @@ pub(crate) unsafe fn call_user_expand_func(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    let mut args = [TV_INITIAL_VALUE; 4];
+    let mut args = [UNSET_ARG; 4];
     let save_current_sctx = current_sctx.get();
 
     if expand.xp_arg.is_null()
@@ -299,7 +300,7 @@ pub(crate) unsafe fn call_user_expand_func(
 
     current_sctx.set(expand.xp_script_ctx);
 
-    let ret = unsafe { user_expand_func(expand.xp_arg, 3, args.as_mut_ptr()) };
+    let ret = unsafe { user_expand_func(expand.xp_arg, 3, args.args()) };
 
     current_sctx.set(save_current_sctx);
     unsafe { xfree(pat as *mut c_void) };
@@ -486,7 +487,10 @@ pub(crate) unsafe fn expand_user_lua(
         return Err(Failed);
     }
 
-    unsafe { process_user_list(rettv.list_or_null(), matches, num_matches) };
+    // `process_user_list` takes the list over, so the value gives it up.
+    let list = rettv.list_or_null();
+    rettv.disown();
+    unsafe { process_user_list(list, matches, num_matches) };
     Ok(())
 }
 

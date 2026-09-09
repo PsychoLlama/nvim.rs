@@ -335,6 +335,9 @@ unsafe fn create_environment(
         unsafe { f_environ(ptr::null_mut(), out, row) };
         unsafe { tv_dict_extend(env, inherited.dict_or_null(), c"force".as_ptr()) };
         unsafe { tv_dict_free(inherited.dict_or_null()) };
+        // Freed outright rather than released, so the value that named it
+        // must give it up without a second release.
+        inherited.disown();
 
         if pty {
             for name in PTY_IGNORED_ENV {
