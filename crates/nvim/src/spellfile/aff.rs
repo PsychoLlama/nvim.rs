@@ -27,6 +27,24 @@
 //! With `PFXPOSTPONE`, a prefix that only adds letters is not expanded into
 //! the word list at all — it goes into the prefix tree with an id, and the
 //! condition it needs is filed in `si_prefcond` for the reader to compile.
+//!
+//! # The items
+//!
+//! Upstream keeps the split line as `char *items[MAXITEMCNT]` pointing into
+//! the line buffer, with a NUL written over each separator. The terminators
+//! stay -- nearly every consumer hands an item straight on to a callee that
+//! takes a C string, and a copy per item would be the only other way to say
+//! that -- so an item is a **`&CStr` borrowed from the line**, and the
+//! vector of them is what [`split_items`] answers. [`item_ptr`] is the one
+//! place that spells the borrow as a pointer again.
+//!
+//! | upstream | here |
+//! | --- | --- |
+//! | `split_items(line, items)` | [`split_items`] answers the items |
+//! | `spell_info_item(s)` | [`is_info_keyword`] |
+//! | `*items[n]` | [`first_byte`], or `items[n].to_bytes()` |
+//! | `atoi(items[n])` | [`item_number`] |
+//! | `STRCMP(items[n], "X")` | `items[n] == c"X"` |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -37,14 +55,13 @@ use crate::smsg;
 use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
-use crate::charset::skipdigits;
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_add, hash_find, hash_init};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;
-use crate::message_fmt::{c_str, report_msg};
+use crate::message_fmt::{c_str, msg_bytes, msg_cstr, report_msg};
 use crate::option::vars::p_enc;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::os::fs::os_fopen;
@@ -238,32 +255,28 @@ const CASE_RULES: &[(&CStr, CaseTable)] = &[
 /// # Safety
 ///
 /// `items` must hold live NUL-terminated strings.
-unsafe fn is_aff_rule(items: &[*mut c_char], rulename: &CStr, mincount: usize) -> bool {
-    // SAFETY: the caller promises the items.
-    unsafe {
-        cstr::eq(items[0], rulename.as_ptr())
-            && (items.len() == mincount
-                || (items.len() > mincount && *items[mincount] as c_int == b'#' as c_int))
-    }
+fn is_aff_rule(items: &[&CStr], rulename: &CStr, mincount: usize) -> bool {
+    items[0] == rulename
+        && (items.len() == mincount
+            || (items.len() > mincount && first_byte(items[mincount]) == b'#'))
+}
+
+/// The item's first byte, or `NUL` when it is empty.
+pub(super) fn first_byte(item: &CStr) -> uint8_t {
+    item.to_bytes().first().copied().unwrap_or(NUL as uint8_t)
 }
 
 /// Keywords whose argument is free text kept for `:spellinfo`.
-///
-/// # Safety
-///
-/// `s` must be NUL-terminated.
-unsafe fn spell_info_item(s: *mut c_char) -> bool {
-    // SAFETY: the caller promises the string.
+fn is_info_keyword(name: &[uint8_t]) -> bool {
     [
-        c"NAME",
-        c"HOME",
-        c"VERSION",
-        c"AUTHOR",
-        c"EMAIL",
-        c"COPYRIGHT",
+        &b"NAME"[..],
+        b"HOME",
+        b"VERSION",
+        b"AUTHOR",
+        b"EMAIL",
+        b"COPYRIGHT",
     ]
-    .into_iter()
-    .any(|name| unsafe { cstr::eq(s, name.as_ptr()) })
+    .contains(&name)
 }
 
 /// Read a `.aff` file and return what it describes, or null if it could not
@@ -321,31 +334,36 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) ->
         hash_init(&raw mut aff.af_comp);
     }
 
-    let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
-    let mut items: [*mut c_char; MAXITEMCNT] = [core::ptr::null_mut(); MAXITEMCNT];
-    let mut pc: *mut c_char = core::ptr::null_mut();
+    let mut rline = [0 as uint8_t; MAXLINELEN as usize];
+    // The converted spelling of the line, when the file's encoding is not
+    // the editor's.  Kept across iterations for its capacity alone.
+    let mut converted: Vec<uint8_t> = Vec::new();
     let mut lnum: c_int = 0;
 
-    while !unsafe { vim_fgets(rline.as_mut_ptr(), MAXLINELEN, fd) } && !got_int.get() {
+    // SAFETY: `rline` is MAXLINELEN bytes, the bound `vim_fgets` is given.
+    while !unsafe { vim_fgets(rline.as_mut_ptr().cast::<c_char>(), MAXLINELEN, fd) }
+        && !got_int.get()
+    {
         line_breakcheck();
         lnum += 1;
-        if rline[0] as c_int == b'#' as c_int {
+        if rline[0] == b'#' {
             continue;
         }
 
-        unsafe { xfree(pc.cast()) };
-        pc = core::ptr::null_mut();
-        let line = if spin.si_conv.vc_type != CONV_NONE {
-            pc = unsafe {
+        let line: &mut [uint8_t] = if spin.si_conv.vc_type != CONV_NONE {
+            // SAFETY: a NUL-terminated line, converted into a fresh
+            // allocation this loop then owns and frees.
+            let converted_line = unsafe {
                 string_convert(
                     &raw mut spin.si_conv,
-                    rline.as_mut_ptr(),
+                    rline.as_mut_ptr().cast::<c_char>(),
                     core::ptr::null_mut(),
                 )
             };
-            if pc.is_null() {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, rline) = unsafe { (c_str(fname), c_str(rline.as_mut_ptr())) };
+            if converted_line.is_null() {
+                // SAFETY: a message argument the caller holds as a NUL-terminated string.
+                let fname = unsafe { c_str(fname) };
+                let rline = msg_bytes(read_line(&rline));
                 smsg!(
                     0,
                     "Conversion failure for word in {fname} line {}: {rline}",
@@ -353,24 +371,37 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) ->
                 );
                 continue;
             }
-            pc
+            converted.clear();
+            // SAFETY: as above.
+            converted.extend_from_slice(unsafe { cstr::bytes_at(converted_line) });
+            unsafe { xfree(converted_line.cast()) };
+            converted.push(NUL as uint8_t);
+            &mut converted
         } else {
-            rline.as_mut_ptr()
+            &mut rline
         };
 
-        let itemcnt = unsafe { split_items(line, &mut items) };
-        if itemcnt == 0 {
+        let items = split_items(line);
+        if items.is_empty() {
             continue;
         }
-        if !unsafe { handle_line(spin, aff, &mut st, &items[..itemcnt], fname, lnum) } {
+        if !unsafe { handle_line(spin, aff, &mut st, &items, fname, lnum) } {
             break;
         }
     }
 
     unsafe { finish_aff(spin, aff, &mut st, fname) };
-    unsafe { xfree(pc.cast()) };
     unsafe { fclose(fd) };
     aff
+}
+
+/// The line `vim_fgets` just read into `buffer`, without its terminator.
+fn read_line(buffer: &[uint8_t]) -> &[uint8_t] {
+    let end = buffer
+        .iter()
+        .position(|&byte| byte == NUL as uint8_t)
+        .unwrap_or(buffer.len());
+    &buffer[..end]
 }
 
 /// Split a line into white-space separated items, in place.
@@ -378,64 +409,71 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) ->
 /// An informational keyword's argument is everything to the end of the
 /// line, spaces and all, so `NAME Some Dictionary` is two items.
 ///
-/// # Safety
-///
-/// `line` must be NUL-terminated and writable.
-unsafe fn split_items(line: *mut c_char, items: &mut [*mut c_char; MAXITEMCNT]) -> usize {
-    // SAFETY: the caller promises the line; the walk stops at its NUL.
-    let mut itemcnt = 0;
-    let mut p = line;
+/// The items are spans of `line` with a terminator written after each,
+/// which is what makes them `CStr`s rather than plain slices: nearly every
+/// consumer hands one straight on to a callee that takes a C string --
+/// `save_str`, `snprintf`, `atoi`, `spell_casefold` -- and a copy per item
+/// would be the only other way to say that.
+fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
+    // Each item as its first byte and the index of its terminator.
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    let mut at = 0;
     loop {
-        while unsafe { *p } as c_int != NUL && unsafe { *p } as uint8_t as c_int <= b' ' as c_int {
-            p = unsafe { p.add(1) };
+        while line[at] != NUL as uint8_t && line[at] <= b' ' {
+            at += 1;
         }
-        if unsafe { *p } as c_int == NUL || itemcnt == MAXITEMCNT {
+        if line[at] == NUL as uint8_t || spans.len() == MAXITEMCNT {
             break;
         }
-        items[itemcnt] = p;
-        itemcnt += 1;
+        let start = at;
 
-        if itemcnt == 2 && unsafe { spell_info_item(items[0]) } {
+        if spans.len() == 1 && is_info_keyword(&line[spans[0].0..spans[0].1]) {
             // Take the rest of the line, stopping only at a control
             // character that is not a tab.
-            while unsafe { *p } as uint8_t as c_int >= b' ' as c_int
-                || unsafe { *p } as c_int == TAB
-            {
-                p = unsafe { p.add(1) };
+            while line[at] >= b' ' || line[at] as c_int == TAB {
+                at += 1;
             }
         } else {
-            while unsafe { *p } as uint8_t as c_int > b' ' as c_int {
-                p = unsafe { p.add(1) };
+            while line[at] > b' ' {
+                at += 1;
             }
         }
-        if unsafe { *p } as c_int == NUL {
+        spans.push((start, at));
+        if line[at] == NUL as uint8_t {
             break;
         }
-        unsafe { *p = NUL as c_char };
-        p = unsafe { p.add(1) };
+        line[at] = NUL as uint8_t;
+        at += 1;
     }
-    itemcnt
+
+    let line: &[uint8_t] = line;
+    spans
+        .iter()
+        .map(|&(start, end)| {
+            CStr::from_bytes_with_nul(&line[start..=end])
+                .expect("every walk above stopped at a terminator")
+        })
+        .collect()
 }
 
 /// Handle one line. Returns false to stop reading the file.
 ///
 /// # Safety
 ///
-/// `items` must hold live NUL-terminated strings, and `aff` and `spin` be
-/// live.
+/// `aff` and `spin` must be live.
 unsafe fn handle_line(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
     st: &mut AffState,
-    items: &[*mut c_char],
+    items: &[&CStr],
     fname: *mut c_char,
     lnum: c_int,
 ) -> bool {
-    // SAFETY: the caller promises the items and the two structures.
+    // SAFETY: the caller promises the two structures.
     // SET must come before anything that could need converting.
-    if unsafe { is_aff_rule(items, c"SET", 2) } && aff.af_enc.is_null() {
-        // SAFETY: the caller promises the items.
-        aff.af_enc = unsafe { enc_canonize(items[1]) };
+    if is_aff_rule(items, c"SET", 2) && aff.af_enc.is_null() {
+        // SAFETY: an item, which is a live NUL-terminated string.
+        aff.af_enc = unsafe { enc_canonize(item_ptr(items[1])) };
         if spin.si_ascii == 0
             && unsafe { convert_setup(&raw mut spin.si_conv, aff.af_enc, p_enc.get()) }.is_err()
         {
@@ -450,28 +488,28 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"FLAG", 2) } && aff.af_flagtype == AFT_CHAR {
+    if is_aff_rule(items, c"FLAG", 2) && aff.af_flagtype == AFT_CHAR {
         unsafe { handle_flag_type(aff, items, fname, lnum) };
         return true;
     }
 
-    if unsafe { spell_info_item(items[0]) } && items.len() > 1 {
+    if is_info_keyword(items[0].to_bytes()) && items.len() > 1 {
         unsafe { append_info(spin, items) };
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"MIDWORD", 2) } && st.midword.is_null() {
-        st.midword = unsafe { spin.si_arena.save_str(items[1]) };
+    if is_aff_rule(items, c"MIDWORD", 2) && st.midword.is_null() {
+        st.midword = unsafe { spin.si_arena.save_str(item_ptr(items[1])) };
         return true;
     }
 
     // TRY is Hunspell's suggestion alphabet; nvim does not use it.
-    if unsafe { is_aff_rule(items, c"TRY", 2) } {
+    if is_aff_rule(items, c"TRY", 2) {
         return true;
     }
 
     for (names, field) in FLAG_RULES {
-        if !names.iter().any(|n| unsafe { is_aff_rule(items, n, 2) }) {
+        if !names.iter().any(|n| is_aff_rule(items, n, 2)) {
             continue;
         }
         // A second declaration is not this arm's business; it falls
@@ -479,8 +517,8 @@ unsafe fn handle_line(
         if *field.slot(aff) != 0 {
             break;
         }
-        // SAFETY: the caller promises the items.
-        let flag = unsafe { affitem2flag(aff.af_flagtype, items[1], fname, lnum) };
+        // SAFETY: an item, which is a live NUL-terminated string.
+        let flag = unsafe { affitem2flag(aff.af_flagtype, item_ptr(items[1]), fname, lnum) };
         *field.slot(aff) = flag;
         if let Some(warning) = field.warn_after_pfx()
             && aff.af_pref.ht_used > 0
@@ -492,20 +530,21 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"COMPOUNDFLAG", 2) } && st.compflags.is_null() {
+    if is_aff_rule(items, c"COMPOUNDFLAG", 2) && st.compflags.is_null() {
         // One flag becomes a pattern matching one or more of it.
-        let len = unsafe { cstr::bytes_at(items[1]) }.len() + 2;
+        let len = items[1].to_bytes().len() + 2;
         let p = spin.si_arena.alloc_bytes(len, false);
-        unsafe { strcpy(p, items[1]) };
+        // SAFETY: `p` is `len` bytes: the item, a `+` and the terminator.
+        unsafe { strcpy(p, item_ptr(items[1])) };
         unsafe { strcat(p, c"+".as_ptr()) };
         st.compflags = p;
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"COMPOUNDRULES", 2) } {
-        if unsafe { atoi(items[1]) } == 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+    if is_aff_rule(items, c"COMPOUNDRULES", 2) {
+        if item_number(items[1]) == 0 {
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
             smsg!(
                 0,
                 "Wrong COMPOUNDRULES value in {fname} line {}: {arg2}",
@@ -515,27 +554,32 @@ unsafe fn handle_line(
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"COMPOUNDRULE", 2) } {
+    if is_aff_rule(items, c"COMPOUNDRULE", 2) {
         // A rule that is only digits is the count line, unless a
         // pattern has already been started.
-        if !st.compflags.is_null() || unsafe { *skipdigits(items[1]) } as c_int != NUL {
-            let mut len = unsafe { cstr::bytes_at(items[1]) }.len() + 1;
+        let all_digits = items[1].to_bytes().iter().all(u8::is_ascii_digit);
+        if !st.compflags.is_null() || !all_digits {
+            let mut len = items[1].to_bytes().len() + 1;
             if !st.compflags.is_null() {
+                // SAFETY: an arena string this file built.
                 len += unsafe { cstr::bytes_at(st.compflags) }.len() + 1;
             }
             let p = spin.si_arena.alloc_bytes(len, false);
-            if !st.compflags.is_null() {
-                unsafe { strcpy(p, st.compflags) };
-                unsafe { strcat(p, c"/".as_ptr()) };
+            // SAFETY: `p` is `len` bytes, which is what the pieces need.
+            unsafe {
+                if !st.compflags.is_null() {
+                    strcpy(p, st.compflags);
+                    strcat(p, c"/".as_ptr());
+                }
+                strcat(p, item_ptr(items[1]));
             }
-            unsafe { strcat(p, items[1]) };
             st.compflags = p;
         }
         return true;
     }
 
     for (name, field, complaint) in NUMBER_RULES {
-        if !unsafe { is_aff_rule(items, name, 2) } {
+        if !is_aff_rule(items, name, 2) {
             continue;
         }
         let slot = match field {
@@ -546,17 +590,17 @@ unsafe fn handle_line(
         if *slot != 0 {
             break;
         }
-        *slot = unsafe { atoi(items[1]) };
+        *slot = item_number(items[1]);
         if *slot == 0 {
-            // SAFETY: the affix file's name and the item, NUL-terminated.
-            let (fname, item) = unsafe { (c_str(fname), c_str(items[1])) };
+            // SAFETY: the affix file's name, NUL-terminated.
+            let (fname, item) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
             let _: bool = report_msg(0, || tr_c!(complaint, fname, lnum, item));
         }
         return true;
     }
 
     for (name, bit) in COMPOPT_RULES {
-        if unsafe { is_aff_rule(items, name, 1) } {
+        if is_aff_rule(items, name, 1) {
             st.compoptions |= *bit as c_int;
             return true;
         }
@@ -564,10 +608,10 @@ unsafe fn handle_line(
 
     // The two-item form is the count line; the three-item form is a
     // pattern pair.
-    if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) } {
-        if unsafe { atoi(items[1]) } == 0 {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+    if is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) {
+        if item_number(items[1]) == 0 {
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
             smsg!(
                 0,
                 "Wrong CHECKCOMPOUNDPATTERN value in {fname} line {}: {arg2}",
@@ -576,18 +620,18 @@ unsafe fn handle_line(
         }
         return true;
     }
-    if unsafe { is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 3) } {
-        unsafe { add_comppat(spin, items) };
+    if is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 3) {
+        add_comppat(spin, items);
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"SYLLABLE", 2) } && st.syllable.is_null() {
-        st.syllable = unsafe { spin.si_arena.save_str(items[1]) };
+    if is_aff_rule(items, c"SYLLABLE", 2) && st.syllable.is_null() {
+        st.syllable = unsafe { spin.si_arena.save_str(item_ptr(items[1])) };
         return true;
     }
 
     for (name, toggle) in TOGGLE_RULES {
-        if !unsafe { is_aff_rule(items, name, 1) } {
+        if !is_aff_rule(items, name, 1) {
             continue;
         }
         match toggle {
@@ -601,14 +645,13 @@ unsafe fn handle_line(
         return true;
     }
 
-    let is_affix =
-        unsafe { cstr::eq_bytes(items[0], b"PFX") } || unsafe { cstr::eq_bytes(items[0], b"SFX") };
+    let is_affix = items[0] == c"PFX" || items[0] == c"SFX";
     if is_affix && st.aff_todo == 0 && items.len() >= 4 {
         return unsafe { handle_affix_header(spin, aff, st, items, fname, lnum) };
     }
     if is_affix
         && st.aff_todo > 0
-        && unsafe { cstr::eq(AffHeader::key(st.cur_aff), items[1]) }
+        && unsafe { cstr::eq(AffHeader::key(st.cur_aff), item_ptr(items[1])) }
         && items.len() >= 5
     {
         unsafe { handle_affix_entry(spin, aff, st, items, fname, lnum) };
@@ -616,7 +659,7 @@ unsafe fn handle_line(
     }
 
     for (name, table) in CASE_RULES {
-        if !unsafe { is_aff_rule(items, name, 2) } {
+        if !is_aff_rule(items, name, 2) {
             continue;
         }
         let slot = match table {
@@ -627,65 +670,82 @@ unsafe fn handle_line(
         if !slot.is_null() {
             break;
         }
-        *slot = unsafe { xstrdup(items[1]) };
+        *slot = unsafe { xstrdup(item_ptr(items[1])) };
         return true;
     }
 
     // The two-item form of REP/REPSAL is the count line.
-    if unsafe { is_aff_rule(items, c"REP", 2) } || unsafe { is_aff_rule(items, c"REPSAL", 2) } {
-        if !unsafe { is_digit_byte(*items[1]) } {
+    if is_aff_rule(items, c"REP", 2) || is_aff_rule(items, c"REPSAL", 2) {
+        if !unsafe { is_digit_byte(first_byte(items[1]) as c_char) } {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "Expected REP(SAL) count in {fname} line {}", lnum);
         }
         return true;
     }
-    let is_rep = unsafe { cstr::eq_bytes(items[0], b"REP") }
-        || unsafe { cstr::eq_bytes(items[0], b"REPSAL") };
+    let is_rep = items[0] == c"REP" || items[0] == c"REPSAL";
     if is_rep && items.len() >= 3 {
         unsafe { add_rep_entry(spin, st, items, fname, lnum) };
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"MAP", 2) } {
+    if is_aff_rule(items, c"MAP", 2) {
         unsafe { handle_map(spin, st, items, fname, lnum) };
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"SAL", 3) } {
+    if is_aff_rule(items, c"SAL", 3) {
         if st.do_sal {
             unsafe { handle_sal(spin, items) };
         }
         return true;
     }
 
-    if unsafe { is_aff_rule(items, c"SOFOFROM", 2) } && st.sofofrom.is_null() {
-        st.sofofrom = unsafe { spin.si_arena.save_str(items[1]) };
+    if is_aff_rule(items, c"SOFOFROM", 2) && st.sofofrom.is_null() {
+        st.sofofrom = unsafe { spin.si_arena.save_str(item_ptr(items[1])) };
         return true;
     }
-    if unsafe { is_aff_rule(items, c"SOFOTO", 2) } && st.sofoto.is_null() {
-        st.sofoto = unsafe { spin.si_arena.save_str(items[1]) };
+    if is_aff_rule(items, c"SOFOTO", 2) && st.sofoto.is_null() {
+        st.sofoto = unsafe { spin.si_arena.save_str(item_ptr(items[1])) };
         return true;
     }
 
-    if unsafe { cstr::eq_bytes(items[0], b"COMMON") } {
-        for &item in &items[1..] {
-            let hi = unsafe { hash_find(&raw mut spin.si_commonwords, item) };
+    if items[0] == c"COMMON" {
+        for item in &items[1..] {
+            // SAFETY: an item, which is a live NUL-terminated string; the
+            // table keeps a copy of its own.
+            let hi = unsafe { hash_find(&raw mut spin.si_commonwords, item_ptr(item)) };
             if !hi.is_kept() {
-                let _ = unsafe { hash_add(&raw mut spin.si_commonwords, xstrdup(item)) };
+                let word = unsafe { xstrdup(item_ptr(item)) };
+                let _ = unsafe { hash_add(&raw mut spin.si_commonwords, word) };
             }
         }
         return true;
     }
 
-    // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-    let (fname, arg2) = unsafe { (c_str(fname), c_str(items[0])) };
+    // SAFETY: a message argument the caller holds as a NUL-terminated string.
+    let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[0]));
     smsg!(
         0,
         "Unrecognized or duplicate item in {fname} line {}: {arg2}",
         lnum
     );
     true
+}
+
+/// An item as the C string a pointer-taking callee wants.
+///
+/// A borrow, not a copy: the items are spans of the line the splitter
+/// terminated in place. See [`split_items`].
+pub(super) fn item_ptr(item: &CStr) -> *mut c_char {
+    item.as_ptr().cast_mut()
+}
+
+/// An item read as a number, which is `atoi`: leading blanks and a sign,
+/// then digits, and zero for anything else.
+fn item_number(item: &CStr) -> c_int {
+    // SAFETY: an item, which is a live NUL-terminated string.
+    unsafe { atoi(item_ptr(item)) }
 }
 
 /// Is this byte a digit, by the C library's classification?
@@ -707,22 +767,16 @@ pub(super) unsafe fn is_digit_byte(c: c_char) -> bool {
 /// # Safety
 ///
 /// As [`handle_line`].
-unsafe fn handle_flag_type(
-    aff: &mut AffFile,
-    items: &[*mut c_char],
-    fname: *mut c_char,
-    lnum: c_int,
-) {
-    // SAFETY: the caller promises the items.
-    if unsafe { cstr::eq_bytes(items[1], b"long") } {
+unsafe fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: *mut c_char, lnum: c_int) {
+    if items[1] == c"long" {
         aff.af_flagtype = AFT_LONG;
-    } else if unsafe { cstr::eq_bytes(items[1], b"num") } {
+    } else if items[1] == c"num" {
         aff.af_flagtype = AFT_NUM;
-    } else if unsafe { cstr::eq_bytes(items[1], b"caplong") } {
+    } else if items[1] == c"caplong" {
         aff.af_flagtype = AFT_CAPLONG;
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
         smsg!(0, "Invalid value for FLAG in {fname} line {}: {arg2}", lnum);
     }
     // Anything already read used the old spelling, so it would be
@@ -738,8 +792,8 @@ unsafe fn handle_flag_type(
         || aff.af_suff.ht_used > 0
         || aff.af_pref.ht_used > 0;
     if used {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (fname, arg2) = unsafe { (c_str(fname), c_str(items[1])) };
+        // SAFETY: a message argument the caller holds as a NUL-terminated string.
+        let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
         smsg!(0, "FLAG after using flags in {fname} line {}: {arg2}", lnum);
     }
 }
@@ -878,19 +932,16 @@ mod tests {
 
     /// Split `text` the way [`spell_read_aff`] splits one line of a `.aff`
     /// file, and answer the items as bytes.
-    fn items_of(text: &str) -> Vec<Vec<u8>> {
-        let mut line: Vec<c_char> = text.bytes().map(|byte| byte as c_char).collect();
-        line.push(NUL as c_char);
-        let mut items = [core::ptr::null_mut(); MAXITEMCNT];
-        // SAFETY: a NUL-terminated buffer of this call's own.
-        let count = unsafe { split_items(line.as_mut_ptr(), &mut items) };
-        // SAFETY: the splitter terminated each of the items it counted.
-        (0..count)
-            .map(|at| unsafe { cstr::bytes_at(items[at]) }.to_vec())
+    fn items_of(text: &str) -> Vec<Vec<uint8_t>> {
+        let mut line: Vec<uint8_t> = text.bytes().collect();
+        line.push(NUL as uint8_t);
+        split_items(&mut line)
+            .iter()
+            .map(|item| item.to_bytes().to_vec())
             .collect()
     }
 
-    fn strs(items: &[Vec<u8>]) -> Vec<&str> {
+    fn strs(items: &[Vec<uint8_t>]) -> Vec<&str> {
         items
             .iter()
             .map(|item| core::str::from_utf8(item).expect("ASCII test input"))
@@ -968,22 +1019,23 @@ mod tests {
     /// trailing comment does not make the line a different rule.
     #[test]
     fn a_rule_is_its_keyword_and_a_count_of_items() {
-        let mut owned: Vec<Vec<c_char>> = ["SET", "UTF-8", "# and a comment"]
-            .iter()
-            .map(|item| {
-                let mut bytes: Vec<c_char> = item.bytes().map(|byte| byte as c_char).collect();
-                bytes.push(NUL as c_char);
-                bytes
-            })
-            .collect();
-        let items: Vec<*mut c_char> = owned.iter_mut().map(|item| item.as_mut_ptr()).collect();
-        // SAFETY: the buffers above are NUL-terminated and live.
-        unsafe {
-            assert!(is_aff_rule(&items[..2], c"SET", 2));
-            assert!(!is_aff_rule(&items[..2], c"SET", 3));
-            assert!(!is_aff_rule(&items[..2], c"FLAG", 2));
-            assert!(is_aff_rule(&items, c"SET", 2));
-            assert!(!is_aff_rule(&items[..1], c"SET", 2));
-        }
+        let items = [c"SET", c"UTF-8", c"# and a comment"];
+        assert!(is_aff_rule(&items[..2], c"SET", 2));
+        assert!(!is_aff_rule(&items[..2], c"SET", 3));
+        assert!(!is_aff_rule(&items[..2], c"FLAG", 2));
+        // A trailing comment does not make the line a different rule.
+        assert!(is_aff_rule(&items, c"SET", 2));
+        assert!(!is_aff_rule(&items[..1], c"SET", 2));
+    }
+
+    /// The reading loop measures the line itself, because `vim_fgets` fills
+    /// a fixed buffer and only the terminator says where the line ends.
+    #[test]
+    fn a_line_ends_at_its_terminator() {
+        let mut buffer = [0 as uint8_t; 8];
+        buffer[..3].copy_from_slice(b"ab\n");
+        assert_eq!(read_line(&buffer), b"ab\n");
+        assert_eq!(read_line(&[b'x'; 4]), b"xxxx");
+        assert_eq!(read_line(&[]), b"");
     }
 }
