@@ -205,9 +205,7 @@ impl TypVal {
             .or_else(|| self.as_func_name())
             .unwrap_or(::core::ptr::null_mut())
     }
-}
 
-impl TypVal {
     /// The union's pointer arm read **without asking the tag**: the address
     /// `printf("%p")` and `id()` answer.
     ///
