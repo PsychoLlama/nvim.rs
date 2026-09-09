@@ -206,6 +206,15 @@ impl TypVal {
             .unwrap_or(::core::ptr::null_mut())
     }
 
+    /// Whether this value is callable: `VAR_FUNC` or `VAR_PARTIAL`.
+    ///
+    /// Upstream's `tv_is_func`, which took the whole typval by value for
+    /// two tag comparisons.
+    #[inline(always)]
+    pub(crate) fn is_func(&self) -> bool {
+        self.v_type == VAR_FUNC || self.v_type == VAR_PARTIAL
+    }
+
     /// The union's pointer arm read **without asking the tag**: the address
     /// `printf("%p")` and `id()` answer.
     ///
@@ -220,15 +229,6 @@ impl TypVal {
     ///
     /// When the union becomes an enum this is a `match` over the pointer
     /// arms; the scalar arms have no address and answer their bits.
-    /// Whether this value is callable: `VAR_FUNC` or `VAR_PARTIAL`.
-    ///
-    /// Upstream's `tv_is_func`, which took the whole typval by value for
-    /// two tag comparisons.
-    #[inline(always)]
-    pub(crate) fn is_func(&self) -> bool {
-        self.v_type == VAR_FUNC || self.v_type == VAR_PARTIAL
-    }
-
     #[inline(always)]
     pub(crate) fn payload_address(&self) -> *const ::core::ffi::c_void {
         // SAFETY: every bit pattern is a valid value of every member, so the

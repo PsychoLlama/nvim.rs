@@ -185,10 +185,8 @@ impl Reading {
     ///
     /// # Safety
     ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call. `pat` must be an initialized
-    /// `KeyDict__shada_search_pat` whose pointer fields point at live data for
-    /// the call.
+    /// `entry` must be an initialized `ShadaEntry` carrying a search
+    /// pattern, whose pointer fields point at live data for the call.
     unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry) {
         let pat = *entry.data.search_pattern_mut();
         let is_sub = pat.is_substitute_pattern;
@@ -235,9 +233,8 @@ impl Reading {
     ///
     /// # Safety
     ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call. `sub_string` must be an initialized
-    /// `ShadaSubString` whose pointer fields point at live data for the call.
+    /// `entry` must be an initialized `ShadaEntry` carrying a replacement
+    /// string, whose pointer fields point at live data for the call.
     unsafe fn apply_sub_string(&self, mut entry: ShadaEntry) {
         let sub_string = *entry.data.sub_string_mut();
         if !self.force {
@@ -266,8 +263,7 @@ impl Reading {
     ///
     /// # Safety
     ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call. `item` must be an initialized `ShadaHistoryItem`
+    /// `entry` must be an initialized `ShadaEntry` carrying a history line,
     /// whose pointer fields point at live data for the call.
     unsafe fn apply_history(&mut self, mut entry: ShadaEntry) {
         let histtype = entry.data.history().histtype as c_uint;
@@ -283,9 +279,8 @@ impl Reading {
     ///
     /// # Safety
     ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call. `reg` must be an initialized `ShadaRegister` whose
-    /// pointer fields point at live data for the call.
+    /// `entry` must be an initialized `ShadaEntry` carrying a register,
+    /// whose pointer fields point at live data for the call.
     unsafe fn apply_register(&self, mut entry: ShadaEntry) {
         let reg = *entry.data.register_mut();
         if reg.type_0 != kMTCharWise && reg.type_0 != kMTLineWise && reg.type_0 != kMTBlockWise {
@@ -439,8 +434,7 @@ impl Reading {
 ///
 /// # Safety
 ///
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call. `var` must be an initialized `ShadaGlobalVar`
+/// `entry` must be an initialized `ShadaEntry` carrying a global variable,
 /// whose pointer fields point at live data for the call.
 unsafe fn apply_variable(mut entry: ShadaEntry) {
     let var = entry.data.variable_mut();
@@ -454,8 +448,7 @@ unsafe fn apply_variable(mut entry: ShadaEntry) {
 ///
 /// # Safety
 ///
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call. `list` must be an initialized `ShadaBufferList`
+/// `entry` must be an initialized `ShadaEntry` carrying a buffer list,
 /// whose pointer fields point at live data for the call.
 unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
     let list = entry.data.buffer_list();

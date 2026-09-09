@@ -312,7 +312,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     // SAFETY: `li` is an item of the frame's list.
                     let inner = unsafe { Li::new(li) }.list();
                     let first_item = unsafe { tv_list_first(inner) };
-                    let key_tv = &raw mut unsafe { Li::new(first_item) }.li_tv;
+                    let key_tv = unsafe { &raw mut (*first_item).li_tv };
                     Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
                 };
                 match pair_key {
