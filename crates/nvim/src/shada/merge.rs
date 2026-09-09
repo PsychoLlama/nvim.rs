@@ -148,11 +148,12 @@ pub(crate) unsafe fn hmll_insert(
         target
     };
 
-    unsafe { (*target).data = data };
     // SAFETY: the entry's history string is NUL-terminated. Only a key that
     // was not there takes the new slot, which is what `map_put_ref` plus the
-    // `new_item` guard did.
+    // `new_item` guard did.  Read before the entry moves into the slot; the
+    // string it names belongs to the entry either way.
     let key = unsafe { shada_key(data.data.history().string) };
+    unsafe { (*target).data = data };
     unsafe { &mut (*hmll).contained_entries }
         .entry(key.into())
         .or_insert(target);
@@ -220,14 +221,32 @@ pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
     unsafe { (*hms_p).pending = Box::into_raw(pending).cast::<ShadaEntry>() };
 }
 
-/// Nvim's next own history entry, if one is still waiting to be merged.
+/// When Nvim's next own history entry was recorded, if one is still
+/// waiting to be merged.
 ///
 /// # Safety
 ///
 /// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
-unsafe fn next_pending(hms_p: *mut HistoryMergerState) -> Option<ShadaEntry> {
-    (unsafe { (*hms_p).pending_pos } < unsafe { (*hms_p).pending_len })
-        .then(|| unsafe { *(*hms_p).pending.add((*hms_p).pending_pos) })
+unsafe fn pending_timestamp(hms_p: *mut HistoryMergerState) -> Option<Timestamp> {
+    let pos = unsafe { (*hms_p).pending_pos };
+    (pos < unsafe { (*hms_p).pending_len })
+        .then(|| unsafe { (*(*hms_p).pending.add(pos)).timestamp })
+}
+
+/// Take Nvim's next own history entry out of the snapshot, if one is still
+/// waiting to be merged.  The slot is left missing: the entry is the
+/// caller's now, and dropping the snapshot must not touch it again.
+///
+/// # Safety
+///
+/// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
+unsafe fn take_pending(hms_p: *mut HistoryMergerState) -> Option<ShadaEntry> {
+    let pos = unsafe { (*hms_p).pending_pos };
+    (pos < unsafe { (*hms_p).pending_len }).then(|| {
+        unsafe { (*hms_p).pending_pos = pos + 1 };
+        let slot = unsafe { &mut *(*hms_p).pending.add(pos) };
+        core::mem::replace(slot, ShadaEntry::MISSING)
+    })
 }
 
 /// Insert one history entry, keeping the ring ordered by timestamp.
@@ -247,11 +266,11 @@ unsafe fn next_pending(hms_p: *mut HistoryMergerState) -> Option<ShadaEntry> {
 /// live data for the call.
 pub(crate) unsafe fn hms_insert(hms_p: *mut HistoryMergerState, entry: ShadaEntry, do_iter: bool) {
     if do_iter {
-        while let Some(next) = unsafe { next_pending(hms_p) } {
-            if next.timestamp >= entry.timestamp {
+        while let Some(timestamp) = unsafe { pending_timestamp(hms_p) } {
+            if timestamp >= entry.timestamp {
                 break;
             }
-            unsafe { (*hms_p).pending_pos += 1 };
+            let next = unsafe { take_pending(hms_p) }.expect("the entry just looked at");
             unsafe { hms_insert(hms_p, next, false) };
         }
     }
@@ -309,8 +328,7 @@ pub(crate) unsafe fn hms_init(
 ///
 /// `hms_p` must point at a live `HistoryMergerState`, unaliased for the call.
 pub(crate) unsafe fn hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
-    while let Some(next) = unsafe { next_pending(hms_p) } {
-        unsafe { (*hms_p).pending_pos += 1 };
+    while let Some(next) = unsafe { take_pending(hms_p) } {
         unsafe { hms_insert(hms_p, next, false) };
     }
 }
@@ -344,9 +362,8 @@ pub(crate) unsafe fn hms_dealloc(hms_p: *mut HistoryMergerState) {
     // Free whatever part of the snapshot was never merged; it is only
     // owned on the reading path, and `shada_free_shada_entry` checks
     // `can_free_entry` itself.
-    while let Some(mut entry) = unsafe { next_pending(hms_p) } {
+    while let Some(mut entry) = unsafe { take_pending(hms_p) } {
         unsafe { shada_free_shada_entry(&raw mut entry) };
-        unsafe { (*hms_p).pending_pos += 1 };
     }
     if !unsafe { (*hms_p).pending.is_null() } {
         drop(unsafe {
@@ -396,9 +413,9 @@ pub(crate) unsafe extern "C" fn compare_file_marks(a: *const c_void, b: *const c
 ///
 /// The items are *moved* within the list, not duplicated: a mark owns its
 /// ShaDa extra data, and the slot a shift vacates is written over by the
-/// caller. [`shift_within`] is `slice::copy_within` for a type that is only
-/// `Clone` for that reason.
-pub(crate) fn marklist_insert<T: Clone>(list: &mut [T], len: c_int, i: c_int) -> c_int {
+/// caller. [`shift_within`] is `slice::copy_within` for a type that owns
+/// what it holds, and so is neither `Copy` nor `Clone`.
+pub(crate) fn marklist_insert<T>(list: &mut [T], len: c_int, i: c_int) -> c_int {
     let len = len as usize;
     match i.cmp(&0) {
         Ordering::Less => -1,
@@ -427,17 +444,19 @@ pub(crate) fn marklist_insert<T: Clone>(list: &mut [T], len: c_int, i: c_int) ->
     }
 }
 
-/// `slice::copy_within` without the `Copy` bound: the elements are shallow-
-/// cloned in whichever direction keeps the source intact until it is read,
-/// which is what a `memmove` of the same range does.
-fn shift_within<T: Clone>(list: &mut [T], src: core::ops::Range<usize>, dest: usize) {
+/// `slice::copy_within` without the `Copy` bound: the elements are swapped
+/// in whichever direction keeps the source intact until it is read, which
+/// is what a `memmove` of the same range does.  Swapping rather than
+/// overwriting means every element is still somewhere afterwards -- what is
+/// left in the hole is whatever the caller is about to write over.
+pub(crate) fn shift_within<T>(list: &mut [T], src: core::ops::Range<usize>, dest: usize) {
     if dest <= src.start {
         for (n, at) in src.enumerate() {
-            list[dest + n] = list[at].clone();
+            list.swap(dest + n, at);
         }
     } else {
         for (n, at) in src.enumerate().rev() {
-            list[dest + n] = list[at].clone();
+            list.swap(dest + n, at);
         }
     }
 }
@@ -459,9 +478,9 @@ unsafe fn insert_mark_list(
     // Walk back to the first entry no newer than this one.
     let mut i = *size as c_int;
     while i > 0 {
-        let existing = list[i as usize - 1];
+        let existing = &list[i as usize - 1];
         if existing.timestamp <= entry.timestamp {
-            if same(&existing) {
+            if same(existing) {
                 i = -1;
             }
             break;
@@ -538,7 +557,7 @@ pub(crate) unsafe fn shada_read_when_writing(
                 unreachable!("shada: entry type {} is never merged", entry.kind())
             }
             ShadaEntryData::Unknown(_) => {
-                ret = unsafe { shada_pack_entry(packer, entry, 0) };
+                ret = unsafe { shada_pack_entry(packer, &entry, 0) };
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
             ShadaEntryData::SearchPattern(pattern) => {
@@ -558,18 +577,18 @@ pub(crate) unsafe fn shada_read_when_writing(
             ShadaEntryData::Register(reg) => {
                 let idx = op_reg_index(reg.name as c_int);
                 if idx < 0 {
-                    ret = unsafe { shada_pack_entry(packer, entry, 0) };
+                    ret = unsafe { shada_pack_entry(packer, &entry, 0) };
                     unsafe { shada_free_shada_entry(&raw mut entry) };
                 } else {
                     unsafe { keep_newer(&raw mut (*wms).registers[idx as usize], entry) };
                 }
             }
-            ShadaEntryData::Variable(var) => {
+            ShadaEntryData::Variable(_) => {
                 // A variable this session has already written wins.
                 // SAFETY: a variable's name is NUL-terminated.
-                let name = unsafe { shada_key(var.name) };
+                let name = unsafe { shada_key(entry.data.variable_mut().name) };
                 if !unsafe { &(*wms).dumped_variables }.contains(name) {
-                    ret = unsafe { shada_pack_entry(packer, entry, 0) };
+                    ret = unsafe { shada_pack_entry(packer, &entry, 0) };
                 }
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
@@ -613,7 +632,7 @@ unsafe fn merge_history(
 ) -> ShaDaWriteResult {
     let histtype = item.histtype as c_uint;
     if histtype >= HIST_COUNT {
-        let ret = unsafe { shada_pack_entry(packer, entry, 0) };
+        let ret = unsafe { shada_pack_entry(packer, &entry, 0) };
         unsafe { shada_free_shada_entry(&raw mut entry) };
         return ret;
     }
@@ -653,7 +672,7 @@ unsafe fn merge_global_mark(
 
     let idx = mark_global_index(mark.name);
     if idx < 0 {
-        let ret = unsafe { shada_pack_entry(packer, entry, 0) };
+        let ret = unsafe { shada_pack_entry(packer, &entry, 0) };
         unsafe { shada_free_shada_entry(&raw mut entry) };
         return ret;
     }
@@ -683,7 +702,7 @@ unsafe fn merge_global_mark(
 unsafe fn merge_numbered_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
     let marks = unsafe { &(*wms).numbered_marks };
     for i in (1..=marks.len()).rev() {
-        let existing = marks[i - 1];
+        let existing = &marks[i - 1];
         if !matches!(existing.data, ShadaEntryData::GlobalMark(_)) {
             continue;
         }

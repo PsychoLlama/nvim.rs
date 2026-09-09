@@ -225,7 +225,7 @@ pub(crate) unsafe fn replace_numbered_mark(
             mark.name = (b'0' + i as u8 + 1) as c_char;
         }
     }
-    marks.copy_within(idx..last, idx + 1);
+    shift_within(marks, idx..last, idx + 1);
     marks[idx] = entry;
     marks[idx].data.filemark_mut().name = (b'0' + idx as u8) as c_char;
 }
@@ -377,7 +377,7 @@ pub fn shada_encode_regs() -> String_0 {
     for i in 0..unsafe { (*wms).registers.len() } {
         if !unsafe { (*wms).registers[i].data.is_missing() } {
             let written =
-                unsafe { shada_pack_pfreed_entry(&raw mut packer, (*wms).registers[i], 0) };
+                unsafe { shada_pack_pfreed_entry(&raw mut packer, &mut (*wms).registers[i], 0) };
             assert!(written != kSDWriteFailed, "shada: cannot pack a register");
         }
     }
@@ -392,8 +392,8 @@ pub fn shada_encode_jumps() -> String_0 {
     let mut jumps = [ShadaEntry::MISSING; JUMPLISTSIZE as usize];
     let jumps_size = unsafe { shada_init_jumps(jumps.as_mut_ptr(), &removable_bufs) };
     let mut packer = packer_string_buffer();
-    for jump in &jumps[..jumps_size] {
-        let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, *jump, 0) };
+    for jump in &mut jumps[..jumps_size] {
+        let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, jump, 0) };
         assert!(written != kSDWriteFailed, "shada: cannot pack a jump");
     }
     packer_take_string(&packer)
@@ -405,7 +405,7 @@ pub fn shada_encode_buflist() -> String_0 {
     find_removable_bufs(&mut removable_bufs);
     let buflist_entry = shada_get_buflist(&removable_bufs);
     let mut packer = packer_string_buffer();
-    let written = unsafe { shada_pack_entry(&raw mut packer, buflist_entry, 0) };
+    let written = unsafe { shada_pack_entry(&raw mut packer, &buflist_entry, 0) };
     assert!(
         written != kSDWriteFailed,
         "shada: cannot pack the buffer list"
@@ -420,7 +420,7 @@ pub fn shada_encode_gvars() -> String_0 {
     let mut var_iter: Option<usize> = None;
     let cur_timestamp = os_time();
     loop {
-        let mut vartv: TypVal = unsafe { core::mem::zeroed() };
+        let mut vartv = TV_INITIAL_VALUE;
         let mut name = core::ptr::null::<c_char>();
         var_iter = unsafe {
             var_shada_iter(
@@ -435,9 +435,11 @@ pub fn shada_encode_gvars() -> String_0 {
         }
         // A function reference cannot be written to a file.
         if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
-            let mut tgttv: TypVal = unsafe { core::mem::zeroed() };
+            // The entry owns the copy it is built around; the value the
+            // iterator handed over stays this function's to release.
+            let mut tgttv = TV_INITIAL_VALUE;
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
-            let entry = ShadaEntry {
+            let mut entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: cur_timestamp,
                 data: ShadaEntryData::Variable(ShadaGlobalVar {
@@ -446,9 +448,9 @@ pub fn shada_encode_gvars() -> String_0 {
                 }),
                 additional_data: core::ptr::null_mut(),
             };
-            let written = unsafe { shada_pack_entry(&raw mut packer, entry, 0) };
+            let written = unsafe { shada_pack_entry(&raw mut packer, &entry, 0) };
             assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
-            unsafe { tv_clear(&raw mut tgttv) };
+            unsafe { tv_clear(&raw mut entry.data.variable_mut().value) };
         }
         unsafe { tv_clear(&raw mut vartv) };
         if var_iter.is_none() {

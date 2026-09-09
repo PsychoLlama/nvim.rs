@@ -19,7 +19,7 @@ use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
-use crate::types::{VAR_UNKNOWN, Vv, kListLenUnknown};
+use crate::types::{Vv, kListLenUnknown};
 use crate::winlayer::{Buf, BufId, Win};
 
 /// What a mark restored from a file starts its view at: nothing is known
@@ -144,7 +144,9 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
             kSDReadStatusMalformed => continue,
             _ => break,
         }
-        unsafe { state.apply(entry) };
+        // The entry moves to `apply`, which owns it from here; the next
+        // pass refills the slot from the file.
+        unsafe { state.apply(core::mem::replace(&mut entry, ShadaEntry::MISSING)) };
     }
 
     state.finish(srni_flags);
@@ -158,24 +160,23 @@ impl Reading {
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call.
     unsafe fn apply(&mut self, mut entry: ShadaEntry) {
-        match entry.data {
-            ShadaEntryData::Missing => unreachable!("shada: read an entry with no type"),
+        // On the kind rather than the payload: every arm below hands the
+        // whole entry on, and reads its payload out of it there.
+        match entry.kind() {
+            kSDItemMissing => unreachable!("shada: read an entry with no type"),
             // Only reached with `kSDReadUnknown`, which a plain read
             // never asks for.
-            ShadaEntryData::Unknown(_) => {}
-            ShadaEntryData::Header(_) => unsafe { shada_free_shada_entry(&raw mut entry) },
-            ShadaEntryData::SearchPattern(pat) => unsafe { self.apply_search_pattern(entry, pat) },
-            ShadaEntryData::SubString(sub) => unsafe { self.apply_sub_string(entry, sub) },
-            ShadaEntryData::HistoryEntry(item) => unsafe { self.apply_history(entry, item) },
-            ShadaEntryData::Register(reg) => unsafe { self.apply_register(entry, reg) },
-            ShadaEntryData::Variable(var) => unsafe { apply_variable(entry, var) },
-            ShadaEntryData::GlobalMark(_) | ShadaEntryData::Jump(_) => unsafe {
-                self.apply_file_mark(entry)
-            },
-            ShadaEntryData::BufferList(list) => unsafe { apply_buffer_list(entry, list) },
-            ShadaEntryData::LocalMark(_) | ShadaEntryData::Change(_) => unsafe {
-                self.apply_buffer_mark(entry)
-            },
+            kSDItemUnknown => {}
+            kSDItemHeader => unsafe { shada_free_shada_entry(&raw mut entry) },
+            kSDItemSearchPattern => unsafe { self.apply_search_pattern(entry) },
+            kSDItemSubString => unsafe { self.apply_sub_string(entry) },
+            kSDItemHistoryEntry => unsafe { self.apply_history(entry) },
+            kSDItemRegister => unsafe { self.apply_register(entry) },
+            kSDItemVariable => unsafe { apply_variable(entry) },
+            kSDItemGlobalMark | kSDItemJump => unsafe { self.apply_file_mark(entry) },
+            kSDItemBufferList => unsafe { apply_buffer_list(entry) },
+            kSDItemLocalMark | kSDItemChange => unsafe { self.apply_buffer_mark(entry) },
+            other => unreachable!("shada: entry type {other} has no reader"),
         }
     }
 
@@ -188,7 +189,8 @@ impl Reading {
     /// live data for the call. `pat` must be an initialized
     /// `KeyDict__shada_search_pat` whose pointer fields point at live data for
     /// the call.
-    unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry, pat: KeyDict__shada_search_pat) {
+    unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry) {
+        let pat = *entry.data.search_pattern_mut();
         let is_sub = pat.is_substitute_pattern;
         if !self.force {
             let mut current: SearchPattern = unsafe { core::mem::zeroed() };
@@ -236,7 +238,8 @@ impl Reading {
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call. `sub_string` must be an initialized
     /// `ShadaSubString` whose pointer fields point at live data for the call.
-    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry, sub_string: ShadaSubString) {
+    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry) {
+        let sub_string = *entry.data.sub_string_mut();
         if !self.force {
             let mut current: SubReplacementString = unsafe { core::mem::zeroed() };
             unsafe { sub_get_replacement(&raw mut current) };
@@ -266,8 +269,8 @@ impl Reading {
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call. `item` must be an initialized `ShadaHistoryItem`
     /// whose pointer fields point at live data for the call.
-    unsafe fn apply_history(&mut self, mut entry: ShadaEntry, item: ShadaHistoryItem) {
-        let histtype = item.histtype as c_uint;
+    unsafe fn apply_history(&mut self, mut entry: ShadaEntry) {
+        let histtype = entry.data.history().histtype as c_uint;
         if histtype >= HIST_COUNT {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -283,7 +286,8 @@ impl Reading {
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call. `reg` must be an initialized `ShadaRegister` whose
     /// pointer fields point at live data for the call.
-    unsafe fn apply_register(&self, mut entry: ShadaEntry, reg: ShadaRegister) {
+    unsafe fn apply_register(&self, mut entry: ShadaEntry) {
+        let reg = *entry.data.register_mut();
         if reg.type_0 != kMTCharWise && reg.type_0 != kMTLineWise && reg.type_0 != kMTBlockWise {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -438,9 +442,10 @@ impl Reading {
 /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
 /// live data for the call. `var` must be an initialized `ShadaGlobalVar`
 /// whose pointer fields point at live data for the call.
-unsafe fn apply_variable(mut entry: ShadaEntry, var: ShadaGlobalVar) {
-    unsafe { var_set_global(var.name, var.value) };
-    entry.data.variable_mut().value.v_type = VAR_UNKNOWN;
+unsafe fn apply_variable(mut entry: ShadaEntry) {
+    let var = entry.data.variable_mut();
+    // The value moves into the variable; the name stays the entry's.
+    unsafe { var_set_global(var.name, var.value.take()) };
     unsafe { shada_free_shada_entry(&raw mut entry) };
 }
 
@@ -452,7 +457,8 @@ unsafe fn apply_variable(mut entry: ShadaEntry, var: ShadaGlobalVar) {
 /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
 /// live data for the call. `list` must be an initialized `ShadaBufferList`
 /// whose pointer fields point at live data for the call.
-unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
+unsafe fn apply_buffer_list(mut entry: ShadaEntry) {
+    let list = entry.data.buffer_list();
     for i in 0..list.size {
         let item = unsafe { list.buffers.add(i) };
         let sfname = unsafe { path_try_shorten_fname((*item).fname) };

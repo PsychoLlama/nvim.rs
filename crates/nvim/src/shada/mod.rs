@@ -143,7 +143,6 @@ pub struct WriteMergerState {
     /// [`Writing::file_marks_for`]: write::Writing::file_marks_for
     pub(crate) file_marks: SlotTable<Box<[u8]>, *mut FileMarks>,
 }
-#[derive(Copy, Clone)]
 pub struct ShadaEntry {
     pub can_free_entry: bool,
     pub timestamp: Timestamp,
@@ -172,7 +171,6 @@ impl ShadaEntry {
 /// Upstream this is an untagged union beside a separate `type` field; the
 /// two are never written apart, so they are one value here and the reads
 /// that used to have to trust the tag are `match` arms.
-#[derive(Copy, Clone)]
 pub enum ShadaEntryData {
     /// No entry at all. An empty slot in a merger's arrays, and what a
     /// malformed entry is reduced to.
@@ -354,7 +352,6 @@ pub struct ShadaUnknownItem {
     pub contents: *mut ::core::ffi::c_char,
     pub size: size_t,
 }
-#[derive(Copy, Clone)]
 pub struct ShadaGlobalVar {
     pub name: *mut ::core::ffi::c_char,
     pub value: TypVal,

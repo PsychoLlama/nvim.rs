@@ -243,14 +243,14 @@ impl Writing {
             data: ShadaEntryData::Header(header.dict()),
             additional_data: core::ptr::null_mut(),
         };
-        unsafe { self.pack(entry, 0) }
+        unsafe { self.pack(&entry, 0) }
     }
 
     /// The list of files this Nvim has buffers for, so that a later start
     /// can reopen them.
     fn write_buflist(&mut self) -> ShaDaWriteResult {
         let entry = shada_get_buflist(&self.removable_bufs);
-        let ret = unsafe { self.pack(entry, 0) };
+        let ret = unsafe { self.pack(&entry, 0) };
         unsafe { xfree(entry.data.buffer_list().buffers.cast()) };
         ret
     }
@@ -263,7 +263,7 @@ impl Writing {
         let mut var_iter: Option<usize> = None;
         let timestamp = os_time();
         loop {
-            let mut vartv: TypVal = unsafe { core::mem::zeroed() };
+            let mut vartv = TV_INITIAL_VALUE;
             let mut name: *const c_char = core::ptr::null();
             var_iter = unsafe {
                 var_shada_iter(var_iter, &raw mut name, &raw mut vartv, VAR_FLAVOUR_SHADA)
@@ -280,11 +280,11 @@ impl Writing {
                 continue;
             }
 
-            // The entry takes a copy, which the pack frees; the value
-            // the iterator handed over is this function's to release.
-            let mut tgttv: TypVal = unsafe { core::mem::zeroed() };
+            // The entry owns the copy it is built around; the value the
+            // iterator handed over is this function's to release.
+            let mut tgttv = TV_INITIAL_VALUE;
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
-            let entry = ShadaEntry {
+            let mut entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp,
                 data: ShadaEntryData::Variable(ShadaGlobalVar {
@@ -293,9 +293,9 @@ impl Writing {
                 }),
                 additional_data: core::ptr::null_mut(),
             };
-            let ret = unsafe { self.pack(entry, self.limits.max_kbyte) };
+            let ret = unsafe { self.pack(&entry, self.limits.max_kbyte) };
             unsafe { tv_clear(&raw mut vartv) };
-            unsafe { tv_clear(&raw mut tgttv) };
+            unsafe { tv_clear(&raw mut entry.data.variable_mut().value) };
             if ret == kSDWriteFailed {
                 return kSDWriteFailed;
             }
@@ -531,19 +531,20 @@ impl Writing {
     /// wants it.
     fn pack_everything(&mut self) -> ShaDaWriteResult {
         let wms = self.wms;
-        if unsafe { self.pack_sparse(&raw const (*wms).global_marks) } == kSDWriteFailed
-            || unsafe { self.pack_sparse(&raw const (*wms).numbered_marks) } == kSDWriteFailed
-            || unsafe { self.pack_sparse(&raw const (*wms).registers) } == kSDWriteFailed
-            || unsafe { self.pack_dense((&raw const (*wms).jumps).cast(), (*wms).jumps_size) }
+        if unsafe { self.pack_sparse(&raw mut (*wms).global_marks) } == kSDWriteFailed
+            || unsafe { self.pack_sparse(&raw mut (*wms).numbered_marks) } == kSDWriteFailed
+            || unsafe { self.pack_sparse(&raw mut (*wms).registers) } == kSDWriteFailed
+            || unsafe { self.pack_dense((&raw mut (*wms).jumps).cast(), (*wms).jumps_size) }
                 == kSDWriteFailed
         {
             return kSDWriteFailed;
         }
         for entry in [
-            unsafe { (*wms).search_pattern },
-            unsafe { (*wms).sub_search_pattern },
-            unsafe { (*wms).replacement },
+            unsafe { &raw mut (*wms).search_pattern },
+            unsafe { &raw mut (*wms).sub_search_pattern },
+            unsafe { &raw mut (*wms).replacement },
         ] {
+            let entry = unsafe { &mut *entry };
             if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
                 return kSDWriteFailed;
             }
@@ -573,9 +574,9 @@ impl Writing {
 
         let to_dump = all.len().min(self.limits.num_marked_files);
         for &file in &all[..to_dump] {
-            if unsafe { self.pack_sparse(&raw const (*file).marks) } == kSDWriteFailed
+            if unsafe { self.pack_sparse(&raw mut (*file).marks) } == kSDWriteFailed
                 || unsafe {
-                    self.pack_dense((&raw const (*file).changes).cast(), (*file).changes_size)
+                    self.pack_dense((&raw mut (*file).changes).cast(), (*file).changes_size)
                 } == kSDWriteFailed
             {
                 return kSDWriteFailed;
@@ -587,7 +588,7 @@ impl Writing {
             for i in 0..unsafe { (*file).additional_marks_size } {
                 let entry = unsafe { (*file).additional_marks.add(i) };
                 if ret != kSDWriteFailed {
-                    ret = unsafe { shada_pack_entry(&raw mut self.packer, *entry, 0) };
+                    ret = unsafe { shada_pack_entry(&raw mut self.packer, &*entry, 0) };
                 }
                 unsafe { shada_free_shada_entry(entry) };
             }
@@ -608,7 +609,7 @@ impl Writing {
             unsafe { hms_insert_whole_neovim_history(&raw mut (*self.wms).hms[i]) };
             let mut cur = unsafe { (*self.wms).hms[i].hmll.first };
             while !cur.is_null() {
-                if unsafe { self.pack_freeing((*cur).data) } == kSDWriteFailed {
+                if unsafe { self.pack_freeing(&mut (*cur).data) } == kSDWriteFailed {
                     return kSDWriteFailed;
                 }
                 cur = unsafe { (*cur).next };
@@ -629,11 +630,11 @@ impl Writing {
     /// every one that is not missing is written and freed.
     unsafe fn pack_sparse<const N: usize>(
         &mut self,
-        entries: *const [ShadaEntry; N],
+        entries: *mut [ShadaEntry; N],
     ) -> ShaDaWriteResult {
         let entries = entries.cast::<ShadaEntry>();
         for i in 0..N {
-            let entry = unsafe { *entries.add(i) };
+            let entry = unsafe { &mut *entries.add(i) };
             if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
                 return kSDWriteFailed;
             }
@@ -648,9 +649,9 @@ impl Writing {
     ///
     /// `entries` must point at `len` consecutive values, each initialized ShaDa
     /// entry.
-    unsafe fn pack_dense(&mut self, entries: *const ShadaEntry, len: size_t) -> ShaDaWriteResult {
+    unsafe fn pack_dense(&mut self, entries: *mut ShadaEntry, len: size_t) -> ShaDaWriteResult {
         for i in 0..len {
-            if unsafe { self.pack_freeing(*entries.add(i)) } == kSDWriteFailed {
+            if unsafe { self.pack_freeing(&mut *entries.add(i)) } == kSDWriteFailed {
                 return kSDWriteFailed;
             }
         }
@@ -663,7 +664,7 @@ impl Writing {
     ///
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call.
-    unsafe fn pack_freeing(&mut self, entry: ShadaEntry) -> ShaDaWriteResult {
+    unsafe fn pack_freeing(&mut self, entry: &mut ShadaEntry) -> ShaDaWriteResult {
         unsafe { shada_pack_pfreed_entry(&raw mut self.packer, entry, self.limits.max_kbyte) }
     }
 
@@ -673,7 +674,7 @@ impl Writing {
     ///
     /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
     /// live data for the call.
-    unsafe fn pack(&mut self, entry: ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
+    unsafe fn pack(&mut self, entry: &ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
         unsafe { shada_pack_entry(&raw mut self.packer, entry, max_kbyte) }
     }
 

@@ -122,11 +122,11 @@ fn written<T: PartialEq>(value: T, default: T) -> uint32_t {
 /// live data for the call.
 pub(crate) unsafe fn shada_pack_pfreed_entry(
     packer: *mut PackerBuffer,
-    mut entry: ShadaEntry,
+    entry: &mut ShadaEntry,
     max_kbyte: size_t,
 ) -> ShaDaWriteResult {
     let ret = unsafe { shada_pack_entry(packer, entry, max_kbyte) };
-    unsafe { shada_free_shada_entry(&raw mut entry) };
+    unsafe { shada_free_shada_entry(entry) };
     ret
 }
 
@@ -143,48 +143,48 @@ pub(crate) unsafe fn shada_pack_pfreed_entry(
 /// live data for the call.
 pub(crate) unsafe fn shada_pack_entry(
     packer: *mut PackerBuffer,
-    entry: ShadaEntry,
+    entry: &ShadaEntry,
     max_kbyte: size_t,
 ) -> ShaDaWriteResult {
     let mut payload = Payload::new();
     let sbuf = &mut payload.buf;
 
-    let packed = match entry.data {
+    let packed = match &entry.data {
         ShadaEntryData::Missing => unreachable!("shada: a missing entry is never written"),
         ShadaEntryData::Unknown(item) => {
             unsafe { mpack_raw(item.contents, item.size, sbuf) };
             Ok(())
         }
         ShadaEntryData::Header(header) => {
-            unsafe { pack_header(header, sbuf) };
+            unsafe { pack_header(*header, sbuf) };
             Ok(())
         }
         ShadaEntryData::HistoryEntry(history) => {
-            unsafe { pack_history(&entry, history, sbuf) };
+            unsafe { pack_history(entry, *history, sbuf) };
             Ok(())
         }
-        ShadaEntryData::Variable(var) => unsafe { pack_variable(&entry, var, sbuf) },
+        ShadaEntryData::Variable(var) => unsafe { pack_variable(entry, var, sbuf) },
         ShadaEntryData::SubString(sub) => {
-            unsafe { pack_sub_string(&entry, sub, sbuf) };
+            unsafe { pack_sub_string(entry, *sub, sbuf) };
             Ok(())
         }
         ShadaEntryData::SearchPattern(pattern) => {
-            unsafe { pack_search_pattern(&entry, pattern, &mut payload) };
+            unsafe { pack_search_pattern(entry, *pattern, &mut payload) };
             Ok(())
         }
         ShadaEntryData::GlobalMark(mark)
         | ShadaEntryData::LocalMark(mark)
         | ShadaEntryData::Jump(mark)
         | ShadaEntryData::Change(mark) => {
-            unsafe { pack_mark(&entry, mark, &mut payload) };
+            unsafe { pack_mark(entry, *mark, &mut payload) };
             Ok(())
         }
         ShadaEntryData::Register(reg) => {
-            unsafe { pack_register(&entry, reg, &mut payload) };
+            unsafe { pack_register(entry, *reg, &mut payload) };
             Ok(())
         }
         ShadaEntryData::BufferList(list) => {
-            unsafe { pack_buffer_list(list, &mut payload) };
+            unsafe { pack_buffer_list(*list, &mut payload) };
             Ok(())
         }
     };
@@ -201,7 +201,7 @@ pub(crate) unsafe fn shada_pack_entry(
     // An unknown entry keeps the type it arrived with.
     mpack_uint64(
         unsafe { (*packer).cursor_mut() },
-        match entry.data {
+        match &entry.data {
             ShadaEntryData::Unknown(item) => item.type_0,
             data => data.kind() as uint64_t,
         },
@@ -269,7 +269,7 @@ unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut
 /// point at live data for the call.
 unsafe fn pack_variable(
     entry: &ShadaEntry,
-    mut global_var: ShadaGlobalVar,
+    global_var: &ShadaGlobalVar,
     sbuf: &mut PackerBuffer,
 ) -> Result<(), ShaDaWriteResult> {
     let is_blob = global_var.value.v_type == VAR_BLOB;
@@ -291,7 +291,7 @@ unsafe fn pack_variable(
     if unsafe {
         encode_vim_to_msgpack(
             sbuf,
-            &raw mut global_var.value,
+            (&raw const global_var.value).cast_mut(),
             vardesc.as_ptr().cast::<c_char>(),
         )
     } == FAIL
