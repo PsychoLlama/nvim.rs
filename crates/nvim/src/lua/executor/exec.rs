@@ -211,7 +211,7 @@ unsafe fn push_typval_args(
         };
         for i in 0..argcount {
             let arg = args.offset(i as isize);
-            if (*arg).v_type == VAR_UNKNOWN {
+            if (*arg).v_type() == VAR_UNKNOWN {
                 lua_pushnil(lstate);
             } else {
                 nlua_push_typval(lstate, arg, flags);

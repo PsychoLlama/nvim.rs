@@ -126,7 +126,7 @@ unsafe fn get_var_from(
     }
 
     // SAFETY: the caller's obligation -- a live default value.
-    if !done && unsafe { (*deftv).v_type } != VAR_UNKNOWN {
+    if !done && unsafe { (*deftv).v_type() } != VAR_UNKNOWN {
         unsafe { tv_copy(deftv, result) };
     }
 }
@@ -194,7 +194,7 @@ pub(crate) unsafe fn tv_to_optval(
         // A String answers 0 both when it *is* zero and when it is not a
         // number at all, so a zero from a String has to be re-read: it
         // is only honest if the string is all '0's and nothing else.
-        if !err && tvh.v_type == VAR_STRING && n == 0 {
+        if !err && tvh.v_type() == VAR_STRING && n == 0 {
             // SAFETY: the type tag says the union holds the string arm.
             let s = tvh.string_or_null();
             let mut idx = 0;
@@ -220,7 +220,7 @@ pub(crate) unsafe fn tv_to_optval(
         }
     } else if option_has_str {
         // Never set a string option to `v:true` or `v:null`.
-        if tvh.v_type != VAR_BOOL && tvh.v_type != VAR_SPECIAL {
+        if tvh.v_type() != VAR_BOOL && tvh.v_type() != VAR_SPECIAL {
             let strval = unsafe { tv_get_string_buf_chk(tv, nbuf.as_mut_ptr()) };
             err = strval.is_null();
             OptVal::String(unsafe { cstr_to_string(strval) })
@@ -245,7 +245,7 @@ pub(crate) unsafe fn tv_to_optval(
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
 /// Number, which is what the old spelling of the accessors answered.
 pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
-    let mut rettv = TypVal::special(kSpecialVarNull);
+    let mut rettv = TypVal::Special(kSpecialVarNull);
     match value {
         OptVal::Boolean(word) => {
             if numbool {

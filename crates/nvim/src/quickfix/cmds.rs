@@ -300,7 +300,7 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
 
     // A non-string reads as a NULL string, so the tag test is the accessor's.
     let usable =
-        !unsafe { (*tv).string_or_null() }.is_null() || unsafe { (*tv).v_type } == VAR_LIST;
+        !unsafe { (*tv).string_or_null() }.is_null() || unsafe { (*tv).v_type() } == VAR_LIST;
     if !usable {
         qf_emsg(c"E777: String or List expected".as_ptr());
         return Err(Failed);

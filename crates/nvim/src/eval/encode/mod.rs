@@ -274,7 +274,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `idx` is a slot
                 // of its hash table, or one past the last.
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                let mut key_tv = TypVal::string(hi.hi_key);
+                let mut key_tv = TypVal::String(hi.hi_key);
                 let key = unsafe { encode_tv2string(&raw mut key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
@@ -378,7 +378,7 @@ pub unsafe fn encode_vim_list_to_buf(
     // SAFETY: the caller's promise about `list`.
     for li in unsafe { items(list) } {
         // SAFETY: `li` is one of the list's items.
-        if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+        if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
             return false;
         }
         // One separator per item, so the total is one too many.
@@ -471,7 +471,7 @@ pub unsafe fn encode_read_from_list(
             out[p] = b'\n';
             p += 1;
             // SAFETY: as above.
-            if unsafe { (*state.li).li_tv.v_type } != VAR_STRING {
+            if unsafe { (*state.li).li_tv.v_type() } != VAR_STRING {
                 unsafe { *read_bytes = p };
                 return Err(Failed);
             }
@@ -743,10 +743,10 @@ pub(crate) unsafe fn convert_to_json_string(
 pub unsafe fn encode_check_json_key(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise about `tv`.
     let tv = unsafe { &*tv };
-    if tv.v_type == VAR_STRING {
+    if tv.v_type() == VAR_STRING {
         return true;
     }
-    if tv.v_type != VAR_DICT {
+    if tv.v_type() != VAR_DICT {
         return false;
     }
     // SAFETY: a `VAR_DICT` holds a live dictionary.
@@ -762,7 +762,7 @@ pub unsafe fn encode_check_json_key(tv: *const TypVal) -> bool {
     }
     // SAFETY: a non-NULL find answers a live item of `spdict`.
     let type_tv = unsafe { &(*type_di).di_tv };
-    if type_tv.v_type != VAR_LIST
+    if type_tv.v_type() != VAR_LIST
         || !core::ptr::eq(
             type_tv.list_or_null(),
             eval_msgpack_type_lists.get()[kMPString as usize],
@@ -773,13 +773,13 @@ pub unsafe fn encode_check_json_key(tv: *const TypVal) -> bool {
     }
     // SAFETY: as `type_di`.
     let val_tv = unsafe { &(*val_di).di_tv };
-    if val_tv.v_type != VAR_LIST {
+    if val_tv.v_type() != VAR_LIST {
         return false;
     }
     // SAFETY: a `VAR_LIST` holds a live list or NULL, and nothing runs
     // between the items.
     for li in unsafe { items(val_tv.list_or_null()) } {
-        if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+        if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
             return false;
         }
     }
@@ -826,7 +826,7 @@ pub unsafe fn encode_tv2echo(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
     // level; below it, the sink says it again.
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
-    if val.v_type == VAR_STRING || val.v_type == VAR_FUNC {
+    if val.v_type() == VAR_STRING || val.v_type() == VAR_FUNC {
         let s = val.string_or_func_name();
         if !s.is_null() {
             ga.extend_from_slice(unsafe { cstr::bytes_at(s) });

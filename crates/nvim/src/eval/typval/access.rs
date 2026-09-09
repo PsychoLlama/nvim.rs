@@ -141,50 +141,37 @@ pub(crate) fn bv_ga(b: *mut Blob) -> *mut GArray {
     field_of(b, ::core::mem::offset_of!(Blob, bv_ga))
 }
 
-/// The tag-checked readers for `TypVal`'s union, generated nine times over
-/// the one shape they all have.
+/// The tag-checked readers, generated ten times over the one shape they all
+/// have.
 ///
-/// Reading a union field is `unsafe` in Rust because a member the union does
-/// not currently hold may have an invalid bit pattern for its type.
-/// `typval_vval_union` has none: its nine members are a `VarNumber`, two
-/// `c_uint` tags, an `f64` and five raw pointers, and *every* bit pattern is
-/// a valid value of each. So the read itself is defined however the `v_type`
-/// tag reads. What it is not is *meaningful* — a `v_list` read out of a
-/// `VAR_NUMBER` is a pointer synthesised from a user's integer, and following
-/// it is the hoisted-union-read bug that only AddressSanitizer has ever
-/// caught here.
+/// A `TypVal` is an enum, so the tag test *is* the read: the `as_*` form is a
+/// `match` with one arm and answers `None` for every other variant. What this
+/// buys over writing the match at the call site is that seven hundred of them
+/// keep reading like the field accesses they replaced -- and that the family
+/// is defined once, so a new variant is a new row here rather than a hunt.
 ///
-/// So every accessor below tests `v_type` first and the union read is
-/// unreachable when the tag says otherwise. The `as_*` form answers `None`;
-/// the `*_or_null`/`*_or_zero` form answers the empty value this family
+/// The `*_or_null`/`*_or_zero` form answers the empty value this family
 /// already reads as absent everywhere (`tv_list_len(NULL) == 0`,
 /// `partial_name(NULL)`, `tv_get_number` of a `VAR_SPECIAL`), which is what a
-/// site whose tag was established by an earlier `tv_check_for_*_arg` wants to
+/// site whose type was established by an earlier `tv_check_for_*_arg` wants to
 /// write.
-///
-/// Written as a macro so that the whole family's unchecked surface is the
-/// single read below rather than nine copies of it.
 macro_rules! union_readers {
     ($(
-        $tag:ident, $member:ident, $ty:ty, $as_fn:ident $(, $or_fn:ident = $empty:expr)?;
+        $variant:ident, $ty:ty, $as_fn:ident $(, $or_fn:ident = $empty:expr)?;
     )*) => {
         impl TypVal {
             $(
-                #[doc = concat!("`vval.", stringify!($member), "`, or `None` unless the tag is `", stringify!($tag), "`.")]
+                #[doc = concat!("The payload, or `None` unless this is a `", stringify!($variant), "`.")]
                 #[inline(always)]
                 pub(crate) fn $as_fn(&self) -> Option<$ty> {
-                    if self.v_type == $tag {
-                        // SAFETY: every bit pattern is a valid value of every
-                        // member, so the read is defined for any initialised
-                        // typval; the tag test is what makes it meaningful.
-                        Some(unsafe { self.vval.$member })
-                    } else {
-                        None
+                    match self {
+                        TypVal::$variant(value) => Some(*value),
+                        _ => None,
                     }
                 }
 
                 $(
-                    #[doc = concat!("`vval.", stringify!($member), "`, or the empty value unless the tag is `", stringify!($tag), "`.")]
+                    #[doc = concat!("The payload, or the empty value unless this is a `", stringify!($variant), "`.")]
                     #[inline(always)]
                     pub(crate) fn $or_fn(&self) -> $ty {
                         self.$as_fn().unwrap_or($empty)
@@ -196,70 +183,120 @@ macro_rules! union_readers {
 }
 
 union_readers! {
-    VAR_NUMBER,  v_number,  VarNumber,               as_number,    number_or_zero = 0;
-    VAR_BOOL,    v_bool,    BoolVarValue,              as_bool;
-    VAR_SPECIAL, v_special, SpecialVarValue,           as_special;
-    VAR_FLOAT,   v_float,   Float,                   as_float,     float_or_zero = 0.0;
-    VAR_STRING,  v_string,  *mut ::core::ffi::c_char,  as_string,    string_or_null = ::core::ptr::null_mut();
-    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char,  as_func_name, func_name_or_null = ::core::ptr::null_mut();
-    VAR_LIST,    v_list,    *mut List,               as_list,      list_or_null = ::core::ptr::null_mut();
-    VAR_DICT,    v_dict,    *mut Dict,               as_dict,      dict_or_null = ::core::ptr::null_mut();
-    VAR_PARTIAL, v_partial, *mut Partial,            as_partial,   partial_or_null = ::core::ptr::null_mut();
-    VAR_BLOB,    v_blob,    *mut Blob,               as_blob,      blob_or_null = ::core::ptr::null_mut();
+    Number,  VarNumber,                as_number,    number_or_zero = 0;
+    Bool,    BoolVarValue,             as_bool;
+    Special, SpecialVarValue,          as_special;
+    Float,   Float,                    as_float,     float_or_zero = 0.0;
+    String,  *mut ::core::ffi::c_char, as_string,    string_or_null = ::core::ptr::null_mut();
+    Func,    *mut ::core::ffi::c_char, as_func_name, func_name_or_null = ::core::ptr::null_mut();
+    List,    *mut List,                as_list,      list_or_null = ::core::ptr::null_mut();
+    Dict,    *mut Dict,                as_dict,      dict_or_null = ::core::ptr::null_mut();
+    Partial, *mut Partial,             as_partial,   partial_or_null = ::core::ptr::null_mut();
+    Blob,    *mut Blob,                as_blob,      blob_or_null = ::core::ptr::null_mut();
 }
 
 impl TypVal {
-    /// `vval.v_string` under either tag that puts one there — `VAR_STRING`'s
-    /// text or `VAR_FUNC`'s function name — and NULL under any other.
+    /// Which kind of value this is, as the `VAR_*` code the tree tests
+    /// against.
+    ///
+    /// The discriminants *are* those codes (see [`TypVal`]), so this is a
+    /// load, not a jump table -- which is why the tables indexed by type
+    /// (`num_errors`, `str_errors`, `type()`'s codes) and the hundreds of
+    /// `== VAR_X` tests keep their spelling instead of becoming matches.
+    #[inline(always)]
+    pub const fn v_type(&self) -> crate::types::VarType {
+        match self {
+            TypVal::Unknown => VAR_UNKNOWN,
+            TypVal::Number(_) => VAR_NUMBER,
+            TypVal::String(_) => VAR_STRING,
+            TypVal::Func(_) => VAR_FUNC,
+            TypVal::List(_) => VAR_LIST,
+            TypVal::Dict(_) => VAR_DICT,
+            TypVal::Float(_) => VAR_FLOAT,
+            TypVal::Bool(_) => VAR_BOOL,
+            TypVal::Special(_) => VAR_SPECIAL,
+            TypVal::Partial(_) => VAR_PARTIAL,
+            TypVal::Blob(_) => VAR_BLOB,
+        }
+    }
+
+    /// The empty value of `v_type`: a null pointer, a zero, a `v:false`.
+    ///
+    /// What c2rust's `{ .v_type = X }` designated initialiser was, and what a
+    /// slot holds once its payload has been released. Panics on a `v_type`
+    /// that is not one of the eleven, which is unreachable: they are the
+    /// discriminants.
+    pub(crate) const fn empty(v_type: crate::types::VarType) -> TypVal {
+        match v_type {
+            VAR_UNKNOWN => TypVal::Unknown,
+            VAR_NUMBER => TypVal::Number(0),
+            VAR_STRING => TypVal::String(::core::ptr::null_mut()),
+            VAR_FUNC => TypVal::Func(::core::ptr::null_mut()),
+            VAR_LIST => TypVal::List(::core::ptr::null_mut()),
+            VAR_DICT => TypVal::Dict(::core::ptr::null_mut()),
+            VAR_FLOAT => TypVal::Float(0.0),
+            VAR_BOOL => TypVal::Bool(crate::types::kBoolVarFalse),
+            VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
+            VAR_PARTIAL => TypVal::Partial(::core::ptr::null_mut()),
+            VAR_BLOB => TypVal::Blob(::core::ptr::null_mut()),
+            _ => panic!("a VarType outside the eleven the enum names"),
+        }
+    }
+
+    /// The string under either variant that holds one — `String`'s text or
+    /// `Func`'s function name — and NULL under any other.
     ///
     /// The arms that treat the two alike (`tv2bool`, `tv_copy`, the encoders)
     /// are the reason this exists; a site that means only one of them wants
     /// [`TypVal::string_or_null`] or [`TypVal::func_name_or_null`].
     #[inline(always)]
     pub(crate) fn string_or_func_name(&self) -> *mut ::core::ffi::c_char {
-        self.as_string()
-            .or_else(|| self.as_func_name())
-            .unwrap_or(::core::ptr::null_mut())
+        match self {
+            TypVal::String(text) | TypVal::Func(text) => *text,
+            _ => ::core::ptr::null_mut(),
+        }
     }
 
-    /// Whether this value is callable: `VAR_FUNC` or `VAR_PARTIAL`.
+    /// Whether this value is callable: a funcref or a partial.
     ///
     /// Upstream's `tv_is_func`, which took the whole typval by value for
     /// two tag comparisons.
     #[inline(always)]
     pub(crate) fn is_func(&self) -> bool {
-        self.v_type == VAR_FUNC || self.v_type == VAR_PARTIAL
+        matches!(self, TypVal::Func(_) | TypVal::Partial(_))
     }
 
-    /// The union's pointer arm read **without asking the tag**: the address
-    /// `printf("%p")` and `id()` answer.
+    /// The payload as an address: what `printf("%p")` and `id()` answer.
     ///
-    /// The one deliberate exception to [`union_readers`]' rule, and the
-    /// reason it is here rather than at the call site.  Every pointer-shaped
-    /// value -- a string, a function name, a list, a dictionary, a blob, a
-    /// partial -- sits in this slot, and `%p` is the address of whichever one
-    /// the value is; upstream reads the slot with no tag test at all, so a
-    /// Number prints as the pointer its bits spell.  Nothing is dereferenced:
-    /// the answer is printed, and `id()` uses it as an identity, so narrowing
-    /// it by tag would make `%p` answer NULL for six of the nine types.
+    /// Upstream reads `vval.v_string` here with **no** tag test at all, and
+    /// this keeps that answer for every kind: a pointer-shaped value gives
+    /// its address, and a scalar gives its own bits, so `printf('%p', 42)`
+    /// still says `0x2a`.  The two four-byte kinds are the one place the two
+    /// can differ -- upstream reads four bytes of payload and four of
+    /// padding, this reads the four that were written -- and `v:true`'s
+    /// address was never a number anybody could use.
     ///
-    /// When the union becomes an enum this is a `match` over the pointer
-    /// arms; the scalar arms have no address and answer their bits.
+    /// Nothing is dereferenced: the answer is printed, and `id()` uses it as
+    /// an identity, which is why `id()` of two distinct empty lists must
+    /// differ and `id(v:_null_list)` must not.
     #[inline(always)]
     pub(crate) fn payload_address(&self) -> *const ::core::ffi::c_void {
-        // SAFETY: every bit pattern is a valid value of every member, so the
-        // read is defined for any initialised typval. Only its *meaning*
-        // needs a tag, and this caller wants the bits.
-        unsafe { self.vval.v_string.cast_const().cast() }
-    }
-}
-
-impl Tv {
-    /// The *address* of `vval.v_dict`, for the sinks that are handed a
-    /// `*mut *mut Dict` so they can clear the slot; see [`field_of`].
-    #[inline(always)]
-    pub(crate) fn dict_ptr(self) -> *mut *mut Dict {
-        self.field_ptr(::core::mem::offset_of!(TypVal, vval))
+        // The editor is 64-bit by construction, so a payload always fits an
+        // address; upstream's read is the same eight bytes either way.
+        let bits =
+            |n: u64| ::core::ptr::without_provenance(usize::try_from(n).expect("a 64-bit host"));
+        match self {
+            TypVal::Unknown => ::core::ptr::null(),
+            TypVal::String(p) | TypVal::Func(p) => p.cast_const().cast(),
+            TypVal::List(p) => p.cast_const().cast(),
+            TypVal::Dict(p) => p.cast_const().cast(),
+            TypVal::Partial(p) => p.cast_const().cast(),
+            TypVal::Blob(p) => p.cast_const().cast(),
+            TypVal::Number(n) => bits(n.cast_unsigned()),
+            TypVal::Float(f) => bits(f.to_bits()),
+            TypVal::Bool(b) => bits(u64::from(*b)),
+            TypVal::Special(s) => bits(u64::from(*s)),
+        }
     }
 }
 
@@ -272,10 +309,10 @@ impl Li {
         unsafe { Tv::new(self.field_ptr(::core::mem::offset_of!(ListItem, li_tv))) }
     }
 
-    /// `li_tv.v_type`.
+    /// `li_tv`'s kind; see [`TypVal::v_type`].
     #[inline(always)]
     pub(crate) fn v_type(self) -> crate::types::VarType {
-        self.li_tv.v_type
+        self.li_tv.v_type()
     }
 
     /// `li_tv.vval.v_number`; see [`TypVal::as_number`].
@@ -300,55 +337,35 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
     gettext(msg).as_ptr()
 }
 
-/// The tag-and-payload writers for `TypVal`'s union, generated over its ten
-/// tag/member pairs.
+/// The slot writers, generated over the enum's ten value-carrying variants.
 ///
-/// The `TypVal::x(v)` form **makes** a value: c2rust wrote the designated
-/// initialiser out in full at every site — three fields, one of them a union
-/// literal, over six to nine lines — and every one of them was a `v_type`
-/// tag, a lock, and the one union member that tag selects.
+/// `tv.write_x(v)` **overwrites a slot without releasing what it held**.
+/// That is not what `*tv = TypVal::X(v)` does — an assignment drops the old
+/// value — and the difference is the whole reason these exist: six hundred
+/// call sites inherited C's rule that a slot is *filled*, never replaced, and
+/// the ones that mean "replace" clear first, by hand, at a point of their own
+/// choosing.  Some cannot do otherwise: the `nothing` sink frees a string and
+/// *then* blanks the slot it came out of, so an assignment there would free
+/// it twice.
 ///
-/// The `tv.write_x(v)` form **overwrites a slot**: it sets the tag and the
-/// payload, and nothing else.  It is deliberately not called `set`: it does **not** release what
-/// the slot held, so a caller replacing a value rather than filling a fresh
-/// one still clears it first. When the union becomes an enum that release is
-/// `Drop`'s job and this comment goes away.
-///
-/// Writing a union field is safe — it is only *reading* one that needs a tag
-/// to be meaningful (see [`union_readers`]) — so both forms are safe, and
-/// the sites that used to spell a tag and an arm inside an `unsafe` region no
-/// longer put either there.
+/// `mem::forget` rather than `ptr::write`, so the family stays safe code: the
+/// old value is moved out and abandoned, which is exactly what the C
+/// assignment did.
 ///
 /// A row carries a constructor only where something builds a value of that
-/// kind; the rest fill a slot and have the writer alone. `VAR_UNKNOWN` has
-/// neither: that one is [`TV_INITIAL_VALUE`], a value rather than a
-/// conversion.
+/// kind rather than filling a slot; the rest have the writer alone.
 macro_rules! union_writers {
     ($(
-        $tag:ident, $member:ident, $ty:ty, $write_fn:ident, $what:expr $(, $new_fn:ident)?;
+        $variant:ident, $payload:ident, $ty:ty, $write_fn:ident, $what:expr;
     )*) => {
         impl TypVal {
             $(
-                $(
-                    #[doc = concat!("A `", stringify!($tag), "` over ", $what, ".")]
-                    #[doc = ""]
-                    #[doc = "Taking no reference: see [`union_writers`]."]
-                    #[inline(always)]
-                    pub(crate) const fn $new_fn($member: $ty) -> Self {
-                        Self {
-                            v_type: $tag,
-                            vval: typval_vval_union { $member },
-                        }
-                    }
-                )?
-
-                #[doc = concat!("Overwrite this slot with a `", stringify!($tag), "` over ", $what, ".")]
+                #[doc = concat!("Overwrite this slot with ", $what, ".")]
                 #[doc = ""]
                 #[doc = "Releases nothing: see [`union_writers`]."]
                 #[inline(always)]
-                pub(crate) fn $write_fn(&mut self, $member: $ty) {
-                    self.v_type = $tag;
-                    self.vval = typval_vval_union { $member };
+                pub(crate) fn $write_fn(&mut self, $payload: $ty) {
+                    self.overwrite(TypVal::$variant($payload));
                 }
             )*
         }
@@ -356,79 +373,141 @@ macro_rules! union_writers {
 }
 
 union_writers! {
-    VAR_NUMBER,  v_number,  VarNumber,                write_number,    "an integer",              number;
-    VAR_BOOL,    v_bool,    BoolVarValue,             write_boolean,   "`v:true`/`v:false`",      boolean;
-    VAR_SPECIAL, v_special, SpecialVarValue,          write_special,   "`v:null`",                special;
-    VAR_FLOAT,   v_float,   Float,                    write_float,     "a float",                 float;
-    VAR_STRING,  v_string,  *mut ::core::ffi::c_char, write_string,    "an owned string",         string;
-    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char, write_func_name, "an owned function name",  func_name;
-    VAR_LIST,    v_list,    *mut List,                write_list,      "a list",                  list;
-    VAR_DICT,    v_dict,    *mut Dict,                write_dict,      "a dictionary",            dict;
-    VAR_PARTIAL, v_partial, *mut Partial,             write_partial,   "a partial";
-    VAR_BLOB,    v_blob,    *mut Blob,                write_blob,      "a blob";
+    Number,  number,    VarNumber,                write_number,    "an integer";
+    Bool,    boolean,   BoolVarValue,             write_boolean,   "`v:true`/`v:false`";
+    Special, special,   SpecialVarValue,          write_special,   "`v:null`";
+    Float,   float,     Float,                    write_float,     "a float";
+    String,  string,    *mut ::core::ffi::c_char, write_string,    "an owned string";
+    Func,    name,      *mut ::core::ffi::c_char, write_func_name, "an owned function name";
+    List,    list,      *mut List,                write_list,      "a list";
+    Dict,    dict,      *mut Dict,                write_dict,      "a dictionary";
+    Partial, partial,   *mut Partial,             write_partial,   "a partial";
+    Blob,    blob,      *mut Blob,                write_blob,      "a blob";
 }
 
-/// The payload every tag reads as owning nothing: a null pointer, a zero, a
-/// false.  A slot left holding this still says what type it is, and clearing
-/// it is a no-op whichever tag that is.
-const EMPTY_PAYLOAD: typval_vval_union = typval_vval_union { v_number: 0 };
-
 impl TypVal {
-    /// Move this slot's value out, leaving the tag and an empty payload.
+    /// Put `value` in this slot and **abandon** what was there.
+    ///
+    /// The engine under [`union_writers`]; see its note for why the release
+    /// is the caller's and not this call's.
+    #[inline(always)]
+    fn overwrite(&mut self, value: TypVal) {
+        // SAFETY: `self` is a `&mut`, so the place is writable and aligned;
+        // `write` does not read what was there, which is the point -- these
+        // callers own the old value's release and some of them fill storage
+        // that has never held one.
+        unsafe { ::core::ptr::write(self, value) };
+    }
+
+    /// Overwrite this slot with the empty value of `v_type`: the kind, and a
+    /// null pointer or a zero.
+    ///
+    /// c2rust's lone `x.v_type = VAR_X;`, which is what every one of these
+    /// sites was: a return slot is declared to be of a kind before the value
+    /// that goes in it is known, and the paths that answer nothing leave the
+    /// empty one behind.  Releases nothing, as [`union_writers`].
+    #[inline(always)]
+    pub(crate) fn write_empty(&mut self, v_type: crate::types::VarType) {
+        self.overwrite(TypVal::empty(v_type));
+    }
+
+    /// Move this slot's value out, leaving the empty value of the same kind.
     ///
     /// The slot keeps saying what type it is — which is the whole point:
     /// `prepare_vimvar` blanks a `v:` variable and the tag it leaves behind
     /// is what tells `restore_vimvar` there was one, and what keeps a
     /// still-untyped `v:val` out of the `v:` dictionary.  What the slot no
-    /// longer holds is anything to free: the caller owns that now.
+    /// longer holds is anything to free: the caller owns that now, so
+    /// dropping the slot afterwards is a no-op.
     ///
     /// The slot's lock stays where it is: it belongs to the place, not to
-    /// the value that was sitting in it.  When the union becomes an enum
-    /// this is a `mem::replace` that keeps the discriminant.
+    /// the value that was sitting in it.
     #[inline(always)]
     pub(crate) fn take_value(&mut self) -> TypVal {
-        TypVal {
-            v_type: self.v_type,
-            vval: ::core::mem::replace(&mut self.vval, EMPTY_PAYLOAD),
-        }
+        let empty = TypVal::empty(self.v_type());
+        ::core::mem::replace(self, empty)
     }
 
     /// Move the value out, leaving an unset slot.
     ///
-    /// The whole slot goes — tag, lock and payload — and what stays behind
-    /// is [`TV_INITIAL_VALUE`], the `VAR_UNKNOWN` a typval is born as.  This
-    /// is the shape of every "hand the value on and reset the source" site
-    /// the tree had spelled `*to = *from; tv_init(from)`.
+    /// What stays behind is [`TypVal::Unknown`], the value a typval is born
+    /// as.  This is the shape of every "hand the value on and reset the
+    /// source" site the tree had spelled `*to = *from; tv_init(from)`.
     ///
     /// Where the slot has to keep saying what type it held, the take is
     /// [`TypVal::take_value`] instead.
     #[inline(always)]
     pub(crate) fn take(&mut self) -> TypVal {
-        ::core::mem::replace(self, TV_INITIAL_VALUE)
+        ::core::mem::replace(self, TypVal::Unknown)
     }
 
-    /// Duplicate the slot's bits, **sharing** whatever it points at.
+    /// Duplicate the value's bits, **sharing** whatever it points at.
     ///
     /// This is not a copy of the *value*: no string is duplicated and no
-    /// reference count moves, so the payload now has two holders and only
-    /// one of them may release it.  The caller owns that reasoning, and
-    /// every use of this is a place where upstream relies on two typvals
-    /// naming one object for a bounded window — an argument vector that
-    /// borrows the caller's values for the length of a call, a handle kept
-    /// beside a value that outlives it, a slot packed for output while the
-    /// original is still the owner.
+    /// reference count moves, so the payload now has two holders — and, with
+    /// `Drop` live, two would-be releasers.  Every use of this is a place
+    /// where upstream relies on two typvals naming one object for a bounded
+    /// window: an argument vector that borrows the caller's values for the
+    /// length of a call, a slot packed for output while the original is still
+    /// the owner.
     ///
     /// A real copy — one that duplicates the string and takes the
-    /// reference — is [`tv_copy`](crate::eval::typval::tv_copy).
+    /// reference — is [`Clone`].
+    ///
+    /// # Safety
+    /// The duplicate must not be released: exactly one of the two holders
+    /// may, and it is the original. In practice the duplicate goes into a
+    /// [`ManuallyDrop`](core::mem::ManuallyDrop) frame that outlives nothing.
     #[inline(always)]
-    pub(crate) fn bit_copy(&self) -> TypVal {
-        TypVal {
-            v_type: self.v_type,
-            // SAFETY: every bit pattern is a valid value of every member, so
-            // reading the payload without asking the tag is defined; what
-            // the bits *mean* is the caller's problem, and the doc comment
-            // above hands them the ownership half of it.
-            vval: unsafe { ::core::ptr::read(&self.vval) },
+    pub(crate) unsafe fn bit_copy(&self) -> TypVal {
+        // SAFETY: the caller's promise above -- the duplicate is not released,
+        // so the payload keeps its one owner.
+        unsafe { ::core::ptr::read(self) }
+    }
+}
+
+/// Where a dictionary pointer *lives*, for the walk that has to clear it.
+///
+/// [`TypvalSink`](crate::eval::typval_encode::TypvalSink)'s dictionary hooks
+/// are handed the place rather than the value, because the `nothing` sink
+/// releases the reference and blanks the slot it came out of. Two different
+/// places are that slot — a `TypVal::Dict`'s payload, and a partial's
+/// `pt_dict`, which is a bare `*mut Dict` and no typval at all — so one
+/// pointer type cannot serve both.
+#[derive(Clone, Copy)]
+pub(crate) enum DictSlot {
+    /// A typval holding the dictionary. Cleared, it is a `TypVal::Dict` over
+    /// NULL: still a dictionary, holding none.
+    Value(*mut TypVal),
+    /// A partial's `pt_dict` field.
+    Field(*mut *mut Dict),
+}
+
+impl DictSlot {
+    /// The dictionary in the slot, or NULL.
+    ///
+    /// # Safety
+    /// The slot must be live for the call, and a [`Value`](Self::Value) must
+    /// hold a dictionary.
+    #[inline(always)]
+    pub(crate) unsafe fn get(self) -> *mut Dict {
+        match self {
+            // SAFETY: the caller's promise: a live slot.
+            DictSlot::Value(tv) => unsafe { (*tv).dict_or_null() },
+            DictSlot::Field(dictp) => unsafe { *dictp },
+        }
+    }
+
+    /// Leave the slot holding no dictionary, releasing nothing.
+    ///
+    /// # Safety
+    /// As [`get`](Self::get).
+    #[inline(always)]
+    pub(crate) unsafe fn clear(self) {
+        match self {
+            // SAFETY: the caller's promise: a live slot.
+            DictSlot::Value(tv) => unsafe { (*tv).write_dict(::core::ptr::null_mut()) },
+            DictSlot::Field(dictp) => unsafe { *dictp = ::core::ptr::null_mut() },
         }
     }
 }
@@ -855,13 +934,20 @@ mod tests {
     use super::*;
     use crate::types::VarType;
 
-    /// A typval carrying `bits` in its union under `tag`, without going near
-    /// a constructor: the point is to prove the *tag* gates the read, so the
-    /// payload has to be one no honest constructor would pair with it.
-    fn tagged(v_type: VarType, bits: VarNumber) -> TypVal {
-        TypVal {
-            v_type,
-            vval: typval_vval_union { v_number: bits },
+    /// The value of `v_type` whose payload is `bits`, so that reading the
+    /// wrong arm would answer something a real value never holds: the point
+    /// of these cases is that the *kind* gates the read.
+    fn tagged(v_type: VarType, bits: usize) -> TypVal {
+        let p = ::core::ptr::without_provenance_mut::<()>(bits);
+        match v_type {
+            VAR_NUMBER => TypVal::Number(VarNumber::try_from(bits).expect("a small address")),
+            VAR_LIST => TypVal::List(p.cast()),
+            VAR_DICT => TypVal::Dict(p.cast()),
+            VAR_BLOB => TypVal::Blob(p.cast()),
+            VAR_PARTIAL => TypVal::Partial(p.cast()),
+            VAR_STRING => TypVal::String(p.cast()),
+            VAR_FUNC => TypVal::Func(p.cast()),
+            other => panic!("no bogus payload for {other}"),
         }
     }
 
@@ -896,25 +982,67 @@ mod tests {
     fn a_list_reads_back_as_the_pointer_it_was_given() {
         // Any address will do: nothing here dereferences it.
         let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
-        let tv = TypVal::list(l);
+        let tv = TypVal::List(l);
         assert_eq!(tv.as_list(), Some(l));
         assert_eq!(tv.list_or_null(), l);
         // The same bits under any other tag are not a list.
-        assert_eq!(tagged(VAR_DICT, l as VarNumber).as_list(), None);
+        assert_eq!(tagged(VAR_DICT, l.addr()).as_list(), None);
     }
 
     #[test]
-    fn the_two_tags_that_share_v_string_stay_apart() {
+    fn the_two_kinds_that_both_hold_a_string_stay_apart() {
         let text = c"x".as_ptr().cast_mut();
-        let string = TypVal::string(text);
+        let string = TypVal::String(text);
         assert_eq!(string.as_string(), Some(text));
         assert_eq!(string.as_func_name(), None);
         assert_eq!(string.string_or_func_name(), text);
 
-        let func = TypVal::func_name(text);
+        let func = TypVal::Func(text);
         assert_eq!(func.as_string(), None);
         assert_eq!(func.as_func_name(), Some(text));
         assert_eq!(func.string_or_func_name(), text);
+    }
+
+    /// Sixteen bytes, and the discriminant is the `VarType` code at offset
+    /// zero.
+    ///
+    /// The size is the reason the lock lives on the slot: a `TypVal` is
+    /// copied into every argument frame and every return slot in the
+    /// interpreter, and twenty-four would be paid for on all of them. The
+    /// offset is what `#[repr(C, u32)]` promises and what the generated
+    /// `ffi.cdef` chunk describes to the unit fixtures.
+    #[test]
+    fn a_value_is_sixteen_bytes_tagged_by_its_var_type() {
+        assert_eq!(::core::mem::size_of::<TypVal>(), 16);
+        assert_eq!(::core::mem::align_of::<TypVal>(), 8);
+        for tv in [
+            TypVal::Unknown,
+            TypVal::Number(1),
+            TypVal::String(::core::ptr::null_mut()),
+            TypVal::Func(::core::ptr::null_mut()),
+            TypVal::List(::core::ptr::null_mut()),
+            TypVal::Dict(::core::ptr::null_mut()),
+            TypVal::Float(1.0),
+            TypVal::Bool(kBoolVarTrue),
+            TypVal::Special(kSpecialVarNull),
+            TypVal::Partial(::core::ptr::null_mut()),
+            TypVal::Blob(::core::ptr::null_mut()),
+        ] {
+            // SAFETY: `repr(C, u32)` puts the discriminant first, and it is
+            // a `u32`.
+            let tag = unsafe { *(&raw const tv).cast::<VarType>() };
+            assert_eq!(tag, tv.v_type());
+        }
+    }
+
+    /// `%p` answers the payload under every kind, as upstream's untagged
+    /// union read did.
+    #[test]
+    fn the_printed_address_is_the_payload_whatever_the_kind_is() {
+        let l = ::core::ptr::without_provenance_mut::<List>(0x1000);
+        assert_eq!(TypVal::List(l).payload_address().addr(), 0x1000);
+        assert_eq!(TypVal::Number(42).payload_address().addr(), 42);
+        assert_eq!(TypVal::Unknown.payload_address().addr(), 0);
     }
 
     #[test]

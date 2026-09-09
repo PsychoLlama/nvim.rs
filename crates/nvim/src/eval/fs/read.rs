@@ -160,7 +160,7 @@ impl Lines {
     /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
     /// from here on.
     fn push(self, s: *mut c_char) {
-        let tv = TypVal::string(s);
+        let tv = TypVal::String(s);
         // SAFETY: a live list, and `tv` an owned String the list takes over.
         unsafe { tv_list_append_owned_tv(self.0, tv) };
     }

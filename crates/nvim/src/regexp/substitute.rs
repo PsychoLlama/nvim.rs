@@ -565,9 +565,9 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);
     funcexe.fe_evaluate = true;
-    let name = if unsafe { (*expr).v_type } == VAR_FUNC {
+    let name = if unsafe { (*expr).v_type() } == VAR_FUNC {
         Some(unsafe { (*expr).func_name_or_null() })
-    } else if unsafe { (*expr).v_type } == VAR_PARTIAL {
+    } else if unsafe { (*expr).v_type() } == VAR_PARTIAL {
         let partial: *mut Partial = unsafe { (*expr).partial_or_null() };
         funcexe.fe_partial = partial;
         Some(unsafe { partial_name(partial) })
@@ -587,7 +587,7 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
 
     // An unknown return type means the call failed and has already said
     // so; there is no second error to report.
-    let text = if rettv.v_type == VAR_UNKNOWN {
+    let text = if rettv.v_type() == VAR_UNKNOWN {
         core::ptr::null_mut()
     } else {
         let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];

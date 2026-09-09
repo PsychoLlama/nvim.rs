@@ -19,14 +19,14 @@ use neovim::eval::typval::{
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
-    TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, typval_vval_union,
+    TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, kBoolVarFalse, kBoolVarTrue,
+    kSpecialVarNull,
 };
 use neovim::winlayer::Win;
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::tv::{self, Pt, Tv};
+use crate::support::tv::{self, Payload, Pt, Tv};
 use crate::support::{check_emsg, cstr};
 
 /// The spec's bare Lua numbers, which `lua2typvalt` made floats.
@@ -34,11 +34,26 @@ fn f(n: f64) -> Tv {
     Tv::Float(n)
 }
 
-/// A `TypVal` assembled from a type and a raw union, the spec's
-/// `typvalt(typ, vval)` — used where a case needs a value whose contents
-/// are deliberately not a real one.
-fn raw(v_type: VarType, vval: typval_vval_union) -> TypVal {
-    TypVal { v_type, vval }
+/// A value of `v_type` whose payload is `bits`, the spec's
+/// `typvalt(typ, vval)` — used where a case needs a value whose contents are
+/// deliberately not a real one, so that a reader of the wrong arm would
+/// answer something no honest value holds.
+fn bogus(v_type: VarType, bits: usize) -> TypVal {
+    let p = ptr::without_provenance_mut::<()>(bits);
+    match v_type {
+        VAR_NUMBER => TypVal::Number(bits as VarNumber),
+        VAR_FLOAT => TypVal::Float(f64::from_bits(bits as u64)),
+        VAR_STRING => TypVal::String(p.cast()),
+        VAR_FUNC => TypVal::Func(p.cast()),
+        VAR_LIST => TypVal::List(p.cast()),
+        VAR_DICT => TypVal::Dict(p.cast()),
+        VAR_PARTIAL => TypVal::Partial(p.cast()),
+        VAR_BLOB => TypVal::Blob(p.cast()),
+        VAR_BOOL => TypVal::Bool(kBoolVarTrue),
+        VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
+        VAR_UNKNOWN => TypVal::Unknown,
+        other => panic!("no bogus value for v_type {other}"),
+    }
 }
 
 // --------------------------------------------------------------- alloc
@@ -50,13 +65,13 @@ fn allocating_into_a_return_value_leaves_an_empty_container() {
     let _log = AllocLog::start();
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
-        let mut rettv = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut rettv = TypVal::Unknown;
         let l = tv_list_alloc_ret(&raw mut rettv, 0);
         assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
-        assert_eq!(rettv.vval.v_list, l);
+        assert_eq!(rettv.list(), l);
         tv_clear(&raw mut rettv);
 
-        let mut rettv = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut rettv = TypVal::Unknown;
         tv_dict_alloc_ret(&raw mut rettv);
         assert_eq!(tv::read(&raw const rettv), Tv::Dict(vec![]));
         tv_clear(&raw mut rettv);
@@ -95,19 +110,19 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         // A string, a dict and a list are one allocation each, released in
         // the reverse of the order they were made.
         let mut tv = Tv::s("true").build();
-        log.check(&[alloc::string(tv.vval.v_string, "true".len())]);
-        let s = tv.vval.v_string;
+        log.check(&[alloc::string(tv.string(), "true".len())]);
+        let s = tv.string();
         tv_clear(&raw mut tv);
         log.check(&[alloc::freed(s)]);
 
         let mut tv = Tv::Dict(vec![]).build();
-        let d = tv.vval.v_dict;
+        let d = tv.dict();
         log.check(&[alloc::dict(d)]);
         tv_clear(&raw mut tv);
         log.check(&[alloc::freed(d)]);
 
         let mut tv = Tv::List(vec![]).build();
-        let l = tv.vval.v_list;
+        let l = tv.list();
         log.check(&[alloc::list(l)]);
         tv_clear(&raw mut tv);
         log.check(&[alloc::freed(l)]);
@@ -115,14 +130,14 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         // A self-referencing container holds itself, so clearing the only
         // *outside* reference frees nothing and leaves the count at one.
         let mut tv = Tv::List(vec![Tv::Cycle(0)]).build();
-        let l = tv.vval.v_list;
+        let l = tv.list();
         log.check(&[alloc::list(l), alloc::li((*l).lv_first)]);
         tv_clear(&raw mut tv);
         log.check(&[]);
         assert_eq!((*l).lv_refcount.get(), 1);
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
-        let d = tv.vval.v_dict;
+        let d = tv.dict();
         log.check(&[alloc::dict(d), alloc::di(tv::first_di(d), "dd".len())]);
         tv_clear(&raw mut tv);
         log.check(&[]);
@@ -192,7 +207,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         ] {
             let mut from = value.clone().build();
             log.check(&[]);
-            let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+            let mut to = TypVal::Unknown;
             tv_copy(&raw const from, &raw mut to);
             assert_eq!(tv::read(&raw const to), value);
             log.check(&[]);
@@ -202,36 +217,36 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         }
 
         let mut from = Tv::Dict(vec![]).build();
-        log.check(&[alloc::dict(from.vval.v_dict)]);
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        log.check(&[alloc::dict(from.dict())]);
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
         assert_eq!(tv::read(&raw const to), Tv::Dict(vec![]));
         log.check(&[]);
-        assert_eq!((*to.vval.v_dict).dv_refcount.get(), 2);
-        assert_eq!(to.vval.v_dict, from.vval.v_dict);
+        assert_eq!((*to.dict()).dv_refcount.get(), 2);
+        assert_eq!(to.dict(), from.dict());
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
         log.clear();
 
         let mut from = Tv::List(vec![]).build();
-        log.check(&[alloc::list(from.vval.v_list)]);
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        log.check(&[alloc::list(from.list())]);
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
         assert_eq!(tv::read(&raw const to), Tv::List(vec![]));
         log.check(&[]);
-        assert_eq!((*to.vval.v_list).lv_refcount.get(), 2);
-        assert_eq!(to.vval.v_list, from.vval.v_list);
+        assert_eq!((*to.list()).lv_refcount.get(), 2);
+        assert_eq!(to.list(), from.list());
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
         log.clear();
 
         let mut from = Tv::s("test").build();
-        log.check(&[alloc::string(from.vval.v_string, "test".len())]);
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        log.check(&[alloc::string(from.string(), "test".len())]);
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
         assert_eq!(tv::read(&raw const to), Tv::s("test"));
-        log.check(&[alloc::string(to.vval.v_string, "test".len())]);
-        assert_ne!(to.vval.v_string, from.vval.v_string);
+        log.check(&[alloc::string(to.string(), "test".len())]);
+        assert_ne!(to.string(), from.string());
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
     }
@@ -249,19 +264,19 @@ fn copying_a_container_is_shallow() {
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
-        let outer = from.vval.v_list;
-        let inner = (*(*outer).lv_first).li_tv.vval.v_list;
+        let outer = from.list();
+        let inner = (*(*outer).lv_first).li_tv.list();
         assert_eq!(
             ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
             (1, 1)
         );
 
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
 
-        assert_eq!(to.vval.v_list, outer, "the copy names the same list");
+        assert_eq!(to.list(), outer, "the copy names the same list");
         assert_eq!(
-            (*(*to.vval.v_list).lv_first).li_tv.vval.v_list,
+            (*(*to.list()).lv_first).li_tv.list(),
             inner,
             "and the same list inside it",
         );
@@ -298,13 +313,13 @@ fn copying_a_funcref_duplicates_its_name() {
     unsafe {
         let mut from = Tv::Func(b"tr".to_vec()).build();
         log.clear();
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
 
-        assert_eq!(to.v_type, VAR_FUNC);
-        assert_ne!(to.vval.v_string, from.vval.v_string, "the name was shared");
+        assert_eq!(to.v_type(), VAR_FUNC);
+        assert_ne!(to.string(), from.string(), "the name was shared");
         assert_eq!(tv::read(&raw const to), Tv::Func(b"tr".to_vec()));
-        log.check(&[alloc::string(to.vval.v_string, "tr".len())]);
+        log.check(&[alloc::string(to.string(), "tr".len())]);
 
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
@@ -325,10 +340,10 @@ fn copying_a_partial_or_a_blob_takes_a_reference() {
             dict: None,
         }))
         .build();
-        let pt = from.vval.v_partial;
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let pt = from.partial();
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
-        assert_eq!(to.vval.v_partial, pt);
+        assert_eq!(to.partial(), pt);
         assert_eq!((*pt).pt_refcount.get(), 2);
         tv_clear(&raw mut from);
         assert_eq!((*pt).pt_refcount.get(), 1, "one clear freed the partial");
@@ -336,10 +351,10 @@ fn copying_a_partial_or_a_blob_takes_a_reference() {
         tv_clear(&raw mut to);
 
         let mut from = Tv::Blob(vec![0x00, 0xff]).build();
-        let blob = from.vval.v_blob;
-        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let blob = from.blob();
+        let mut to = TypVal::Unknown;
         tv_copy(&raw const from, &raw mut to);
-        assert_eq!(to.vval.v_blob, blob);
+        assert_eq!(to.blob(), blob);
         assert_eq!((*blob).bv_refcount.get(), 2);
         tv_clear(&raw mut from);
         assert_eq!((*blob).bv_refcount.get(), 1);
@@ -357,10 +372,10 @@ fn copying_a_null_container_answers_a_null_container() {
     unsafe {
         for value in [Tv::NullList, Tv::NullDict, Tv::NullBlob] {
             let from = value.clone().build();
-            let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+            let mut to = TypVal::Unknown;
             tv_copy(&raw const from, &raw mut to);
             assert_eq!(tv::read(&raw const to), value);
-            assert_eq!(to.v_type, from.v_type);
+            assert_eq!(to.v_type(), from.v_type());
             log.check(&[]);
         }
     }
@@ -379,19 +394,19 @@ fn copying_leaves_every_lock_where_it_is() {
         for lock in [VarLock::Locked, VarLock::Fixed] {
             let mut from = Slot::new(Tv::List(vec![Tv::Int(1)]).build());
             from.lock = lock;
-            (*from.tv.vval.v_list).lv_lock = lock;
+            (*from.tv.list()).lv_lock = lock;
 
-            let mut to = Slot::new(raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 }));
+            let mut to = Slot::new(TypVal::Unknown);
             to.lock = lock;
             tv_copy(&raw const from.tv, &raw mut to.tv);
             assert_eq!(to.lock, lock, "the copy moved the destination's lock");
             assert_eq!(
-                (*to.tv.vval.v_list).lv_lock,
+                (*to.tv.list()).lv_lock,
                 lock,
                 "the container's own lock moved",
             );
 
-            (*from.tv.vval.v_list).lv_lock = VarLock::Unlocked;
+            (*from.tv.list()).lv_lock = VarLock::Unlocked;
             tv_clear(&raw mut from.tv);
             tv_clear(&raw mut to.tv);
         }
@@ -450,14 +465,14 @@ fn copying_an_unknown_value_is_an_internal_error() {
     let log = AllocLog::start();
     // SAFETY: neither value owns anything.
     unsafe {
-        let from = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
-        let mut to = raw(VAR_NUMBER, typval_vval_union { v_number: 7 });
+        let from = TypVal::Unknown;
+        let mut to = TypVal::Number(7);
         check_emsg(
             log.editor(),
             || tv_copy(&raw const from, &raw mut to),
             Some("E685: Internal error: tv_copy(UNKNOWN)"),
         );
-        assert_eq!(to.v_type, VAR_UNKNOWN, "the type was still copied over");
+        assert_eq!(to.v_type(), VAR_UNKNOWN, "the type was still copied over");
     }
 }
 
@@ -479,7 +494,7 @@ fn locking_a_partial_leaves_its_dict_alone() {
         .build();
         let mut p = Slot::new(p_tv);
         p.item_lock(-1, true, false);
-        assert_eq!((*(*p.tv.vval.v_partial).pt_dict).dv_lock, VarLock::Unlocked);
+        assert_eq!((*(*p.tv.partial()).pt_dict).dv_lock, VarLock::Unlocked);
         tv_clear(&raw mut p.tv);
     }
 }
@@ -495,17 +510,17 @@ fn locking_never_moves_a_fixed_value() {
         let mut l_tv = Slot::new(Tv::List(vec![]).build());
         log.clear();
         d_tv.lock = VarLock::Fixed;
-        (*d_tv.tv.vval.v_dict).dv_lock = VarLock::Fixed;
+        (*d_tv.tv.dict()).dv_lock = VarLock::Fixed;
         l_tv.lock = VarLock::Fixed;
-        (*l_tv.tv.vval.v_list).lv_lock = VarLock::Fixed;
+        (*l_tv.tv.list()).lv_lock = VarLock::Fixed;
 
         for lock in [true, false] {
             d_tv.item_lock(1, lock, false);
             l_tv.item_lock(1, lock, false);
             assert_eq!(d_tv.lock, VarLock::Fixed);
             assert_eq!(l_tv.lock, VarLock::Fixed);
-            assert_eq!((*d_tv.tv.vval.v_dict).dv_lock, VarLock::Fixed);
-            assert_eq!((*l_tv.tv.vval.v_list).lv_lock, VarLock::Fixed);
+            assert_eq!((*d_tv.tv.dict()).dv_lock, VarLock::Fixed);
+            assert_eq!((*l_tv.tv.list()).lv_lock, VarLock::Fixed);
         }
         log.check(&[]);
 
@@ -567,8 +582,8 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
         let mut d_tv = Slot::new(Tv::Dict(vec![]).build());
         let mut l_tv = Slot::new(Tv::List(vec![]).build());
         log.clear();
-        let d = d_tv.tv.vval.v_dict;
-        let l = l_tv.tv.vval.v_list;
+        let d = d_tv.tv.dict();
+        let l = l_tv.tv.list();
 
         assert_eq!(
             (tv.islocked(), l_tv.islocked(), d_tv.islocked()),
@@ -690,11 +705,11 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
         ])
         .build();
         let mut tv = Slot::new(tv);
-        let outer = tv.tv.vval.v_list;
+        let outer = tv.tv.list();
         let items = tv::list_items(outer);
-        let inner_list = (*items[0]).li_tv.vval.v_list;
-        let inner_dict = (*items[1]).li_tv.vval.v_dict;
-        let deepest = (*tv::di_of(inner_dict, "a")).di_tv.vval.v_list;
+        let inner_list = (*items[0]).li_tv.list();
+        let inner_dict = (*items[1]).li_tv.dict();
+        let deepest = (*tv::di_of(inner_dict, "a")).di_tv.list();
 
         // The three container locks, outermost first.
         let locks = || {
@@ -765,11 +780,11 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         let mut tv = Slot::new(Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build());
-        let outer = tv.tv.vval.v_list;
-        let inner = (*(*outer).lv_first).li_tv.vval.v_list;
+        let outer = tv.tv.list();
+        let inner = (*(*outer).lv_first).li_tv.list();
 
         // A second name for the outer list, as an argument binding is.
-        let mut other = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut other = TypVal::Unknown;
         tv_copy(&raw const tv.tv, &raw mut other);
         assert_eq!((*outer).lv_refcount.get(), 2);
 
@@ -822,16 +837,16 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
         for (tv, set_container) in [
             (
                 Tv::List(vec![]).build(),
-                Box::new(|tv: &TypVal, lock| (*tv.vval.v_list).lv_lock = lock)
+                Box::new(|tv: &TypVal, lock| (*tv.list()).lv_lock = lock)
                     as Box<dyn Fn(&TypVal, VarLock)>,
             ),
             (
                 Tv::Dict(vec![]).build(),
-                Box::new(|tv: &TypVal, lock| (*tv.vval.v_dict).dv_lock = lock),
+                Box::new(|tv: &TypVal, lock| (*tv.dict()).dv_lock = lock),
             ),
             (
                 Tv::Blob(vec![]).build(),
-                Box::new(|tv: &TypVal, lock| (*tv.vval.v_blob).bv_lock = lock),
+                Box::new(|tv: &TypVal, lock| (*tv.blob()).bv_lock = lock),
             ),
         ] {
             let mut slot = Slot::new(tv);
@@ -980,24 +995,24 @@ fn comparing_dict_values_folds_values_but_never_keys() {
         log.check(&[]);
 
         let mut d1 = Tv::Dict(vec![]).build();
-        log.check(&[alloc::dict(d1.vval.v_dict)]);
-        assert_eq!((*d1.vval.v_dict).dv_refcount.get(), 1);
+        log.check(&[alloc::dict(d1.dict())]);
+        assert_eq!((*d1.dict()).dv_refcount.get(), 1);
         assert!(tv_equal(&raw mut nd, &raw mut d1, false));
         assert!(tv_equal(&raw mut d1, &raw mut nd, false));
         assert!(tv_equal(&raw mut d1, &raw mut d1, false));
-        assert_eq!((*d1.vval.v_dict).dv_refcount.get(), 1);
+        assert_eq!((*d1.dict()).dv_refcount.get(), 1);
         log.check(&[]);
 
         let build = |key: &str, value: &str| {
             let tv = Tv::dict([(key, Tv::s(value))]).build();
-            let d = tv.vval.v_dict;
+            let d = tv.dict();
             let di = tv::first_di(d);
             log.check_net(
                 false,
                 &[
                     alloc::dict(d),
                     alloc::di(di, key.len()),
-                    alloc::string((*di).di_tv.vval.v_string, value.len()),
+                    alloc::string((*di).di_tv.string(), value.len()),
                 ],
             );
             tv
@@ -1036,13 +1051,8 @@ fn the_type_checks_read_only_the_type() {
     // SAFETY: `vval` is never dereferenced by anything under test — that
     // is the assertion. The allocation is freed at the end.
     unsafe {
-        let bogus = xmalloc(1);
-        let mut tv = raw(
-            VAR_UNKNOWN,
-            typval_vval_union {
-                v_list: bogus.cast(),
-            },
-        );
+        let bogus_alloc = xmalloc(1);
+        let addr = bogus_alloc.addr();
         log.clear();
 
         type Check = (&'static str, unsafe fn(*const TypVal) -> bool);
@@ -1127,7 +1137,7 @@ fn the_type_checks_read_only_the_type() {
 
         for ((name, check), rows) in checks {
             for (v_type, msg) in rows {
-                tv.v_type = v_type;
+                let tv = bogus(v_type, addr);
                 let ok = check_emsg(log.editor(), || check(&raw const tv), msg);
                 assert_eq!(ok, msg.is_none(), "{name} of {v_type}");
                 if msg.is_some() {
@@ -1138,7 +1148,7 @@ fn the_type_checks_read_only_the_type() {
             }
         }
 
-        xfree(bogus);
+        xfree(bogus_alloc);
     }
 }
 
@@ -1147,81 +1157,42 @@ fn the_type_checks_read_only_the_type() {
 /// One row of the `describe('get')` tables: a value and the message
 /// reading it raises, if any.
 struct Row {
-    v_type: VarType,
-    vval: typval_vval_union,
+    tv: TypVal,
     emsg: Option<&'static str>,
 }
 
 /// The rows the number-shaped getters share, in the spec's order. The
 /// answers differ, so each case supplies its own.
 fn number_rows(number: &CString) -> Vec<Row> {
-    let row = |v_type, vval, emsg| Row { v_type, vval, emsg };
+    let row = |tv, emsg| Row { tv, emsg };
     vec![
-        row(VAR_NUMBER, typval_vval_union { v_number: 42 }, None),
+        row(TypVal::Number(42), None),
+        row(TypVal::String(number.as_ptr().cast_mut()), None),
         row(
-            VAR_STRING,
-            typval_vval_union {
-                v_string: number.as_ptr().cast_mut(),
-            },
-            None,
-        ),
-        row(
-            VAR_FLOAT,
-            typval_vval_union { v_float: 42.53 },
+            TypVal::Float(42.53),
             Some("E805: Using a Float as a Number"),
         ),
         row(
-            VAR_PARTIAL,
-            typval_vval_union {
-                v_partial: ptr::null_mut(),
-            },
+            TypVal::Partial(ptr::null_mut()),
             Some("E703: Using a Funcref as a Number"),
         ),
         row(
-            VAR_FUNC,
-            typval_vval_union {
-                v_string: ptr::null_mut(),
-            },
+            TypVal::Func(ptr::null_mut()),
             Some("E703: Using a Funcref as a Number"),
         ),
         row(
-            VAR_LIST,
-            typval_vval_union {
-                v_list: ptr::null_mut(),
-            },
+            TypVal::List(ptr::null_mut()),
             Some("E745: Using a List as a Number"),
         ),
         row(
-            VAR_DICT,
-            typval_vval_union {
-                v_dict: ptr::null_mut(),
-            },
+            TypVal::Dict(ptr::null_mut()),
             Some("E728: Using a Dictionary as a Number"),
         ),
+        row(TypVal::Special(kSpecialVarNull), None),
+        row(TypVal::Bool(kBoolVarTrue), None),
+        row(TypVal::Bool(kBoolVarFalse), None),
         row(
-            VAR_SPECIAL,
-            typval_vval_union {
-                v_special: kSpecialVarNull,
-            },
-            None,
-        ),
-        row(
-            VAR_BOOL,
-            typval_vval_union {
-                v_bool: kBoolVarTrue,
-            },
-            None,
-        ),
-        row(
-            VAR_BOOL,
-            typval_vval_union {
-                v_bool: kBoolVarFalse,
-            },
-            None,
-        ),
-        row(
-            VAR_UNKNOWN,
-            typval_vval_union { v_number: 0 },
+            TypVal::Unknown,
             Some("E685: Internal error: tv_get_number(UNKNOWN)"),
         ),
     ]
@@ -1237,10 +1208,10 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
         let number = cstr("100500");
         let answers = [42, 100500, 0, 0, 0, 0, 0, 0, 1, 0, 0];
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
-            let tv = raw(row.v_type, row.vval);
+            let tv = row.tv;
             log.check(&[]);
             let got = check_emsg(log.editor(), || tv_get_number(&raw const tv), row.emsg);
-            assert_eq!(got, want, "{}", row.v_type);
+            assert_eq!(got, want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
             } else {
@@ -1249,14 +1220,14 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
         }
 
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
-            let tv = raw(row.v_type, row.vval);
+            let tv = row.tv;
             let mut err = false;
             let got = check_emsg(
                 log.editor(),
                 || tv_get_number_chk(&raw const tv, &raw mut err),
                 row.emsg,
             );
-            assert_eq!((got, err), (want, row.emsg.is_some()), "{}", row.v_type);
+            assert_eq!((got, err), (want, row.emsg.is_some()), "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
             } else {
@@ -1293,10 +1264,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         rows.insert(
             2,
             Row {
-                v_type: VAR_STRING,
-                vval: typval_vval_union {
-                    v_string: dot.as_ptr().cast_mut(),
-                },
+                tv: TypVal::String(dot.as_ptr().cast_mut()),
                 emsg: None,
             },
         );
@@ -1304,10 +1272,10 @@ fn getting_a_line_number_resolves_the_cursor() {
 
         for (row, want) in rows.into_iter().zip(answers) {
             win.w_cursor.lnum = 46;
-            let tv = raw(row.v_type, row.vval);
+            let tv = row.tv;
             log.check(&[]);
             let got = check_emsg(log.editor(), || tv_get_lnum(&raw const tv), row.emsg);
-            assert_eq!(i64::from(got), want, "{}", row.v_type);
+            assert_eq!(i64::from(got), want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
             } else {
@@ -1327,86 +1295,60 @@ fn getting_a_float_accepts_only_numbers() {
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
         let number = cstr("100500");
-        let rows: [(VarType, typval_vval_union, Option<&str>, f64); 11] = [
-            (VAR_NUMBER, typval_vval_union { v_number: 42 }, None, 42.0),
+        let rows: [(TypVal, Option<&str>, f64); 11] = [
+            (TypVal::Number(42), None, 42.0),
             (
-                VAR_STRING,
-                typval_vval_union {
-                    v_string: number.as_ptr().cast_mut(),
-                },
+                TypVal::String(number.as_ptr().cast_mut()),
                 Some("E892: Using a String as a Float"),
                 0.0,
             ),
-            (VAR_FLOAT, typval_vval_union { v_float: 42.53 }, None, 42.53),
+            (TypVal::Float(42.53), None, 42.53),
             (
-                VAR_PARTIAL,
-                typval_vval_union {
-                    v_partial: ptr::null_mut(),
-                },
+                TypVal::Partial(ptr::null_mut()),
                 Some("E891: Using a Funcref as a Float"),
                 0.0,
             ),
             (
-                VAR_FUNC,
-                typval_vval_union {
-                    v_string: ptr::null_mut(),
-                },
+                TypVal::Func(ptr::null_mut()),
                 Some("E891: Using a Funcref as a Float"),
                 0.0,
             ),
             (
-                VAR_LIST,
-                typval_vval_union {
-                    v_list: ptr::null_mut(),
-                },
+                TypVal::List(ptr::null_mut()),
                 Some("E893: Using a List as a Float"),
                 0.0,
             ),
             (
-                VAR_DICT,
-                typval_vval_union {
-                    v_dict: ptr::null_mut(),
-                },
+                TypVal::Dict(ptr::null_mut()),
                 Some("E894: Using a Dictionary as a Float"),
                 0.0,
             ),
             (
-                VAR_SPECIAL,
-                typval_vval_union {
-                    v_special: kSpecialVarNull,
-                },
+                TypVal::Special(kSpecialVarNull),
                 Some("E907: Using a special value as a Float"),
                 0.0,
             ),
             (
-                VAR_BOOL,
-                typval_vval_union {
-                    v_bool: kBoolVarTrue,
-                },
+                TypVal::Bool(kBoolVarTrue),
                 Some("E362: Using a boolean value as a Float"),
                 0.0,
             ),
             (
-                VAR_BOOL,
-                typval_vval_union {
-                    v_bool: kBoolVarFalse,
-                },
+                TypVal::Bool(kBoolVarFalse),
                 Some("E362: Using a boolean value as a Float"),
                 0.0,
             ),
             (
-                VAR_UNKNOWN,
-                typval_vval_union { v_number: 0 },
+                TypVal::Unknown,
                 Some("E685: Internal error: tv_get_float(UNKNOWN)"),
                 0.0,
             ),
         ];
 
-        for (v_type, vval, emsg, want) in rows {
-            let tv = raw(v_type, vval);
+        for (tv, emsg, want) in rows {
             log.check(&[]);
             let got = check_emsg(log.editor(), || tv_get_float(&raw const tv), emsg);
-            assert_eq!(got, want, "{v_type}");
+            assert_eq!(got, want, "{}", tv.v_type());
             if emsg.is_some() {
                 log.clear();
             } else {
@@ -1428,86 +1370,39 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
     // SAFETY: every value is this case's own and owns nothing.
     unsafe {
         let number = cstr("100500");
-        let rows: [(VarType, typval_vval_union, Option<&str>, Option<&str>); 11] = [
+        let rows: [(TypVal, Option<&str>, Option<&str>); 11] = [
+            (TypVal::Number(42), None, Some("42")),
             (
-                VAR_NUMBER,
-                typval_vval_union { v_number: 42 },
-                None,
-                Some("42"),
-            ),
-            (
-                VAR_STRING,
-                typval_vval_union {
-                    v_string: number.as_ptr().cast_mut(),
-                },
+                TypVal::String(number.as_ptr().cast_mut()),
                 None,
                 Some("100500"),
             ),
+            (TypVal::Float(42.53), None, Some("42.53")),
             (
-                VAR_FLOAT,
-                typval_vval_union { v_float: 42.53 },
-                None,
-                Some("42.53"),
-            ),
-            (
-                VAR_PARTIAL,
-                typval_vval_union {
-                    v_partial: ptr::null_mut(),
-                },
+                TypVal::Partial(ptr::null_mut()),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),
             (
-                VAR_FUNC,
-                typval_vval_union {
-                    v_string: ptr::null_mut(),
-                },
+                TypVal::Func(ptr::null_mut()),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),
             (
-                VAR_LIST,
-                typval_vval_union {
-                    v_list: ptr::null_mut(),
-                },
+                TypVal::List(ptr::null_mut()),
                 Some("E730: Using a List as a String"),
                 None,
             ),
             (
-                VAR_DICT,
-                typval_vval_union {
-                    v_dict: ptr::null_mut(),
-                },
+                TypVal::Dict(ptr::null_mut()),
                 Some("E731: Using a Dictionary as a String"),
                 None,
             ),
+            (TypVal::Special(kSpecialVarNull), None, Some("v:null")),
+            (TypVal::Bool(kBoolVarTrue), None, Some("v:true")),
+            (TypVal::Bool(kBoolVarFalse), None, Some("v:false")),
             (
-                VAR_SPECIAL,
-                typval_vval_union {
-                    v_special: kSpecialVarNull,
-                },
-                None,
-                Some("v:null"),
-            ),
-            (
-                VAR_BOOL,
-                typval_vval_union {
-                    v_bool: kBoolVarTrue,
-                },
-                None,
-                Some("v:true"),
-            ),
-            (
-                VAR_BOOL,
-                typval_vval_union {
-                    v_bool: kBoolVarFalse,
-                },
-                None,
-                Some("v:false"),
-            ),
-            (
-                VAR_UNKNOWN,
-                typval_vval_union { v_number: 0 },
+                TypVal::Unknown,
                 Some("E908: Using an invalid value as a String"),
                 None,
             ),
@@ -1535,16 +1430,16 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
             ("string_buf", false, scratch.cast_const()),
             ("string_buf_chk", true, scratch.cast_const()),
         ] {
-            for &(v_type, ref vval, emsg, answer) in &rows {
-                let tv = raw(v_type, ptr::read(vval));
+            for (tv, emsg, answer) in &rows {
+                let v_type = tv.v_type();
                 log.check(&[]);
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string_buf" => tv_get_string_buf(&raw const tv, scratch),
-                        _ => tv_get_string_buf_chk(&raw const tv, scratch),
+                        "string_buf" => tv_get_string_buf(&raw const *tv, scratch),
+                        _ => tv_get_string_buf_chk(&raw const *tv, scratch),
                     },
-                    emsg,
+                    *emsg,
                 );
 
                 // A scalar is formatted into the buffer; a string is not.
@@ -1556,7 +1451,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 }
 
                 let want = match (answer, checked) {
-                    (Some(s), _) => Some(s),
+                    (Some(s), _) => Some(*s),
                     // Unchecked, a failure is the empty string, not NULL.
                     (None, false) => Some(""),
                     (None, true) => None,

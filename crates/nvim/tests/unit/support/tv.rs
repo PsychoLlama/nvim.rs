@@ -34,9 +34,7 @@ use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
     Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
-    typval_vval_union,
+    VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
 };
 
 use super::cstr;
@@ -130,59 +128,24 @@ impl Tv {
     /// As [`Tv::build`]. `path` holds the containers currently being built,
     /// outermost first, for [`Tv::Cycle`] to name.
     unsafe fn build_at(&self, path: &mut Vec<Container>) -> TypVal {
-        let (v_type, vval) = match self {
-            Tv::Unknown => (VAR_UNKNOWN, typval_vval_union { v_number: 0 }),
-            Tv::Nil => (
-                VAR_SPECIAL,
-                typval_vval_union {
-                    v_special: kSpecialVarNull,
-                },
-            ),
-            Tv::Bool(b) => (
-                VAR_BOOL,
-                typval_vval_union {
-                    v_bool: if *b { kBoolVarTrue } else { kBoolVarFalse },
-                },
-            ),
-            Tv::Int(n) => (VAR_NUMBER, typval_vval_union { v_number: *n }),
-            Tv::Float(f) => (VAR_FLOAT, typval_vval_union { v_float: *f }),
-            Tv::Str(s) => (
-                VAR_STRING,
-                typval_vval_union {
-                    v_string: unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast(),
-                },
-            ),
-            Tv::NullStr => (
-                VAR_STRING,
-                typval_vval_union {
-                    v_string: ptr::null_mut(),
-                },
-            ),
-            Tv::NullList => (
-                VAR_LIST,
-                typval_vval_union {
-                    v_list: ptr::null_mut(),
-                },
-            ),
-            Tv::NullDict => (
-                VAR_DICT,
-                typval_vval_union {
-                    v_dict: ptr::null_mut(),
-                },
-            ),
-            Tv::NullBlob => (
-                VAR_BLOB,
-                typval_vval_union {
-                    v_blob: ptr::null_mut(),
-                },
-            ),
+        match self {
+            Tv::Unknown => TypVal::Unknown,
+            Tv::Nil => TypVal::Special(kSpecialVarNull),
+            Tv::Bool(b) => TypVal::Bool(if *b { kBoolVarTrue } else { kBoolVarFalse }),
+            Tv::Int(n) => TypVal::Number(*n),
+            Tv::Float(f) => TypVal::Float(*f),
+            Tv::Str(s) => TypVal::String(unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast()),
+            Tv::NullStr => TypVal::String(ptr::null_mut()),
+            Tv::NullList => TypVal::List(ptr::null_mut()),
+            Tv::NullDict => TypVal::Dict(ptr::null_mut()),
+            Tv::NullBlob => TypVal::Blob(ptr::null_mut()),
             Tv::Blob(bytes) => {
                 let b = tv_blob_alloc();
                 unsafe { (*b).bv_refcount = Refcount::ONE };
                 for byte in bytes {
                     unsafe { ga_append(&raw mut (*b).bv_ga, *byte) };
                 }
-                (VAR_BLOB, typval_vval_union { v_blob: b })
+                TypVal::Blob(b)
             }
             Tv::List(items) => {
                 let l = tv_list_alloc(items.len() as isize);
@@ -191,11 +154,14 @@ impl Tv {
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
                     let li = unsafe { list_item_alloc() };
-                    unsafe { (*li).li_tv = item_tv };
+                    // The item's value has never held one, so the value goes
+                    // in rather than over: an assignment would drop what the
+                    // allocator left behind.
+                    unsafe { (&raw mut (*li).li_tv).write(item_tv) };
                     unsafe { tv_list_append(l, li) };
                 }
                 path.pop();
-                (VAR_LIST, typval_vval_union { v_list: l })
+                TypVal::List(l)
             }
             Tv::Dict(entries) => {
                 let d = unsafe { tv_dict_alloc() };
@@ -209,43 +175,31 @@ impl Tv {
                     let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();
-                (VAR_DICT, typval_vval_union { v_dict: d })
+                TypVal::Dict(d)
             }
-            Tv::Func(name) => (
-                VAR_FUNC,
-                typval_vval_union {
-                    v_string: unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast(),
-                },
-            ),
-            Tv::Partial(pt) => (
-                VAR_PARTIAL,
-                typval_vval_union {
-                    v_partial: unsafe { pt.build_at(path) },
-                },
-            ),
+            Tv::Func(name) => {
+                TypVal::Func(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
+            }
+            Tv::Partial(pt) => TypVal::Partial(unsafe { pt.build_at(path) }),
             Tv::Cycle(up) => {
                 // The container is already live and gains a reference.
                 match path[*up] {
                     Container::List(l) => {
                         unsafe { (*l).lv_refcount.retain() };
-                        (VAR_LIST, typval_vval_union { v_list: l })
+                        TypVal::List(l)
                     }
                     Container::Dict(d) => {
                         unsafe { (*d).dv_refcount.retain() };
-                        (VAR_DICT, typval_vval_union { v_dict: d })
+                        TypVal::Dict(d)
                     }
                 }
             }
             Tv::Copied(from) => {
-                let mut to = TypVal {
-                    v_type: VAR_UNKNOWN,
-                    vval: typval_vval_union { v_number: 0 },
-                };
+                let mut to = TypVal::Unknown;
                 unsafe { tv_copy(*from, &raw mut to) };
-                return to;
+                to
             }
-        };
-        TypVal { v_type, vval }
+        }
     }
 }
 
@@ -264,11 +218,10 @@ impl Pt {
         }
         let dict = match &self.dict {
             None => ptr::null_mut(),
-            Some(dict) => {
-                let tv = unsafe { dict.build_at(path) };
-                assert_eq!(tv.v_type, VAR_DICT, "a partial's dict is a dict");
-                unsafe { tv.vval.v_dict }
-            }
+            Some(dict) => match unsafe { dict.build_at(path) } {
+                TypVal::Dict(d) => d,
+                other => panic!("a partial's dict is a dict, not {}", other.v_type()),
+            },
         };
         unsafe {
             (*pt).pt_refcount = Refcount::ONE;
@@ -279,6 +232,63 @@ impl Pt {
             (*pt).pt_dict = dict;
         }
         pt
+    }
+}
+
+/// The payload readers the crate keeps to itself.
+///
+/// The enum's variants are the seam a spec gets; the crate's `as_*`/
+/// `*_or_null` family is `pub(crate)`. These are what the specs' old
+/// `tv.list()` became, and they **panic** on the wrong kind rather than
+/// answering NULL: a spec that reads the wrong arm has a bug, where the
+/// crate's readers answer the empty value on purpose.
+pub(crate) trait Payload {
+    /// The list this value holds.
+    fn list(&self) -> *mut List;
+    /// The dictionary this value holds.
+    fn dict(&self) -> *mut Dict;
+    /// The blob this value holds.
+    fn blob(&self) -> *mut Blob;
+    /// The partial this value holds.
+    fn partial(&self) -> *mut Partial;
+    /// The string this value holds, under either kind that holds one.
+    fn string(&self) -> *mut c_char;
+}
+
+impl Payload for TypVal {
+    fn list(&self) -> *mut List {
+        match self {
+            TypVal::List(l) => *l,
+            other => panic!("not a list: v_type {}", other.v_type()),
+        }
+    }
+
+    fn dict(&self) -> *mut Dict {
+        match self {
+            TypVal::Dict(d) => *d,
+            other => panic!("not a dictionary: v_type {}", other.v_type()),
+        }
+    }
+
+    fn blob(&self) -> *mut Blob {
+        match self {
+            TypVal::Blob(b) => *b,
+            other => panic!("not a blob: v_type {}", other.v_type()),
+        }
+    }
+
+    fn partial(&self) -> *mut Partial {
+        match self {
+            TypVal::Partial(pt) => *pt,
+            other => panic!("not a partial: v_type {}", other.v_type()),
+        }
+    }
+
+    fn string(&self) -> *mut c_char {
+        match self {
+            TypVal::String(s) | TypVal::Func(s) => *s,
+            other => panic!("not a string: v_type {}", other.v_type()),
+        }
     }
 }
 
@@ -308,11 +318,8 @@ impl Container {
 /// # Safety
 /// The caller owns the refcount reasoning; see above.
 pub(crate) unsafe fn bit_copy(tv: &TypVal) -> TypVal {
-    TypVal {
-        v_type: tv.v_type,
-        // SAFETY: every bit pattern is a valid value of every member.
-        vval: unsafe { ptr::read(&tv.vval) },
-    }
+    // SAFETY: the caller's promise above -- the duplicate is not released.
+    unsafe { ptr::read(tv) }
 }
 
 /// `typvalt2lua`: read a value back out.
@@ -345,36 +352,28 @@ pub(crate) unsafe fn read_dict(d: *const Dict) -> Tv {
 /// # Safety
 /// As [`read`].
 unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
-    let vval = unsafe { &(*tv).vval };
-    match unsafe { (*tv).v_type } {
-        VAR_UNKNOWN => Tv::Unknown,
-        VAR_SPECIAL => {
-            assert_eq!(unsafe { vval.v_special }, kSpecialVarNull);
+    match unsafe { &*tv } {
+        TypVal::Unknown => Tv::Unknown,
+        TypVal::Special(special) => {
+            assert_eq!(*special, kSpecialVarNull);
             Tv::Nil
         }
-        VAR_BOOL => Tv::Bool(match unsafe { vval.v_bool } {
+        TypVal::Bool(b) => Tv::Bool(match *b {
             b if b == kBoolVarTrue => true,
             b if b == kBoolVarFalse => false,
             other => panic!("not a boolean: {other}"),
         }),
-        VAR_NUMBER => Tv::Int(unsafe { vval.v_number }),
-        VAR_FLOAT => Tv::Float(unsafe { vval.v_float }),
-        VAR_STRING => match unsafe { vval.v_string } {
-            s if s.is_null() => Tv::NullStr,
-            s => Tv::Str(unsafe { CStr::from_ptr(s) }.to_bytes().to_vec()),
-        },
-        VAR_FUNC => match unsafe { vval.v_string } {
-            s if s.is_null() => Tv::NullStr,
-            s => Tv::Func(unsafe { CStr::from_ptr(s) }.to_bytes().to_vec()),
-        },
-        VAR_BLOB => match unsafe { vval.v_blob } {
-            b if b.is_null() => Tv::NullBlob,
-            b => Tv::Blob(unsafe { blob_bytes(b) }),
-        },
-        VAR_LIST => unsafe { read_list_at(vval.v_list, path) },
-        VAR_DICT => unsafe { read_dict_at(vval.v_dict, path) },
-        VAR_PARTIAL => Tv::Partial(Box::new(unsafe { read_partial(vval.v_partial, path) })),
-        other => panic!("reading v_type {other} is not implemented"),
+        TypVal::Number(n) => Tv::Int(*n),
+        TypVal::Float(f) => Tv::Float(*f),
+        TypVal::String(s) if s.is_null() => Tv::NullStr,
+        TypVal::String(s) => Tv::Str(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
+        TypVal::Func(s) if s.is_null() => Tv::NullStr,
+        TypVal::Func(s) => Tv::Func(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
+        TypVal::Blob(b) if b.is_null() => Tv::NullBlob,
+        TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(*b) }),
+        TypVal::List(l) => unsafe { read_list_at(*l, path) },
+        TypVal::Dict(d) => unsafe { read_dict_at(*d, path) },
+        TypVal::Partial(pt) => Tv::Partial(Box::new(unsafe { read_partial(*pt, path) })),
     }
 }
 
@@ -477,10 +476,8 @@ pub(crate) unsafe fn li_alloc() -> *mut ListItem {
     unsafe {
         (*li).li_next = ptr::null_mut();
         (*li).li_prev = ptr::null_mut();
-        (*li).li_tv = TypVal {
-            v_type: VAR_UNKNOWN,
-            vval: typval_vval_union { v_number: 0 },
-        };
+        // Written, not assigned: the slot has never held a value.
+        (&raw mut (*li).li_tv).write(TypVal::Unknown);
     }
     li
 }
@@ -492,7 +489,7 @@ pub(crate) unsafe fn li_alloc() -> *mut ListItem {
 /// The editor must be up.
 pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut List {
     let tv = unsafe { Tv::List(items.to_vec()).build() };
-    unsafe { tv.vval.v_list }
+    tv.list()
 }
 
 /// The spec's `dict{...}`: a fresh dict with `dv_refcount` 1.
@@ -505,7 +502,7 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
         .map(|(k, v)| (k.as_bytes().to_vec(), v.clone()))
         .collect();
     let tv = unsafe { Tv::Dict(entries).build() };
-    unsafe { tv.vval.v_dict }
+    tv.dict()
 }
 
 /// The spec's `list_items`: every item of `l`, front to back.
@@ -671,10 +668,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
     use neovim::eval::EVAL_EVALUATE;
     use neovim::types::EvalArg;
 
-    let mut tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut tv = TypVal::Unknown;
     let mut evalarg = EvalArg {
         eval_flags: EVAL_EVALUATE as c_int,
         eval_getline: None,

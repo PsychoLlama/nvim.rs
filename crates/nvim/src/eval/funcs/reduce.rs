@@ -35,12 +35,12 @@ const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 /// # Safety
 /// `p` has at least `len` readable bytes.
 unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
-    TypVal::string(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
+    TypVal::String(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
 }
 
 /// A Number typval.
 const fn number_tv(n: VarNumber) -> TypVal {
-    TypVal::number(n)
+    TypVal::Number(n)
 }
 
 /// The shared body of `max()` and `min()`.
@@ -57,7 +57,7 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
     let mut n: VarNumber = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
     let better = |i: VarNumber, n: VarNumber| if domax { i > n } else { i < n };
     let tv = unsafe { &*tv };
-    match tv.v_type {
+    match tv.v_type() {
         VAR_LIST => {
             if unsafe { tv_list_len(tv.list_or_null()) } == 0 {
                 return;
@@ -188,10 +188,14 @@ unsafe fn fold_step(
     // the List fold blanks `rettv` so that only `argv[0]` holds the old
     // accumulator, the String fold owns the character it just measured, and
     // the Blob fold's accumulator starts as a Number that owns nothing.
-    argv[0] = result.bit_copy();
-    argv[1] = item.bit_copy();
+    // SAFETY: the frame is this call's and is not released as a whole -- the
+    // `cleanup` flags below say which of the two slots the callee took over,
+    // and only that one is cleared.
+    argv[0] = unsafe { result.bit_copy() };
+    // SAFETY: as above.
+    argv[1] = unsafe { item.bit_copy() };
     if cleanup.blank_rettv {
-        result.v_type = VAR_UNKNOWN;
+        result.write_empty(VAR_UNKNOWN);
     }
     let r = unsafe { eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, result) };
     if cleanup.clear_acc {

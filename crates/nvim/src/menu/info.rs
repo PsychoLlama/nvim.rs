@@ -256,7 +256,7 @@ pub(crate) unsafe fn f_menu_info(args: *mut TypVal, result: *mut TypVal, _fptr: 
     // SAFETY: the caller's obligation; the second argument if there is one.
     let which = unsafe {
         let second = args.add(1);
-        if (*second).v_type != VAR_UNKNOWN {
+        if (*second).v_type() != VAR_UNKNOWN {
             numbuf2.string_chk(second)
         } else {
             // The default is the modes of plain ":menu".

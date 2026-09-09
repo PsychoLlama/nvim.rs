@@ -23,6 +23,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::nlua_create_typed_table;
+use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
@@ -33,7 +34,7 @@ use crate::lua::ffi::{
 };
 use crate::lua::state::nlua_global_refs;
 use crate::types::{
-    Blob, Dict, Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
+    Blob, Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
 };
 
 /// How many Lua slots opening a container needs: its table, the key or index
@@ -270,7 +271,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
         } else {
@@ -334,7 +335,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 
@@ -342,7 +343,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 

@@ -96,7 +96,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut TypVal, dir: Direction, fast: boo
     let mut user_hl: [c_int; 2] = [-1, -1];
     let mut user_data = TYPVAL_T_INIT;
 
-    if unsafe { (*tv).v_type } == VAR_DICT && !unsafe { (*tv).dict_or_null() }.is_null() {
+    if unsafe { (*tv).v_type() } == VAR_DICT && !unsafe { (*tv).dict_or_null() }.is_null() {
         let d = unsafe { (*tv).dict_or_null() };
         // The four cptext strings are copied and owned by the match from
         // here on; the two highlight names and `word` are borrowed, so
@@ -186,7 +186,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
     // Check for the optional "refresh" item.
     compl_opt_refresh_always.set(false);
     let di_refresh = find("refresh");
-    if !di_refresh.is_null() && unsafe { (*di_refresh).di_tv.v_type } == VAR_STRING {
+    if !di_refresh.is_null() && unsafe { (*di_refresh).di_tv.v_type() } == VAR_STRING {
         let v = unsafe { (*di_refresh).di_tv.string_or_null() };
         if !v.is_null() && unsafe { cstr::eq_bytes(v, b"always") } {
             compl_opt_refresh_always.set(true);
@@ -195,7 +195,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
 
     // Add completions from a "words" list.
     let di_words = find("words");
-    if !di_words.is_null() && unsafe { (*di_words).di_tv.v_type } == VAR_LIST {
+    if !di_words.is_null() && unsafe { (*di_words).di_tv.v_type() } == VAR_LIST {
         unsafe { ins_compl_add_list((*di_words).di_tv.list_or_null()) };
     }
 }
@@ -361,7 +361,7 @@ pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFun
         return;
     }
 
-    if unsafe { (*args.offset(1)).v_type } != VAR_LIST {
+    if unsafe { (*args.offset(1)).v_type() } != VAR_LIST {
         emsg(gettext(e_invarg));
     } else {
         let startcol = unsafe { tv_get_number_chk(args, ptr::null_mut()) } as ColNr;
@@ -424,7 +424,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
         // SAFETY: `di` is the dict being built and `key` a static name.
         let _ = unsafe { tv_dict_add_bool(di, key, klen, in_array) };
     }
-    if unsafe { (*match_0).cp_user_data.v_type } == VAR_UNKNOWN {
+    if unsafe { (*match_0).cp_user_data.v_type() } == VAR_UNKNOWN {
         // Add an empty string for backwards compatibility.
         let _ = add_str("user_data", c"".as_ptr());
     } else {
@@ -574,8 +574,8 @@ pub unsafe fn f_complete_info(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     unsafe { tv_dict_alloc_ret(result) };
 
     let mut what_list: *mut List = ptr::null_mut();
-    if unsafe { (*args).v_type } != VAR_UNKNOWN {
-        if unsafe { (*args).v_type } != VAR_LIST {
+    if unsafe { (*args).v_type() } != VAR_UNKNOWN {
+        if unsafe { (*args).v_type() } != VAR_LIST {
             emsg(gettext(e_listreq));
             return;
         }

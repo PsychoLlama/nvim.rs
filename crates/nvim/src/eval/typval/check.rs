@@ -54,7 +54,7 @@ fn arg_check(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_str_or_nr(tv: *const TypVal) -> bool {
-    let message = match unsafe { (*tv).v_type } {
+    let message = match unsafe { (*tv).v_type() } {
         VAR_NUMBER | VAR_STRING => return true,
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
         VAR_PARTIAL | VAR_FUNC => c"E703: Expected a Number or a String, Funcref found",
@@ -81,10 +81,10 @@ pub unsafe fn tv_check_str_or_nr(tv: *const TypVal) -> bool {
 /// The message comes out of the global `num_errors` table, so the caller must
 /// be on the editor's main thread.
 pub unsafe fn tv_check_num(tv: *const TypVal) -> bool {
-    match unsafe { (*tv).v_type } {
+    match unsafe { (*tv).v_type() } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type() as usize])) };
             false
         }
         _ => unsafe { abort() },
@@ -98,10 +98,10 @@ pub unsafe fn tv_check_num(tv: *const TypVal) -> bool {
 /// The message comes out of the global `str_errors` table, so the caller must
 /// be on the editor's main thread.
 pub unsafe fn tv_check_str(tv: *const TypVal) -> bool {
-    match unsafe { (*tv).v_type } {
+    match unsafe { (*tv).v_type() } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type() as usize])) };
             false
         }
         _ => unsafe { abort() },
@@ -121,7 +121,7 @@ pub unsafe fn tv_check_for_string_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_STRING,
+        arg.v_type() == VAR_STRING,
         e_string_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -159,7 +159,7 @@ pub unsafe fn tv_check_for_opt_string_arg(
     args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
         return Ok(());
     }
     unsafe { tv_check_for_string_arg(args, idx) }
@@ -178,7 +178,7 @@ pub unsafe fn tv_check_for_number_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_NUMBER,
+        arg.v_type() == VAR_NUMBER,
         e_number_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -195,7 +195,7 @@ pub unsafe fn tv_check_for_opt_number_arg(
     args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
         return Ok(());
     }
     unsafe { tv_check_for_number_arg(args, idx) }
@@ -214,7 +214,7 @@ pub unsafe fn tv_check_for_float_or_nr_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_FLOAT || arg.v_type == VAR_NUMBER,
+        arg.v_type() == VAR_FLOAT || arg.v_type() == VAR_NUMBER,
         e_float_or_number_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -233,9 +233,9 @@ pub unsafe fn tv_check_for_bool_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     let numeric_bool =
-        arg.v_type == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
+        arg.v_type() == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
     arg_check(
-        arg.v_type == VAR_BOOL || numeric_bool,
+        arg.v_type() == VAR_BOOL || numeric_bool,
         e_bool_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -252,7 +252,7 @@ pub unsafe fn tv_check_for_opt_bool_arg(
     args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
         return Ok(());
     }
     unsafe { tv_check_for_bool_arg(args, idx) }
@@ -271,7 +271,7 @@ pub unsafe fn tv_check_for_blob_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_BLOB,
+        arg.v_type() == VAR_BLOB,
         e_blob_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -290,7 +290,7 @@ pub unsafe fn tv_check_for_list_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_LIST,
+        arg.v_type() == VAR_LIST,
         e_list_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -309,7 +309,7 @@ pub unsafe fn tv_check_for_dict_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_DICT,
+        arg.v_type() == VAR_DICT,
         e_dict_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -346,7 +346,7 @@ pub unsafe fn tv_check_for_opt_dict_arg(
     args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
         return Ok(());
     }
     unsafe { tv_check_for_dict_arg(args, idx) }
@@ -365,7 +365,7 @@ pub unsafe fn tv_check_for_string_or_number_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_STRING || arg.v_type == VAR_NUMBER,
+        arg.v_type() == VAR_STRING || arg.v_type() == VAR_NUMBER,
         e_string_or_number_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -412,7 +412,7 @@ pub unsafe fn tv_check_for_string_or_list_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_STRING || arg.v_type == VAR_LIST,
+        arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST,
         e_string_or_list_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -431,7 +431,7 @@ pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_STRING || arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
+        arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
         e_string_list_or_blob_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -448,7 +448,7 @@ pub unsafe fn tv_check_for_opt_string_or_list_arg(
     args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
         return Ok(());
     }
     unsafe { tv_check_for_string_or_list_arg(args, idx) }
@@ -467,7 +467,7 @@ pub unsafe fn tv_check_for_string_or_func_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_PARTIAL || arg.v_type == VAR_FUNC || arg.v_type == VAR_STRING,
+        arg.v_type() == VAR_PARTIAL || arg.v_type() == VAR_FUNC || arg.v_type() == VAR_STRING,
         e_string_or_function_required_for_argument_nr.as_ptr(),
         idx,
     )
@@ -486,7 +486,7 @@ pub unsafe fn tv_check_for_list_or_blob_arg(
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
     arg_check(
-        arg.v_type == VAR_LIST || arg.v_type == VAR_BLOB,
+        arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
         e_list_or_blob_required_for_argument_nr.as_ptr(),
         idx,
     )

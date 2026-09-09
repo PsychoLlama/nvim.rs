@@ -434,7 +434,7 @@ pub fn shada_encode_gvars() -> String_0 {
             return packer_take_string(&packer);
         }
         // A function reference cannot be written to a file.
-        if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
+        if vartv.v_type() != VAR_FUNC && vartv.v_type() != VAR_PARTIAL {
             // The entry owns the copy it is built around; the value the
             // iterator handed over stays this function's to release.
             let mut tgttv = TV_INITIAL_VALUE;

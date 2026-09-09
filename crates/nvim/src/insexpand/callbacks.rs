@@ -608,9 +608,9 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
 
     // Call the function to obtain the list of matches.
     let mut args = [TYPVAL_T_INIT; 3];
-    args[0].v_type = VAR_NUMBER;
-    args[1].v_type = VAR_STRING;
-    args[2].v_type = VAR_UNKNOWN;
+    args[0].write_empty(VAR_NUMBER);
+    args[1].write_empty(VAR_STRING);
+    args[2].write_empty(VAR_UNKNOWN);
     args[0].write_number(0);
     args[1].write_string(if base.is_null() {
         c"".as_ptr().cast_mut()
@@ -629,7 +629,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     // in Insert mode in another buffer.
     let locked = Lock::text();
     if unsafe { callback_call(cb, 2, args.as_mut_ptr(), &raw mut rettv) } {
-        match rettv.v_type {
+        match rettv.v_type() {
             VAR_LIST => matchlist = rettv.list_or_null(),
             VAR_DICT => matchdict = rettv.dict_or_null(),
             // VAR_SPECIAL falls through to the default.

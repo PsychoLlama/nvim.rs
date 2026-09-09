@@ -204,7 +204,7 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
             // evaluated; each of the three renderings is NUL-terminated.
             let argstr: *const c_char = if !owned {
                 unsafe { numbuf.string(&raw mut rettv) }
-            } else if rettv.v_type == VAR_STRING {
+            } else if rettv.v_type() == VAR_STRING {
                 unsafe { encode_tv2echo(&raw mut rettv, null_mut::<size_t>()) }
             } else {
                 unsafe { encode_tv2string(&raw mut rettv, null_mut::<size_t>()) }

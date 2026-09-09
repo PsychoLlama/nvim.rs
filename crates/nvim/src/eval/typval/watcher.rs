@@ -310,9 +310,9 @@ pub unsafe fn tv_dict_watcher_notify(
     oldtv: *mut TypVal,
 ) {
     let mut argv = [TV_INITIAL_VALUE; 3];
-    argv[0] = TypVal::dict(dict);
-    argv[1] = TypVal::string(unsafe { xstrdup(key) });
-    argv[2] = TypVal::dict(unsafe { tv_dict_alloc() });
+    argv[0] = TypVal::Dict(dict);
+    argv[1] = TypVal::String(unsafe { xstrdup(key) });
+    argv[2] = TypVal::Dict(unsafe { tv_dict_alloc() });
     unsafe { (*argv[2].dict_or_null()).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
@@ -326,7 +326,7 @@ pub unsafe fn tv_dict_watcher_notify(
     if !newtv.is_null() {
         add("new", newtv);
     }
-    if !oldtv.is_null() && unsafe { (*oldtv).v_type } != VAR_UNKNOWN {
+    if !oldtv.is_null() && unsafe { (*oldtv).v_type() } != VAR_UNKNOWN {
         add("old", oldtv);
     }
 

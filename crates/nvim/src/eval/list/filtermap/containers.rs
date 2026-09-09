@@ -147,7 +147,7 @@ pub(crate) fn filter_map_blob(
     let mut idx = 0;
     while i < b.len() {
         let val = VarNumber::from(b.byte(i));
-        let mut tv = TypVal::number(val);
+        let mut tv = TypVal::Number(val);
         set_key_nr(idx);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
@@ -157,7 +157,7 @@ pub(crate) fn filter_map_blob(
             break;
         }
         if filtermap != FilterMap::Foreach {
-            if newtv.v_type != VAR_NUMBER && newtv.v_type != VAR_BOOL {
+            if newtv.v_type() != VAR_NUMBER && newtv.v_type() != VAR_BOOL {
                 clear_tv(&mut newtv);
                 err(e_invalblob);
                 break;
@@ -219,7 +219,7 @@ pub(crate) fn filter_map_string(
             break;
         }
         if matches!(filtermap, FilterMap::Map | FilterMap::MapNew) {
-            if newtv.v_type != VAR_STRING {
+            if newtv.v_type() != VAR_STRING {
                 clear_tv(&mut newtv);
                 clear_tv(&mut tv);
                 err(e_string_required);

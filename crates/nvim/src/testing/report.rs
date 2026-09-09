@@ -177,9 +177,9 @@ unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
 unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
     let msg = unsafe { &*opt_msg_tv };
-    let blank = msg.v_type == VAR_STRING
+    let blank = msg.v_type() == VAR_STRING
         && (msg.string_or_null().is_null() || unsafe { *msg.string_or_null() } == 0);
-    if msg.v_type == VAR_UNKNOWN || blank {
+    if msg.v_type() == VAR_UNKNOWN || blank {
         return;
     }
     let tofree = unsafe { encode_tv2echo(opt_msg_tv, ptr::null_mut()) };
@@ -194,7 +194,7 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
 /// `tv` is a live typval.
 unsafe fn is_dict(tv: *mut TypVal) -> bool {
     // SAFETY: the caller's typval.
-    unsafe { (*tv).v_type == VAR_DICT && !(*tv).dict_or_null().is_null() }
+    unsafe { (*tv).v_type() == VAR_DICT && !(*tv).dict_or_null().is_null() }
 }
 
 /// Replace both dictionaries with copies holding only the entries that differ,

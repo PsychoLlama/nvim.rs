@@ -534,22 +534,51 @@ pub struct StaticList10 {
     pub sl_list: List,
     pub sl_items: [ListItem; 10],
 }
-#[repr(C)]
-pub struct TypVal {
-    pub v_type: VarType,
-    pub vval: typval_vval_union,
-}
-#[repr(C)]
-pub union typval_vval_union {
-    pub v_number: VarNumber,
-    pub v_bool: BoolVarValue,
-    pub v_special: SpecialVarValue,
-    pub v_float: Float,
-    pub v_string: *mut ::core::ffi::c_char,
-    pub v_list: *mut List,
-    pub v_dict: *mut Dict,
-    pub v_partial: *mut Partial,
-    pub v_blob: *mut Blob,
+/// A Vimscript value.
+///
+/// Eleven kinds, one payload each, sixteen bytes: the tag and, beside it, the
+/// eight the payload needs.  `#[repr(C, u32)]` because that layout is the one
+/// the C had -- a `v_type` word followed by a union -- and because it lets the
+/// discriminants *be* the [`VarType`] codes, so `type()`, the error tables and
+/// the `tv_check_for_*_arg` family keep reading a number rather than matching
+/// eleven arms.  [`v_type`](Self::v_type) is that number.
+///
+/// **The lock is not here.** `:lockvar l[0]` locks the place, not the value in
+/// it, so the lock lives on the [`ListItem`]/[`DictItem`](crate::types::DictItem)
+/// -- which is also what keeps this type at sixteen bytes, since an enum has
+/// nowhere to put a second field.
+///
+/// [`VAR_STRING`] and [`VAR_FUNC`] shared `v_string` in the union and are two
+/// variants here: the string a funcref holds is a *name*, and copying one
+/// takes a reference to the function as well.
+///
+/// The pointer payloads are still raw, and the value still owns what they
+/// point at: `Drop` is `tv_clear` and `Clone` is `tv_copy`.
+#[repr(C, u32)]
+pub enum TypVal {
+    /// No value: what a fresh slot holds, and what one is left as after being
+    /// moved out of.
+    Unknown = VAR_UNKNOWN,
+    /// An integer.
+    Number(VarNumber) = VAR_NUMBER,
+    /// A string.  Owned, and null for `v:_null_string`.
+    String(*mut ::core::ffi::c_char) = VAR_STRING,
+    /// A funcref: an owned function name, plus a reference to the function.
+    Func(*mut ::core::ffi::c_char) = VAR_FUNC,
+    /// A list; owned as one reference, and null for `v:_null_list`.
+    List(*mut List) = VAR_LIST,
+    /// A dictionary; owned as one reference, and null for `v:_null_dict`.
+    Dict(*mut Dict) = VAR_DICT,
+    /// A float.
+    Float(Float) = VAR_FLOAT,
+    /// `v:true` or `v:false`.
+    Bool(BoolVarValue) = VAR_BOOL,
+    /// `v:null`.
+    Special(SpecialVarValue) = VAR_SPECIAL,
+    /// A partial; owned as one reference.
+    Partial(*mut Partial) = VAR_PARTIAL,
+    /// A blob; owned as one reference, and null for `v:_null_blob`.
+    Blob(*mut Blob) = VAR_BLOB,
 }
 #[repr(C)]
 pub struct UserFunc {

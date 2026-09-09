@@ -186,7 +186,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
     }
 
     let mut arg_allocated = false;
-    let mut arg = TypVal::string(colored_ccline.text());
+    let mut arg = TypVal::String(colored_ccline.text());
     let mut tv = TV_INITIAL_VALUE;
 
     // Both are C function-level statics. `prev_prompt_id` starts at
@@ -276,7 +276,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         if err.is_set() || !cbcall_ret {
             break 'body Label::Error;
         }
-        if tv.v_type != VAR_LIST {
+        if tv.v_type() != VAR_LIST {
             print_errmsg!("E5400: Callback should return list");
             break 'body Label::Error;
         }
@@ -288,7 +288,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         let mut i: ::core::ffi::c_int = 0;
         let mut li: *const ListItem = unsafe { (*tv.list_or_null()).lv_first };
         while !li.is_null() {
-            if unsafe { (*li).li_tv.v_type } != VAR_LIST {
+            if unsafe { (*li).li_tv.v_type() } != VAR_LIST {
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }

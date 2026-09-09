@@ -122,9 +122,9 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
             let mut cur = stack.last();
             stack.pop();
             if cur.container {
-                if cur.special || (*cur.tv).v_type == VAR_DICT {
+                if cur.special || (*cur.tv).v_type() == VAR_DICT {
                     debug_assert!(
-                        (*cur.tv).v_type == if cur.special { VAR_LIST } else { VAR_DICT }
+                        (*cur.tv).v_type() == if cur.special { VAR_LIST } else { VAR_DICT }
                     );
                     // Skip any non-string key: those are not part of the
                     // dictionary being built.
@@ -162,7 +162,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         cur = TVPopStackItem::leaf(&raw mut (*di).di_tv);
                     }
                 } else {
-                    debug_assert!((*cur.tv).v_type == VAR_LIST);
+                    debug_assert!((*cur.tv).v_type() == VAR_LIST);
                     let list = (*cur.tv).list_or_null();
                     if usize::try_from(tv_list_len(list)).is_ok_and(|n| n == cur.list_len) {
                         lua_pop(lstate, 1);
@@ -178,7 +178,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                 }
             }
             debug_assert!(!cur.container);
-            *cur.tv = TypVal::number(0);
+            *cur.tv = TypVal::Number(0);
             'converted: {
                 match lua_type(lstate, -1) {
                     LUA_TNIL => {
@@ -256,7 +256,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                             cur.tv,
                                             table_props.string_keys_num.cast_signed(),
                                         );
-                                        debug_assert!((*cur.tv).v_type == VAR_DICT);
+                                        debug_assert!((*cur.tv).v_type() == VAR_DICT);
                                         let val_di = tv_dict_find(
                                             (*cur.tv).dict_or_null(),
                                             c"_VAL".as_ptr(),
@@ -265,7 +265,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                         debug_assert!(!val_di.is_null());
                                         cur.tv = &raw mut (*val_di).di_tv;
                                         (*(*cur.tv).list_or_null()).lua_table_ref = table_ref;
-                                        debug_assert!((*cur.tv).v_type == VAR_LIST);
+                                        debug_assert!((*cur.tv).v_type() == VAR_LIST);
                                         cur.list_len = table_props.string_keys_num;
                                     } else {
                                         new_dict(cur.tv, table_ref);
@@ -316,7 +316,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
         }
         if !ret {
             tv_clear(ret_tv);
-            *ret_tv = TypVal::number(0);
+            *ret_tv = TypVal::Number(0);
             lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);
         }
         debug_assert!(lua_gettop(lstate) == initial_size - 1);

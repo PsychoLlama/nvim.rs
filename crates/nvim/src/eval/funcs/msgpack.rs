@@ -79,7 +79,7 @@ pub unsafe fn f_json_decode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         semsg!("E474: Failed to parse {s}");
         result.write_number(0);
     }
-    debug_assert!(result.v_type != VAR_UNKNOWN);
+    debug_assert!(result.v_type() != VAR_UNKNOWN);
     unsafe { xfree(tofree as *mut c_void) };
 }
 
@@ -173,7 +173,7 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
     if unsafe { tv_list_len(list) } == 0 {
         return;
     }
-    if unsafe { (*tv_list_first(list)).li_tv.v_type } != VAR_STRING {
+    if unsafe { (*tv_list_first(list)).li_tv.v_type() } != VAR_STRING {
         semsg!("E475: Invalid argument: List item is not a string");
         return;
     }

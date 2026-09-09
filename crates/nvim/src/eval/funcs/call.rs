@@ -608,7 +608,7 @@ pub unsafe fn f_garbagecollect(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `libcall()` and `libcallnr()`.
 fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
-    result.v_type = out_type;
+    result.write_empty(out_type);
     if out_type != VAR_NUMBER {
         result.write_string(ptr::null_mut());
     }
@@ -623,7 +623,7 @@ fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
     let libname = args.get(0).string_or_null();
     let funcname = args.get(1).string_or_null();
     let arg3 = args.get(2);
-    let str_in = if arg3.v_type == VAR_STRING {
+    let str_in = if arg3.v_type() == VAR_STRING {
         arg3.string_or_null()
     } else {
         ptr::null_mut()

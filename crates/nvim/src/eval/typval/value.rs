@@ -43,7 +43,7 @@ const TV_CSTRING: size_t = size_t::MAX - 1;
 ///
 /// `tv` must point at an initialized typval, unaliased for the call.
 pub unsafe fn tv_clear(tv: *mut TypVal) {
-    if tv.is_null() || unsafe { (*tv).v_type } == VAR_UNKNOWN {
+    if tv.is_null() || unsafe { (*tv).v_type() } == VAR_UNKNOWN {
         return;
     }
 
@@ -73,12 +73,12 @@ pub unsafe fn tv_free(tv: *mut TypVal) {
 
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
-    match val.v_type {
+    match val.v_type() {
         VAR_PARTIAL => unsafe { partial_unref((*tv).partial_or_null()) },
         // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
         // reference to the function and the name string.
         VAR_FUNC | VAR_STRING => {
-            if val.v_type == VAR_FUNC {
+            if val.v_type() == VAR_FUNC {
                 unsafe { func_unref((*tv).func_name_or_null()) };
             }
             unsafe { xfree((*tv).string_or_func_name().cast()) };
@@ -109,14 +109,14 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
 
     // SAFETY: the caller's promise: a live source typval.
     let src = unsafe { Tv::new(from.cast_mut()) };
-    match src.v_type {
+    match src.v_type() {
         VAR_STRING | VAR_FUNC => {
             let text = src.string_or_func_name();
             if !text.is_null() {
                 // SAFETY: the tag says the string arm holds a live
                 // NUL-terminated string.
                 let copy = unsafe { xstrdup(text) };
-                if src.v_type == VAR_FUNC {
+                if src.v_type() == VAR_FUNC {
                     dst.write_func_name(copy);
                     // SAFETY: the name just copied.
                     unsafe { func_ref(copy) };
@@ -190,7 +190,7 @@ pub unsafe fn tv_item_lock(
 
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
-    match val.v_type {
+    match val.v_type() {
         VAR_BLOB => {
             let b = val.blob_or_null();
             // SAFETY: the typval's own blob.
@@ -245,7 +245,7 @@ pub unsafe fn tv_item_lock(
 pub unsafe fn tv_islocked(slot_lock: VarLock, tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    let container_lock = match val.v_type {
+    let container_lock = match val.v_type() {
         VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
         VAR_DICT => {
             unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
@@ -275,7 +275,7 @@ pub unsafe extern "C" fn tv_check_lock(
 ) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    let lock = match val.v_type {
+    let lock = match val.v_type() {
         // SAFETY: the caller's live typval, read through the union member
         // its own `v_type` selects.
         VAR_BLOB => {
@@ -354,7 +354,7 @@ pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if !(unsafe { (*tv1).is_func() } && unsafe { (*tv2).is_func() })
-        && unsafe { (*tv1).v_type } != unsafe { (*tv2).v_type }
+        && unsafe { (*tv1).v_type() } != unsafe { (*tv2).v_type() }
     {
         return false;
     }
@@ -380,7 +380,7 @@ pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     // nothing extra -- it is the same two `set`s, moved onto the scope.
     // SAFETY: the caller's promise: two live typvals.
     let (a, b) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
-    match a.v_type {
+    match a.v_type() {
         VAR_LIST => {
             let _recursing = Depth::of(&recursive_cnt);
             unsafe { tv_list_equal((*tv1).list_or_null(), (*tv2).list_or_null(), ic) }

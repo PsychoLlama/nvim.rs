@@ -255,7 +255,7 @@ pub fn buf_inc_changedtick(buffer: Buf) {
 pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     // `b:changedtick` is always a plain number, so the watcher's "old
     // value" is one too: a fresh typval, owning nothing.
-    let mut old_val = TypVal::number(b.changedtick_di.di_tv.number_or_zero());
+    let mut old_val = TypVal::Number(b.changedtick_di.di_tv.number_or_zero());
     check_changedtick_item(b);
     b.changedtick_di.di_tv.write_number(changedtick);
     // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
@@ -287,8 +287,8 @@ fn check_changedtick_item(buffer: Buf) {
     // SAFETY: non-null, and `tv_dict_find` answers a live dictionary item.
     let item = unsafe { &*di };
     assert!(
-        item.di_tv.v_type == VAR_NUMBER as _,
-        "changedtick_di->di_tv.v_type == VAR_NUMBER"
+        item.di_tv.v_type() == VAR_NUMBER as _,
+        "changedtick_di->di_tv.v_type() == VAR_NUMBER"
     );
     assert!(
         item.di_lock == VarLock::Fixed,

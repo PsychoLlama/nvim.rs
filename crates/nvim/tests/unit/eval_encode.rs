@@ -9,10 +9,10 @@ use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
-use neovim::types::{List, Refcount, TypVal, typval_vval_union};
+use neovim::types::{List, Refcount, TypVal};
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::tv::{self, Tv};
+use crate::support::tv::{self, Payload, Tv};
 
 // -------------------------------------------------------------- encode
 
@@ -116,10 +116,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                     "after writing {chunk:?}"
                 );
             }
-            let mut tv = TypVal {
-                v_type: neovim::types::VAR_LIST,
-                vval: typval_vval_union { v_list: l },
-            };
+            let mut tv = TypVal::List(l);
             tv_clear(&raw mut tv);
         }
     }
@@ -142,9 +139,9 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
         let inner_tv = inner.build();
         for i in 0..n {
             if i > 0 {
-                match inner_tv.v_type {
-                    neovim::types::VAR_LIST => (*inner_tv.vval.v_list).lv_refcount.retain(),
-                    _ => (*inner_tv.vval.v_dict).dv_refcount.retain(),
+                match inner_tv.v_type() {
+                    neovim::types::VAR_LIST => (*inner_tv.list()).lv_refcount.retain(),
+                    _ => (*inner_tv.dict()).dv_refcount.retain(),
                 }
             }
             let li = tv::list_item_alloc();
@@ -155,10 +152,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             (*li).li_tv = tv::bit_copy(&inner_tv);
             tv_list_append(outer, li);
         }
-        TypVal {
-            v_type: neovim::types::VAR_LIST,
-            vval: typval_vval_union { v_list: outer },
-        }
+        TypVal::List(outer)
     }
 }
 
@@ -172,9 +166,9 @@ fn clearing_releases_a_shared_container_exactly_once() {
     unsafe {
         // `[&l [1], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![Tv::Float(1.0)]));
-        let outer = tv.vval.v_list;
+        let outer = tv.list();
         let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.vval.v_list;
+        let inner = (*lis[0]).li_tv.list();
         let inner_li = (*inner).lv_first;
         log.check(&[
             alloc::list(outer),
@@ -197,9 +191,9 @@ fn clearing_releases_a_shared_container_exactly_once() {
 
         // `[&l [], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![]));
-        let outer = tv.vval.v_list;
+        let outer = tv.list();
         let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.vval.v_list;
+        let inner = (*lis[0]).li_tv.list();
         log.check(&[
             alloc::list(outer),
             alloc::list(inner),
@@ -219,9 +213,9 @@ fn clearing_releases_a_shared_container_exactly_once() {
 
         // `[&d {}, *d]`
         let mut tv = sharing(2, &Tv::Dict(vec![]));
-        let outer = tv.vval.v_list;
+        let outer = tv.list();
         let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.vval.v_dict;
+        let inner = (*lis[0]).li_tv.dict();
         log.check(&[
             alloc::list(outer),
             alloc::dict(inner),
@@ -239,9 +233,9 @@ fn clearing_releases_a_shared_container_exactly_once() {
 
         // `[&d {a: 1}, *d]`
         let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
-        let outer = tv.vval.v_list;
+        let outer = tv.list();
         let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.vval.v_dict;
+        let inner = (*lis[0]).li_tv.dict();
         let di = tv::first_di(inner);
         log.check(&[
             alloc::list(outer),

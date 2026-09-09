@@ -136,7 +136,7 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
 pub unsafe fn f_undofile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_empty(VAR_STRING) };
     // SAFETY: as above.
     let fname: *const c_char = unsafe { numbuf.string(args) };
     // SAFETY: a NUL-terminated name.
@@ -165,7 +165,7 @@ pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     unsafe { tv_dict_alloc_ret(result) };
     let tv: *mut TypVal = args;
     // SAFETY: as above.
-    let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
+    let raw = if unsafe { (*tv).v_type() } == VAR_UNKNOWN {
         Buf::current_raw()
     } else {
         // SAFETY: as above.

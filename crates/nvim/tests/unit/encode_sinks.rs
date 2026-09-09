@@ -48,7 +48,7 @@ use neovim::memory::xfree;
 use neovim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use neovim::types::{PackerBuffer, String_0, TypVal};
 
-use crate::support::tv::{Pt, Tv};
+use crate::support::tv::{Payload, Pt, Tv};
 use crate::support::{Editor, check_emsg, editor_lock, internalize};
 
 /// The name the two refusing encoders put in their complaints. `json`'s is
@@ -454,7 +454,7 @@ fn a_cycle_met_twice_is_reported_once_per_dump() {
         let got = check_emsg(&editor, || echo(at), None);
         assert_eq!(got, "[[...@0], [...@0]]");
 
-        tv_list_free(tv.vval.v_list);
+        tv_list_free(tv.list());
     }
 }
 

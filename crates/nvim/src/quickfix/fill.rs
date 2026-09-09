@@ -281,12 +281,12 @@ unsafe fn call_qftf_func(
     add(c"end_idx", end_idx as VarNumber);
     unsafe { (*dict).dv_refcount.retain() };
 
-    let mut args = [TypVal::dict(dict)];
+    let mut args = [TypVal::Dict(dict)];
     let mut rettv = TV_INITIAL_VALUE;
     let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();
     if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {
-        if rettv.v_type == VAR_LIST {
+        if rettv.v_type() == VAR_LIST {
             answer = rettv.list_or_null();
             unsafe { tv_list_ref(answer) };
         }

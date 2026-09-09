@@ -101,7 +101,7 @@ pub(crate) unsafe fn eval_func(
 
     // While skipping, a name that was never resolved still has to look
     // like a Funcref so the subscript handling can go on.
-    if rv.v_type == VAR_UNKNOWN && !evaluate && cur.byte() == b'(' {
+    if rv.v_type() == VAR_UNKNOWN && !evaluate && cur.byte() == b'(' {
         rv.write_func_name(tv_empty_string.get() as *mut c_char);
     }
     if evaluate && aborting() {
@@ -146,7 +146,7 @@ pub(crate) unsafe fn call_func_rettv(
 
     if evaluate {
         functv = rv.take();
-        if functv.v_type == VAR_PARTIAL {
+        if functv.v_type() == VAR_PARTIAL {
             // SAFETY: the tag says the union holds a partial, which
             // `is_luafunc` and `partial_name` both take null or valid.
             pt = functv.partial_or_null();
@@ -324,14 +324,14 @@ pub(crate) unsafe fn eval_method(
                     semsg!("E488: Trailing characters: {at}");
                 }
                 ret = Err(Failed);
-            } else if callee.v_type == VAR_FUNC && !callee.func_name_or_null().is_null() {
+            } else if callee.v_type() == VAR_FUNC && !callee.func_name_or_null().is_null() {
                 // Take the name over from the typval so `tv_clear`
                 // below does not free what is about to be called.
                 name = callee.func_name_or_null();
                 callee.write_func_name(null_mut());
                 tofree = name;
                 len = unsafe { cstr::bytes_at(name) }.len() as c_int;
-            } else if callee.v_type == VAR_PARTIAL && !callee.partial_or_null().is_null() {
+            } else if callee.v_type() == VAR_PARTIAL && !callee.partial_or_null().is_null() {
                 // SAFETY: the tag says the union holds a live partial.
                 let pt = unsafe { Live::new(callee.partial_or_null()) };
                 if pt.pt_argc > 0 || !pt.pt_dict.is_null() {
@@ -379,7 +379,7 @@ pub(crate) unsafe fn eval_method(
                 ret = Err(Failed);
             } else if !lua_funcname.is_null() {
                 if evaluate {
-                    rv.v_type = VAR_PARTIAL;
+                    rv.write_empty(VAR_PARTIAL);
                     let pt = get_vim_var_partial(Vv::Lua);
                     rv.write_partial(pt);
                     unsafe { (*pt).pt_refcount.retain() };

@@ -122,7 +122,7 @@ pub unsafe fn call_user_func(
         // Set l:self to "selfdict".
         let v = take_fixvar(&mut fixvar_idx);
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab }, c"self");
-        unsafe { (*v).di_tv.v_type = VAR_DICT };
+        unsafe { (*v).di_tv.write_empty(VAR_DICT) };
         unsafe { (*v).di_lock = VarLock::Unlocked };
         unsafe { (*v).di_tv.write_dict(selfdict) };
         unsafe { (*selfdict).dv_refcount.retain() };
@@ -145,7 +145,7 @@ pub unsafe fn call_user_func(
         // the funccall's own `fc_l_listitems` slots.
         let v = take_fixvar(&mut fixvar_idx);
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_avars.dv_hashtab }, c"000");
-        unsafe { (*v).di_tv.v_type = VAR_LIST };
+        unsafe { (*v).di_tv.write_empty(VAR_LIST) };
         unsafe { (*v).di_lock = VarLock::Fixed };
         unsafe { (*v).di_tv.write_list(&raw mut (*fc).fc_l_varlist) };
     }
@@ -283,7 +283,7 @@ pub unsafe fn call_user_func(
                     }
                     // SAFETY: `i` is inside the caller's argument array.
                     let tv = unsafe { Tv::new(args.offset(i as isize)) };
-                    if tv.v_type == VAR_NUMBER {
+                    if tv.v_type() == VAR_NUMBER {
                         msg_outnum(tv.number_or_zero() as c_int);
                     } else {
                         // Do not want errors such as E724 here.
@@ -362,7 +362,7 @@ pub unsafe fn call_user_func(
     drop(redraw_off);
 
     // When the function was aborted because of an error, return -1.
-    if (did_emsg.get() != 0 && f.uf_flags.has(FuncFlags::ABORT)) || rv.v_type == VAR_UNKNOWN {
+    if (did_emsg.get() != 0 && f.uf_flags.has(FuncFlags::ABORT)) || rv.v_type() == VAR_UNKNOWN {
         unsafe { tv_clear(result) };
         rv.write_number(-1);
     }
@@ -396,7 +396,7 @@ pub unsafe fn call_user_func(
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let name = unsafe { c_str(name) };
                 smsg!(0, "{name} aborted");
-            } else if ret.v_type == VAR_NUMBER {
+            } else if ret.v_type() == VAR_NUMBER {
                 // SAFETY: the tag says the union holds a Number.
                 let n = ret.number_or_zero();
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -559,7 +559,7 @@ pub unsafe fn call_simple_luafunc(
     rv.write_number(0);
 
     let mut argvars = [TV_INITIAL_VALUE; 1];
-    argvars[0].v_type = VAR_UNKNOWN;
+    argvars[0].write_empty(VAR_UNKNOWN);
     unsafe { nlua_typval_call(funcname, len, argvars.as_mut_ptr(), 0, result) };
     Ok(())
 }
@@ -607,7 +607,7 @@ pub unsafe fn call_simple_func(
         error = FCERR_DELETED;
     } else {
         let mut argvars = [TV_INITIAL_VALUE; 1];
-        argvars[0].v_type = VAR_UNKNOWN;
+        argvars[0].write_empty(VAR_UNKNOWN);
         let mut funcexe = FUNCEXE_INIT;
         funcexe.fe_evaluate = true;
         let (args, exe) = (argvars.as_mut_ptr(), &raw mut funcexe);

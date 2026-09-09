@@ -27,13 +27,13 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::eval::encode::{
     conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
 };
-use crate::eval::typval::tv_blob_get;
+use crate::eval::typval::{DictSlot, tv_blob_get};
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
-use crate::types::{Blob, Dict, Float, TypVal, int64_t, size_t};
+use crate::types::{Blob, Float, TypVal, int64_t, size_t};
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -213,7 +213,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b"{}");
     }
 
@@ -270,7 +270,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b": ");
     }
 
@@ -278,7 +278,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b", ");
     }
 
@@ -286,7 +286,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.gap.push(b'}');
     }
 

@@ -203,7 +203,7 @@ pub unsafe fn f_pathshorten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     } else {
         1
     };
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     let Some(p) = str_arg_chk(args, 0, &mut numbuf) else {
         result.write_string(ptr::null_mut());
         return;

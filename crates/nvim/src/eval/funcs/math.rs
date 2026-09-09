@@ -365,7 +365,7 @@ pub unsafe fn f_rand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 /// The four state words of a seed list, or `None` if the value is not a
 /// four-element List of Numbers.
 fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
-    if tv.v_type != VAR_LIST {
+    if tv.v_type() != VAR_LIST {
         return None;
     }
     // SAFETY: the tag says the union holds a list pointer, which may be
@@ -381,7 +381,7 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
         // `tv_list_find` returns a live item.
         let tv = unsafe { &raw mut (*tv_list_find(l, i as c_int)).li_tv };
         // SAFETY: as above.
-        if unsafe { (*tv).v_type } != VAR_NUMBER {
+        if unsafe { (*tv).v_type() } != VAR_NUMBER {
             return None;
         }
         *slot = tv;

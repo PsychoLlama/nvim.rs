@@ -585,7 +585,7 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     for hi in ht.items() {
         let item = di_of_key(hi.hi_key);
         let key = tv_dict_item_key(item);
-        let kind = unsafe { (*item).di_tv.v_type };
+        let kind = unsafe { (*item).di_tv.v_type() };
         let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
             if !unsafe { put_session_global(out, key, kind, &raw mut (*item).di_tv) } {

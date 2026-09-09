@@ -573,8 +573,8 @@ pub(crate) unsafe fn eval5(
         // Reject an operand of the wrong type before consuming the
         // operator — but not for the two cases that have their own
         // handling: `+` on a List or Blob, and anything on a Float.
-        let container_plus = op == b'+' && (rv.v_type == VAR_LIST || rv.v_type == VAR_BLOB);
-        let float_arith = op != b'.' && rv.v_type == VAR_FLOAT;
+        let container_plus = op == b'+' && (rv.v_type() == VAR_LIST || rv.v_type() == VAR_BLOB);
+        let float_arith = op != b'.' && rv.v_type() == VAR_FLOAT;
         if !container_plus && !float_arith && evaluate {
             let ok = if concat {
                 unsafe { tv_check_str(result) }
@@ -596,14 +596,14 @@ pub(crate) unsafe fn eval5(
             return Err(Failed);
         }
         if evaluate {
-            let (blob2, list2) = (var2.v_type == VAR_BLOB, var2.v_type == VAR_LIST);
+            let (blob2, list2) = (var2.v_type() == VAR_BLOB, var2.v_type() == VAR_LIST);
             let two = &raw mut var2;
             let ok = if concat {
                 unsafe { eval_concat_str(result, two) }
-            } else if op == b'+' && rv.v_type == VAR_BLOB && blob2 {
+            } else if op == b'+' && rv.v_type() == VAR_BLOB && blob2 {
                 unsafe { eval_addblob(result, two) };
                 true
-            } else if op == b'+' && rv.v_type == VAR_LIST && list2 {
+            } else if op == b'+' && rv.v_type() == VAR_LIST && list2 {
                 unsafe { eval_addlist(result, two) }
             } else {
                 unsafe { eval_addsub_number(result, two, op) }
@@ -667,7 +667,7 @@ pub(crate) unsafe fn eval7(
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut ret = Ok(Parsed::Done);
-    rv.v_type = VAR_UNKNOWN;
+    rv.write_empty(VAR_UNKNOWN);
 
     // The prefixes are collected now and applied last, so that `-1` is
     // parsed as a negated literal but `!x[0]` negates the subscript.
@@ -722,7 +722,7 @@ pub(crate) unsafe fn eval7(
         b'@' => {
             cur.bump(1);
             if evaluate {
-                rv.v_type = VAR_STRING;
+                rv.write_empty(VAR_STRING);
                 // Sign-extended, as the C is: `**arg` is a `char`.
                 let name = cur.byte() as c_char as c_int;
                 // SAFETY: `get_reg_contents` reads only the register name.
@@ -779,8 +779,8 @@ pub(crate) unsafe fn eval7(
                 // While skipping, `v:lua.x` still has to come out as
                 // something callable.
                 let lua = unsafe { strnequal(name, c"v:lua.".as_ptr(), 6) };
-                if rv.v_type == VAR_UNKNOWN && lua {
-                    rv.v_type = VAR_PARTIAL;
+                if rv.v_type() == VAR_UNKNOWN && lua {
+                    rv.write_empty(VAR_PARTIAL);
                     let partial = get_vim_var_partial(Vv::Lua);
                     rv.write_partial(partial);
                     // SAFETY: `get_vim_var_partial` answers a live partial.
@@ -830,7 +830,7 @@ pub(crate) unsafe fn eval7_leader(
     let mut val: VarNumber = 0;
     let mut f: Float = 0.0;
 
-    if rv.v_type == VAR_FLOAT {
+    if rv.v_type() == VAR_FLOAT {
         // SAFETY: the tag says the union holds a Float.
         f = rv.float_or_zero();
     } else {
@@ -851,12 +851,12 @@ pub(crate) unsafe fn eval7_leader(
                         end_leader = end_leader.wrapping_add(1);
                         break;
                     }
-                    if rv.v_type == VAR_FLOAT {
+                    if rv.v_type() == VAR_FLOAT {
                         // Negating a Float leaves the value in `val` and
                         // the tag saying so, which is what makes a second
                         // `!` see a Number. The tag is overwritten below,
                         // so `!1.5` still answers a Number.
-                        rv.v_type = VAR_BOOL;
+                        rv.write_empty(VAR_BOOL);
                         val = VarNumber::from(if f == 0.0 {
                             kBoolVarTrue
                         } else {
@@ -869,7 +869,7 @@ pub(crate) unsafe fn eval7_leader(
                 // Vimscript arithmetic wraps, so negating VARNUMBER_MIN
                 // is itself rather than an abort.
                 b'-' => {
-                    if rv.v_type == VAR_FLOAT {
+                    if rv.v_type() == VAR_FLOAT {
                         f = -f;
                     } else {
                         val = val.wrapping_neg();
@@ -879,7 +879,7 @@ pub(crate) unsafe fn eval7_leader(
                 _ => {}
             }
         }
-        let float = rv.v_type == VAR_FLOAT;
+        let float = rv.v_type() == VAR_FLOAT;
         unsafe { tv_clear(result) };
         if float {
             rv.write_float(f);

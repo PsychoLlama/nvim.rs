@@ -266,7 +266,7 @@ unsafe fn call_in_dict(
     // SAFETY: the caller's promise about `err`.
     let mut refuse = |msg: &CStr| *err = Error::validation(msg);
 
-    if result.v_type != VAR_DICT || self_dict.is_null() {
+    if result.v_type() != VAR_DICT || self_dict.is_null() {
         refuse(c"dict not found");
         return Object::Nil;
     }
@@ -283,7 +283,7 @@ unsafe fn call_in_dict(
             return Object::Nil;
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
-        let v_type = unsafe { (*di).di_tv.v_type };
+        let v_type = unsafe { (*di).di_tv.v_type() };
         if v_type == VAR_PARTIAL {
             refuse(c"partial function not supported");
             return Object::Nil;

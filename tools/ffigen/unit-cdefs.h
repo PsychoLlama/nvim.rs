@@ -49,7 +49,6 @@ typedef struct ApiDict ApiDict;
 typedef struct Array Array;
 typedef struct BufState BufState;
 typedef struct Callback Callback;
-typedef union typval_vval_union typval_vval_union;
 typedef struct TypVal TypVal;
 typedef struct ChangedtickDictItem ChangedtickDictItem;
 typedef struct InternalState InternalState;
@@ -585,20 +584,20 @@ struct Callback {
     LuaRef lua_;
   } payload;
 };
-union typval_vval_union {
-  VarNumber v_number;
-  BoolVarValue v_bool;
-  SpecialVarValue v_special;
-  Float v_float;
-  char *v_string;
-  List *v_list;
-  Dict *v_dict;
-  Partial *v_partial;
-  Blob *v_blob;
-};
 struct TypVal {
-  VarType v_type;
-  typval_vval_union vval;
+  unsigned int tag;
+  union {
+    VarNumber number_;
+    char *string_;
+    char *func_;
+    List *list_;
+    Dict *dict_;
+    Float float_;
+    BoolVarValue bool_;
+    SpecialVarValue special_;
+    Partial *partial_;
+    Blob *blob_;
+  } payload;
 };
 struct ChangedtickDictItem {
   TypVal di_tv;

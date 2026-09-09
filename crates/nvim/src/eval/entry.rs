@@ -234,10 +234,10 @@ pub unsafe fn eval_expr_valid_arg(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise -- the typval outlives the call, and it
     // is only read through here.
     let tv = unsafe { Tv::new(tv.cast_mut()) };
-    if tv.v_type == VAR_UNKNOWN {
+    if tv.v_type() == VAR_UNKNOWN {
         return false;
     }
-    if tv.v_type != VAR_STRING {
+    if tv.v_type() != VAR_STRING {
         return true;
     }
     // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
@@ -288,7 +288,7 @@ pub(crate) unsafe fn eval_expr_func(
     // only read through here; `VAR_FUNC` says `v_string` is its live
     // member, and `buf` outlives the string rendered into it.
     let expr_tv = unsafe { Tv::new(expr.cast_mut()) };
-    let s: *const c_char = if expr_tv.v_type == VAR_FUNC {
+    let s: *const c_char = if expr_tv.v_type() == VAR_FUNC {
         expr_tv.func_name_or_null() as *const c_char
     } else {
         unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) }
@@ -342,10 +342,10 @@ pub unsafe fn eval_expr_typval(
     // SAFETY: the caller's promise -- `expr` outlives the call and is only
     // read through here; each arm restates the same promise.
     let ty = unsafe { Tv::new(expr.cast_mut()) };
-    if ty.v_type == VAR_PARTIAL {
+    if ty.v_type() == VAR_PARTIAL {
         return unsafe { eval_expr_partial(expr, argv, argc, result) };
     }
-    if ty.v_type == VAR_FUNC || want_func {
+    if ty.v_type() == VAR_FUNC || want_func {
         return unsafe { eval_expr_func(expr, argv, argc, result) };
     }
     unsafe { eval_expr_string(expr, result) }
@@ -428,7 +428,7 @@ pub(crate) unsafe fn typval2string(tv: *mut TypVal, join_list: bool) -> *mut c_c
     // SAFETY: the caller's promise -- the typval outlives the call, and
     // `VAR_LIST` says `v_list` is the union's live member.
     let value = unsafe { Tv::new(tv) };
-    if join_list && value.v_type == VAR_LIST {
+    if join_list && value.v_type() == VAR_LIST {
         let mut ga = UNSET_GA;
         // SAFETY: `ga` is this frame's.
         unsafe { ga_init(&raw mut ga, size_of::<c_char>() as c_int, 80) };
@@ -446,7 +446,7 @@ pub(crate) unsafe fn typval2string(tv: *mut TypVal, join_list: bool) -> *mut c_c
         unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
         return ga.ga_data as *mut c_char;
     }
-    if value.v_type == VAR_LIST || value.v_type == VAR_DICT {
+    if value.v_type() == VAR_LIST || value.v_type() == VAR_DICT {
         // SAFETY: the caller's typval.
         return unsafe { encode_tv2string(tv, null_mut()) };
     }
@@ -615,7 +615,7 @@ pub unsafe fn call_vim_function(
             pt = get_vim_var_partial(Vv::Lua);
         }
         // SAFETY: the caller's promise about `result`.
-        unsafe { (*result).v_type = VAR_UNKNOWN };
+        unsafe { (*result).write_empty(VAR_UNKNOWN) };
         let mut funcexe: FuncExe = FUNCEXE_INIT;
         funcexe.fe_firstline = Win::current().w_cursor.lnum;
         funcexe.fe_lastline = Win::current().w_cursor.lnum;
@@ -659,7 +659,7 @@ pub unsafe fn call_func_retlist(
     if unsafe { call_vim_function(func, argc, argv, &raw mut rettv) }.is_err() {
         return null_mut();
     }
-    if rettv.v_type != VAR_LIST {
+    if rettv.v_type() != VAR_LIST {
         clear_local(&mut rettv);
         return null_mut();
     }
@@ -689,9 +689,9 @@ pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
         let mut tv = UNSET_TV;
         let mut retval: VarNumber = 0;
         if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) }.is_ok() {
-            if tv.v_type == VAR_NUMBER {
+            if tv.v_type() == VAR_NUMBER {
                 retval = tv.number_or_zero();
-            } else if tv.v_type != VAR_STRING || tv.string_or_null().is_null() {
+            } else if tv.v_type() != VAR_STRING || tv.string_or_null().is_null() {
                 retval = 0;
             } else {
                 // SAFETY: `VAR_STRING` says `v_string` is the live member,
@@ -752,7 +752,7 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
     {
         empty_string()
     } else {
-        let obj = if tv.v_type == VAR_LIST {
+        let obj = if tv.v_type() == VAR_LIST {
             unsafe { vim_to_object(&raw mut tv, null_mut::<Arena>(), false) }
         } else {
             Object::String(unsafe { cstr_to_string(numbuf.string(&raw mut tv)) })
@@ -799,7 +799,7 @@ pub unsafe fn typval_tostring(arg: *mut TypVal, quotes: bool) -> *mut c_char {
     }
     // SAFETY: the caller's promise -- a non-null typval outlives the call.
     let value = unsafe { Tv::new(arg) };
-    if !quotes && value.v_type == VAR_STRING {
+    if !quotes && value.v_type() == VAR_STRING {
         let s = value.string_or_null();
         let s = if s.is_null() {
             c"".as_ptr()

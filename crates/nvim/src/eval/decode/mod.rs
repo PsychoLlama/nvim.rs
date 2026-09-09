@@ -58,7 +58,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
         unsafe { tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len()) };
     // SAFETY: the item just added to the special dictionary.
     let mut type_item = unsafe { Di::new(type_di) };
-    type_item.di_tv.v_type = VAR_LIST;
+    type_item.di_tv.write_empty(VAR_LIST);
     type_item.di_lock = VarLock::Unlocked;
     unsafe { (*type_di).di_tv.write_list(msgpack_type_list(type_)) };
     unsafe { tv_list_ref((*type_di).di_tv.list_or_null()) };
@@ -70,7 +70,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *result = TypVal::dict(dict) };
+    unsafe { *result = TypVal::Dict(dict) };
 }
 
 /// The special dictionary a map that cannot be a `Dict` decodes to.
@@ -85,7 +85,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
 pub unsafe fn decode_create_map_special_dict(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
     let list = tv_list_alloc(len);
     unsafe { tv_list_ref(list) };
-    let val_tv = TypVal::list(list);
+    let val_tv = TypVal::List(list);
     unsafe { create_special_dict(ret_tv, kMPMap, val_tv) };
     list
 }
@@ -126,7 +126,7 @@ pub unsafe fn decode_string(
         }
         return tv;
     }
-    TypVal::string(if s.is_null() || s_allocated {
+    TypVal::String(if s.is_null() || s_allocated {
         s as *mut c_char
     } else {
         unsafe { xmemdupz(s.cast(), len) as *mut c_char }

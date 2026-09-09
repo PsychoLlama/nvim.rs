@@ -309,8 +309,8 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     let wrapped = Object::Array(array);
     unsafe { object_to_vim(wrapped, &raw mut list_tv) };
     debug_assert!(
-        list_tv.v_type as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
-        "list_tv.v_type == VAR_LIST"
+        list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
+        "list_tv.v_type() == VAR_LIST"
     );
     let (data, size) = sbuf.parts_mut();
     if !unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) } {

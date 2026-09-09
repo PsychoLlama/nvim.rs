@@ -61,7 +61,7 @@ pub unsafe fn tv_to_argv(
     let mut numbuf3 = NumBuf::new();
     // SAFETY: the caller's promise -- the typval outlives the call.
     let tv = unsafe { Tv::new(cmd_tv) };
-    if tv.v_type == VAR_STRING {
+    if tv.v_type() == VAR_STRING {
         // SAFETY: `numbuf` is the caller's scratch, which outlives `*cmd`.
         let cmd_str = unsafe { numbuf.string(cmd_tv) };
         if !cmd.is_null() {
@@ -71,7 +71,7 @@ pub unsafe fn tv_to_argv(
         // SAFETY: `cmd_str` is NUL-terminated.
         return unsafe { shell_build_argv(cmd_str, null::<c_char>()) };
     }
-    if tv.v_type != VAR_LIST {
+    if tv.v_type() != VAR_LIST {
         let what = c"expected String or List".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -271,8 +271,8 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         let mut keepempty = 0;
         // SAFETY: the builtin declares three slots, and the third is only
         // reached once the second turned out to be given.
-        let given = unsafe { (*args.add(1)).v_type } != VAR_UNKNOWN
-            && unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN;
+        let given = unsafe { (*args.add(1)).v_type() } != VAR_UNKNOWN
+            && unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN;
         if given {
             // SAFETY: as above.
             keepempty = unsafe { tv_get_number(args.add(2)) } as c_int;
@@ -282,7 +282,6 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         ret.write_list(list);
         // SAFETY: the List was just built.
         unsafe { tv_list_ref(list) };
-        ret.v_type = VAR_LIST;
         // SAFETY: the encoder copied what it needed.
         unsafe { xfree(res as *mut c_void) };
     } else {
@@ -372,10 +371,10 @@ pub unsafe fn save_tv_as_string(
     let value = unsafe { Tv::new(tv) };
     // SAFETY: as above.
     unsafe { *len = 0 };
-    if value.v_type == VAR_UNKNOWN {
+    if value.v_type() == VAR_UNKNOWN {
         return null_mut();
     }
-    if value.v_type != VAR_LIST && value.v_type != VAR_NUMBER {
+    if value.v_type() != VAR_LIST && value.v_type() != VAR_NUMBER {
         // SAFETY: `numbuf` outlives the string rendered into it.
         let ret = unsafe { numbuf.string_chk(tv) };
         if ret.is_null() {
@@ -388,7 +387,7 @@ pub unsafe fn save_tv_as_string(
         // SAFETY: `ret` has the `*len` bytes just measured.
         return unsafe { xmemdupz(ret as *const c_void, *len as size_t) as *mut c_char };
     }
-    if value.v_type == VAR_NUMBER {
+    if value.v_type() == VAR_NUMBER {
         // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
         return unsafe { buffer_as_string(tv, len) };
     }

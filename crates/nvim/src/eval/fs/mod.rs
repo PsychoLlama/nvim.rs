@@ -475,7 +475,7 @@ pub unsafe fn f_getftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 pub unsafe fn f_getftype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     let named = lstat(str_arg(args, 0, &mut numbuf)).map(|info| {
         // The `S_IS*` family, spelled out.
         match info.stat.st_mode & __S_IFMT as uint64_t {

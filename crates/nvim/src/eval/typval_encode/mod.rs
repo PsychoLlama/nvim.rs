@@ -25,6 +25,8 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::MaybeUninit;
 
+use crate::eval::typval::DictSlot;
+
 use crate::types::{
     Blob, Dict, Float, List, ListItem, Partial, TypVal, int64_t, ptrdiff_t, size_t,
 };
@@ -85,10 +87,9 @@ pub(crate) enum PartialStage {
 pub(crate) enum Frame {
     Dict {
         dict: *mut Dict,
-        /// Where the dictionary pointer *lives*, so a sink can clear it.  For
-        /// a `TypVal` that is `&tv->vval.v_dict`; for a partial's self
-        /// dictionary, `&pt->pt_dict`.
-        dictp: *mut *mut Dict,
+        /// Where the dictionary pointer *lives*, so a sink can clear it:
+        /// the typval that holds it, or a partial's `pt_dict` field.
+        dictp: DictSlot,
         /// The slot the walk stands on -- an *index*, because the small run
         /// lives inside the `HashTab` and a body may take `&mut` to it.
         idx: usize,
@@ -397,7 +398,7 @@ pub(crate) trait TypvalSink {
     /// for the call. `dictp`, when given, points at the slot the
     /// dictionary pointer lives in, which an implementation may overwrite but
     /// must not free out from under the walk.
-    unsafe fn conv_empty_dict(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>);
+    unsafe fn conv_empty_dict(&mut self, tv: *mut TypVal, dictp: Option<DictSlot>);
 
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
@@ -447,7 +448,7 @@ pub(crate) trait TypvalSink {
     unsafe fn conv_real_dict_after_start(
         &mut self,
         tv: *mut TypVal,
-        dictp: Option<*mut *mut Dict>,
+        dictp: Option<DictSlot>,
         frame: &mut ConvFrame,
     ) -> Flow {
         let _ = (tv, dictp, frame);
@@ -466,19 +467,19 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_after_key(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_after_key(&mut self, tv: *mut TypVal, dictp: Option<DictSlot>) {
         let _ = (tv, dictp);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_between_items(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_between_items(&mut self, tv: *mut TypVal, dictp: Option<DictSlot>) {
         let _ = (tv, dictp);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<DictSlot>) {
         let _ = (tv, dictp);
     }
 

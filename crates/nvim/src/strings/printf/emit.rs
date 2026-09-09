@@ -862,7 +862,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
         } else {
             args.arg_idx - 1
         };
-        if tvs_present && unsafe { (*tvs.offset(unused as isize)).v_type } != VAR_UNKNOWN {
+        if tvs_present && unsafe { (*tvs.offset(unused as isize)).v_type() } != VAR_UNKNOWN {
             emsg(gettext(E_TOO_MANY_ARGS));
         }
     }

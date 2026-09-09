@@ -87,7 +87,7 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
             c"".as_ptr()
         };
         let mut tv = unsafe { Tv::new(lines) };
-        if tv.v_type == VAR_LIST {
+        if tv.v_type() == VAR_LIST {
             let l = tv.list_or_null();
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
                 let mut item = unsafe { Li::new((*l).lv_first) };
@@ -97,7 +97,7 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
                 item.li_tv.write_string(joined);
                 did_concat = true;
             }
-        } else if tv.v_type == VAR_STRING {
+        } else if tv.v_type() == VAR_STRING {
             let joined = unsafe { concat_str(text, numbuf2.string(lines)) };
             unsafe { tv_clear(lines) };
             tv.write_string(joined);
@@ -124,12 +124,12 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
     }
     if result.number_or_zero() == 0 {
         let mut buf = buf;
-        buf.b_prompt_append_new_line = if tv.v_type == VAR_LIST {
+        buf.b_prompt_append_new_line = if tv.v_type() == VAR_LIST {
             let last = unsafe { list_last(lines) };
             let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(ListItem, li_tv));
             !last.is_null() && unsafe { ends_in_newline(numbuf3.string(ltv)) }
         } else {
-            tv.v_type == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
+            tv.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
         };
     }
 }

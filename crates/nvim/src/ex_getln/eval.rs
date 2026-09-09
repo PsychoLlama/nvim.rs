@@ -258,7 +258,7 @@ pub unsafe fn f_setcmdline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     }
 
     let mut pos = -1;
-    if unsafe { (*args.offset(1)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.offset(1)).v_type() } != VAR_UNKNOWN {
         let mut error = false;
         pos =
             unsafe { tv_get_number_chk(args.offset(1), &raw mut error) } as ::core::ffi::c_int - 1;

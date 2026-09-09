@@ -60,7 +60,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let mut line: *mut c_char = ptr::null_mut();
     let src = unsafe { Tv::new(lines) };
     '_cleanup: {
-        if src.v_type == VAR_LIST {
+        if src.v_type() == VAR_LIST {
             l = src.list_or_null();
             if l.is_null() || unsafe { (*l).lv_len } == 0 {
                 break '_cleanup;
@@ -72,7 +72,7 @@ pub(crate) unsafe fn set_buffer_lines(
         loop {
             // Re-read, as upstream does: the type tag is the argument's own
             // and the walk below can run user code.
-            if src.v_type == VAR_LIST {
+            if src.v_type() == VAR_LIST {
                 if li.is_null() {
                     break;
                 }
@@ -166,7 +166,7 @@ unsafe fn get_buffer_lines(
     // SAFETY: the caller's obligation; every line index is clamped to the
     // buffer before `ml_get_buf` sees it.
     let mut ret = unsafe { Tv::new(result) };
-    ret.v_type = if retlist { VAR_LIST } else { VAR_STRING };
+    ret.write_empty(if retlist { VAR_LIST } else { VAR_STRING });
     ret.write_string(ptr::null_mut());
     if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
         if retlist {

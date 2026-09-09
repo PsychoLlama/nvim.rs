@@ -231,7 +231,7 @@ impl<'a> Decoder<'a> {
         }
 
         // A dictionary with nothing pending: this value is a key.
-        if !obj.is_special_string && obj.val.v_type != VAR_STRING {
+        if !obj.is_special_string && obj.val.v_type() != VAR_STRING {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(self.buf[*at..].as_ptr() as *const c_char) };
             semsg!("E474: Expected string key: {arg0}");

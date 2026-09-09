@@ -61,12 +61,13 @@ unsafe fn getchar_opts(args: *mut TypVal, allow_number: bool) -> Option<GetcharO
     // SAFETY (this body): the Vimscript call convention -- `args` is a live
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `numbuf` outlives the strings it lends back.
-    if unsafe { (*args).v_type } != VAR_UNKNOWN
+    if unsafe { (*args).v_type() } != VAR_UNKNOWN
         && unsafe { tv_check_for_opt_dict_arg(args, 1) }.is_err()
     {
         return None;
     }
-    if unsafe { (*args).v_type } != VAR_UNKNOWN && unsafe { (*args.add(1)).v_type } == VAR_DICT {
+    if unsafe { (*args).v_type() } != VAR_UNKNOWN && unsafe { (*args.add(1)).v_type() } == VAR_DICT
+    {
         let d = unsafe { (*args.add(1)).dict_or_null() };
 
         if opts.allow_number {
@@ -117,8 +118,8 @@ unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
 
         // SAFETY (this body): reads one key through the ordinary input stack;
         // the buffers it fills are this frame's own.
-        let blocking =
-            unsafe { (*args).v_type } == VAR_UNKNOWN || unsafe { (*args).as_number() } == Some(-1);
+        let blocking = unsafe { (*args).v_type() } == VAR_UNKNOWN
+            || unsafe { (*args).as_number() } == Some(-1);
         let n: VarNumber = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
@@ -247,7 +248,7 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
             set_mouse_vars();
         }
     } else if !opts.allow_number {
-        unsafe { (*result).v_type = VAR_STRING };
+        unsafe { (*result).write_empty(VAR_STRING) };
     } else {
         unsafe { (*result).write_number(n) };
     }

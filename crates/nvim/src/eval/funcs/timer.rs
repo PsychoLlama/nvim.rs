@@ -172,7 +172,7 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
 unsafe fn list2proftime(arg: *const TypVal) -> Option<ProfTime> {
     // SAFETY: the caller's obligation; the list is only read.
     let arg = unsafe { &*arg };
-    if arg.v_type != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
+    if arg.v_type() != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
         return None;
     }
     let mut error = false;

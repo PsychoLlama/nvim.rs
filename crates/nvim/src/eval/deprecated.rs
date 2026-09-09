@@ -109,7 +109,8 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
     // SAFETY: the caller's promise about `args`.
     let argv = unsafe { arg_slice(args) };
-    if argv[0].v_type != VAR_STRING || (argv[1].v_type != VAR_LIST && argv[1].v_type != VAR_UNKNOWN)
+    if argv[0].v_type() != VAR_STRING
+        || (argv[1].v_type() != VAR_LIST && argv[1].v_type() != VAR_UNKNOWN)
     {
         // Wrong argument types.
         emsg_static(e_invarg);
@@ -118,14 +119,14 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
     let mut args_list: *mut List = core::ptr::null_mut();
     let mut argsl = 0;
-    if argv[1].v_type == VAR_LIST {
+    if argv[1].v_type() == VAR_LIST {
         // SAFETY: a `VAR_LIST` holds a live list or NULL.
         args_list = argv[1].list_or_null();
         argsl = unsafe { tv_list_len(args_list) };
         // Assert that all list items are strings.
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
             // SAFETY: `arg` is one of the list's items.
-            if unsafe { (*arg).li_tv.v_type } != VAR_STRING {
+            if unsafe { (*arg).li_tv.v_type() } != VAR_STRING {
                 semsg!(
                     "E5010: List item {} of the second argument is not a string",
                     i as c_int
@@ -205,7 +206,7 @@ pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncDa
 
     // SAFETY: the caller's promise about `args`.
     let argv = unsafe { arg_slice(args) };
-    if argv[0].v_type != VAR_NUMBER {
+    if argv[0].v_type() != VAR_NUMBER {
         // Wrong argument types.
         emsg_static(e_invarg);
         return;
@@ -260,13 +261,13 @@ pub unsafe fn f_termopen(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncD
     let argv = unsafe { arg_slice(args) };
     // With no options at all, borrow a dictionary for the one flag this adds
     // and free it again on the way out.
-    let must_free = argv[1].v_type == VAR_UNKNOWN;
+    let must_free = argv[1].v_type() == VAR_UNKNOWN;
     if must_free {
         // SAFETY: `tv_dict_alloc` never answers NULL.
         argv[1].write_dict(unsafe { tv_dict_alloc() });
     }
 
-    if argv[1].v_type != VAR_DICT {
+    if argv[1].v_type() != VAR_DICT {
         // Wrong argument types. // SAFETY: `e_invarg2` takes one string.
         semsg!("E475: Invalid argument: {}", "expected dictionary");
         return;

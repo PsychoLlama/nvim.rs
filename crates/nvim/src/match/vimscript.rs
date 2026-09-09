@@ -63,7 +63,7 @@ unsafe fn matchadd_dict_arg(
     numbuf: &mut NumBuf,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's typval and out-parameters.
-    if unsafe { (*tv).v_type } != VAR_DICT {
+    if unsafe { (*tv).v_type() } != VAR_DICT {
         emsg(gettext(e_dictreq));
         return Err(Failed);
     }
@@ -165,7 +165,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     let win = unsafe { get_optional_window(args, 1) };
 
     unsafe { (*result).write_number(-1) };
-    if unsafe { (*args).v_type } != VAR_LIST {
+    if unsafe { (*args).v_type() } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
@@ -179,7 +179,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     let mut li = unsafe { tv_list_first(l) };
     while !li.is_null() {
         let tv = unsafe { &raw mut (*li).li_tv };
-        if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).dict_or_null() }.is_null() {
+        if unsafe { (*tv).v_type() } != VAR_DICT || unsafe { (*tv).dict_or_null() }.is_null() {
             semsg!(
                 "E474: List item {} is either not a dictionary or an empty one",
                 li_idx
@@ -220,7 +220,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
                 if pos_di.is_null() {
                     break;
                 }
-                if unsafe { (*pos_di).di_tv.v_type } != VAR_LIST {
+                if unsafe { (*pos_di).di_tv.v_type() } != VAR_LIST {
                     // Leaks `positions` exactly as upstream does, and
                     // leaves the earlier entries of the list already
                     // restored — the validation above does not look
@@ -286,11 +286,11 @@ unsafe fn optional_args(
 
     // Nested, not sequential: an `id` is only read when a `priority` was
     // given, and the dictionary only when an `id` was.
-    if unsafe { (*args.offset(2)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.offset(2)).v_type() } != VAR_UNKNOWN {
         prio = unsafe { tv_get_number_chk(args.offset(2), &raw mut error) } as c_int;
-        if unsafe { (*args.offset(3)).v_type } != VAR_UNKNOWN {
+        if unsafe { (*args.offset(3)).v_type() } != VAR_UNKNOWN {
             id = unsafe { tv_get_number_chk(args.offset(3), &raw mut error) } as c_int;
-            if unsafe { (*args.offset(4)).v_type } != VAR_UNKNOWN
+            if unsafe { (*args.offset(4)).v_type() } != VAR_UNKNOWN
                 && unsafe {
                     matchadd_dict_arg(args.offset(4), &raw mut conceal_char, &mut win, numbuf)
                 }
@@ -353,7 +353,7 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
     if group.is_null() {
         return;
     }
-    if unsafe { (*args.offset(1)).v_type } != VAR_LIST {
+    if unsafe { (*args.offset(1)).v_type() } != VAR_LIST {
         semsg!("E686: Argument of {} must be a List", "matchaddpos()");
         return;
     }

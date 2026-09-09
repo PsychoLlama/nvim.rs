@@ -146,7 +146,7 @@ impl Container {
     /// Read `tv`'s live union arm.
     #[inline(always)]
     pub(crate) fn of(tv: &TypVal) -> Self {
-        match tv.v_type {
+        match tv.v_type() {
             // SAFETY: `v_type` is what says which arm of `vval` is live.
             VAR_LIST => Self::List(ListRef(tv.list_or_null())),
             VAR_DICT => Self::Dict(DictRef(tv.dict_or_null())),
@@ -738,7 +738,7 @@ pub(crate) fn cstr_of_chk<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> Option<&'
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.
 #[inline(always)]
 pub(crate) fn string_tv(bytes: &[u8]) -> TypVal {
-    TypVal::string(unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() })
+    TypVal::String(unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() })
 }
 
 /// Whether `lock` forbids a change, reporting `E741`/`E742` naming `what`.

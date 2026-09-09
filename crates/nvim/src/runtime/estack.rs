@@ -329,7 +329,7 @@ unsafe fn stacktrace_push_item(
     let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
     // Upstream marks this local `VAR_LOCKED`; the lock never travels, because
     // `tv_list_append_tv` copies it into a fresh item and a copy is unlocked.
-    let mut tv = TypVal::dict(d);
+    let mut tv = TypVal::Dict(d);
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }

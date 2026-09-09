@@ -46,7 +46,7 @@ pub(super) fn global_qftf() -> *mut Callback {
 /// `tv` must be a live value.
 unsafe fn holds_references(tv: *const TypVal) -> bool {
     // SAFETY: the caller's value.
-    unsafe { !matches!((*tv).v_type, VAR_NUMBER | VAR_STRING | VAR_FLOAT) }
+    unsafe { !matches!((*tv).v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT) }
 }
 
 /// Mark the `user_data` of every entry of every list on the stack. Answers
@@ -154,7 +154,7 @@ unsafe fn get_qf_loc_list(
     result: *mut TypVal,
 ) {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*what_arg).v_type } == VAR_UNKNOWN {
+    if unsafe { (*what_arg).v_type() } == VAR_UNKNOWN {
         unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
         if is_qf || window.is_some() {
             // No list, or an empty one, is an empty answer, not an error.
@@ -168,7 +168,7 @@ unsafe fn get_qf_loc_list(
     if !is_qf && window.is_none() {
         return;
     }
-    if unsafe { (*what_arg).v_type } != VAR_DICT {
+    if unsafe { (*what_arg).v_type() } != VAR_DICT {
         emsg(gettext(e_dictreq));
         return;
     }
@@ -219,7 +219,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
     unsafe { (*result).write_number(-1) };
 
     let list_arg = args;
-    if unsafe { (*list_arg).v_type } != VAR_LIST {
+    if unsafe { (*list_arg).v_type() } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
@@ -233,8 +233,8 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
     let mut what: *mut Dict = ptr::null_mut();
 
     let action_arg = unsafe { args.add(1) };
-    if unsafe { (*action_arg).v_type } != VAR_UNKNOWN {
-        if unsafe { (*action_arg).v_type } != VAR_STRING {
+    if unsafe { (*action_arg).v_type() } != VAR_UNKNOWN {
+        if unsafe { (*action_arg).v_type() } != VAR_STRING {
             emsg(gettext(e_string_required));
             return;
         }
@@ -254,16 +254,16 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
         action = unsafe { *act };
 
         let what_arg = unsafe { args.add(2) };
-        if unsafe { (*what_arg).v_type } == VAR_STRING {
+        if unsafe { (*what_arg).v_type() } == VAR_STRING {
             title = unsafe { numbuf2.string_chk(what_arg) };
             if title.is_null() {
                 return;
             }
-        } else if unsafe { (*what_arg).v_type } == VAR_DICT
+        } else if unsafe { (*what_arg).v_type() } == VAR_DICT
             && !unsafe { (*what_arg).dict_or_null() }.is_null()
         {
             what = unsafe { (*what_arg).dict_or_null() };
-        } else if unsafe { (*what_arg).v_type } != VAR_UNKNOWN {
+        } else if unsafe { (*what_arg).v_type() } != VAR_UNKNOWN {
             emsg(gettext(e_dictreq));
             return;
         }

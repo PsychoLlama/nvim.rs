@@ -131,7 +131,7 @@ pub unsafe fn var2fpos(
     let bp = wp.buffer();
 
     // `[lnum, col]`, `[lnum, col, off]`.
-    if tv.v_type == VAR_LIST {
+    if tv.v_type() == VAR_LIST {
         let l: *mut List = tv.list_or_null();
         if l.is_null() {
             return None;
@@ -161,7 +161,7 @@ pub unsafe fn var2fpos(
         // SAFETY: a non-null item holds a typval, and `VAR_STRING` says
         // `v_string` is its live member.
         let dollar = !li.is_null()
-            && unsafe { (*li).li_tv.v_type } == VAR_STRING
+            && unsafe { (*li).li_tv.v_type() } == VAR_STRING
             && !unsafe { (*li).li_tv.string_or_null() }.is_null()
             && unsafe { cstr::eq_bytes((*li).li_tv.string_or_null(), b"$") };
         if dollar {
@@ -285,7 +285,7 @@ pub unsafe fn list2fpos(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
     let (arg, mut posp) = unsafe { (Tv::new(arg), Live::<Pos>::new(posp)) };
-    if arg.v_type != VAR_LIST {
+    if arg.v_type() != VAR_LIST {
         return Err(Failed);
     }
     let l: *mut List = arg.list_or_null();

@@ -121,10 +121,10 @@ pub unsafe fn find_win_by_nr_or_id(vp: *mut TypVal) -> Option<Win> {
 /// `wvp` and `tvp` must point at live typvals.
 pub unsafe fn find_tabwin(wvp: *mut TypVal, tvp: *mut TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
-    if unsafe { (*wvp).v_type } == VAR_UNKNOWN {
+    if unsafe { (*wvp).v_type() } == VAR_UNKNOWN {
         return Some(Win::current());
     }
-    let tp = if unsafe { (*tvp).v_type } == VAR_UNKNOWN {
+    let tp = if unsafe { (*tvp).v_type() } == VAR_UNKNOWN {
         Some(TabPage::current())
     } else {
         let n = number_as_int(unsafe { tv_get_number(tvp) });
@@ -149,7 +149,7 @@ fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
 unsafe fn get_winnr(tabpage: TabPage, argvar: *mut TypVal) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut twin = tabpage.curwin();
-    if unsafe { (*argvar).v_type } == VAR_UNKNOWN {
+    if unsafe { (*argvar).v_type() } == VAR_UNKNOWN {
         // Without an argument the answer is the current window's number,
         // which a float without one does not have.
         if !twin.has_winnr(tabpage) {

@@ -81,7 +81,7 @@ impl<'a> Args<'a> {
 
     /// The type tag of argument `i`, or `VAR_UNKNOWN` past the last one.
     pub(crate) fn ty(&self, i: usize) -> VarType {
-        self.get(i).v_type
+        self.get(i).v_type()
     }
 
     /// Whether argument `i` was supplied.

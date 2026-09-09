@@ -292,7 +292,7 @@ pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn f_getcmdwintype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; `xmallocz(1)` hands back
     // two writable bytes, the second already NUL.
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_empty(VAR_STRING) };
     let s = unsafe { xmallocz(1) }.cast::<c_char>();
     unsafe { *s = cmdwin_type.get().to_le_bytes()[0].cast_signed() };
     unsafe { (*result).write_string(s) };

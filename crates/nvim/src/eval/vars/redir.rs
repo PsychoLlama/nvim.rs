@@ -25,7 +25,7 @@ pub fn assert_error(message: &[u8]) {
     // SAFETY: `v:errors` is a table row, and `message` is the caller's own
     // buffer, read for exactly its own length.
     let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
-    if tv.v_type != VAR_LIST || tv.list_or_null().is_null() {
+    if tv.v_type() != VAR_LIST || tv.list_or_null().is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
         unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
     }
@@ -120,7 +120,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // appending to it -- an empty string.
     let called_emsg_before = called_emsg.get();
     did_emsg.set(0);
-    let mut tv = TypVal::string(c"".as_ptr() as *mut c_char);
+    let mut tv = TypVal::String(c"".as_ptr() as *mut c_char);
     let op = if append { c"." } else { c"=" };
     let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut tv);
     // SAFETY: the lvalue just resolved, and a live local value.
@@ -176,7 +176,7 @@ pub unsafe fn var_redir_stop() {
         // Store the text, unless the start failed.
         if !redir_endp.get().is_null() {
             text.push(NUL as u8);
-            let mut tv = TypVal::string(text.as_mut_ptr().cast::<c_char>());
+            let mut tv = TypVal::String(text.as_mut_ptr().cast::<c_char>());
             // Resolve the name again: inside a Dict or List it may have
             // moved since.
             // SAFETY: as [`var_redir_start`] -- the saved name and lvalue.

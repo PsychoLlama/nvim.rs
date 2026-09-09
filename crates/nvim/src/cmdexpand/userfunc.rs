@@ -289,10 +289,10 @@ pub(crate) unsafe fn call_user_expand_func(
     // `CmdBuff`'s invariant now, so the byte it saved is always the NUL it
     // wrote, and both halves are gone.
     let pat = unsafe { xstrnsave(expand.xp_pattern, expand.xp_pattern_len) };
-    args[0].v_type = VAR_STRING;
-    args[1].v_type = VAR_STRING;
-    args[2].v_type = VAR_NUMBER;
-    args[3].v_type = VAR_UNKNOWN;
+    args[0].write_empty(VAR_STRING);
+    args[1].write_empty(VAR_STRING);
+    args[2].write_empty(VAR_NUMBER);
+    args[3].write_empty(VAR_UNKNOWN);
     args[0].write_string(pat);
     args[1].write_string(expand.xp_line);
     args[2].write_number(expand.xp_col as VarNumber);
@@ -421,7 +421,7 @@ pub(crate) unsafe fn process_user_list(
         let mut li: *const ListItem = unsafe { (*retlist).lv_first };
         while !li.is_null() {
             // Skip non-string items and empty strings.
-            if unsafe { (*li).li_tv.v_type } == VAR_STRING
+            if unsafe { (*li).li_tv.v_type() } == VAR_STRING
                 && !unsafe { (*li).li_tv.string_or_null() }.is_null()
             {
                 // SAFETY: the item is a live, NUL-terminated string.
@@ -481,7 +481,7 @@ pub(crate) unsafe fn expand_user_lua(
     let expand = unsafe { Xp::new(expand) };
     let mut rettv = TV_INITIAL_VALUE;
     unsafe { nlua_call_user_expand_func(expand.raw(), &raw mut rettv) };
-    if rettv.v_type != VAR_LIST {
+    if rettv.v_type() != VAR_LIST {
         unsafe { tv_clear(&raw mut rettv) };
         return Err(Failed);
     }

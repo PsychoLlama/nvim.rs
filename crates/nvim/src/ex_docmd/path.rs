@@ -88,14 +88,14 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     current_sctx.set(option_last_set(kOptFindfunc));
     let cb = get_findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
-    rettv.v_type = VAR_UNKNOWN;
+    rettv.write_empty(VAR_UNKNOWN);
     let called = unsafe { callback_call(cb, 2, &raw mut args as *mut TypVal, &raw mut rettv) };
     current_sctx.set(saved_sctx);
     drop(locked);
 
     let mut retlist: *mut List = ptr::null_mut();
     if called as c_int == OK {
-        if rettv.v_type as c_uint == VAR_LIST as c_uint {
+        if rettv.v_type() as c_uint == VAR_LIST as c_uint {
             retlist =
                 unsafe { tv_list_copy(ptr::null(), rettv.list_or_null(), false, get_copy_id()) };
         } else {
@@ -136,7 +136,7 @@ pub unsafe fn expand_findfunc(
     let mut idx = 0;
     let mut li: *const ListItem = unsafe { (*l).lv_first };
     while !li.is_null() {
-        if unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
+        if unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
             unsafe { *(*files).offset(idx as isize) = xstrdup((*li).li_tv.string_or_null()) };
             idx += 1;
         }
@@ -176,7 +176,7 @@ pub(crate) unsafe fn findfunc_find_file(
         semsg!("E347: No more file \"{findarg}\" found in path");
     } else {
         let li = unsafe { tv_list_find(fname_list, count - 1) };
-        if !li.is_null() && unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
+        if !li.is_null() && unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
             ret_fname = unsafe { xstrdup((*li).li_tv.string_or_null()) };
         }
     }

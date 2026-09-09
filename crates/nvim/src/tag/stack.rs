@@ -164,7 +164,7 @@ impl TagStack {
             li = unsafe { (*li).li_next };
 
             // Skip anything that is not a dict describing a jump.
-            if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).dict_or_null().is_null() } {
+            if unsafe { (*tv).v_type() } != VAR_DICT || unsafe { (*tv).dict_or_null().is_null() } {
                 continue;
             }
             let item = unsafe { (*tv).dict_or_null() };
@@ -351,7 +351,7 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
 
     let mut items = ptr::null_mut::<List>();
     if let Some(di) = unsafe { find(d, c"items") } {
-        if unsafe { (*di).di_tv.v_type } != VAR_LIST {
+        if unsafe { (*di).di_tv.v_type() } != VAR_LIST {
             emsg(gettext(e_listreq));
             return Err(Failed);
         }

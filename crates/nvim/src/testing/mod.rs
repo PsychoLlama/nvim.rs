@@ -103,7 +103,7 @@ unsafe fn arg(args: *mut TypVal, i: usize) -> *mut TypVal {
 /// As [`arg`].
 unsafe fn arg_type(args: *mut TypVal, i: usize) -> VarType {
     // SAFETY: the caller's argument vector.
-    unsafe { (*arg(args, i)).v_type }
+    unsafe { (*arg(args, i)).v_type() }
 }
 
 /// Whether `argvars[i]` was supplied at all.
@@ -186,7 +186,7 @@ unsafe fn assert_bool(args: *mut TypVal, is_true: bool) -> c_int {
     let mut error = false;
     // SAFETY: the caller's arguments.
     let actual = unsafe { &*arg(args, 0) };
-    let number_ok = actual.v_type == VAR_NUMBER
+    let number_ok = actual.v_type() == VAR_NUMBER
         && (unsafe { tv_get_number_chk(arg(args, 0), &raw mut error) } == 0) != is_true
         && !error;
     let want = (if is_true { kBoolVarTrue } else { kBoolVarFalse }) as BoolVarValue;

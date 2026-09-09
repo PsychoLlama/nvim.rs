@@ -61,7 +61,7 @@ pub unsafe fn tv_dict_item_alloc_len(
     let mut item = unsafe { Di::new(di) };
     item.di_flags = DI_FLAGS_ALLOC as uint8_t;
     item.di_lock = VarLock::Unlocked;
-    item.di_tv.v_type = VAR_UNKNOWN;
+    item.di_tv.write_empty(VAR_UNKNOWN);
     di
 }
 
@@ -266,7 +266,7 @@ pub unsafe fn tv_dict_add_list(
     list: *mut List,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::list(list) };
+    unsafe { (*item).di_tv = TypVal::List(list) };
     unsafe { tv_list_ref(list) };
     unsafe { add_or_free(d, item) }
 }
@@ -301,7 +301,7 @@ pub unsafe fn tv_dict_add_dict(
     dict: *mut Dict,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::dict(dict) };
+    unsafe { (*item).di_tv = TypVal::Dict(dict) };
     unsafe { (*dict).dv_refcount.retain() };
     unsafe { add_or_free(d, item) }
 }
@@ -318,7 +318,7 @@ pub unsafe fn tv_dict_add_nr(
     nr: VarNumber,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::number(nr) };
+    unsafe { (*item).di_tv = TypVal::Number(nr) };
     unsafe { add_or_free(d, item) }
 }
 
@@ -334,7 +334,7 @@ pub unsafe fn tv_dict_add_float(
     nr: Float,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::float(nr) };
+    unsafe { (*item).di_tv = TypVal::Float(nr) };
     unsafe { add_or_free(d, item) }
 }
 
@@ -350,7 +350,7 @@ pub unsafe fn tv_dict_add_bool(
     val: BoolVarValue,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::boolean(val) };
+    unsafe { (*item).di_tv = TypVal::Bool(val) };
     unsafe { add_or_free(d, item) }
 }
 
@@ -406,7 +406,7 @@ pub unsafe fn tv_dict_add_allocated_str(
     val: *mut ::core::ffi::c_char,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { (*item).di_tv = TypVal::string(val) };
+    unsafe { (*item).di_tv = TypVal::String(val) };
     unsafe { add_or_free(d, item) }
 }
 
@@ -429,7 +429,7 @@ pub unsafe fn tv_dict_add_func(
     let func = unsafe { Live::<UserFunc>::new(func) };
     let namelen = func.uf_namelen;
     let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
-    unsafe { (*item).di_tv = TypVal::func_name(owned) };
+    unsafe { (*item).di_tv = TypVal::Func(owned) };
     if unsafe { tv_dict_add(d, item) }.is_err() {
         unsafe { tv_dict_item_free(item) };
         return Err(Failed);
@@ -709,7 +709,7 @@ pub unsafe fn tv_dict_remove(
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let mut numbuf = NumBuf::new();
-    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
         let arg0 = "remove()";
         semsg!("E118: Too many arguments for function: {arg0}");
         return;

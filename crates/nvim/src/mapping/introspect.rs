@@ -43,7 +43,7 @@ impl Argv {
         // SAFETY: the caller's promise — the vector runs to a `VAR_UNKNOWN`,
         // so the walk stops inside it.
         let len = (0..)
-            .find(|&n| unsafe { (*args.add(n)).v_type } == VAR_UNKNOWN)
+            .find(|&n| unsafe { (*args.add(n)).v_type() } == VAR_UNKNOWN)
             .expect("a Vimscript argument vector is terminated");
         Self { at: args, len }
     }
@@ -390,7 +390,7 @@ pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
                     mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true, &raw mut arena);
                 let mut obj = Object::dict(dict);
                 object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
-                debug_assert_eq!(d.v_type, VAR_DICT);
+                debug_assert_eq!(d.v_type(), VAR_DICT);
                 tv_list_append_dict((*result).list_or_null(), d.dict_or_null());
                 arena_mem_free(arena_finish(&raw mut arena));
             }

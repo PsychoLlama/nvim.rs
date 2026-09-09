@@ -226,7 +226,7 @@ pub unsafe fn ex_let_vars(
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
     // SAFETY: the caller's obligation -- a live value.
     let tv = unsafe { Tv::new(tv) };
-    if tv.v_type != VAR_LIST {
+    if tv.v_type() != VAR_LIST {
         emsg_static(e_listreq);
         return Err(Failed);
     }
@@ -272,7 +272,7 @@ pub unsafe fn ex_let_vars(
                 unsafe { tv_list_append_tv(rest_list, &raw mut (*item).li_tv) };
                 item = unsafe { (*item).li_next };
             }
-            let mut ltv = TypVal::list(rest_list);
+            let mut ltv = TypVal::List(rest_list);
             unsafe { tv_list_ref(rest_list) };
 
             // SAFETY: `arg` is inside the caller's string and `ltv` a live

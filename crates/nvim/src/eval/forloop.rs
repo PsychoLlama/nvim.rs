@@ -90,7 +90,7 @@ pub unsafe fn eval_for_line(
         // SAFETY: the caller's promise about `errp`.
         unsafe { *errp = false };
         if !skip {
-            match tv.v_type {
+            match tv.v_type() {
                 VAR_LIST => {
                     let l = tv.list_or_null();
                     if l.is_null() {

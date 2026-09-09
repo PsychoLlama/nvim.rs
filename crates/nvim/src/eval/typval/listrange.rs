@@ -198,7 +198,7 @@ pub unsafe fn tv_list_flatten(
         if got_int.get() {
             return;
         }
-        if flat.li_tv.v_type == VAR_LIST {
+        if flat.li_tv.v_type() == VAR_LIST {
             let itemlist = flat.list();
 
             unsafe { tv_list_drop_items(list, item, item) };
@@ -416,17 +416,17 @@ pub unsafe fn tv_list_join(
 /// dispatchers keep.
 pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { (*args).v_type } != VAR_LIST {
+    if unsafe { (*args).v_type() } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
-    let sep = if unsafe { (*args.add(1)).v_type } == VAR_UNKNOWN {
+    let sep = if unsafe { (*args.add(1)).v_type() } == VAR_UNKNOWN {
         c" ".as_ptr()
     } else {
         unsafe { numbuf.string_chk(args.add(1)) }
     };
 
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_empty(VAR_STRING) };
     if sep.is_null() {
         unsafe { (*result).write_string(::core::ptr::null_mut()) };
         return;
@@ -451,7 +451,7 @@ pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     unsafe { (*result).write_string(::core::ptr::null_mut()) };
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(args) };
-    if args.v_type != VAR_LIST {
+    if args.v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
         return;
     }

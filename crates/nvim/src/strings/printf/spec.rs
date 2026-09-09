@@ -486,7 +486,7 @@ unsafe fn scan_fmt_types(
             );
             return Err(BadFormat);
         }
-        if !tvs.is_null() && unsafe { (*tvs.offset(arg_idx as isize)).v_type } == VAR_UNKNOWN {
+        if !tvs.is_null() && unsafe { (*tvs.offset(arg_idx as isize)).v_type() } == VAR_UNKNOWN {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg1 = unsafe { c_str(fmt) };
             semsg!(

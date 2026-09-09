@@ -151,7 +151,7 @@ pub unsafe fn f_gettext(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_keytrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a String pointer, which may still be null.
     if check_arg(args, 0, tv_check_for_string_arg).is_err()
@@ -344,7 +344,7 @@ unsafe fn repeat_string(args: Args<'_>, result: &mut TypVal, n: VarNumber) {
 pub unsafe fn f_sha256(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     let hash = if args.ty(0) == VAR_BLOB {
         let blob = args.get(0).blob_or_null();
         let ga = if blob.is_null() {
@@ -645,7 +645,7 @@ unsafe fn split_into(list: *mut List, mut str: *const c_char, prog: *mut RegProg
 pub unsafe fn f_strftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY throughout: the arguments are live typvals; the two conversion
     // descriptors are opened and closed here, and `enc` is freed on every
     // path out.
@@ -784,7 +784,7 @@ pub unsafe fn f_substitute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let mut patbuf = NumBuf::new();
     let mut subbuf = NumBuf::new();
     let mut flagsbuf = NumBuf::new();
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY throughout: the arguments are live typvals and the three scratch buffers
     // outlive the calls that fill them and the `do_string_sub` that reads
     // what they hold.

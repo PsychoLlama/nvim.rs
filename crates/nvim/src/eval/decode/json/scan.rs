@@ -227,7 +227,7 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
     let obj = unsafe { decode_string(out as *const c_char, w, false, true) };
     // A string carrying an embedded NUL came back as a blob wrapped in a
     // special dictionary, which can be a dictionary value but not a key.
-    let is_special_string = obj.v_type != VAR_STRING;
+    let is_special_string = obj.v_type() != VAR_STRING;
     let value = dec.value(obj, is_special_string);
     let ok = unsafe { dec.finish_value(value, &mut p) };
     *at = p;
@@ -310,7 +310,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
 
     let text = unsafe { buf.as_ptr().add(s) } as *const c_char;
     let want = p - s;
-    let mut tv = TypVal::number(0);
+    let mut tv = TypVal::Number(0);
     if fracs.is_some() || exps.is_some() {
         let (parsed, got) = unsafe { string2float(text) };
         tv.write_float(parsed);

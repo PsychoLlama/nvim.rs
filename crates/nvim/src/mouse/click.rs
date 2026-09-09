@@ -36,8 +36,8 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     let mut modifiers = modifier_letters(mod_mask.get());
     // Upstream builds these argument slots `VAR_FIXED`; an argument vector's
     // lock is never read, and with the lock on the slot there is none to set.
-    let number = TypVal::number;
-    let string = TypVal::string;
+    let number = TypVal::Number;
+    let string = TypVal::String;
     let mut argv = [
         number(def.tabnr as VarNumber),
         number(click_count(mod_mask.get())),

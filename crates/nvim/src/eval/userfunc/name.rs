@@ -55,7 +55,7 @@ pub unsafe fn deref_func_name(
         unsafe { *found_var = true };
     }
 
-    if unsafe { (*tv).v_type } == VAR_FUNC {
+    if unsafe { (*tv).v_type() } == VAR_FUNC {
         if unsafe { (*tv).func_name_or_null() }.is_null() {
             // Just in case.
             unsafe { *lenp = 0 };
@@ -65,7 +65,7 @@ pub unsafe fn deref_func_name(
         return unsafe { (*tv).func_name_or_null() };
     }
 
-    if unsafe { (*tv).v_type } == VAR_PARTIAL {
+    if unsafe { (*tv).v_type() } == VAR_PARTIAL {
         let pt = unsafe { (*tv).partial_or_null() };
         if pt.is_null() {
             // Just in case.
@@ -461,12 +461,12 @@ pub unsafe fn trans_function_name(
                 lv.ll_newkey = ptr::null_mut();
                 unsafe { (*fdp).fd_di = lv.ll_di };
             }
-            if unsafe { (*lv.ll_tv).v_type } == VAR_FUNC
+            if unsafe { (*lv.ll_tv).v_type() } == VAR_FUNC
                 && !unsafe { (*lv.ll_tv).func_name_or_null() }.is_null()
             {
                 name = unsafe { xstrdup((*lv.ll_tv).func_name_or_null()) };
                 unsafe { *cursor = end as *mut c_char };
-            } else if unsafe { (*lv.ll_tv).v_type } == VAR_PARTIAL
+            } else if unsafe { (*lv.ll_tv).v_type() } == VAR_PARTIAL
                 && !unsafe { (*lv.ll_tv).partial_or_null() }.is_null()
             {
                 if unsafe { is_luafunc((*lv.ll_tv).partial_or_null()) }

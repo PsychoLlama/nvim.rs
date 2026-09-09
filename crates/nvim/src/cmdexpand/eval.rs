@@ -49,7 +49,7 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     }
     let type_0 = unsafe { numbuf.string(args.add(1)) };
 
-    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
         filtered = unsafe { tv_get_number_chk(args.add(2), ptr::null_mut()) } != 0;
     }
 
@@ -62,7 +62,7 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         options |= WildOpts::KEEP_ALL;
     }
 
-    if unsafe { (*args).v_type } != VAR_STRING {
+    if unsafe { (*args).v_type() } != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
     }

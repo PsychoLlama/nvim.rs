@@ -194,7 +194,7 @@ pub unsafe fn set_var_const(
     // the pointer the watcher notification and the `:const` lock below are
     // handed. See [`Live`]'s module docs.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
-    if copy || tvh.v_type == VAR_NUMBER || tvh.v_type == VAR_FLOAT {
+    if copy || tvh.v_type() == VAR_NUMBER || tvh.v_type() == VAR_FLOAT {
         unsafe { tv_copy(tv, cur) };
     } else {
         let mut into = unsafe { Tv::new(cur) };

@@ -33,7 +33,7 @@ pub use self::printf::*;
 /// question is a type test. Taking a reference keeps this safe — the
 /// caller's own block already had to produce one.
 pub(crate) fn given(tv: &TypVal) -> bool {
-    tv.v_type != VAR_UNKNOWN
+    tv.v_type() != VAR_UNKNOWN
 }
 
 /// Read an optional boolean argument that must be spelled `0` or `1`.

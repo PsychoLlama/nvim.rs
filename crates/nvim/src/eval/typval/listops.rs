@@ -118,7 +118,7 @@ pub unsafe fn tv_list_append_owned_tv(l: *mut List, tv: TypVal) -> *mut TypVal {
 /// `l` must point at a live list, and `itemlist` is null or a live list. A
 /// reference to `itemlist` is taken.
 pub unsafe fn tv_list_append_list(l: *mut List, itemlist: *mut List) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::list(itemlist)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::List(itemlist)) };
     unsafe { tv_list_ref(itemlist) };
 }
 
@@ -128,7 +128,7 @@ pub unsafe fn tv_list_append_list(l: *mut List, itemlist: *mut List) {
 /// `l` must point at a live list, and `dict` is null or a live dictionary.
 /// A reference to `dict` is taken.
 pub unsafe fn tv_list_append_dict(l: *mut List, dict: *mut Dict) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::dict(dict)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::Dict(dict)) };
     if let Some(dict) = unsafe { dict.as_mut() } {
         dict.dv_refcount.retain();
     }
@@ -161,7 +161,7 @@ pub unsafe fn tv_list_append_string(l: *mut List, str: *const ::core::ffi::c_cha
 /// the `xmalloc` family. **The list takes it over**; the caller must not
 /// free it.
 pub unsafe fn tv_list_append_allocated_string(l: *mut List, str: *mut ::core::ffi::c_char) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::string(str)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::String(str)) };
 }
 
 /// Append the number `n` to `l`.
@@ -169,7 +169,7 @@ pub unsafe fn tv_list_append_allocated_string(l: *mut List, str: *mut ::core::ff
 /// # Safety
 /// `l` must point at a live list.
 pub unsafe fn tv_list_append_number(l: *mut List, n: VarNumber) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::number(n)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::Number(n)) };
 }
 
 /// Copy `orig`, deeply when `deep`, converting strings through `conv`.
@@ -267,7 +267,7 @@ pub unsafe fn tv_list_extend(l1: *mut List, l2: *mut List, bef: *mut ListItem) {
 pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
-    val.v_type = VAR_LIST;
+    val.write_empty(VAR_LIST);
     let l = if l1.is_null() && l2.is_null() {
         ::core::ptr::null_mut()
     } else if l1.is_null() {
@@ -316,7 +316,7 @@ pub unsafe fn tv_list_remove(
         return;
     }
 
-    if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } == VAR_UNKNOWN {
         // Remove one item, return its value.
         unsafe { tv_list_drop_items(l, item, item) };
         unsafe { *result = (*item).li_tv.take() };

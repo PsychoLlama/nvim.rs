@@ -65,7 +65,7 @@ const NO_CALLBACK: Callback = Callback::None;
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.
 fn job_id(arg: &TypVal) -> Option<uint64_t> {
-    if arg.v_type != VAR_NUMBER {
+    if arg.v_type() != VAR_NUMBER {
         emsg(gettext(e_invarg));
         return None;
     }
@@ -202,7 +202,7 @@ pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         let mut arg: *const ListItem = unsafe { (*list).lv_first };
         while !arg.is_null() {
             let chan;
-            if unsafe { (*arg).li_tv.v_type } != VAR_NUMBER
+            if unsafe { (*arg).li_tv.v_type() } != VAR_NUMBER
                 || {
                     chan = find_channel(unsafe { (*arg).li_tv.number_or_zero() } as uint64_t);
                     chan.is_null()
@@ -472,7 +472,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         // `term` is the one option whose *type* is checked, because a
         // truthy string used to mean something else.
         let job_term = unsafe { tv_dict_find(job_opts, c"term".as_ptr(), 4) };
-        if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type } != VAR_BOOL {
+        if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type() } != VAR_BOOL {
             let what = c"'term' must be Boolean".as_ptr();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
@@ -500,7 +500,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         }
 
         job_env = unsafe { tv_dict_find(job_opts, c"env".as_ptr(), 3) };
-        if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type } != VAR_DICT {
+        if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type() } != VAR_DICT {
             let arg0 = "env";
             semsg!("E475: Invalid argument: {arg0}");
             bail!();

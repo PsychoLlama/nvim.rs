@@ -37,7 +37,7 @@ pub unsafe fn evalvars_init() {
         } else {
             DI_FLAGS_FIX
         };
-        let (name, declared) = (row.vv_name, row.vv_di.di_tv.v_type);
+        let (name, declared) = (row.vv_name, row.vv_di.di_tv.v_type());
 
         // The key's address is taken *after* the last field access, and
         // nothing touches the row again: `di_key` is a member of `VimVar`,
@@ -80,7 +80,7 @@ pub unsafe fn evalvars_init() {
         // SAFETY: the item just allocated.
         let mut item = unsafe { Di::new(di) };
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
-        item.di_tv = TypVal::list(type_list);
+        item.di_tv = TypVal::List(type_list);
         type_lists[i] = type_list;
         if unsafe { tv_dict_add(msgpack_types_dict, di) }.is_err() {
             // The names are distinct by construction.
@@ -175,7 +175,7 @@ pub unsafe fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
 /// # Safety
 /// `name` is a NUL-terminated string and `value` an owned one.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let mut tv = TypVal::string(value);
+    let mut tv = TypVal::String(value);
     unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut tv, true) };
 }
 

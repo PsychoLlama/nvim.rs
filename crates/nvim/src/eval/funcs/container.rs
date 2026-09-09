@@ -90,7 +90,7 @@ pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     // SAFETY throughout: every read is guarded by the type tag that says
     // which union member is live. A String, List, Dict or Blob pointer may
     // still be null, which each reader treats as empty.
-    let empty = match tv.v_type {
+    let empty = match tv.v_type() {
         VAR_STRING | VAR_FUNC => {
             let s = tv.string_or_func_name();
             s.is_null() || unsafe { *s } == NUL as c_char
@@ -238,7 +238,7 @@ fn get_from_blob(args: Args<'_>, result: &mut TypVal) -> *mut TypVal {
         return ptr::null_mut();
     }
     let blob = args.get(0).blob_or_null();
-    result.v_type = VAR_NUMBER;
+    result.write_empty(VAR_NUMBER);
     if idx < 0 {
         idx += unsafe { tv_blob_len(blob) };
     }
@@ -344,7 +344,7 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
             return true;
         }
         b"args" => {
-            result.v_type = VAR_LIST;
+            result.write_empty(VAR_LIST);
             let list = unsafe { list_alloc_ret(result, (*pt).pt_argc as isize) };
             for i in 0..unsafe { (*pt).pt_argc } {
                 unsafe { tv_list_append_tv(list, (*pt).pt_argv.offset(i as isize)) };
@@ -372,7 +372,7 @@ unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
     let name = unsafe { partial_name(pt) };
     let (req, opt, var) = (&raw mut required, &raw mut optional, &raw mut varargs);
     let _ = unsafe { get_func_arity(name, req, opt, var) };
-    result.v_type = VAR_DICT;
+    result.write_empty(VAR_DICT);
     dict_alloc_ret(result);
     let dict = result.dict_or_null();
     // The bound arguments cover the required ones first.
@@ -499,7 +499,7 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     }
     // An empty expression matches nothing rather than everything.
     let expr = args.get(1);
-    let vacuous = match expr.v_type {
+    let vacuous = match expr.v_type() {
         VAR_STRING => {
             expr.string_or_null().is_null() || unsafe { *expr.string_or_null() } == NUL as c_char
         }
@@ -641,7 +641,7 @@ pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
     let tv = args.get(0);
     // SAFETY throughout: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
-    result.write_number(match tv.v_type {
+    result.write_number(match tv.v_type() {
         VAR_STRING | VAR_NUMBER => {
             let s = arg_string(&mut numbuf, args.get(0));
             unsafe { cstr::bytes_at(s).len() as VarNumber }

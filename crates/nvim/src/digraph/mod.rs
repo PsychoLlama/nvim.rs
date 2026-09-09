@@ -581,7 +581,8 @@ pub unsafe fn f_digraph_getlist(args: *mut TypVal, result: *mut TypVal, _fptr: E
         return;
     }
     // SAFETY: caller contract; the optional argument was just type-checked.
-    let list_all = unsafe { (*args).v_type != VAR_UNKNOWN && tv_get_bool(args) != 0 as VarNumber };
+    let list_all =
+        unsafe { (*args).v_type() != VAR_UNKNOWN && tv_get_bool(args) != 0 as VarNumber };
     // SAFETY: caller contract.
     unsafe { digraph_getlist_common(list_all, result) };
 }
@@ -620,7 +621,7 @@ pub unsafe fn f_digraph_setlist(args: *mut TypVal, result: *mut TypVal, _fptr: E
 unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
     // SAFETY: caller contract; the list is only read once its type is known.
     let pl = unsafe {
-        if (*arg).v_type != VAR_LIST {
+        if (*arg).v_type() != VAR_LIST {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
@@ -633,7 +634,7 @@ unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
     // `digraph_set_common` does not touch the list it is reading from.
     let mut pli = unsafe { (*pl).lv_first };
     while !pli.is_null() {
-        if unsafe { (*pli).li_tv.v_type } != VAR_LIST {
+        if unsafe { (*pli).li_tv.v_type() } != VAR_LIST {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }

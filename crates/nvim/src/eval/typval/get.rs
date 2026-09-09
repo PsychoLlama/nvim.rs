@@ -41,7 +41,7 @@ pub unsafe fn tv_get_number(tv: *const TypVal) -> VarNumber {
 pub unsafe fn tv_get_number_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNumber {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    match val.v_type {
+    match val.v_type() {
         VAR_NUMBER => return val.number_or_zero(),
         VAR_STRING => {
             let mut n = 0;
@@ -57,7 +57,7 @@ pub unsafe fn tv_get_number_chk(tv: *const TypVal, ret_error: *mut bool) -> VarN
         VAR_BOOL => return VarNumber::from(val.as_bool() == Some(kBoolVarTrue)),
         VAR_SPECIAL => return 0,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
-            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type() as usize])) };
         }
         VAR_UNKNOWN => {
             let arg0 = "tv_get_number(UNKNOWN)";
@@ -102,7 +102,7 @@ pub unsafe fn tv_get_bool_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNum
 pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
     let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
-    if lnum <= 0 && did_emsg_before == did_emsg.get() && unsafe { (*tv).v_type } != VAR_NUMBER {
+    if lnum <= 0 && did_emsg_before == did_emsg.get() && unsafe { (*tv).v_type() } != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
         let fp = unsafe { var2fpos(tv, true, &raw mut fnum, false, Win::current()) };
@@ -141,7 +141,7 @@ pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: Option<Buf>) -> LineNr 
 pub unsafe fn tv_get_float(tv: *const TypVal) -> Float {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    let message = match val.v_type {
+    let message = match val.v_type() {
         VAR_NUMBER => return val.number_or_zero() as Float,
         VAR_FLOAT => return val.float_or_zero(),
         VAR_PARTIAL | VAR_FUNC => c"E891: Using a Funcref as a Float",
@@ -177,7 +177,7 @@ pub unsafe fn tv_get_string_buf_chk(
 ) -> *const ::core::ffi::c_char {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    match val.v_type {
+    match val.v_type() {
         VAR_NUMBER => {
             let n = val.number_or_zero();
             let size = NUMBUFLEN as size_t;
@@ -208,7 +208,7 @@ pub unsafe fn tv_get_string_buf_chk(
             buf
         }
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type as usize])) };
+            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type() as usize])) };
             ::core::ptr::null()
         }
         _ => unsafe { abort() },
@@ -288,7 +288,7 @@ pub unsafe fn tv_get_string_buf(
 pub unsafe fn tv2bool(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let tv = unsafe { Tv::new(tv.cast_mut()) };
-    match tv.v_type {
+    match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_FLOAT => tv.float_or_zero() != 0.0,
         VAR_PARTIAL => !tv.partial_or_null().is_null(),

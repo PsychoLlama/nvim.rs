@@ -270,10 +270,10 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
     // SAFETY: the tag says which union member holds the callable, and a
     // partial in it is null or live.
     let held = rv.partial_or_null();
-    if rv.v_type == VAR_PARTIAL && !held.is_null() && !unsafe { (*held).pt_func }.is_null() {
+    if rv.v_type() == VAR_PARTIAL && !held.is_null() && !unsafe { (*held).pt_func }.is_null() {
         fp = unsafe { (*held).pt_func };
     } else {
-        let mut fname = if rv.v_type == VAR_FUNC || rv.v_type == VAR_STRING {
+        let mut fname = if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
             rv.string_or_func_name()
         } else if held.is_null() {
             ptr::null_mut()
@@ -306,7 +306,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
     part.pt_dict = selfdict;
     unsafe { (*selfdict).dv_refcount.retain() };
     part.pt_auto = true;
-    if rv.v_type == VAR_FUNC || rv.v_type == VAR_STRING {
+    if rv.v_type() == VAR_FUNC || rv.v_type() == VAR_STRING {
         // Just a function: take over the function name and use selfdict.
         part.pt_name = rv.string_or_func_name();
     } else {

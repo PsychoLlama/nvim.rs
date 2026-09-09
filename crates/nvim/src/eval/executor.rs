@@ -63,7 +63,7 @@ unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias, which is why they are held as pointers and never as references.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    if op != b'+' || rhs.v_type != VAR_BLOB {
+    if op != b'+' || rhs.v_type() != VAR_BLOB {
         return Err(Failed);
     }
     let b2: *mut Blob = rhs.blob_or_null();
@@ -107,7 +107,7 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    if op != b'+' || rhs.v_type != VAR_LIST {
+    if op != b'+' || rhs.v_type() != VAR_LIST {
         return Err(Failed);
     }
     let l2 = rhs.list_or_null();
@@ -144,7 +144,7 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     // SAFETY: as above.
     let n: VarNumber = unsafe { tv_get_number(tv1) };
-    if rhs.v_type == VAR_FLOAT {
+    if rhs.v_type() == VAR_FLOAT {
         if op == b'%' {
             return Err(Failed);
         }
@@ -187,7 +187,7 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     // formatted into them, and `concat_str` has copied both operands before
     // `tv_clear` runs.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    if rhs.v_type == VAR_FLOAT {
+    if rhs.v_type() == VAR_FLOAT {
         return Err(Failed);
     }
     let mut numbuf = NumBuf::new();
@@ -216,7 +216,7 @@ unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<()
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias. The right operand is read before the left is written.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    let rhs_type = rhs.v_type;
+    let rhs_type = rhs.v_type();
     if op == b'%'
         || op == b'.'
         || (rhs_type != VAR_FLOAT && rhs_type != VAR_NUMBER && rhs_type != VAR_STRING)
@@ -253,7 +253,7 @@ pub unsafe fn eexe_mod_op(
     // SAFETY: the caller's obligation -- two initialised typvals, which may
     // alias; every helper below restates the same promise.
     let (lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
-    let rhs_type = rhs.v_type;
+    let rhs_type = rhs.v_type();
     // Nothing works with a Funcref or a Dict on the right, and v:true and
     // friends only work with "..=".
     if rhs_type == VAR_FUNC
@@ -263,7 +263,7 @@ pub unsafe fn eexe_mod_op(
         report_wrong_type(op);
         return Err(Failed);
     }
-    let retval = match lhs.v_type {
+    let retval = match lhs.v_type() {
         // SAFETY: as above -- each helper takes the same two pointers.
         VAR_BLOB => unsafe { tv_op_blob(tv1, tv2, op_byte) },
         VAR_LIST => unsafe { tv_op_list(tv1, tv2, op_byte) },

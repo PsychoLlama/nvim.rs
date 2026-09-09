@@ -90,7 +90,7 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let mut flags = if expr_src { kGRegExprSrc as c_int } else { 0 };
     if return_list {
         flags |= kGRegList as c_int;
-        result.v_type = VAR_LIST;
+        result.write_empty(VAR_LIST);
         let mut l = unsafe { get_reg_contents(regname, flags) } as *mut List;
         if l.is_null() {
             l = tv_list_alloc(0);
@@ -363,7 +363,7 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         }
     }
 
-    if !regcontents.is_null() && unsafe { (*regcontents).v_type } == VAR_LIST {
+    if !regcontents.is_null() && unsafe { (*regcontents).v_type() } == VAR_LIST {
         let list = unsafe { (*regcontents).list_or_null() };
         unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {

@@ -118,7 +118,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let (args, result) = frame!(args, result);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY throughout: `s` points into the argument, which outlives every call here;
     // `xpc` is cleared by `expand_init` before use and cleaned up after.
     // The `{list}` argument is only honoured when `{nosuf}` was given
@@ -144,7 +144,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         if !quiet && !errormsg.is_null() {
             unsafe { emsg_ptr(errormsg) };
         }
-        if result.v_type == VAR_LIST {
+        if result.v_type() == VAR_LIST {
             list_alloc_ret(result, isize::from(!expanded.is_null()));
             if !expanded.is_null() {
                 unsafe { tv_list_append_string(result.list_or_null(), expanded, -1) };
@@ -161,7 +161,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     if error {
         // `{list}` may already have made the answer a List; the empty
         // answer keeps whichever tag was chosen.
-        if result.v_type == VAR_LIST {
+        if result.v_type() == VAR_LIST {
             result.write_list(ptr::null_mut());
         } else {
             result.write_string(ptr::null_mut());
@@ -174,7 +174,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     if p_wic.get() != 0 {
         options |= WildOpts::ICASE;
     }
-    if result.v_type == VAR_STRING {
+    if result.v_type() == VAR_STRING {
         let (expand, pat) = (&raw mut xpc, s as *mut c_char);
         let nul = ptr::null_mut();
         // SAFETY: `xpc` is a local the `expand_cleanup` below tidies, and
@@ -206,7 +206,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY throughout: `cmdstr` is owned here and handed to the return value;
     // `expand_filename` may replace it with another owned string.
     // {'errmsg': v:true} asks for the expansion's own error instead of
@@ -411,7 +411,7 @@ pub unsafe fn f_swapinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// dispatchers keep.
 pub unsafe fn f_swapname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     // SAFETY: the buffer comes from the buffer list; the memfile and its
     // name are checked before either is read.
     let buf = unsafe { tv_get_buf(args.ptr(0), 0) };

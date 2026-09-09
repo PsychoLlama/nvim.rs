@@ -49,7 +49,7 @@ pub unsafe fn list_hashtable_vars(
             continue;
         }
         if empty
-            || unsafe { (*di).di_tv.v_type } != VAR_STRING
+            || unsafe { (*di).di_tv.v_type() } != VAR_STRING
             || !unsafe { (*di).di_tv.string_or_null() }.is_null()
         {
             unsafe { list_one_var(di, prefix, first) };
@@ -222,7 +222,7 @@ pub(crate) unsafe fn list_arg_vars(
                     unsafe { arg.offset_from(used_name) }
                 };
                 let text = if s.is_null() { c"".as_ptr() } else { s };
-                let ty = tv.v_type;
+                let ty = tv.v_type();
                 // SAFETY: a NUL-terminated rendering, a name of `name_size`
                 // bytes, and the caller's `first`.
                 unsafe { list_one_var_a(c"".as_ptr(), used_name, name_size, ty, text, first) };
@@ -249,7 +249,7 @@ unsafe fn list_one_var(v: *mut DictItem, prefix: *const c_char, first: *mut c_in
     let s = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
     let len = unsafe { cstr::bytes_at(key) }.len() as ptrdiff_t;
     let text = if s.is_null() { c"".as_ptr() } else { s };
-    let ty = item.di_tv.v_type;
+    let ty = item.di_tv.v_type();
     unsafe { list_one_var_a(prefix, key, len, ty, text, first) };
     unsafe { xfree(s.cast()) };
 }

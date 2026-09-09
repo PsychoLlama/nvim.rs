@@ -95,7 +95,7 @@ pub(crate) fn filter_map_one(
     rem: &mut bool,
 ) -> bool {
     set_vim_var_tv(Vv::Val, tv);
-    newtv.v_type = VAR_UNKNOWN;
+    newtv.write_empty(VAR_UNKNOWN);
 
     let mut retval = false;
     'theend: {
@@ -152,7 +152,7 @@ fn filter_map(args: *mut TypVal, result: &mut TypVal, filtermap: FilterMap) {
     // message.  Avoid a misleading one for an empty string that was not
     // passed as an argument.
     let expr = args.get_mut(1);
-    if expr.v_type == VAR_UNKNOWN {
+    if expr.v_type() == VAR_UNKNOWN {
         return;
     }
 

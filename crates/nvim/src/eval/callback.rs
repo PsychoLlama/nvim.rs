@@ -60,13 +60,13 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
     let mut r = OK;
     // Every union read below is guarded by the `v_type` that names the live
     // member, which is the promise each SAFETY note restates.
-    let cb = if tv.v_type == VAR_PARTIAL && !tv.partial_or_null().is_null() {
+    let cb = if tv.v_type() == VAR_PARTIAL && !tv.partial_or_null().is_null() {
         // SAFETY: `VAR_PARTIAL` says `v_partial` is the live member, and the
         // typval holds a live partial the callback becomes a second owner of.
         let partial = tv.partial_or_null();
         unsafe { (*partial).pt_refcount.retain() };
         Callback::Partial(partial)
-    } else if tv.v_type == VAR_STRING
+    } else if tv.v_type() == VAR_STRING
         // SAFETY: `VAR_STRING` says `v_string` is the live member, and a
         // non-null one is NUL-terminated, so its first byte is readable.
         && !tv.string_or_null().is_null()
@@ -74,7 +74,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
     {
         r = FAIL;
         Callback::None
-    } else if tv.v_type == VAR_FUNC || tv.v_type == VAR_STRING {
+    } else if tv.v_type() == VAR_FUNC || tv.v_type() == VAR_STRING {
         let name = tv.string_or_func_name();
         if name.is_null() {
             r = FAIL;
@@ -86,7 +86,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
             // A plain String may name a script-local function, which
             // has to be resolved against the current script now.
             let mut funcref = null_mut();
-            if tv.v_type == VAR_STRING {
+            if tv.v_type() == VAR_STRING {
                 // SAFETY: `name` is the typval's NUL-terminated string.
                 funcref = unsafe { get_scriptlocal_funcname(name) };
             }
@@ -109,7 +109,8 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) 
             // SAFETY: `name` is the registered function's name.
             Callback::Funcref(unsafe { xstrdup(name) })
         }
-    } else if tv.v_type == VAR_SPECIAL || (tv.v_type == VAR_NUMBER && tv.number_or_zero() == 0) {
+    } else if tv.v_type() == VAR_SPECIAL || (tv.v_type() == VAR_NUMBER && tv.number_or_zero() == 0)
+    {
         Callback::None
     } else {
         r = FAIL;

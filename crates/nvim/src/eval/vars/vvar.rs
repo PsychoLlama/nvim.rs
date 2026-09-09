@@ -86,7 +86,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut TypVal) {
     // [`restore_vimvar`] puts back.  Nothing is freed from under the copy.
     // SAFETY: the caller's obligation -- `save_tv` is writable.
     unsafe { *save_tv = tv.take_value() };
-    if tv.v_type == VAR_UNKNOWN {
+    if tv.v_type() == VAR_UNKNOWN {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
         // SAFETY: the `v:` hashtab, and a key that is the row's own.
@@ -104,7 +104,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut TypVal) {
     // SAFETY: the caller's obligation -- `save_tv` is the value the paired
     // `prepare_vimvar` filled.
     *tv = unsafe { (*save_tv).take() };
-    if tv.v_type != VAR_UNKNOWN {
+    if tv.v_type() != VAR_UNKNOWN {
         return;
     }
     // SAFETY: the `v:` hashtab and the row's own key; `hash_find` answers an
@@ -162,7 +162,11 @@ pub fn get_vim_var_dict(idx: Vv) -> *mut Dict {
 /// is what the callers holding it across a call need.
 pub fn get_vim_var_str(idx: Vv) -> *mut c_char {
     let tv = vimvar_val(idx);
-    debug_assert_eq!(tv.v_type, VAR_STRING, "v: variable {idx:?} is not a String");
+    debug_assert_eq!(
+        tv.v_type(),
+        VAR_STRING,
+        "v: variable {idx:?} is not a String"
+    );
     let s = tv.string_or_null();
     if s.is_null() {
         c"".as_ptr().cast_mut()
@@ -180,7 +184,7 @@ pub fn get_vim_var_partial(idx: Vv) -> *mut Partial {
 /// value.
 pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
     let mut tv = vimvar_val(idx);
-    tv.v_type = type_0;
+    tv.write_empty(type_0);
 }
 
 /// Set `v:` variable `idx` to the Number `val`.
@@ -499,7 +503,7 @@ pub unsafe fn before_set_vvar(
     // notification below is handed. See [`Live`]'s module docs.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     let (mut stored, mut tv) = unsafe { (Tv::new(cur), Tv::new(tv)) };
-    if stored.v_type == VAR_STRING {
+    if stored.v_type() == VAR_STRING {
         let mut oldtv = TV_INITIAL_VALUE;
         if watched {
             // SAFETY: a live value and a live local.
@@ -510,7 +514,7 @@ pub unsafe fn before_set_vvar(
         unsafe { xfree(stored.string_or_null().cast()) };
         stored.write_string(ptr::null_mut());
 
-        if copy || tv.v_type != VAR_STRING {
+        if copy || tv.v_type() != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
             let val = unsafe { numbuf.string(tv.raw()) };
             // Careful: assigning to v:errmsg, `tv_get_string()` may
@@ -531,7 +535,7 @@ pub unsafe fn before_set_vvar(
             clear_local(&mut oldtv);
         }
         return false;
-    } else if stored.v_type == VAR_NUMBER {
+    } else if stored.v_type() == VAR_NUMBER {
         let mut oldtv = TV_INITIAL_VALUE;
         if watched {
             // SAFETY: a live value and a live local.
@@ -553,7 +557,7 @@ pub unsafe fn before_set_vvar(
             clear_local(&mut oldtv);
         }
         return false;
-    } else if stored.v_type != tv.v_type {
+    } else if stored.v_type() != tv.v_type() {
         // SAFETY: the caller's obligation -- `type_error` is writable.
         unsafe { *type_error = true };
         return false;
@@ -641,7 +645,7 @@ pub(crate) unsafe fn set_vvar_item(
     // SAFETY: this item's value, which the store below replaces.
     unsafe { tv_clear(cur) };
     // SAFETY: `val` is the caller's value or the local temporary.
-    let val_type = unsafe { (*val).v_type };
+    let val_type = unsafe { (*val).v_type() };
     if !compound && (copy || val_type == VAR_NUMBER || val_type == VAR_FLOAT) {
         // SAFETY: a live value and this item's own.
         unsafe { tv_copy(val, cur) };

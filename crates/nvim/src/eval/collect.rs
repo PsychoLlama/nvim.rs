@@ -627,7 +627,7 @@ pub unsafe fn set_ref_in_item(
     // are the caller's.
     let tv = unsafe { Tv::new(tv) };
     let (ht, ls) = (ht_stack, list_stack);
-    match tv.v_type {
+    match tv.v_type() {
         // SAFETY: as above.
         VAR_DICT => unsafe { set_ref_in_item_dict(tv.dict_or_null(), copy_id, ht, ls) },
         VAR_LIST => unsafe { set_ref_in_item_list(tv.list_or_null(), copy_id, ht, ls) },
@@ -667,11 +667,11 @@ pub unsafe fn var_item_copy(
     let _depth = Depth::of(&RECURSE);
 
     // SAFETY: the caller's promise -- both typvals outlive the call. Every
-    // union member read below is the one `src.v_type` names, and the
+    // union member read below is the one `src.v_type()` names, and the
     // matching member of `dst` is written before it is read.
     let (src, mut dst) = unsafe { (Tv::new(from), Tv::new(to)) };
     let mut ret = Ok(());
-    match src.v_type {
+    match src.v_type() {
         VAR_STRING => {
             // SAFETY: as above; a null `conv` is not read.
             let plain = conv.is_null()

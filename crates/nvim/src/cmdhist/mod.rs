@@ -379,10 +379,10 @@ pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         } else {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
             let arg = args.offset(1);
-            if (*arg).v_type == VAR_UNKNOWN {
+            if (*arg).v_type() == VAR_UNKNOWN {
                 // Only one argument: clear the whole history.
                 clr_history(histype).is_ok() as c_int
-            } else if (*arg).v_type == VAR_NUMBER {
+            } else if (*arg).v_type() == VAR_NUMBER {
                 // Delete by history number.
                 del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
             } else {
@@ -415,7 +415,7 @@ pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         // `xstrnsave` copies the entry text before returning.
         unsafe {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let num = if (*args.offset(1)).v_type == VAR_UNKNOWN {
+            let num = if (*args.offset(1)).v_type() == VAR_UNKNOWN {
                 get_history_idx(histype)
             } else {
                 tv_get_number_chk(args.offset(1), core::ptr::null_mut()) as c_int

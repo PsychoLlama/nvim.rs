@@ -317,7 +317,7 @@ pub unsafe fn tv_dict_get_callback(
     if di.is_null() {
         return true;
     }
-    if !unsafe { (*di).di_tv.is_func() } && unsafe { (*di).di_tv.v_type } != VAR_STRING {
+    if !unsafe { (*di).di_tv.is_func() } && unsafe { (*di).di_tv.v_type() } != VAR_STRING {
         let msg = tr(c"E6000: Argument is not a function or function name");
         unsafe { emsg_ptr(msg) };
         return false;
@@ -403,7 +403,7 @@ pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: 
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
 pub unsafe fn f_items(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    match unsafe { (*args).v_type } {
+    match unsafe { (*args).v_type() } {
         VAR_STRING => unsafe { tv_string2items(args, result) },
         VAR_LIST => unsafe { tv_list2items(args, result) },
         VAR_BLOB => unsafe { tv_blob2items(args, result) },

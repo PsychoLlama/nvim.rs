@@ -189,7 +189,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         unsafe { tv_clear(&raw mut rettv) };
         return NOTDONE;
     }
-    if rettv.v_type != VAR_LIST || rettv.list_or_null().is_null() {
+    if rettv.v_type() != VAR_LIST || rettv.list_or_null().is_null() {
         unsafe { tv_clear(&raw mut rettv) };
         tag_emsg(E_INVALID_RETURN);
         return FAIL;
@@ -198,7 +198,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     let mut ntags = 0;
     let mut li = unsafe { (*rettv.list_or_null()).lv_first };
     while !li.is_null() {
-        if unsafe { (*li).li_tv.v_type } != VAR_DICT {
+        if unsafe { (*li).li_tv.v_type() } != VAR_DICT {
             tag_emsg(E_INVALID_RETURN);
             break;
         }
@@ -344,7 +344,7 @@ unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
         let di = unsafe { hi.hi_key.byte_sub(core::mem::offset_of!(DictItem, di_key)) }
             .cast::<DictItem>();
         let tv = unsafe { &raw mut (*di).di_tv };
-        if unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).string_or_null().is_null() } {
+        if unsafe { (*tv).v_type() } == VAR_STRING && !unsafe { (*tv).string_or_null().is_null() } {
             fields.push(Field {
                 key: (unsafe { &raw const (*di).di_key }).cast(),
                 value: unsafe { (*tv).string_or_null() },

@@ -33,10 +33,11 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Callback, Failed, ListItem, ListWatch, VAR_STRING, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t,
+    Callback, Failed, ListItem, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t,
 };
 
 use crate::support::alloc::{self, AllocLog};
+use crate::support::tv::Payload;
 use crate::support::{check_emsg, cstr, editor_lock};
 
 /// `describe('list') describe('append') describe('string()') itp('works')`,
@@ -56,7 +57,7 @@ fn tv_list_append_string_copies_then_appends() {
         let test = cstr("test");
         tv_list_append_string(l, test.as_ptr(), 3);
         log.check(&[
-            alloc::string((*(*l).lv_last).li_tv.vval.v_string, 3),
+            alloc::string((*(*l).lv_last).li_tv.string(), 3),
             alloc::li((*l).lv_last),
         ]);
 
@@ -69,7 +70,7 @@ fn tv_list_append_string_copies_then_appends() {
         // A negative length means "to the terminator".
         tv_list_append_string(l, test.as_ptr(), -1);
         log.check(&[
-            alloc::string((*(*l).lv_last).li_tv.vval.v_string, 4),
+            alloc::string((*(*l).lv_last).li_tv.string(), 4),
             alloc::li((*l).lv_last),
         ]);
 
@@ -83,7 +84,7 @@ fn tv_list_append_string_copies_then_appends() {
             let mut items = Vec::new();
             let mut item = (*l).lv_first;
             while !item.is_null() {
-                items.push(((*item).li_tv.vval.v_string, item));
+                items.push(((*item).li_tv.string(), item));
                 item = (*item).li_next;
             }
             items
@@ -106,7 +107,7 @@ unsafe fn strings(l: *const neovim::types::List) -> Vec<Option<&'static str>> {
     let mut out = Vec::new();
     let mut item = unsafe { (*l).lv_first };
     while !item.is_null() {
-        let s = unsafe { (*item).li_tv.vval.v_string };
+        let s = unsafe { (*item).li_tv.string() };
         out.push((!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_str().unwrap()));
         item = unsafe { (*item).li_next };
     }
@@ -154,7 +155,11 @@ fn tv_dict_item_is_allocated_around_its_key() {
             );
             log.check(&[alloc::di(di, len)]);
 
-            (*di).di_tv.v_type = VAR_UNKNOWN;
+            assert_eq!(
+                (*di).di_tv.v_type(),
+                VAR_UNKNOWN,
+                "a fresh item holds nothing"
+            );
             tv_dict_item_free(di);
             log.check(&[alloc::freed(di)]);
         }
@@ -174,8 +179,7 @@ fn freeing_a_dict_item_frees_its_value_first() {
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         log.check(&[alloc::di(di, 0)]);
-        (*di).di_tv.v_type = VAR_STRING;
-        (*di).di_tv.vval.v_string = value;
+        (*di).di_tv = TypVal::String(value);
 
         tv_dict_item_free(di);
         log.check(&[alloc::freed(value), alloc::freed(di)]);
@@ -199,8 +203,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         let value = xstrdup(cstr("test").as_ptr());
-        (*di).di_tv.v_type = VAR_STRING;
-        (*di).di_tv.vval.v_string = value;
+        (*di).di_tv = TypVal::String(value);
         log.check(&[alloc::di(di, 0), alloc::string(value, 4)]);
 
         assert_eq!(tv_dict_add(d, di), Ok(()));

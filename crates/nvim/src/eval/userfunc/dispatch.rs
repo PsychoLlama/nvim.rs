@@ -192,7 +192,7 @@ pub unsafe fn call_func(
 
     // Initialise rettv so that the caller may `tv_clear` it even when
     // this answers FAIL.
-    unsafe { (*result).v_type = VAR_UNKNOWN };
+    unsafe { (*result).write_empty(VAR_UNKNOWN) };
 
     if len <= 0 {
         len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;

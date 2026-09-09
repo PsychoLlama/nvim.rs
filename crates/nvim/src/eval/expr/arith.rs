@@ -135,7 +135,7 @@ pub(crate) unsafe fn grow_string_tv(tv1: *mut TypVal, s2: *const c_char) -> bool
     // SAFETY: the caller's promise -- `tv1` is a valid typval.
     let mut one = unsafe { Tv::new(tv1) };
     let old = one.string_or_null();
-    if one.v_type != VAR_STRING || old.is_null() {
+    if one.v_type() != VAR_STRING || old.is_null() {
         return false;
     }
     // SAFETY: `old` is that String's allocation and `s2` is NUL-terminated
@@ -191,7 +191,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
     // SAFETY: the caller's promise -- both operands are valid typvals.
     let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
 
-    if one.v_type == VAR_FLOAT {
+    if one.v_type() == VAR_FLOAT {
         // SAFETY: the tag says the union holds a Float.
         f1 = one.float_or_zero();
     } else {
@@ -204,11 +204,11 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
             unsafe { tv_clear(tv2) };
             return false;
         }
-        if two.v_type == VAR_FLOAT {
+        if two.v_type() == VAR_FLOAT {
             f1 = n1 as Float;
         }
     }
-    if two.v_type == VAR_FLOAT {
+    if two.v_type() == VAR_FLOAT {
         // SAFETY: as above, for the right operand.
         f2 = two.float_or_zero();
     } else {
@@ -218,7 +218,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
             unsafe { tv_clear(tv2) };
             return false;
         }
-        if one.v_type == VAR_FLOAT {
+        if one.v_type() == VAR_FLOAT {
             f2 = n2 as Float;
         }
     }
@@ -228,7 +228,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
     // leaves a Float's tag alone (there is nothing to free), so this
     // still sees a Float on the left, but a List or Blob that was
     // rejected above has become VAR_UNKNOWN.
-    if one.v_type == VAR_FLOAT || two.v_type == VAR_FLOAT {
+    if one.v_type() == VAR_FLOAT || two.v_type() == VAR_FLOAT {
         one.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
     } else {
         one.write_number(if op == b'+' {
@@ -252,7 +252,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut TypVal, tv2: *mut TypVal, op:
     let mut f2: Float = 0.0;
     // SAFETY: the caller's promise -- both operands are valid typvals.
     let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
-    let mut use_float = one.v_type == VAR_FLOAT;
+    let mut use_float = one.v_type() == VAR_FLOAT;
 
     if use_float {
         // SAFETY: the tag says the union holds a Float.
@@ -269,7 +269,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut TypVal, tv2: *mut TypVal, op:
         return false;
     }
 
-    if two.v_type == VAR_FLOAT {
+    if two.v_type() == VAR_FLOAT {
         if !use_float {
             f1 = n1 as Float;
             use_float = true;

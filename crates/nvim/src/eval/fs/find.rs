@@ -181,7 +181,7 @@ impl StrArray {
 /// asks for a List and the rest of these answer a String, and the empty
 /// form of both is a NULL payload.
 fn empty_answer(result: &mut TypVal) {
-    if result.v_type == VAR_LIST {
+    if result.v_type() == VAR_LIST {
         result.write_list(ptr::null_mut());
     } else {
         result.write_string(ptr::null_mut());
@@ -294,10 +294,10 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
             find_file_in_path_option(p, n, quiet, first, path, find_what, rel, sua, f2f, c)
         };
         first = false;
-        if !fresult.is_null() && result.v_type == VAR_LIST {
+        if !fresult.is_null() && result.v_type() == VAR_LIST {
             RetList::of(result).push(fresult);
         }
-        let more = result.v_type == VAR_LIST || {
+        let more = result.v_type() == VAR_LIST || {
             count -= 1;
             count > 0
         };
@@ -311,7 +311,7 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
 
     // The List answer appended a copy of each match and only leaves the
     // loop on a NULL, so there is nothing left to hand back there.
-    if result.v_type == VAR_STRING {
+    if result.v_type() == VAR_STRING {
         result.write_string(fresult);
     }
 }
@@ -350,7 +350,7 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
 
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     if args.has(1) {
         if nr_arg(args, 1, &mut error) != 0 {
             options |= WildOpts::KEEP_ALL;
@@ -374,7 +374,7 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         options |= WildOpts::ICASE;
     }
     let pat = str_arg(args, 0, &mut numbuf);
-    if result.v_type == VAR_STRING {
+    if result.v_type() == VAR_STRING {
         result.write_string(xpc.one(pat, options, WildMode::All));
         return;
     }
@@ -398,7 +398,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
 
-    result.v_type = VAR_STRING;
+    result.write_empty(VAR_STRING);
     if args.has(2) {
         if nr_arg(args, 2, &mut error) != 0 {
             flags |= WildOpts::KEEP_ALL;
@@ -426,7 +426,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // initialised array for it to append the matches to.
     unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
 
-    if result.v_type == VAR_STRING {
+    if result.v_type() == VAR_STRING {
         result.write_string(found.joined(c"\n"));
         return;
     }
@@ -448,7 +448,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNumber {
     // SAFETY: the caller's contract.
     let expr = unsafe { &mut *context.cast::<TypVal>() };
-    if expr.v_type == VAR_UNKNOWN {
+    if expr.v_type() == VAR_UNKNOWN {
         return 1;
     }
 

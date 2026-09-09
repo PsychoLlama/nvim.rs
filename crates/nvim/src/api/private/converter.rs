@@ -26,7 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DictSlot, TV_INITIAL_VALUE};
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string};
@@ -270,7 +270,7 @@ impl TypvalSink for ObjectSink {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         self.stack.push(Object::Dict(ApiDict::EMPTY));
     }
 
@@ -322,7 +322,7 @@ impl TypvalSink for ObjectSink {
     ///
     /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         let key = self.take_top();
         // SAFETY: the walk is inside a dictionary; `key` is the object it just
         // converted, and a `String` object owns its bytes.
@@ -339,7 +339,7 @@ impl TypvalSink for ObjectSink {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         let value = self.take_top();
         // SAFETY: as `conv_dict_after_key`, whose slot this completes.
         unsafe {
@@ -353,7 +353,7 @@ impl TypvalSink for ObjectSink {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<DictSlot>) {
         // SAFETY: as `conv_dict_between_items`.
         unsafe { self.conv_dict_between_items(tv, dictp) };
         debug_assert!(matches!(
@@ -435,7 +435,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
     let mut tv = unsafe { Live::<TypVal>::new(tv) };
     // SAFETY: as above.
     let mut obj = unsafe { Live::<Object>::new(obj) };
-    tv.v_type = VAR_UNKNOWN;
+    tv.write_empty(VAR_UNKNOWN);
     let value = *obj;
     match value {
         Object::Nil => {

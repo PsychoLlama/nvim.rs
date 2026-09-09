@@ -63,7 +63,7 @@ const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
 /// `arg` must be a live typval.
 unsafe fn lua_table_ref(arg: *const TypVal) -> LuaRef {
     unsafe {
-        match (*arg).v_type {
+        match (*arg).v_type() {
             VAR_DICT => (*(*arg).dict_or_null()).lua_table_ref,
             VAR_LIST => (*(*arg).list_or_null()).lua_table_ref,
             _ => LUA_NOREF,

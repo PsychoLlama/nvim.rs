@@ -406,7 +406,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 break;
             }
             let mut container = unsafe { Tv::new(lval.ll_tv) };
-            if c == b'.' as c_char && container.v_type != VAR_DICT {
+            if c == b'.' as c_char && container.v_type() != VAR_DICT {
                 if !quiet {
                     // SAFETY: a shared message, whose format takes one // NUL-terminated string.
                     let name = unsafe { c_str(name) };
@@ -414,9 +414,9 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
                 return null_mut();
             }
-            if container.v_type != VAR_LIST
-                && container.v_type != VAR_DICT
-                && container.v_type != VAR_BLOB
+            if container.v_type() != VAR_LIST
+                && container.v_type() != VAR_DICT
+                && container.v_type() != VAR_BLOB
             {
                 if !quiet {
                     emsg_static(c"E689: Can only index a List, Dictionary or Blob");
@@ -425,9 +425,9 @@ pub(crate) unsafe fn get_lval_subscript(
             }
 
             // A null List or Blob works like an empty one; allocate now.
-            if container.v_type == VAR_LIST && container.list_or_null().is_null() {
+            if container.v_type() == VAR_LIST && container.list_or_null().is_null() {
                 unsafe { tv_list_alloc_ret(lval.ll_tv, kListLenUnknown as ptrdiff_t) };
-            } else if container.v_type == VAR_BLOB && container.blob_or_null().is_null() {
+            } else if container.v_type() == VAR_BLOB && container.blob_or_null().is_null() {
                 unsafe { tv_blob_alloc_ret(lval.ll_tv) };
             }
 
@@ -474,7 +474,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
 
                 if unsafe { *p } == b':' as c_char {
-                    if container.v_type == VAR_DICT {
+                    if container.v_type() == VAR_DICT {
                         if !quiet {
                             emsg_static(e_cannot_slice_dictionary);
                         }
@@ -484,9 +484,9 @@ pub(crate) unsafe fn get_lval_subscript(
                     // A null `result` is `:unlet`, which assigns nothing.
                     // SAFETY: `result` is non-null here; `v_type` names the member read.
                     let sliceable = result.is_null()
-                        || (unsafe { (*result).v_type } == VAR_LIST
+                        || (unsafe { (*result).v_type() } == VAR_LIST
                             && !unsafe { (*result).list_or_null() }.is_null())
-                        || (unsafe { (*result).v_type } == VAR_BLOB
+                        || (unsafe { (*result).v_type() } == VAR_BLOB
                             && !unsafe { (*result).blob_or_null() }.is_null());
                     if !sliceable {
                         if !quiet {
@@ -522,7 +522,7 @@ pub(crate) unsafe fn get_lval_subscript(
             }
 
             container = unsafe { Tv::new(lval.ll_tv) };
-            if container.v_type == VAR_DICT {
+            if container.v_type() == VAR_DICT {
                 let (rec, end, idx) = (lval.raw(), &raw mut p, &raw mut var1);
                 let status = unsafe {
                     get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, result)
@@ -534,7 +534,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     GLV_STOP => break,
                     _ => {}
                 }
-            } else if container.v_type == VAR_BLOB {
+            } else if container.v_type() == VAR_BLOB {
                 let (a, b) = (&raw mut var1, &raw mut var2);
                 if unsafe { get_lval_blob(lval.raw(), a, b, empty1, quiet) }.is_err() {
                     break 'done;
@@ -550,8 +550,8 @@ pub(crate) unsafe fn get_lval_subscript(
 
             clear_local(&mut var1);
             clear_local(&mut var2);
-            var1.v_type = VAR_UNKNOWN;
-            var2.v_type = VAR_UNKNOWN;
+            var1.write_empty(VAR_UNKNOWN);
+            var2.write_empty(VAR_UNKNOWN);
         }
         rc = OK;
     }
@@ -754,7 +754,7 @@ pub unsafe fn set_var_lval(
         // `tv_list_assign_range` through `vval.v_list` — walking a
         // `Blob` as a `List`. `let l = [1,2] | let l[0:] = 0z11`
         // is enough. Report what the assignment actually needs.
-        if value.v_type != VAR_LIST {
+        if value.v_type() != VAR_LIST {
             emsg_static(e_listreq);
             return;
         }
@@ -846,7 +846,7 @@ pub unsafe fn set_var_lval(
     if !watched {
         return;
     }
-    if oldtv.v_type == VAR_UNKNOWN {
+    if oldtv.v_type() == VAR_UNKNOWN {
         // Nothing was saved, so this is the new-key case.
         debug_assert!(!lval.ll_newkey.is_null());
         // SAFETY: the watched Dict, its new key, and the value just written.
@@ -959,7 +959,7 @@ unsafe fn set_blob_var(lval: *mut LVal, result: *mut TypVal, op: *const c_char) 
         return false;
     }
 
-    if lval.ll_range && value.v_type == VAR_BLOB {
+    if lval.ll_range && value.v_type() == VAR_BLOB {
         if lval.ll_empty2 {
             lval.ll_n2 = unsafe { tv_blob_len(lval.ll_blob) } - 1;
         }

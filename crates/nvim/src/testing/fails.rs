@@ -220,9 +220,9 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
 unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch: &FailsMismatch) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let mut actual_tv = match mismatch.index {
-        3 => TypVal::number(emsg_assert_fails_lnum.get() as VarNumber),
-        4 => TypVal::string(emsg_assert_fails_context.get()),
-        _ => TypVal::string(mismatch.actual),
+        3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
+        4 => TypVal::String(emsg_assert_fails_context.get()),
+        _ => TypVal::String(mismatch.actual),
     };
     let mut ga = unsafe { prepare_assert_error() };
     let gap = &mut ga;

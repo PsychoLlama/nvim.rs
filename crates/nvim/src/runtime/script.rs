@@ -365,7 +365,7 @@ unsafe fn script_query(
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's argument vector; argument 0 always exists.
     let arg = unsafe { &*args };
-    if arg.v_type != VAR_DICT {
+    if arg.v_type() != VAR_DICT {
         return ScriptQuery::All;
     }
     // The tag was tested above, so this is the argument's own dictionary.

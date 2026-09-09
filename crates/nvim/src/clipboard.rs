@@ -183,8 +183,8 @@ pub(crate) unsafe fn get_clipboard(
     // SAFETY: `result` is the provider's typval, whose list (if any) is
     // alive for this block, and `reg` is the live register being filled.
     'err: {
-        if result.v_type != VAR_LIST {
-            if result.v_type == VAR_NUMBER && result.number_or_zero() == 0 {
+        if result.v_type() != VAR_LIST {
+            if result.v_type() == VAR_NUMBER && result.number_or_zero() == 0 {
                 errmsg = false;
             }
             break 'err;
@@ -192,10 +192,10 @@ pub(crate) unsafe fn get_clipboard(
         let res = result.list_or_null();
         let lines;
         if unsafe { tv_list_len(res) } == 2
-            && unsafe { (*tv_list_first(res)).li_tv.v_type } == VAR_LIST
+            && unsafe { (*tv_list_first(res)).li_tv.v_type() } == VAR_LIST
         {
             lines = unsafe { (*tv_list_first(res)).li_tv.list_or_null() };
-            if unsafe { (*tv_list_last(res)).li_tv.v_type } != VAR_STRING {
+            if unsafe { (*tv_list_last(res)).li_tv.v_type() } != VAR_STRING {
                 break 'err;
             }
             let regtype = unsafe { (*tv_list_last(res)).li_tv.string_or_null() };
@@ -226,7 +226,7 @@ pub(crate) unsafe fn get_clipboard(
         if !lines.is_null() {
             let mut li = unsafe { (*lines).lv_first };
             while !li.is_null() {
-                if unsafe { (*li).li_tv.v_type } != VAR_STRING {
+                if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
                     break 'err;
                 }
                 let s = unsafe { (*li).li_tv.string_or_null() };

@@ -27,10 +27,11 @@ use crate::winlayer::Win;
 /// `arg` must be a valid typval.
 unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
-    if unsafe { (*arg).v_type } == VAR_UNKNOWN {
+    if unsafe { (*arg).v_type() } == VAR_UNKNOWN {
         return Some(win_alist(Win::current()));
     }
-    if unsafe { (*arg).v_type } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber {
+    if unsafe { (*arg).v_type() } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber
+    {
         return Some(global_arglist());
     }
     unsafe { find_win_by_nr_or_id(arg) }.map(win_alist)
@@ -111,7 +112,7 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut Ty
 pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
-    if unsafe { (*args.offset(0)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(0)).v_type() } == VAR_UNKNOWN {
         // No index: the whole current argument list.
         let (entries, count) = alist_entries(win_alist(Win::current()));
         unsafe { arglist_as_rettv(entries, count, result) };

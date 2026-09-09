@@ -91,7 +91,7 @@ pub(crate) unsafe fn tv_str(
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return ptr::null();
     };
-    if matches!(unsafe { (*tv).v_type }, VAR_STRING | VAR_NUMBER) {
+    if matches!(unsafe { (*tv).v_type() }, VAR_STRING | VAR_NUMBER) {
         *tofree = ptr::null_mut();
         unsafe { tv_get_string_buf_chk(tv, numbuf) }
     } else {
@@ -127,7 +127,7 @@ pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0.0;
     };
-    match unsafe { (*tv).v_type } {
+    match unsafe { (*tv).v_type() } {
         VAR_FLOAT => unsafe { (*tv).float_or_zero() },
         VAR_NUMBER => unsafe { (*tv).number_or_zero() as Float },
         _ => {

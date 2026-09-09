@@ -351,7 +351,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                         let mut ht: *mut HashTab = ptr::null_mut();
                         let name_len = unsafe { cstr::bytes_at(name) }.len();
                         let v = unsafe { find_var(name, name_len, &raw mut ht, false) };
-                        if !v.is_null() && unsafe { (*v).di_tv.v_type } == VAR_FUNC {
+                        if !v.is_null() && unsafe { (*v).di_tv.v_type() } == VAR_FUNC {
                             let clash = c"E707: Function name conflicts with variable: %s";
                             unsafe { emsg_funcname(clash.as_ptr(), name) };
                             break 'erret;

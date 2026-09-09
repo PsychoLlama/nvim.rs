@@ -462,7 +462,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // over the *pointer* instead, so a caller that asked for a prefix
         // of a longer string had the whole of it printed.
         let text = cstr::owned(bytes);
-        let mut argv = [TypVal::string(text.as_ptr().cast_mut())];
+        let mut argv = [TypVal::String(text.as_ptr().cast_mut())];
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
         unsafe { callback_call(on_print_cb(), 1, argv.as_mut_ptr(), &raw mut rettv) };

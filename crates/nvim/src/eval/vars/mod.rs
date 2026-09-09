@@ -323,10 +323,7 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
     VimVar {
         vv_name: name.as_ptr().cast_mut(),
         vv_di: VimVarItem {
-            di_tv: TypVal {
-                v_type,
-                ..TV_INITIAL_VALUE
-            },
+            di_tv: TypVal::empty(v_type),
             di_lock: VarLock::Unlocked,
             di_flags: 0,
             di_key: [0; 17],

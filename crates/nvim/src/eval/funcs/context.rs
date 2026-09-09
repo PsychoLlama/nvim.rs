@@ -31,9 +31,9 @@ const NO_ERROR: Error = Error::none();
 unsafe fn context_index(tv: *const TypVal, what: &str) -> Option<usize> {
     // SAFETY: the caller's obligation.
     let tv = unsafe { &*tv };
-    if tv.v_type == VAR_NUMBER {
+    if tv.v_type() == VAR_NUMBER {
         Some(tv.number_or_zero() as usize)
-    } else if tv.v_type == VAR_UNKNOWN {
+    } else if tv.v_type() == VAR_UNKNOWN {
         Some(0)
     } else {
         semsg!("E475: Invalid argument: {what}");
@@ -114,7 +114,7 @@ pub unsafe fn f_ctxpush(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFunc
                 // non-String item.
                 // A null `v_string` is the empty string, which matches
                 // no name; `strequal` answered the same for it.
-                if tv.v_type == VAR_STRING && !tv.string_or_null().is_null() {
+                if tv.v_type() == VAR_STRING && !tv.string_or_null().is_null() {
                     types |= match unsafe { CStr::from_ptr(tv.string_or_null()) }.to_bytes() {
                         b"regs" => kCtxRegs as c_int,
                         b"jumps" => kCtxJumps as c_int,

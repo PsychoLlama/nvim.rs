@@ -127,7 +127,7 @@ unsafe fn search_direction(varp: *mut TypVal, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
     // SAFETY: the caller's obligation; `nbuf` outlives the string
     // `tv_get_string_buf_chk` may park in it.
-    if unsafe { (*varp).v_type } == VAR_UNKNOWN {
+    if unsafe { (*varp).v_type() } == VAR_UNKNOWN {
         return FORWARD as c_int;
     }
     let mut nbuf = [0 as c_char; NUMBUFLEN];

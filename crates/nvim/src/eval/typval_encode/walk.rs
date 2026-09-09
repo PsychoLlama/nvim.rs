@@ -14,8 +14,9 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
-    Dt, Li, Pt, Tv, di_tv, dv_copyid, li_tv, lv_copyid, tv_blob_len, tv_dict_find, tv_dict_hi2di,
-    tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len, tv_list_set_copyid,
+    DictSlot, Dt, Li, Pt, Tv, di_tv, dv_copyid, li_tv, lv_copyid, tv_blob_len, tv_dict_find,
+    tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len,
+    tv_list_set_copyid,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copy_id, partial_name};
@@ -59,7 +60,7 @@ macro_rules! walk_hook {
 pub(crate) unsafe fn tv_strlen(tv: *const TypVal) -> size_t {
     // SAFETY: the caller's promise: a live VAR_STRING typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    debug_assert!(val.v_type == VAR_STRING);
+    debug_assert!(val.v_type() == VAR_STRING);
     if val.string_or_null().is_null() {
         0
     } else {
@@ -183,7 +184,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
     sink.check_before();
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
-    match val.v_type {
+    match val.v_type() {
         VAR_STRING => {
             item_hook!(unsafe { sink.conv_string(tv, (*tv).string_or_null(), tv_strlen(tv)) });
         }
@@ -272,7 +273,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             // SAFETY: the typval's own dictionary, live while the typval is.
             let d = unsafe { Dt::new(dict) };
             if dict.is_null() || d.dv_hashtab.ht_used == 0 {
-                unsafe { sink.conv_empty_dict(tv, Some(val.dict_ptr())) };
+                unsafe { sink.conv_empty_dict(tv, Some(DictSlot::Value(tv))) };
             } else {
                 if S::ALLOW_SPECIALS
                     && let Some(flow) =
@@ -286,7 +287,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     let path = ConvPath { stack, objname };
                     item_hook!(unsafe { check_dict_seen(sink, dict, copyid, &path) });
                 }
-                let dictp = val.dict_ptr();
+                let dictp = DictSlot::Value(tv);
                 let used = d.dv_hashtab.ht_used;
                 item_hook!(unsafe { sink.conv_dict_start(tv, used) });
                 debug_assert!(saved_copyid != copyid);
@@ -337,7 +338,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
         return Ok(None);
     }
     let type_di: *const DictItem = unsafe { tv_dict_find(dict, c"_TYPE".as_ptr(), 5) };
-    if type_di.is_null() || unsafe { (*type_di).di_tv.v_type } != VAR_LIST {
+    if type_di.is_null() || unsafe { (*type_di).di_tv.v_type() } != VAR_LIST {
         return Ok(None);
     }
     let val_di: *const DictItem = unsafe { tv_dict_find(dict, c"_VAL".as_ptr(), 4) };
@@ -362,7 +363,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     match SPECIAL_KINDS[found] {
         SpecialKind::Nil => unsafe { sink.conv_nil(tv) },
         SpecialKind::Bool => {
-            if val.v_type != VAR_NUMBER {
+            if val.v_type() != VAR_NUMBER {
                 return Ok(None);
             }
             unsafe { sink.conv_bool(tv, val.number_or_zero() != 0) };
@@ -371,7 +372,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             // A list of four integers: a sign (nominally ±1), then the
             // number in three unsigned pieces, most significant first.
             // How many bits each piece really carries is not checked.
-            if val.v_type != VAR_LIST {
+            if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
             let val_list = val.list_or_null();
@@ -409,14 +410,14 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             }
         }
         SpecialKind::Float => {
-            if val.v_type != VAR_FLOAT {
+            if val.v_type() != VAR_FLOAT {
                 return Ok(None);
             }
             let f = val.float_or_zero();
             return Ok(Some(unsafe { sink.conv_float(tv, f) }));
         }
         SpecialKind::String => {
-            if val.v_type != VAR_LIST {
+            if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
             let mut len: size_t = 0;
@@ -432,7 +433,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             return Ok(Some(flow));
         }
         SpecialKind::Array => {
-            if val.v_type != VAR_LIST {
+            if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
             let val_list = val.list_or_null();
@@ -460,7 +461,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             });
         }
         SpecialKind::Map => {
-            if val.v_type != VAR_LIST {
+            if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
             let val_list = val.list_or_null();
@@ -473,7 +474,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             let mut li = unsafe { tv_list_first(val_list) };
             while !li.is_null() {
                 let item = li_tv(li);
-                if unsafe { (*item).v_type } != VAR_LIST
+                if unsafe { (*item).v_type() } != VAR_LIST
                     || unsafe { tv_list_len((*item).list_or_null()) } != 2
                 {
                     return Ok(None);
@@ -504,7 +505,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             });
         }
         SpecialKind::Ext => {
-            if val.v_type != VAR_LIST {
+            if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
             let val_list = val.list_or_null();
@@ -716,7 +717,9 @@ unsafe fn walk<S: TypvalSink>(
                             let frame_dict = unsafe { Dt::new(dict) };
                             let used = frame_dict.dv_hashtab.ht_used;
                             unsafe { sink.conv_func_before_self(cur_tv, used as ptrdiff_t) };
-                            let dictp = part.field_ptr(::core::mem::offset_of!(Partial, pt_dict));
+                            let dictp = DictSlot::Field(
+                                part.field_ptr(::core::mem::offset_of!(Partial, pt_dict)),
+                            );
                             if used == 0 {
                                 unsafe { sink.conv_empty_dict(ptr::null_mut(), Some(dictp)) };
                                 continue;

@@ -265,7 +265,7 @@ unsafe fn qf_add_entries(
         let first = unsafe { tv_list_first(list) };
         let mut li = unsafe { (*list).lv_first };
         while !li.is_null() {
-            if unsafe { (*li).li_tv.v_type } == VAR_DICT
+            if unsafe { (*li).li_tv.v_type() } == VAR_DICT
                 && !unsafe { (*li).li_tv.dict_or_null() }.is_null()
             {
                 let d = unsafe { (*li).li_tv.dict_or_null() };
@@ -321,7 +321,7 @@ unsafe fn qf_setprop_get_qfidx(
 
     let di = unsafe { find(what, "nr") };
     if !di.is_null() {
-        if unsafe { (*di).di_tv.v_type } == VAR_NUMBER {
+        if unsafe { (*di).di_tv.v_type() } == VAR_NUMBER {
             // For zero use the current list.
             if unsafe { (*di).di_tv.number_or_zero() } != 0 {
                 qf_idx = unsafe { (*di).di_tv.number_or_zero() } as c_int - 1;
@@ -341,7 +341,7 @@ unsafe fn qf_setprop_get_qfidx(
             } else if action != ' ' as c_int {
                 *newlist = false;
             }
-        } else if unsafe { (*di).di_tv.v_type } == VAR_STRING
+        } else if unsafe { (*di).di_tv.v_type() } == VAR_STRING
             && unsafe { strequal((*di).di_tv.string_or_null(), c"$".as_ptr()) }
         {
             if !unsafe { qf_stack_empty(qi) } {
@@ -361,7 +361,7 @@ unsafe fn qf_setprop_get_qfidx(
     if !*newlist {
         let di = unsafe { find(what, "id") };
         if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
+            if unsafe { (*di).di_tv.v_type() } != VAR_NUMBER {
                 return None;
             }
             let by_id = unsafe { qf_id2nr(qi, (*di).di_tv.number_or_zero() as c_uint) };
@@ -383,7 +383,7 @@ unsafe fn qf_setprop_title(
     di: *const DictItem,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*di).di_tv.v_type } != VAR_STRING {
+    if unsafe { (*di).di_tv.v_type() } != VAR_STRING {
         return Err(QfError::BadValue);
     }
     let qfl = unsafe { qf_get_list(qi, qf_idx) };
@@ -407,7 +407,7 @@ unsafe fn qf_setprop_items(
     action: c_int,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*di).di_tv.v_type } != VAR_LIST {
+    if unsafe { (*di).di_tv.v_type() } != VAR_LIST {
         return Err(QfError::BadValue);
     }
     // The title survives the entries being replaced, so it has to be
@@ -439,7 +439,7 @@ unsafe fn qf_setprop_items_from_lines(
     let mut errorformat = p_efm.get();
     let efm_di = unsafe { find(what, "efm") };
     if !efm_di.is_null() {
-        if unsafe { (*efm_di).di_tv.v_type } != VAR_STRING
+        if unsafe { (*efm_di).di_tv.v_type() } != VAR_STRING
             || unsafe { (*efm_di).di_tv.string_or_null() }.is_null()
         {
             return Err(QfError::BadValue);
@@ -448,7 +448,8 @@ unsafe fn qf_setprop_items_from_lines(
     }
 
     // Only a List value is supported.
-    if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.list_or_null() }.is_null()
+    if unsafe { (*di).di_tv.v_type() } != VAR_LIST
+        || unsafe { (*di).di_tv.list_or_null() }.is_null()
     {
         return Err(QfError::BadValue);
     }
@@ -502,7 +503,7 @@ unsafe fn qf_setprop_context(mut qfl: Qfl, di: *mut DictItem) {
 unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller -- a live dictionary entry.
     let mut newidx = unsafe {
-        if (*di).di_tv.v_type == VAR_STRING
+        if (*di).di_tv.v_type() == VAR_STRING
             && !(*di).di_tv.string_or_null().is_null()
             && cstr::eq_bytes((*di).di_tv.string_or_null(), b"$")
         {

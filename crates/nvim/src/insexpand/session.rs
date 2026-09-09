@@ -306,9 +306,9 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     }
 
     let mut args = [TYPVAL_T_INIT; 3];
-    args[0].v_type = VAR_NUMBER;
-    args[1].v_type = VAR_STRING;
-    args[2].v_type = VAR_UNKNOWN;
+    args[0].write_empty(VAR_NUMBER);
+    args[1].write_empty(VAR_STRING);
+    args[2].write_empty(VAR_UNKNOWN);
     args[0].write_number(1);
     args[1].write_string(c"".as_ptr().cast_mut());
 

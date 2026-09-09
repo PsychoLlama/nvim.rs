@@ -67,10 +67,10 @@ const E474_UNIDENTIFIED_BYTE: &CStr = c"E474: Unidentified byte: %.*s";
 const E474_TRAILING_CHARACTERS: &CStr = c"E474: Trailing characters: %.*s";
 const E474_UNEXPECTED_END: &CStr = c"E474: Unexpected end of input: %.*s";
 
-const NULL_TV: TypVal = TypVal::special(kSpecialVarNull);
+const NULL_TV: TypVal = TypVal::Special(kSpecialVarNull);
 
 const fn bool_tv(value: bool) -> TypVal {
-    TypVal::boolean(if value { kBoolVarTrue } else { kBoolVarFalse })
+    TypVal::Bool(if value { kBoolVarTrue } else { kBoolVarFalse })
 }
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
@@ -100,7 +100,7 @@ pub unsafe fn json_decode_string(
         return Err(Failed);
     }
 
-    unsafe { (*result).v_type = VAR_UNKNOWN };
+    unsafe { (*result).write_empty(VAR_UNKNOWN) };
     let mut dec = Decoder::new(bytes);
     let mut ret = Ok(());
     // Whether a container holds nothing yet, which is what makes a comma
@@ -271,7 +271,7 @@ pub unsafe fn json_decode_string(
                     b'[' => {
                         let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
                         unsafe { tv_list_ref(list) };
-                        let tv = TypVal::list(list);
+                        let tv = TypVal::List(list);
                         dec.open(tv, ::core::ptr::null_mut(), p);
                     }
                     b'{' => {
@@ -285,7 +285,7 @@ pub unsafe fn json_decode_string(
                         } else {
                             let dict = unsafe { tv_dict_alloc() };
                             unsafe { (*dict).dv_refcount.retain() };
-                            tv = TypVal::dict(dict);
+                            tv = TypVal::Dict(dict);
                         }
                         dec.open(tv, special_val, p);
                     }
@@ -330,11 +330,11 @@ impl Decoder<'_> {
     fn open(&mut self, container: TypVal, special_val: *mut List, at: usize) {
         // The container stack keeps a handle; the value stack keeps the
         // value, and is what owns the reference the handle names.
-        let handle = match container.v_type {
+        let handle = match container.v_type() {
             VAR_LIST => OpenContainer::List(container.list_or_null()),
             _ => OpenContainer::Dict(container.dict_or_null()),
         };
-        debug_assert!(container.v_type == VAR_LIST || container.v_type == VAR_DICT);
+        debug_assert!(container.v_type() == VAR_LIST || container.v_type() == VAR_DICT);
         self.containers.push(Container {
             stack_index: self.stack.len(),
             special_val,

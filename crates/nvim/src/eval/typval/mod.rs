@@ -41,7 +41,7 @@ use crate::types::{
     SpecialVarValue, StaticList10, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
     VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
+    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
@@ -172,13 +172,14 @@ pub const GARRAY_EMPTY: GArray = GArray {
     ga_growsize: 0,
     ga_data: ::core::ptr::null_mut(),
 };
-/// `TV_INITIAL_VALUE`: an unlocked `VAR_UNKNOWN` object, which is what a
-/// `TypVal` is initialised to and what one is left as after being moved out
-/// of.  c2rust wrote the designated initialiser out at every use site.
-pub const TV_INITIAL_VALUE: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    vval: typval_vval_union { v_number: 0 },
-};
+/// `TV_INITIAL_VALUE`: the `VAR_UNKNOWN` a `TypVal` is initialised to and
+/// left as after being moved out of.  c2rust wrote the designated
+/// initialiser out at every use site.
+///
+/// A `const` rather than the bare [`TypVal::Unknown`] because a repeated
+/// array (`[TV_INITIAL_VALUE; 21]`, every argument frame in the interpreter)
+/// needs a constant on its left, the element type not being `Copy`.
+pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());

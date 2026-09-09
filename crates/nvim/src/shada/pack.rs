@@ -272,7 +272,7 @@ unsafe fn pack_variable(
     global_var: &ShadaGlobalVar,
     sbuf: &mut PackerBuffer,
 ) -> Result<(), ShaDaWriteResult> {
-    let is_blob = global_var.value.v_type == VAR_BLOB;
+    let is_blob = global_var.value.v_type() == VAR_BLOB;
     mpack_array(
         sbuf.cursor_mut(),
         2 + is_blob as uint32_t + unsafe { additional_data_len(entry.additional_data) },

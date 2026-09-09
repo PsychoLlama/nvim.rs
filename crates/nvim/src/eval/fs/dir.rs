@@ -557,7 +557,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
     let how = if recurse { c"rf" } else { c"d" };
     // SAFETY: a NUL-terminated literal; the copy is nvim's heap.
     let how = unsafe { xstrdup(how.as_ptr()) };
-    let string = |s| TypVal::string(s);
+    let string = |s| TypVal::String(s);
     let mut tv = [string(created), string(how)];
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: two arguments, at `tv`, whose contents the callee takes over.

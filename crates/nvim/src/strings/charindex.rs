@@ -352,7 +352,7 @@ pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         len = slen as c_int - nbyte;
     }
 
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_empty(VAR_STRING) };
     let from = unsafe { p.offset(nbyte as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
     unsafe { (*result).write_string(part) };
@@ -407,7 +407,7 @@ pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         len = (off - n as int64_t) as VarNumber;
     }
 
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_empty(VAR_STRING) };
     let from = unsafe { p.offset(n as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
     unsafe { (*result).write_string(part) };

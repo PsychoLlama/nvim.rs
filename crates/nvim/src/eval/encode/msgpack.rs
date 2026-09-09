@@ -20,13 +20,14 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::conv_error;
+use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
 use crate::os::cshim::gettext;
-use crate::types::{Blob, Dict, Float, Integer, PackerBuffer, String_0, TypVal, int64_t, size_t};
+use crate::types::{Blob, Float, Integer, PackerBuffer, String_0, TypVal, int64_t, size_t};
 
 /// The two errors this sink can raise, both through
 /// [`conv_error`][crate::eval::encode::conv_error], which appends
@@ -175,7 +176,7 @@ impl TypvalSink for MsgpackSink<'_> {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
         mpack_map(self.packer.cursor_mut(), 0);
     }
 

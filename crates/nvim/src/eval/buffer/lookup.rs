@@ -24,7 +24,7 @@ use crate::types::{VAR_NUMBER, VAR_STRING};
 pub unsafe fn find_buffer(avar: *mut TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation; under `VAR_STRING` the union's live arm
     // is `v_string`, a NUL-terminated string or NULL.
-    match unsafe { (*avar).v_type } {
+    match unsafe { (*avar).v_type() } {
         VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).number_or_zero() })),
         VAR_STRING if !unsafe { (*avar).string_or_null() }.is_null() => {
             let name = unsafe { (*avar).string_or_null() };

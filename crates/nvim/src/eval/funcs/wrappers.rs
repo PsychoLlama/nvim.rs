@@ -235,7 +235,7 @@ pub unsafe fn call_internal_func(
     if argcount > unsafe { (*fdef).max_argc } as c_int {
         return FCERR_TOOMANY as c_int;
     }
-    unsafe { (*args.add(argcount as usize)).v_type = VAR_UNKNOWN };
+    unsafe { (*args.add(argcount as usize)).write_empty(VAR_UNKNOWN) };
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
     let data = unsafe { (*fdef).data };
     // SAFETY: the row's body takes exactly the frame built above.
@@ -295,7 +295,7 @@ pub unsafe fn call_internal_method(
     let to = unsafe { out.add(base_index as usize + 1) };
     let rest = (argcount - base_index) as usize;
     unsafe { ptr::copy_nonoverlapping(from, to, rest) };
-    unsafe { (*out.add(argcount as usize + 1)).v_type = VAR_UNKNOWN };
+    unsafe { (*out.add(argcount as usize + 1)).write_empty(VAR_UNKNOWN) };
 
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
     let data = unsafe { (*fdef).data };
@@ -392,7 +392,7 @@ pub(crate) unsafe fn non_zero_arg(args: *mut TypVal) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
     let tv = unsafe { &*args };
-    match tv.v_type {
+    match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
         VAR_STRING => {
@@ -409,7 +409,7 @@ pub(crate) unsafe fn non_zero_arg(args: *mut TypVal) -> bool {
 pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
-    match unsafe { (*tv).v_type } {
+    match unsafe { (*tv).v_type() } {
         VAR_FLOAT => unsafe { *ret_f = (*tv).float_or_zero() },
         VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as Float },
         _ => {
@@ -435,7 +435,7 @@ pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: Eva
     // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     let mut f: Float = 0.0;
-    unsafe { (*result).v_type = VAR_FLOAT };
+    unsafe { (*result).write_empty(VAR_FLOAT) };
     let value = if unsafe { tv_get_float_chk(args, &raw mut f) } {
         let EvalFuncData::Float(op) = fptr else {
             unreachable!("a float builtin's row carries its operation")
@@ -512,10 +512,10 @@ pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFunc
 pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
-    if unsafe { (*tv).v_type } == VAR_NUMBER {
+    if unsafe { (*tv).v_type() } == VAR_NUMBER {
         return find_buf(unsafe { (*tv).number_or_zero() } as c_int);
     }
-    if unsafe { (*tv).v_type } != VAR_STRING {
+    if unsafe { (*tv).v_type() } != VAR_STRING {
         return None;
     }
     let name = unsafe { (*tv).string_or_null() };
@@ -588,7 +588,7 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> Option<Buf> {
 /// `args` is a live call frame's argument array and `idx` is within it.
 pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> Option<Win> {
     // SAFETY: the caller's obligation.
-    if unsafe { (*args.add(idx as usize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(idx as usize)).v_type() } == VAR_UNKNOWN {
         return Win::current_or_none();
     }
     let win = unsafe { find_win_by_nr_or_id(args.add(idx as usize)) };

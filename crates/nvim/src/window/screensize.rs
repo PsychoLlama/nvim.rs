@@ -156,7 +156,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut Dict {
         c"skipcol".to_bytes(),
     ];
     for (key, value) in keys.iter().zip(deltas) {
-        let mut tv = TypVal::number(value as VarNumber);
+        let mut tv = TypVal::Number(value as VarNumber);
         let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
         // SAFETY: a live dictionary, a static key of the given length, and a
         // value the dictionary takes over.
@@ -227,7 +227,7 @@ fn scan_windows(what: &mut Scan) {
         if size_changed {
             match what {
                 Scan::Winlist(list) => {
-                    let tv = TypVal::number(wp.handle as VarNumber);
+                    let tv = TypVal::Number(wp.handle as VarNumber);
                     // SAFETY: a live list, which takes ownership of `tv`.
                     unsafe { tv_list_append_owned_tv(*list, tv) };
                 }

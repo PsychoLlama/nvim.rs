@@ -181,7 +181,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: *mut TypVal, result: *mu
     }
     // SAFETY: the caller's promise -- both typvals outlive the call.
     let (arg, mut ret) = unsafe { (Tv::new(args), Tv::new(result)) };
-    if arg.v_type != VAR_STRING {
+    if arg.v_type() != VAR_STRING {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);
         return;
@@ -215,7 +215,7 @@ pub unsafe fn eval_call_provider(
         // SAFETY: the format takes one NUL-terminated string.
         let provider = unsafe { c_str(provider) };
         semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
-        return TypVal::number(0);
+        return TypVal::Number(0);
     }
 
     let mut func: [c_char; NAMEBUF] = [0; NAMEBUF];
@@ -244,7 +244,7 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    let mut argvars: [TypVal; 3] = [TypVal::string(method), TypVal::list(arguments), UNSET_TV];
+    let mut argvars: [TypVal; 3] = [TypVal::String(method), TypVal::List(arguments), UNSET_TV];
     let mut rettv = UNSET_TV;
     // The argument array borrows the List, so the reference is taken
     // for the duration of the call and given back after it.
@@ -363,7 +363,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
 
     // 2 is the "working" value; 1 means the provider declined.
     // SAFETY: `VAR_NUMBER` says `v_number` is the union's live member.
-    let mut ok = tv.v_type == VAR_NUMBER && tv.number_or_zero() == 2 as VarNumber;
+    let mut ok = tv.v_type() == VAR_NUMBER && tv.number_or_zero() == 2 as VarNumber;
     if ok {
         // SAFETY: as above.
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
@@ -464,7 +464,7 @@ pub unsafe fn prompt_invoke_callback() {
         let mut rettv = UNSET_TV;
         let mut argv = [UNSET_TV; 2];
         argv[0].write_string(user_input);
-        argv[1].v_type = VAR_UNKNOWN;
+        argv[1].write_empty(VAR_UNKNOWN);
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
@@ -491,7 +491,7 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
     }
     let mut rettv = UNSET_TV;
     let mut argv = [UNSET_TV; 1];
-    argv[0].v_type = VAR_UNKNOWN;
+    argv[0].write_empty(VAR_UNKNOWN);
     // The interrupt is consumed here; the callback decides what to do
     // about it.
     got_int.set(false);

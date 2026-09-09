@@ -79,8 +79,8 @@ pub(crate) unsafe fn item_compare(
         let mut p2;
         // SAFETY: the two items' values, live while their lists are.
         let (a, b) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
-        if a.v_type == VAR_STRING {
-            if b.v_type != VAR_STRING || sort_info.item_compare_numeric {
+        if a.v_type() == VAR_STRING {
+            if b.v_type() != VAR_STRING || sort_info.item_compare_numeric {
                 p1 = c"'".as_ptr().cast_mut();
             } else {
                 p1 = a.string_or_null();
@@ -89,8 +89,8 @@ pub(crate) unsafe fn item_compare(
             p1 = unsafe { encode_tv2string(tv1, ::core::ptr::null_mut()) };
             tofree1 = p1;
         }
-        if b.v_type == VAR_STRING {
-            if a.v_type != VAR_STRING || sort_info.item_compare_numeric {
+        if b.v_type() == VAR_STRING {
+            if a.v_type() != VAR_STRING || sort_info.item_compare_numeric {
                 p2 = c"'".as_ptr().cast_mut();
             } else {
                 p2 = b.string_or_null();
@@ -411,14 +411,14 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 
     // SAFETY: the builtin's argument array, which has at least two slots.
     let arg1 = unsafe { Tv::new(args.add(1)) };
-    if arg1.v_type == VAR_UNKNOWN {
+    if arg1.v_type() == VAR_UNKNOWN {
         return Ok(());
     }
 
     // optional second argument: {func}
-    if arg1.v_type == VAR_FUNC {
+    if arg1.v_type() == VAR_FUNC {
         sort_info.item_compare_func = arg1.func_name_or_null();
-    } else if arg1.v_type == VAR_PARTIAL {
+    } else if arg1.v_type() == VAR_PARTIAL {
         sort_info.item_compare_partial = arg1.partial_or_null();
     } else {
         let mut error = false;
@@ -428,7 +428,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
         }
         if nr == 1 {
             sort_info.item_compare_ic = 1;
-        } else if arg1.v_type != VAR_NUMBER {
+        } else if arg1.v_type() != VAR_NUMBER {
             let name = unsafe { how.string(args.add(1)) };
             sort_info.item_compare_func = name;
         } else if nr != 0 {
@@ -460,7 +460,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
         }
     }
 
-    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
         // optional third argument: {dict}
         unsafe { tv_check_for_dict_arg(args, 2) }?;
         unsafe { (*info).item_compare_selfdict = (*args.add(2)).dict_or_null() };
@@ -484,7 +484,7 @@ pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: 
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
     let first = unsafe { Tv::new(args) };
-    if first.v_type != VAR_LIST {
+    if first.v_type() != VAR_LIST {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe {
             c_str(if sort {

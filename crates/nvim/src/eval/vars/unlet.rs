@@ -366,8 +366,8 @@ unsafe fn do_lock_var(
         // A fixed variable -- one of `v:` or a scope dictionary -- can
         // only be locked through the container it holds.
         if di.di_flags & DI_FLAGS_FIX != 0
-            && di.di_tv.v_type != VAR_DICT
-            && di.di_tv.v_type != VAR_LIST
+            && di.di_tv.v_type() != VAR_DICT
+            && di.di_tv.v_type() != VAR_LIST
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };

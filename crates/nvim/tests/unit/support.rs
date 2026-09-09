@@ -304,7 +304,7 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// alloc_log:clear()
 /// lib.tv_list_append_string(l, 'test', 3)
 /// alloc_log:check({
-///   a.str(l.lv_last.li_tv.vval.v_string, 'tes'),
+///   a.str(l.lv_last.li_tv.string(), 'tes'),
 ///   a.li(l.lv_last),
 /// })
 /// ```
@@ -315,7 +315,7 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// log.clear();
 /// unsafe { tv_list_append_string(l, cstr("test").as_ptr(), 3) };
 /// log.check(&[
-///     alloc::string(unsafe { (*(*l).lv_last).li_tv.vval.v_string }, 3),
+///     alloc::string(unsafe { (*(*l).lv_last).li_tv.string() }, 3),
 ///     alloc::li(unsafe { (*l).lv_last }),
 /// ]);
 /// ```

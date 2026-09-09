@@ -408,7 +408,7 @@ pub(crate) unsafe fn eval_string(
     }
 
     // Copy the string into allocated memory, resolving the escapes.
-    rv.v_type = VAR_STRING;
+    rv.write_empty(VAR_STRING);
     let len = (unsafe { p.since(cur.get()) } + extra) as c_int;
     let buffer = unsafe { xmalloc(len as size_t) } as *mut c_char;
     rv.write_string(buffer);

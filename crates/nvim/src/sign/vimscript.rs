@@ -142,7 +142,7 @@ unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut
     // SAFETY: the caller's lists.
     unsafe {
         for tv in list_items(l) {
-            let retval = if (*tv).v_type == VAR_DICT {
+            let retval = if (*tv).v_type() == VAR_DICT {
                 one((*tv).dict_or_null())
             } else {
                 emsg(gettext(e_dictreq));

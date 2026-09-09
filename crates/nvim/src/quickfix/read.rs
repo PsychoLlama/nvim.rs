@@ -148,9 +148,9 @@ impl Reader {
             }
             reader.source = Source::File(fd);
         } else if !tv.is_null() {
-            reader.source = if unsafe { (*tv).v_type } == VAR_STRING as VarType {
+            reader.source = if unsafe { (*tv).v_type() } == VAR_STRING as VarType {
                 Source::Text(unsafe { (*tv).string_or_null() })
-            } else if unsafe { (*tv).v_type } == VAR_LIST as VarType {
+            } else if unsafe { (*tv).v_type() } == VAR_LIST as VarType {
                 Source::List(unsafe { tv_list_first((*tv).list_or_null()) })
             } else {
                 Source::Unusable
@@ -256,7 +256,7 @@ impl Reader {
         };
         // SAFETY: the caller's list is live.
         while !at.is_null()
-            && (unsafe { (*at).li_tv.v_type } != VAR_STRING as VarType
+            && (unsafe { (*at).li_tv.v_type() } != VAR_STRING as VarType
                 || unsafe { (*at).li_tv.string_or_null() }.is_null())
         {
             at = unsafe { (*at).li_next };

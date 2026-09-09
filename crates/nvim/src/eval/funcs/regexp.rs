@@ -495,7 +495,7 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
     if di.is_null() {
         return Some(false);
     }
-    if unsafe { (*di).di_tv.v_type } != VAR_BOOL {
+    if unsafe { (*di).di_tv.v_type() } != VAR_BOOL {
         let arg0 = "submatches";
         semsg!("E475: Invalid value for argument {arg0}");
         return None;
@@ -610,7 +610,7 @@ pub unsafe fn f_matchstrlist(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     while !li.is_null() {
         let li_tv = unsafe { &(*li).li_tv };
         // A non-String item, and the null String, contribute nothing.
-        if li_tv.v_type == VAR_STRING && !li_tv.string_or_null().is_null() {
+        if li_tv.v_type() == VAR_STRING && !li_tv.string_or_null().is_null() {
             let str = li_tv.string_or_null();
             let rmp = &raw mut prog.0;
             unsafe { get_matches_in_str(str, rmp, retlist, idx, submatches, false) };
@@ -674,10 +674,10 @@ unsafe fn item_string(
     result: *mut TypVal,
     numbuf: &mut NumBuf,
 ) -> *const c_char {
-    if unsafe { (*tv).v_type } == VAR_STRING {
+    if unsafe { (*tv).v_type() } == VAR_STRING {
         return unsafe { (*tv).string_or_null() };
     }
-    if unsafe { (*tv).v_type } != VAR_DICT {
+    if unsafe { (*tv).v_type() } != VAR_DICT {
         return ptr::null();
     }
     match request.source {
@@ -687,10 +687,10 @@ unsafe fn item_string(
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
             unsafe { (*(*tv).dict_or_null()).dv_refcount.retain() };
-            let mut argv = [TypVal::dict(unsafe { (*tv).dict_or_null() }), TV_UNKNOWN];
+            let mut argv = [TypVal::Dict(unsafe { (*tv).dict_or_null() }), TV_UNKNOWN];
             let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), result) };
             unsafe { tv_dict_unref((*tv).dict_or_null()) };
-            if called && unsafe { (*result).v_type } == VAR_STRING {
+            if called && unsafe { (*result).v_type() } == VAR_STRING {
                 unsafe { (*result).string_or_null() }
             } else {
                 ptr::null()
@@ -818,7 +818,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     let list = unsafe { &*args };
-    if list.v_type != VAR_LIST || list.list_or_null().is_null() {
+    if list.v_type() != VAR_LIST || list.list_or_null().is_null() {
         let who = if retmatchpos {
             c"matchfuzzypos()".as_ptr()
         } else {
@@ -830,7 +830,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         return;
     }
     let pat = unsafe { &*args.add(1) };
-    if pat.v_type != VAR_STRING || pat.string_or_null().is_null() {
+    if pat.v_type() != VAR_STRING || pat.string_or_null().is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe { c_str(numbuf.string(pat)) };
         semsg!("E475: Invalid argument: {arg0}");
@@ -843,14 +843,14 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
     let mut key = ptr::null();
     let mut matchseq = false;
     let mut limit = 0;
-    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
         if unsafe { tv_check_for_nonnull_dict_arg(args, 2) }.is_err() {
             return;
         }
         let d: *mut Dict = unsafe { (*args.add(2)).dict_or_null() };
         let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
         if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_STRING
+            if unsafe { (*di).di_tv.v_type() } != VAR_STRING
                 || unsafe { (*di).di_tv.string_or_null() }.is_null()
                 || unsafe { *(*di).di_tv.string_or_null() } == 0
             {
@@ -867,7 +867,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         }
         let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
         if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
+            if unsafe { (*di).di_tv.v_type() } != VAR_NUMBER {
                 semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }

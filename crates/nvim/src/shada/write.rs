@@ -704,7 +704,7 @@ impl Writing {
 /// Functions have no representation in the format, and a container that
 /// refers to itself would not terminate the encoder.
 fn writable_value(vartv: &TypVal) -> bool {
-    match vartv.v_type {
+    match vartv.v_type() {
         VAR_FUNC | VAR_PARTIAL => false,
         VAR_DICT => {
             let di = vartv.dict_or_null();

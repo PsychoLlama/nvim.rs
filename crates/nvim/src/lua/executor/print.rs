@@ -230,7 +230,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
     let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         let input_args: [TypVal; 2] = [
-            TypVal::string(c"lua_debug> ".as_ptr().cast_mut()),
+            TypVal::String(c"lua_debug> ".as_ptr().cast_mut()),
             TV_INITIAL_VALUE,
         ];
         loop {
@@ -250,7 +250,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
                 msg_putchar(b'\n' as c_int);
             }
 
-            let done = input.v_type != VAR_STRING
+            let done = input.v_type() != VAR_STRING
                 || input.string_or_null().is_null()
                 || *input.string_or_null() == 0
                 || cstr::eq_bytes(input.string_or_null(), b"cont");

@@ -93,7 +93,7 @@ pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
 unsafe fn callable_name(tv: *mut TypVal) -> *mut c_char {
     // SAFETY: the caller's promise -- the tag says which union member holds
     // the callable, and a partial is null or live.
-    let name = if unsafe { (*tv).v_type } == VAR_FUNC {
+    let name = if unsafe { (*tv).v_type() } == VAR_FUNC {
         unsafe { (*tv).func_name_or_null() }
     } else {
         unsafe { partial_name((*tv).partial_or_null()) }
@@ -125,7 +125,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) ->
 
     // A plain Funcref carries neither a bound dictionary nor arguments.
     let dict_of = |tv: *mut TypVal| -> *mut Dict {
-        if unsafe { (*tv).v_type } == VAR_FUNC {
+        if unsafe { (*tv).v_type() } == VAR_FUNC {
             core::ptr::null_mut()
         } else {
             unsafe { (*(*tv).partial_or_null()).pt_dict }
@@ -142,7 +142,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) ->
     }
 
     let argc_of = |tv: *mut TypVal| -> c_int {
-        if unsafe { (*tv).v_type } == VAR_FUNC {
+        if unsafe { (*tv).v_type() } == VAR_FUNC {
             0
         } else {
             unsafe { (*(*tv).partial_or_null()).pt_argc }
@@ -228,7 +228,7 @@ pub(crate) unsafe fn typval_compare(
     ic: bool,
 ) -> Result<(), Failed> {
     let type_is = op == EXPR_IS || op == EXPR_ISNOT;
-    let (t1, t2) = (unsafe { (*typ1).v_type }, unsafe { (*typ2).v_type });
+    let (t1, t2) = (unsafe { (*typ1).v_type() }, unsafe { (*typ2).v_type() });
     let same_type = t1 == t2;
 
     let answer: VarNumber = if type_is && !same_type {

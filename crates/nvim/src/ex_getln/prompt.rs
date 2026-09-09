@@ -119,8 +119,8 @@ pub unsafe fn get_user_input(
     // a distinct object from the `""` literal `defstr` starts as.
     let def: [::core::ffi::c_char; 1] = [0];
 
-    if unsafe { (*args.offset(0)).v_type } == VAR_DICT {
-        if unsafe { (*args.offset(1)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.offset(0)).v_type() } == VAR_DICT {
+        if unsafe { (*args.offset(1)).v_type() } != VAR_UNKNOWN {
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
@@ -186,12 +186,12 @@ pub unsafe fn get_user_input(
         if prompt.is_null() {
             return;
         }
-        if unsafe { (*args.offset(1)).v_type } != VAR_UNKNOWN {
+        if unsafe { (*args.offset(1)).v_type() } != VAR_UNKNOWN {
             defstr = unsafe { tv_get_string_buf_chk(args.offset(1), defstr_buf.as_mut_ptr()) };
             if defstr.is_null() {
                 return;
             }
-            if unsafe { (*args.offset(2)).v_type } != VAR_UNKNOWN {
+            if unsafe { (*args.offset(2)).v_type() } != VAR_UNKNOWN {
                 let strarg2 =
                     unsafe { tv_get_string_buf_chk(args.offset(2), cancelreturn_buf.as_mut_ptr()) };
                 if strarg2.is_null() {

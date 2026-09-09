@@ -227,8 +227,8 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
     unsafe { (*qfp).qf_col = new.col };
     unsafe { (*qfp).qf_end_col = new.end_col };
     unsafe { (*qfp).qf_viscol = new.vis_col };
-    if new.user_data.is_null() || unsafe { (*new.user_data).v_type } == VAR_UNKNOWN {
-        unsafe { (*qfp).qf_user_data.v_type = VAR_UNKNOWN };
+    if new.user_data.is_null() || unsafe { (*new.user_data).v_type() } == VAR_UNKNOWN {
+        unsafe { (*qfp).qf_user_data.write_empty(VAR_UNKNOWN) };
     } else {
         unsafe { tv_copy(new.user_data, &raw mut (*qfp).qf_user_data) };
         unsafe { (*qfl).qf_has_user_data = true };

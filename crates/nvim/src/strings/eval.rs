@@ -485,7 +485,7 @@ pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         return;
     }
 
-    if unsafe { (*args.add(1)).v_type } == VAR_STRING {
+    if unsafe { (*args.add(1)).v_type() } == VAR_STRING {
         mask = unsafe { tv_get_string_buf_chk(args.add(1), buf2.as_mut_ptr()) };
         if unsafe { *mask } == 0 {
             mask = ptr::null();

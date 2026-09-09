@@ -161,7 +161,7 @@ pub(crate) unsafe fn check_can_index(
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let message = match unsafe { (*result).v_type } {
+    let message = match unsafe { (*result).v_type() } {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
         VAR_FLOAT => e_using_float_as_string.as_ptr(),
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
@@ -194,7 +194,7 @@ pub(crate) unsafe fn f_slice(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // SAFETY: the builtin table hands in three argument slots, terminated by
     // a `VAR_UNKNOWN` when the third was not given.
     let (first, last) = unsafe { (args.add(1), args.add(2)) };
-    let end = if unsafe { (*last).v_type } == VAR_UNKNOWN {
+    let end = if unsafe { (*last).v_type() } == VAR_UNKNOWN {
         null_mut()
     } else {
         last
@@ -230,11 +230,11 @@ pub(crate) unsafe fn eval_index_inner(
     // SAFETY: the caller's promise -- `result` is the value being indexed,
     // and `var1`/`var2` are null or valid typvals.
     let mut rv = unsafe { Tv::new(result) };
-    if !var1.is_null() && rv.v_type != VAR_DICT {
+    if !var1.is_null() && rv.v_type() != VAR_DICT {
         n1 = unsafe { tv_get_number(var1) };
     }
     if is_range {
-        if rv.v_type == VAR_DICT {
+        if rv.v_type() == VAR_DICT {
             if verbose {
                 emsg(gettext(e_cannot_slice_dictionary));
             }
@@ -247,7 +247,7 @@ pub(crate) unsafe fn eval_index_inner(
         };
     }
 
-    match rv.v_type {
+    match rv.v_type() {
         VAR_NUMBER | VAR_STRING => {
             // SAFETY: `numbuf` is this frame's own scratch, and the String
             // it answers is NUL-terminated with `n1`/`n2` inside it.
@@ -500,7 +500,7 @@ pub(crate) unsafe fn handle_subscript(
     let more = || {
         let c = cur.byte();
         let opens = c == b'['
-            || (c == b'.' && rv.v_type == VAR_DICT)
+            || (c == b'.' && rv.v_type() == VAR_DICT)
             || (c == b'(' && (!evaluate || rv.is_func()));
         // SAFETY: the caller's promise -- the byte before the cursor is
         // readable, and only an opening character asks for it.
@@ -536,7 +536,7 @@ pub(crate) unsafe fn handle_subscript(
             // `[` or `.`: a Dict being subscripted is the `self` a
             // Funcref found in it would be bound to.
             unsafe { tv_dict_unref(selfdict) };
-            selfdict = if rv.v_type == VAR_DICT {
+            selfdict = if rv.v_type() == VAR_DICT {
                 // SAFETY: the tag says the union holds a Dict.
                 let d = rv.dict_or_null();
                 if !d.is_null() {
@@ -571,7 +571,7 @@ pub(crate) unsafe fn set_selfdict(result: *mut TypVal, selfdict: *mut Dict) {
     // SAFETY: the caller's promise -- `result` is valid, and the tag says
     // whether the union holds a live partial.
     let rv = unsafe { Tv::new(result) };
-    if rv.v_type == VAR_PARTIAL {
+    if rv.v_type() == VAR_PARTIAL {
         let pt = unsafe { Live::new(rv.partial_or_null()) };
         if !pt.pt_auto && !pt.pt_dict.is_null() {
             return;

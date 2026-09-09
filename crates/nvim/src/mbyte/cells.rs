@@ -328,7 +328,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// `_result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_setcellwidths(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    if unsafe { (*args).v_type } as c_uint != VAR_LIST as c_uint
+    if unsafe { (*args).v_type() } as c_uint != VAR_LIST as c_uint
         || unsafe { (*args).list_or_null() }.is_null()
     {
         emsg(gettext(e_listreq));
@@ -368,7 +368,7 @@ unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
     let mut item: c_int = 0;
     while !li.is_null() {
         let li_tv = unsafe { &raw const (*li).li_tv };
-        if unsafe { (*li_tv).v_type } as c_uint != VAR_LIST as c_uint
+        if unsafe { (*li_tv).v_type() } as c_uint != VAR_LIST as c_uint
             || unsafe { (*li_tv).list_or_null() }.is_null()
         {
             semsg!("E1109: List item {} is not a List", item);
@@ -409,7 +409,7 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
     let mut lili = unsafe { tv_list_first(li_l) };
     while !lili.is_null() {
         let tv = unsafe { &raw const (*lili).li_tv };
-        if unsafe { (*tv).v_type } as c_uint != VAR_NUMBER as c_uint {
+        if unsafe { (*tv).v_type() } as c_uint != VAR_NUMBER as c_uint {
             break;
         }
         let n = unsafe { (*tv).number_or_zero() };

@@ -710,7 +710,7 @@ pub unsafe fn build_stl_str_hl(
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
     let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = TypVal::number(win.handle as VarNumber);
+        let mut winid = TypVal::Number(win.handle as VarNumber);
         let name = c"g:statusline_winid";
         // SAFETY: a NUL-terminated name with its own length, and a typval
         // this frame owns, which `set_var` copies.

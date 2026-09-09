@@ -10,7 +10,7 @@ use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
 use neovim::memory::{xfree, xmemdup};
 use neovim::message::state::emsg_silent;
-use neovim::types::{Failed, TypVal, VAR_UNKNOWN, typval_vval_union};
+use neovim::types::{Failed, TypVal, VAR_UNKNOWN};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};
@@ -39,10 +39,7 @@ impl Drop for Silent {
 
 /// An unset `TypVal` for the decoder to write into.
 fn unset() -> TypVal {
-    TypVal {
-        v_type: VAR_UNKNOWN,
-        vval: typval_vval_union { v_number: 0 },
-    }
+    TypVal::Unknown
 }
 
 /// `describe('json_decode_string()')`'s three "does not overflow" cases,
@@ -80,7 +77,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
                 Err(Failed),
                 "{text:?} at {len}"
             );
-            assert_eq!(rettv.v_type, VAR_UNKNOWN, "{text:?} at {len}");
+            assert_eq!(rettv.v_type(), VAR_UNKNOWN, "{text:?} at {len}");
         }
     }
 }
@@ -108,7 +105,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
                 "{:?}",
                 byte as char
             );
-            assert_eq!(rettv.v_type, VAR_UNKNOWN);
+            assert_eq!(rettv.v_type(), VAR_UNKNOWN);
             xfree(one);
         }
     }
@@ -140,7 +137,7 @@ fn a_decoder_error_quotes_no_more_than_it_read() {
                 Some(msg),
             );
             assert_eq!(ret, Err(Failed), "{:?}", String::from_utf8_lossy(text));
-            assert_eq!(rettv.v_type, VAR_UNKNOWN);
+            assert_eq!(rettv.v_type(), VAR_UNKNOWN);
             log.clear();
         };
 

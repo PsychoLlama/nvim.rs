@@ -372,7 +372,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
     unsafe { tv_dict_alloc_ret(result) };
 
-    if unsafe { (*args).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args).v_type() } != VAR_UNKNOWN {
         if unsafe { tv_check_for_nonnull_dict_arg(args, 0) }.is_err() {
             return;
         }
@@ -403,7 +403,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
         let di = unsafe { tv_dict_find(dict, c"pos".as_ptr(), -1 as ptrdiff_t) };
         if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type } != VAR_LIST {
+            if unsafe { (*di).di_tv.v_type() } != VAR_LIST {
                 // SAFETY: reporting a static, translated message.
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;

@@ -76,7 +76,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     d1.extend_with(d2, action);
 
     if is_new {
-        *result = TypVal::dict(d1.raw());
+        *result = TypVal::Dict(d1.raw());
     } else {
         copy_tv(args.get_mut(0), result);
     }
@@ -128,7 +128,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     l1.extend_with(l2, before);
 
     if is_new {
-        *result = TypVal::list(l1.raw());
+        *result = TypVal::List(l1.raw());
     } else {
         copy_tv(args.get_mut(0), result);
     }

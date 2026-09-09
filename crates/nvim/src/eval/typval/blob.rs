@@ -300,7 +300,7 @@ pub unsafe fn tv_blob_remove(
     // cannot be, so this is the caller's live blob.
     let mut blob = unsafe { Bl::new(b) };
 
-    if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type() } == VAR_UNKNOWN {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
         unsafe { (*result).write_number(VarNumber::from(*p.offset(idx as isize))) };
@@ -423,7 +423,7 @@ pub unsafe fn tv_blob_alloc_ret(ret_tv: *mut TypVal) -> *mut Blob {
 pub unsafe fn tv_blob_copy(from: *mut Blob, to: *mut TypVal) {
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };
-    dst.v_type = VAR_BLOB;
+    dst.write_empty(VAR_BLOB);
     if from.is_null() {
         unsafe { (*to).write_blob(::core::ptr::null_mut()) };
         return;
