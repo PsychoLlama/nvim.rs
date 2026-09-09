@@ -391,7 +391,7 @@ pub unsafe fn save_tv_as_string(
         // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
         return unsafe { buffer_as_string(tv, len) };
     }
-    // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
+    // SAFETY: `VAR_LIST` says the value holds a List.
     unsafe { list_as_string(value.list_or_null(), len, endnl, crlf) }
 }
 
@@ -400,8 +400,8 @@ pub unsafe fn save_tv_as_string(
 /// # Safety
 /// `tv` must be a `VAR_NUMBER`; `len` valid.
 unsafe fn buffer_as_string(tv: *mut TypVal, len: *mut ptrdiff_t) -> *mut c_char {
-    // SAFETY: the caller's promise -- a `VAR_NUMBER`, so `v_number` is the
-    // union's live member.
+    // SAFETY: the caller's promise -- a `VAR_NUMBER`, so the value holds a
+    // buffer number.
     let nr = unsafe { Tv::new(tv).number_or_zero() };
     let Some(buf) = find_buf(nr as c_int) else {
         semsg!("E86: Buffer {} does not exist", nr);

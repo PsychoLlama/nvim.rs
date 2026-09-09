@@ -831,7 +831,7 @@ pub(crate) unsafe fn eval7_leader(
     let mut f: Float = 0.0;
 
     if rv.v_type() == VAR_FLOAT {
-        // SAFETY: the tag says the union holds a Float.
+        // SAFETY: the kind says the value holds a Float.
         f = rv.float_or_zero();
     } else {
         val = unsafe { tv_get_number_chk(result, &raw mut error) };

@@ -230,7 +230,7 @@ pub unsafe fn ex_let_vars(
         emsg_static(e_listreq);
         return Err(Failed);
     }
-    // SAFETY: the type tag says the union holds the List arm, and the list
+    // SAFETY: the kind says the value holds a List, and the list
     // is the caller's for the whole walk below.
     let l = tv.list_or_null();
     let len = unsafe { tv_list_len(l) };

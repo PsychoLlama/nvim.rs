@@ -71,7 +71,7 @@ pub unsafe fn add_timer_info(result: *mut TypVal, timer: *mut Timer) {
     // SAFETY: `tv_dict_alloc` never answers NULL.
     let dict: *mut Dict = unsafe { tv_dict_alloc() };
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
-    // the union's live arm; the append takes over the dictionary's
+    // the kind the caller promised; the append takes over the dictionary's
     // reference.
     unsafe { tv_list_append_dict(rettv.list_or_null(), dict) };
 

@@ -51,7 +51,7 @@ pub unsafe fn f_json_decode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     let mut tofree: *mut c_char = ptr::null_mut();
     let mut len: usize = 0;
     let s: *const c_char = if args.ty(0) == VAR_LIST {
-        // SAFETY: the tag says the union holds a List pointer; the two
+        // SAFETY: the kind says the value holds a List pointer; the two
         // out-parameters are locals.
         let l = args.get(0).list_or_null();
         let (out_len, out) = (&raw mut len, &raw mut tofree);

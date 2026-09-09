@@ -147,7 +147,7 @@ pub(crate) unsafe fn call_func_rettv(
     if evaluate {
         functv = rv.take();
         if functv.v_type() == VAR_PARTIAL {
-            // SAFETY: the tag says the union holds a partial, which
+            // SAFETY: the kind says the value holds a partial, which
             // `is_luafunc` and `partial_name` both take null or valid.
             pt = functv.partial_or_null();
             is_lua = unsafe { is_luafunc(pt) };
@@ -157,9 +157,9 @@ pub(crate) unsafe fn call_func_rettv(
                 (unsafe { partial_name(pt) }) as *const c_char
             };
         } else {
-            // Not a partial, so the union holds a name: `VAR_FUNC`'s or
-            // `VAR_STRING`'s, both `v_string`. Anything else has no name and
-            // reports the empty-name error just below.
+            // Not a partial, so the value holds a name: `VAR_FUNC`'s or
+            // `VAR_STRING`'s. Anything else has no name and reports the
+            // empty-name error just below.
             funcname = functv.string_or_func_name();
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
                 emsg(gettext(e_empty_function_name));
@@ -332,7 +332,7 @@ pub(crate) unsafe fn eval_method(
                 tofree = name;
                 len = unsafe { cstr::bytes_at(name) }.len() as c_int;
             } else if callee.v_type() == VAR_PARTIAL && !callee.partial_or_null().is_null() {
-                // SAFETY: the tag says the union holds a live partial.
+                // SAFETY: the kind says the value holds a live partial.
                 let pt = unsafe { Live::new(callee.partial_or_null()) };
                 if pt.pt_argc > 0 || !pt.pt_dict.is_null() {
                     if verbose {

@@ -192,7 +192,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
     let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
 
     if one.v_type() == VAR_FLOAT {
-        // SAFETY: the tag says the union holds a Float.
+        // SAFETY: the kind says the value holds a Float.
         f1 = one.float_or_zero();
     } else {
         n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };
@@ -257,7 +257,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut TypVal, tv2: *mut TypVal, op:
     let mut use_float = one.v_type() == VAR_FLOAT;
 
     if use_float {
-        // SAFETY: the tag says the union holds a Float.
+        // SAFETY: the kind says the value holds a Float.
         f1 = one.float_or_zero();
     } else {
         n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };

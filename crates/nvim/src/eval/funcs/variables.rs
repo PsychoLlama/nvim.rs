@@ -65,7 +65,7 @@ pub unsafe fn f_dictwatcheradd(args: *mut TypVal, _result: *mut TypVal, _fptr: E
         semsg!("E475: Invalid argument: funcref");
         return;
     }
-    // SAFETY: the tag checked above says the union holds a Dict pointer;
+    // SAFETY: the kind checked above says the value holds a Dict pointer;
     // the watcher takes the callback over.
     let d = args.get(0).dict_or_null();
     unsafe { tv_dict_watcher_add(d, key_pattern, key_pattern_len, callback) };

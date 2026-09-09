@@ -299,7 +299,7 @@ pub unsafe fn set_reg_var(c: c_int) {
     // Only write when it changed, to avoid the reallocation. The test
     // is against `c`, not against the name that would be stored, so
     // `set_reg_var(0)` always rewrites -- upstream's.
-    // SAFETY: `v:register` is declared a String, so the union holds one.
+    // SAFETY: `v:register` is declared a String, so the value holds one.
     let cur = vimvar_val(Vv::Register).string_or_null();
     if cur.is_null() || unsafe { *cur } != c as c_char {
         let buf = [regname, NUL as c_char];
@@ -509,7 +509,7 @@ pub unsafe fn before_set_vvar(
             // SAFETY: a live value and a live local.
             unsafe { tv_copy(cur, &raw mut oldtv) };
         }
-        // SAFETY: the type tag says the union holds the string arm, which
+        // SAFETY: the kind says the value holds a string, which
         // this item owns.
         unsafe { xfree(stored.string_or_null().cast()) };
         stored.write_string(ptr::null_mut());

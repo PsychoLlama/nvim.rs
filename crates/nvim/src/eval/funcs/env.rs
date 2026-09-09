@@ -212,7 +212,7 @@ pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
     let errmsg = args.ty(1) == VAR_DICT && {
-        // SAFETY: the tag says the union holds a Dict pointer.
+        // SAFETY: the kind says the value holds a Dict pointer.
         let d = args.get(1).dict_or_null();
         let no = kBoolVarFalse as c_int;
         unsafe { tv_dict_get_bool(d, c"errmsg".as_ptr(), no) != 0 }

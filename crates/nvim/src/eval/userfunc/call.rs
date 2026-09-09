@@ -398,7 +398,7 @@ pub unsafe fn call_user_func(
                 let name = unsafe { c_str(name) };
                 smsg!(0, "{name} aborted");
             } else if ret.v_type() == VAR_NUMBER {
-                // SAFETY: the tag says the union holds a Number.
+                // SAFETY: the kind says the value holds a Number.
                 let n = ret.number_or_zero();
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let name = unsafe { c_str(name) };

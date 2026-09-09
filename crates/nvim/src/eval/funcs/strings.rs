@@ -138,7 +138,7 @@ pub unsafe fn f_gettext(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         return;
     }
     // SAFETY: the check above proved argument 0 is a non-empty String, so
-    // the union holds a live NUL-terminated pointer.
+    // the value holds a live NUL-terminated string.
     result.write_string(unsafe { xstrdup(gettext_ptr(args.get(0).string_or_null()).as_ptr()) });
 }
 

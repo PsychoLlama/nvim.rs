@@ -31,10 +31,8 @@ use crate::winlayer::Live;
 ///
 /// See [`Live`](crate::winlayer::Live): construction is the one `unsafe` step
 /// and records the caller's promise that the pointee stays live; every
-/// `(*p).field` after it is ordinary checked code. Writing a `TypVal`'s
-/// union member through one is checked too — it is only *reading* a union
-/// that stays unsafe — which is why the `tv_*_set`/`_alloc` families lose
-/// almost all of their regions to these.
+/// `(*p).field` after it is ordinary checked code, which is why the
+/// `tv_*_set`/`_alloc` families lose almost all of their regions to these.
 ///
 /// A handle is never built from a pointer the code has not already committed
 /// to dereferencing: the null-tolerant entry points (`tv_list_len`,
@@ -372,12 +370,9 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
 /// *then* blanks the slot it came out of, so an assignment there would free
 /// it twice.
 ///
-/// `mem::forget` rather than `ptr::write`, so the family stays safe code: the
-/// old value is moved out and abandoned, which is exactly what the C
-/// assignment did.
-///
-/// A row carries a constructor only where something builds a value of that
-/// kind rather than filling a slot; the rest have the writer alone.
+/// Making a value rather than filling a slot is the variant itself now —
+/// `TypVal::Number(n)`, not a `TypVal::number(n)` beside it — so these ten
+/// rows are the whole family.
 macro_rules! union_writers {
     ($(
         $variant:ident, $payload:ident, $ty:ty, $write_fn:ident, $what:expr;

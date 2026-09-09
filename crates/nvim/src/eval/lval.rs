@@ -327,7 +327,7 @@ pub(crate) unsafe fn get_lval_list(
         // SAFETY: `var1` is the caller's index expression.
         unsafe { tv_get_number(var1) as c_int }
     };
-    // SAFETY: `VAR_LIST` says `v_list` is the union's live member, and
+    // SAFETY: `VAR_LIST` says the value holds a List, and
     // `rec` is the caller's record.
     unsafe {
         *n1 = first;

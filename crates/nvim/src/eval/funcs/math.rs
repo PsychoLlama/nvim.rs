@@ -368,7 +368,7 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
     if tv.v_type() != VAR_LIST {
         return None;
     }
-    // SAFETY: the tag says the union holds a list pointer, which may be
+    // SAFETY: the kind says the value holds a list pointer, which may be
     // null for an empty list literal; `tv_list_len` answers 0 for null.
     let l = tv.list_or_null();
     // SAFETY: `l` is a list pointer or null.

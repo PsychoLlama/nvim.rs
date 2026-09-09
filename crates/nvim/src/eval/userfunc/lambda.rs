@@ -313,7 +313,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
         // Partial: copy the function name, use selfdict and copy the
         // arguments.  Neither can be taken over, because the partial may
         // be referenced elsewhere.
-        // SAFETY: the tag says the union holds a live partial.
+        // SAFETY: the kind says the value holds a live partial.
         let ret_pt = unsafe { Live::new(rv.partial_or_null()) };
         if !ret_pt.pt_name.is_null() {
             part.pt_name = unsafe { xstrdup(ret_pt.pt_name) };

@@ -154,7 +154,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) ->
     }
     if argc == 0 {
         // Neither side has an argument vector to compare -- and a plain
-        // Funcref's union holds its *name*, so `v_partial` must not be read
+        // Funcref carries its *name*, so a partial must not be read
         // at all here. Upstream reaches the reads only from inside the loop
         // body, which a zero count never enters.
         return true;

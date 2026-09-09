@@ -240,7 +240,7 @@ pub unsafe fn eval_expr_valid_arg(tv: *const TypVal) -> bool {
     if tv.v_type() != VAR_STRING {
         return true;
     }
-    // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
+    // SAFETY: `VAR_STRING` says the value holds a string, and
     // a non-null one is NUL-terminated.
     let s = tv.string_or_null();
     !s.is_null() && unsafe { *s } as c_int != NUL
@@ -256,8 +256,8 @@ pub(crate) unsafe fn eval_expr_partial(
     argc: c_int,
     result: *mut TypVal,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so `v_partial` is
-    // the union's live member.
+    // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so the value holds a
+    // live partial or NULL.
     let partial = unsafe { (*expr).partial_or_null() };
     if partial.is_null() {
         return Err(Failed);
@@ -426,7 +426,7 @@ pub unsafe fn skip_expr(cursor: *mut *mut c_char, evalarg: *mut EvalArg) -> Resu
 pub(crate) unsafe fn typval2string(tv: *mut TypVal, join_list: bool) -> *mut c_char {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- the typval outlives the call, and
-    // `VAR_LIST` says `v_list` is the union's live member.
+    // `VAR_LIST` says the value holds a List.
     let value = unsafe { Tv::new(tv) };
     if join_list && value.v_type() == VAR_LIST {
         let mut ga = UNSET_GA;

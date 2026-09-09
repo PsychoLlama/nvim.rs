@@ -287,7 +287,7 @@ pub(crate) unsafe fn eval_index_inner(
             rv.write_string(v);
         }
         VAR_BLOB => {
-            // SAFETY: the tag says the union holds a Blob.
+            // SAFETY: the kind says the value holds a Blob.
             let blob = rv.blob_or_null();
             let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, result) };
         }
@@ -298,7 +298,7 @@ pub(crate) unsafe fn eval_index_inner(
             if var2.is_null() {
                 n2 = VARNUMBER_MAX;
             }
-            // SAFETY: the tag says the union holds a List.
+            // SAFETY: the kind says the value holds a List.
             let list = rv.list_or_null();
             let sliced = unsafe {
                 tv_list_slice_or_index(list, is_range, n1, n2, exclusive, result, verbose)
@@ -314,7 +314,7 @@ pub(crate) unsafe fn eval_index_inner(
                     return Err(Failed);
                 }
             }
-            // SAFETY: the tag says the union holds a Dict, and `key` is the
+            // SAFETY: the kind says the value holds a Dict, and `key` is the
             // caller's own of `keylen` bytes.
             let dict = rv.dict_or_null();
             let item: *mut DictItem = unsafe { tv_dict_find(dict, key, keylen) };
@@ -537,7 +537,7 @@ pub(crate) unsafe fn handle_subscript(
             // Funcref found in it would be bound to.
             unsafe { tv_dict_unref(selfdict) };
             selfdict = if rv.v_type() == VAR_DICT {
-                // SAFETY: the tag says the union holds a Dict.
+                // SAFETY: the kind says the value holds a Dict.
                 let d = rv.dict_or_null();
                 if !d.is_null() {
                     unsafe { (*d).dv_refcount.retain() };
@@ -569,7 +569,7 @@ pub(crate) unsafe fn handle_subscript(
 pub(crate) unsafe fn set_selfdict(result: *mut TypVal, selfdict: *mut Dict) {
     // Not for a partial that was bound explicitly (`pt_auto` clear).
     // SAFETY: the caller's promise -- `result` is valid, and the tag says
-    // whether the union holds a live partial.
+    // whether the value holds a live partial.
     let rv = unsafe { Tv::new(result) };
     if rv.v_type() == VAR_PARTIAL {
         let pt = unsafe { Live::new(rv.partial_or_null()) };

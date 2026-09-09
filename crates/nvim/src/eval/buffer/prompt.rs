@@ -37,8 +37,8 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
 /// # Safety
 /// `lines` must be a live typval.
 unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
-    // SAFETY: the caller's obligation; under `VAR_LIST` the union's live arm
-    // is `v_list`, a live list or NULL.
+    // SAFETY: the caller's obligation; a `VAR_LIST` holds a live list or
+    // NULL.
     let l = unsafe { (*lines).list_or_null() };
     if l.is_null() {
         return ptr::null_mut();

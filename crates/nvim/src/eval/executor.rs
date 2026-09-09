@@ -148,7 +148,7 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
         if op == b'%' {
             return Err(Failed);
         }
-        // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
+        // SAFETY: `VAR_FLOAT` says the value holds a Float.
         let f = float_op(n as Float, op, rhs.float_or_zero());
         // SAFETY: `tv1` is the caller's initialised typval.
         unsafe { tv_clear(tv1) };

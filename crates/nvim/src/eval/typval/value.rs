@@ -326,8 +326,8 @@ pub unsafe extern "C" fn tv_check_lock(
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let lock = match val.v_type() {
-        // SAFETY: the caller's live typval, read through the union member
-        // its own `v_type` selects.
+        // SAFETY (all three arms): the caller's live typval, whose kind says
+        // which container it holds.
         VAR_BLOB => {
             unsafe { (*tv).blob_or_null().as_ref() }.map_or(VarLock::Unlocked, |b| b.bv_lock)
         }
