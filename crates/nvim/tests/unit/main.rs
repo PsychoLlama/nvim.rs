@@ -21,6 +21,7 @@ mod charset;
 mod cmdhist;
 mod cursor;
 mod digraph;
+mod encode_sinks;
 mod env;
 mod eval_decode;
 mod eval_encode;

@@ -27,14 +27,15 @@ use std::mem::offset_of;
 use std::ptr;
 
 use neovim::eval::typval::{
-    tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
-    tv_list_append,
+    tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc,
+    tv_dict_item_alloc, tv_list_alloc, tv_list_append,
 };
+use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
-    Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
     typval_vval_union,
 };
 
@@ -67,6 +68,10 @@ pub(crate) enum Tv {
     Dict(Vec<(Vec<u8>, Tv)>),
     /// `VAR_DICT` whose `v_dict` is NULL; the spec's `null_dict`.
     NullDict,
+    /// `VAR_BLOB` with a value. The empty blob is `Blob(vec![])`.
+    Blob(Vec<u8>),
+    /// `VAR_BLOB` whose `v_blob` is NULL; `v:_null_blob`.
+    NullBlob,
     /// `VAR_FUNC`: a function name and nothing else.
     Func(Vec<u8>),
     /// `VAR_PARTIAL`: a name with bound arguments and/or a dict.
@@ -165,6 +170,20 @@ impl Tv {
                     v_dict: ptr::null_mut(),
                 },
             ),
+            Tv::NullBlob => (
+                VAR_BLOB,
+                typval_vval_union {
+                    v_blob: ptr::null_mut(),
+                },
+            ),
+            Tv::Blob(bytes) => {
+                let b = tv_blob_alloc();
+                unsafe { (*b).bv_refcount = Refcount::ONE };
+                for byte in bytes {
+                    unsafe { ga_append(&raw mut (*b).bv_ga, *byte) };
+                }
+                (VAR_BLOB, typval_vval_union { v_blob: b })
+            }
             Tv::List(items) => {
                 let l = tv_list_alloc(items.len() as isize);
                 unsafe { (*l).lv_refcount = Refcount::ONE };
@@ -336,11 +355,25 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
             s if s.is_null() => Tv::NullStr,
             s => Tv::Func(unsafe { CStr::from_ptr(s) }.to_bytes().to_vec()),
         },
+        VAR_BLOB => match unsafe { vval.v_blob } {
+            b if b.is_null() => Tv::NullBlob,
+            b => Tv::Blob(unsafe { blob_bytes(b) }),
+        },
         VAR_LIST => unsafe { read_list_at(vval.v_list, path) },
         VAR_DICT => unsafe { read_dict_at(vval.v_dict, path) },
         VAR_PARTIAL => Tv::Partial(Box::new(unsafe { read_partial(vval.v_partial, path) })),
         other => panic!("reading v_type {other} is not implemented"),
     }
+}
+
+/// A blob's bytes.
+///
+/// # Safety
+/// `b` points at a live blob.
+unsafe fn blob_bytes(b: *const Blob) -> Vec<u8> {
+    (0..unsafe { tv_blob_len(b) })
+        .map(|i| unsafe { tv_blob_get(b, i) })
+        .collect()
 }
 
 /// # Safety

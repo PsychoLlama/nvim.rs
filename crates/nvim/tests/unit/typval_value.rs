@@ -13,7 +13,8 @@ use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
     tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
     tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf,
-    tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
+    tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, tv_list_append_number,
+    value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
@@ -133,6 +134,49 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
     }
 }
 
+/// The same statement for the kinds the spec's case did not build, said as
+/// a leak check rather than as a sequence: whatever the build allocated, the
+/// clear gives back. A partial owns its name, its bound arguments and its
+/// dict; a blob owns its byte array; a container owns everything under it.
+///
+/// Written this way on purpose — `alloc_log`'s exact sequences are what the
+/// value model's rewrite will invalidate, and "nothing was left held" is the
+/// half of the assertion that survives it.
+#[test]
+fn clearing_releases_everything_a_value_allocated() {
+    let log = AllocLog::start();
+    // SAFETY: every value is this iteration's own and is cleared before the
+    // next one is built.
+    unsafe {
+        for value in [
+            Tv::Partial(Box::new(Pt {
+                value: b"tr".to_vec(),
+                auto: false,
+                args: vec![Tv::s("x"), Tv::List(vec![Tv::Int(1)])],
+                dict: Some(Tv::dict([("a", Tv::Int(1))])),
+            })),
+            Tv::Blob(vec![0, 1, 2]),
+            Tv::Func(b"tr".to_vec()),
+            Tv::List(vec![
+                Tv::s("a"),
+                Tv::dict([("k", Tv::List(vec![Tv::Int(1)]))]),
+            ]),
+            Tv::dict([("k", Tv::Blob(vec![9]))]),
+        ] {
+            log.clear();
+            let mut tv = value.clone().build();
+            tv_clear(&raw mut tv);
+            log.check_net(true, &[]);
+            // And clearing what is already cleared costs nothing: the value
+            // keeps its type and is left holding an empty one, which is
+            // what makes `tv_clear` safe to call on the way out of a frame
+            // that may or may not have got that far.
+            tv_clear(&raw mut tv);
+            log.check_net(true, &[]);
+        }
+    }
+}
+
 // ---------------------------------------------------------------- copy
 
 /// `describe('copy()') itp('works')`, spec line 2736: a container is shared
@@ -194,6 +238,184 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         assert_ne!(to.vval.v_string, from.vval.v_string);
         tv_clear(&raw mut from);
         tv_clear(&raw mut to);
+    }
+}
+
+/// The rest of `copy()`: the four kinds the spec's case never built, and
+/// the property the whole phase turns on — **`tv_copy` is shallow**. It
+/// takes one reference to whatever the value names and stops there, so a
+/// nested container is the *same* container in both values and its own
+/// count does not move. `deepcopy()` is the other one, and it goes through
+/// `tv_list_copy`/`tv_dict_copy` (see `typval_list`, `typval_dict`).
+#[test]
+fn copying_a_container_is_shallow() {
+    let _log = AllocLog::start();
+    // SAFETY: both values are this case's own and are cleared.
+    unsafe {
+        let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
+        let outer = from.vval.v_list;
+        let inner = (*(*outer).lv_first).li_tv.vval.v_list;
+        assert_eq!(
+            ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
+            (1, 1)
+        );
+
+        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        tv_copy(&raw const from, &raw mut to);
+
+        assert_eq!(to.vval.v_list, outer, "the copy names the same list");
+        assert_eq!(
+            (*(*to.vval.v_list).lv_first).li_tv.vval.v_list,
+            inner,
+            "and the same list inside it",
+        );
+        assert_eq!(
+            ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
+            (2, 1),
+            "only the container named by the value gained a reference",
+        );
+
+        // Which is what makes the copy an alias: appending through one is
+        // visible through the other.
+        tv_list_append_number(inner, 2);
+        assert_eq!(
+            tv::read(&raw const to),
+            Tv::List(vec![Tv::List(vec![Tv::Int(1), Tv::Int(2)])]),
+        );
+
+        tv_clear(&raw mut from);
+        assert_eq!(
+            (*outer).lv_refcount.get(),
+            1,
+            "the other copy still holds it"
+        );
+        tv_clear(&raw mut to);
+    }
+}
+
+/// A funcref is a string that also holds a reference to the function: the
+/// name is duplicated exactly as `VAR_STRING`'s is.
+#[test]
+fn copying_a_funcref_duplicates_its_name() {
+    let log = AllocLog::start();
+    // SAFETY: both values are this case's own and are cleared.
+    unsafe {
+        let mut from = Tv::Func(b"tr".to_vec()).build();
+        log.clear();
+        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        tv_copy(&raw const from, &raw mut to);
+
+        assert_eq!(to.v_type, VAR_FUNC);
+        assert_ne!(to.vval.v_string, from.vval.v_string, "the name was shared");
+        assert_eq!(tv::read(&raw const to), Tv::Func(b"tr".to_vec()));
+        log.check(&[alloc::string(to.vval.v_string, "tr".len())]);
+
+        tv_clear(&raw mut from);
+        tv_clear(&raw mut to);
+    }
+}
+
+/// A partial and a blob are reference-counted like a list and a dict: one
+/// object, two names for it.
+#[test]
+fn copying_a_partial_or_a_blob_takes_a_reference() {
+    let _log = AllocLog::start();
+    // SAFETY: every value is this case's own and is cleared.
+    unsafe {
+        let mut from = Tv::Partial(Box::new(Pt {
+            value: b"tr".to_vec(),
+            auto: false,
+            args: vec![Tv::Int(1)],
+            dict: None,
+        }))
+        .build();
+        let pt = from.vval.v_partial;
+        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        tv_copy(&raw const from, &raw mut to);
+        assert_eq!(to.vval.v_partial, pt);
+        assert_eq!((*pt).pt_refcount.get(), 2);
+        tv_clear(&raw mut from);
+        assert_eq!((*pt).pt_refcount.get(), 1, "one clear freed the partial");
+        assert_eq!(tv::read(&raw const to), tv::read(&raw const to));
+        tv_clear(&raw mut to);
+
+        let mut from = Tv::Blob(vec![0x00, 0xff]).build();
+        let blob = from.vval.v_blob;
+        let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        tv_copy(&raw const from, &raw mut to);
+        assert_eq!(to.vval.v_blob, blob);
+        assert_eq!((*blob).bv_refcount.get(), 2);
+        tv_clear(&raw mut from);
+        assert_eq!((*blob).bv_refcount.get(), 1);
+        assert_eq!(tv::read(&raw const to), Tv::Blob(vec![0x00, 0xff]));
+        tv_clear(&raw mut to);
+    }
+}
+
+/// A NULL container copies as a NULL container and costs nothing: there is
+/// no reference to take.
+#[test]
+fn copying_a_null_container_answers_a_null_container() {
+    let log = AllocLog::start();
+    // SAFETY: nothing here owns anything.
+    unsafe {
+        for value in [Tv::NullList, Tv::NullDict, Tv::NullBlob] {
+            let from = value.clone().build();
+            let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+            tv_copy(&raw const from, &raw mut to);
+            assert_eq!(tv::read(&raw const to), value);
+            assert_eq!(to.v_type, from.v_type);
+            log.check(&[]);
+        }
+    }
+}
+
+/// The copy is **always unlocked**, whatever the source's lock says — the
+/// lock belongs to the slot a value sits in, not to the value. The
+/// container's own lock is a different lock and is not touched, so a copy of
+/// a locked list still names a locked list.
+#[test]
+fn copying_never_carries_the_lock() {
+    let _log = AllocLog::start();
+    // SAFETY: both values are this case's own and are cleared.
+    unsafe {
+        for lock in [VarLock::Locked, VarLock::Fixed] {
+            let mut from = Tv::List(vec![Tv::Int(1)]).build();
+            from.v_lock = lock;
+            (*from.vval.v_list).lv_lock = lock;
+
+            let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+            tv_copy(&raw const from, &raw mut to);
+            assert_eq!(to.v_lock, VarLock::Unlocked, "the copy took the {lock:?}");
+            assert_eq!(
+                (*to.vval.v_list).lv_lock,
+                lock,
+                "the container's own lock moved",
+            );
+
+            (*from.vval.v_list).lv_lock = VarLock::Unlocked;
+            from.v_lock = VarLock::Unlocked;
+            tv_clear(&raw mut from);
+            tv_clear(&raw mut to);
+        }
+    }
+}
+
+/// Copying a `VAR_UNKNOWN` is an internal error, reported and not fatal —
+/// the one arm of the match that says so.
+#[test]
+fn copying_an_unknown_value_is_an_internal_error() {
+    let log = AllocLog::start();
+    // SAFETY: neither value owns anything.
+    unsafe {
+        let from = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        let mut to = raw(VAR_NUMBER, typval_vval_union { v_number: 7 });
+        check_emsg(
+            log.editor(),
+            || tv_copy(&raw const from, &raw mut to),
+            Some("E685: Internal error: tv_copy(UNKNOWN)"),
+        );
+        assert_eq!(to.v_type, VAR_UNKNOWN, "the type was still copied over");
     }
 }
 
@@ -410,6 +632,127 @@ fn checking_a_lock_names_what_is_locked() {
             Some("E742: Cannot change value of test")
         ));
         log.clear();
+    }
+}
+
+/// `deep` is a *level count*, not a flag: 1 locks the value and the
+/// container it names, 2 reaches that container's items, and a negative
+/// number reaches all the way down. Nothing in `typval_spec.lua` said this,
+/// and it is the whole difference between `:lockvar` and `:lockvar!`.
+#[test]
+fn locking_descends_exactly_as_deep_as_it_is_told() {
+    let _log = AllocLog::start();
+    // SAFETY: the structure is this case's own and is cleared at the end.
+    unsafe {
+        let mut tv = Tv::List(vec![
+            Tv::List(vec![Tv::Int(1)]),
+            Tv::dict([("a", Tv::List(vec![Tv::Int(2)]))]),
+        ])
+        .build();
+        let outer = tv.vval.v_list;
+        let items = tv::list_items(outer);
+        let inner_list = (*items[0]).li_tv.vval.v_list;
+        let inner_dict = (*items[1]).li_tv.vval.v_dict;
+        let deepest = (*tv::di_of(inner_dict, "a")).di_tv.vval.v_list;
+
+        // The three container locks, outermost first.
+        let locks = || {
+            (
+                (*outer).lv_lock,
+                ((*inner_list).lv_lock, (*inner_dict).dv_lock),
+                (*deepest).lv_lock,
+            )
+        };
+        let unlocked = (
+            VarLock::Unlocked,
+            (VarLock::Unlocked, VarLock::Unlocked),
+            VarLock::Unlocked,
+        );
+        assert_eq!(locks(), unlocked);
+
+        // `deep == 0` is "do nothing at all", the value included.
+        tv_item_lock(&raw mut tv, 0, true, false);
+        assert_eq!((tv.v_lock, locks()), (VarLock::Unlocked, unlocked));
+
+        // One level: the value and the list it names, nothing inside it.
+        tv_item_lock(&raw mut tv, 1, true, false);
+        assert_eq!(tv.v_lock, VarLock::Locked);
+        assert_eq!(
+            locks(),
+            (
+                VarLock::Locked,
+                (VarLock::Unlocked, VarLock::Unlocked),
+                VarLock::Unlocked
+            ),
+        );
+
+        // Two: its items as well, but not what *they* name.
+        tv_item_lock(&raw mut tv, 2, true, false);
+        assert_eq!(
+            locks(),
+            (
+                VarLock::Locked,
+                (VarLock::Locked, VarLock::Locked),
+                VarLock::Unlocked
+            ),
+        );
+
+        // All the way down, and back up again: unlocking takes the same
+        // depth argument and undoes exactly what locking did.
+        tv_item_lock(&raw mut tv, -1, true, false);
+        assert_eq!(
+            locks(),
+            (
+                VarLock::Locked,
+                (VarLock::Locked, VarLock::Locked),
+                VarLock::Locked
+            ),
+        );
+        tv_item_lock(&raw mut tv, -1, false, false);
+        assert_eq!((tv.v_lock, locks()), (VarLock::Unlocked, unlocked));
+
+        tv_clear(&raw mut tv);
+    }
+}
+
+/// `check_refcount` is what keeps `:lockvar` on a function argument from
+/// locking the caller's value: a container more than one name refers to is
+/// left alone, and so is everything inside it.
+#[test]
+fn locking_leaves_a_shared_container_alone_when_asked() {
+    let _log = AllocLog::start();
+    // SAFETY: both values are this case's own and are cleared.
+    unsafe {
+        let mut tv = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
+        let outer = tv.vval.v_list;
+        let inner = (*(*outer).lv_first).li_tv.vval.v_list;
+
+        // A second name for the outer list, as an argument binding is.
+        let mut other = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
+        tv_copy(&raw const tv, &raw mut other);
+        assert_eq!((*outer).lv_refcount.get(), 2);
+
+        tv_item_lock(&raw mut tv, -1, true, true);
+        assert_eq!((*outer).lv_lock, VarLock::Unlocked, "a shared list locked");
+        assert_eq!(
+            (*inner).lv_lock,
+            VarLock::Unlocked,
+            "the walk went inside a list it refused to lock",
+        );
+        // The *value* still locks: it is this slot's, not the container's.
+        assert_eq!(tv.v_lock, VarLock::Locked);
+
+        // Unshared, the same call reaches both.
+        tv_clear(&raw mut other);
+        assert_eq!((*outer).lv_refcount.get(), 1);
+        tv_item_lock(&raw mut tv, -1, true, true);
+        assert_eq!(
+            ((*outer).lv_lock, (*inner).lv_lock),
+            (VarLock::Locked, VarLock::Locked)
+        );
+
+        tv_item_lock(&raw mut tv, -1, false, true);
+        tv_clear(&raw mut tv);
     }
 }
 
