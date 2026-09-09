@@ -11,10 +11,10 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
-    tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf,
-    tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, tv_list_append_number,
-    value_check_lock,
+    tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy,
+    tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
+    tv_list_append_number, value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
@@ -753,6 +753,78 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
 
         tv_item_lock(&raw mut tv, -1, false, true);
         tv_clear(&raw mut tv);
+    }
+}
+
+/// `tv_check_lock` is the one every assignment path calls, and it is
+/// [`value_check_lock`] asked **twice**: once about the slot's own lock and,
+/// only if that said nothing, once about the container's. Nothing pinned it
+/// before, and the container half is the half that makes `:lockvar l` stop
+/// `let l[0] = 1`.
+#[test]
+fn checking_a_lock_reads_the_value_and_then_its_container() {
+    let log = AllocLog::start();
+    // SAFETY: every value is this case's own; the name outlives the calls.
+    unsafe {
+        let name = cstr("v");
+        let cstring = kTVCstring.get();
+        let check = |tv: &TypVal, msg| {
+            check_emsg(
+                log.editor(),
+                || tv_check_lock(&raw const *tv, name.as_ptr(), cstring),
+                msg,
+            )
+        };
+        let locked = "E741: Value is locked: v";
+        let fixed = "E742: Cannot change value of v";
+
+        for (mut tv, set_container) in [
+            (
+                Tv::List(vec![]).build(),
+                Box::new(|tv: &TypVal, lock| (*tv.vval.v_list).lv_lock = lock)
+                    as Box<dyn Fn(&TypVal, VarLock)>,
+            ),
+            (
+                Tv::Dict(vec![]).build(),
+                Box::new(|tv: &TypVal, lock| (*tv.vval.v_dict).dv_lock = lock),
+            ),
+            (
+                Tv::Blob(vec![]).build(),
+                Box::new(|tv: &TypVal, lock| (*tv.vval.v_blob).bv_lock = lock),
+            ),
+        ] {
+            assert!(!check(&tv, None), "an unlocked value refused a change");
+
+            // The slot's own lock, whatever the container says.
+            tv.v_lock = VarLock::Locked;
+            assert!(check(&tv, Some(locked)));
+            tv.v_lock = VarLock::Fixed;
+            assert!(check(&tv, Some(fixed)));
+            tv.v_lock = VarLock::Unlocked;
+
+            // The container's, which only an unlocked slot reaches.
+            set_container(&tv, VarLock::Locked);
+            assert!(check(&tv, Some(locked)));
+            set_container(&tv, VarLock::Fixed);
+            // A `VarLock::Fixed` container reports too, because the second
+            // question is asked of `is_locked()` -- which is true for both
+            // locked states. `tv_islocked` next door asks `== Locked`, so
+            // it answers *false* for exactly this value: the two questions
+            // are not the same question.
+            assert!(check(&tv, Some(fixed)));
+            assert!(!tv_islocked(&raw const tv));
+            set_container(&tv, VarLock::Unlocked);
+
+            tv_clear(&raw mut tv);
+        }
+
+        // A NULL container has no lock to read, so only the slot's counts.
+        for value in [Tv::NullList, Tv::NullDict, Tv::NullBlob] {
+            let mut tv = value.build();
+            assert!(!check(&tv, None));
+            tv.v_lock = VarLock::Locked;
+            assert!(check(&tv, Some(locked)));
+        }
     }
 }
 

@@ -62,6 +62,7 @@
 {"path":"neovim::eval::typval::tv_blob_alloc","kind":"fn","file":"crates/nvim/src/eval/typval/blob.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::typval::tv_blob_get","kind":"fn","file":"crates/nvim/src/eval/typval/access.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
 {"path":"neovim::eval::typval::tv_blob_len","kind":"fn","file":"crates/nvim/src/eval/typval/access.rs","tests":["crates/nvim/tests/unit/support/tv.rs"]}
+{"path":"neovim::eval::typval::tv_check_lock","kind":"fn","file":"crates/nvim/src/eval/typval/value.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::tv_check_num","kind":"fn","file":"crates/nvim/src/eval/typval/check.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::tv_check_str","kind":"fn","file":"crates/nvim/src/eval/typval/check.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::tv_check_str_or_nr","kind":"fn","file":"crates/nvim/src/eval/typval/check.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
