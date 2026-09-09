@@ -479,10 +479,14 @@ pub unsafe fn do_return(
             if result.is_null() {
                 unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
             } else {
-                // Store the value of the pending return.
+                // Store the value of the pending return.  A bit copy, not
+                // a take: the pending slot owns the value from here, but
+                // `report_make_pending` below still renders `result` for
+                // `:debug`, and blanking it would leave it a `VAR_UNKNOWN`
+                // the echo encoder refuses.
                 let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe { *saved.cast::<TypVal>() = (*result.cast::<TypVal>()).take() };
+                unsafe { *saved.cast::<TypVal>() = (*result.cast::<TypVal>()).bit_copy() };
             }
             if reanimate {
                 // The return value is not available yet.
