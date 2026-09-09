@@ -9,6 +9,16 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Rewrote how the editor reads a buffer line and walks the characters in it,
+  covering folding, diffs, text formatting, paragraph and sentence motions,
+  spell checking, searching, indent measurement and the `:syntax` item
+  arguments: a line is now a run of bytes with a length rather than a pointer
+  into the memline, and a character walk carries an offset into it. Behaviour
+  is unchanged.
+- Rewrote the line `:s` builds its replacement into and the way a spell affix
+  file's items are read, so each owns or borrows its own text instead of
+  writing over a shared buffer through pointers. `:s` and `:mkspell` produce
+  the same output.
 - Rewrote the C indenter (`'cindent'`, `'cinoptions'`, `'cinkeys'` and
   `cindent()`) and the blockwise operators (`I`, `A`, `c`, `d`, `CTRL-A`) to
   work over the line's bytes rather than pointers into it. Behaviour is
