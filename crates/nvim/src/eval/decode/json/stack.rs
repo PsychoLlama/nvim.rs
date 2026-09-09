@@ -174,8 +174,9 @@ impl<'a> Decoder<'a> {
         // closed, so it belongs to the one below, and the error position
         // to report against is where it opened.
         // Upstream reads `vval.v_list` for both cases, the two members
-        // having the same size and offset; the tag has to pick the reader
-        // here, or a Dict container would compare two NULLs and match.
+        // having the same size and offset; the handle's kind picks the
+        // reader here, so a Dict container cannot compare two NULLs and
+        // match.
         let is_the_container = match last.container {
             OpenContainer::List(l) => obj.val.as_list() == Some(l),
             OpenContainer::Dict(d) => obj.val.as_dict() == Some(d),
