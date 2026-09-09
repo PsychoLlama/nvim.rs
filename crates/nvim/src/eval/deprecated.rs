@@ -160,6 +160,8 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     }
     child_argv[i] = core::ptr::null_mut();
 
+    // The channel id, or the reason the spawn failed; written on every path.
+    let mut status: VarNumber = 0;
     // SAFETY: `channel_job_start` takes over the vector.
     let chan = unsafe {
         channel_job_start(
@@ -177,9 +179,10 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             0,
             0,
             core::ptr::null_mut(),
-            &raw mut result.vval.v_number,
+            &raw mut status,
         )
     };
+    result.write_number(status);
     if !chan.is_null() {
         // SAFETY: `chan` is the channel just created.
         unsafe { channel_create_event(chan, core::ptr::null()) };

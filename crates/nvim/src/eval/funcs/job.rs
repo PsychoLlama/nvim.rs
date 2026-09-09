@@ -564,9 +564,12 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     }
 
     let env = unsafe { create_environment(job_env, clear_env, pty, term_name) };
-    let pid_out = &raw mut result.vval.v_number;
+    // `channel_job_start` answers the channel id, or the reason it failed,
+    // through this slot on every path; it lands in the return value below.
+    let mut status: VarNumber = 0;
+    let status_out = &raw mut status;
     // SAFETY: `argv` is a NUL-terminated vector this frame owns, `env` the
-    // environment built above, and `pid_out` the return value's own slot.
+    // environment built above, and `status_out` a local.
     // The fifteen arguments are what upstream's `channel_job_start` takes;
     // there is no shorter way to write the call.
     let chan = unsafe {
@@ -585,9 +588,10 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             width,
             height,
             env,
-            pid_out,
+            status_out,
         )
     };
+    result.write_number(status);
     if chan.is_null() {
         return;
     }
