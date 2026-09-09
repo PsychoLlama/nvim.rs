@@ -83,7 +83,11 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut TypVal) {
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is writable.
     unsafe { *save_tv = *tv };
-    tv.write_string(ptr::null_mut());
+    // Not `write_string`: the value moved to `save_tv` and what is left
+    // behind keeps its tag, which the test below reads and
+    // [`restore_vimvar`] puts back. Only the payload is forgotten, so the
+    // old string is not freed from under the copy.
+    tv.vval.v_string = ptr::null_mut();
     if tv.v_type == VAR_UNKNOWN {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.

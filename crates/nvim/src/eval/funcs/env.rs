@@ -159,7 +159,13 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         options |= WildOpts::KEEP_ALL;
     }
     if error {
-        result.write_string(ptr::null_mut());
+        // `{list}` may already have made the answer a List; the empty
+        // answer keeps whichever tag was chosen.
+        if result.v_type == VAR_LIST {
+            result.write_list(ptr::null_mut());
+        } else {
+            result.write_string(ptr::null_mut());
+        }
         return;
     }
     let mut xpc: Expand = unsafe { core::mem::zeroed() };

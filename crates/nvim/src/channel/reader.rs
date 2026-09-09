@@ -271,7 +271,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
         unsafe { &raw mut (*chan).on_exit }
     } else {
         argv[1].write_list(unsafe { reader_lines(reader) });
-        unsafe { tv_list_ref(argv[1].vval.v_list) };
+        unsafe { tv_list_ref(argv[1].list_or_null()) };
         unsafe { (*reader).buffer.clear() };
         argv[2].write_string(unsafe { (*reader).type_0 } as *mut c_char);
         unsafe { &raw mut (*reader).cb }
@@ -280,7 +280,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
     unsafe { callback_call(cb, 3, argv.as_mut_ptr(), &raw mut rettv) };
     unsafe { tv_clear(&raw mut rettv) };
     if !reader.is_null() {
-        unsafe { tv_list_unref(argv[1].vval.v_list) };
+        unsafe { tv_list_unref(argv[1].list_or_null()) };
     }
 }
 

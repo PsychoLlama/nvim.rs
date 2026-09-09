@@ -177,6 +177,17 @@ impl StrArray {
 
 /// Answer a List rather than a String.  Which list is decided later, once
 /// the number of matches is known.
+/// Answer nothing, under whichever tag [`ret_list`] left behind: `{list}`
+/// asks for a List and the rest of these answer a String, and the empty
+/// form of both is a NULL payload.
+fn empty_answer(result: &mut TypVal) {
+    if result.v_type == VAR_LIST {
+        result.write_list(ptr::null_mut());
+    } else {
+        result.write_string(ptr::null_mut());
+    }
+}
+
 fn ret_list(result: &mut TypVal) {
     // SAFETY: `result` is the builtin's own cleared result slot.
     unsafe { tv_list_set_ret(result, ptr::null_mut()) };
@@ -354,7 +365,7 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         }
     }
     if error {
-        result.write_string(ptr::null_mut());
+        empty_answer(result);
         return;
     }
 
@@ -405,7 +416,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut buf1 = NumBuf::new();
     let file = str_arg_chk(args, 1, &mut buf1);
     let (Some(file), false) = (file, error) else {
-        result.write_string(ptr::null_mut());
+        empty_answer(result);
         return;
     };
 
