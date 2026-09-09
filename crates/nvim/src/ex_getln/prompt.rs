@@ -65,7 +65,7 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
         if !skip {
             // SAFETY: the item's rendering is NUL-terminated and outlives
             // the copy.
-            let line = unsafe { numbuf.string(&raw const (*li).li_tv) };
+            let line = unsafe { numbuf.string(&(*li).li_tv) };
             text.extend_from_slice(unsafe { cstr::bytes_at(line) });
             text.push(b'\n');
         }
@@ -96,11 +96,11 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 /// owns and will clear.
 pub unsafe fn get_user_input(
     args: &[TypVal],
-    result: *mut TypVal,
+    result: &mut TypVal,
     inputdialog: bool,
     secret: bool,
 ) {
-    unsafe { (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>()) };
+    (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>());
 
     if cmdpreview.get() {
         return;
@@ -268,8 +268,8 @@ pub unsafe fn get_user_input(
     ex_normal_busy.set(save_ex_normal_busy);
     unsafe { callback_free(&raw mut input_callback) };
 
-    if unsafe { (*result).string_or_null() }.is_null() && !cancelreturn.is_null() {
-        unsafe { tv_copy(cancelreturn, result) };
+    if (*result).string_or_null().is_null() && !cancelreturn.is_null() {
+        unsafe { tv_copy(&*cancelreturn, result) };
     }
 
     unsafe { xfree(xp_arg as *mut ::core::ffi::c_void) };

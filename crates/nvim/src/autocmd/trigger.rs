@@ -286,15 +286,15 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 let item = unsafe { *items.items.add(i) };
                 let mut tv = TV_INITIAL_VALUE;
                 // SAFETY: `tv` and `err` are this frame's own.
-                unsafe { object_to_vim(item.value, &raw mut tv) };
+                unsafe { object_to_vim(item.value, &mut tv) };
                 // A value `v:event` cannot hold is dropped, not fatal.
                 if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is
                     // the dict entry's own name of the length given.
                     let _ = unsafe {
-                        tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &raw mut tv)
+                        tv_dict_add_tv(v_event, item.key.data(), item.key.len(), &mut tv)
                     };
-                    unsafe { tv_clear(&raw mut tv) };
+                    unsafe { tv_clear(&mut tv) };
                 } else {
                     err.clear();
                 }

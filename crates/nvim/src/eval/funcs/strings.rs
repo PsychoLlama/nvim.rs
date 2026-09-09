@@ -681,7 +681,7 @@ pub fn f_substitute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // SAFETY: every string is NUL-terminated and outlives the call,
             // and `expr` is null or argument 2.
             let len = unsafe { cstr::bytes_at(str) }.len();
-            unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
+            unsafe { do_string_sub(str, len, pat, sub, &*expr, flg, out) }
         },
     );
 }

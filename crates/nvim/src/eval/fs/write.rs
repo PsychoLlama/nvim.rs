@@ -134,14 +134,14 @@ impl Item {
         // SAFETY: a live item and a scratch of the promised length; the
         // answer is NUL-terminated, or NULL.
         let tv = unsafe { &raw const (*self.0).li_tv };
-        unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()).as_ref() }
+        unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()).as_ref() }
             .map(|p| unsafe { CStr::from_ptr(p) })
     }
 
     /// Whether the item is a String or a Number, having reported if not.
     fn is_str_or_nr(self) -> bool {
         // SAFETY: a live item.
-        unsafe { tv_check_str_or_nr(&raw const (*self.0).li_tv) }
+        unsafe { tv_check_str_or_nr(&(*self.0).li_tv) }
     }
 }
 

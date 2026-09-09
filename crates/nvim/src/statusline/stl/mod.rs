@@ -718,7 +718,7 @@ pub unsafe fn build_stl_str_hl(
             set_var(
                 name.as_ptr(),
                 name.to_bytes().len() as size_t,
-                &raw mut winid,
+                &mut winid,
                 false,
             )
         };

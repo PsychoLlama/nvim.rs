@@ -15,7 +15,6 @@ use super::*;
 use crate::cstr;
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
-use core::mem::offset_of;
 
 /// Set or append lines in buffer `buffer`, from `lines` — any type, converted to
 /// a string, or a List of them.
@@ -29,7 +28,7 @@ pub(crate) unsafe fn set_buffer_lines(
     buffer: Option<Buf>,
     lnum_arg: LineNr,
     append: bool,
-    lines: *const TypVal,
+    lines: &TypVal,
     result: &mut TypVal,
 ) {
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
@@ -58,7 +57,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let mut l: *mut List = ptr::null_mut();
     let mut li: *mut ListItem = ptr::null_mut();
     let mut line: *mut c_char = ptr::null_mut();
-    let src = unsafe { Tv::new(lines.cast_mut()) };
+    let src = lines;
     '_cleanup: {
         if src.v_type() == VAR_LIST {
             l = src.list_or_null();
@@ -67,7 +66,7 @@ pub(crate) unsafe fn set_buffer_lines(
             }
             li = unsafe { (*l).lv_first };
         } else {
-            line = unsafe { typval_tostring(lines, false) };
+            line = unsafe { typval_tostring(Some(lines), false) };
         }
         loop {
             // Re-read, as upstream does: the type tag is the argument's own
@@ -77,9 +76,8 @@ pub(crate) unsafe fn set_buffer_lines(
                     break;
                 }
                 let item = unsafe { Li::new(li) };
-                let itv = item.field_ptr(offset_of!(ListItem, li_tv));
                 unsafe { xfree(line.cast()) };
-                line = unsafe { typval_tostring(itv, false) };
+                line = unsafe { typval_tostring(Some(&item.li_tv), false) };
                 li = item.li_next;
             }
             ret.write_number(1);

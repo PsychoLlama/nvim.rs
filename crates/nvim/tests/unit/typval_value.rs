@@ -74,12 +74,12 @@ fn allocating_into_a_return_value_leaves_an_empty_container() {
         let l = tv_list_alloc_ret(&mut rettv, 0);
         assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
         assert_eq!(rettv.list(), l);
-        tv_clear(&raw mut rettv);
+        tv_clear(&mut rettv);
 
         let mut rettv = TypVal::Unknown;
         tv_dict_alloc_ret(&mut rettv);
         assert_eq!(tv::read(&raw const rettv), Tv::Dict(vec![]));
-        tv_clear(&raw mut rettv);
+        tv_clear(&mut rettv);
     }
 }
 
@@ -92,8 +92,6 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
     let log = AllocLog::start();
     // SAFETY: every value is this case's own.
     unsafe {
-        log.check(&[]);
-        tv_clear(ptr::null_mut());
         log.check(&[]);
 
         // The scalars own nothing, and neither does a NULL string: an
@@ -109,7 +107,7 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         ] {
             let mut tv = value.build();
             log.check(&[]);
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
             log.check(&vec![alloc::freed(ptr::null::<u8>()); frees]);
         }
 
@@ -118,19 +116,19 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         let mut tv = Tv::s("true").build();
         log.check(&[alloc::string(tv.string(), "true".len())]);
         let s = tv.string();
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[alloc::freed(s)]);
 
         let mut tv = Tv::Dict(vec![]).build();
         let d = tv.dict();
         log.check(&[alloc::dict(d)]);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[alloc::freed(d)]);
 
         let mut tv = Tv::List(vec![]).build();
         let l = tv.list();
         log.check(&[alloc::list(l)]);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[alloc::freed(l)]);
 
         // A self-referencing container holds itself, so clearing the only
@@ -138,14 +136,14 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         let mut tv = Tv::List(vec![Tv::Cycle(0)]).build();
         let l = tv.list();
         log.check(&[alloc::list(l), alloc::li((*l).lv_first)]);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!((*l).lv_refcount.get(), 1);
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
         let d = tv.dict();
         log.check(&[alloc::dict(d), alloc::di(tv::first_di(d), "dd".len())]);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!((*d).dv_refcount.get(), 1);
     }
@@ -182,13 +180,13 @@ fn clearing_releases_everything_a_value_allocated() {
         ] {
             log.clear();
             let mut tv = value.clone().build();
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
             log.check_net(true, &[]);
             // And clearing what is already cleared costs nothing: the value
             // keeps its type and is left holding an empty one, which is
             // what makes `tv_clear` safe to call on the way out of a frame
             // that may or may not have got that far.
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
             log.check_net(true, &[]);
         }
     }
@@ -214,47 +212,47 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
             let mut from = value.clone().build();
             log.check(&[]);
             let mut to = TypVal::Unknown;
-            tv_copy(&raw const from, &raw mut to);
+            tv_copy(&from, &mut to);
             assert_eq!(tv::read(&raw const to), value);
             log.check(&[]);
-            tv_clear(&raw mut from);
-            tv_clear(&raw mut to);
+            tv_clear(&mut from);
+            tv_clear(&mut to);
             log.clear();
         }
 
         let mut from = Tv::Dict(vec![]).build();
         log.check(&[alloc::dict(from.dict())]);
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::Dict(vec![]));
         log.check(&[]);
         assert_eq!((*to.dict()).dv_refcount.get(), 2);
         assert_eq!(to.dict(), from.dict());
-        tv_clear(&raw mut from);
-        tv_clear(&raw mut to);
+        tv_clear(&mut from);
+        tv_clear(&mut to);
         log.clear();
 
         let mut from = Tv::List(vec![]).build();
         log.check(&[alloc::list(from.list())]);
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::List(vec![]));
         log.check(&[]);
         assert_eq!((*to.list()).lv_refcount.get(), 2);
         assert_eq!(to.list(), from.list());
-        tv_clear(&raw mut from);
-        tv_clear(&raw mut to);
+        tv_clear(&mut from);
+        tv_clear(&mut to);
         log.clear();
 
         let mut from = Tv::s("test").build();
         log.check(&[alloc::string(from.string(), "test".len())]);
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::s("test"));
         log.check(&[alloc::string(to.string(), "test".len())]);
         assert_ne!(to.string(), from.string());
-        tv_clear(&raw mut from);
-        tv_clear(&raw mut to);
+        tv_clear(&mut from);
+        tv_clear(&mut to);
     }
 }
 
@@ -278,7 +276,7 @@ fn copying_a_container_is_shallow() {
         );
 
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
 
         assert_eq!(to.list(), outer, "the copy names the same list");
         assert_eq!(
@@ -300,13 +298,13 @@ fn copying_a_container_is_shallow() {
             Tv::List(vec![Tv::List(vec![Tv::Int(1), Tv::Int(2)])]),
         );
 
-        tv_clear(&raw mut from);
+        tv_clear(&mut from);
         assert_eq!(
             (*outer).lv_refcount.get(),
             1,
             "the other copy still holds it"
         );
-        tv_clear(&raw mut to);
+        tv_clear(&mut to);
     }
 }
 
@@ -320,15 +318,15 @@ fn copying_a_funcref_duplicates_its_name() {
         let mut from = Tv::Func(b"tr".to_vec()).build();
         log.clear();
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
 
         assert_eq!(to.v_type(), VAR_FUNC);
         assert_ne!(to.string(), from.string(), "the name was shared");
         assert_eq!(tv::read(&raw const to), Tv::Func(b"tr".to_vec()));
         log.check(&[alloc::string(to.string(), "tr".len())]);
 
-        tv_clear(&raw mut from);
-        tv_clear(&raw mut to);
+        tv_clear(&mut from);
+        tv_clear(&mut to);
     }
 }
 
@@ -348,24 +346,24 @@ fn copying_a_partial_or_a_blob_takes_a_reference() {
         .build();
         let pt = from.partial();
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
         assert_eq!(to.partial(), pt);
         assert_eq!((*pt).pt_refcount.get(), 2);
-        tv_clear(&raw mut from);
+        tv_clear(&mut from);
         assert_eq!((*pt).pt_refcount.get(), 1, "one clear freed the partial");
         assert_eq!(tv::read(&raw const to), tv::read(&raw const to));
-        tv_clear(&raw mut to);
+        tv_clear(&mut to);
 
         let mut from = Tv::Blob(vec![0x00, 0xff]).build();
         let blob = from.blob();
         let mut to = TypVal::Unknown;
-        tv_copy(&raw const from, &raw mut to);
+        tv_copy(&from, &mut to);
         assert_eq!(to.blob(), blob);
         assert_eq!((*blob).bv_refcount.get(), 2);
-        tv_clear(&raw mut from);
+        tv_clear(&mut from);
         assert_eq!((*blob).bv_refcount.get(), 1);
         assert_eq!(tv::read(&raw const to), Tv::Blob(vec![0x00, 0xff]));
-        tv_clear(&raw mut to);
+        tv_clear(&mut to);
     }
 }
 
@@ -379,7 +377,7 @@ fn copying_a_null_container_answers_a_null_container() {
         for value in [Tv::NullList, Tv::NullDict, Tv::NullBlob] {
             let from = value.clone().build();
             let mut to = TypVal::Unknown;
-            tv_copy(&raw const from, &raw mut to);
+            tv_copy(&from, &mut to);
             assert_eq!(tv::read(&raw const to), value);
             assert_eq!(to.v_type(), from.v_type());
             log.check(&[]);
@@ -404,7 +402,7 @@ fn copying_leaves_every_lock_where_it_is() {
 
             let mut to = Slot::new(TypVal::Unknown);
             to.lock = lock;
-            tv_copy(&raw const from.tv, &raw mut to.tv);
+            tv_copy(&from.tv, &mut to.tv);
             assert_eq!(to.lock, lock, "the copy moved the destination's lock");
             assert_eq!(
                 (*to.tv.list()).lv_lock,
@@ -413,8 +411,8 @@ fn copying_leaves_every_lock_where_it_is() {
             );
 
             (*from.tv.list()).lv_lock = VarLock::Unlocked;
-            tv_clear(&raw mut from.tv);
-            tv_clear(&raw mut to.tv);
+            tv_clear(&mut from.tv);
+            tv_clear(&mut to.tv);
         }
     }
 }
@@ -445,13 +443,7 @@ impl Slot {
     /// As `tv_item_lock`.
     unsafe fn item_lock(&mut self, deep: c_int, lock: bool, check_refcount: bool) {
         unsafe {
-            tv_item_lock(
-                &raw mut self.lock,
-                &raw mut self.tv,
-                deep,
-                lock,
-                check_refcount,
-            );
+            tv_item_lock(&raw mut self.lock, &mut self.tv, deep, lock, check_refcount);
         }
     }
 
@@ -460,7 +452,7 @@ impl Slot {
     /// # Safety
     /// As `tv_islocked`.
     unsafe fn islocked(&self) -> bool {
-        unsafe { tv_islocked(self.lock, &raw const self.tv) }
+        unsafe { tv_islocked(self.lock, &self.tv) }
     }
 }
 
@@ -475,7 +467,7 @@ fn copying_an_unknown_value_is_an_internal_error() {
         let mut to = TypVal::Number(7);
         check_emsg(
             log.editor(),
-            || tv_copy(&raw const from, &raw mut to),
+            || tv_copy(&from, &mut to),
             Some("E685: Internal error: tv_copy(UNKNOWN)"),
         );
         assert_eq!(to.v_type(), VAR_UNKNOWN, "the type was still copied over");
@@ -501,7 +493,7 @@ fn locking_a_partial_leaves_its_dict_alone() {
         let mut p = Slot::new(p_tv);
         p.item_lock(-1, true, false);
         assert_eq!((*(*p.tv.partial()).pt_dict).dv_lock, VarLock::Unlocked);
-        tv_clear(&raw mut p.tv);
+        tv_clear(&mut p.tv);
     }
 }
 
@@ -530,8 +522,8 @@ fn locking_never_moves_a_fixed_value() {
         }
         log.check(&[]);
 
-        tv_clear(&raw mut d_tv.tv);
-        tv_clear(&raw mut l_tv.tv);
+        tv_clear(&mut d_tv.tv);
+        tv_clear(&mut l_tv.tv);
     }
 }
 
@@ -634,8 +626,8 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
 
         (*d).dv_lock = VarLock::Unlocked;
         (*l).lv_lock = VarLock::Unlocked;
-        tv_clear(&raw mut d_tv.tv);
-        tv_clear(&raw mut l_tv.tv);
+        tv_clear(&mut d_tv.tv);
+        tv_clear(&mut l_tv.tv);
     }
 }
 
@@ -773,7 +765,7 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
         tv.item_lock(-1, false, false);
         assert_eq!((tv.lock, locks()), (VarLock::Unlocked, unlocked));
 
-        tv_clear(&raw mut tv.tv);
+        tv_clear(&mut tv.tv);
     }
 }
 
@@ -791,7 +783,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
 
         // A second name for the outer list, as an argument binding is.
         let mut other = TypVal::Unknown;
-        tv_copy(&raw const tv.tv, &raw mut other);
+        tv_copy(&tv.tv, &mut other);
         assert_eq!((*outer).lv_refcount.get(), 2);
 
         tv.item_lock(-1, true, true);
@@ -805,7 +797,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
         assert_eq!(tv.lock, VarLock::Locked);
 
         // Unshared, the same call reaches both.
-        tv_clear(&raw mut other);
+        tv_clear(&mut other);
         assert_eq!((*outer).lv_refcount.get(), 1);
         tv.item_lock(-1, true, true);
         assert_eq!(
@@ -814,7 +806,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
         );
 
         tv.item_lock(-1, false, true);
-        tv_clear(&raw mut tv.tv);
+        tv_clear(&mut tv.tv);
     }
 }
 
@@ -833,7 +825,7 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
         let check = |slot: &Slot, msg| {
             check_emsg(
                 log.editor(),
-                || tv_check_lock(slot.lock, &raw const slot.tv, name.as_ptr(), cstring),
+                || tv_check_lock(slot.lock, &slot.tv, name.as_ptr(), cstring),
                 msg,
             )
         };
@@ -878,7 +870,7 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
             assert!(!slot.islocked());
             set_container(&slot.tv, VarLock::Unlocked);
 
-            tv_clear(&raw mut slot.tv);
+            tv_clear(&mut slot.tv);
         }
 
         // A NULL container has no lock to read, so only the slot's counts.
@@ -902,19 +894,19 @@ fn a_null_list_value_equals_an_empty_one() {
     unsafe {
         let mut l = Tv::List(vec![]).build();
         let mut l2 = Tv::List(vec![]).build();
-        let mut nl = Tv::NullList.build();
+        let nl = Tv::NullList.build();
 
         for ic in [true, false] {
-            assert!(tv_equal(&raw mut l, &raw mut nl, ic));
-            assert!(tv_equal(&raw mut nl, &raw mut l, ic));
-            assert!(tv_equal(&raw mut nl, &raw mut nl, ic));
-            assert!(tv_equal(&raw mut l, &raw mut l, ic));
-            assert!(tv_equal(&raw mut l, &raw mut l2, ic));
-            assert!(tv_equal(&raw mut l2, &raw mut l, ic));
+            assert!(tv_equal(&l, &nl, ic));
+            assert!(tv_equal(&nl, &l, ic));
+            assert!(tv_equal(&nl, &nl, ic));
+            assert!(tv_equal(&l, &l, ic));
+            assert!(tv_equal(&l, &l2, ic));
+            assert!(tv_equal(&l2, &l, ic));
         }
 
-        tv_clear(&raw mut l);
-        tv_clear(&raw mut l2);
+        tv_clear(&mut l);
+        tv_clear(&mut l2);
     }
 }
 
@@ -980,12 +972,16 @@ fn comparing_values_folds_case_only_when_asked() {
         for (i, (exact, folded)) in expected.into_iter().enumerate() {
             let first = &raw mut tvs[0];
             let other = &raw mut tvs[i];
-            assert_eq!(tv_equal(first, other, false), exact, "exact, value {i}");
-            assert_eq!(tv_equal(first, other, true), folded, "folded, value {i}");
+            assert_eq!(tv_equal(&*first, &*other, false), exact, "exact, value {i}");
+            assert_eq!(
+                tv_equal(&*first, &*other, true),
+                folded,
+                "folded, value {i}"
+            );
         }
 
         for tv in &mut tvs {
-            tv_clear(&raw mut *tv);
+            tv_clear(&mut *tv);
         }
     }
 }
@@ -996,16 +992,16 @@ fn comparing_dict_values_folds_values_but_never_keys() {
     let log = AllocLog::start();
     // SAFETY: every value is this case's own.
     unsafe {
-        let mut nd = Tv::NullDict.build();
-        assert!(tv_equal(&raw mut nd, &raw mut nd, false));
+        let nd = Tv::NullDict.build();
+        assert!(tv_equal(&nd, &nd, false));
         log.check(&[]);
 
         let mut d1 = Tv::Dict(vec![]).build();
         log.check(&[alloc::dict(d1.dict())]);
         assert_eq!((*d1.dict()).dv_refcount.get(), 1);
-        assert!(tv_equal(&raw mut nd, &raw mut d1, false));
-        assert!(tv_equal(&raw mut d1, &raw mut nd, false));
-        assert!(tv_equal(&raw mut d1, &raw mut d1, false));
+        assert!(tv_equal(&nd, &d1, false));
+        assert!(tv_equal(&d1, &nd, false));
+        assert!(tv_equal(&d1, &d1, false));
         assert_eq!((*d1.dict()).dv_refcount.get(), 1);
         log.check(&[]);
 
@@ -1028,18 +1024,18 @@ fn comparing_dict_values_folds_values_but_never_keys() {
         let mut kupper_upper = build("A", "TEST");
         let mut kupper_lower = build("A", "test");
 
-        assert!(tv_equal(&raw mut upper, &raw mut upper, false));
-        assert!(tv_equal(&raw mut upper, &raw mut upper, true));
-        assert!(!tv_equal(&raw mut upper, &raw mut lower, false));
-        assert!(tv_equal(&raw mut upper, &raw mut lower, true));
-        assert!(tv_equal(&raw mut kupper_upper, &raw mut kupper_lower, true));
-        assert!(!tv_equal(&raw mut kupper_upper, &raw mut lower, true));
-        assert!(!tv_equal(&raw mut kupper_upper, &raw mut upper, true));
+        assert!(tv_equal(&upper, &upper, false));
+        assert!(tv_equal(&upper, &upper, true));
+        assert!(!tv_equal(&upper, &lower, false));
+        assert!(tv_equal(&upper, &lower, true));
+        assert!(tv_equal(&kupper_upper, &kupper_lower, true));
+        assert!(!tv_equal(&kupper_upper, &lower, true));
+        assert!(!tv_equal(&kupper_upper, &upper, true));
         log.check(&[]);
 
-        tv_clear(&raw mut d1);
+        tv_clear(&mut d1);
         for tv in [&mut upper, &mut lower, &mut kupper_upper, &mut kupper_lower] {
-            tv_clear(&raw mut *tv);
+            tv_clear(&mut *tv);
         }
     }
 }
@@ -1061,7 +1057,7 @@ fn the_type_checks_read_only_the_type() {
         let addr = bogus_alloc.addr();
         log.clear();
 
-        type Check = (&'static str, unsafe fn(*const TypVal) -> bool);
+        type Check = (&'static str, unsafe fn(&TypVal) -> bool);
         /// One check, and the nine rows it is stated over.
         type Table = (Check, [(VarType, Option<&'static str>); 9]);
         let checks: [Table; 3] = [
@@ -1144,7 +1140,7 @@ fn the_type_checks_read_only_the_type() {
         for ((name, check), rows) in checks {
             for (v_type, msg) in rows {
                 let tv = bogus(v_type, addr);
-                let ok = check_emsg(log.editor(), || check(&raw const *tv), msg);
+                let ok = check_emsg(log.editor(), || check(&tv), msg);
                 assert_eq!(ok, msg.is_none(), "{name} of {v_type}");
                 if msg.is_some() {
                     log.clear();
@@ -1221,7 +1217,7 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
             let tv = row.tv;
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_number(&raw const *tv), row.emsg);
+            let got = check_emsg(log.editor(), || tv_get_number(&tv), row.emsg);
             assert_eq!(got, want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
@@ -1235,7 +1231,7 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
             let mut err = false;
             let got = check_emsg(
                 log.editor(),
-                || tv_get_number_chk(&raw const *tv, &raw mut err),
+                || tv_get_number_chk(&tv, &raw mut err),
                 row.emsg,
             );
             assert_eq!((got, err), (want, row.emsg.is_some()), "{}", tv.v_type());
@@ -1285,7 +1281,7 @@ fn getting_a_line_number_resolves_the_cursor() {
             win.w_cursor.lnum = 46;
             let tv = row.tv;
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_lnum(&raw const *tv), row.emsg);
+            let got = check_emsg(log.editor(), || tv_get_lnum(&tv), row.emsg);
             assert_eq!(i64::from(got), want, "{}", tv.v_type());
             if row.emsg.is_some() {
                 log.clear();
@@ -1358,7 +1354,7 @@ fn getting_a_float_accepts_only_numbers() {
 
         for (tv, emsg, want) in rows {
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_float(&raw const *tv), emsg);
+            let got = check_emsg(log.editor(), || tv_get_float(&tv), emsg);
             assert_eq!(got, want, "{}", tv.v_type());
             if emsg.is_some() {
                 log.clear();
@@ -1438,8 +1434,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
         let two = Tv::Int(2).build();
         let mut first = [0 as c_char; NUMBUFLEN as usize];
         let mut second = [0 as c_char; NUMBUFLEN as usize];
-        let a = tv_get_string_buf(&raw const one, first.as_mut_ptr());
-        let b = tv_get_string_buf(&raw const two, second.as_mut_ptr());
+        let a = tv_get_string_buf(&one, first.as_mut_ptr());
+        let b = tv_get_string_buf(&two, second.as_mut_ptr());
         assert_ne!(a, b);
         assert_eq!(CStr::from_ptr(a).to_bytes(), b"1");
         assert_eq!(CStr::from_ptr(b).to_bytes(), b"2");
@@ -1459,8 +1455,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string_buf" => tv_get_string_buf(&raw const **tv, scratch),
-                        _ => tv_get_string_buf_chk(&raw const **tv, scratch),
+                        "string_buf" => tv_get_string_buf(tv, scratch),
+                        _ => tv_get_string_buf_chk(tv, scratch),
                     },
                     *emsg,
                 );

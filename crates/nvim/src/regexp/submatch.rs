@@ -159,7 +159,7 @@ pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
     // naming freed bytes would be released twice.
     let mut li = unsafe { (*sl).sl_list.lv_first };
     while !li.is_null() {
-        unsafe { tv_clear(li_tv(li)) };
+        unsafe { tv_clear(&mut *li_tv(li)) };
         li = unsafe { (*li).li_next };
     }
 }

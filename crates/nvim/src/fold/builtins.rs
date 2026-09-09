@@ -35,7 +35,7 @@ use crate::types::Vv;
 ///
 /// # Safety
 /// `args` and `result` must be live typvals.
-pub(super) unsafe fn foldclosed_both(args: &[TypVal], result: *mut TypVal, end: bool) {
+pub(super) unsafe fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(&args[0])) };
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {

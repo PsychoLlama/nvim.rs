@@ -368,13 +368,13 @@ unsafe fn script_query(
     if !sid_di.is_null() {
         let mut error = false;
         // SAFETY: `sid_di` is a live item of `dict`.
-        let sid = unsafe { tv_get_number_chk(&raw mut (*sid_di).di_tv, &raw mut error) };
+        let sid = unsafe { tv_get_number_chk(&(*sid_di).di_tv, &raw mut error) };
         if error {
             return ScriptQuery::Rejected;
         }
         if sid <= 0 {
             // SAFETY: as above; the message borrows the item's string form.
-            let arg1 = unsafe { c_str(numbuf.string(&raw mut (*sid_di).di_tv)) };
+            let arg1 = unsafe { c_str(numbuf.string(&(*sid_di).di_tv)) };
             semsg!("E475: Invalid value for argument {}: {arg1}", "sid");
             return ScriptQuery::Rejected;
         }

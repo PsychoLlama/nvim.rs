@@ -123,9 +123,9 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             drop(sctx);
 
             if !err.is_set() {
-                nlua_push_typval(lstate, &raw mut rettv, 0);
+                nlua_push_typval(lstate, &rettv, 0);
             }
-            tv_clear(&raw mut rettv);
+            tv_clear(&mut rettv);
         }
 
         if err.is_set() {

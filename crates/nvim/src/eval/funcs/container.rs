@@ -177,7 +177,7 @@ pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     };
     if !found.is_null() {
-        unsafe { tv_copy(found, result) };
+        unsafe { tv_copy(&*found, result) };
     } else if args.len() > 2 {
         arg_copy(&args[2], result);
     }
@@ -303,7 +303,7 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             result.write_empty(VAR_LIST);
             let list = unsafe { list_alloc_ret(result, (*pt).pt_argc as isize) };
             for i in 0..unsafe { (*pt).pt_argc } {
-                unsafe { tv_list_append_tv(list, (*pt).pt_argv.offset(i as isize)) };
+                unsafe { tv_list_append_tv(list, &*(*pt).pt_argv.offset(i as isize)) };
             }
         }
         b"arity" => unsafe { func_arity(pt, result) },
@@ -384,7 +384,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
-        if unsafe { tv_equal(&raw mut tv, &args[1], false) } {
+        if unsafe { tv_equal(&tv, &args[1], false) } {
             result.write_number(idx as VarNumber);
             return;
         }
@@ -418,7 +418,7 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
         }
     }
     while !item.is_null() {
-        if unsafe { tv_equal(&raw mut (*item).li_tv, &args[1], ic) } {
+        if unsafe { tv_equal(&(*item).li_tv, &args[1], ic) } {
             result.write_number(idx as VarNumber);
             return;
         }
@@ -460,8 +460,8 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
 
     let (mut save_val, mut save_key) = (NIL, NIL);
-    unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
-    unsafe { prepare_vimvar(Vv::Key, &raw mut save_key) };
+    unsafe { prepare_vimvar(Vv::Val, &mut save_val) };
+    unsafe { prepare_vimvar(Vv::Key, &mut save_key) };
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
     result.write_number(if args[0].v_type() == VAR_BLOB {
@@ -469,8 +469,8 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         unsafe { indexof_list(args[0].list_or_null(), startidx, &args[1]) }
     });
-    unsafe { restore_vimvar(Vv::Key, &raw mut save_key) };
-    unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
+    unsafe { restore_vimvar(Vv::Key, &mut save_key) };
+    unsafe { restore_vimvar(Vv::Val, &mut save_val) };
     // As `printf()`: an error raised before this call survives, one
     // raised inside it does not.
     did_emsg.set(did_emsg.get() | saved_did_emsg);
@@ -494,8 +494,8 @@ unsafe fn indexof_matches(expr: &TypVal) -> bool {
         return false;
     }
     let mut error = false;
-    let found = unsafe { tv_get_bool_chk(&raw mut newtv, &raw mut error) };
-    unsafe { tv_clear(&raw mut newtv) };
+    let found = unsafe { tv_get_bool_chk(&newtv, &raw mut error) };
+    unsafe { tv_clear(&mut newtv) };
     !error && found != 0
 }
 
@@ -553,9 +553,9 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
     let called_emsg_start = called_emsg.get();
     while !item.is_null() {
         set_vim_var_nr(Vv::Key, idx);
-        unsafe { tv_copy(&raw mut (*item).li_tv, get_vim_var_tv(Vv::Val)) };
+        unsafe { tv_copy(&(*item).li_tv, &mut *get_vim_var_tv(Vv::Val)) };
         let found = unsafe { indexof_matches(expr) };
-        unsafe { tv_clear(get_vim_var_tv(Vv::Val)) };
+        unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
         if found {
             return idx;
         }

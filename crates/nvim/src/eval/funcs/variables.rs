@@ -126,7 +126,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let di = unsafe { find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true) };
             if !di.is_null() {
                 let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
-                    || unsafe { tv_islocked(*di_lock(di), di_tv(di)) };
+                    || unsafe { tv_islocked(*di_lock(di), &*di_tv(di)) };
                 result.write_number(locked as VarNumber);
             }
         } else if lv.ll_range {
@@ -138,12 +138,12 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         } else if !lv.ll_list.is_null() {
             let li = lv.ll_li;
             // SAFETY: a resolved lvalue's own item, whose lock is its own.
-            let locked = unsafe { tv_islocked(*li_lock(li), li_tv(li)) };
+            let locked = unsafe { tv_islocked(*li_lock(li), &*li_tv(li)) };
             result.write_number(locked as VarNumber);
         } else {
             let di = lv.ll_di;
             // SAFETY: as above, for a dictionary item.
-            let locked = unsafe { tv_islocked(*di_lock(di), di_tv(di)) };
+            let locked = unsafe { tv_islocked(*di_lock(di), &*di_tv(di)) };
             result.write_number(locked as VarNumber);
         }
     }

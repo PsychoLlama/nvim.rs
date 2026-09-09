@@ -62,12 +62,12 @@ pub(crate) unsafe fn item_compare(
     // SAFETY: the `SortInfo` the sort set up.
     let sort_info = unsafe { Si::new(info) };
     if sort_info.item_compare_numbers {
-        let v1 = unsafe { tv_get_number(tv1) };
-        let v2 = unsafe { tv_get_number(tv2) };
+        let v1 = unsafe { tv_get_number(&*tv1) };
+        let v2 = unsafe { tv_get_number(&*tv2) };
         res = sign(v1 > v2, v1 == v2);
     } else if sort_info.item_compare_float {
-        let v1 = unsafe { tv_get_float(tv1) };
-        let v2 = unsafe { tv_get_float(tv2) };
+        let v1 = unsafe { tv_get_float(&*tv1) };
+        let v2 = unsafe { tv_get_float(&*tv2) };
         res = sign(v1 > v2, v1 == v2);
     } else {
         // encode_tv2string() puts quotes around a string and allocates
@@ -86,7 +86,7 @@ pub(crate) unsafe fn item_compare(
                 p1 = a.string_or_null();
             }
         } else {
-            p1 = unsafe { encode_tv2string(tv1, ::core::ptr::null_mut()) };
+            p1 = unsafe { encode_tv2string(&*tv1, ::core::ptr::null_mut()) };
             tofree1 = p1;
         }
         if b.v_type() == VAR_STRING {
@@ -96,7 +96,7 @@ pub(crate) unsafe fn item_compare(
                 p2 = b.string_or_null();
             }
         } else {
-            p2 = unsafe { encode_tv2string(tv2, ::core::ptr::null_mut()) };
+            p2 = unsafe { encode_tv2string(&*tv2, ::core::ptr::null_mut()) };
             tofree2 = p2;
         }
         if p1.is_null() {
@@ -196,8 +196,8 @@ pub(crate) unsafe fn item_compare2(
     // Copy the values.  This is needed to be able to set v_lock to
     // VarLock::Fixed in the copy without changing the original list items.
     let mut argv = [TV_INITIAL_VALUE; 2];
-    unsafe { tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut argv[0]) };
-    unsafe { tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut argv[1]) };
+    unsafe { tv_copy(&(*(*si1).item).li_tv, &mut argv[0]) };
+    unsafe { tv_copy(&(*(*si2).item).li_tv, &mut argv[1]) };
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut funcexe = FUNCEXE_INIT;
@@ -212,8 +212,7 @@ pub(crate) unsafe fn item_compare2(
         res = ITEM_COMPARE_FAIL;
         sort_info.item_compare_func_err = true;
     } else {
-        let n =
-            unsafe { tv_get_number_chk(&raw mut rettv, &raw mut (*info).item_compare_func_err) };
+        let n = unsafe { tv_get_number_chk(&rettv, &raw mut (*info).item_compare_func_err) };
         res = if n > 0 {
             1
         } else if n < 0 {
@@ -225,7 +224,7 @@ pub(crate) unsafe fn item_compare2(
     if sort_info.item_compare_func_err {
         res = ITEM_COMPARE_FAIL; // return value has wrong type
     }
-    unsafe { tv_clear(&raw mut rettv) };
+    unsafe { tv_clear(&mut rettv) };
 
     if res == 0 && !keep_zero {
         res = if unsafe { (*si1).idx } > unsafe { (*si2).idx } {

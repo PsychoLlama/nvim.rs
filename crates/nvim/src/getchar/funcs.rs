@@ -190,7 +190,7 @@ fn set_mouse_vars() {
 ///
 /// # Safety
 /// `args` and `result` must be a valid argument vector and return slot.
-pub(crate) unsafe fn getchar_common(args: &[TypVal], result: *mut TypVal, allow_number: bool) {
+pub(crate) unsafe fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number: bool) {
     // SAFETY (this body): as [`getchar_opts`] -- a live argument vector and a
     // writable `result`; the scratch buffers are this frame's own.
     let Some(opts) = (unsafe { getchar_opts(args, allow_number) }) else {
@@ -244,9 +244,9 @@ pub(crate) unsafe fn getchar_common(args: &[TypVal], result: *mut TypVal, allow_
             set_mouse_vars();
         }
     } else if !opts.allow_number {
-        unsafe { (*result).write_empty(VAR_STRING) };
+        (*result).write_empty(VAR_STRING);
     } else {
-        unsafe { (*result).write_number(n) };
+        (*result).write_number(n);
     }
 }
 

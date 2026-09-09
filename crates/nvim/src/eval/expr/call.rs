@@ -62,7 +62,7 @@ pub(crate) unsafe fn eval_func(
     name_len: c_int,
     result: &mut TypVal,
     flags: c_int,
-    basetv: *mut TypVal,
+    basetv: Option<&mut TypVal>,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `result` is the result being built.
@@ -90,7 +90,7 @@ pub(crate) unsafe fn eval_func(
     funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
     funcexe.fe_partial = partial;
-    funcexe.fe_basetv = basetv;
+    funcexe.fe_basetv = basetv.map_or(::core::ptr::null_mut(), ::core::ptr::from_mut);
     funcexe.fe_found_var = found_var;
     let exe = &raw mut funcexe;
     // SAFETY: `owned` is a NUL-terminated name of `len` bytes and `exe` is
@@ -130,7 +130,7 @@ pub(crate) unsafe fn call_func_rettv(
     result: &mut TypVal,
     evaluate: bool,
     selfdict: *mut Dict,
-    basetv: *mut TypVal,
+    basetv: Option<&mut TypVal>,
     lua_funcname: *const c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -163,7 +163,7 @@ pub(crate) unsafe fn call_func_rettv(
             funcname = functv.string_or_func_name();
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
                 emsg(gettext(e_empty_function_name));
-                unsafe { tv_clear(&raw mut functv) };
+                unsafe { tv_clear(&mut functv) };
                 return Err(Failed);
             }
         }
@@ -177,7 +177,7 @@ pub(crate) unsafe fn call_func_rettv(
     funcexe.fe_evaluate = evaluate;
     funcexe.fe_partial = pt;
     funcexe.fe_selfdict = selfdict;
-    funcexe.fe_basetv = basetv;
+    funcexe.fe_basetv = basetv.map_or(::core::ptr::null_mut(), ::core::ptr::from_mut);
     // A `v:lua.` name is not NUL-terminated: it runs to the cursor.
     let namelen = if is_lua {
         // SAFETY: a `v:lua.` name starts inside the expression the cursor
@@ -193,7 +193,7 @@ pub(crate) unsafe fn call_func_rettv(
 
     if evaluate {
         // SAFETY: `functv` is this frame's own copy of the callee.
-        unsafe { tv_clear(&raw mut functv) };
+        unsafe { tv_clear(&mut functv) };
     }
     ret
 }
@@ -236,13 +236,13 @@ pub(crate) unsafe fn eval_lambda(
         unsafe { tv_clear(result) };
         Err(Failed)
     } else {
-        let basep = &raw mut base;
+        let basep = Some(&mut base);
         // SAFETY: as above, with `base` this frame's own.
         unsafe { call_func_rettv(arg, evalarg, result, evaluate, null_mut(), basep, null()) }
     };
 
     if evaluate {
-        unsafe { tv_clear(&raw mut base) };
+        unsafe { tv_clear(&mut base) };
     }
     ret
 }
@@ -359,12 +359,12 @@ pub(crate) unsafe fn eval_method(
                 }
                 ret = Err(Failed);
             }
-            unsafe { tv_clear(&raw mut callee) };
+            unsafe { tv_clear(&mut callee) };
             unsafe { *paren = b'(' as c_char };
         }
 
         if ret.is_ok() {
-            let basep = &raw mut base;
+            let mut basep = Some(&mut base);
             if cur.byte() != b'(' {
                 if verbose {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -385,12 +385,14 @@ pub(crate) unsafe fn eval_method(
                     unsafe { (*pt).pt_refcount.retain() };
                 }
                 let lua = lua_funcname;
+                let base = basep.take();
                 ret = unsafe {
-                    call_func_rettv(arg, evalarg, result, evaluate, null_mut(), basep, lua)
+                    call_func_rettv(arg, evalarg, result, evaluate, null_mut(), base, lua)
                 };
             } else {
                 let flags = if evaluate { EVAL_EVALUATE as c_int } else { 0 };
-                ret = unsafe { eval_func(arg, evalarg, name, len, result, flags, basep) };
+                let base = basep.take();
+                ret = unsafe { eval_func(arg, evalarg, name, len, result, flags, base) };
             }
         }
     }
@@ -398,7 +400,7 @@ pub(crate) unsafe fn eval_method(
     // Clear the Funcref afterwards, so that deleting it while its own
     // arguments are being evaluated is possible (test55).
     if evaluate {
-        unsafe { tv_clear(&raw mut base) };
+        unsafe { tv_clear(&mut base) };
     }
     // SAFETY: both are null or this call's own allocations.
     unsafe { xfree(tofree as *mut c_void) };
@@ -438,7 +440,7 @@ unsafe fn partial_free(pt: *mut Partial) {
     let live = unsafe { Live::new(pt) };
     for i in 0..live.pt_argc {
         // SAFETY: `pt_argv` holds `pt_argc` typvals this partial owns.
-        unsafe { tv_clear(live.pt_argv.offset(i as isize)) };
+        unsafe { tv_clear(&mut *live.pt_argv.offset(i as isize)) };
     }
     unsafe { xfree(live.pt_argv as *mut c_void) };
     unsafe { tv_dict_unref(live.pt_dict) };

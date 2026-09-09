@@ -126,7 +126,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     key: *mut c_char,
     len: c_int,
     key_end: *mut *mut c_char,
-    var1: *mut TypVal,
+    var1: &mut TypVal,
     flags: c_int,
     unlet: bool,
     result: Option<&mut TypVal>,
@@ -196,7 +196,7 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // SAFETY: a non-null `ll_di` is a live dictionary item.
     let lua_key = !lval.ll_di.is_null()
-        && unsafe { tv_is_luafunc(&raw mut (*lval.ll_di).di_tv) }
+        && unsafe { tv_is_luafunc(&mut (*lval.ll_di).di_tv) }
         && len == -1
         && result.is_none();
     if lua_key {
@@ -266,8 +266,8 @@ pub(crate) unsafe fn get_lval_dict_item(
 /// `lval` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_blob(
     lval: *mut LVal,
-    var1: *mut TypVal,
-    var2: *mut TypVal,
+    var1: &mut TypVal,
+    var2: &mut TypVal,
     empty1: bool,
     quiet: bool,
 ) -> Result<(), Failed> {
@@ -303,8 +303,8 @@ pub(crate) unsafe fn get_lval_blob(
 /// `lval` must be valid with `ll_tv` a List; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_list(
     lval: *mut LVal,
-    var1: *mut TypVal,
-    var2: *mut TypVal,
+    var1: &mut TypVal,
+    var2: &mut TypVal,
     empty1: bool,
     _flags: c_int,
     quiet: bool,
@@ -471,7 +471,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     if unsafe { eval1(&raw mut p, &mut var1, &raw mut evalarg) }.is_err() {
                         break 'done;
                     }
-                    if !unsafe { tv_check_str(&raw mut var1) } {
+                    if !unsafe { tv_check_str(&var1) } {
                         break 'done;
                     }
                     p = unsafe { skipwhite(p) };
@@ -505,7 +505,7 @@ pub(crate) unsafe fn get_lval_subscript(
                         if ev.is_err() {
                             break 'done;
                         }
-                        if !unsafe { tv_check_str(&raw mut var2) } {
+                        if !unsafe { tv_check_str(&var2) } {
                             break 'done;
                         }
                     }
@@ -528,7 +528,7 @@ pub(crate) unsafe fn get_lval_subscript(
                 let (rec, end, idx) = (lval.raw(), &raw mut p, &raw mut var1);
                 let status = unsafe {
                     let value = result.as_deref_mut();
-                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, value)
+                    get_lval_dict_item(rec, name, key, len, end, &mut *idx, flags, unlet, value)
                 };
                 match status {
                     GLV_FAIL => break 'done,
@@ -539,14 +539,16 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
             } else if container.v_type() == VAR_BLOB {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_blob(lval.raw(), a, b, empty1, quiet) }.is_err() {
+                if unsafe { get_lval_blob(lval.raw(), &mut *a, &mut *b, empty1, quiet) }.is_err() {
                     break 'done;
                 }
                 // A Blob byte is never a container, so this is the end.
                 break;
             } else {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_list(lval.raw(), a, b, empty1, flags, quiet) }.is_err() {
+                if unsafe { get_lval_list(lval.raw(), &mut *a, &mut *b, empty1, flags, quiet) }
+                    .is_err()
+                {
                     break 'done;
                 }
             }
@@ -671,7 +673,7 @@ pub unsafe fn get_lval(
     lval.ll_tv = unsafe { &raw mut (*v).di_tv };
     lval.ll_lock = di_lock(v);
     // SAFETY: `ll_tv` is that item's typval.
-    if unsafe { tv_is_luafunc(lval.ll_tv) } {
+    if unsafe { tv_is_luafunc(&mut *lval.ll_tv) } {
         return p;
     }
 
@@ -819,7 +821,7 @@ pub unsafe fn set_var_lval(
         } else {
             if watched {
                 // SAFETY: `oldtv` is this frame's separate record of the old value.
-                unsafe { tv_copy(lval.ll_tv, &raw mut oldtv) };
+                unsafe { tv_copy(&*lval.ll_tv, &mut oldtv) };
             }
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
                 // `+=` and friends modify in place; there is nothing to
@@ -828,11 +830,11 @@ pub unsafe fn set_var_lval(
                 let _ = unsafe { eexe_mod_op(lval.ll_tv, result, op) };
                 break 'notify;
             }
-            unsafe { tv_clear(lval.ll_tv) };
+            unsafe { tv_clear(&mut *lval.ll_tv) };
         }
 
         if copy {
-            unsafe { tv_copy(result, lval.ll_tv) };
+            unsafe { tv_copy(result, &mut *lval.ll_tv) };
         } else {
             // SAFETY: the value moves out of `result`, which is reset after it.
             let mut target = unsafe { Tv::new(lval.ll_tv) };
@@ -925,10 +927,10 @@ unsafe fn set_whole_var(
             };
             let writable = di.is_null()
                 || (!unsafe { var_check_ro(n, name, TV_CSTRING as size_t) }
-                    && !unsafe { tv_check_lock(dlock, dtv, name, TV_CSTRING as size_t) });
+                    && !unsafe { tv_check_lock(dlock, &*dtv, name, TV_CSTRING as size_t) });
             if writable && unsafe { eexe_mod_op(&raw mut tv, result, op) }.is_ok() {
                 // SAFETY: as above -- the folded value goes back by name.
-                unsafe { set_var(name, name_len, &raw mut tv, false) };
+                unsafe { set_var(name, name_len, &mut tv, false) };
             }
             clear_local(&mut tv);
         }

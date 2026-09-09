@@ -21,7 +21,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::conv_error;
 use crate::eval::typval::DictSlot;
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_ext, mpack_float8, mpack_integer,
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
@@ -202,11 +202,11 @@ impl TypvalSink for MsgpackSink<'_> {
 /// `packer` and `tv` must be live, and `objname` NUL-terminated.
 pub unsafe fn encode_vim_to_msgpack(
     packer: *mut PackerBuffer,
-    tv: *mut TypVal,
-    objname: *const c_char,
+    tv: &TypVal,
+    objname: &CStr,
 ) -> c_int {
     let mut sink = MsgpackSink {
         packer: unsafe { &mut *packer },
     };
-    c_int::from(unsafe { encode_typval(&mut sink, tv, objname) })
+    c_int::from(unsafe { encode_typval_read(&mut sink, tv, objname) })
 }

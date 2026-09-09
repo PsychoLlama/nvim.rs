@@ -61,7 +61,7 @@ const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
 ///
 /// # Safety
 /// `arg` must be a live typval.
-unsafe fn lua_table_ref(arg: *const TypVal) -> LuaRef {
+unsafe fn lua_table_ref(arg: &TypVal) -> LuaRef {
     unsafe {
         match (*arg).v_type() {
             VAR_DICT => (*(*arg).dict_or_null()).lua_table_ref,
@@ -76,7 +76,7 @@ unsafe fn lua_table_ref(arg: *const TypVal) -> LuaRef {
 ///
 /// # Safety
 /// `arg` must be a live typval.
-pub unsafe fn nlua_is_table_from_lua(arg: *const TypVal) -> bool {
+pub unsafe fn nlua_is_table_from_lua(arg: &TypVal) -> bool {
     unsafe { lua_table_ref(arg) != LUA_NOREF }
 }
 
@@ -87,7 +87,7 @@ pub unsafe fn nlua_is_table_from_lua(arg: *const TypVal) -> bool {
 ///
 /// # Safety
 /// `arg` must be a live typval and the main state must exist.
-pub unsafe fn nlua_register_table_as_callable(arg: *const TypVal) -> *mut c_char {
+pub unsafe fn nlua_register_table_as_callable(arg: &TypVal) -> *mut c_char {
     unsafe {
         let table_ref = lua_table_ref(arg);
         if table_ref == LUA_NOREF {

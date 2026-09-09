@@ -253,7 +253,7 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 pub(crate) unsafe fn var_shada_iter(
     iter: Option<usize>,
     name: *mut *const c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     flavour: VarFlavour,
 ) -> Option<usize> {
     let globvarht = get_globvar_ht();
@@ -275,7 +275,7 @@ pub(crate) unsafe fn var_shada_iter(
     let key = unsafe { (*globvarht).slot(idx) }.hi_key;
     let di = unsafe { key.sub(offset_of!(DictItem, di_key)) } as *mut DictItem;
     unsafe { *name = &raw mut (*di).di_key as *mut c_char };
-    unsafe { tv_copy(&raw mut (*di).di_tv, result) };
+    unsafe { tv_copy(&(*di).di_tv, result) };
 
     // Answer where the *next* one is, so the caller knows to stop.
     loop {
@@ -426,7 +426,7 @@ pub fn shada_encode_gvars() -> String_0 {
             var_shada_iter(
                 var_iter,
                 &raw mut name,
-                &raw mut vartv,
+                &mut vartv,
                 VAR_FLAVOUR_DEFAULT | VAR_FLAVOUR_SESSION | VAR_FLAVOUR_SHADA,
             )
         };
@@ -438,7 +438,7 @@ pub fn shada_encode_gvars() -> String_0 {
             // The entry owns the copy it is built around; the value the
             // iterator handed over stays this function's to release.
             let mut tgttv = TV_INITIAL_VALUE;
-            unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
+            unsafe { tv_copy(&vartv, &mut tgttv) };
             let mut entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: cur_timestamp,
@@ -450,9 +450,9 @@ pub fn shada_encode_gvars() -> String_0 {
             };
             let written = unsafe { shada_pack_entry(&raw mut packer, &entry, 0) };
             assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
-            unsafe { tv_clear(&raw mut entry.data.variable_mut().value) };
+            unsafe { tv_clear(&mut entry.data.variable_mut().value) };
         }
-        unsafe { tv_clear(&raw mut vartv) };
+        unsafe { tv_clear(&mut vartv) };
         if var_iter.is_none() {
             return packer_take_string(&packer);
         }

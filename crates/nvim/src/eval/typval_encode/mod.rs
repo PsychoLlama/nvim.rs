@@ -33,7 +33,7 @@ use crate::types::{
 
 // The walk itself; this half is the contract it runs against.
 mod walk;
-pub(crate) use self::walk::encode_typval;
+pub(crate) use self::walk::{encode_typval, encode_typval_read};
 
 /// The encode was abandoned.
 ///
@@ -248,7 +248,7 @@ impl<T: Copy, const N: usize> InlineStack<T, N> {
 /// down to it and the name of the object being dumped.
 pub(crate) struct ConvPath<'a> {
     pub stack: &'a ConvStack,
-    pub objname: *const c_char,
+    pub objname: &'a CStr,
 }
 
 /// The `TYPVAL_ENCODE_CONV_*` macros one includer of `typval_encode.c.h`
@@ -271,6 +271,15 @@ pub(crate) trait TypvalSink {
     /// The name `internal_error` reports for a `VAR_UNKNOWN`, which upstream
     /// spells with the instantiation's own function name.
     const CONVERT_FN_NAME: &'static CStr;
+
+    /// Whether the sink *writes* to the values it is walking.
+    ///
+    /// Only the `nothing` sink does -- it is `tv_clear`'s deep free, and
+    /// empties every slot it passes. Every other sink reads, which is what
+    /// lets [`encode_typval_read`](crate::eval::typval_encode::encode_typval_read)
+    /// take a shared borrow; that entry point refuses a sink that says
+    /// `true` here, at compile time.
+    const WRITES_BACK: bool = false;
 
     /// `TYPVAL_ENCODE_CHECK_BEFORE`, run before every value.
     fn check_before(&mut self) {}

@@ -109,7 +109,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
     let mut li: *const ListItem = unsafe { (*argv_list).lv_first };
     while !li.is_null() {
-        let arg = unsafe { numbuf.string(&raw const (*li).li_tv) };
+        let arg = unsafe { numbuf.string(&(*li).li_tv) };
         // `-- [files…]` is dropped: it is almost never wanted, and
         // `:mksession` is the way to carry a session over.
         if i > 0 && strequal(arg, c"--".as_ptr()) {
@@ -131,7 +131,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
             if !next_li.is_null() {
                 // SAFETY: the list entry is live and `string` answers a
                 // NUL-terminated buffer that outlives the loop.
-                let addr = unsafe { numbuf2.string(&raw const (*next_li).li_tv) };
+                let addr = unsafe { numbuf2.string(&(*next_li).li_tv) };
                 let text = unsafe { cstr::at(addr) };
                 if has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\") {
                     listen_arg = addr;

@@ -98,8 +98,8 @@ pub(crate) unsafe fn eval_index(
             empty1 = true;
         } else if unsafe { eval1(arg, &mut var1, evalarg) }.is_err() {
             return Err(Failed);
-        } else if evaluate && !unsafe { tv_check_str(&raw mut var1) } {
-            unsafe { tv_clear(&raw mut var1) };
+        } else if evaluate && !unsafe { tv_check_str(&var1) } {
+            unsafe { tv_clear(&mut var1) };
             return Err(Failed);
         }
 
@@ -111,14 +111,14 @@ pub(crate) unsafe fn eval_index(
                 empty2 = true;
             } else if unsafe { eval1(arg, &mut var2, evalarg) }.is_err() {
                 if !empty1 {
-                    unsafe { tv_clear(&raw mut var1) };
+                    unsafe { tv_clear(&mut var1) };
                 }
                 return Err(Failed);
-            } else if evaluate && !unsafe { tv_check_str(&raw mut var2) } {
+            } else if evaluate && !unsafe { tv_check_str(&var2) } {
                 if !empty1 {
-                    unsafe { tv_clear(&raw mut var1) };
+                    unsafe { tv_clear(&mut var1) };
                 }
-                unsafe { tv_clear(&raw mut var2) };
+                unsafe { tv_clear(&mut var2) };
                 return Err(Failed);
             }
         }
@@ -128,9 +128,9 @@ pub(crate) unsafe fn eval_index(
                 emsg(gettext(e_missbrac));
             }
             // Not guarded by `empty1`: an unread `var1` is still unset.
-            unsafe { tv_clear(&raw mut var1) };
+            unsafe { tv_clear(&mut var1) };
             if range {
-                unsafe { tv_clear(&raw mut var2) };
+                unsafe { tv_clear(&mut var2) };
             }
             return Err(Failed);
         }
@@ -142,12 +142,14 @@ pub(crate) unsafe fn eval_index(
     }
     let one = if empty1 { null_mut() } else { &raw mut var1 };
     let two = if empty2 { null_mut() } else { &raw mut var2 };
+    // SAFETY: the two index expressions this frame just evaluated.
+    let (one, two) = unsafe { (Some(&*one), Some(&*two)) };
     let res = unsafe { eval_index_inner(result, range, one, two, false, key, keylen, verbose) };
     if !empty1 {
-        unsafe { tv_clear(&raw mut var1) };
+        unsafe { tv_clear(&mut var1) };
     }
     if range {
-        unsafe { tv_clear(&raw mut var2) };
+        unsafe { tv_clear(&mut var2) };
     }
     res
 }
@@ -189,8 +191,7 @@ pub(crate) fn f_slice(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     unsafe { tv_copy(&args[0], result) };
-    let first: *const TypVal = &args[1];
-    let end: *const TypVal = args.get(2).map_or(null(), core::ptr::from_ref);
+    let (first, end) = (Some(&args[1]), args.get(2));
     let _ = unsafe { eval_index_inner(result, true, first, end, true, null(), 0, false) };
 }
 
@@ -208,8 +209,8 @@ pub(crate) fn f_slice(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub(crate) unsafe fn eval_index_inner(
     result: &mut TypVal,
     is_range: bool,
-    var1: *const TypVal,
-    var2: *const TypVal,
+    var1: Option<&TypVal>,
+    var2: Option<&TypVal>,
     exclusive: bool,
     key: *const c_char,
     keylen: ptrdiff_t,
@@ -222,7 +223,9 @@ pub(crate) unsafe fn eval_index_inner(
     // SAFETY: the caller's promise -- `result` is the value being indexed,
     // and `var1`/`var2` are null or valid typvals.
     let mut rv = unsafe { Tv::new(result) };
-    if !var1.is_null() && rv.v_type() != VAR_DICT {
+    if let Some(var1) = var1
+        && rv.v_type() != VAR_DICT
+    {
         n1 = unsafe { tv_get_number(var1) };
     }
     if is_range {
@@ -232,10 +235,9 @@ pub(crate) unsafe fn eval_index_inner(
             }
             return Err(Failed);
         }
-        n2 = if var2.is_null() {
-            VARNUMBER_MAX
-        } else {
-            unsafe { tv_get_number(var2) }
+        n2 = match var2 {
+            None => VARNUMBER_MAX,
+            Some(var2) => unsafe { tv_get_number(var2) },
         };
     }
 
@@ -284,10 +286,10 @@ pub(crate) unsafe fn eval_index_inner(
             let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, result) };
         }
         VAR_LIST => {
-            if var1.is_null() {
+            if var1.is_none() {
                 n1 = 0;
             }
-            if var2.is_null() {
+            if var2.is_none() {
                 n2 = VARNUMBER_MAX;
             }
             // SAFETY: the kind says the value holds a List.
@@ -301,7 +303,7 @@ pub(crate) unsafe fn eval_index_inner(
             let mut key = key;
             if key.is_null() {
                 // SAFETY: `numbuf2` is this frame's own scratch.
-                key = unsafe { numbuf2.string_chk(var1) };
+                key = unsafe { numbuf2.string_chk(var1.expect("checked")) };
                 if key.is_null() {
                     return Err(Failed);
                 }
@@ -321,13 +323,13 @@ pub(crate) unsafe fn eval_index_inner(
                     semsg!("E716: Key not present in Dictionary: \"{key}\"");
                 }
             }
-            if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {
+            if item.is_null() || unsafe { tv_is_luafunc(&mut (*item).di_tv) } {
                 return Err(Failed);
             }
             // The copy is taken before `result` — which owns the Dict the
             // item lives in — is cleared.
             let mut tmp = UNSET_TV;
-            unsafe { tv_copy(&raw mut (*item).di_tv, &raw mut tmp) };
+            unsafe { tv_copy(&(*item).di_tv, &mut tmp) };
             unsafe { tv_clear(result) };
             *rv = tmp;
         }
@@ -503,9 +505,7 @@ pub(crate) unsafe fn handle_subscript(
     while ret.is_ok() && more() {
         if cur.byte() == b'(' {
             let (raw, lua) = (cur.raw(), lua_funcname);
-            ret = unsafe {
-                call_func_rettv(raw, evalarg, result, evaluate, selfdict, null_mut(), lua)
-            };
+            ret = unsafe { call_func_rettv(raw, evalarg, result, evaluate, selfdict, None, lua) };
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {

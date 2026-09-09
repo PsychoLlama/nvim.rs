@@ -115,7 +115,7 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptDiffexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true)) };
+    unsafe { tv_free(eval_expr_ext(p_dex.get(), ptr::null_mut(), true).as_mut()) };
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -138,7 +138,7 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptPatchexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true)) };
+    unsafe { tv_free(eval_expr_ext(p_pex.get(), ptr::null_mut(), true).as_mut()) };
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -160,7 +160,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     // `v:val` is the bad word; it has no type of its own, so it has to
     // be added to the `v:` dictionary and taken out again.
     let mut save_val = TV_INITIAL_VALUE;
-    unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
+    unsafe { prepare_vimvar(Vv::Val, &mut save_val) };
     unsafe { set_vim_var_string(Vv::Val, badword, -1) };
     let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
     current_sctx.set(option_last_set(kOptSpellsuggest));
@@ -184,8 +184,8 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     }
 
     drop(no_emsg);
-    unsafe { tv_clear(get_vim_var_tv(Vv::Val)) };
-    unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
+    unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
+    unsafe { restore_vimvar(Vv::Val, &mut save_val) };
     current_sctx.set(saved_sctx);
 
     list

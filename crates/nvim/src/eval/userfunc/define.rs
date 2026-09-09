@@ -474,7 +474,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                                 }
                             } else {
                                 // Overwrite the existing dict entry.
-                                unsafe { tv_clear(&raw mut (*fudi.fd_di).di_tv) };
+                                unsafe { tv_clear(&mut (*fudi.fd_di).di_tv) };
                             }
                             let owned = unsafe { xmemdupz(name as *const c_void, namelen) };
                             unsafe { (*fudi.fd_di).di_tv.write_func_name(owned as *mut c_char) };

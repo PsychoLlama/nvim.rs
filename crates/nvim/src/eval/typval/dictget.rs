@@ -62,7 +62,7 @@ pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
         let l2 = tv_list_alloc(2);
         unsafe { tv_list_append_list((*result).list_or_null(), l2) };
         unsafe { tv_list_append_number(l2, idx as VarNumber) };
-        unsafe { tv_list_append_tv(l2, &raw mut (*li).li_tv) };
+        unsafe { tv_list_append_tv(l2, &(*li).li_tv) };
     }
 }
 
@@ -147,7 +147,7 @@ pub unsafe fn tv_dict_get_tv(
     if di.is_null() {
         return Err(Failed);
     }
-    unsafe { tv_copy(&raw mut (*di).di_tv, result) };
+    unsafe { tv_copy(&(*di).di_tv, result) };
     Ok(())
 }
 
@@ -176,7 +176,7 @@ pub unsafe fn tv_dict_get_number_def(
     if di.is_null() {
         return def as VarNumber;
     }
-    unsafe { tv_get_number(&raw mut (*di).di_tv) }
+    unsafe { tv_get_number(&(*di).di_tv) }
 }
 
 /// `d[key]` as a boolean, or `def` when there is no such key.
@@ -193,7 +193,7 @@ pub unsafe fn tv_dict_get_bool(
     if di.is_null() {
         return def as VarNumber;
     }
-    unsafe { tv_get_bool(&raw mut (*di).di_tv) }
+    unsafe { tv_get_bool(&(*di).di_tv) }
 }
 
 /// `denv` as a NULL-terminated `environ`-shaped array of `KEY=VALUE` strings.
@@ -217,7 +217,7 @@ pub unsafe fn tv_dict_to_env(denv: *mut Dict) -> *mut *mut ::core::ffi::c_char {
     for (i, hi) in unsafe { tv_dict_iter(denv) }.enumerate() {
         let var = unsafe { tv_dict_hi2di(hi) };
         let key = tv_dict_item_key(var);
-        let str = unsafe { numbuf.string(&raw mut (*var).di_tv) };
+        let str = unsafe { numbuf.string(&(*var).di_tv) };
         debug_assert!(!str.is_null());
         let len = unsafe { cstr::bytes_at(key) }.len()
             + unsafe { cstr::bytes_at(str) }.len()
@@ -270,7 +270,7 @@ pub unsafe fn tv_dict_get_string_buf(
     if di.is_null() {
         return ::core::ptr::null();
     }
-    unsafe { tv_get_string_buf(&raw const (*di).di_tv, numbuf) }
+    unsafe { tv_get_string_buf(&(*di).di_tv, numbuf) }
 }
 
 /// [`tv_dict_get_string_buf`] answering `def` for a missing key, and NULL with
@@ -292,7 +292,7 @@ pub unsafe fn tv_dict_get_string_buf_chk(
     if di.is_null() {
         return def;
     }
-    unsafe { tv_get_string_buf_chk(&raw const (*di).di_tv, numbuf) }
+    unsafe { tv_get_string_buf_chk(&(*di).di_tv, numbuf) }
 }
 
 /// `d[key]` as a callback, bound to `d` as its `self` dictionary.
@@ -324,10 +324,10 @@ pub unsafe fn tv_dict_get_callback(
     }
 
     let mut tv = TV_INITIAL_VALUE;
-    unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut tv) };
+    unsafe { tv_copy(&(*di).di_tv, &mut tv) };
     unsafe { set_selfdict(&mut tv, d) };
-    let res = unsafe { callback_from_typval(result, &raw mut tv) };
-    unsafe { tv_clear(&raw mut tv) };
+    let res = unsafe { callback_from_typval(result, &tv) };
+    unsafe { tv_clear(&mut tv) };
     res
 }
 
@@ -342,11 +342,11 @@ pub unsafe fn tv_dict_get_callback(
 /// thread.
 pub unsafe fn tv_dict_wrong_func_name(
     d: *mut Dict,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     ((d == get_globvar_dict() || dv_hashtab(d) == get_funccal_local_ht())
-        && unsafe { (*tv).is_func() }
+        && (*tv).is_func()
         && unsafe { var_wrong_func_name(name, true) }) as ::core::ffi::c_int
 }
 
@@ -379,7 +379,7 @@ pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: Di
                 tv_item.write_string(unsafe { xstrdup(di_key) });
             }
             kDict2ListValues => {
-                unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut tv_item) };
+                unsafe { tv_copy(&(*di).di_tv, &mut tv_item) };
             }
             kDict2ListItems => {
                 // items()
@@ -387,7 +387,7 @@ pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: Di
                 tv_item.write_list(sub_l);
                 unsafe { tv_list_ref(sub_l) };
                 unsafe { tv_list_append_string(sub_l, di_key, -1) };
-                unsafe { tv_list_append_tv(sub_l, &raw mut (*di).di_tv) };
+                unsafe { tv_list_append_tv(sub_l, &(*di).di_tv) };
             }
             _ => {}
         }

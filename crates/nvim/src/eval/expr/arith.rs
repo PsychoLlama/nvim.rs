@@ -112,7 +112,7 @@ pub(crate) unsafe fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `List`, and `joined` is this frame's own.
     let (l1, l2) = ((*tv1).list_or_null(), (*tv2).list_or_null());
-    if unsafe { tv_list_concat(l1, l2, &raw mut joined) }.is_err() {
+    if unsafe { tv_list_concat(l1, l2, &mut joined) }.is_err() {
         unsafe { tv_clear(tv1) };
         unsafe { tv_clear(tv2) };
         return false;

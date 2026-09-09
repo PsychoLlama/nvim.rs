@@ -175,7 +175,7 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 ///
 /// # Safety
 /// `name` must be NUL-terminated; `args` and `result` valid.
-pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: *mut TypVal) {
+pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut TypVal) {
     if check_secure() {
         return;
     }

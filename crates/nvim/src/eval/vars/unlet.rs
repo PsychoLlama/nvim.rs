@@ -203,8 +203,8 @@ unsafe fn do_unlet_var(
         let mut oldtv = TV_INITIAL_VALUE;
         let mut key: *mut c_char = ptr::null_mut();
         if watched {
-            let tv = di.field_ptr(offset_of!(DictItem, di_tv));
-            unsafe { tv_copy(tv, &raw mut oldtv) };
+            let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+            unsafe { tv_copy(&*tv, &mut oldtv) };
             // The key has to be saved: removing the item frees it.
             key = unsafe { xstrdup(tv_dict_item_key(di.raw())) };
         }
@@ -303,8 +303,8 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             let mut oldtv = TV_INITIAL_VALUE;
             let watched = unsafe { tv_dict_is_watched(dict) };
             if watched {
-                let tv = di.field_ptr(offset_of!(DictItem, di_tv));
-                unsafe { tv_copy(tv, &raw mut oldtv) };
+                let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+                unsafe { tv_copy(&*tv, &mut oldtv) };
             }
 
             unsafe { delete_var(ht, hi) };
@@ -380,9 +380,10 @@ unsafe fn do_lock_var(
         }
         // The value's address is taken after the flag write: it points into
         // the item, and the write goes through a borrow of the whole item.
-        let (tv, lock_of) = (di.field_ptr(offset_of!(DictItem, di_tv)), di_lock(di.raw()));
+        let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+        let lock_of = di_lock(di.raw());
         if deep != 0 {
-            unsafe { tv_item_lock(lock_of, tv, deep, lock, false) };
+            unsafe { tv_item_lock(lock_of, &mut *tv, deep, lock, false) };
         }
     } else if deep != 0 {
         if lval.ll_range {
@@ -390,7 +391,7 @@ unsafe fn do_lock_var(
             let mut li = lval.ll_li;
             while !li.is_null() && (lval.ll_empty2 || lval.ll_n2 >= lval.ll_n1) {
                 // SAFETY: a resolved lvalue's items, walked to the end.
-                unsafe { tv_item_lock(li_lock(li), li_tv(li), deep, lock, false) };
+                unsafe { tv_item_lock(li_lock(li), &mut *li_tv(li), deep, lock, false) };
                 li = unsafe { (*li).li_next };
                 lval.ll_n1 += 1;
             }
@@ -398,12 +399,12 @@ unsafe fn do_lock_var(
             // One List item.
             let li = lval.ll_li;
             // SAFETY: a resolved lvalue's own item.
-            unsafe { tv_item_lock(li_lock(li), li_tv(li), deep, lock, false) };
+            unsafe { tv_item_lock(li_lock(li), &mut *li_tv(li), deep, lock, false) };
         } else {
             // One Dict item.
             let di = lval.ll_di;
             // SAFETY: a resolved lvalue's own item.
-            unsafe { tv_item_lock(di_lock(di), di_tv(di), deep, lock, false) };
+            unsafe { tv_item_lock(di_lock(di), &mut *di_tv(di), deep, lock, false) };
         }
     }
     Ok(())

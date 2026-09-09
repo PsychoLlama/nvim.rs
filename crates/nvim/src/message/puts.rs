@@ -469,7 +469,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // SAFETY: one argument, and `rettv` is a live unset value.
         unsafe { callback_call(on_print_cb(), argv.args(), &mut rettv) };
         // SAFETY: `rettv` is whatever the callback answered.
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
         return;
     }
 

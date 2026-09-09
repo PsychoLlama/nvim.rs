@@ -68,7 +68,7 @@ unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> TypVal {
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.
     let info = unsafe { channel_info(id, arena) };
-    unsafe { object_to_vim(Object::Dict(info), &raw mut tv) };
+    unsafe { object_to_vim(Object::Dict(info), &mut tv) };
     debug_assert!(tv.v_type() == VAR_DICT);
     tv
 }
@@ -99,8 +99,8 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
     // points at until it is finished below.
     debug_assert!(unsafe { (*chan).id } <= i64::MAX as uint64_t);
     let mut arena: Arena = ARENA_EMPTY;
-    let mut tv = unsafe { info_tv((*chan).id, &raw mut arena) };
-    let str = unsafe { encode_tv2json(&raw mut tv, ptr::null_mut()) };
+    let tv = unsafe { info_tv((*chan).id, &raw mut arena) };
+    let str = unsafe { encode_tv2json(&tv, ptr::null_mut()) };
     // SAFETY: the caller's live channel, and two NUL-terminated strings --
     // the caller's `source` and the JSON just rendered.
     let (id, source, info) = unsafe { ((*chan).id, c_str(source), c_str(str)) };

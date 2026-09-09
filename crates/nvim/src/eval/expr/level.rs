@@ -457,8 +457,8 @@ unsafe fn eval_logical(
         if evaluate && truthy != stop_at {
             let mut error = false;
             // SAFETY: `var2` is the operand just parsed.
-            truthy = unsafe { tv_get_number_chk(&raw mut var2, &raw mut error) } != 0;
-            unsafe { tv_clear(&raw mut var2) };
+            truthy = unsafe { tv_get_number_chk(&var2, &raw mut error) } != 0;
+            unsafe { tv_clear(&mut var2) };
             if error {
                 return Err(Failed);
             }
@@ -541,8 +541,8 @@ pub(crate) unsafe fn eval4(
     }
     if unsafe { evaluating(evalarg) } {
         // SAFETY: both operands are typvals the levels just parsed.
-        let ret = unsafe { typval_compare(result, &raw mut var2, op, ic) };
-        unsafe { tv_clear(&raw mut var2) };
+        let ret = unsafe { typval_compare(result, &mut var2, op, ic) };
+        unsafe { tv_clear(&mut var2) };
         return ret;
     }
     Ok(())
@@ -610,7 +610,7 @@ pub(crate) unsafe fn eval5(
             if !ok {
                 return Err(Failed);
             }
-            unsafe { tv_clear(&raw mut var2) };
+            unsafe { tv_clear(&mut var2) };
         }
     }
 }
@@ -768,7 +768,7 @@ pub(crate) unsafe fn eval7(
             let call = unsafe { *skipwhite(cur.get()) } == b'(' as c_char;
             if call {
                 cur.skip(0);
-                let func = unsafe { eval_func(arg, evalarg, name, len, result, flags, null_mut()) };
+                let func = unsafe { eval_func(arg, evalarg, name, len, result, flags, None) };
                 ret = Parsed::done(func);
             } else if evaluate {
                 let none = null_mut::<*mut DictItem>();

@@ -48,7 +48,7 @@ pub(crate) fn tv_list_item_alloc() -> *mut ListItem {
 pub unsafe fn tv_list_item_remove(l: *mut List, item: *mut ListItem) -> *mut ListItem {
     let next_item = unsafe { (*item).li_next };
     unsafe { tv_list_drop_items(l, item, item) };
-    unsafe { tv_clear(&raw mut (*item).li_tv) };
+    unsafe { tv_clear(&mut (*item).li_tv) };
     unsafe { xfree(item.cast()) };
     next_item
 }
@@ -180,7 +180,7 @@ pub unsafe fn tv_list_free_contents(l: *mut List) {
     let mut item = list.lv_first;
     while !item.is_null() {
         unsafe { (*l).lv_first = (*item).li_next };
-        unsafe { tv_clear(&raw mut (*item).li_tv) };
+        unsafe { tv_clear(&mut (*item).li_tv) };
         unsafe { xfree(item.cast()) };
         item = list.lv_first;
     }
@@ -282,7 +282,7 @@ pub unsafe fn tv_list_remove_items(l: *mut List, item: *mut ListItem, item2: *mu
     unsafe { tv_list_drop_items(l, item, item2) };
     let mut li = item;
     loop {
-        unsafe { tv_clear(&raw mut (*li).li_tv) };
+        unsafe { tv_clear(&mut (*li).li_tv) };
         // Read the link before the free, not after.
         let nli = unsafe { (*li).li_next };
         unsafe { xfree(li.cast()) };

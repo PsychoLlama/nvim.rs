@@ -181,7 +181,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
 
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     if unsafe { callback_call(global_opfunc(), argv.args(), &mut rettv) } {
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
     }
 
     virtual_op.set(save_virtual_op);

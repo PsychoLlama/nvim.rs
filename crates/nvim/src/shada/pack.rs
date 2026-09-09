@@ -288,14 +288,9 @@ unsafe fn pack_variable(
     vardesc.extend_from_slice(unsafe { varname.as_bytes() });
     vardesc.push(0);
 
-    if unsafe {
-        encode_vim_to_msgpack(
-            sbuf,
-            (&raw const global_var.value).cast_mut(),
-            vardesc.as_ptr().cast::<c_char>(),
-        )
-    } == FAIL
-    {
+    // SAFETY: the bytes just built end in the NUL pushed above.
+    let vardesc = unsafe { CStr::from_bytes_with_nul_unchecked(&vardesc) };
+    if unsafe { encode_vim_to_msgpack(sbuf, &global_var.value, vardesc) } == FAIL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(global_var.name) };
         semsg!("E574: Failed to write variable {name}");

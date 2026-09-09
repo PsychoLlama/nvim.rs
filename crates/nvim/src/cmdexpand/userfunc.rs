@@ -478,9 +478,9 @@ pub(crate) unsafe fn expand_user_lua(
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
     let mut rettv = TV_INITIAL_VALUE;
-    unsafe { nlua_call_user_expand_func(expand.raw(), &raw mut rettv) };
+    unsafe { nlua_call_user_expand_func(expand.raw(), &mut rettv) };
     if rettv.v_type() != VAR_LIST {
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
         return Err(Failed);
     }
 

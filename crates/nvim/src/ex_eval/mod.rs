@@ -204,7 +204,7 @@ unsafe fn check_skip(cstack: *mut CondStack) -> bool {
 /// `p` is a `TypVal` a pending `:return` owned.
 unsafe fn discard_pending_return(p: *mut c_void) {
     // SAFETY: caller contract.
-    unsafe { tv_free(p.cast::<TypVal>()) }
+    unsafe { tv_free(p.cast::<TypVal>().as_mut()) }
 }
 
 /// Whether to abort immediately: an error while aborting, an interrupt, or
@@ -265,7 +265,7 @@ pub(crate) unsafe fn ex_eval(args: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, (*args).skip != 0) };
     if unsafe { eval0((*args).arg, &mut tv, args, &raw mut evalarg) }.is_ok() {
-        unsafe { tv_clear(&raw mut tv) };
+        unsafe { tv_clear(&mut tv) };
     }
     unsafe { clear_evalarg(&raw mut evalarg, args) };
 }

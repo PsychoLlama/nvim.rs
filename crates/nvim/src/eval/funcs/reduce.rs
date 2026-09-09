@@ -44,7 +44,7 @@ const fn number_tv(n: VarNumber) -> TypVal {
 ///
 /// # Safety
 /// `tv` is a live argument typval and `result` the cleared return value.
-unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
+unsafe fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
@@ -53,7 +53,6 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
     // container returns the 0 written above instead.
     let mut n: VarNumber = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
     let better = |i: VarNumber, n: VarNumber| if domax { i > n } else { i < n };
-    let tv = unsafe { &*tv };
     match tv.v_type() {
         VAR_LIST => {
             if unsafe { tv_list_len(tv.list_or_null()) } == 0 {
@@ -61,7 +60,7 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
             }
             let mut li = unsafe { tv_list_first(tv.list_or_null()) };
             while !li.is_null() {
-                let i = unsafe { tv_get_number_chk(&raw const (*li).li_tv, &raw mut error) };
+                let i = unsafe { tv_get_number_chk(&(*li).li_tv, &raw mut error) };
                 if error {
                     return;
                 }
@@ -80,7 +79,7 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
                 let di = di_of_key(hi.hi_key);
                 // SAFETY: an occupied slot of the dictionary's own table, so
                 // the item its key points into is live.
-                let i = unsafe { tv_get_number_chk(di_tv(di), &raw mut error) };
+                let i = unsafe { tv_get_number_chk(&*di_tv(di), &raw mut error) };
                 if error {
                     return;
                 }
@@ -206,7 +205,7 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
             return;
         }
         let first = unsafe { tv_list_first(l) };
-        unsafe { tv_copy(&raw const (*first).li_tv, result) };
+        unsafe { tv_copy(&(*first).li_tv, result) };
         unsafe { (*first).li_next }
     };
     // A null List is `v:_null_list`: nothing to fold, and nothing to

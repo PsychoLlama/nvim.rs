@@ -171,7 +171,8 @@ pub unsafe fn eval_variable(
     }
     if let Some(result) = result {
         let item = unsafe { Di::new(v) };
-        unsafe { tv_copy(item.field_ptr(offset_of!(DictItem, di_tv)), result) };
+        let value = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+        unsafe { tv_copy(&*value, result) };
     }
     Ok(())
 }
@@ -401,8 +402,8 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
     if v.is_null() {
         return ptr::null_mut();
     }
-    let tv = unsafe { Di::new(v) }.field_ptr(offset_of!(DictItem, di_tv));
-    unsafe { numbuf.string(tv) as *mut c_char }
+    let tv = unsafe { Di::new(v) }.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
+    unsafe { numbuf.string(&*tv) as *mut c_char }
 }
 
 /// `exists()` over a variable name: whether `var` names something, including

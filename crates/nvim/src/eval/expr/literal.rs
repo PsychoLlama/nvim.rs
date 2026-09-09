@@ -685,7 +685,7 @@ pub(crate) unsafe fn eval_interp_string(
             if !piece.is_null() {
                 text.extend_from_slice(unsafe { cstr::bytes_at(piece) });
             }
-            unsafe { tv_clear(&raw mut tv) };
+            unsafe { tv_clear(&mut tv) };
         }
         if cur.byte() != b'{' {
             // Found the terminating quote.

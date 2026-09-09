@@ -234,7 +234,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
         loop {
             lua_settop(lstate, 0);
             let mut input = TV_INITIAL_VALUE;
-            get_user_input(input_args.args(), &raw mut input, false, false);
+            get_user_input(input_args.args(), &mut input, false, false);
 
             if ui_has(kUICmdline) {
                 snprintf(
@@ -253,7 +253,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
                 || *input.string_or_null() == 0
                 || cstr::eq_bytes(input.string_or_null(), b"cont");
             if done {
-                tv_clear(&raw mut input);
+                tv_clear(&mut input);
                 if ui_has(kUICmdline) {
                     ui_ext_cmdline_block_leave();
                 }
@@ -277,7 +277,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
                     gettext(c"E5116: Calling Lua debug string: %.*s").as_ptr(),
                 );
             }
-            tv_clear(&raw mut input);
+            tv_clear(&mut input);
         }
     }
 }

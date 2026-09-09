@@ -73,7 +73,7 @@ pub unsafe fn ex_return(args: *mut ExArg) {
         if ea.skip == 0 {
             returning = unsafe { do_return(args, false, true, (&raw mut rettv) as *mut c_void) };
         } else {
-            unsafe { tv_clear(&raw mut rettv) };
+            unsafe { tv_clear(&mut rettv) };
         }
     } else if ea.skip == 0 {
         // It's safer to return also on error.
@@ -146,7 +146,7 @@ unsafe fn ex_call_inner(
             failed = true;
             break;
         }
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
         if doesrange || aborting() {
             break;
         }
@@ -188,7 +188,7 @@ unsafe fn ex_defer_inner(
             let bound = unsafe { (*partial).pt_argv };
             for i in 0..partial_argc {
                 let into = &raw mut argvars[i as usize];
-                unsafe { tv_copy(bound.offset(i as isize), into) };
+                unsafe { tv_copy(&*bound.offset(i as isize), &mut *into) };
             }
         }
     }
@@ -306,12 +306,12 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut FuncCall) {
             let _ = unsafe { call_func(name, -1, &mut rettv, args, exe) };
 
             unsafe { exception_state_restore(&raw mut estate) };
-            unsafe { tv_clear(&raw mut rettv) };
+            unsafe { tv_clear(&mut rettv) };
             unsafe { xfree(name as *mut c_void) };
             let mut i = unsafe { (*dr).dr_argcount } - 1;
             while i >= 0 {
                 unsafe {
-                    tv_clear(((&raw mut (*dr).dr_argvars) as *mut TypVal).offset(i as isize))
+                    tv_clear(&mut *((&raw mut (*dr).dr_argvars) as *mut TypVal).offset(i as isize))
                 };
                 i -= 1;
             }
@@ -358,7 +358,7 @@ pub unsafe fn ex_call(args: *mut ExArg) {
         let mut rettv = TV_INITIAL_VALUE;
         let skipping = Suppress::emsg_skip();
         if unsafe { eval0(ea.arg, &mut rettv, args, &raw mut evalarg) }.is_ok() {
-            unsafe { tv_clear(&raw mut rettv) };
+            unsafe { tv_clear(&mut rettv) };
         }
         drop(skipping);
         unsafe { clear_evalarg(&raw mut evalarg, args) };
@@ -519,7 +519,7 @@ pub unsafe fn do_return(
     } else {
         unsafe { (*current_funccal.get()).fc_returned = 1 };
         if !reanimate && !result.is_null() {
-            unsafe { tv_clear((*current_funccal.get()).fc_rettv) };
+            unsafe { tv_clear(&mut *(*current_funccal.get()).fc_rettv) };
             unsafe { *(*current_funccal.get()).fc_rettv = (*(result as *mut TypVal)).take() };
             if !is_cmd {
                 unsafe { xfree(result) };
@@ -543,7 +543,7 @@ pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
     let mut slen: size_t = 0;
 
     if !result.is_null() {
-        s = unsafe { encode_tv2echo(result as *mut TypVal, ptr::null_mut()) };
+        s = unsafe { encode_tv2echo(&*result.cast::<TypVal>(), ptr::null_mut()) };
         tofree = s;
     }
     if s.is_null() {

@@ -314,7 +314,7 @@ fn corpus() -> Vec<Row> {
 /// `tv` is live.
 unsafe fn echo(tv: *mut TypVal) -> String {
     let mut len = 0;
-    let text = unsafe { internalize(encode_tv2echo(tv, &raw mut len)) };
+    let text = unsafe { internalize(encode_tv2echo(&*tv, &raw mut len)) };
     assert_eq!(len, text.len(), "the length reported is the length written");
     text
 }
@@ -325,7 +325,7 @@ unsafe fn echo(tv: *mut TypVal) -> String {
 /// As [`echo`].
 unsafe fn string(tv: *mut TypVal) -> String {
     let mut len = 0;
-    let text = unsafe { internalize(encode_tv2string(tv, &raw mut len)) };
+    let text = unsafe { internalize(encode_tv2string(&*tv, &raw mut len)) };
     assert_eq!(len, text.len());
     text
 }
@@ -336,7 +336,7 @@ unsafe fn string(tv: *mut TypVal) -> String {
 /// As [`echo`].
 unsafe fn json(tv: *mut TypVal) -> String {
     let mut len = 0;
-    let text = unsafe { internalize(encode_tv2json(tv, &raw mut len)) };
+    let text = unsafe { internalize(encode_tv2json(&*tv, &raw mut len)) };
     assert_eq!(len, text.len());
     text
 }
@@ -348,7 +348,7 @@ unsafe fn json(tv: *mut TypVal) -> String {
 /// As [`echo`].
 unsafe fn msgpack(tv: *mut TypVal) -> Option<Vec<u8>> {
     let mut buffer: PackerBuffer = packer_string_buffer();
-    let ok = unsafe { encode_vim_to_msgpack(&raw mut buffer, tv, MSGPACK_OBJNAME.as_ptr()) };
+    let ok = unsafe { encode_vim_to_msgpack(&raw mut buffer, &*tv, MSGPACK_OBJNAME) };
     let packed: String_0 = packer_take_string(&buffer);
     let bytes = unsafe { packed.as_bytes() }.to_vec();
     unsafe { xfree(packed.data().cast()) };
@@ -376,7 +376,7 @@ fn each_row(mut f: impl FnMut(&Editor, &Row, *mut TypVal)) {
             eprintln!("  built");
             f(&editor, &row, &raw mut tv);
             eprintln!("  ran");
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
             eprintln!("  cleared");
         }
     }
@@ -474,15 +474,18 @@ fn the_length_is_optional() {
     unsafe {
         let mut tv = Tv::List(vec![Tv::Int(1), Tv::s("x")]).build();
         let at = &raw mut tv;
-        assert_eq!(internalize(encode_tv2echo(at, ptr::null_mut())), "[1, 'x']");
         assert_eq!(
-            internalize(encode_tv2string(at, ptr::null_mut())),
+            internalize(encode_tv2echo(&*at, ptr::null_mut())),
             "[1, 'x']"
         );
         assert_eq!(
-            internalize(encode_tv2json(at, ptr::null_mut())),
+            internalize(encode_tv2string(&*at, ptr::null_mut())),
+            "[1, 'x']"
+        );
+        assert_eq!(
+            internalize(encode_tv2json(&*at, ptr::null_mut())),
             "[1, \"x\"]"
         );
-        tv_clear(at);
+        tv_clear(&mut *at);
     }
 }

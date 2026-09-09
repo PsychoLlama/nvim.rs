@@ -230,7 +230,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
     if new.user_data.is_null() || unsafe { (*new.user_data).v_type() } == VAR_UNKNOWN {
         unsafe { (*qfp).qf_user_data.write_empty(VAR_UNKNOWN) };
     } else {
-        unsafe { tv_copy(new.user_data, &raw mut (*qfp).qf_user_data) };
+        unsafe { tv_copy(&*new.user_data, &mut (*qfp).qf_user_data) };
         unsafe { (*qfl).qf_has_user_data = true };
     }
     unsafe { (*qfp).qf_pattern = dup_unless_empty(new.pattern) };
@@ -367,7 +367,7 @@ pub(crate) unsafe fn copy_loclist(from_qfl: *mut QfList, to_qfl: *mut QfList) {
             ptr::null_mut()
         } else {
             let ctx: *mut TypVal = xcalloc(1, size_of::<TypVal>()).cast();
-            tv_copy((*from_qfl).qf_ctx, ctx);
+            tv_copy(&*(*from_qfl).qf_ctx, &mut *ctx);
             ctx
         }
     };
@@ -408,7 +408,7 @@ pub(crate) unsafe fn qf_free_items(qfl: *mut QfList) {
             unsafe { xfree((*qfp).qf_module.cast()) };
             unsafe { xfree((*qfp).qf_text.cast()) };
             unsafe { xfree((*qfp).qf_pattern.cast()) };
-            unsafe { tv_clear(&raw mut (*qfp).qf_user_data) };
+            unsafe { tv_clear(&mut (*qfp).qf_user_data) };
             stop = qfp == next;
             unsafe { xfree(qfp.cast()) };
             if stop {
@@ -447,7 +447,7 @@ pub(crate) unsafe fn qf_free(qfl: *mut QfList) {
     unsafe { qf_free_items(qfl) };
     unsafe { xfree((*qfl).qf_title.cast()) };
     unsafe { (*qfl).qf_title = ptr::null_mut() };
-    unsafe { tv_free((*qfl).qf_ctx) };
+    unsafe { tv_free((*qfl).qf_ctx.as_mut()) };
     unsafe { (*qfl).qf_ctx = ptr::null_mut() };
     unsafe { callback_free(&raw mut (*qfl).qf_qftf_cb) };
     unsafe { (*qfl).qf_id = 0 };

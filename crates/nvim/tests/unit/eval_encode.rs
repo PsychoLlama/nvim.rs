@@ -118,7 +118,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                 );
             }
             let mut tv = TypVal::List(l);
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
         }
     }
 }
@@ -182,7 +182,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[2]),
         ]);
         assert_eq!((*inner).lv_refcount.get(), 3);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[
             alloc::freed(inner_li),
             alloc::freed(inner),
@@ -205,7 +205,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[2]),
         ]);
         assert_eq!((*inner).lv_refcount.get(), 3);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[
             alloc::freed(inner),
             alloc::freed(lis[0]),
@@ -226,7 +226,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[1]),
         ]);
         assert_eq!((*inner).dv_refcount.get(), 2);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[
             alloc::freed(inner),
             alloc::freed(lis[0]),
@@ -248,7 +248,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
             alloc::li(lis[1]),
         ]);
         assert_eq!((*inner).dv_refcount.get(), 2);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         log.check(&[
             alloc::freed(di),
             alloc::freed(inner),

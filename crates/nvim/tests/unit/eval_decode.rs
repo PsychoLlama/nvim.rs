@@ -73,7 +73,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
         ] {
             let buf = cstr(text);
             assert_eq!(
-                json_decode_string(buf.as_ptr(), len, &raw mut rettv),
+                json_decode_string(buf.as_ptr(), len, &mut rettv),
                 Err(Failed),
                 "{text:?} at {len}"
             );
@@ -100,7 +100,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
         for &byte in b"ntf\"" {
             let one = xmemdup((&raw const byte).cast(), 1);
             assert_eq!(
-                json_decode_string(one.cast(), 1, &raw mut rettv),
+                json_decode_string(one.cast(), 1, &mut rettv),
                 Err(Failed),
                 "{:?}",
                 byte as char
@@ -133,7 +133,7 @@ fn a_decoder_error_quotes_no_more_than_it_read() {
             let buf = text.to_vec();
             let ret = check_emsg_bytes(
                 log.editor(),
-                || json_decode_string(buf.as_ptr().cast(), len, &raw mut rettv),
+                || json_decode_string(buf.as_ptr().cast(), len, &mut rettv),
                 Some(msg),
             );
             assert_eq!(ret, Err(Failed), "{:?}", String::from_utf8_lossy(text));
@@ -237,7 +237,7 @@ fn three_expressions_produce_the_null_containers() {
         ] {
             let mut tv = tv::eval0(&expr).unwrap_or_else(|| panic!("{expr} evaluates"));
             assert_eq!(tv::read(&raw const tv), expected, "{expr}");
-            tv_clear(&raw mut tv);
+            tv_clear(&mut tv);
         }
     }
 }

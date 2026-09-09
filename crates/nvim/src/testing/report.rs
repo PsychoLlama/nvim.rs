@@ -194,9 +194,8 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
 ///
 /// # Safety
 /// `tv` is a live typval.
-unsafe fn is_dict(tv: *const TypVal) -> bool {
-    // SAFETY: the caller's typval.
-    unsafe { (*tv).v_type() == VAR_DICT && !(*tv).dict_or_null().is_null() }
+fn is_dict(tv: &TypVal) -> bool {
+    tv.v_type() == VAR_DICT && !tv.dict_or_null().is_null()
 }
 
 /// Copies of both dictionaries holding only the entries that differ, and how
@@ -207,13 +206,10 @@ unsafe fn is_dict(tv: *const TypVal) -> bool {
 ///
 /// # Safety
 /// Both typvals hold non-null dictionaries.
-unsafe fn prune_equal_dict_items(
-    exp_tv: *const TypVal,
-    got_tv: *const TypVal,
-) -> (TypVal, TypVal, c_int) {
+unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, TypVal, c_int) {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
-    let (exp_d, got_d) = unsafe { ((*exp_tv).dict_or_null(), (*got_tv).dict_or_null()) };
+    let (exp_d, got_d) = (exp_tv.dict_or_null(), got_tv.dict_or_null());
     let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
 
     let mut omitted = 0;
@@ -221,15 +217,15 @@ unsafe fn prune_equal_dict_items(
         let key = hi.hi_key;
         let expected = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
         let item2 = unsafe { tv_dict_find(got_d, key, -1) };
-        if !item2.is_null() && unsafe { tv_equal(expected, &raw mut (*item2).di_tv, false) } {
+        if !item2.is_null() && unsafe { tv_equal(&*expected, &(*item2).di_tv, false) } {
             omitted += 1;
             continue;
         }
         // Absent from the actual value, or present with a different one.
         let key_len = unsafe { cstr::bytes_at(key) }.len();
-        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, expected) };
+        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, &mut *expected) };
         if !item2.is_null() {
-            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &raw mut (*item2).di_tv) };
+            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut (*item2).di_tv) };
         }
     }
 
@@ -238,7 +234,7 @@ unsafe fn prune_equal_dict_items(
         let key = hi.hi_key;
         if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
             let tv = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
-            let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), tv) };
+            let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), &mut *tv) };
         }
     }
     (TypVal::Dict(exp), TypVal::Dict(got), omitted)
@@ -257,8 +253,8 @@ pub(super) unsafe fn fill_assert_error(
     gap: &mut Vec<u8>,
     opt_msg_tv: Option<&TypVal>,
     exp_str: *const c_char,
-    exp_tv: *const TypVal,
-    got_tv: *const TypVal,
+    exp_tv: Option<&TypVal>,
+    got_tv: &TypVal,
     atype: AssertType,
 ) {
     let mut omitted = 0;
@@ -266,15 +262,14 @@ pub(super) unsafe fn fill_assert_error(
     // pruned copies belong to this frame and go with it.
     let pruned = (exp_str.is_null()
         && atype != AssertType::NotEqual
-        // SAFETY: the caller's typvals.
-        && unsafe { is_dict(exp_tv) }
-        && unsafe { is_dict(got_tv) })
-    // SAFETY: as above; both hold non-null dictionaries.
-    .then(|| unsafe { prune_equal_dict_items(exp_tv, got_tv) });
+        && exp_tv.is_some_and(is_dict)
+        && is_dict(got_tv))
+    // SAFETY: both hold non-null dictionaries.
+    .then(|| unsafe { prune_equal_dict_items(exp_tv.expect("a dict is a value"), got_tv) });
     let (exp_tv, got_tv) = match &pruned {
         Some((exp, got, n)) => {
             omitted = *n;
-            (ptr::from_ref(exp), ptr::from_ref(got))
+            (Some(exp), got)
         }
         None => (exp_tv, got_tv),
     };
@@ -292,7 +287,8 @@ pub(super) unsafe fn fill_assert_error(
     );
 
     if exp_str.is_null() {
-        let tofree = unsafe { encode_tv2string(exp_tv, ptr::null_mut()) };
+        let expected = exp_tv.expect("no `exp_str` means a value");
+        let tofree = unsafe { encode_tv2string(expected, ptr::null_mut()) };
         unsafe { ga_concat_shorten_esc(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
     } else {

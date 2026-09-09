@@ -100,7 +100,7 @@ unsafe fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
     }
     let di = unsafe { tv_dict_find(d, c"rightbelow".as_ptr(), -1) };
     if !di.is_null() {
-        let below = unsafe { tv_get_number(&raw mut (*di).di_tv) };
+        let below = unsafe { tv_get_number(&(*di).di_tv) };
         flags |= if below != 0 {
             WSP_BELOW.cast_signed()
         } else {
@@ -227,7 +227,7 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
         // entry of it or NULL.
         let di = unsafe { tv_dict_find(dict, key.as_ptr(), key.count_bytes().cast_signed()) };
-        (!di.is_null()).then(|| unsafe { tv_get_number(&raw mut (*di).di_tv) })
+        (!di.is_null()).then(|| unsafe { tv_get_number(&(*di).di_tv) })
     };
 
     if let Some(v) = entry(c"lnum") {

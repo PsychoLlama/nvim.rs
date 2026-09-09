@@ -6,7 +6,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
@@ -57,9 +57,9 @@ macro_rules! walk_hook {
 ///
 /// # Safety
 /// `tv` must point at a live `VAR_STRING` typval.
-pub(crate) unsafe fn tv_strlen(tv: *const TypVal) -> size_t {
+pub(crate) unsafe fn tv_strlen(tv: &TypVal) -> size_t {
     // SAFETY: the caller's promise: a live VAR_STRING typval.
-    let val = unsafe { Tv::new(tv.cast_mut()) };
+    let val = tv;
     debug_assert!(val.v_type() == VAR_STRING);
     if val.string_or_null().is_null() {
         0
@@ -173,13 +173,15 @@ const SPECIAL_KINDS: [SpecialKind; 8] = [
 ///
 /// `tv` must point at the value the walk is standing on, live and unaliased
 /// for the call, and `objname` at the NUL-terminated name the walk's error
-/// messages use.
+/// messages use.  A raw pointer, not a borrow: the value comes back out of
+/// [`ConvStack`], whose frames hold the containers they are suspended in by
+/// address, and each hook takes its own `&mut` of the slot in turn.
 unsafe fn convert_one_value<S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack,
     tv: *mut TypVal,
     copyid: c_int,
-    objname: *const c_char,
+    objname: &CStr,
 ) -> Result<(), Refused> {
     sink.check_before();
     // SAFETY: the caller's promise: a live typval.
@@ -194,7 +196,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
     }
     match val.v_type() {
         VAR_STRING => {
-            let (buf, len) = (val.string_or_null(), unsafe { tv_strlen(tv) });
+            let (buf, len) = (val.string_or_null(), unsafe { tv_strlen(&*tv) });
             item_hook!(unsafe { sink.conv_string(slot!(), buf, len) });
         }
         VAR_NUMBER => {
@@ -349,7 +351,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     stack: &mut ConvStack,
     tv: *mut TypVal,
     copyid: c_int,
-    objname: *const c_char,
+    objname: &CStr,
 ) -> Result<Option<Flow>, Refused> {
     let dict = unsafe { (*tv).dict_or_null() };
     if unsafe { (*dict).dv_hashtab.ht_used } != 2 {
@@ -574,25 +576,41 @@ unsafe fn convert_special_dict<S: TypvalSink>(
 /// has already reported why.
 ///
 /// # Safety
-/// `top_tv` must point at a live typval and `objname` at a NUL-terminated
-/// name used only for error messages.
+/// `objname` must point at a NUL-terminated name used only for error
+/// messages.
 pub(crate) unsafe fn encode_typval<S: TypvalSink>(
     sink: &mut S,
-    top_tv: *mut TypVal,
-    objname: *const c_char,
+    top_tv: &mut TypVal,
+    objname: &CStr,
 ) -> bool {
-    unsafe { walk(sink, top_tv, objname).is_ok() }
+    unsafe { walk(sink, ptr::from_mut(top_tv), objname).is_ok() }
+}
+
+/// [`encode_typval`] for a sink that only reads.
+///
+/// The walk hands each hook a `&mut` of the slot it is standing on, so a
+/// sink that wrote through one would be writing through a shared borrow --
+/// which is why `S::WRITES_BACK` is asserted here rather than trusted.
+///
+/// # Safety
+/// As [`encode_typval`].
+pub(crate) unsafe fn encode_typval_read<S: TypvalSink>(
+    sink: &mut S,
+    top_tv: &TypVal,
+    objname: &CStr,
+) -> bool {
+    const { assert!(!S::WRITES_BACK, "this sink writes to what it walks") };
+    let top = ptr::from_ref(top_tv).cast_mut();
+    unsafe { walk(sink, top, objname).is_ok() }
 }
 
 /// # Safety
 ///
-/// `top_tv` must point at the value to encode, live and unaliased for the
-/// whole walk, and `objname` at the NUL-terminated name the error messages
-/// use.
+/// `objname` must point at the NUL-terminated name the error messages use.
 unsafe fn walk<S: TypvalSink>(
     sink: &mut S,
     top_tv: *mut TypVal,
-    objname: *const c_char,
+    objname: &CStr,
 ) -> Result<(), Refused> {
     let copyid = get_copy_id();
     let mut stack = ConvStack::new();

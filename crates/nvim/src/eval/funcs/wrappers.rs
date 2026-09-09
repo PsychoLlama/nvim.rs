@@ -225,7 +225,7 @@ pub unsafe fn call_internal_method(
     fname: *const c_char,
     args: &[TypVal],
     result: &mut TypVal,
-    base: *mut TypVal,
+    base: &mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation.
     let fdef = unsafe { find_internal_func(fname) };
@@ -252,7 +252,7 @@ pub unsafe fn call_internal_method(
     frame.extend_borrowed(before);
     // SAFETY: the caller's promise -- `base` is a live typval, named the
     // same way.
-    frame.push_borrowed(unsafe { &*base });
+    frame.push_borrowed(&*base);
     frame.extend_borrowed(after);
 
     let func = fdef.func.expect("non-null function pointer");
@@ -356,10 +356,10 @@ pub(crate) fn non_zero_arg(tv: &TypVal) -> bool {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> bool {
+pub(crate) unsafe fn tv_get_float_chk(tv: &TypVal, ret_f: *mut Float) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
-    match unsafe { (*tv).v_type() } {
+    match (*tv).v_type() {
         VAR_FLOAT => unsafe { *ret_f = (*tv).float_or_zero() },
         VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as Float },
         _ => {

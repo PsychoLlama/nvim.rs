@@ -328,7 +328,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
             part.pt_argc = ret_pt.pt_argc;
             let (from, into) = (ret_pt.pt_argv, part.pt_argv);
             for i in 0..part.pt_argc {
-                unsafe { tv_copy(from.offset(i as isize), into.offset(i as isize)) };
+                unsafe { tv_copy(&*from.offset(i as isize), &mut *into.offset(i as isize)) };
             }
         }
         unsafe { partial_unref(ret_pt.raw()) };

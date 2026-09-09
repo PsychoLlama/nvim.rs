@@ -121,7 +121,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
                 msg_str_hl(c" ", echo_hl_id.get(), false);
             }
             // SAFETY: `rettv` is this frame's.
-            let tofree = unsafe { encode_tv2echo(&raw mut rettv, null_mut::<size_t>()) };
+            let tofree = unsafe { encode_tv2echo(&rettv, null_mut::<size_t>()) };
             let (hl, clear) = (echo_hl_id.get(), &raw mut need_clear);
             // SAFETY: `tofree` is the NUL-terminated rendering just made and
             // `clear` names this frame's flag.
@@ -203,11 +203,11 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
             // SAFETY: `rettv` is this frame's, holding the value just
             // evaluated; each of the three renderings is NUL-terminated.
             let argstr: *const c_char = if !owned {
-                unsafe { numbuf.string(&raw mut rettv) }
+                unsafe { numbuf.string(&rettv) }
             } else if rettv.v_type() == VAR_STRING {
-                unsafe { encode_tv2echo(&raw mut rettv, null_mut::<size_t>()) }
+                unsafe { encode_tv2echo(&rettv, null_mut::<size_t>()) }
             } else {
-                unsafe { encode_tv2string(&raw mut rettv, null_mut::<size_t>()) }
+                unsafe { encode_tv2string(&rettv, null_mut::<size_t>()) }
             };
             if built {
                 text.push(b' ');
@@ -297,7 +297,7 @@ pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
     unsafe { save_funccal(&raw mut funccall_entry) };
     // SAFETY: the caller's promise about `name`; `vartv` is this frame's
     // copy, whose ownership moves into the variable.
-    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut vartv, false) };
+    unsafe { set_var(name, cstr::bytes_at(name).len(), &mut vartv, false) };
     // SAFETY: this undoes the save above.
     unsafe { restore_funccal() };
 }

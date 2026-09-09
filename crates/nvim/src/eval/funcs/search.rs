@@ -418,7 +418,7 @@ unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int 
     // The optional {skip}, {stopline} and {timeout}. As in search(),
     // each is only read when the one before it was supplied.
     let skip = if args.len() <= 3 || args.len() <= 4 {
-        ptr::null()
+        None
     } else {
         // The type is checked later, when the expression is evaluated.
         if args.len() > 5 {
@@ -441,7 +441,7 @@ unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int 
                 }
             }
         }
-        &args[4] as *const TypVal
+        Some(&args[4])
     };
 
     let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut Pos);
@@ -547,7 +547,7 @@ pub unsafe fn do_searchpair(
     mpat: *const c_char,
     epat: *const c_char,
     dir: c_int,
-    skip: *const TypVal,
+    skip: Option<&TypVal>,
     flags: c_int,
     match_pos: *mut Pos,
     lnum_stop: LineNr,
@@ -582,7 +582,7 @@ pub unsafe fn do_searchpair(
     if flags & SP_START != 0 {
         options |= SEARCH_START as c_int;
     }
-    let use_skip = !skip.is_null() && unsafe { eval_expr_valid_arg(&*skip) };
+    let use_skip = skip.is_some_and(|s| unsafe { eval_expr_valid_arg(s) });
 
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;
@@ -633,7 +633,8 @@ pub unsafe fn do_searchpair(
             let save_pos = Win::current().w_cursor;
             Win::current().w_cursor = pos;
             let mut err = false;
-            let skipped = unsafe { eval_expr_to_bool(skip, &raw mut err) };
+            let expr = skip.expect("`use_skip` means there is one");
+            let skipped = unsafe { eval_expr_to_bool(expr, &raw mut err) };
             Win::current().w_cursor = save_pos;
             if err {
                 Win::current().w_cursor = save_cursor;

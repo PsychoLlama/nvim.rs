@@ -417,7 +417,7 @@ unsafe fn parse_variable(
             is_blob = true;
         }
         global_var.value = unsafe { decode_string(binval.data(), binval.len(), is_blob, false) };
-    } else if cursor.typval(&raw mut global_var.value) != MPACK_OK {
+    } else if cursor.typval(&mut global_var.value) != MPACK_OK {
         malformed_entry(c"E575: Error while reading ShaDa file: variable entry at position %lu has value that cannot be converted to the Vimscript value", pos);
         return Err(Malformed);
     }

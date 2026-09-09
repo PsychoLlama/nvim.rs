@@ -177,7 +177,7 @@ pub unsafe fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
 /// caller's: the store copies it.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
     let mut tv = ManuallyDrop::new(TypVal::String(value));
-    unsafe { set_var(name, cstr::bytes_at(name).len(), &raw mut *tv, true) };
+    unsafe { set_var(name, cstr::bytes_at(name).len(), &mut tv, true) };
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.
@@ -321,7 +321,7 @@ pub unsafe fn vars_clear_ext(ht: *mut HashTab, free_val: bool) {
         // in a `FuncCall` or a scope dictionary.
         let v = unsafe { Di::new(tv_dict_hi2di(hi)) };
         if free_val {
-            unsafe { tv_clear(v.field_ptr(offset_of!(DictItem, di_tv))) };
+            unsafe { tv_clear(&mut *v.field_ptr::<TypVal>(offset_of!(DictItem, di_tv))) };
         }
         if v.di_flags & DI_FLAGS_ALLOC != 0 {
             unsafe { xfree(v.raw().cast()) };
@@ -340,6 +340,6 @@ pub(crate) unsafe fn delete_var(ht: *mut HashTab, hi: Slot) {
     // takes out of the table and then frees.
     let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
     unsafe { hash_remove(ht, hi) };
-    unsafe { tv_clear(di.field_ptr(offset_of!(DictItem, di_tv))) };
+    unsafe { tv_clear(&mut *di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv))) };
     unsafe { xfree(di.raw().cast()) };
 }

@@ -639,7 +639,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
             for tv in list_items(args[0].list_or_null()) {
-                let name = numbuf.string_chk(tv);
+                let name = numbuf.string_chk(&*tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
             }

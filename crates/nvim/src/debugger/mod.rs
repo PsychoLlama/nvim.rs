@@ -574,7 +574,7 @@ pub unsafe fn ex_breakdel(args: *mut ExArg) {
         // SAFETY: all three are this entry's own allocations.
         unsafe { xfree(bp.dbg_name.cast()) };
         if bp.dbg_type == DBG_EXPR && !bp.dbg_val.is_null() {
-            unsafe { tv_free(bp.dbg_val) };
+            unsafe { tv_free(bp.dbg_val.as_mut()) };
         }
         unsafe { vim_regfree(bp.dbg_prog) };
         // `:profdel` is not something `:breaklist` shows, so it does not
@@ -760,36 +760,36 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
         if previous.is_null() {
             return false;
         }
-        unsafe { set_oldval(previous) };
-        unsafe { set_newval(ptr::null_mut()) };
-        unsafe { tv_free(previous) };
+        unsafe { set_oldval(Some(&mut *previous)) };
+        unsafe { set_newval(None) };
+        unsafe { tv_free(previous.as_mut()) };
         unsafe { (*breakpoint).dbg_val = ptr::null_mut() };
         return true;
     }
 
     if previous.is_null() {
         // First evaluation: the baseline, with no old value to show.
-        unsafe { set_oldval(ptr::null_mut()) };
+        unsafe { set_oldval(None) };
         unsafe { (*breakpoint).dbg_val = tv };
-        unsafe { set_newval(tv) };
+        unsafe { set_newval(Some(&mut *tv)) };
         return true;
     }
 
     // `EXPR_IS` answers "is the same value"; a false answer is a change.
-    let changed = unsafe { typval_compare(tv, previous, EXPR_IS, false) }.is_ok()
+    let changed = unsafe { typval_compare(&mut *tv, &mut *previous, EXPR_IS, false) }.is_ok()
         && unsafe { (*tv).number_or_zero() } == 0;
     if changed {
         // Render the old value before re-evaluating, because evaluating
         // can reach whatever the old value refers to.
-        unsafe { set_oldval(previous) };
+        unsafe { set_oldval(Some(&mut *previous)) };
         // `typval_compare` overwrote `tv`, so the new value has to be
         // evaluated a second time before it can be shown.
         let fresh = unsafe { eval_expr_no_emsg(breakpoint) };
-        unsafe { set_newval(fresh) };
-        unsafe { tv_free(previous) };
+        unsafe { set_newval(Some(&mut *fresh)) };
+        unsafe { tv_free(previous.as_mut()) };
         unsafe { (*breakpoint).dbg_val = fresh };
     }
-    unsafe { tv_free(tv) };
+    unsafe { tv_free(tv.as_mut()) };
     changed
 }
 
@@ -798,18 +798,18 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 ///
 /// # Safety
 /// `tv` must be null or a live typval.
-unsafe fn set_oldval(tv: *mut TypVal) {
+unsafe fn set_oldval(tv: Option<&mut TypVal>) {
     // SAFETY: caller contract; the cell owns what it holds.
     unsafe { xfree(debug_oldval.get().cast()) };
-    debug_oldval.set(unsafe { typval_tostring(tv, true) });
+    debug_oldval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });
 }
 
 /// [`set_oldval`] for the "after" value.
 ///
 /// # Safety
 /// As [`set_oldval`].
-unsafe fn set_newval(tv: *mut TypVal) {
+unsafe fn set_newval(tv: Option<&mut TypVal>) {
     // SAFETY: as `set_oldval`.
     unsafe { xfree(debug_newval.get().cast()) };
-    debug_newval.set(unsafe { typval_tostring(tv, true) });
+    debug_newval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });
 }

@@ -252,8 +252,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 semsg!("E5030: Empty list at position {at}");
                 return None;
             }
-            lnum =
-                unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) } as LineNr;
+            lnum = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) } as LineNr;
             if error {
                 return None;
             }
@@ -263,8 +262,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 subli = unsafe { (*subli).li_next };
                 if !subli.is_null() {
-                    col = unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) }
-                        as ColNr;
+                    col = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) } as ColNr;
                     if error {
                         return None;
                     }
@@ -273,9 +271,8 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                     } else {
                         subli = unsafe { (*subli).li_next };
                         if !subli.is_null() {
-                            len = unsafe {
-                                tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error)
-                            } as ColNr;
+                            len = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) }
+                                as ColNr;
                             // Note the order: a negative length is
                             // skipped before `error` is even looked at.
                             if len < 0 {

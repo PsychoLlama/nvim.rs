@@ -34,7 +34,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::encode::did_echo_string_emsg;
 use crate::eval::typval::{DictSlot, tv_blob_get};
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
@@ -363,24 +363,16 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
 ///
 /// # Safety
 /// `tv` must be a live typval and `objname` NUL-terminated.
-pub(crate) unsafe fn encode_vim_to_string(
-    gap: &mut Vec<u8>,
-    tv: *mut TypVal,
-    objname: *const c_char,
-) -> bool {
+pub(crate) unsafe fn encode_vim_to_string(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<false> { gap };
-    unsafe { encode_typval(&mut sink, tv, objname) }
+    unsafe { encode_typval_read(&mut sink, tv, objname) }
 }
 
 /// Append `tv` to `gap` as the text `:echo` prints.
 ///
 /// # Safety
 /// As [`encode_vim_to_string`].
-pub(crate) unsafe fn encode_vim_to_echo(
-    gap: &mut Vec<u8>,
-    tv: *mut TypVal,
-    objname: *const c_char,
-) -> bool {
+pub(crate) unsafe fn encode_vim_to_echo(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<true> { gap };
-    unsafe { encode_typval(&mut sink, tv, objname) }
+    unsafe { encode_typval_read(&mut sink, tv, objname) }
 }

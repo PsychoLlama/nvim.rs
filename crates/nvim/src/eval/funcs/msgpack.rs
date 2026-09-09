@@ -26,7 +26,7 @@ use crate::types::{
     Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
     mpack_parser_t,
 };
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::fmt::Write as _;
 use core::ptr;
 
@@ -104,10 +104,10 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         label.clear();
         let _ = write!(label, "msgpackdump() argument, index {idx}\0");
         idx += 1;
-        let item = unsafe { &raw mut (*li).li_tv };
-        let what = label.as_ptr() as *const c_char;
         // SAFETY: `packer` is the local writer, `item` is the List item the
         // walk is on, and `label` is NUL-terminated by the `write!` above.
+        let item = unsafe { &(*li).li_tv };
+        let what = CStr::from_bytes_with_nul(label.as_bytes()).expect("the NUL above");
         if unsafe { encode_vim_to_msgpack(&raw mut packer, item, what) } == 0 {
             break;
         }
@@ -221,7 +221,7 @@ unsafe fn msgpackparse_unpack_blob(blob: *const Blob, ret_list: *mut List) {
     let mut remaining = len as usize;
     while remaining != 0 {
         let mut tv = EMPTY_TV;
-        let status = unsafe { unpack_typval(&raw mut data, &raw mut remaining, &raw mut tv) };
+        let status = unsafe { unpack_typval(&raw mut data, &raw mut remaining, &mut tv) };
         if status != MPACK_OK as c_int {
             emsg_mpack_error(status);
             return;

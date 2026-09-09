@@ -60,8 +60,8 @@ fn arg_check(ok: bool, errmsg: *const ::core::ffi::c_char, idx: usize) -> Result
 /// `tv` must point at an initialised value.
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
-pub unsafe fn tv_check_str_or_nr(tv: *const TypVal) -> bool {
-    let message = match unsafe { (*tv).v_type() } {
+pub unsafe fn tv_check_str_or_nr(tv: &TypVal) -> bool {
+    let message = match (*tv).v_type() {
         VAR_NUMBER | VAR_STRING => return true,
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
         VAR_PARTIAL | VAR_FUNC => c"E703: Expected a Number or a String, Funcref found",
@@ -87,8 +87,8 @@ pub unsafe fn tv_check_str_or_nr(tv: *const TypVal) -> bool {
 /// `tv` must point at an initialised value.
 /// The message comes out of the global `num_errors` table, so the caller must
 /// be on the editor's main thread.
-pub unsafe fn tv_check_num(tv: *const TypVal) -> bool {
-    match unsafe { (*tv).v_type() } {
+pub unsafe fn tv_check_num(tv: &TypVal) -> bool {
+    match (*tv).v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
             unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type() as usize])) };
@@ -104,8 +104,8 @@ pub unsafe fn tv_check_num(tv: *const TypVal) -> bool {
 /// `tv` must point at an initialised value.
 /// The message comes out of the global `str_errors` table, so the caller must
 /// be on the editor's main thread.
-pub unsafe fn tv_check_str(tv: *const TypVal) -> bool {
-    match unsafe { (*tv).v_type() } {
+pub unsafe fn tv_check_str(tv: &TypVal) -> bool {
+    match (*tv).v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
             unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type() as usize])) };

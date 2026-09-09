@@ -185,7 +185,7 @@ pub unsafe fn eval_to_bool(
     } else {
         unsafe { *error = false };
         if !skip {
-            retval = unsafe { tv_get_number_chk(&raw mut tv, error) } != 0;
+            retval = unsafe { tv_get_number_chk(&tv, error) } != 0;
             clear_local(&mut tv);
         }
     }
@@ -251,13 +251,13 @@ pub unsafe fn eval_expr_valid_arg(tv: &TypVal) -> bool {
 /// # Safety
 /// `expr` must be a valid `VAR_PARTIAL`.
 pub(crate) unsafe fn eval_expr_partial(
-    expr: *const TypVal,
+    expr: &TypVal,
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so the value holds a
     // live partial or NULL.
-    let partial = unsafe { (*expr).partial_or_null() };
+    let partial = (*expr).partial_or_null();
     if partial.is_null() {
         return Err(Failed);
     }
@@ -277,7 +277,7 @@ pub(crate) unsafe fn eval_expr_partial(
 /// # Safety
 /// As `eval_expr_partial`.
 pub(crate) unsafe fn eval_expr_func(
-    expr: *const TypVal,
+    expr: &TypVal,
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
@@ -285,7 +285,7 @@ pub(crate) unsafe fn eval_expr_func(
     // SAFETY: the caller's promise -- `expr` outlives the call, and it is
     // only read through here; `VAR_FUNC` says `v_string` is its live
     // member, and `buf` outlives the string rendered into it.
-    let expr_tv = unsafe { Tv::new(expr.cast_mut()) };
+    let expr_tv = expr;
     let s: *const c_char = if expr_tv.v_type() == VAR_FUNC {
         expr_tv.func_name_or_null() as *const c_char
     } else {
@@ -304,10 +304,7 @@ pub(crate) unsafe fn eval_expr_func(
 ///
 /// # Safety
 /// `expr` and `result` must be valid.
-pub(crate) unsafe fn eval_expr_string(
-    expr: *const TypVal,
-    result: &mut TypVal,
-) -> Result<(), Failed> {
+pub(crate) unsafe fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut s = unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) } as *mut c_char;
     if s.is_null() {
@@ -331,14 +328,14 @@ pub(crate) unsafe fn eval_expr_string(
 /// # Safety
 /// `expr` must be valid.
 pub unsafe fn eval_expr_typval(
-    expr: *const TypVal,
+    expr: &TypVal,
     want_func: bool,
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `expr` outlives the call and is only
     // read through here; each arm restates the same promise.
-    let ty = unsafe { Tv::new(expr.cast_mut()) };
+    let ty = expr;
     if ty.v_type() == VAR_PARTIAL {
         return unsafe { eval_expr_partial(expr, argv, result) };
     }
@@ -352,13 +349,13 @@ pub unsafe fn eval_expr_typval(
 ///
 /// # Safety
 /// `expr` and `error` must be valid.
-pub unsafe fn eval_expr_to_bool(expr: *const TypVal, error: *mut bool) -> bool {
+pub unsafe fn eval_expr_to_bool(expr: &TypVal, error: *mut bool) -> bool {
     let mut rettv = UNSET_TV;
     if unsafe { eval_expr_typval(expr, false, &[], &mut rettv) }.is_err() {
         unsafe { *error = true };
         return false;
     }
-    let res = unsafe { tv_get_number_chk(&raw mut rettv, error) } != 0;
+    let res = unsafe { tv_get_number_chk(&rettv, error) } != 0;
     clear_local(&mut rettv);
     res
 }
@@ -376,7 +373,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, args: *mut ExArg, skip: bool
     let retval = if unsafe { eval0(arg, &mut tv, args, &raw mut evalarg) }.is_err() || skip {
         null_mut()
     } else {
-        let s = unsafe { xstrdup(numbuf.string(&raw mut tv)) };
+        let s = unsafe { xstrdup(numbuf.string(&tv)) };
         clear_local(&mut tv);
         s
     };
@@ -539,7 +536,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> Va
     if r.is_err() {
         -1
     } else {
-        let n = unsafe { tv_get_number_chk(&raw mut rettv, null_mut()) };
+        let n = unsafe { tv_get_number_chk(&rettv, null_mut()) };
         clear_local(&mut rettv);
         n
     }
@@ -639,7 +636,7 @@ pub unsafe fn call_func_retstr(func: *const c_char, argv: &[TypVal]) -> *mut c_v
     if unsafe { call_vim_function(func, argv, &mut rettv) }.is_err() {
         return null_mut();
     }
-    let retval = unsafe { xstrdup(numbuf.string(&raw mut rettv)) };
+    let retval = unsafe { xstrdup(numbuf.string(&rettv)) };
     clear_local(&mut rettv);
     retval as *mut c_void
 }
@@ -750,9 +747,9 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
             empty_string()
         } else {
             let obj = if tv.v_type() == VAR_LIST {
-                unsafe { vim_to_object(&raw mut tv, null_mut::<Arena>(), false) }
+                unsafe { vim_to_object(&tv, null_mut::<Arena>(), false) }
             } else {
-                Object::String(unsafe { cstr_to_string(numbuf.string(&raw mut tv)) })
+                Object::String(unsafe { cstr_to_string(numbuf.string(&tv)) })
             };
             clear_local(&mut tv);
             obj
@@ -789,13 +786,11 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
 ///
 /// # Safety
 /// `arg` must be null or valid.
-pub unsafe fn typval_tostring(arg: *const TypVal, quotes: bool) -> *mut c_char {
-    if arg.is_null() {
+pub unsafe fn typval_tostring(arg: Option<&TypVal>, quotes: bool) -> *mut c_char {
+    let Some(value) = arg else {
         // SAFETY: the text is a NUL-terminated literal.
         return unsafe { xstrdup(c"(does not exist)".as_ptr()) };
-    }
-    // SAFETY: the caller's promise -- a non-null typval outlives the call.
-    let value = unsafe { Tv::new(arg.cast_mut()) };
+    };
     if !quotes && value.v_type() == VAR_STRING {
         let s = value.string_or_null();
         let s = if s.is_null() {
@@ -807,5 +802,5 @@ pub unsafe fn typval_tostring(arg: *const TypVal, quotes: bool) -> *mut c_char {
         return unsafe { xstrdup(s) };
     }
     // SAFETY: the caller's typval.
-    unsafe { encode_tv2string(arg, null_mut()) }
+    unsafe { encode_tv2string(value, null_mut()) }
 }

@@ -56,7 +56,7 @@ unsafe fn add_list(dict: *mut Dict, key: &str, list: *mut List) -> Result<(), Ke
 /// # Safety
 ///
 /// `dict` must be live and `tv` a live value.
-unsafe fn add_tv(dict: *mut Dict, key: &str, tv: *mut TypVal) -> Result<(), KeyTaken> {
+unsafe fn add_tv(dict: *mut Dict, key: &str, tv: &mut TypVal) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and value.
     Ok(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) }?)
 }
@@ -119,7 +119,7 @@ unsafe fn get_qfline_items(qfp: *mut QfLine, list: *mut List) {
         || unsafe { add_str(dict, "text", (*qfp).qf_text) }.is_err()
         || unsafe { add_str(dict, "type", kind.as_ptr()) }.is_err()
         || (unsafe { (*qfp).qf_user_data.v_type() } != VAR_UNKNOWN
-            && unsafe { add_tv(dict, "user_data", &raw mut (*qfp).qf_user_data) }.is_err())
+            && unsafe { add_tv(dict, "user_data", &mut (*qfp).qf_user_data) }.is_err())
         || unsafe { add_nr(dict, "valid", (*qfp).qf_valid as VarNumber) }.is_err()
     {
         // Only a NULL dict_item would cause this, which cannot happen.
@@ -222,7 +222,7 @@ unsafe fn qf_get_list_from_lines(
             0,
             ptr::null(),
             None,
-            &raw mut (*di).di_tv,
+            Some(&mut (*di).di_tv),
             errorformat,
             true,
             0,
@@ -466,7 +466,7 @@ unsafe fn qf_getprop_ctx(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Key
         return unsafe { add_str(retdict, "context", ptr::null()) };
     }
     let di = unsafe { tv_dict_item_alloc_len(c"context".as_ptr(), "context".len()) };
-    unsafe { tv_copy((*qfl).qf_ctx, &raw mut (*di).di_tv) };
+    unsafe { tv_copy(&*(*qfl).qf_ctx, &mut (*di).di_tv) };
     let status = unsafe { tv_dict_add(retdict, di) };
     if status.is_err() {
         // A refused item is still ours to free.
@@ -506,9 +506,9 @@ unsafe fn qf_getprop_qftf(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Ke
         return unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) };
     }
     let mut tv = TV_INITIAL_VALUE;
-    unsafe { callback_put(&raw mut (*qfl).qf_qftf_cb, &raw mut tv) };
-    let status = unsafe { add_tv(retdict, "quickfixtextfunc", &raw mut tv) };
-    unsafe { tv_clear(&raw mut tv) };
+    unsafe { callback_put(&raw mut (*qfl).qf_qftf_cb, &mut tv) };
+    let status = unsafe { add_tv(retdict, "quickfixtextfunc", &mut tv) };
+    unsafe { tv_clear(&mut tv) };
     status
 }
 

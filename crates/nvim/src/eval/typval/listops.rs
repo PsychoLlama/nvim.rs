@@ -56,9 +56,9 @@ pub unsafe fn tv_list_insert(l: *mut List, ni: *mut ListItem, item: *mut ListIte
 /// `l` must point at a live list, `tv` at a value that is safe to copy, and
 /// `item` must be null or an item of `l`. The copy takes its own
 /// references, so `tv` stays the caller's.
-pub unsafe fn tv_list_insert_tv(l: *mut List, tv: *mut TypVal, item: *mut ListItem) {
+pub unsafe fn tv_list_insert_tv(l: *mut List, tv: &TypVal, item: *mut ListItem) {
     let ni = tv_list_item_alloc();
-    unsafe { tv_copy(tv, &raw mut (*ni).li_tv) };
+    unsafe { tv_copy(tv, &mut (*ni).li_tv) };
     unsafe { tv_list_insert(l, ni, item) };
 }
 
@@ -90,9 +90,9 @@ pub unsafe fn tv_list_append(l: *mut List, item: *mut ListItem) {
 /// # Safety
 /// `l` must point at a live list and `tv` at a value that is safe to copy;
 /// `tv` stays the caller's.
-pub unsafe fn tv_list_append_tv(l: *mut List, tv: *mut TypVal) {
+pub unsafe fn tv_list_append_tv(l: *mut List, tv: &TypVal) {
     let li = tv_list_item_alloc();
-    unsafe { tv_copy(tv, &raw mut (*li).li_tv) };
+    unsafe { tv_copy(tv, &mut (*li).li_tv) };
     unsafe { tv_list_append(l, li) };
 }
 
@@ -213,14 +213,14 @@ pub unsafe fn tv_list_copy(
         if deep {
             let from = li_tv(item);
             let to = li_tv(ni);
-            if unsafe { var_item_copy(conv, from, to, deep, copy_id) }.is_err() {
+            if unsafe { var_item_copy(conv, &*from, &mut *to, deep, copy_id) }.is_err() {
                 // `tv_list_copy_error`: the partial copy goes too.
                 unsafe { xfree(ni.cast()) };
                 unsafe { tv_list_unref(copy) };
                 return ::core::ptr::null_mut();
             }
         } else {
-            unsafe { tv_copy(&raw mut (*item).li_tv, &raw mut (*ni).li_tv) };
+            unsafe { tv_copy(&(*item).li_tv, &mut (*ni).li_tv) };
         }
         unsafe { tv_list_append(copy, ni) };
     }
@@ -252,7 +252,7 @@ pub unsafe fn tv_list_extend(l1: *mut List, l2: *mut List, bef: *mut ListItem) {
     let mut item = unsafe { tv_list_first(l2) };
     while !item.is_null() && todo != 0 {
         todo -= 1;
-        unsafe { tv_list_insert_tv(l1, &raw mut (*item).li_tv, bef) };
+        unsafe { tv_list_insert_tv(l1, &(*item).li_tv, bef) };
         item = if item == befbef {
             saved_next
         } else {
@@ -266,7 +266,7 @@ pub unsafe fn tv_list_extend(l1: *mut List, l2: *mut List, bef: *mut ListItem) {
 /// # Safety
 /// `l1` and `l2` are each null or a live list, and `tv` must point at a
 /// writable `TypVal` holding no value yet.
-pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> Result<(), Failed> {
+pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: &mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.write_empty(VAR_LIST);
@@ -381,7 +381,7 @@ pub unsafe fn tv_list_equal(l1: *mut List, l2: *mut List, ic: bool) -> bool {
     let mut item1 = unsafe { tv_list_first(l1) };
     let mut item2 = unsafe { tv_list_first(l2) };
     while !item1.is_null() && !item2.is_null() {
-        if !unsafe { tv_equal(&raw mut (*item1).li_tv, &raw mut (*item2).li_tv, ic) } {
+        if !unsafe { tv_equal(&(*item1).li_tv, &(*item2).li_tv, ic) } {
             return false;
         }
         item1 = unsafe { (*item1).li_next };
@@ -490,7 +490,7 @@ pub unsafe fn tv_list_find_nr(
         }
         return -1;
     }
-    unsafe { tv_get_number_chk(&raw const (*li).li_tv, ret_error) }
+    unsafe { tv_get_number_chk(&(*li).li_tv, ret_error) }
 }
 
 /// The string at index `n` of `l`, or NULL with `E684` raised.
@@ -509,7 +509,7 @@ pub unsafe fn tv_list_find_str(
         semsg!("E684: List index out of range: {}", n as int64_t);
         return ::core::ptr::null();
     }
-    unsafe { numbuf.string(&raw const (*li).li_tv) }
+    unsafe { numbuf.string(&(*li).li_tv) }
 }
 
 /// [`tv_list_find`], clamping a negative index that fell off the front to 0.

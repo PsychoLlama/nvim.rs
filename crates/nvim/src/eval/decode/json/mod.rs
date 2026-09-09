@@ -83,7 +83,7 @@ const fn bool_tv(value: bool) -> TypVal {
 pub unsafe fn json_decode_string(
     buf: *const c_char,
     buf_len: size_t,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: `buf`/`buf_len` are the caller's obligation, which upstream
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
@@ -100,7 +100,7 @@ pub unsafe fn json_decode_string(
         return Err(Failed);
     }
 
-    unsafe { (*result).write_empty(VAR_UNKNOWN) };
+    (*result).write_empty(VAR_UNKNOWN);
     let mut dec = Decoder::new(bytes);
     let mut ret = Ok(());
     // Whether a container holds nothing yet, which is what makes a comma
@@ -280,8 +280,7 @@ pub unsafe fn json_decode_string(
                         if dec.next_map_special {
                             dec.next_map_special = false;
                             let len = kListLenMayKnow as ptrdiff_t;
-                            special_val =
-                                unsafe { decode_create_map_special_dict(&raw mut tv, len) };
+                            special_val = unsafe { decode_create_map_special_dict(&mut tv, len) };
                         } else {
                             let dict = unsafe { tv_dict_alloc() };
                             unsafe { (*dict).dv_refcount.retain() };
@@ -311,14 +310,15 @@ pub unsafe fn json_decode_string(
                 p += 1;
             }
             if dec.stack.len() == 1 && dec.containers.is_empty() {
-                unsafe { result.write(dec.stack.pop().expect("the decoded value").val) };
+                let decoded = dec.stack.pop().expect("the decoded value").val;
+                unsafe { ::core::ptr::write(result, decoded) };
                 break 'done;
             }
             dec.emsg_rest(E474_UNEXPECTED_END, 0);
         }
         ret = Err(Failed);
         while let Some(mut left) = dec.stack.pop() {
-            unsafe { tv_clear(&raw mut left.val) };
+            unsafe { tv_clear(&mut left.val) };
         }
     }
     ret

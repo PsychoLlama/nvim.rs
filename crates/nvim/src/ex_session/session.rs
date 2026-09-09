@@ -588,7 +588,7 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
         let kind = unsafe { (*item).di_tv.v_type() };
         let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
-            if !unsafe { put_session_global(out, key, kind, &raw mut (*item).di_tv) } {
+            if !unsafe { put_session_global(out, key, kind, &mut (*item).di_tv) } {
                 return false;
             }
         } else if kind == VAR_FLOAT && sessionable {
@@ -622,7 +622,7 @@ unsafe fn put_session_global(
     out: SessionFile,
     key: *const c_char,
     kind: VarType,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
 ) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; `escaped` is owned and freed here.

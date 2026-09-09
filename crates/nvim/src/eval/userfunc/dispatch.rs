@@ -95,7 +95,7 @@ pub unsafe fn get_func_tv(
 /// `name` is NUL-terminated and `args` holds a list (or nothing).
 pub unsafe fn func_call(
     name: *mut c_char,
-    args: *const TypVal,
+    args: &TypVal,
     partial: *mut Partial,
     selfdict: *mut Dict,
     result: &mut TypVal,
@@ -120,7 +120,7 @@ pub unsafe fn func_call(
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
             let from = unsafe { &raw mut (*item).li_tv };
-            unsafe { tv_copy(from, &raw mut argv[argc]) };
+            unsafe { tv_copy(&*from, &mut argv[argc]) };
             argc += 1;
         }
 
@@ -147,8 +147,8 @@ pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> V
     if !unsafe { callback_call(callback, args, &mut rettv) } {
         return -2;
     }
-    let retval = unsafe { tv_get_number_chk(&raw mut rettv, ptr::null_mut()) };
-    unsafe { tv_clear(&raw mut rettv) };
+    let retval = unsafe { tv_get_number_chk(&rettv, ptr::null_mut()) };
+    unsafe { tv_clear(&mut rettv) };
     retval
 }
 
@@ -374,7 +374,7 @@ pub unsafe fn call_func(
                 error = if base.is_null() {
                     unsafe { call_internal_func(fname, args, result) }
                 } else {
-                    unsafe { call_internal_method(fname, args, result, base) }
+                    unsafe { call_internal_method(fname, args, result, &mut *base) }
                 };
             }
 

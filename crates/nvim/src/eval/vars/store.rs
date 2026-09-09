@@ -60,7 +60,7 @@ pub(crate) fn emsg_static(msg: &'static CStr) {
 /// code, so the borrow cannot be re-entered through.
 pub(crate) fn clear_local(tv: &mut TypVal) {
     // SAFETY: an exclusive borrow of a live local.
-    unsafe { tv_clear(&raw mut *tv) };
+    unsafe { tv_clear(&mut *tv) };
 }
 
 /// Store `tv` in the variable `name`.
@@ -68,7 +68,7 @@ pub(crate) fn clear_local(tv: &mut TypVal) {
 /// # Safety
 /// `name` points at `name_len` readable bytes and is NUL-terminated there;
 /// `tv` is a live value.
-pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: *mut TypVal, copy: bool) {
+pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: &mut TypVal, copy: bool) {
     unsafe { set_var_const(name, name_len, tv, copy, false) }
 }
 
@@ -84,7 +84,7 @@ pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: *mut TypVal, co
 pub unsafe fn set_var_const(
     name: *const c_char,
     name_len: size_t,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     copy: bool,
     is_const: bool,
 ) {
@@ -151,11 +151,11 @@ pub unsafe fn set_var_const(
             return;
         }
 
-        let cur = item.field_ptr(offset_of!(DictItem, di_tv));
+        let cur = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
         if watched {
-            unsafe { tv_copy(cur, &raw mut oldtv) };
+            unsafe { tv_copy(&*cur, &mut oldtv) };
         }
-        unsafe { tv_clear(cur) };
+        unsafe { tv_clear(&mut *cur) };
     } else {
         // A new variable. `v:` and `a:` do not take one.
         if ht == get_vimvar_ht() || ht == get_funccal_args_ht() {
@@ -195,7 +195,7 @@ pub unsafe fn set_var_const(
     // handed. See [`Live`]'s module docs.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     if copy || tvh.v_type() == VAR_NUMBER || tvh.v_type() == VAR_FLOAT {
-        unsafe { tv_copy(tv, cur) };
+        unsafe { tv_copy(tv, &mut *cur) };
     } else {
         let mut into = unsafe { Tv::new(cur) };
         *into = tvh.take();
@@ -216,7 +216,7 @@ pub unsafe fn set_var_const(
         // Like `:lockvar! name`: lock the value and what it contains,
         // but only where the reference count is one, so that only
         // literal values are locked.
-        unsafe { tv_item_lock(di_lock(di), cur, DICT_MAXNEST, true, true) };
+        unsafe { tv_item_lock(di_lock(di), &mut *cur, DICT_MAXNEST, true, true) };
     }
 }
 

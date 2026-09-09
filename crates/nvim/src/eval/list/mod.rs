@@ -233,7 +233,6 @@ impl ListRef {
     #[inline(always)]
     pub(crate) fn append_tv(self, tv: &TypVal) {
         // SAFETY: live or NULL, and `tv` is a live value.
-        let tv = core::ptr::from_ref(tv).cast_mut();
         unsafe { tv_list_append_tv(self.0, tv) };
     }
 
@@ -249,7 +248,6 @@ impl ListRef {
     pub(crate) fn insert_tv(self, tv: &TypVal, before: Option<Item>) {
         // SAFETY: live, `tv` is a live value, and `before` is an item of this
         // very list -- `find` is the only thing that produces one.
-        let tv = core::ptr::from_ref(tv).cast_mut();
         unsafe { tv_list_insert_tv(self.0, tv, Item::raw(before)) };
     }
 
@@ -817,14 +815,14 @@ pub(crate) fn vim_var_value(idx: Vv) -> &'static TypVal {
 #[inline(always)]
 pub(crate) fn clear_vim_var(idx: Vv) {
     // SAFETY: as `vim_var_value`.
-    unsafe { tv_clear(get_vim_var_tv(idx)) };
+    unsafe { tv_clear(&mut *get_vim_var_tv(idx)) };
 }
 
 /// Copy `tv` into the `v:` variable `idx`.
 #[inline(always)]
 pub(crate) fn set_vim_var_tv(idx: Vv, tv: TvRef) {
     // SAFETY: as `vim_var_value`, and `tv` is a live value.
-    unsafe { tv_copy(tv.0, get_vim_var_tv(idx)) };
+    unsafe { tv_copy(&*tv.0, &mut *get_vim_var_tv(idx)) };
 }
 
 /// Set `v:key` to the Number `n`.  Its type is set separately, once per
@@ -853,7 +851,7 @@ pub(crate) fn set_key_type(v_type: VarType) {
 pub(crate) fn save_vim_var(idx: Vv) -> TypVal {
     let mut save = UNKNOWN_TV;
     // SAFETY: `idx` names a `v:` variable.
-    unsafe { prepare_vimvar(idx, &raw mut save) };
+    unsafe { prepare_vimvar(idx, &mut save) };
     save
 }
 

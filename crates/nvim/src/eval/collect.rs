@@ -108,7 +108,7 @@ unsafe fn hi2di(hi: &HashItem) -> *mut DictItem {
 ///
 /// # Safety
 /// `tv` must be a live typval.
-unsafe fn mark_root(tv: *mut TypVal, copy_id: c_int) -> bool {
+unsafe fn mark_root(tv: &mut TypVal, copy_id: c_int) -> bool {
     // SAFETY: the caller's promise; the two nulls are what say "recurse".
     unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
 }
@@ -164,9 +164,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         // SAFETY: `buffers()` walks the editor's own list of live buffers.
         let buf = unsafe { Live::<Buffer>::new(buf.raw()) };
         // buffer-local variables
-        let bufvar = buf.field_ptr(offset_of!(Buffer, b_bufvar.di_tv));
+        let bufvar = buf.field_ptr::<TypVal>(offset_of!(Buffer, b_bufvar.di_tv));
         // SAFETY: `bufvar` is the buffer's own variable dictionary.
-        abort = abort || unsafe { mark_root(bufvar, copy_id) };
+        abort = abort || unsafe { mark_root(&mut *bufvar, copy_id) };
         // buffer callback functions
         for offset in [
             offset_of!(Buffer, b_prompt_callback),
@@ -200,9 +200,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     for wp in tab_windows() {
         // SAFETY: the walk answers the editor's own live windows.
         let wp = unsafe { Live::<Window>::new(wp.raw()) };
-        let winvar = wp.field_ptr(offset_of!(Window, w_winvar.di_tv));
+        let winvar = wp.field_ptr::<TypVal>(offset_of!(Window, w_winvar.di_tv));
         // SAFETY: `winvar` is the window's own variable dictionary.
-        abort = abort || unsafe { mark_root(winvar, copy_id) };
+        abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
     }
 
     // window-local variables in the autocommand windows
@@ -213,9 +213,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         if !win.is_null() {
             // SAFETY: as above.
             let win = unsafe { Live::<Window>::new(win) };
-            let winvar = win.field_ptr(offset_of!(Window, w_winvar.di_tv));
+            let winvar = win.field_ptr::<TypVal>(offset_of!(Window, w_winvar.di_tv));
             // SAFETY: `winvar` is that window's own variable dictionary.
-            abort = abort || unsafe { mark_root(winvar, copy_id) };
+            abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
         }
     }
 
@@ -225,9 +225,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     for tp in tabs() {
         // SAFETY: the walk answers the editor's own live tab pages.
         let tp = unsafe { Live::<Tabpage>::new(tp.raw()) };
-        let tpvar = tp.field_ptr(offset_of!(Tabpage, tp_winvar.di_tv));
+        let tpvar = tp.field_ptr::<TypVal>(offset_of!(Tabpage, tp_winvar.di_tv));
         // SAFETY: `tpvar` is the tab page's own variable dictionary.
-        abort = abort || unsafe { mark_root(tpvar, copy_id) };
+        abort = abort || unsafe { mark_root(&mut *tpvar, copy_id) };
     }
 
     abort = abort || unsafe { garbage_collect_globvars(copy_id) } != 0;
@@ -449,7 +449,7 @@ pub unsafe fn set_ref_in_ht(
                 let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
                 let stack = &raw mut ht_stack;
                 // SAFETY: as above.
-                abort = abort || unsafe { set_ref_in_item(tv, copy_id, stack, list_stack) };
+                abort = abort || unsafe { set_ref_in_item(&mut *tv, copy_id, stack, list_stack) };
             }
         }
         // The stack is drained even while aborting, so nothing leaks.
@@ -485,7 +485,7 @@ pub unsafe fn set_ref_in_list_items(
                     break;
                 }
                 abort = unsafe {
-                    set_ref_in_item(&raw mut (*li).li_tv, copy_id, ht_stack, &raw mut list_stack)
+                    set_ref_in_item(&mut (*li).li_tv, copy_id, ht_stack, &raw mut list_stack)
                 };
                 li = unsafe { (*li).li_next };
             }
@@ -594,7 +594,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
         // A borrowed view, not an owner: the partial keeps the reference,
         // so `dtv` releases nothing.
         let mut dtv = ManuallyDrop::new(TypVal::Dict(unsafe { (*pt).pt_dict }));
-        abort = abort || unsafe { set_ref_in_item(&raw mut *dtv, copy_id, ht_stack, list_stack) };
+        abort = abort || unsafe { set_ref_in_item(&mut dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
     // arguments and `pt_argv` names them.
@@ -602,7 +602,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
         // SAFETY: as above -- `i` is one of them.
         let arg = unsafe { (*pt).pt_argv.offset(i as isize) };
         // SAFETY: as above; the stacks are the caller's.
-        abort = abort || unsafe { set_ref_in_item(arg, copy_id, ht_stack, list_stack) };
+        abort = abort || unsafe { set_ref_in_item(&mut *arg, copy_id, ht_stack, list_stack) };
     }
     abort
 }
@@ -613,7 +613,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
 /// # Safety
 /// `tv` must be valid; the stacks null or valid.
 pub unsafe fn set_ref_in_item(
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     copy_id: c_int,
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
@@ -648,8 +648,8 @@ pub unsafe fn set_ref_in_item(
 /// `from` and `to` must be valid; `conv` null or valid.
 pub unsafe fn var_item_copy(
     conv: *const VimConv,
-    from: *const TypVal,
-    to: *mut TypVal,
+    from: &TypVal,
+    to: &mut TypVal,
     deep: bool,
     copy_id: c_int,
 ) -> Result<(), Failed> {
@@ -665,7 +665,7 @@ pub unsafe fn var_item_copy(
     // SAFETY: the caller's promise -- both typvals outlive the call. Every
     // union member read below is the one `src.v_type()` names, and the
     // matching member of `dst` is written before it is read.
-    let (src, mut dst) = unsafe { (Tv::new(from.cast_mut()), Tv::new(to)) };
+    let (src, mut dst) = unsafe { (from, Tv::new(to)) };
     let mut ret = Ok(());
     match src.v_type() {
         VAR_STRING => {

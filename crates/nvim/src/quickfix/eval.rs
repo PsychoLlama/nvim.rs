@@ -67,11 +67,10 @@ unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
                 // The value is inline in the entry, so it is always
                 // there; only its type says whether to walk into it.
                 let user_data = unsafe { &raw mut (*qfp).qf_user_data };
+                let (no_ht, no_list) = (ptr::null_mut(), ptr::null_mut());
                 if unsafe { holds_references(&*user_data) } {
-                    aborted = aborted
-                        || unsafe {
-                            set_ref_in_item(user_data, copy_id, ptr::null_mut(), ptr::null_mut())
-                        };
+                    let data = unsafe { &mut *user_data };
+                    aborted = aborted || unsafe { set_ref_in_item(data, copy_id, no_ht, no_list) };
                 }
                 j += 1;
                 qfp = unsafe { (*qfp).qf_next };
@@ -94,6 +93,8 @@ unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
     while i < unsafe { (*qi).max_count() } && !aborted {
         let ctx = unsafe { (*qf_get_list(qi, i)).qf_ctx };
         if !ctx.is_null() && unsafe { holds_references(&*ctx) } {
+            // SAFETY: the list's own context value.
+            let ctx = unsafe { &mut *ctx };
             aborted = unsafe { set_ref_in_item(ctx, copy_id, ptr::null_mut(), ptr::null_mut()) };
         }
         let cb = unsafe { &raw mut (*qf_get_list(qi, i)).qf_qftf_cb };

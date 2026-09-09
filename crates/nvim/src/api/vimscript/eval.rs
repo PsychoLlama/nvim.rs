@@ -91,11 +91,11 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
             );
         } else {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
-            rv = unsafe { vim_to_object(&raw mut rettv, arena, false) };
+            rv = unsafe { vim_to_object(&rettv, arena, false) };
         }
     }
     // SAFETY: `rettv` is this frame's.
-    unsafe { tv_clear(&raw mut rettv) };
+    unsafe { tv_clear(&mut rettv) };
     rv.reported(error)
 }
 
@@ -148,10 +148,10 @@ unsafe fn call_function_with(
         unsafe { try_leave(&raw mut tstate, err) };
         if err.kind() == kErrorTypeNone {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
-            rv = unsafe { vim_to_object(ret, arena, false) };
+            rv = unsafe { vim_to_object(&*ret, arena, false) };
         }
         // SAFETY: `rettv` is this frame's.
-        unsafe { tv_clear(ret) };
+        unsafe { tv_clear(&mut *ret) };
     }
     rv
 }
@@ -217,7 +217,7 @@ pub unsafe fn nvim_call_dict_function(
         mustfree = true;
     } else if matches!(dict, Object::Dict(_)) {
         // SAFETY: `dict` is the caller's and `rettv`/`error` are this frame's.
-        unsafe { object_to_vim(dict, &raw mut rettv) };
+        unsafe { object_to_vim(dict, &mut rettv) };
     } else {
         let want = c"String or Dict";
         // SAFETY: `error` is this frame's slot and both strings are static.
@@ -232,7 +232,7 @@ pub unsafe fn nvim_call_dict_function(
     let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, &mut error) };
     if mustfree {
         // SAFETY: the evaluated value is this frame's.
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
     }
     rv.reported(error)
 }

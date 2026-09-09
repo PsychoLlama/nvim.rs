@@ -245,7 +245,7 @@ pub unsafe fn call_user_func(
         if addlocal {
             // A lambda sees its arguments as l: variables too, so the
             // value has to be reference-counted twice.
-            unsafe { tv_copy(&raw mut (*v).di_tv, &raw mut (*v).di_tv) };
+            unsafe { tv_copy(&(*v).di_tv, &mut (*v).di_tv) };
             let _ = unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, tv_dict_item_key(v)) };
         } else {
             let _ = unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, tv_dict_item_key(v)) };
@@ -290,7 +290,7 @@ pub unsafe fn call_user_func(
                         let tvp = ptr::from_ref(tv).cast_mut();
                         let tofree = {
                             let _no_emsg = Suppress::emsg();
-                            unsafe { encode_tv2string(tvp, ptr::null_mut()) }
+                            unsafe { encode_tv2string(&*tvp, ptr::null_mut()) }
                         };
                         if !tofree.is_null() {
                             let mut buf: [c_char; MSG_BUF_LEN as usize] = [0; MSG_BUF_LEN as usize];
@@ -407,7 +407,7 @@ pub unsafe fn call_user_func(
                 // Do not want errors such as E724 here.
                 let tofree = {
                     let _no_emsg = Suppress::emsg();
-                    unsafe { encode_tv2string(ret.raw(), ptr::null_mut()) }
+                    unsafe { encode_tv2string(&*ret.raw(), ptr::null_mut()) }
                 };
                 let mut s = tofree;
                 if !s.is_null() {
@@ -448,7 +448,7 @@ pub unsafe fn call_user_func(
     // The tear-down below is the caller's depth, not this call's.
     drop(call_depth);
     for tv in &tv_to_free[..tv_to_free_len] {
-        unsafe { tv_clear(*tv) };
+        unsafe { tv_clear(&mut **tv) };
     }
     unsafe { cleanup_function_call(fc) };
 

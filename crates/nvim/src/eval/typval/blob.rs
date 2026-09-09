@@ -376,7 +376,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     for li in tv_list_iter(unsafe { l.as_ref() }) {
         let mut error = false;
-        let n = unsafe { tv_get_number_chk(&raw const (*li).li_tv, &raw mut error) };
+        let n = unsafe { tv_get_number_chk(&(*li).li_tv, &raw mut error) };
         if error || !(0..=255).contains(&n) {
             if !error {
                 // As in `eval/lval.rs`: upstream's text has no conversion in

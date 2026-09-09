@@ -54,8 +54,8 @@ const TV_CSTRING: size_t = size_t::MAX - 1;
 /// # Safety
 ///
 /// `tv` must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_clear(tv: *mut TypVal) {
-    if tv.is_null() || unsafe { (*tv).is_empty() } {
+pub unsafe fn tv_clear(tv: &mut TypVal) {
+    if tv.is_empty() {
         return;
     }
 
@@ -66,9 +66,8 @@ pub unsafe fn tv_clear(tv: *mut TypVal) {
     //
     // If that changes and the argument starts being used, translate it
     // where it is used.
-    let evn_ret = unsafe { encode_vim_to_nothing(tv, c"tv_clear() argument".as_ptr()) };
+    let evn_ret = unsafe { encode_vim_to_nothing(tv, c"tv_clear() argument") };
     debug_assert!(evn_ret);
-    debug_assert!(unsafe { (*tv).is_empty() });
 }
 
 /// Release what `tv` holds and free the `TypVal` itself.
@@ -76,32 +75,34 @@ pub unsafe fn tv_clear(tv: *mut TypVal) {
 /// Unlike [`tv_clear`] this does not recurse into a container: it drops one
 /// reference and frees the box.
 ///
+/// `None` is a no-op, which is what the callers that free the answer of a
+/// failed evaluation need.
+///
 /// # Safety
 ///
-/// `tv` must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_free(tv: *mut TypVal) {
-    if tv.is_null() {
-        return;
-    }
-
-    // SAFETY: the caller's promise: a live typval.
-    let val = unsafe { Tv::new(tv) };
-    match val.v_type() {
-        VAR_PARTIAL => unsafe { partial_unref((*tv).partial_or_null()) },
+/// `tv` must be an initialized typval, unaliased for the call, in an
+/// allocation of its own.
+pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
+    let Some(tv) = tv else { return };
+    match tv.v_type() {
+        // SAFETY, for every arm: the caller's promise -- a live typval, so
+        // the member the kind names is its own.
+        VAR_PARTIAL => unsafe { partial_unref(tv.partial_or_null()) },
         // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
         // reference to the function and the name string.
         VAR_FUNC | VAR_STRING => {
-            if val.v_type() == VAR_FUNC {
-                unsafe { func_unref((*tv).func_name_or_null()) };
+            if tv.v_type() == VAR_FUNC {
+                unsafe { func_unref(tv.func_name_or_null()) };
             }
-            unsafe { xfree((*tv).string_or_func_name().cast()) };
+            unsafe { xfree(tv.string_or_func_name().cast()) };
         }
-        VAR_BLOB => unsafe { tv_blob_unref((*tv).blob_or_null()) },
-        VAR_LIST => unsafe { tv_list_unref((*tv).list_or_null()) },
-        VAR_DICT => unsafe { tv_dict_unref((*tv).dict_or_null()) },
+        VAR_BLOB => unsafe { tv_blob_unref(tv.blob_or_null()) },
+        VAR_LIST => unsafe { tv_list_unref(tv.list_or_null()) },
+        VAR_DICT => unsafe { tv_dict_unref(tv.dict_or_null()) },
         _ => {}
     }
-    unsafe { xfree(tv.cast()) };
+    // SAFETY: the caller's promise -- the box is theirs to free.
+    unsafe { xfree(::core::ptr::from_mut(tv).cast()) };
 }
 
 impl Clone for TypVal {
@@ -177,7 +178,7 @@ impl Drop for TypVal {
     fn drop(&mut self) {
         // SAFETY: `self` is a live typval by construction, and the walk
         // leaves it holding nothing.
-        unsafe { tv_clear(&raw mut *self) };
+        unsafe { tv_clear(&mut *self) };
     }
 }
 
@@ -192,11 +193,11 @@ impl Drop for TypVal {
 /// `from` must point at an initialized typval. `to` must point at writable
 /// typval storage holding nothing that needs releasing, unaliased for the
 /// call.
-pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
+pub unsafe fn tv_copy(from: &TypVal, to: &mut TypVal) {
     // SAFETY: the caller's promise: a live source and writable storage that
     // owes nothing, so the old bits are overwritten rather than released.
-    let copy = unsafe { (*from).clone() };
-    unsafe { to.write(copy) };
+    let copy = (*from).clone();
+    unsafe { ::core::ptr::write(to, copy) };
 }
 
 /// `:lockvar` / `:unlockvar` over the slot `slot_lock`/`tv` name, descending
@@ -218,7 +219,7 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
 /// the slot holding it; both unaliased for the call.
 pub unsafe fn tv_item_lock(
     slot_lock: *mut VarLock,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     deep: ::core::ffi::c_int,
     lock: bool,
     check_refcount: bool,
@@ -259,7 +260,9 @@ pub unsafe fn tv_item_lock(
                     // Recursive: lock/unlock the items the List contains.
                     for li in tv_list_iter(unsafe { l.as_ref() }) {
                         let (lock_of, value) = (li_lock(li), li_tv(li));
-                        unsafe { tv_item_lock(lock_of, value, deep - 1, lock, check_refcount) };
+                        unsafe {
+                            tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
+                        };
                     }
                 }
             }
@@ -275,7 +278,9 @@ pub unsafe fn tv_item_lock(
                     for hi in unsafe { tv_dict_iter(d) } {
                         let di = unsafe { tv_dict_hi2di(hi) };
                         let (lock_of, value) = (di_lock(di), di_tv(di));
-                        unsafe { tv_item_lock(lock_of, value, deep - 1, lock, check_refcount) };
+                        unsafe {
+                            tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
+                        };
                     }
                 }
             }
@@ -292,9 +297,8 @@ pub unsafe fn tv_item_lock(
 ///
 /// `tv` must point at an initialized typval, and `slot_lock` be the lock of
 /// the slot holding it.
-pub unsafe fn tv_islocked(slot_lock: VarLock, tv: *const TypVal) -> bool {
-    // SAFETY: the caller's promise: a live typval.
-    let val = unsafe { Tv::new(tv.cast_mut()) };
+pub unsafe fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
+    let val = tv;
     let container_lock = match val.v_type() {
         VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
         VAR_DICT => {
@@ -319,12 +323,11 @@ pub unsafe fn tv_islocked(slot_lock: VarLock, tv: *const TypVal) -> bool {
 /// `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable bytes.
 pub unsafe extern "C" fn tv_check_lock(
     slot_lock: VarLock,
-    tv: *const TypVal,
+    tv: &TypVal,
     name: *const ::core::ffi::c_char,
     name_len: size_t,
 ) -> bool {
-    // SAFETY: the caller's promise: a live typval.
-    let val = unsafe { Tv::new(tv.cast_mut()) };
+    let val = tv;
     let lock = match val.v_type() {
         // SAFETY (all three arms): the caller's live typval, whose kind says
         // which container it holds.
@@ -399,13 +402,11 @@ pub unsafe fn value_check_lock(
 ///
 /// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
 /// must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_equal(tv1: *const TypVal, tv2: *const TypVal, ic: bool) -> bool {
+pub unsafe fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    if !(unsafe { (*tv1).is_func() } && unsafe { (*tv2).is_func() })
-        && unsafe { (*tv1).v_type() } != unsafe { (*tv2).v_type() }
-    {
+    if !((*tv1).is_func() && (*tv2).is_func()) && (*tv1).v_type() != (*tv2).v_type() {
         return false;
     }
 
@@ -429,7 +430,7 @@ pub unsafe fn tv_equal(tv1: *const TypVal, tv2: *const TypVal, ic: bool) -> bool
     // there would be an indirect call on a measured phase. [`Depth`] costs
     // nothing extra -- it is the same two `set`s, moved onto the scope.
     // SAFETY: the caller's promise: two live typvals.
-    let (a, b) = unsafe { (Tv::new(tv1.cast_mut()), Tv::new(tv2.cast_mut())) };
+    let (a, b) = (tv1, tv2);
     match a.v_type() {
         VAR_LIST => {
             let _recursing = Depth::of(&recursive_cnt);

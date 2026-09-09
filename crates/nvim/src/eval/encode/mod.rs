@@ -36,7 +36,7 @@ use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::eval::typval::{
-    Li, Tv, tv_dict_find, tv_list_append_allocated_string, tv_list_first, tv_list_idx_of_item,
+    Li, tv_dict_find, tv_list_append_allocated_string, tv_list_first, tv_list_idx_of_item,
     tv_list_last, tv_list_len,
 };
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
@@ -277,8 +277,8 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
                 // The key is the item's own inline storage, so the value
                 // that names it must not release it.
-                let mut key_tv = ManuallyDrop::new(TypVal::String(hi.hi_key));
-                let key = unsafe { encode_tv2string(&raw mut *key_tv, core::ptr::null_mut()) };
+                let key_tv = ManuallyDrop::new(TypVal::String(hi.hi_key));
+                let key = unsafe { encode_tv2string(&key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
                 unsafe { xfree(key.cast::<c_void>()) };
@@ -316,7 +316,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                     let inner = unsafe { Li::new(li) }.list();
                     let first_item = unsafe { tv_list_first(inner) };
                     let key_tv = unsafe { &raw mut (*first_item).li_tv };
-                    Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
+                    Some(unsafe { encode_tv2echo(&*key_tv, core::ptr::null_mut()) })
                 };
                 match pair_key {
                     None => append_formatted!(idx_msg, idx),
@@ -352,7 +352,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     let (template, objname, where_0) = unsafe {
         (
             gettext_ptr(msg),
-            c_str(path.objname),
+            c_str(path.objname.as_ptr()),
             if path.stack.is_empty() {
                 c_str(tr(c"itself"))
             } else {
@@ -743,9 +743,7 @@ pub(crate) unsafe fn convert_to_json_string(
 ///
 /// # Safety
 /// `tv` must be live, as must anything it points at.
-pub unsafe fn encode_check_json_key(tv: *const TypVal) -> bool {
-    // SAFETY: the caller's promise about `tv`.
-    let tv = unsafe { &*tv };
+pub unsafe fn encode_check_json_key(tv: &TypVal) -> bool {
     if tv.v_type() == VAR_STRING {
         return true;
     }
@@ -806,12 +804,10 @@ unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
 ///
 /// # Safety
 /// `tv` must be live; `len` must be NULL or writable.
-pub unsafe fn encode_tv2string(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2string(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`; `string()` never refuses.
-    let tv = tv.cast_mut();
-    let evs_ret =
-        unsafe { encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument".as_ptr()) };
+    let evs_ret = unsafe { encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument") };
     debug_assert!(evs_ret);
     did_echo_string_emsg.set(false);
     // SAFETY: the caller's promise about `len`.
@@ -822,22 +818,20 @@ pub unsafe fn encode_tv2string(tv: *const TypVal, len: *mut size_t) -> *mut c_ch
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2echo(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
     // A string or function reference echoes as its own bytes, which is
     // the whole difference between `:echo` and `string()` at the top
     // level; below it, the sink says it again.
-    // SAFETY: the caller's promise: a live typval.
-    let tv = tv.cast_mut();
-    let val = unsafe { Tv::new(tv) };
+    let val = tv;
     if val.v_type() == VAR_STRING || val.v_type() == VAR_FUNC {
         let s = val.string_or_func_name();
         if !s.is_null() {
             ga.extend_from_slice(unsafe { cstr::bytes_at(s) });
         }
     } else {
-        let eve_ret = unsafe { encode_vim_to_echo(&mut ga, tv, c":echo argument".as_ptr()) };
+        let eve_ret = unsafe { encode_vim_to_echo(&mut ga, tv, c":echo argument") };
         debug_assert!(eve_ret);
     }
     unsafe { finish_tv2(ga, len) }
@@ -847,11 +841,10 @@ pub unsafe fn encode_tv2echo(tv: *const TypVal, len: *mut size_t) -> *mut c_char
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2json(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2json(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
-    let tv = tv.cast_mut();
-    let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument".as_ptr()) };
+    let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument") };
     if !evj_ret {
         ga.clear();
     }

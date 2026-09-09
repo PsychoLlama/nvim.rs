@@ -353,7 +353,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 pub(crate) unsafe fn vim_regsub(
     rmp: *mut RegMatch,
     source: *mut c_char,
-    expr: *mut TypVal,
+    expr: &TypVal,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
@@ -369,7 +369,7 @@ pub(crate) unsafe fn vim_regsub(
         // A string replacement has no lines to cross, so a `\n` in it
         // is a literal newline rather than a line break.
         rex.set_reg_line_lbr(true);
-        unsafe { vim_regsub_both(rex, source, expr, dest, destlen, flags) }
+        unsafe { vim_regsub_both(rex, source, Some(expr), dest, destlen, flags) }
     })
 }
 
@@ -399,7 +399,7 @@ pub(crate) unsafe fn vim_regsub_multi(
         rex.set_reg_firstlnum(lnum);
         rex.set_reg_maxline(Buf::current().b_ml.ml_line_count - lnum);
         rex.set_reg_line_lbr(false);
-        unsafe { vim_regsub_both(rex, source, core::ptr::null_mut(), dest, destlen, flags) }
+        unsafe { vim_regsub_both(rex, source, None, dest, destlen, flags) }
     })
 }
 
@@ -415,12 +415,12 @@ pub(crate) unsafe fn vim_regsub_multi(
 unsafe fn vim_regsub_both(
     rex: Rex,
     source: *mut c_char,
-    expr: *mut TypVal,
+    expr: Option<&TypVal>,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
 ) -> c_int {
-    if (source.is_null() && expr.is_null()) || dest.is_null() {
+    if (source.is_null() && expr.is_none()) || dest.is_null() {
         emsg(gettext(e_null));
         return 0;
     }
@@ -437,7 +437,7 @@ unsafe fn vim_regsub_both(
     let mut out = unsafe { Out::new(dest, destlen, flags & REGSUB_COPY as c_int != 0) };
     // A caller-supplied function, or a replacement that starts `\=`, is
     // a Vimscript expression rather than replacement text.
-    let outcome = if !expr.is_null()
+    let outcome = if expr.is_some()
         || (unsafe { *source } == b'\\' as c_char && unsafe { *source.offset(1) } == b'=' as c_char)
     {
         unsafe { eval_replacement(rex, source, expr, flags, &mut out) };
@@ -473,7 +473,7 @@ unsafe fn vim_regsub_both(
 unsafe fn eval_replacement(
     rex: Rex,
     source: *mut c_char,
-    expr: *mut TypVal,
+    expr: Option<&TypVal>,
     flags: c_int,
     out: &mut Out,
 ) {
@@ -519,10 +519,9 @@ unsafe fn eval_replacement(
     });
 
     NESTING.set(nested as c_int + 1);
-    let mut text = if expr.is_null() {
-        unsafe { eval_to_string(source.offset(2), true, false) }
-    } else {
-        unsafe { call_replacement(expr) }
+    let mut text = match expr {
+        None => unsafe { eval_to_string(source.offset(2), true, false) },
+        Some(expr) => unsafe { call_replacement(expr) },
     };
     NESTING.set(nested as c_int);
 
@@ -551,7 +550,7 @@ unsafe fn eval_replacement(
 /// # Safety
 ///
 /// `expr` must point at an initialized typval, unaliased for the call.
-unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
+unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     // SAFETY: `expr` is the caller's live callable.
     // `fill_submatch_list` fills this in place if the function takes an
     // argument at all, so it must outlive the call.
@@ -566,10 +565,10 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);
     funcexe.fe_evaluate = true;
-    let name = if unsafe { (*expr).v_type() } == VAR_FUNC {
-        Some(unsafe { (*expr).func_name_or_null() })
-    } else if unsafe { (*expr).v_type() } == VAR_PARTIAL {
-        let partial: *mut Partial = unsafe { (*expr).partial_or_null() };
+    let name = if (*expr).v_type() == VAR_FUNC {
+        Some((*expr).func_name_or_null())
+    } else if (*expr).v_type() == VAR_PARTIAL {
+        let partial: *mut Partial = (*expr).partial_or_null();
         funcexe.fe_partial = partial;
         Some(unsafe { partial_name(partial) })
     } else {
@@ -590,14 +589,14 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
         core::ptr::null_mut()
     } else {
         let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-        let s = unsafe { tv_get_string_buf_chk(&raw mut rettv, buf.as_mut_ptr()) };
+        let s = unsafe { tv_get_string_buf_chk(&rettv, buf.as_mut_ptr()) };
         if s.is_null() {
             core::ptr::null_mut()
         } else {
             unsafe { xstrdup(s) }
         }
     };
-    unsafe { tv_clear(&raw mut rettv) };
+    unsafe { tv_clear(&mut rettv) };
     text
 }
 

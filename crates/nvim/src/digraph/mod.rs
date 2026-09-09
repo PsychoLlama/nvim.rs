@@ -466,7 +466,7 @@ fn next_char(s: &[u8]) -> (c_int, &[u8]) {
 ///
 /// `arg` must be a valid typval, and `buf` — the scratch space a non-string
 /// value is rendered into — must outlive the returned slice.
-unsafe fn tv_string(arg: *const TypVal, buf: &mut [c_char; 65]) -> Option<&[u8]> {
+unsafe fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut [c_char; 65]) -> Option<&'a [u8]> {
     // SAFETY: caller contract; the result is null or a NUL-terminated string
     // owned by the typval or by `buf`, both of which outlive the borrow.
     let s = unsafe { tv_get_string_buf_chk(arg, buf.as_mut_ptr()) };
@@ -498,7 +498,7 @@ fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
 /// # Safety
 ///
 /// Both arguments must be valid typvals.
-unsafe fn digraph_set_common(argchars: *const TypVal, argdigraph: *const TypVal) -> bool {
+unsafe fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> bool {
     let mut buf_chars = [0 as c_char; 65];
     // SAFETY: caller contract; `buf_chars` outlives the borrow.
     let chars = unsafe { tv_string(argchars, &mut buf_chars) };
@@ -592,9 +592,9 @@ pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
+unsafe fn digraph_setlist_common(arg: &TypVal) -> bool {
     // SAFETY: caller contract; the list is only read once its type is known.
-    let pl = unsafe {
+    let pl = {
         if (*arg).v_type() != VAR_LIST {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;

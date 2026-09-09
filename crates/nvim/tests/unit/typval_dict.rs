@@ -1298,8 +1298,8 @@ fn a_dict_copy_id_preserves_sharing() {
         assert_eq!((*inner).dv_refcount.get(), 3);
         tv_dict_unref(without);
         tv_dict_unref(with);
-        tv_clear(&raw mut d_tv);
-        tv_clear(&raw mut inner_tv);
+        tv_clear(&mut d_tv);
+        tv_clear(&mut inner_tv);
     }
 }
 
@@ -1325,7 +1325,7 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         assert_eq!((*copy).dv_refcount.get(), 1);
 
         tv_dict_unref(copy);
-        tv_clear(&raw mut d_tv);
+        tv_clear(&mut d_tv);
     }
 }
 

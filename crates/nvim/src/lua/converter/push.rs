@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use super::nlua_create_typed_table;
 use crate::eval::typval::DictSlot;
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::find_func;
 use crate::lua::executor::nlua_pushref;
@@ -340,7 +340,7 @@ impl TypvalSink for LuaSink {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `tv` a live typval.
-pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut TypVal, flags: c_int) -> bool {
+pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: &TypVal, flags: c_int) -> bool {
     unsafe {
         let initial_size = lua_gettop(lstate);
         if lua_checkstack(lstate, initial_size + 2) == 0 {
@@ -353,7 +353,7 @@ pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut TypVal, flags: c
             lstate,
             special: flags & super::kNluaPushSpecial != 0,
         };
-        if !encode_typval(&mut sink, tv, c"nlua_push_typval argument".as_ptr()) {
+        if !encode_typval_read(&mut sink, tv, c"nlua_push_typval argument") {
             return false;
         }
         debug_assert!(lua_gettop(lstate) == initial_size + 1);

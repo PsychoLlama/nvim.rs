@@ -305,7 +305,7 @@ fn string_sub(
     // SAFETY: `text` has `len` readable bytes -- it was copied from exactly
     // that many -- and the rest are NUL-terminated strings; a NULL `expr` is
     // what asks for a plain replacement rather than a `\=` one.
-    let out = unsafe { do_string_sub(text.0, n, pat.0, sub.0, expr, fl, ret) };
+    let out = unsafe { do_string_sub(text.0, n, pat.0, sub.0, &*expr, fl, ret) };
     (out, out_len as usize)
 }
 

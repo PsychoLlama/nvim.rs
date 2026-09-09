@@ -102,7 +102,7 @@ unsafe fn get_var_from(
                     _ => &raw mut tp.tp_winvar,
                 };
                 let value: *const TypVal = unsafe { (&raw const (*v).di_tv).cast() };
-                unsafe { tv_copy(value, result) };
+                unsafe { tv_copy(&*value, result) };
                 done = true;
             } else {
                 // SAFETY: each scope's own variable dictionary is live.
@@ -116,7 +116,7 @@ unsafe fn get_var_from(
                 let varname_len = unsafe { cstr::bytes_at(varname) }.len();
                 let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };
                 if !v.is_null() {
-                    unsafe { tv_copy(&raw const (*v).di_tv, result) };
+                    unsafe { tv_copy(&(*v).di_tv, result) };
                     done = true;
                 }
             }
@@ -162,7 +162,7 @@ unsafe fn getwinvar(args: &[TypVal], result: &mut TypVal, off: c_int) {
 /// `tv` is a live value, `option` a NUL-terminated name matching `opt_idx`,
 /// and `error` writable or NULL.
 pub(crate) unsafe fn tv_to_optval(
-    tv: *mut TypVal,
+    tv: &TypVal,
     opt_idx: OptIndex,
     option: *const c_char,
     error: *mut bool,
@@ -171,7 +171,7 @@ pub(crate) unsafe fn tv_to_optval(
     let mut err = false;
     // SAFETY: the caller's obligation -- a live value and a NUL-terminated
     // option name.
-    let tvh = unsafe { Tv::new(tv) };
+    let tvh = tv;
     let is_tty_opt = is_tty_option(unsafe { CStr::from_ptr(option) });
     let option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
     let option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
@@ -286,14 +286,7 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: &TypVal) {
         return;
     }
     let mut error = false;
-    let value = unsafe {
-        tv_to_optval(
-            ptr::from_ref(varp).cast_mut(),
-            opt_idx,
-            varname,
-            &raw mut error,
-        )
-    };
+    let value = unsafe { tv_to_optval(varp, opt_idx, varname, &raw mut error) };
     if !error {
         let local = OptionSetFlags::LOCAL;
         // SAFETY: the caller's obligation -- a NUL-terminated name matching
@@ -353,13 +346,16 @@ unsafe fn setwinvar(args: &[TypVal], off: c_int) {
 /// # Safety
 /// `varname` is a NUL-terminated name and `varp` a live value.
 unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: &TypVal) {
+    // The store either copies or takes; this one only ever borrows, so it
+    // hands over a copy of its own and lets the store take that.
+    let mut value = varp.clone();
     let varname_len = unsafe { cstr::bytes_at(varname) }.len();
     let name = unsafe { xmalloc(varname_len + 3) } as *mut c_char;
     let into = name.cast::<u8>();
     unsafe { into.copy_from_nonoverlapping(scope.as_ptr().cast(), 2) };
     let into = unsafe { name.add(2) }.cast::<u8>();
     unsafe { into.copy_from_nonoverlapping(varname.cast(), varname_len + 1) };
-    unsafe { set_var(name, varname_len + 2, ptr::from_ref(varp).cast_mut(), true) };
+    unsafe { set_var(name, varname_len + 2, &mut value, false) };
     unsafe { xfree(name.cast()) };
 }
 

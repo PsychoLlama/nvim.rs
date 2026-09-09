@@ -116,7 +116,7 @@ pub unsafe fn callback_free(callback: *mut Callback) {
 ///
 /// `cb` must point at an initialized callback, unaliased for the call. `tv`
 /// must point at an initialized typval, unaliased for the call.
-pub unsafe fn callback_put(cb: *mut Callback, tv: *mut TypVal) {
+pub unsafe fn callback_put(cb: *mut Callback, tv: &mut TypVal) {
     // SAFETY: the caller's promise: a live typval.
     let mut value = unsafe { Tv::new(tv) };
     // SAFETY: as above, and a live callback whose payload it owns.
@@ -321,7 +321,7 @@ pub unsafe fn tv_dict_watcher_notify(
     // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
     let add = |name: &str, from: &TypVal| {
         let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
-        unsafe { tv_copy(from, &raw mut (*v).di_tv) };
+        unsafe { tv_copy(from, &mut (*v).di_tv) };
         let _ = unsafe { tv_dict_add(event, v) };
     };
     if let Some(newtv) = newtv {
@@ -358,7 +358,7 @@ pub unsafe fn tv_dict_watcher_notify(
             let cb = wd.field_ptr(::core::mem::offset_of!(DictWatcher, callback));
             unsafe { callback_call(cb, argv.args(), &mut rettv) };
             wd.busy = false;
-            unsafe { tv_clear(&raw mut rettv) };
+            unsafe { tv_clear(&mut rettv) };
             if wd.needs_free {
                 any_needs_free = true;
             }

@@ -141,7 +141,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
         let l = unsafe { heredoc_get(args, expr.add(3), false) };
         if !l.is_null() {
             // SAFETY: a live local and the list just built.
-            unsafe { tv_list_set_ret(&raw mut rettv, l) };
+            unsafe { tv_list_set_ret(&mut rettv, l) };
             if ea.skip == 0 {
                 let op = [b'=' as c_char, NUL as c_char];
                 assign(&mut rettv, op.as_ptr());
@@ -269,7 +269,7 @@ pub unsafe fn ex_let_vars(
             // variable after the ';', as a list of its own.
             let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
             while !item.is_null() {
-                unsafe { tv_list_append_tv(rest_list, &raw mut (*item).li_tv) };
+                unsafe { tv_list_append_tv(rest_list, &(*item).li_tv) };
                 item = unsafe { (*item).li_next };
             }
             let mut ltv = TypVal::List(rest_list);
@@ -279,7 +279,7 @@ pub unsafe fn ex_let_vars(
             // local.
             let rest_arg = unsafe { skipwhite(arg.add(1)) };
             arg = unsafe { ex_let_one(rest_arg, &mut ltv, false, is_const, c"]".as_ptr(), op) };
-            unsafe { tv_clear(&raw mut ltv) };
+            unsafe { tv_clear(&mut ltv) };
             if arg.is_null() {
                 return Err(Failed);
             }

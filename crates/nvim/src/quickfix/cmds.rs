@@ -211,7 +211,7 @@ pub unsafe fn ex_cbuffer(args: *mut ExArg) {
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
-    let qf_title2 = ptr::null_mut();
+    let qf_title2 = None;
     let errorformat3 = p_efm.get();
     let line12 = args.line1;
     let line22 = args.line2;
@@ -289,7 +289,7 @@ fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
 /// # Safety
 ///
 /// `args` must be a live command and `tv` a live value.
-unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
+unsafe fn cexpr_core(args: *const ExArg, tv: &mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let args = unsafe { Ea::new(args.cast_mut()) };
     // SAFETY: forwarded from the caller.
@@ -299,8 +299,7 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
     let (qi, wp) = qf_cmd_stack_or_alloc(args);
 
     // A non-string reads as a NULL string, so the tag test is the accessor's.
-    let usable =
-        !unsafe { (*tv).string_or_null() }.is_null() || unsafe { (*tv).v_type() } == VAR_LIST;
+    let usable = !(*tv).string_or_null().is_null() || (*tv).v_type() == VAR_LIST;
     if !usable {
         qf_emsg(c"E777: String or List expected".as_ptr());
         return Err(Failed);
@@ -324,7 +323,7 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
             curlist,
             errorformat2,
             buf2,
-            tv,
+            Some(tv),
             errorformat3,
             newlist,
             0,
@@ -371,6 +370,6 @@ pub unsafe fn ex_cexpr(args: *mut ExArg) {
     if tv.is_null() {
         return;
     }
-    let _ = unsafe { cexpr_core(args.raw().cast_const(), tv) };
-    unsafe { tv_free(tv) };
+    let _ = unsafe { cexpr_core(args.raw().cast_const(), &mut *tv) };
+    unsafe { tv_free(tv.as_mut()) };
 }

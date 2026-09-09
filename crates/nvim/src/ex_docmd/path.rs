@@ -102,7 +102,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
         } else {
             emsg(gettext(e_invalid_return_type_from_findfunc.as_ptr()));
         }
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
     }
     retlist
 }

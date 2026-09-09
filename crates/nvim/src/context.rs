@@ -307,7 +307,7 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     // SAFETY: the caller's array and error; `list_tv` owns the conversion
     // result until `tv_clear`.
     let wrapped = Object::Array(array);
-    unsafe { object_to_vim(wrapped, &raw mut list_tv) };
+    unsafe { object_to_vim(wrapped, &mut list_tv) };
     debug_assert!(
         list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type() == VAR_LIST"
@@ -316,7 +316,7 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     if !unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) } {
         *err = Error::exception(c"E474: Failed to convert list to msgpack string buffer");
     }
-    unsafe { tv_clear(&raw mut list_tv) };
+    unsafe { tv_clear(&mut list_tv) };
     sbuf
 }
 

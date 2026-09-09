@@ -192,7 +192,7 @@ impl<'a> Decoder<'a> {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
                 semsg!("E474: Expected comma before list item: {arg0}");
-                unsafe { tv_clear(&raw mut obj.val) };
+                unsafe { tv_clear(&mut obj.val) };
                 return false;
             }
             debug_assert!(last.special_val.is_null());
@@ -207,7 +207,7 @@ impl<'a> Decoder<'a> {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
                 semsg!("E474: Expected colon before dictionary value: {arg0}");
-                unsafe { tv_clear(&raw mut obj.val) };
+                unsafe { tv_clear(&mut obj.val) };
                 return false;
             }
             let mut key = self.stack.pop().expect("a dictionary key below the value");
@@ -216,7 +216,7 @@ impl<'a> Decoder<'a> {
                 // this container down the special-map path below.
                 debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
                 let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
-                unsafe { tv_clear(&raw mut key.val) };
+                unsafe { tv_clear(&mut key.val) };
                 if unsafe { tv_dict_add(last.container.dict(), obj_di) }.is_err() {
                     unsafe { abort() };
                 }
@@ -235,7 +235,7 @@ impl<'a> Decoder<'a> {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(self.buf[*at..].as_ptr() as *const c_char) };
             semsg!("E474: Expected string key: {arg0}");
-            unsafe { tv_clear(&raw mut obj.val) };
+            unsafe { tv_clear(&mut obj.val) };
             return false;
         }
         if !obj.didcomma
@@ -245,7 +245,7 @@ impl<'a> Decoder<'a> {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
             semsg!("E474: Expected comma before dictionary key: {arg0}");
-            unsafe { tv_clear(&raw mut obj.val) };
+            unsafe { tv_clear(&mut obj.val) };
             return false;
         }
 
@@ -260,7 +260,7 @@ impl<'a> Decoder<'a> {
                 || !unsafe { tv_dict_find(last.container.dict(), obj.val.string_or_null(), -1) }
                     .is_null())
         {
-            unsafe { tv_clear(&raw mut obj.val) };
+            unsafe { tv_clear(&mut obj.val) };
             // Rewind to the `{` and reopen it as a special map.
             // Everything decoded inside it is dropped — the container's
             // own value included, which frees the half-filled dictionary.
@@ -269,7 +269,7 @@ impl<'a> Decoder<'a> {
             (self.didcomma, self.didcolon) = (reopened.didcomma, reopened.didcolon);
             while self.stack.len() > last.stack_index {
                 let mut dropped = self.stack.pop().expect("the loop bound is the depth");
-                unsafe { tv_clear(&raw mut dropped.val) };
+                unsafe { tv_clear(&mut dropped.val) };
             }
             *at = last.at;
             self.next_map_special = true;

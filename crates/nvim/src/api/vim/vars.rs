@@ -85,7 +85,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
     }
     // SAFETY: `di` is the live dictionary item just found, and `arena` is the
     // caller's.
-    unsafe { vim_to_object(&raw mut (*di).di_tv, arena, true) }.reported(error)
+    unsafe { vim_to_object(&(*di).di_tv, arena, true) }.reported(error)
 }
 
 /// `g:name`'s dictionary item, or null.

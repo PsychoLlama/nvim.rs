@@ -608,7 +608,7 @@ pub unsafe fn tv_list_ref(l: *mut List) {
 /// `tv` must point at a writable `TypVal` holding no value yet — the old
 /// contents are overwritten, not cleared — and `l` is null or a live list.
 #[inline(always)]
-pub unsafe fn tv_list_set_ret(tv: *mut TypVal, l: *mut List) {
+pub unsafe fn tv_list_set_ret(tv: &mut TypVal, l: *mut List) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.write_list(l);
@@ -744,7 +744,7 @@ pub(crate) fn tv_list_iter(l: Option<&List>) -> ListIter {
 /// contents are overwritten, not cleared — and `d` is null or a live
 /// dictionary.
 #[inline(always)]
-pub unsafe fn tv_dict_set_ret(tv: *mut TypVal, d: *mut Dict) {
+pub unsafe fn tv_dict_set_ret(tv: &mut TypVal, d: *mut Dict) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.write_dict(d);
@@ -903,7 +903,7 @@ pub(crate) unsafe fn tv_ht_iter(ht: *const HashTab) -> DictIter {
 /// `tv` must point at a writable `TypVal` holding no value yet — the old
 /// contents are overwritten, not cleared — and `b` is null or a live blob.
 #[inline(always)]
-pub unsafe fn tv_blob_set_ret(tv: *mut TypVal, b: *mut Blob) {
+pub unsafe fn tv_blob_set_ret(tv: &mut TypVal, b: *mut Blob) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.write_blob(b);

@@ -32,10 +32,10 @@ unsafe fn convert(value: Tv) -> Obj {
     // SAFETY: the value and the object are this call's own.
     unsafe {
         let mut tv = value.build();
-        let object = vim_to_object(&raw mut tv, ptr::null_mut(), false);
+        let object = vim_to_object(&tv, ptr::null_mut(), false);
         let read = crate::support::tv::read_object(&raw const object);
         api_free_object(object);
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         read
     }
 }

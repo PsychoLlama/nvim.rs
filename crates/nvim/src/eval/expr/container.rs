@@ -193,23 +193,22 @@ pub(crate) unsafe fn eval_dict(
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let at = unsafe { c_str(at) };
                 semsg!("E720: Missing colon in Dictionary: {at}");
-                unsafe { tv_clear(&raw mut tvkey) };
+                unsafe { tv_clear(&mut tvkey) };
                 break 'items false;
             }
 
             // The key borrows `buf`, so it must not outlive this pass.
             let mut key: *mut c_char = null_mut();
             if evaluate {
-                key = unsafe { tv_get_string_buf_chk(&raw mut tvkey, buf.as_mut_ptr()) }
-                    as *mut c_char;
+                key = unsafe { tv_get_string_buf_chk(&tvkey, buf.as_mut_ptr()) } as *mut c_char;
                 if key.is_null() {
-                    unsafe { tv_clear(&raw mut tvkey) };
+                    unsafe { tv_clear(&mut tvkey) };
                     break 'items false;
                 }
             }
             cur.skip(1);
             if unsafe { eval1(arg, &mut tv, evalarg) }.is_err() {
-                unsafe { tv_clear(&raw mut tvkey) };
+                unsafe { tv_clear(&mut tvkey) };
                 break 'items false;
             }
             if evaluate {
@@ -217,8 +216,8 @@ pub(crate) unsafe fn eval_dict(
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let key = unsafe { c_str(key) };
                     semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
-                    unsafe { tv_clear(&raw mut tvkey) };
-                    unsafe { tv_clear(&raw mut tv) };
+                    unsafe { tv_clear(&mut tvkey) };
+                    unsafe { tv_clear(&mut tv) };
                     break 'items false;
                 }
                 // SAFETY: a fresh item of this call's own.
@@ -230,7 +229,7 @@ pub(crate) unsafe fn eval_dict(
                     unsafe { tv_dict_item_free(item) };
                 }
             }
-            unsafe { tv_clear(&raw mut tvkey) };
+            unsafe { tv_clear(&mut tvkey) };
 
             let had_comma = cur.byte() == b',';
             if had_comma {

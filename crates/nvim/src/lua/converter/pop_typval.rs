@@ -76,9 +76,9 @@ pub struct TVPopStackItem {
 
 impl TVPopStackItem {
     /// A frame about to be filled in, not a suspended container.
-    const fn leaf(tv: *mut TypVal) -> Self {
+    fn leaf(tv: &mut TypVal) -> Self {
         Self {
-            tv,
+            tv: ::core::ptr::from_mut(tv),
             list_len: 0,
             container: false,
             special: false,
@@ -99,7 +99,7 @@ type TVPopStack = InlineStack<TVPopStackItem, 2>;
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top, and `ret_tv` a
 /// writable typval the caller owns.
-pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bool {
+pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: &mut TypVal) -> bool {
     unsafe {
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
         let new_dict = |tv: *mut TypVal, ref_: LuaRef| {
@@ -152,14 +152,14 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         tv_list_append_owned_tv(kv_pair, TV_INITIAL_VALUE);
                         stack.push(cur);
                         tv_list_append_list((*cur.tv).list_or_null(), kv_pair);
-                        cur = TVPopStackItem::leaf(&raw mut (*tv_list_last(kv_pair)).li_tv);
+                        cur = TVPopStackItem::leaf(&mut (*tv_list_last(kv_pair)).li_tv);
                     } else {
                         let di = tv_dict_item_alloc_len(s, len);
                         if tv_dict_add((*cur.tv).dict_or_null(), di).is_err() {
                             abort();
                         }
                         stack.push(cur);
-                        cur = TVPopStackItem::leaf(&raw mut (*di).di_tv);
+                        cur = TVPopStackItem::leaf(&mut (*di).di_tv);
                     }
                 } else {
                     debug_assert!((*cur.tv).v_type() == VAR_LIST);
@@ -174,7 +174,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                     stack.push(cur);
                     // TODO(ZyX-I): use indexes, the list item *will* be
                     // reallocated here.
-                    cur = TVPopStackItem::leaf(&raw mut (*tv_list_last(list)).li_tv);
+                    cur = TVPopStackItem::leaf(&mut (*tv_list_last(list)).li_tv);
                 }
             }
             debug_assert!(!cur.container);
@@ -222,7 +222,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         // table: share it rather than descend forever.
                         for item in stack.iter() {
                             if item.container && lua_rawequal(lstate, -1, item.idx) != 0 {
-                                tv_copy(item.tv, cur.tv);
+                                tv_copy(&*item.tv, &mut *cur.tv);
                                 cur.container = false;
                                 break 'converted;
                             }
@@ -253,7 +253,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                         // map, _VAL = [[k, v], …]}` special
                                         // form and `cur` descends into `_VAL`.
                                         decode_create_map_special_dict(
-                                            cur.tv,
+                                            &mut *cur.tv,
                                             table_props.string_keys_num.cast_signed(),
                                         );
                                         debug_assert!((*cur.tv).v_type() == VAR_DICT);

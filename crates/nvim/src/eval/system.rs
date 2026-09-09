@@ -52,7 +52,7 @@ use crate::types::{
 /// the scratch a Number command is spelled into and must outlive `*cmd`,
 /// which may point into it.
 pub unsafe fn tv_to_argv(
-    cmd_tv: *const TypVal,
+    cmd_tv: &TypVal,
     cmd: *mut *const c_char,
     executable: *mut bool,
     numbuf: &mut NumBuf,
@@ -60,7 +60,7 @@ pub unsafe fn tv_to_argv(
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     // SAFETY: the caller's promise -- the typval outlives the call.
-    let tv = unsafe { Tv::new(cmd_tv.cast_mut()) };
+    let tv = cmd_tv;
     if tv.v_type() == VAR_STRING {
         // SAFETY: `numbuf` is the caller's scratch, which outlives `*cmd`.
         let cmd_str = unsafe { numbuf.string(cmd_tv) };
@@ -92,7 +92,7 @@ pub unsafe fn tv_to_argv(
     // resolved path is what actually goes in slot 0.
     // SAFETY: a non-empty List has a first item, and `numbuf2` outlives
     // the string rendered into it.
-    let arg0 = unsafe { numbuf2.string_chk(&raw mut (*tv_list_first(argl)).li_tv) };
+    let arg0 = unsafe { numbuf2.string_chk(&(*tv_list_first(argl)).li_tv) };
     let mut exe_resolved: *mut c_char = null_mut();
     // SAFETY: `arg0` is NUL-terminated and `exe_resolved` is this frame's.
     let runnable =
@@ -130,7 +130,7 @@ pub unsafe fn tv_to_argv(
         while !arg.is_null() {
             // SAFETY: `arg` is one of the List's items, and `numbuf3`
             // outlives the string rendered into it.
-            let a = unsafe { numbuf3.string_chk(&raw const (*arg).li_tv) };
+            let a = unsafe { numbuf3.string_chk(&(*arg).li_tv) };
             if a.is_null() {
                 // SAFETY: `argv` holds `i` owned strings and a NULL tail.
                 unsafe { shell_free_argv(argv) };
@@ -454,7 +454,7 @@ unsafe fn list_as_string(
         while !li.is_null() {
             // SAFETY: `li` is one of the List's items, `numbuf` outlives
             // the string rendered into it, and `len` is the caller's.
-            let tv_len = unsafe { cstr::bytes_at(numbuf.string(&raw const (*li).li_tv)) }.len();
+            let tv_len = unsafe { cstr::bytes_at(numbuf.string(&(*li).li_tv)) }.len();
             unsafe { *len += tv_len as ptrdiff_t + sep };
             // SAFETY: `li` is a live item.
             li = unsafe { (*li).li_next };
@@ -477,7 +477,7 @@ unsafe fn list_as_string(
             // SAFETY: `li` is one of the List's items, `numbuf2` outlives
             // the string rendered into it, and the measurement above left
             // room for that string's bytes.
-            unsafe { end = copy_swapping_nl(numbuf2.string(&raw const (*li).li_tv), end) };
+            unsafe { end = copy_swapping_nl(numbuf2.string(&(*li).li_tv), end) };
             // SAFETY: `li` is a live item.
             let last = unsafe { (*li).li_next }.is_null();
             if endnl || !last {

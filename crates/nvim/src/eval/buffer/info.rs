@@ -109,7 +109,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let flag = |key: &CStr| {
                 let di =
                     unsafe { tv_dict_find(sel_d, key.as_ptr(), key.count_bytes().cast_signed()) };
-                !di.is_null() && unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0
+                !di.is_null() && unsafe { tv_get_number(&(*di).di_tv) } != 0
             };
             filter = Filter {
                 on: true,

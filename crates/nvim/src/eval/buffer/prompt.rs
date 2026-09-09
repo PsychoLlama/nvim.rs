@@ -83,9 +83,9 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             let l = lines.list_or_null();
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
                 let mut item = unsafe { Li::new((*l).lv_first) };
-                let itv = item.field_ptr(offset_of!(ListItem, li_tv));
-                let joined = unsafe { concat_str(text, numbuf.string(itv)) };
-                unsafe { tv_clear(itv) };
+                let itv = item.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
+                let joined = unsafe { concat_str(text, numbuf.string(&*itv)) };
+                unsafe { tv_clear(&mut *itv) };
                 item.li_tv.write_string(joined);
                 did_concat = true;
             }
@@ -102,8 +102,8 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             // appended after it, but only once the replacement worked.
             let l = lines.list_or_null();
             let li = unsafe { (*l).lv_first };
-            let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(ListItem, li_tv));
-            unsafe { set_buffer_lines(Some(buf), lnum, false, itv, result) };
+            let itv = unsafe { Li::new(li) }.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
+            unsafe { set_buffer_lines(Some(buf), lnum, false, &*itv, result) };
             if result.number_or_zero() == 0 {
                 unsafe { tv_list_item_remove(l, li) };
                 unsafe { set_buffer_lines(Some(buf), lnum, true, lines, result) };
@@ -117,8 +117,8 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         let mut buf = buf;
         buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
             let last = list_last(lines);
-            let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(ListItem, li_tv));
-            !last.is_null() && unsafe { ends_in_newline(numbuf3.string(ltv)) }
+            let ltv = unsafe { Li::new(last) }.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
+            !last.is_null() && unsafe { ends_in_newline(numbuf3.string(&*ltv)) }
         } else {
             lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
         };

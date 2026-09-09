@@ -107,7 +107,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: `out` is this frame's own local.
         let got = unsafe { eval_expr_typval(expr, false, &[], &mut *out) };
         got.is_err()
-            || unsafe { tv_get_number_chk(out, &raw mut error) } != 0
+            || unsafe { tv_get_number_chk(&*out, &raw mut error) } != 0
             || called_emsg.get() > called_emsg_before
             || error
             || got_int.get()
@@ -119,7 +119,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         got_int.set(false);
         vgetc();
         result.write_number(-2);
-    } else if unsafe { tv_get_number_chk(&raw mut exprval, &raw mut error) } != 0 {
+    } else if unsafe { tv_get_number_chk(&exprval, &raw mut error) } != 0 {
         result.write_number(0);
     }
     unsafe { time_watcher_stop(tw) };
@@ -156,9 +156,7 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
 ///
 /// # Safety
 /// `arg` is a live typval from the call frame.
-unsafe fn list2proftime(arg: *const TypVal) -> Option<ProfTime> {
-    // SAFETY: the caller's obligation; the list is only read.
-    let arg = unsafe { &*arg };
+unsafe fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
     if arg.v_type() != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
         return None;
     }
@@ -285,7 +283,7 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
         let di = unsafe { tv_dict_find(args[2].dict_or_null(), c"repeat".as_ptr(), 6) };
         if !di.is_null() {
-            repeat = unsafe { tv_get_number(&raw mut (*di).di_tv) } as c_int;
+            repeat = unsafe { tv_get_number(&(*di).di_tv) } as c_int;
             // A repeat of 0 means "once", the same as the default.
             if repeat == 0 {
                 repeat = 1;

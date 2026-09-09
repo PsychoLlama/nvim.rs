@@ -171,8 +171,8 @@ impl Tv {
                 for (key, value) in entries {
                     let di = unsafe { tv_dict_item_alloc(cstr(key.clone()).as_ptr()) };
                     let mut value_tv = unsafe { value.build_at(path) };
-                    unsafe { tv_copy(&raw const value_tv, &raw mut (*di).di_tv) };
-                    unsafe { tv_clear(&raw mut value_tv) };
+                    unsafe { tv_copy(&value_tv, &mut (*di).di_tv) };
+                    unsafe { tv_clear(&mut value_tv) };
                     let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();
@@ -197,7 +197,7 @@ impl Tv {
             }
             Tv::Copied(from) => {
                 let mut to = TypVal::Unknown;
-                unsafe { tv_copy(*from, &raw mut to) };
+                unsafe { tv_copy(&**from, &mut to) };
                 to
             }
         }

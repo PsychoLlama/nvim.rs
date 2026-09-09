@@ -4,7 +4,6 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::eval::Tv;
 use crate::winlayer::{Buf, Live};
 use core::ffi::{c_char, c_int};
 use core::ptr::null_mut;
@@ -112,7 +111,7 @@ pub unsafe fn buf_charidx_to_byteidx(
 /// # Safety
 /// `tv`, `ret_fnum` and `wp` must be valid.
 pub unsafe fn var2fpos(
-    tv: *const TypVal,
+    tv: &TypVal,
     dollar_lnum: bool,
     ret_fnum: *mut c_int,
     charcol: bool,
@@ -126,7 +125,7 @@ pub unsafe fn var2fpos(
     // only read through here, which is what makes casting its `const` away
     // sound. Nothing below holds either across a call that could close the
     // window: `wp` is the caller's and outlives this frame.
-    let (wp, tv) = unsafe { (window, Tv::new(tv.cast_mut())) };
+    let (wp, tv) = (window, tv);
     let mut pos = Pos::default();
     let bp = wp.buffer();
 
@@ -181,7 +180,7 @@ pub unsafe fn var2fpos(
     }
 
     // SAFETY: `tv` is the caller's typval and `numbuf` outlives the name.
-    let name = unsafe { numbuf.string_chk(tv.raw()) };
+    let name = unsafe { numbuf.string_chk(tv) };
     if name.is_null() {
         return None;
     }
@@ -277,14 +276,14 @@ pub unsafe fn var2fpos(
 /// # Safety
 /// `arg` and `posp` must be valid; `fnump` and `curswantp` null or valid.
 pub unsafe fn list2fpos(
-    arg: *const TypVal,
+    arg: &TypVal,
     posp: *mut Pos,
     fnump: *mut c_int,
     curswantp: *mut ColNr,
     charcol: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
-    let (arg, mut posp) = unsafe { (Tv::new(arg.cast_mut()), Live::<Pos>::new(posp)) };
+    let (arg, mut posp) = unsafe { (arg, Live::<Pos>::new(posp)) };
     if arg.v_type() != VAR_LIST {
         return Err(Failed);
     }

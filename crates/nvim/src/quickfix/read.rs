@@ -102,7 +102,7 @@ impl Reader {
     unsafe fn open(
         enc: *mut c_char,
         efile: *const c_char,
-        tv: *mut TypVal,
+        tv: Option<&mut TypVal>,
         buffer: Option<Buf>,
         lnumfirst: LineNr,
         lnumlast: LineNr,
@@ -147,11 +147,11 @@ impl Reader {
                 return None;
             }
             reader.source = Source::File(fd);
-        } else if !tv.is_null() {
-            reader.source = if unsafe { (*tv).v_type() } == VAR_STRING as VarType {
-                Source::Text(unsafe { (*tv).string_or_null() })
-            } else if unsafe { (*tv).v_type() } == VAR_LIST as VarType {
-                Source::List(unsafe { tv_list_first((*tv).list_or_null()) })
+        } else if let Some(tv) = tv {
+            reader.source = if tv.v_type() == VAR_STRING as VarType {
+                Source::Text(tv.string_or_null())
+            } else if tv.v_type() == VAR_LIST as VarType {
+                Source::List(unsafe { tv_list_first(tv.list_or_null()) })
             } else {
                 Source::Unusable
             };
@@ -439,7 +439,7 @@ pub unsafe fn qf_init(
             (*qi).qf_curlist,
             efile,
             Some(Buf::current()),
-            ptr::null_mut(),
+            None,
             errorformat,
             newlist != 0,
             0,
@@ -473,7 +473,7 @@ pub(crate) unsafe fn qf_init_ext(
     mut qf_idx: c_int,
     efile: *const c_char,
     buffer: Option<Buf>,
-    tv: *mut TypVal,
+    tv: Option<&mut TypVal>,
     errorformat: *mut c_char,
     newlist: bool,
     lnumfirst: LineNr,
@@ -487,6 +487,7 @@ pub(crate) unsafe fn qf_init_ext(
 
     let mut old_last: *mut QfLine = ptr::null_mut();
     let mut retval = -1;
+    let from_value = tv.is_some();
     let reader = unsafe { Reader::open(enc, efile, tv, buffer, lnumfirst, lnumlast) };
 
     if let Some(mut reader) = reader {
@@ -509,7 +510,7 @@ pub(crate) unsafe fn qf_init_ext(
         // Use the buffer-local 'errorformat' when it has one.
         // The two cheap tests stay in front of the buffer's option, as
         // C's `&&` chain had them.
-        let local_efm = if errorformat == p_efm.get() && tv.is_null() {
+        let local_efm = if errorformat == p_efm.get() && !from_value {
             buffer
                 .map(|buf| buf.b_p_efm)
                 .filter(|&efm| unsafe { *efm } != 0)

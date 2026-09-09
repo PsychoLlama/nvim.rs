@@ -120,7 +120,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         // Convert the Lua value into a temporary before anything is disturbed.
         let mut tv = TV_INITIAL_VALUE;
         lua_pushvalue(lstate, 4);
-        if !nlua_pop_typval(lstate, &raw mut tv) {
+        if !nlua_pop_typval(lstate, &mut tv) {
             return luaL_error(lstate, c"Couldn't convert lua value".as_ptr());
         }
 
@@ -131,16 +131,9 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         } else {
             let mut type_error = false;
             if dict == get_vimvar_dict()
-                && !before_set_vvar(
-                    key.data(),
-                    di,
-                    &raw mut tv,
-                    true,
-                    watched,
-                    &raw mut type_error,
-                )
+                && !before_set_vvar(key.data(), di, &mut tv, true, watched, &raw mut type_error)
             {
-                tv_clear(&raw mut tv);
+                tv_clear(&mut tv);
                 if type_error {
                     return luaL_error(
                         lstate,
@@ -151,18 +144,18 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
                 return 0;
             }
             if watched {
-                tv_copy(&raw mut (*di).di_tv, &raw mut oldtv);
+                tv_copy(&(*di).di_tv, &mut oldtv);
             }
-            tv_clear(&raw mut (*di).di_tv);
+            tv_clear(&mut (*di).di_tv);
         }
 
-        tv_copy(&raw mut tv, &raw mut (*di).di_tv);
+        tv_copy(&tv, &mut (*di).di_tv);
 
         if watched {
             tv_dict_watcher_notify(dict, key.data(), Some(&tv), Some(&oldtv));
-            tv_clear(&raw mut oldtv);
+            tv_clear(&mut oldtv);
         }
-        tv_clear(&raw mut tv);
+        tv_clear(&mut tv);
         0
     }
 }
@@ -189,7 +182,7 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         if di.is_null() {
             return 0; // nil
         }
-        nlua_push_typval(lstate, &raw mut (*di).di_tv, 0);
+        nlua_push_typval(lstate, &(*di).di_tv, 0);
         1
     }
 }

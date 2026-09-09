@@ -57,7 +57,7 @@ pub(crate) unsafe fn dict_get_value(
         return Object::Nil;
     }
     // SAFETY: the lookup answered a live item of `dict`.
-    unsafe { vim_to_object(&raw mut (*di).di_tv, arena, true) }
+    unsafe { vim_to_object(&(*di).di_tv, arena, true) }
 }
 
 /// The item `key` names, having first reported through `err` any reason it
@@ -158,7 +158,7 @@ pub(crate) unsafe fn dict_set_var(
         }
         if retval {
             // SAFETY: as above.
-            rv = unsafe { vim_to_object(old, arena, false) };
+            rv = unsafe { vim_to_object(&*old, arena, false) };
         }
         // SAFETY: `di` is an item of `dict`.
         unsafe { tv_dict_item_remove(dict, di) };
@@ -167,7 +167,7 @@ pub(crate) unsafe fn dict_set_var(
 
     let mut tv = TV_INITIAL_VALUE;
     // SAFETY: `tv` is this frame's and `err` the caller's slot.
-    unsafe { object_to_vim(value, &raw mut tv) };
+    unsafe { object_to_vim(value, &mut tv) };
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.
     let mut oldtv = TV_INITIAL_VALUE;
@@ -181,18 +181,18 @@ pub(crate) unsafe fn dict_set_var(
     } else {
         if retval {
             // SAFETY: `di` is the live item the lookup found.
-            rv = unsafe { vim_to_object(&raw mut (*di).di_tv, arena, false) };
+            rv = unsafe { vim_to_object(&(*di).di_tv, arena, false) };
         }
         // `v:` keys are typed, and some of them run a hook on assignment.
         let mut type_error = false;
         let accepted = dict != get_vimvar_dict() || {
             let (new, bad) = (&raw mut tv, &raw mut type_error);
             // SAFETY: `di` is live, and `tv`/`type_error` are this frame's.
-            unsafe { before_set_vvar(key.data(), di, new, true, watched, bad) }
+            unsafe { before_set_vvar(key.data(), di, &mut *new, true, watched, bad) }
         };
         if !accepted {
             // SAFETY: `tv` is this frame's.
-            unsafe { tv_clear(&raw mut tv) };
+            unsafe { tv_clear(&mut tv) };
             if type_error {
                 // SAFETY: `key` borrows the caller's NUL-terminated text.
                 let key = unsafe { c_str(key.data()) };
@@ -206,22 +206,22 @@ pub(crate) unsafe fn dict_set_var(
         }
         if watched {
             // SAFETY: `di` is live and `oldtv` this frame's.
-            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut oldtv) };
+            unsafe { tv_copy(&(*di).di_tv, &mut oldtv) };
         }
         // SAFETY: `di` is live.
-        unsafe { tv_clear(&raw mut (*di).di_tv) };
+        unsafe { tv_clear(&mut (*di).di_tv) };
     }
 
     // SAFETY: `di` is live and `tv` this frame's.
-    unsafe { tv_copy(&raw mut tv, &raw mut (*di).di_tv) };
+    unsafe { tv_copy(&tv, &mut (*di).di_tv) };
     if watched {
         // SAFETY: as above, and `oldtv` is this frame's.
         unsafe {
             tv_dict_watcher_notify(dict, key.data(), Some(&tv), Some(&oldtv));
-            tv_clear(&raw mut oldtv);
+            tv_clear(&mut oldtv);
         }
     }
     // SAFETY: `tv` is this frame's.
-    unsafe { tv_clear(&raw mut tv) };
+    unsafe { tv_clear(&mut tv) };
     rv
 }

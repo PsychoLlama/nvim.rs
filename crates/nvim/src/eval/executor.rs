@@ -143,7 +143,7 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
     // `tv1`, which is what makes the aliasing case safe.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     // SAFETY: as above.
-    let n: VarNumber = unsafe { tv_get_number(tv1) };
+    let n: VarNumber = unsafe { tv_get_number(&*tv1) };
     if rhs.v_type() == VAR_FLOAT {
         if op == b'%' {
             return Err(Failed);
@@ -151,22 +151,22 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
         // SAFETY: `VAR_FLOAT` says the value holds a Float.
         let f = float_op(n as Float, op, rhs.float_or_zero());
         // SAFETY: `tv1` is the caller's initialised typval.
-        unsafe { tv_clear(tv1) };
+        unsafe { tv_clear(&mut *tv1) };
         lhs.write_float(f);
     } else {
         // Only the arm that is taken reads the right operand, because
         // `tv_get_number` reports on a value it cannot convert.
         let n = match op {
             // SAFETY: `tv2` is initialised.
-            b'+' => n.wrapping_add(unsafe { tv_get_number(tv2) }),
-            b'-' => n.wrapping_sub(unsafe { tv_get_number(tv2) }),
-            b'*' => n.wrapping_mul(unsafe { tv_get_number(tv2) }),
-            b'/' => num_divide(n, unsafe { tv_get_number(tv2) }),
-            b'%' => num_modulus(n, unsafe { tv_get_number(tv2) }),
+            b'+' => n.wrapping_add(unsafe { tv_get_number(&*tv2) }),
+            b'-' => n.wrapping_sub(unsafe { tv_get_number(&*tv2) }),
+            b'*' => n.wrapping_mul(unsafe { tv_get_number(&*tv2) }),
+            b'/' => num_divide(n, unsafe { tv_get_number(&*tv2) }),
+            b'%' => num_modulus(n, unsafe { tv_get_number(&*tv2) }),
             _ => n,
         };
         // SAFETY: `tv1` is the caller's initialised typval.
-        unsafe { tv_clear(tv1) };
+        unsafe { tv_clear(&mut *tv1) };
         lhs.write_number(n);
     }
     Ok(())
@@ -192,16 +192,16 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above.
-    let s2 = unsafe { numbuf.string(tv2) };
+    let s2 = unsafe { numbuf.string(&*tv2) };
     // An owned string with room to spare is extended in place.
     // SAFETY: as above.
     if unsafe { grow_string_tv(&mut *tv1, s2) } {
         return Ok(());
     }
     // SAFETY: as above.
-    let s = unsafe { concat_str(numbuf1.string(tv1), s2) };
+    let s = unsafe { concat_str(numbuf1.string(&*tv1), s2) };
     // SAFETY: both operands have been copied out of `tv1` by now.
-    unsafe { tv_clear(tv1) };
+    unsafe { tv_clear(&mut *tv1) };
     lhs.write_string(s);
     Ok(())
 }
@@ -228,7 +228,7 @@ unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<()
     } else {
         // A string operand goes through the usual "leading number" parse.
         // SAFETY: `tv2` is initialised.
-        unsafe { tv_get_number(tv2) as Float }
+        unsafe { tv_get_number(&*tv2) as Float }
     };
     let result = float_op(lhs.float_or_zero(), op, f);
     lhs.write_float(result);
@@ -241,7 +241,13 @@ unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<()
 /// # Safety
 ///
 /// `tv1` and `tv2` must point at initialised typvals; `op` must point at a
-/// NUL-terminated operator. The two typvals may alias.
+/// NUL-terminated operator.
+///
+/// **The two typvals may be the same object**, which is why this family
+/// keeps its raw pointers where the rest of the evaluator takes borrows:
+/// `:let l[0:1] += l[0:1]` reaches [`tv_op_list`] with one list item as both
+/// operands (`eval/typval/listrange.rs`), and `&mut`/`&` of one place is
+/// exactly what Rust does not allow.
 pub unsafe fn eexe_mod_op(
     tv1: *mut TypVal,
     tv2: *const TypVal,

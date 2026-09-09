@@ -182,7 +182,7 @@ pub unsafe fn ins_compl_add_infercase(
     }
 
     let (no_cptext, no_hl) = (ptr::null(), ptr::null());
-    let no_data = ptr::null_mut();
+    let no_data = None;
     // SAFETY: `str` is `len` readable bytes and `fname` null or a
     // NUL-terminated name; there is no `cptext`, user data or highlight pair.
     let res = unsafe {
@@ -252,7 +252,8 @@ pub(crate) fn get_next_bufname_token() {
         let orig = compl_orig_text().value();
         if unsafe { cstr::prefix_eq(tail, orig.data(), orig.len()) } {
             let flags = if p_ic.get() != 0 { CP_ICASE } else { 0 };
-            let (no_name, no_data) = (ptr::null_mut(), ptr::null_mut());
+            let no_name = ptr::null_mut();
+            let _no_data: Option<&mut TypVal> = None;
             let (no_cptext, no_hl) = (ptr::null(), ptr::null());
             let (dir, score) = (kDirectionNotSet, FUZZY_SCORE_NONE);
             // SAFETY: `tail` is a NUL-terminated buffer name, and there is
@@ -261,7 +262,7 @@ pub(crate) fn get_next_bufname_token() {
                 let len = cstr::bytes_at(tail).len() as c_int;
                 let no_dup = false;
                 ins_compl_add(
-                    tail, len, no_name, no_cptext, false, no_data, dir, flags, no_dup, no_hl, score,
+                    tail, len, no_name, no_cptext, false, None, dir, flags, no_dup, no_hl, score,
                 )
             };
         }

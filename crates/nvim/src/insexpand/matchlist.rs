@@ -124,7 +124,7 @@ pub(crate) unsafe fn ins_compl_add(
     fname: *mut c_char,
     cptext: *const *mut c_char,
     cptext_allocated: bool,
-    user_data: *mut TypVal,
+    user_data: Option<&mut TypVal>,
     cdir: Direction,
     flags_arg: c_int,
     adup: bool,
@@ -246,10 +246,9 @@ pub(crate) unsafe fn ins_compl_add(
         }
     }
 
-    if !user_data.is_null() {
-        // SAFETY: a non-null `user_data` is a live `TypVal`, which the
-        // caller has handed over.
-        match_0.cp_user_data = unsafe { (*user_data).take() };
+    if let Some(user_data) = user_data {
+        // The value the caller has handed over.
+        match_0.cp_user_data = user_data.take();
     }
 
     // Link the new match after (FORWARD) or before (BACKWARD) the current
@@ -340,7 +339,7 @@ pub(crate) unsafe fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed>
             ptr::null_mut(),
             ptr::null(),
             false,
-            ptr::null_mut(),
+            None,
             kDirectionNotSet,
             flags,
             false,
@@ -465,7 +464,7 @@ pub(crate) unsafe fn ins_compl_add_matches(
                 ptr::null_mut(),
                 ptr::null(),
                 false,
-                ptr::null_mut(),
+                None,
                 dir,
                 flags,
                 false,
@@ -723,7 +722,7 @@ pub(crate) unsafe fn ins_compl_item_free(mut match_0: Cm) {
     // all this match's own, and the caller has unlinked it.
     unsafe {
         free_cptext((&raw mut (*raw).cp_text).cast::<*mut c_char>());
-        tv_clear(&raw mut (*raw).cp_user_data);
+        tv_clear(&mut (*raw).cp_user_data);
         xfree(raw.cast::<c_void>());
     }
 }

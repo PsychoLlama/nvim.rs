@@ -398,7 +398,7 @@ fn dropping_a_run_of_items_unlinks_them_and_moves_the_watchers() {
         for li in lis {
             xfree(li.cast());
         }
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -452,7 +452,7 @@ fn removing_a_run_of_items_frees_them_with_their_values() {
             tv_list_watch_remove(l, (&raw const **lw).cast_mut());
         }
         log.check(&[]);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -507,7 +507,7 @@ fn inserting_an_item_puts_it_before_the_one_named() {
         );
 
         log.clear();
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -529,7 +529,7 @@ fn inserting_into_an_empty_list_makes_it_the_only_item() {
         assert_eq!(tv::read(&raw const l_tv), Tv::List(vec![f(100500.0)]));
 
         log.clear();
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -548,14 +548,14 @@ fn inserting_a_value_copies_it() {
         log.clear();
         let inner = inner_tv.list();
         assert_eq!((*inner).lv_refcount.get(), 1);
-        tv_list_insert_tv(l, &raw mut inner_tv, ptr::null_mut());
+        tv_list_insert_tv(l, &inner_tv, ptr::null_mut());
         assert_eq!((*inner).lv_refcount.get(), 2, "the copy holds a reference");
         assert_eq!((*(*l).lv_first).li_tv.list(), inner);
         log.check(&[alloc::li((*l).lv_first)]);
 
         let mut s_tv = Tv::s("test").build();
         log.check(&[alloc::string(s_tv.string(), "test".len())]);
-        tv_list_insert_tv(l, &raw mut s_tv, (*l).lv_first);
+        tv_list_insert_tv(l, &s_tv, (*l).lv_first);
         log.check(&[
             alloc::li((*l).lv_first),
             alloc::string((*(*l).lv_first).li_tv.string(), "test".len()),
@@ -566,9 +566,9 @@ fn inserting_a_value_copies_it() {
             Tv::List(vec![Tv::s("test"), Tv::List(vec![])])
         );
 
-        tv_clear(&raw mut l_tv);
-        tv_clear(&raw mut inner_tv);
-        tv_clear(&raw mut s_tv);
+        tv_clear(&mut l_tv);
+        tv_clear(&mut inner_tv);
+        tv_clear(&mut s_tv);
     }
 }
 
@@ -601,7 +601,7 @@ fn appending_a_list_takes_a_reference() {
             Tv::List(vec![Tv::List(vec![f(1.0)]), Tv::NullList])
         );
 
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
         tv_list_unref(inner);
     }
 }
@@ -632,8 +632,8 @@ fn appending_a_dict_takes_a_reference() {
             Tv::List(vec![Tv::dict([("test", f(1.0))]), Tv::NullDict])
         );
 
-        tv_clear(&raw mut l_tv);
-        tv_clear(&raw mut d_tv);
+        tv_clear(&mut l_tv);
+        tv_clear(&mut d_tv);
     }
 }
 
@@ -674,7 +674,7 @@ fn appending_a_string_copies_it_then_appends() {
             Tv::List(vec![Tv::s("tes"), Tv::NullStr, Tv::NullStr, Tv::s("test")])
         );
 
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -703,7 +703,7 @@ fn appending_an_allocated_string_takes_ownership() {
             Tv::List(vec![Tv::s("test"), Tv::NullStr, Tv::NullStr])
         );
 
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -727,7 +727,7 @@ fn appending_a_number_costs_only_the_item() {
             Tv::List(vec![Tv::Int(-100500), Tv::Int(100500)])
         );
 
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -744,14 +744,14 @@ fn appending_a_value_copies_it() {
         log.clear();
         let inner = inner_tv.list();
         assert_eq!((*inner).lv_refcount.get(), 1);
-        tv_list_append_tv(l, &raw mut inner_tv);
+        tv_list_append_tv(l, &inner_tv);
         assert_eq!((*inner).lv_refcount.get(), 2);
         assert_eq!((*(*l).lv_first).li_tv.list(), inner);
         log.check(&[alloc::li((*l).lv_first)]);
 
         let mut s_tv = Tv::s("test").build();
         log.check(&[alloc::string(s_tv.string(), "test".len())]);
-        tv_list_append_tv(l, &raw mut s_tv);
+        tv_list_append_tv(l, &s_tv);
         log.check(&[
             alloc::li((*l).lv_last),
             alloc::string((*(*l).lv_last).li_tv.string(), "test".len()),
@@ -762,9 +762,9 @@ fn appending_a_value_copies_it() {
             Tv::List(vec![Tv::List(vec![]), Tv::s("test")])
         );
 
-        tv_clear(&raw mut l_tv);
-        tv_clear(&raw mut inner_tv);
-        tv_clear(&raw mut s_tv);
+        tv_clear(&mut l_tv);
+        tv_clear(&mut inner_tv);
+        tv_clear(&mut s_tv);
     }
 }
 
@@ -807,7 +807,7 @@ fn appending_an_owned_value_moves_it() {
             Tv::List(vec![Tv::List(vec![]), Tv::s("test")])
         );
 
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -915,7 +915,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
         ]);
 
         tv_list_free(deep);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -991,7 +991,7 @@ fn a_converting_copy_rewrites_every_string() {
         );
 
         tv_list_free(deep);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
         let _ = convert_setup(&raw mut vc, ptr::null_mut(), ptr::null_mut());
     }
 }
@@ -1039,8 +1039,8 @@ fn a_copy_id_preserves_sharing() {
         assert_eq!((*inner).lv_refcount.get(), 3);
         tv_list_unref(without);
         tv_list_unref(with);
-        tv_clear(&raw mut l_tv);
-        tv_clear(&raw mut inner_tv);
+        tv_clear(&mut l_tv);
+        tv_clear(&mut inner_tv);
     }
 }
 
@@ -1067,7 +1067,7 @@ fn a_self_referencing_list_copies_into_a_self_referencing_copy() {
         assert_eq!((*copy).lv_refcount.get(), 1);
 
         tv_list_unref(copy);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&mut l_tv);
     }
 }
 
@@ -1222,7 +1222,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         let mut results = Vec::new();
         for (l1, l2) in [(ptr::null_mut(), l), (l, ptr::null_mut())] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
+            assert_eq!(tv_list_concat(l1, l2, &mut rettv), Ok(()));
             assert_eq!((*l).lv_refcount.get(), 1);
             assert_eq!(rettv.v_type(), VAR_LIST);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![f(1.0), DICT]));
@@ -1240,7 +1240,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
 
         let mut rettv = Tv::Unknown.build();
         assert_eq!(
-            tv_list_concat(ptr::null_mut(), ptr::null_mut(), &raw mut rettv),
+            tv_list_concat(ptr::null_mut(), ptr::null_mut(), &mut rettv),
             Ok(())
         );
         assert_eq!(rettv.v_type(), VAR_LIST);
@@ -1248,7 +1248,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         log.check(&[]);
 
         for mut rettv in results {
-            tv_clear(&raw mut rettv);
+            tv_clear(&mut rettv);
         }
         tv_list_free(l);
     }
@@ -1273,7 +1273,7 @@ fn concatenating_two_lists_copies_both() {
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
-        assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
+        assert_eq!(tv_list_concat(l1, l2, &mut rettv), Ok(()));
         assert_eq!(((*l1).lv_refcount.get(), (*d).dv_refcount.get()), (1, 2));
         assert_eq!(
             ((*l2).lv_refcount.get(), (*inner).lv_refcount.get()),
@@ -1293,7 +1293,7 @@ fn concatenating_two_lists_copies_both() {
             Tv::List(vec![f(1.0), DICT, f(3.0), LIST])
         );
 
-        tv_clear(&raw mut rettv);
+        tv_clear(&mut rettv);
         tv_list_free(l1);
         tv_list_free(l2);
     }
@@ -1312,7 +1312,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
-        assert_eq!(tv_list_concat(l, l, &raw mut rettv), Ok(()));
+        assert_eq!(tv_list_concat(l, l, &mut rettv), Ok(()));
         assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
         let out = rettv.list();
         let items = tv::list_items(out);
@@ -1328,7 +1328,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
             Tv::List(vec![f(1.0), DICT, f(1.0), DICT])
         );
 
-        tv_clear(&raw mut rettv);
+        tv_clear(&mut rettv);
         tv_list_free(l);
     }
 }
@@ -1349,7 +1349,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
         let mut kept = Vec::new();
         for (l1, l2, refs) in [(l, le, 2), (le, l, 3)] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
+            assert_eq!(tv_list_concat(l1, l2, &mut rettv), Ok(()));
             assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, refs));
             assert_eq!(((*le).lv_refcount.get(), (*le2).lv_refcount.get()), (1, 1));
             let out = rettv.list();
@@ -1364,7 +1364,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
 
         for (l1, l2) in [(le, le), (le, le2)] {
             let mut rettv = Tv::Unknown.build();
-            assert_eq!(tv_list_concat(l1, l2, &raw mut rettv), Ok(()));
+            assert_eq!(tv_list_concat(l1, l2, &mut rettv), Ok(()));
             assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
             log.check(&[alloc::list(rettv.list())]);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
@@ -1372,7 +1372,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
         }
 
         for mut rettv in kept {
-            tv_clear(&raw mut rettv);
+            tv_clear(&mut rettv);
         }
         tv_list_free(l);
         tv_list_free(le);

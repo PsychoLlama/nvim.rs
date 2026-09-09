@@ -227,7 +227,7 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
                     matched = false;
                     break;
                 }
-                tofree = Echoed(unsafe { encode_tv2echo(&raw mut (*li).li_tv, ptr::null_mut()) });
+                tofree = Echoed(unsafe { encode_tv2echo(&(*li).li_tv, ptr::null_mut()) });
                 str = tofree.0;
                 expr = str;
                 if str.is_null() {
@@ -302,7 +302,7 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
                 if !l.is_null() {
                     // A List subject answers with the whole item, not
                     // with the part that matched.
-                    unsafe { tv_copy(&raw mut (*li).li_tv, result) };
+                    unsafe { tv_copy(&(*li).li_tv, result) };
                 } else {
                     let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
                     result
@@ -492,7 +492,7 @@ unsafe fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
         semsg!("E475: Invalid value for argument {arg0}");
         return None;
     }
-    Some(unsafe { tv_get_bool(&raw mut (*di).di_tv) } != 0)
+    Some(unsafe { tv_get_bool(&(*di).di_tv) } != 0)
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
@@ -719,7 +719,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                 });
             }
         }
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
         li = unsafe { (*li).li_next };
     }
     if found.is_empty() {
@@ -744,7 +744,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
         fmatchlist
     };
     for item in &found {
-        unsafe { tv_list_append_tv(strings, &raw mut (*item.item).li_tv) };
+        unsafe { tv_list_append_tv(strings, &(*item.item).li_tv) };
     }
     if request.retmatchpos {
         let positions = unsafe { nested_list(fmatchlist, -2) };
@@ -807,13 +807,13 @@ unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool)
                 || unsafe { (*di).di_tv.string_or_null() }.is_null()
                 || unsafe { *(*di).di_tv.string_or_null() } == 0
             {
-                let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
+                let got = unsafe { numbuf2.string(&(*di).di_tv) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let got = unsafe { c_str(got) };
                 semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
-            key = unsafe { numbuf3.string(&raw const (*di).di_tv) };
+            key = unsafe { numbuf3.string(&(*di).di_tv) };
         } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
@@ -824,7 +824,7 @@ unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool)
                 semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }
-            limit = unsafe { tv_get_number_chk(&raw const (*di).di_tv, ptr::null_mut()) } as c_int;
+            limit = unsafe { tv_get_number_chk(&(*di).di_tv, ptr::null_mut()) } as c_int;
         }
         matchseq = unsafe { tv_dict_has_key(d, c"matchseq".as_ptr()) };
     }

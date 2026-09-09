@@ -64,9 +64,9 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 ///
 /// # Safety
 /// `result` is writable and holds no value that needs clearing.
-unsafe fn positive_integer_to_special_typval(result: *mut TypVal, val: u64) {
+unsafe fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
     if val <= VARNUMBER_MAX {
-        unsafe { result.write(TypVal::Number(val as VarNumber)) };
+        unsafe { ptr::write(result, TypVal::Number(val as VarNumber)) };
         return;
     }
     let list = tv_list_alloc(4);
@@ -138,24 +138,24 @@ unsafe extern "C-unwind" fn typval_parse_enter(
     let len = n.tok.length as size_t;
     match n.tok.type_0 {
         MPACK_TOKEN_NIL => {
-            unsafe { result.write(TypVal::Special(kSpecialVarNull)) };
+            unsafe { ptr::write(result, TypVal::Special(kSpecialVarNull)) };
         }
         MPACK_TOKEN_BOOLEAN => {
             let set = unsafe { mpack_unpack_boolean((*node).tok) };
             let v = if set { kBoolVarTrue } else { kBoolVarFalse };
-            unsafe { result.write(TypVal::Bool(v)) };
+            unsafe { ptr::write(result, TypVal::Bool(v)) };
         }
         MPACK_TOKEN_SINT => {
             let v = unsafe { mpack_unpack_sint((*node).tok) };
-            unsafe { result.write(TypVal::Number(v)) };
+            unsafe { ptr::write(result, TypVal::Number(v)) };
         }
         MPACK_TOKEN_UINT => {
             let v = unsafe { mpack_unpack_uint((*node).tok) };
-            unsafe { positive_integer_to_special_typval(result, v) };
+            unsafe { positive_integer_to_special_typval(&mut *result, v) };
         }
         MPACK_TOKEN_FLOAT => {
             let v = unsafe { mpack_unpack_float_fast((*node).tok) };
-            unsafe { result.write(TypVal::Float(v)) };
+            unsafe { ptr::write(result, TypVal::Float(v)) };
         }
         // Converted in typval_parse_exit, once the chunks have landed.
         MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
@@ -170,7 +170,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         MPACK_TOKEN_ARRAY => {
             let list = tv_list_alloc(len as ptrdiff_t);
             unsafe { tv_list_ref(list) };
-            unsafe { result.write(TypVal::List(list)) };
+            unsafe { ptr::write(result, TypVal::List(list)) };
             unsafe { (*node).data[1].p = list.cast() };
         }
         // Whether this can be a Dict is not knowable yet, so the pairs
@@ -219,10 +219,10 @@ pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
 /// first, with its values disowned so that they survive it.
 ///
 /// # Safety
-/// `pairs` points at `len * 2` decoded typvals and `result` is writable.
-unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bool {
+/// `pairs` holds `len * 2` decoded typvals and `result` is writable.
+unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> bool {
     for i in 0..len {
-        let key = unsafe { &*pairs.add(i * 2) };
+        let key = &pairs[i * 2];
         if key.v_type() != VAR_STRING
             || key.string_or_null().is_null()
             || unsafe { *key.string_or_null() } == 0
@@ -233,10 +233,10 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
 
     let dict = unsafe { tv_dict_alloc() };
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { result.write(TypVal::Dict(dict)) };
+    unsafe { ptr::write(result, TypVal::Dict(dict)) };
 
     for i in 0..len {
-        let key = unsafe { (*pairs.add(i * 2)).string_or_null() };
+        let key = pairs[i * 2].string_or_null();
         let di = unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) };
         if unsafe { tv_dict_add(dict, di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
@@ -256,12 +256,12 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
         // uncleared.  On the duplicate-key path above the move is undone:
         // every item added so far is disowned, leaving the pair array the
         // owner again for the special-map path to re-use.
-        unsafe { (*di).di_tv = ptr::read(pairs.add(i * 2 + 1)) };
+        unsafe { (*di).di_tv = ptr::read(&raw const pairs[i * 2 + 1]) };
     }
 
     // The keys were copied into the items; the originals are ours to free.
     for i in 0..len {
-        unsafe { xfree((*pairs.add(i * 2)).string_or_null().cast()) };
+        unsafe { xfree(pairs[i * 2].string_or_null().cast()) };
     }
     true
 }
@@ -284,7 +284,9 @@ unsafe extern "C-unwind" fn typval_parse_exit(
     match n.tok.type_0 {
         // The chunk buffer is handed straight to the string or blob.
         MPACK_TOKEN_BIN | MPACK_TOKEN_STR => {
-            unsafe { result.write(decode_string((*node).data[1].p.cast(), len, false, true)) };
+            let bytes = unsafe { (*node).data[1].p }.cast();
+            let text = unsafe { decode_string(bytes, len, false, true) };
+            unsafe { ptr::write(result, text) };
             unsafe { (*node).data[1].p = ptr::null_mut() };
         }
         // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes into a
@@ -296,7 +298,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
             let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
             unsafe { tv_list_append_list(list, ext_val_list) };
             let val_tv = TypVal::List(list);
-            unsafe { create_special_dict(result, kMPExt, val_tv) };
+            unsafe { create_special_dict(&mut *result, kMPExt, val_tv) };
             let bytes = unsafe { (*node).data[1].p }.cast();
             unsafe { encode_list_write(ext_val_list.cast(), bytes, len) };
             unsafe { xfree((*node).data[1].p) };
@@ -304,13 +306,17 @@ unsafe extern "C-unwind" fn typval_parse_exit(
         }
         MPACK_TOKEN_MAP => {
             let pairs: *mut TypVal = unsafe { (*node).data[1].p }.cast();
-            if !unsafe { map_to_dict(result, pairs, len) } {
-                let list = unsafe { decode_create_map_special_dict(result, len as ptrdiff_t) };
+            // SAFETY: the node's own `len * 2` decoded values.
+            let pairs = unsafe { ::core::slice::from_raw_parts_mut(pairs, len * 2) };
+            if !unsafe { map_to_dict(&mut *result, pairs, len) } {
+                let n = len as ptrdiff_t;
+                let list = unsafe { decode_create_map_special_dict(&mut *result, n) };
                 for i in 0..len {
                     let kv_pair = tv_list_alloc(2);
                     unsafe { tv_list_append_list(list, kv_pair) };
-                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(pairs.add(i * 2))) };
-                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(pairs.add(i * 2 + 1))) };
+                    let (k, v) = (&raw const pairs[i * 2], &raw const pairs[i * 2 + 1]);
+                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(k)) };
+                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(v)) };
                 }
             }
             unsafe { xfree((*node).data[1].p) };
@@ -349,9 +355,9 @@ pub unsafe fn mpack_parse_typval(
 pub unsafe fn unpack_typval(
     data: *mut *const c_char,
     size: *mut size_t,
-    ret: *mut TypVal,
+    ret: &mut TypVal,
 ) -> c_int {
-    unsafe { (*ret).write_empty(VAR_UNKNOWN) };
+    (*ret).write_empty(VAR_UNKNOWN);
     // `mpack_parser_init` writes every field this parser will be read
     // through, `items` included, so the C leaves the declaration
     // uninitialised too — and it is 2.5 KB, once per decoded object.
@@ -360,7 +366,7 @@ pub unsafe fn unpack_typval(
     let mut storage = MaybeUninit::<mpack_parser_t>::uninit();
     let parser = storage.as_mut_ptr();
     unsafe { mpack_parser_init(parser, 0) };
-    unsafe { (*parser).data.p = ret.cast() };
+    unsafe { (*parser).data.p = ::core::ptr::from_mut(ret).cast() };
     let status = unsafe { mpack_parse_typval(parser, data, size) };
     if status != MPACK_OK {
         unsafe { typval_parser_error_free(parser) };

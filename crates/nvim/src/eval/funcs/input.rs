@@ -186,7 +186,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if !list.is_null() {
         let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
-            msg_str(unsafe { cstr::at(numbuf.string(&raw const (*li).li_tv)) });
+            msg_str(unsafe { cstr::at(numbuf.string(&(*li).li_tv)) });
             // A UI that owns the message area keeps the items in one
             // message, bar the last separator.
             if !ui_has(kUIMessages) || !unsafe { (*li).li_next }.is_null() {

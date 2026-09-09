@@ -189,7 +189,7 @@ unsafe fn get_list_line(
         return ptr::null_mut();
     };
     let mut buf = [0 as c_char; NUMBUFLEN];
-    let s = unsafe { tv_get_string_buf_chk(&raw const item.li_tv, buf.as_mut_ptr()) };
+    let s = unsafe { tv_get_string_buf_chk(&item.li_tv, buf.as_mut_ptr()) };
     unsafe { (*state).item = item.li_next };
     if s.is_null() {
         ptr::null_mut()
@@ -496,13 +496,13 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         while i < arg_len {
             let from = unsafe { (*arg_pt).pt_argv.add(i as usize) };
             let to = unsafe { (*pt).pt_argv.add(i as usize) };
-            unsafe { tv_copy(from, to) };
+            unsafe { tv_copy(&*from, &mut *to) };
             i += 1;
         }
         if lv_len > 0 && !list.is_null() {
             let mut li = unsafe { (*list).lv_first };
             while !li.is_null() {
-                unsafe { tv_copy(&raw mut (*li).li_tv, (*pt).pt_argv.add(i as usize)) };
+                unsafe { tv_copy(&(*li).li_tv, &mut *(*pt).pt_argv.add(i as usize)) };
                 i += 1;
                 li = unsafe { (*li).li_next };
             }

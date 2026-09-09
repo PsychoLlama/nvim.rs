@@ -176,7 +176,7 @@ impl TagStack {
             let mut fnum = 0;
             if unsafe {
                 list2fpos(
-                    &raw mut (*from).di_tv,
+                    &(*from).di_tv,
                     &raw mut mark,
                     &raw mut fnum,
                     ptr::null_mut(),
@@ -360,7 +360,7 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
 
     let mut stack = TagStack::of(window);
     if let Some(di) = unsafe { find(d, c"curidx") } {
-        stack.set_curidx(unsafe { tv_get_number(&raw mut (*di).di_tv) } as c_int - 1);
+        stack.set_curidx(unsafe { tv_get_number(&(*di).di_tv) } as c_int - 1);
     }
 
     if action == 't' as c_int {

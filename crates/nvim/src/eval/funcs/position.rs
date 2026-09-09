@@ -534,11 +534,11 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     }
     let di = unsafe { tv_dict_find(d, c"forward".as_ptr(), 7) };
     if !di.is_null() {
-        let forward = unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0;
+        let forward = unsafe { tv_get_number(&(*di).di_tv) } != 0;
         set_csearch_direction(if forward { FORWARD } else { BACKWARD } as Direction);
     }
     let di = unsafe { tv_dict_find(d, c"until".as_ptr(), 5) };
     if !di.is_null() {
-        set_csearch_until((unsafe { tv_get_number(&raw mut (*di).di_tv) } != 0) as c_int);
+        set_csearch_until((unsafe { tv_get_number(&(*di).di_tv) } != 0) as c_int);
     }
 }

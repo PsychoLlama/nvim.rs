@@ -160,7 +160,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut Dict {
         let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
         // SAFETY: a live dictionary, a static key of the given length, and a
         // value the dictionary takes over.
-        if unsafe { tv_dict_add_tv(d, name, len, &raw mut tv) }.is_err() {
+        if unsafe { tv_dict_add_tv(d, name, len, &mut tv) }.is_err() {
             unref_dict(d);
             return ptr::null_mut::<Dict>();
         }

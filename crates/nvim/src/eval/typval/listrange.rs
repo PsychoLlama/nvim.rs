@@ -128,8 +128,8 @@ pub unsafe fn tv_list_assign_range(
         if !op.is_null() && unsafe { *op } as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
             let _ = unsafe { eexe_mod_op(&raw mut (*dest_li).li_tv, &raw mut (*src_li).li_tv, op) };
         } else {
-            unsafe { tv_clear(&raw mut (*dest_li).li_tv) };
-            unsafe { tv_copy(&raw mut (*src_li).li_tv, &raw mut (*dest_li).li_tv) };
+            unsafe { tv_clear(&mut (*dest_li).li_tv) };
+            unsafe { tv_copy(&(*src_li).li_tv, &mut (*dest_li).li_tv) };
         }
         src_li = unsafe { (*src_li).li_next };
         if src_li.is_null() || (!empty_idx2 && idx2 == idx) {
@@ -214,7 +214,7 @@ pub unsafe fn tv_list_flatten(
                 let n = int64_t::from(unsafe { (*itemlist).lv_len });
                 unsafe { tv_list_flatten(list, spliced_first, n, maxdepth - 1) };
             }
-            unsafe { tv_clear(&raw mut (*item).li_tv) };
+            unsafe { tv_clear(&mut (*item).li_tv) };
             unsafe { xfree(item.cast()) };
         }
 
@@ -232,7 +232,7 @@ pub(crate) unsafe fn tv_list_slice(ol: *mut List, mut n1: VarNumber, n2: VarNumb
     let l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
     let mut item = unsafe { tv_list_find(ol, n1 as ::core::ffi::c_int) };
     while n1 <= n2 {
-        unsafe { tv_list_append_tv(l, &raw mut (*item).li_tv) };
+        unsafe { tv_list_append_tv(l, &(*item).li_tv) };
         item = unsafe { (*item).li_next };
         n1 += 1;
     }
@@ -297,7 +297,7 @@ pub unsafe fn tv_list_slice_or_index(
         // invalid.
         let mut var1 = TV_INITIAL_VALUE;
         let li = unsafe { tv_list_find((*result).list_or_null(), n1 as ::core::ffi::c_int) };
-        unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut var1) };
+        unsafe { tv_copy(&(*li).li_tv, &mut var1) };
         unsafe { tv_clear(result) };
         *result = var1;
     }
@@ -329,7 +329,7 @@ pub(crate) unsafe fn list_join_inner(
             break;
         }
         let mut s = String_0::NULL;
-        let data = unsafe { encode_tv2echo(&raw mut (*item).li_tv, s.len_mut()) };
+        let data = unsafe { encode_tv2echo(&(*item).li_tv, s.len_mut()) };
         s.set_data(data);
         if s.data().is_null() {
             return Err(Failed);
@@ -452,7 +452,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { ga_init(&raw mut ga, 1, 80) };
     let mut buf: [::core::ffi::c_char; 22] = [0; 22];
     for li in tv_list_iter(unsafe { l.as_ref() }) {
-        let n = unsafe { tv_get_number(&raw const (*li).li_tv) };
+        let n = unsafe { tv_get_number(&(*li).li_tv) };
         let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
         buf[buflen as usize] = '\0' as ::core::ffi::c_char;
         unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };

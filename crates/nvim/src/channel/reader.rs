@@ -269,7 +269,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
     };
 
     unsafe { callback_call(cb, &argv, &mut rettv) };
-    unsafe { tv_clear(&raw mut rettv) };
+    unsafe { tv_clear(&mut rettv) };
 }
 
 /// Everything a reader has accumulated, as the list of lines its callback is

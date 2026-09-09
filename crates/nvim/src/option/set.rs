@@ -138,8 +138,8 @@ fn apply_optionset_autocmd(
     let mut oldval_l_tv = ManuallyDrop::new(optval_as_tv(oldval_l, false));
     let mut newval_tv = ManuallyDrop::new(optval_as_tv(newval, false));
 
-    unsafe { set_vim_var_tv(Vv::OptionOld, &raw mut *oldval_tv) };
-    unsafe { set_vim_var_tv(Vv::OptionNew, &raw mut *newval_tv) };
+    unsafe { set_vim_var_tv(Vv::OptionOld, &mut oldval_tv) };
+    unsafe { set_vim_var_tv(Vv::OptionNew, &mut newval_tv) };
 
     let type_str: &CStr = if opt_flags.has(OptionSetFlags::LOCAL) {
         c"local"
@@ -168,20 +168,20 @@ fn apply_optionset_autocmd(
     };
     if opt_flags.has(OptionSetFlags::LOCAL) {
         command(c"setlocal");
-        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut *oldval_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_tv) };
     }
     if opt_flags.has(OptionSetFlags::GLOBAL) {
         command(c"setglobal");
-        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &raw mut *oldval_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &mut oldval_tv) };
     }
     if !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL) {
         command(c"set");
-        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut *oldval_l_tv) };
-        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &raw mut *oldval_g_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_l_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldglobal, &mut oldval_g_tv) };
     }
     if opt_flags.has(OptionSetFlags::MODELINE) {
         command(c"modeline");
-        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &raw mut *oldval_tv) };
+        unsafe { set_vim_var_tv(Vv::OptionOldlocal, &mut oldval_tv) };
     }
 
     unsafe {

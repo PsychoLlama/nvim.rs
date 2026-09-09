@@ -28,7 +28,7 @@ use crate::eval::encode::{
     conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
 };
 use crate::eval::typval::{DictSlot, tv_blob_get};
-use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval};
+use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -277,11 +277,7 @@ impl TypvalSink for JsonSink<'_> {
 /// # Safety
 /// `gap` must be a live byte-item garray, `tv` a live typval and `objname`
 /// NUL-terminated.
-pub(crate) unsafe fn encode_vim_to_json(
-    gap: &mut Vec<u8>,
-    tv: *mut TypVal,
-    objname: *const c_char,
-) -> bool {
+pub(crate) unsafe fn encode_vim_to_json(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = JsonSink { gap };
-    unsafe { encode_typval(&mut sink, tv, objname) }
+    unsafe { encode_typval_read(&mut sink, tv, objname) }
 }

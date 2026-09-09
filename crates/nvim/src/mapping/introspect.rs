@@ -343,7 +343,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let dict =
                     mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true, &raw mut arena);
                 let mut obj = Object::dict(dict);
-                object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
+                object_to_vim_take_luaref(&raw mut obj, &mut d, true);
                 debug_assert_eq!(d.v_type(), VAR_DICT);
                 tv_list_append_dict((*result).list_or_null(), d.dict_or_null());
                 arena_mem_free(arena_finish(&raw mut arena));

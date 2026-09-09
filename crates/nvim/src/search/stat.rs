@@ -337,7 +337,7 @@ unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_i
         return Some(current);
     }
     let mut error = false;
-    let value = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) } as c_int;
+    let value = unsafe { tv_get_number_chk(&(*di).di_tv, &raw mut error) } as c_int;
     if error { None } else { Some(value) }
 }
 
@@ -351,7 +351,7 @@ unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c
         return Some(current);
     }
     let mut error = false;
-    let value = unsafe { tv_get_number_chk(&raw mut (*li).li_tv, &raw mut error) } as c_int;
+    let value = unsafe { tv_get_number_chk(&(*li).li_tv, &raw mut error) } as c_int;
     if error { None } else { Some(value) }
 }
 
@@ -391,7 +391,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
         let di = unsafe { tv_dict_find(dict, c"pattern".as_ptr(), -1 as ptrdiff_t) };
         if !di.is_null() {
-            pattern = unsafe { numbuf.string_chk(&raw mut (*di).di_tv) } as *mut c_char;
+            pattern = unsafe { numbuf.string_chk(&(*di).di_tv) } as *mut c_char;
             if pattern.is_null() {
                 return;
             }

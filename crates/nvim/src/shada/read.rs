@@ -626,7 +626,7 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
         ShadaEntryData::HistoryEntry(item) => unsafe { xfree(item.string.cast()) },
         ShadaEntryData::Variable(var) => {
             unsafe { xfree(var.name.cast()) };
-            unsafe { tv_clear(&raw mut var.value) };
+            unsafe { tv_clear(&mut var.value) };
         }
         ShadaEntryData::SubString(sub) => unsafe { xfree(sub.sub.cast()) },
         ShadaEntryData::BufferList(list) => {

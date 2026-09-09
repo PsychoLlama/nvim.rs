@@ -71,7 +71,7 @@ unsafe fn matchadd_dict_arg(
 
     let di = unsafe { find(dict, "conceal") };
     if !di.is_null() {
-        unsafe { *conceal_char = numbuf.string(&raw mut (*di).di_tv) };
+        unsafe { *conceal_char = numbuf.string(&(*di).di_tv) };
     }
 
     let di = unsafe { find(dict, "window") };
@@ -218,7 +218,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                     // inside a `posN` key.
                     return;
                 }
-                unsafe { tv_list_append_tv(positions, &raw mut (*pos_di).di_tv) };
+                unsafe { tv_list_append_tv(positions, &(*pos_di).di_tv) };
                 unsafe { tv_list_ref(positions) };
             }
         }
@@ -232,7 +232,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         let conceal = if conceal_di.is_null() {
             ::core::ptr::null()
         } else {
-            unsafe { numbuf.string(&raw mut (*conceal_di).di_tv) }
+            unsafe { numbuf.string(&(*conceal_di).di_tv) }
         };
 
         let added = if positions.is_null() {

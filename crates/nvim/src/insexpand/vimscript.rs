@@ -85,7 +85,7 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> *mut Dict 
 /// # Safety
 ///
 /// `tv` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: bool) -> c_int {
+pub(crate) unsafe fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: *const c_char;
@@ -96,8 +96,8 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: b
     let mut user_hl: [c_int; 2] = [-1, -1];
     let mut user_data = TYPVAL_T_INIT;
 
-    if unsafe { (*tv).v_type() } == VAR_DICT && !unsafe { (*tv).dict_or_null() }.is_null() {
-        let d = unsafe { (*tv).dict_or_null() };
+    if (*tv).v_type() == VAR_DICT && !(*tv).dict_or_null().is_null() {
+        let d = (*tv).dict_or_null();
         // The four cptext strings are copied and owned by the match from
         // here on; the two highlight names and `word` are borrowed, so
         // each borrowing answer renders into a scratch of its own —
@@ -130,7 +130,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: b
 
     if word.is_null() || (!empty && unsafe { *word } as c_int == NUL) {
         unsafe { free_cptext(cptext.as_ptr()) };
-        unsafe { tv_clear(&raw mut user_data) };
+        unsafe { tv_clear(&mut user_data) };
         return FAIL;
     }
 
@@ -140,13 +140,15 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: b
     // SAFETY: `text` is NUL-terminated (`len < 0`), `cpt` is the four
     // allocated strings this call hands over, `data` and `hl` are this
     // frame's own locals, and there is no file name.
+    // SAFETY: the user data this frame owns until the add takes it.
+    let data = unsafe { Some(&mut *data) };
     let status =
         unsafe { ins_compl_add(text, -1, none, cpt, true, data, dir, flags, dup, hl, score) };
     // Anything but `OK` leaves the value with this frame -- `NOTDONE` (the
     // word was already in the list) included, which the transpile read as
     // success and leaked.
     if status != OK {
-        unsafe { tv_clear(&raw mut user_data) };
+        unsafe { tv_clear(&mut user_data) };
     }
     status
 }
@@ -163,7 +165,7 @@ pub(crate) unsafe fn ins_compl_add_list(list: *mut List) {
     }
     let mut li = unsafe { (*list).lv_first };
     while !li.is_null() {
-        if unsafe { ins_compl_add_tv(&raw mut (*li).li_tv, dir, true) } == OK {
+        if unsafe { ins_compl_add_tv(&(*li).li_tv, dir, true) } == OK {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
         } else if did_emsg.get() != 0 {
@@ -412,7 +414,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
         let (key, klen) = ("user_data".as_ptr().cast(), "user_data".len());
         // SAFETY: `di` is the dict being built, and the value is the address
         // of one of the live match's fields, taken from its raw pointer.
-        let _ = unsafe { tv_dict_add_tv(di, key, klen, &raw mut (*match_0).cp_user_data) };
+        let _ = unsafe { tv_dict_add_tv(di, key, klen, &mut (*match_0).cp_user_data) };
     }
 }
 
@@ -437,7 +439,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         while !item.is_null() {
             // `tv_get_string` answers "" rather than NULL for anything it
             // cannot render, so this is never a null pointer.
-            let what = unsafe { CStr::from_ptr(numbuf.string(&raw mut (*item).li_tv)) };
+            let what = unsafe { CStr::from_ptr(numbuf.string(&(*item).li_tv)) };
             what_flag |= match what.to_bytes() {
                 b"mode" => CI_WHAT_MODE,
                 b"pum_visible" => CI_WHAT_PUM_VISIBLE,

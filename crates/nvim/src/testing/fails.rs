@@ -138,7 +138,7 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
                 return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
             }
             let mut tv: *const TypVal = unsafe { &raw mut (*tv_list_first(list)).li_tv };
-            let mut expected = unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) };
+            let mut expected = unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()) };
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
@@ -156,7 +156,7 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
             actual = unsafe { xstrdup(get_vim_var_str(Vv::Errmsg)) };
             *tofree = actual;
             tv = unsafe { &raw mut (*tv_list_last(list)).li_tv };
-            expected = unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) };
+            expected = unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()) };
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
@@ -222,7 +222,7 @@ unsafe fn check_error_position(args: &[TypVal]) -> FailsCheck {
 /// `args` has five slots and `cmd` is the command that was run.
 unsafe fn report_fails_mismatch(args: &[TypVal], cmd: *const c_char, mismatch: &FailsMismatch) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
-    let mut actual_tv = ManuallyDrop::new(match mismatch.index {
+    let actual_tv = ManuallyDrop::new(match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
         4 => TypVal::String(emsg_assert_fails_context.get()),
         _ => TypVal::String(mismatch.actual),
@@ -234,8 +234,8 @@ unsafe fn report_fails_mismatch(args: &[TypVal], cmd: *const c_char, mismatch: &
             gap,
             args.get(2),
             mismatch.expected_str,
-            &args[mismatch.index],
-            &raw mut *actual_tv,
+            Some(&args[mismatch.index]),
+            &actual_tv,
             AssertType::Fails,
         )
     };

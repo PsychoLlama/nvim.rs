@@ -36,7 +36,7 @@ use crate::eval::typval::{
     tv_list_ref,
 };
 use crate::eval::typval_encode::{
-    ConvPath, ConvType, Flow, InlineStack, TypvalSink, encode_typval,
+    ConvPath, ConvType, Flow, InlineStack, TypvalSink, encode_typval_read,
 };
 use crate::eval::userfunc::FuncFlags;
 use crate::eval::userfunc::{find_func, register_luafunc};
@@ -354,7 +354,7 @@ impl TypvalSink for ObjectSink {
 ///
 /// # Safety
 /// `obj` must point at a live typval, and `arena` be null or a live arena.
-pub unsafe fn vim_to_object(obj: *const TypVal, arena: *mut Arena, reuse_strdata: bool) -> Object {
+pub unsafe fn vim_to_object(obj: &TypVal, arena: *mut Arena, reuse_strdata: bool) -> Object {
     let mut sink = ObjectSink {
         stack: InlineStack::new(),
         arena,
@@ -362,8 +362,8 @@ pub unsafe fn vim_to_object(obj: *const TypVal, arena: *mut Arena, reuse_strdata
     };
     // SAFETY: the caller's typval, walked by a sink that cannot fail on any
     // value a live one can hold.
-    let obj = obj.cast_mut();
-    let converted = unsafe { encode_typval(&mut sink, obj, c"vim_to_object argument".as_ptr()) };
+    let name = c"vim_to_object argument";
+    let converted = unsafe { encode_typval_read(&mut sink, obj, name) };
     debug_assert!(converted);
     debug_assert!(sink.stack.len() == 1);
     if sink.stack.is_empty() {
@@ -381,7 +381,7 @@ pub unsafe fn vim_to_object(obj: *const TypVal, arena: *mut Arena, reuse_strdata
 ///
 /// # Safety
 /// `tv` must point at writable typval storage.
-pub unsafe fn object_to_vim(obj: Object, tv: *mut TypVal) {
+pub unsafe fn object_to_vim(obj: Object, tv: &mut TypVal) {
     let mut obj = obj;
     unsafe { object_to_vim_take_luaref(&raw mut obj, tv, false) };
 }
@@ -395,7 +395,7 @@ pub unsafe fn object_to_vim(obj: Object, tv: *mut TypVal) {
 ///
 /// # Safety
 /// As [`object_to_vim`]; `obj` must point at a live object tree.
-pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_luaref: bool) {
+pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: &mut TypVal, take_luaref: bool) {
     // SAFETY: the caller's promise -- `tv` is writable typval storage and
     // `obj` a live both for the length of the call.
     let mut tv = unsafe { Live::<TypVal>::new(tv) };
@@ -432,7 +432,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
                 // SAFETY: `i` is below `size`, so the slot is inside
                 // `items`, and `li_tv` is this frame's.
                 unsafe {
-                    object_to_vim_take_luaref(array.items.add(i), &raw mut li_tv, take_luaref);
+                    object_to_vim_take_luaref(array.items.add(i), &mut li_tv, take_luaref);
                     tv_list_append_owned_tv(list, li_tv);
                 }
             }
@@ -450,7 +450,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
                     let item: *mut KeyValuePair = pairs.items.add(i);
                     let di: *mut DictItem = tv_dict_item_alloc((*item).key.data());
                     let value = &raw mut (*item).value;
-                    object_to_vim_take_luaref(value, &raw mut (*di).di_tv, take_luaref);
+                    object_to_vim_take_luaref(value, &mut (*di).di_tv, take_luaref);
                     let _ = tv_dict_add(dict, di);
                 }
             }

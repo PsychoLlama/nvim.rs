@@ -333,7 +333,7 @@ unsafe fn stacktrace_push_item(
     // The dictionary is still unowned -- `tv_dict_alloc` starts it at zero --
     // so the value that names it must not release it: the append's copy is
     // what takes the first reference.
-    let mut tv = ManuallyDrop::new(TypVal::Dict(d));
+    let tv = ManuallyDrop::new(TypVal::Dict(d));
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }
@@ -342,7 +342,7 @@ unsafe fn stacktrace_push_item(
     }
     unsafe { dict_add_nr(d, c"lnum", VarNumber::from(lnum)) };
     unsafe { dict_add_str(d, c"filepath", filepath) };
-    unsafe { tv_list_append_tv(l, &raw mut *tv) };
+    unsafe { tv_list_append_tv(l, &tv) };
 }
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,

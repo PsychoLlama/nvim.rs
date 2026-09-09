@@ -333,7 +333,7 @@ unsafe fn search_tag_pair(spat: *const c_char, epat: *const c_char, dir: c_int) 
             c"".as_ptr(),
             epat,
             dir,
-            ptr::null(),
+            None,
             0,
             ptr::null_mut(),
             0,

@@ -305,8 +305,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             let mut error = false;
-            let start =
-                unsafe { tv_get_number_chk(&raw mut (*tv_list_first(l)).li_tv, &raw mut error) };
+            let start = unsafe { tv_get_number_chk(&(*tv_list_first(l)).li_tv, &raw mut error) };
             if error {
                 break 'body Label::Error;
             } else if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
@@ -331,12 +330,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 unsafe { (*ccline_colors).push(coloured) };
             }
 
-            let end = unsafe {
-                tv_get_number_chk(
-                    &raw mut (*(*tv_list_first(l)).li_next).li_tv,
-                    &raw mut error,
-                )
-            };
+            let end =
+                unsafe { tv_get_number_chk(&(*(*tv_list_first(l)).li_next).li_tv, &raw mut error) };
             if error {
                 break 'body Label::Error;
             } else if !(start < end && end <= colored_ccline.len() as VarNumber) {
@@ -353,7 +348,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             prev_end = end;
-            let group = unsafe { numbuf.string_chk(&raw mut (*tv_list_last(l)).li_tv) };
+            let group = unsafe { numbuf.string_chk(&(*tv_list_last(l)).li_tv) };
             if group.is_null() {
                 break 'body Label::Error;
             }
@@ -423,6 +418,6 @@ msg_putchar('\n' as ::core::ffi::c_int);
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ccline_colors).remember(id, text) };
     }
-    unsafe { tv_clear(&raw mut tv) };
+    unsafe { tv_clear(&mut tv) };
     ret
 }

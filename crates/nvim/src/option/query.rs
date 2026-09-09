@@ -199,13 +199,13 @@ pub(crate) unsafe fn option_set_callback_func(
         tv
     };
     let mut cb = Callback::None;
-    if !unsafe { callback_from_typval(&raw mut cb, tv) } || !cb.is_set() {
-        unsafe { tv_free(tv) };
+    if !unsafe { callback_from_typval(&raw mut cb, &*tv) } || !cb.is_set() {
+        unsafe { tv_free(tv.as_mut()) };
         return Err(Failed);
     }
     unsafe { callback_free(optcb) };
     unsafe { *optcb = cb };
-    unsafe { tv_free(tv) };
+    unsafe { tv_free(tv.as_mut()) };
     Ok(())
 }
 
@@ -460,7 +460,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         let mut tv =
             ManuallyDrop::new(unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) });
         let name = get_option(opt_idx).fullname;
-        let _ = unsafe { tv_dict_add_tv(d, name, cstr::bytes_at(name).len(), &raw mut *tv) };
+        let _ = unsafe { tv_dict_add_tv(d, name, cstr::bytes_at(name).len(), &mut tv) };
     }
     d
 }

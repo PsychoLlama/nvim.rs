@@ -78,9 +78,9 @@ fn code_point(bytes: &[u8], char_len: usize) -> c_int {
 /// `args` must point at an initialized typval, unaliased for the call.
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-unsafe fn byteidx_common(args: &[TypVal], result: *mut TypVal, comp: bool) {
+unsafe fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_number(-1) };
+    (*result).write_number(-1);
 
     let str = unsafe { numbuf.string_chk(&args[0]) };
     let mut idx = unsafe { tv_get_number_chk(&args[1], ptr::null_mut()) };
@@ -120,7 +120,7 @@ unsafe fn byteidx_common(args: &[TypVal], result: *mut TypVal, comp: bool) {
         }
         idx -= 1;
     }
-    unsafe { (*result).write_number(at as VarNumber) };
+    (*result).write_number(at as VarNumber);
 }
 
 /// "byteidx()" function

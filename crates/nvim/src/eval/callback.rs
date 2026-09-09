@@ -22,8 +22,7 @@ use crate::eval::userfunc::{call_func, func_ref, get_scriptlocal_funcname};
 use crate::eval::vars::emsg_static;
 use crate::eval::vars::get_vim_var_partial;
 use crate::eval::{
-    ARRAY_DICT_INIT, FUNCEXE_INIT, Tv, callback_depth, check_luafunc_name, kRetNilBool,
-    partial_name,
+    ARRAY_DICT_INIT, FUNCEXE_INIT, callback_depth, check_luafunc_name, kRetNilBool, partial_name,
 };
 use crate::lua::executor::{
     nlua_call_ref_quiet, nlua_is_table_from_lua, nlua_register_table_as_callable,
@@ -46,14 +45,14 @@ use crate::winlayer::Win;
 ///
 /// # Safety
 /// `callback` and `arg` must be valid.
-pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) -> bool {
+pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> bool {
     // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
     // is only ever read through, which is what makes casting its `const`
     // away sound.
     // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
     // is only ever read through, which is what makes casting its `const`
     // away sound.
-    let tv = unsafe { Tv::new(arg.cast_mut()) };
+    let tv = arg;
     let mut r = OK;
     // Every union read below is guarded by the `v_type` that names the live
     // member, which is the promise each SAFETY note restates.
@@ -215,7 +214,7 @@ pub unsafe fn set_ref_in_callback(
             // releases nothing.
             let mut tv = ManuallyDrop::new(TypVal::Partial(*partial));
             // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-            unsafe { set_ref_in_item(&raw mut *tv, copy_id, ht_stack, list_stack) }
+            unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) }
         }
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
@@ -247,7 +246,7 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
         // As above: the reader keeps the reference.
         let mut tv = ManuallyDrop::new(TypVal::Dict(self_dict));
         // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-        return unsafe { set_ref_in_item(&raw mut *tv, copy_id, ht_stack, list_stack) };
+        return unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) };
     }
     false
 }

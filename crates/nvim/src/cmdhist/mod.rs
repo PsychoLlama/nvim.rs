@@ -311,7 +311,7 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
+unsafe fn arg_histtype(arg: &TypVal) -> HistoryType {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; a non-null result is a NUL-terminated string
     // owned by the typval, which outlives the lookup.

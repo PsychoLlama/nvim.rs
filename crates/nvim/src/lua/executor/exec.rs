@@ -72,11 +72,14 @@ unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
     }
 }
 
+/// The chunk name `luaeval()` errors carry.
+const EVALNAME: &CStr = c"luaeval()";
+
 /// `luaeval(str, arg)`.
 ///
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
-pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: *mut TypVal) {
+pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: &mut TypVal) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
     unsafe {
@@ -90,7 +93,7 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: *mut TypVal)
             .copy_from_nonoverlapping(str.data().cast(), str.len());
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
         let arg = ::core::slice::from_ref(arg);
-        nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, true, ret_tv);
+        nlua_typval_exec(lcmd, lcmd_len, EVALNAME.as_ptr(), arg, true, Some(ret_tv));
         free_chunk_buffer(scratch, lcmd);
     }
 }
@@ -120,7 +123,7 @@ pub unsafe fn nlua_typval_call(
         (lcmd.add(head + len))
             .cast::<u8>()
             .copy_from_nonoverlapping(CALLSUFFIX.as_ptr().cast(), tail);
-        nlua_typval_exec(lcmd, lcmd_len, c"v:lua".as_ptr(), args, false, ret_tv);
+        nlua_typval_exec(lcmd, lcmd_len, c"v:lua".as_ptr(), args, false, Some(ret_tv));
         free_chunk_buffer(scratch, lcmd);
     }
 }
@@ -129,7 +132,7 @@ pub unsafe fn nlua_typval_call(
 ///
 /// # Safety
 /// `xp` must carry a live `xp_luaref`, and `ret_tv` be writable.
-pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: *mut TypVal) {
+pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: &mut TypVal) {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, (*xp).xp_luaref);
@@ -151,20 +154,19 @@ pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: *mut TypVal) {
 /// argument reaches the chunk.
 ///
 /// # Safety
-/// `lcmd`/`lcmd_len` must name a readable chunk, and `ret_tv` be writable or
-/// null.
+/// `lcmd`/`lcmd_len` must name a readable chunk.
 pub(crate) unsafe fn nlua_typval_exec(
     lcmd: *const c_char,
     lcmd_len: size_t,
     name: *const c_char,
     args: &[TypVal],
     special: bool,
-    ret_tv: *mut TypVal,
+    mut ret_tv: Option<&mut TypVal>,
 ) {
     unsafe {
         if check_secure() {
-            if !ret_tv.is_null() {
-                (*ret_tv).write_number(0 as VarNumber);
+            if let Some(ret_tv) = ret_tv {
+                ret_tv.write_number(0 as VarNumber);
             }
             return;
         }
@@ -175,11 +177,11 @@ pub(crate) unsafe fn nlua_typval_exec(
         }
         push_typval_args(lstate, args, special);
         let argcount = args.len() as c_int;
-        if nlua_pcall(lstate, argcount, if ret_tv.is_null() { 0 } else { 1 }) != 0 {
+        if nlua_pcall(lstate, argcount, c_int::from(ret_tv.is_some())) != 0 {
             nlua_error(lstate, gettext(c"E5108: Lua: %.*s").as_ptr());
             return;
         }
-        if !ret_tv.is_null() {
+        if let Some(ret_tv) = ret_tv.take() {
             nlua_pop_typval(lstate, ret_tv);
         }
     }
@@ -200,7 +202,7 @@ unsafe fn push_typval_args(lstate: *mut lua_State, args: &[TypVal], special: boo
             if arg.v_type() == VAR_UNKNOWN {
                 lua_pushnil(lstate);
             } else {
-                nlua_push_typval(lstate, ptr::from_ref(arg).cast_mut(), flags);
+                nlua_push_typval(lstate, arg, flags);
             }
         }
     }
@@ -229,7 +231,7 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
             name,
             &[],
             false,
-            ptr::null_mut::<TypVal>(),
+            None,
         );
     };
 }

@@ -100,7 +100,8 @@ unsafe fn assert_equal_common(args: &[TypVal], atype: AssertType) -> c_int {
         return 0;
     }
     let mut ga = unsafe { prepare_assert_error() };
-    unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), &args[0], &args[1], atype) };
+    let expected = Some(&args[0]);
+    unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), expected, &args[1], atype) };
     report_assert_error(&ga);
     1
 }
@@ -123,7 +124,8 @@ unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
         return 0;
     }
     let mut ga = unsafe { prepare_assert_error() };
-    unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), &args[0], &args[1], atype) };
+    let expected = Some(&args[0]);
+    unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), expected, &args[1], atype) };
     report_assert_error(&ga);
     1
 }
@@ -153,7 +155,7 @@ unsafe fn assert_bool(args: &[TypVal], is_true: bool) -> c_int {
             &mut ga,
             args.get(1),
             (if is_true { c"True" } else { c"False" }).as_ptr(),
-            ptr::null_mut(),
+            None,
             &args[0],
             AssertType::Other,
         )
@@ -431,7 +433,7 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
             &mut ga,
             args.get(3),
             expected.as_ptr(),
-            ptr::null_mut(),
+            None,
             &args[2],
             AssertType::Other,
         )
@@ -492,8 +494,8 @@ pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: Ev
                 &mut ga,
                 args.get(1),
                 ptr::null(),
-                &args[0],
-                get_vim_var_tv(Vv::Exception),
+                Some(&args[0]),
+                &*get_vim_var_tv(Vv::Exception),
                 AssertType::Other,
             )
         };

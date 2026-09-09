@@ -84,7 +84,7 @@ pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut DictIt
 /// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `FuncCall`
 /// or a scope dictionary is merely emptied.
 pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
-    unsafe { tv_clear(&raw mut (*item).di_tv) };
+    unsafe { tv_clear(&mut (*item).di_tv) };
     if unsafe { (*item).di_flags } as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
         unsafe { xfree(item.cast()) };
     }
@@ -97,7 +97,7 @@ pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
 /// obligation as [`tv_dict_item_alloc_len`]'s result.
 pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
     let new_di = unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) };
-    unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv) };
+    unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
     new_di
 }
 
@@ -247,7 +247,7 @@ pub unsafe fn tv_dict_unref(d: *mut Dict) {
 /// still the caller's to free.
 pub unsafe fn tv_dict_add(d: *mut Dict, item: *mut DictItem) -> Result<(), Failed> {
     let key = tv_dict_item_key(item);
-    if unsafe { tv_dict_wrong_func_name(d, &raw mut (*item).di_tv, key) } != 0 {
+    if unsafe { tv_dict_wrong_func_name(d, &mut (*item).di_tv, key) } != 0 {
         return Err(Failed);
     }
     unsafe { hash_add(&raw mut (*d).dv_hashtab, key) }
@@ -281,10 +281,10 @@ pub unsafe fn tv_dict_add_tv(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    unsafe { tv_copy(tv, &raw mut (*item).di_tv) };
+    unsafe { tv_copy(tv, &mut (*item).di_tv) };
     unsafe { add_or_free(d, item) }
 }
 
@@ -533,24 +533,24 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
                 break;
             }
             // Disallow replacing a builtin function.
-            if unsafe { tv_dict_wrong_func_name(d1, &raw mut (*di2).di_tv, di2_key) } != 0 {
+            if unsafe { tv_dict_wrong_func_name(d1, &mut (*di2).di_tv, di2_key) } != 0 {
                 break;
             }
 
             let mut oldtv = TV_INITIAL_VALUE;
             if watched {
-                unsafe { tv_copy(&raw mut (*di1).di_tv, &raw mut oldtv) };
+                unsafe { tv_copy(&(*di1).di_tv, &mut oldtv) };
             }
 
-            unsafe { tv_clear(&raw mut (*di1).di_tv) };
-            unsafe { tv_copy(&raw mut (*di2).di_tv, &raw mut (*di1).di_tv) };
+            unsafe { tv_clear(&mut (*di1).di_tv) };
+            unsafe { tv_copy(&(*di2).di_tv, &mut (*di1).di_tv) };
 
             if watched {
                 let key = tv_dict_item_key(di1);
                 // SAFETY: the item just overwritten in `d1`.
                 let new = Some(unsafe { &*di_tv(di1) });
                 unsafe { tv_dict_watcher_notify(d1, key, new, Some(&oldtv)) };
-                unsafe { tv_clear(&raw mut oldtv) };
+                unsafe { tv_clear(&mut oldtv) };
             }
         }
     }
@@ -584,7 +584,7 @@ pub unsafe fn tv_dict_equal(d1: *mut Dict, d2: *mut Dict, ic: bool) -> bool {
     for hi in unsafe { tv_dict_iter(d1) } {
         let di1 = unsafe { tv_dict_hi2di(hi) };
         let di2 = unsafe { tv_dict_find(d2, tv_dict_item_key(di1), -1) };
-        if di2.is_null() || !unsafe { tv_equal(&raw mut (*di1).di_tv, &raw mut (*di2).di_tv, ic) } {
+        if di2.is_null() || !unsafe { tv_equal(&(*di1).di_tv, &(*di2).di_tv, ic) } {
             return false;
         }
     }
@@ -642,12 +642,12 @@ pub unsafe fn tv_dict_copy(
         if deep {
             let from = di_tv(di);
             let to = di_tv(new_di);
-            if unsafe { var_item_copy(conv, from, to, deep, copy_id) }.is_err() {
+            if unsafe { var_item_copy(conv, &*from, &mut *to, deep, copy_id) }.is_err() {
                 unsafe { xfree(new_di.cast()) };
                 break;
             }
         } else {
-            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*new_di).di_tv) };
+            unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
         }
         if unsafe { tv_dict_add(copy, new_di) }.is_err() {
             unsafe { tv_dict_item_free(new_di) };

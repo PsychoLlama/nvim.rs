@@ -105,12 +105,11 @@ pub unsafe fn do_string_sub(
     len: size_t,
     pat: *mut c_char,
     sub: *mut c_char,
-    expr: *const TypVal,
+    expr: &TypVal,
     flags: *const c_char,
     ret_len: *mut size_t,
 ) -> *mut c_char {
     let _cpo = QuietCpo::enter();
-    let expr = expr.cast_mut();
     let mut out = Vec::<u8>::new();
     // Whether anything was substituted. The garray answered this by having
     // been allocated at all; a `Vec` cannot, and an empty result is a real

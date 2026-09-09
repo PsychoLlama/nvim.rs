@@ -320,7 +320,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let list = unsafe { (*regcontents).list_or_null() };
         unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {
-        let strval = unsafe { numbuf5.string_chk(regcontents) };
+        let strval = unsafe { numbuf5.string_chk(&*regcontents) };
         if strval.is_null() {
             return;
         }
@@ -368,7 +368,7 @@ unsafe fn write_list(
         let mut li: *const ListItem = unsafe { (*l).lv_first };
         while !li.is_null() {
             let mut buf: [c_char; 65] = [0; 65];
-            let s = unsafe { tv_get_string_buf_chk(&raw const (*li).li_tv, buf.as_mut_ptr()) };
+            let s = unsafe { tv_get_string_buf_chk(&(*li).li_tv, buf.as_mut_ptr()) };
             if s.is_null() {
                 complete = false;
                 break;

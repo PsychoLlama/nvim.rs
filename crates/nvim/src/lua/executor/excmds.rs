@@ -33,9 +33,7 @@ use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
-use crate::types::{
-    Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, TypVal, lua_Number, size_t,
-};
+use crate::types::{Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, lua_Number, size_t};
 use crate::undo::u_save;
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
@@ -81,14 +79,7 @@ pub unsafe fn ex_lua(eap: *mut ExArg) {
             code = code_buf;
         }
 
-        nlua_typval_exec(
-            code,
-            len,
-            c":lua".as_ptr(),
-            &[],
-            false,
-            ptr::null_mut::<TypVal>(),
-        );
+        nlua_typval_exec(code, len, c":lua".as_ptr(), &[], false, None);
         xfree(code.cast::<c_void>());
     }
 }

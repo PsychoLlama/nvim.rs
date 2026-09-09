@@ -42,7 +42,7 @@ unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut DictItem) -> Result<(), QfError
     // SAFETY: the list's own callback slot, and the caller's entry.
     unsafe { callback_free(&raw mut qfl.qf_qftf_cb) };
     // A value that is not a callable leaves the list without one.
-    if unsafe { callback_from_typval(&raw mut cb, &raw mut (*di).di_tv) } {
+    if unsafe { callback_from_typval(&raw mut cb, &(*di).di_tv) } {
         qfl.qf_qftf_cb = cb;
     }
     Ok(())
@@ -134,7 +134,7 @@ unsafe fn qf_add_entry_from_dict(
     unsafe { xfree(module.cast()) };
     unsafe { xfree(pattern.cast()) };
     unsafe { xfree(text.cast()) };
-    unsafe { tv_clear(&raw mut user_data) };
+    unsafe { tv_clear(&mut user_data) };
 
     if valid {
         *valid_entry = true;
@@ -463,7 +463,7 @@ unsafe fn qf_setprop_items_from_lines(
             qf_idx,
             ptr::null(),
             None,
-            &raw mut (*di).di_tv,
+            Some(&mut (*di).di_tv),
             errorformat,
             false,
             0,
@@ -487,9 +487,9 @@ unsafe fn qf_setprop_items_from_lines(
 unsafe fn qf_setprop_context(mut qfl: Qfl, di: *mut DictItem) {
     // SAFETY: the list's own context slot, and the caller's entry.
     let ctx: *mut TypVal = unsafe {
-        tv_free(qfl.qf_ctx);
-        let ctx = xcalloc(1, size_of::<TypVal>()).cast();
-        tv_copy(&raw mut (*di).di_tv, ctx);
+        tv_free(qfl.qf_ctx.as_mut());
+        let ctx: *mut TypVal = xcalloc(1, size_of::<TypVal>()).cast();
+        tv_copy(&(*di).di_tv, &mut *ctx);
         ctx
     };
     qfl.qf_ctx = ctx;
@@ -511,7 +511,7 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result
             qfl.qf_count
         } else {
             let mut not_a_number = false;
-            let idx = tv_get_number_chk(&raw const (*di).di_tv, &raw mut not_a_number) as c_int;
+            let idx = tv_get_number_chk(&(*di).di_tv, &raw mut not_a_number) as c_int;
             if not_a_number {
                 return Err(QfError::BadValue);
             }

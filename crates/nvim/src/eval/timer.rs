@@ -99,7 +99,7 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
     }
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback and `di` the item just added.
-    unsafe { callback_put(cb, &raw mut (*di).di_tv) };
+    unsafe { callback_put(cb, &mut (*di).di_tv) };
 }
 
 /// Fill `result` with a List describing every live timer.

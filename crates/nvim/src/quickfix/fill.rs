@@ -292,7 +292,7 @@ unsafe fn call_qftf_func(
             answer = rettv.list_or_null();
             unsafe { tv_list_ref(answer) };
         }
-        unsafe { tv_clear(&raw mut rettv) };
+        unsafe { tv_clear(&mut rettv) };
     }
     drop(locked);
     unsafe { tv_dict_unref(dict) };
@@ -437,7 +437,7 @@ pub(crate) unsafe fn qf_fill_buffer(
             // its answer is ignored too.
             let mut qftf_str = ptr::null::<c_char>();
             if !qftf_li.is_null() && !invalid_val {
-                qftf_str = unsafe { numbuf.string_chk(&raw mut (*qftf_li).li_tv) };
+                qftf_str = unsafe { numbuf.string_chk(&(*qftf_li).li_tv) };
                 if qftf_str.is_null() {
                     invalid_val = true;
                 }

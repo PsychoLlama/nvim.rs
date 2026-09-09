@@ -527,7 +527,7 @@ pub(crate) fn get_next_filename_completion() {
                         ptr::null_mut(),
                         ptr::null(),
                         false,
-                        ptr::null_mut(),
+                        None,
                         dir,
                         CP_FAST
                             | if p_fic.get() != 0 || p_wic.get() != 0 {

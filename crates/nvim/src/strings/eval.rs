@@ -199,7 +199,7 @@ pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `args` must point at an initialized typval, unaliased for the call.
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-unsafe fn strchar_common(args: &[TypVal], result: *mut TypVal, skipcc: bool) {
+unsafe fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
     let mut numbuf = NumBuf::new();
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
         mb_ptr2char_adv
@@ -212,7 +212,7 @@ unsafe fn strchar_common(args: &[TypVal], result: *mut TypVal, skipcc: bool) {
         unsafe { next_char(&raw mut s) };
         len += 1;
     }
-    unsafe { (*result).write_number(len) };
+    (*result).write_number(len);
 }
 
 /// "strcharlen()" function: characters, composing characters folded in.

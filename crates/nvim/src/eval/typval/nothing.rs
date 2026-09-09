@@ -63,6 +63,7 @@ impl TypvalSink for NothingSink {
     /// they are two ordinary keys and have to be freed as such.
     const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_nothing_convert_one_value()";
+    const WRITES_BACK: bool = true;
 
     fn conv_nil(&mut self, tv: Option<&mut TypVal>) {
         slot(tv).write_special(kSpecialVarNull);
@@ -333,6 +334,6 @@ impl TypvalSink for NothingSink {
 /// # Safety
 /// `tv` must point at a live typval, and `objname` be NUL-terminated.  Note
 /// that `objname` is never read: no hook here reports anything.
-pub(crate) unsafe fn encode_vim_to_nothing(tv: *mut TypVal, objname: *const c_char) -> bool {
+pub(crate) unsafe fn encode_vim_to_nothing(tv: &mut TypVal, objname: &CStr) -> bool {
     unsafe { encode_typval(&mut NothingSink, tv, objname) }
 }

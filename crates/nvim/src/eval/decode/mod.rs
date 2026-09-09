@@ -51,7 +51,7 @@ pub(crate) const kMPExt: MessagePackType = 7;
 /// # Safety
 /// `result` is writable and holds no value that needs clearing.
 #[inline]
-pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePackType, val: TypVal) {
+pub(crate) unsafe fn create_special_dict(result: &mut TypVal, type_: MessagePackType, val: TypVal) {
     let dict = unsafe { tv_dict_alloc() };
 
     let type_di: *mut DictItem =
@@ -70,7 +70,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { result.write(TypVal::Dict(dict)) };
+    unsafe { ::core::ptr::write(result, TypVal::Dict(dict)) };
 }
 
 /// The special dictionary a map that cannot be a `Dict` decodes to.
@@ -82,7 +82,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
 ///
 /// # Safety
 /// `ret_tv` is writable and holds no value that needs clearing.
-pub unsafe fn decode_create_map_special_dict(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
+pub unsafe fn decode_create_map_special_dict(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut List {
     let list = tv_list_alloc(len);
     unsafe { tv_list_ref(list) };
     let val_tv = TypVal::List(list);

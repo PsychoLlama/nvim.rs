@@ -641,7 +641,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
             }
             // VAR_SPECIAL falls through to the default.
             // TODO(brammool): Give error message?
-            _ => unsafe { tv_clear(&raw mut rettv) },
+            _ => unsafe { tv_clear(&mut rettv) },
         }
     }
     drop(locked);

@@ -173,7 +173,7 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     unsafe { vars_clear(vars) };
     unsafe { vars_clear(avars) };
     for li in unsafe { tv_list_iter(items.as_ref()) } {
-        unsafe { tv_clear(&raw mut (*li).li_tv) };
+        unsafe { tv_clear(&mut (*li).li_tv) };
     }
     unsafe { free_funccal(fc) };
 }
@@ -208,7 +208,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
         // SAFETY: as above -- the `a:` dictionary is this funccall's own.
         for hi in unsafe { tv_dict_iter(&raw const (*fc).fc_l_avars) } {
             let di = unsafe { tv_dict_hi2di(hi) };
-            unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut (*di).di_tv) };
+            unsafe { tv_copy(&(*di).di_tv, &mut (*di).di_tv) };
         }
     }
 
@@ -219,7 +219,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
         // Make a copy of the a:000 items, since that was not done above.
         // SAFETY: as above -- the `a:000` list is this funccall's own.
         for li in unsafe { tv_list_iter(Some(&(*fc).fc_l_varlist)) } {
-            unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut (*li).li_tv) };
+            unsafe { tv_copy(&(*li).li_tv, &mut (*li).li_tv) };
         }
     }
 
@@ -955,7 +955,7 @@ pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
     funcargs.with(|args| {
         args.iter().any(|&tv| {
             // SAFETY: each entry points at a live caller's argument.
-            unsafe { set_ref_in_item(tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
+            unsafe { set_ref_in_item(&mut *tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
         })
     })
 }
