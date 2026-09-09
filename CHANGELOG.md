@@ -26,9 +26,11 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote the Vimscript value model: a value is a Rust enum rather than a
   type tag beside a union, and it owns what it holds -- releasing a string or
   a reference to a list, a dictionary, a blob or a partial when it goes out of
-  scope. `:lockvar` now locks the slot a value sits in, which is what it
-  always meant. Behaviour is unchanged; several values the interpreter used
-  to leak are released.
+  scope. Every builtin function now receives its arguments as a counted list
+  rather than as a pointer into a buffer ended by a marker, so an optional
+  argument that was not given is absent rather than empty. `:lockvar` now
+  locks the slot a value sits in, which is what it always meant. Behaviour is
+  unchanged; several values the interpreter used to leak are released.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
