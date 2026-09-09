@@ -266,9 +266,9 @@ unsafe fn qf_add_entries(
         let mut li = unsafe { (*list).lv_first };
         while !li.is_null() {
             if unsafe { (*li).li_tv.v_type } == VAR_DICT
-                && !unsafe { (*li).li_tv.vval.v_dict }.is_null()
+                && !unsafe { (*li).li_tv.dict_or_null() }.is_null()
             {
-                let d = unsafe { (*li).li_tv.vval.v_dict };
+                let d = unsafe { (*li).li_tv.dict_or_null() };
                 unsafe { qf_add_entry_from_dict(qfl, d, ptr::eq(li, first), &mut valid_entry) };
 
                 let entry = unsafe { Qfe::new((*qfl).qf_last) };
@@ -323,8 +323,8 @@ unsafe fn qf_setprop_get_qfidx(
     if !di.is_null() {
         if unsafe { (*di).di_tv.v_type } == VAR_NUMBER {
             // For zero use the current list.
-            if unsafe { (*di).di_tv.vval.v_number } != 0 {
-                qf_idx = unsafe { (*di).di_tv.vval.v_number } as c_int - 1;
+            if unsafe { (*di).di_tv.number_or_zero() } != 0 {
+                qf_idx = unsafe { (*di).di_tv.number_or_zero() } as c_int - 1;
             }
             if (action == ' ' as c_int || action == 'a' as c_int)
                 && qf_idx == unsafe { (*qi).qf_listcount }
@@ -342,7 +342,7 @@ unsafe fn qf_setprop_get_qfidx(
                 *newlist = false;
             }
         } else if unsafe { (*di).di_tv.v_type } == VAR_STRING
-            && unsafe { strequal((*di).di_tv.vval.v_string, c"$".as_ptr()) }
+            && unsafe { strequal((*di).di_tv.string_or_null(), c"$".as_ptr()) }
         {
             if !unsafe { qf_stack_empty(qi) } {
                 qf_idx = unsafe { (*qi).qf_listcount } - 1;
@@ -364,7 +364,7 @@ unsafe fn qf_setprop_get_qfidx(
             if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
                 return None;
             }
-            let by_id = unsafe { qf_id2nr(qi, (*di).di_tv.vval.v_number as c_uint) };
+            let by_id = unsafe { qf_id2nr(qi, (*di).di_tv.number_or_zero() as c_uint) };
             return (by_id != INVALID_QFIDX).then_some(by_id);
         }
     }
@@ -418,7 +418,7 @@ unsafe fn qf_setprop_items(
     } else {
         action
     };
-    unsafe { qf_add_entries(qi, qf_idx, (*di).di_tv.vval.v_list, title_save, action) };
+    unsafe { qf_add_entries(qi, qf_idx, (*di).di_tv.list_or_null(), title_save, action) };
     unsafe { xfree(title_save.cast()) };
     Ok(())
 }
@@ -440,15 +440,16 @@ unsafe fn qf_setprop_items_from_lines(
     let efm_di = unsafe { find(what, "efm") };
     if !efm_di.is_null() {
         if unsafe { (*efm_di).di_tv.v_type } != VAR_STRING
-            || unsafe { (*efm_di).di_tv.vval.v_string }.is_null()
+            || unsafe { (*efm_di).di_tv.string_or_null() }.is_null()
         {
             return Err(QfError::BadValue);
         }
-        errorformat = unsafe { (*efm_di).di_tv.vval.v_string };
+        errorformat = unsafe { (*efm_di).di_tv.string_or_null() };
     }
 
     // Only a List value is supported.
-    if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.vval.v_list }.is_null() {
+    if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.list_or_null() }.is_null()
+    {
         return Err(QfError::BadValue);
     }
 
@@ -502,8 +503,8 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result
     // SAFETY: forwarded from the caller -- a live dictionary entry.
     let mut newidx = unsafe {
         if (*di).di_tv.v_type == VAR_STRING
-            && !(*di).di_tv.vval.v_string.is_null()
-            && cstr::eq_bytes((*di).di_tv.vval.v_string, b"$")
+            && !(*di).di_tv.string_or_null().is_null()
+            && cstr::eq_bytes((*di).di_tv.string_or_null(), b"$")
         {
             // Select the last entry in the list.
             qfl.qf_count

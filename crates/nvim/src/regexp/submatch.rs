@@ -126,13 +126,13 @@ pub(crate) unsafe fn fill_submatch_list(
     }
 
     // Relies on `sl_list` being the first member of `StaticList10`.
-    unsafe { tv_list_init_static10((*listarg).vval.v_list as *mut StaticList10) };
+    unsafe { tv_list_init_static10((*listarg).list_or_null() as *mut StaticList10) };
 
     // A `StaticList10` always has exactly ten items, one per capture.
     // SAFETY: the caller promises a live string match.
     // SAFETY: the running string match is the caller's structure.
     let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
-    let mut li = unsafe { tv_list_first((*listarg).vval.v_list) };
+    let mut li = unsafe { tv_list_first((*listarg).list_or_null()) };
     for i in 0..10 {
         let start = match_.startp[i];
         let text = if start.is_null() || match_.endp[i].is_null() {
@@ -155,7 +155,7 @@ pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
     // SAFETY: `sl` is the caller's list, whose items own their strings.
     let mut li = unsafe { (*sl).sl_list.lv_first };
     while !li.is_null() {
-        unsafe { xfree((*li).li_tv.vval.v_string.cast()) };
+        unsafe { xfree((*li).li_tv.string_or_null().cast()) };
         li = unsafe { (*li).li_next };
     }
 }

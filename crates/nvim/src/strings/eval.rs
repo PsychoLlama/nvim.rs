@@ -55,7 +55,7 @@ pub unsafe fn f_str2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
-        unsafe { tv_list_append_number((*result).vval.v_list, VarNumber::from(char_at(rest))) };
+        unsafe { tv_list_append_number((*result).list_or_null(), VarNumber::from(char_at(rest))) };
         at += char_len(rest);
     }
 }

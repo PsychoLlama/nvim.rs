@@ -39,9 +39,9 @@ use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
-    BoolVarValue, EStackArg, EvalFuncData, FILE, Float, IOSIZE, READBIN, TypVal, VAR_BOOL,
-    VAR_FLOAT, VAR_NUMBER, VAR_UNKNOWN, VarNumber, VarType, Vv, int64_t, kBoolVarFalse,
-    kBoolVarTrue, ptrdiff_t, size_t,
+    BoolVarValue, EStackArg, EvalFuncData, FILE, Float, IOSIZE, READBIN, TypVal, VAR_FLOAT,
+    VAR_NUMBER, VAR_UNKNOWN, VarNumber, VarType, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
+    ptrdiff_t, size_t,
 };
 use crate::ui::state::called_vim_beep;
 use ::libc::{fclose, fgetc};
@@ -190,7 +190,7 @@ unsafe fn assert_bool(args: *mut TypVal, is_true: bool) -> c_int {
         && (unsafe { tv_get_number_chk(arg(args, 0), &raw mut error) } == 0) != is_true
         && !error;
     let want = (if is_true { kBoolVarTrue } else { kBoolVarFalse }) as BoolVarValue;
-    let bool_ok = actual.v_type == VAR_BOOL && unsafe { actual.vval.v_bool } == want;
+    let bool_ok = actual.as_bool() == Some(want);
     if number_ok || bool_ok {
         return 0;
     }

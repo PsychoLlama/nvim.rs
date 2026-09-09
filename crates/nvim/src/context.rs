@@ -313,7 +313,7 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
         "list_tv.v_type == VAR_LIST"
     );
     let (data, size) = sbuf.parts_mut();
-    if !unsafe { encode_vim_list_to_buf(list_tv.vval.v_list, size, data) } {
+    if !unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) } {
         *err = Error::exception(c"E474: Failed to convert list to msgpack string buffer");
     }
     unsafe { tv_clear(&raw mut list_tv) };

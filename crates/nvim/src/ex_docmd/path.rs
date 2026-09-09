@@ -100,7 +100,8 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     let mut retlist: *mut List = ptr::null_mut();
     if called as c_int == OK {
         if rettv.v_type as c_uint == VAR_LIST as c_uint {
-            retlist = unsafe { tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copy_id()) };
+            retlist =
+                unsafe { tv_list_copy(ptr::null(), rettv.list_or_null(), false, get_copy_id()) };
         } else {
             emsg(gettext(e_invalid_return_type_from_findfunc.as_ptr()));
         }
@@ -140,7 +141,7 @@ pub unsafe fn expand_findfunc(
     let mut li: *const ListItem = unsafe { (*l).lv_first };
     while !li.is_null() {
         if unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
-            unsafe { *(*files).offset(idx as isize) = xstrdup((*li).li_tv.vval.v_string) };
+            unsafe { *(*files).offset(idx as isize) = xstrdup((*li).li_tv.string_or_null()) };
             idx += 1;
         }
         li = unsafe { (*li).li_next };
@@ -180,7 +181,7 @@ pub(crate) unsafe fn findfunc_find_file(
     } else {
         let li = unsafe { tv_list_find(fname_list, count - 1) };
         if !li.is_null() && unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
-            ret_fname = unsafe { xstrdup((*li).li_tv.vval.v_string) };
+            ret_fname = unsafe { xstrdup((*li).li_tv.string_or_null()) };
         }
     }
     if !fname_list.is_null() {

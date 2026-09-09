@@ -96,8 +96,8 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut TypVal, dir: Direction, fast: boo
     let mut user_hl: [c_int; 2] = [-1, -1];
     let mut user_data = TYPVAL_T_INIT;
 
-    if unsafe { (*tv).v_type } == VAR_DICT && !unsafe { (*tv).vval.v_dict }.is_null() {
-        let d = unsafe { (*tv).vval.v_dict };
+    if unsafe { (*tv).v_type } == VAR_DICT && !unsafe { (*tv).dict_or_null() }.is_null() {
+        let d = unsafe { (*tv).dict_or_null() };
         // The four cptext strings are copied and owned by the match from
         // here on; the two highlight names and `word` are borrowed, so
         // each borrowing answer renders into a scratch of its own —
@@ -184,7 +184,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
     compl_opt_refresh_always.set(false);
     let di_refresh = find("refresh");
     if !di_refresh.is_null() && unsafe { (*di_refresh).di_tv.v_type } == VAR_STRING {
-        let v = unsafe { (*di_refresh).di_tv.vval.v_string };
+        let v = unsafe { (*di_refresh).di_tv.string_or_null() };
         if !v.is_null() && unsafe { cstr::eq_bytes(v, b"always") } {
             compl_opt_refresh_always.set(true);
         }
@@ -193,7 +193,7 @@ pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
     // Add completions from a "words" list.
     let di_words = find("words");
     if !di_words.is_null() && unsafe { (*di_words).di_tv.v_type } == VAR_LIST {
-        unsafe { ins_compl_add_list((*di_words).di_tv.vval.v_list) };
+        unsafe { ins_compl_add_list((*di_words).di_tv.list_or_null()) };
     }
 }
 
@@ -363,7 +363,7 @@ pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFun
     } else {
         let startcol = unsafe { tv_get_number_chk(args, ptr::null_mut()) } as ColNr;
         if startcol > 0 {
-            unsafe { set_completion(startcol - 1, (*args.offset(1)).vval.v_list) };
+            unsafe { set_completion(startcol - 1, (*args.offset(1)).list_or_null()) };
         }
     }
 }
@@ -576,7 +576,7 @@ pub unsafe fn f_complete_info(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
             emsg(gettext(e_listreq));
             return;
         }
-        what_list = unsafe { (*args).vval.v_list };
+        what_list = unsafe { (*args).list_or_null() };
     }
-    unsafe { get_complete_info(what_list, (*result).vval.v_dict) };
+    unsafe { get_complete_info(what_list, (*result).dict_or_null()) };
 }

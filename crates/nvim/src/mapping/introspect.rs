@@ -391,7 +391,7 @@ pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
                 let mut obj = Object::dict(dict);
                 object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
                 debug_assert_eq!(d.v_type, VAR_DICT);
-                tv_list_append_dict((*result).vval.v_list, d.vval.v_dict);
+                tv_list_append_dict((*result).list_or_null(), d.dict_or_null());
                 arena_mem_free(arena_finish(&raw mut arena));
             }
             None

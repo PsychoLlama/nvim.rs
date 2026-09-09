@@ -67,7 +67,7 @@ unsafe fn matchadd_dict_arg(
         emsg(gettext(e_dictreq));
         return Err(Failed);
     }
-    let dict = unsafe { (*tv).vval.v_dict };
+    let dict = unsafe { (*tv).dict_or_null() };
 
     let di = unsafe { find(dict, "conceal") };
     if !di.is_null() {
@@ -172,21 +172,21 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     let Some(win) = win else {
         return;
     };
-    let l = unsafe { (*args).vval.v_list };
+    let l = unsafe { (*args).list_or_null() };
 
     // To some extent make sure this really came from getmatches().
     let mut li_idx = 0;
     let mut li = unsafe { tv_list_first(l) };
     while !li.is_null() {
         let tv = unsafe { &raw mut (*li).li_tv };
-        if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict }.is_null() {
+        if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).dict_or_null() }.is_null() {
             semsg!(
                 "E474: List item {} is either not a dictionary or an empty one",
                 li_idx
             );
             return;
         }
-        let d = unsafe { (*tv).vval.v_dict };
+        let d = unsafe { (*tv).dict_or_null() };
         let ok = !unsafe { find(d, "group") }.is_null()
             && (!unsafe { find(d, "pattern") }.is_null() || !unsafe { find(d, "pos1") }.is_null())
             && !unsafe { find(d, "priority") }.is_null()
@@ -206,7 +206,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     let mut match_add_failed = false;
     let mut li = unsafe { tv_list_first(l) };
     while !li.is_null() {
-        let d = unsafe { (*li).li_tv.vval.v_dict };
+        let d = unsafe { (*li).li_tv.dict_or_null() };
 
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
@@ -357,7 +357,7 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
         semsg!("E686: Argument of {} must be a List", "matchaddpos()");
         return;
     }
-    let l = unsafe { (*args.offset(1)).vval.v_list };
+    let l = unsafe { (*args.offset(1)).list_or_null() };
     if unsafe { tv_list_len(l) } == 0 {
         return;
     }

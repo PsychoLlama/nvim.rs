@@ -188,7 +188,7 @@ pub unsafe fn f_getcmdscreenpos(_args: *mut TypVal, result: *mut TypVal, _fptr: 
 pub unsafe fn f_getcmdtype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // One character plus the terminator `xmallocz` appends.
     unsafe { (*result).write_string(xmallocz(1) as *mut ::core::ffi::c_char) };
-    unsafe { *(*result).vval.v_string.offset(0) = get_cmdline_type() as ::core::ffi::c_char };
+    unsafe { *(*result).string_or_null().offset(0) = get_cmdline_type() as ::core::ffi::c_char };
 }
 
 /// Replace the command line with `str` and put the cursor at `pos`.

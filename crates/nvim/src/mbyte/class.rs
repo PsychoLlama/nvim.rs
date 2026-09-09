@@ -300,11 +300,11 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 /// owns and will clear.
 pub unsafe fn f_charclass(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
-        || unsafe { (*args).vval.v_string }.is_null()
+        || unsafe { (*args).string_or_null() }.is_null()
     {
         return;
     }
-    unsafe { (*result).write_number(mb_get_class((*args).vval.v_string) as VarNumber) };
+    unsafe { (*result).write_number(mb_get_class((*args).string_or_null()) as VarNumber) };
 }
 
 #[cfg(test)]

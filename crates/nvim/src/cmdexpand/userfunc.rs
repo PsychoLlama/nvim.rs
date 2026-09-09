@@ -422,10 +422,10 @@ pub(crate) unsafe fn process_user_list(
         while !li.is_null() {
             // Skip non-string items and empty strings.
             if unsafe { (*li).li_tv.v_type } == VAR_STRING
-                && !unsafe { (*li).li_tv.vval.v_string }.is_null()
+                && !unsafe { (*li).li_tv.string_or_null() }.is_null()
             {
                 // SAFETY: the item is a live, NUL-terminated string.
-                found.push(unsafe { CStr::from_ptr((*li).li_tv.vval.v_string) }.to_owned());
+                found.push(unsafe { CStr::from_ptr((*li).li_tv.string_or_null()) }.to_owned());
             }
             li = unsafe { (*li).li_next };
         }
@@ -486,7 +486,7 @@ pub(crate) unsafe fn expand_user_lua(
         return Err(Failed);
     }
 
-    unsafe { process_user_list(rettv.vval.v_list, matches, num_matches) };
+    unsafe { process_user_list(rettv.list_or_null(), matches, num_matches) };
     Ok(())
 }
 

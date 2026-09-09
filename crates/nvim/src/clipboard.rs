@@ -184,21 +184,21 @@ pub(crate) unsafe fn get_clipboard(
     // alive for this block, and `reg` is the live register being filled.
     'err: {
         if result.v_type != VAR_LIST {
-            if result.v_type == VAR_NUMBER && unsafe { result.vval.v_number } == 0 {
+            if result.v_type == VAR_NUMBER && result.number_or_zero() == 0 {
                 errmsg = false;
             }
             break 'err;
         }
-        let res = unsafe { result.vval.v_list };
+        let res = result.list_or_null();
         let lines;
         if unsafe { tv_list_len(res) } == 2
             && unsafe { (*tv_list_first(res)).li_tv.v_type } == VAR_LIST
         {
-            lines = unsafe { (*tv_list_first(res)).li_tv.vval.v_list };
+            lines = unsafe { (*tv_list_first(res)).li_tv.list_or_null() };
             if unsafe { (*tv_list_last(res)).li_tv.v_type } != VAR_STRING {
                 break 'err;
             }
-            let regtype = unsafe { (*tv_list_last(res)).li_tv.vval.v_string };
+            let regtype = unsafe { (*tv_list_last(res)).li_tv.string_or_null() };
             if regtype.is_null() || unsafe { cstr::bytes_at(regtype) }.len() > 1 {
                 break 'err;
             }
@@ -229,7 +229,7 @@ pub(crate) unsafe fn get_clipboard(
                 if unsafe { (*li).li_tv.v_type } != VAR_STRING {
                     break 'err;
                 }
-                let s = unsafe { (*li).li_tv.vval.v_string };
+                let s = unsafe { (*li).li_tv.string_or_null() };
                 unsafe {
                     *(*reg).y_array.add(tv_idx) =
                         cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() })

@@ -232,11 +232,11 @@ pub unsafe fn nvim_call_dict_function(
         error = err_expected(c"dict argument", want, None);
         return Object::Nil.reported(error);
     }
-    // SAFETY: `rettv` is this frame's; a non-dictionary leaves the union's
-    // pointer arm holding whatever the value was, which `call_in_dict`
-    // refuses after checking `v_type`.
-    let self_dict: *mut Dict = unsafe { rettv.vval.v_dict };
-    // SAFETY: as above, plus `fn_0`/`args`/`arena` are the caller's.
+    // A non-dictionary answers NULL, which `call_in_dict` reads as "no
+    // `self`".
+    let self_dict: *mut Dict = rettv.dict_or_null();
+    // SAFETY: `rettv` is this frame's, and `fn_0`/`args`/`arena` are the
+    // caller's.
     let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, &mut error) };
     if mustfree {
         // SAFETY: the evaluated value is this frame's.
@@ -295,7 +295,7 @@ unsafe fn call_in_dict(
             return Object::Nil;
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
-        let name = unsafe { (*di).di_tv.vval.v_string };
+        let name = unsafe { (*di).di_tv.string_or_null() };
         // SAFETY: as above.
         *fn_0 = String_0::from_raw_parts(name, unsafe { cstr::bytes_at(name) }.len());
     }

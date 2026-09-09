@@ -130,7 +130,7 @@ unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> F
             })
         }
         VAR_LIST => {
-            let list: *const List = unsafe { (*arg(args, 1)).vval.v_list };
+            let list: *const List = unsafe { (*arg(args, 1)).list_or_null() };
             if list.is_null() || !(1..=2).contains(&unsafe { tv_list_len(list) }) {
                 return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
             }
@@ -186,7 +186,7 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
     if unsafe { arg_type(args, 3) } != VAR_NUMBER {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
     }
-    let want_lnum = unsafe { (*arg(args, 3)).vval.v_number };
+    let want_lnum = unsafe { (*arg(args, 3)).number_or_zero() };
     if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as VarNumber {
         return FailsCheck::Mismatch(FailsMismatch {
             expected_str: ptr::null(),
@@ -200,7 +200,7 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
     if unsafe { arg_type(args, 4) } != VAR_STRING {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
     }
-    let want_context = unsafe { (*arg(args, 4)).vval.v_string };
+    let want_context = unsafe { (*arg(args, 4)).string_or_null() };
     if want_context.is_null()
         || unsafe { pattern_match(want_context, emsg_assert_fails_context.get(), false) }
     {

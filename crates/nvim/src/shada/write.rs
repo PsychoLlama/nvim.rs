@@ -706,7 +706,7 @@ fn writable_value(vartv: &TypVal) -> bool {
     match vartv.v_type {
         VAR_FUNC | VAR_PARTIAL => false,
         VAR_DICT => {
-            let di = unsafe { vartv.vval.v_dict };
+            let di = vartv.dict_or_null();
             let copy_id = get_copy_id();
             unsafe {
                 set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
@@ -714,7 +714,7 @@ fn writable_value(vartv: &TypVal) -> bool {
             }
         }
         VAR_LIST => {
-            let l = unsafe { vartv.vval.v_list };
+            let l = vartv.list_or_null();
             let copy_id = get_copy_id();
             unsafe {
                 set_ref_in_list_items(l, copy_id, core::ptr::null_mut())

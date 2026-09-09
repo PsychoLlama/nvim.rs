@@ -337,7 +337,7 @@ pub unsafe fn f_getscriptinfo(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
     if !matches!(query, ScriptQuery::Rejected) {
         // SAFETY: `result` holds the list allocated above.
-        let l = unsafe { (*result).vval.v_list };
+        let l = unsafe { (*result).list_or_null() };
         // SAFETY: nothing in the loop sources a script.
         unsafe { report_scripts(l, &query, &mut regmatch) };
     }
@@ -368,8 +368,8 @@ unsafe fn script_query(
     if arg.v_type != VAR_DICT {
         return ScriptQuery::All;
     }
-    // SAFETY: a `VAR_DICT` argument carries a live dict.
-    let dict = unsafe { arg.vval.v_dict };
+    // The tag was tested above, so this is the argument's own dictionary.
+    let dict = arg.dict_or_null();
 
     // SAFETY: `tv_dict_find` only reads the dict and the key literal.
     let sid_di = unsafe { tv_dict_find(dict, c"sid".as_ptr(), c"sid".count_bytes() as ptrdiff_t) };

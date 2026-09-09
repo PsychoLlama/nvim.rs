@@ -280,19 +280,19 @@ msg_putchar('\n' as ::core::ffi::c_int);
             print_errmsg!("E5400: Callback should return list");
             break 'body Label::Error;
         }
-        if unsafe { tv.vval.v_list }.is_null() {
+        if tv.list_or_null().is_null() {
             break 'body Label::End;
         }
 
         let mut prev_end: VarNumber = 0;
         let mut i: ::core::ffi::c_int = 0;
-        let mut li: *const ListItem = unsafe { (*tv.vval.v_list).lv_first };
+        let mut li: *const ListItem = unsafe { (*tv.list_or_null()).lv_first };
         while !li.is_null() {
             if unsafe { (*li).li_tv.v_type } != VAR_LIST {
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }
-            let l: *const List = unsafe { (*li).li_tv.vval.v_list };
+            let l: *const List = unsafe { (*li).li_tv.list_or_null() };
             if unsafe { tv_list_len(l) } != 3 {
                 // SAFETY: `l` is the list item just checked.
                 let len = unsafe { tv_list_len(l) };
@@ -408,7 +408,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
     // now, so the copy is released instead.
     let id = colored_ccline.prompt_id;
     if arg_allocated {
-        let s = unsafe { arg.vval.v_string };
+        let s = arg.string_or_null();
         // SAFETY: `arg` holds this frame's own NUL-terminated copy.
         let text = unsafe { ::core::slice::from_raw_parts(s, cstr::bytes_at(s).len()) };
         // SAFETY: the command line's own chunk list, taken above.

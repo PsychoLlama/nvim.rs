@@ -376,7 +376,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         if unsafe { tv_check_for_nonnull_dict_arg(args, 0) }.is_err() {
             return;
         }
-        let dict = unsafe { (*args).vval.v_dict };
+        let dict = unsafe { (*args).dict_or_null() };
         let found = unsafe { dict_number(dict, c"timeout", timeout) };
         let Some(t) = found else {
             return;
@@ -408,7 +408,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
-            let list = unsafe { (*di).di_tv.vval.v_list };
+            let list = unsafe { (*di).di_tv.list_or_null() };
             if unsafe { tv_list_len(list) } != 3 {
                 let form = c"List format should be [lnum, col, off]".as_ptr();
                 // SAFETY: reporting a static, translated message.
@@ -453,7 +453,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         let stat = unsafe { update_search_stat(0, pos, pos, recompute, maxcount, timeout) };
         // SAFETY: `result` is the caller's return value, a dictionary this
         // function itself allocated above.
-        let dict = unsafe { (*result).vval.v_dict };
+        let dict = unsafe { (*result).dict_or_null() };
         let add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
             // SAFETY: adding a number under a static key.

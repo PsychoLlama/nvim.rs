@@ -272,7 +272,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             // SAFETY: the typval's own dictionary, live while the typval is.
             let d = unsafe { Dt::new(dict) };
             if dict.is_null() || d.dv_hashtab.ht_used == 0 {
-                unsafe { sink.conv_empty_dict(tv, Some(&raw mut (*tv).vval.v_dict)) };
+                unsafe { sink.conv_empty_dict(tv, Some(val.dict_ptr())) };
             } else {
                 if S::ALLOW_SPECIALS
                     && let Some(flow) =

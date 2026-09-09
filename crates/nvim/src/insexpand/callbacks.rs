@@ -630,8 +630,8 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     let locked = Lock::text();
     if unsafe { callback_call(cb, 2, args.as_mut_ptr(), &raw mut rettv) } {
         match rettv.v_type {
-            VAR_LIST => matchlist = unsafe { rettv.vval.v_list },
-            VAR_DICT => matchdict = unsafe { rettv.vval.v_dict },
+            VAR_LIST => matchlist = rettv.list_or_null(),
+            VAR_DICT => matchdict = rettv.dict_or_null(),
             // VAR_SPECIAL falls through to the default.
             // TODO(brammool): Give error message?
             _ => unsafe { tv_clear(&raw mut rettv) },

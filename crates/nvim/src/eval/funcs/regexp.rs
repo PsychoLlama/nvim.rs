@@ -675,23 +675,23 @@ unsafe fn item_string(
     numbuf: &mut NumBuf,
 ) -> *const c_char {
     if unsafe { (*tv).v_type } == VAR_STRING {
-        return unsafe { (*tv).vval.v_string };
+        return unsafe { (*tv).string_or_null() };
     }
     if unsafe { (*tv).v_type } != VAR_DICT {
         return ptr::null();
     }
     match request.source {
         Source::Item => ptr::null(),
-        Source::Key(key) => unsafe { numbuf.dict_string((*tv).vval.v_dict, key) },
+        Source::Key(key) => unsafe { numbuf.dict_string((*tv).dict_or_null(), key) },
         Source::Callback(cb) => {
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
-            unsafe { (*(*tv).vval.v_dict).dv_refcount.retain() };
-            let mut argv = [TypVal::dict(unsafe { (*tv).vval.v_dict }), TV_UNKNOWN];
+            unsafe { (*(*tv).dict_or_null()).dv_refcount.retain() };
+            let mut argv = [TypVal::dict(unsafe { (*tv).dict_or_null() }), TV_UNKNOWN];
             let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), result) };
-            unsafe { tv_dict_unref((*tv).vval.v_dict) };
+            unsafe { tv_dict_unref((*tv).dict_or_null()) };
             if called && unsafe { (*result).v_type } == VAR_STRING {
-                unsafe { (*result).vval.v_string }
+                unsafe { (*result).string_or_null() }
             } else {
                 ptr::null()
             }
@@ -707,7 +707,7 @@ unsafe fn item_string(
 unsafe fn nested_list(list: *mut List, idx: c_int) -> *mut List {
     let li = unsafe { tv_list_find(list, idx) };
     debug_assert!(!li.is_null(), "fuzzy: result list is short");
-    let nested = unsafe { (*li).li_tv.vval.v_list };
+    let nested = unsafe { (*li).li_tv.list_or_null() };
     debug_assert!(!nested.is_null(), "fuzzy: result item is not a list");
     nested
 }
@@ -818,7 +818,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     let list = unsafe { &*args };
-    if list.v_type != VAR_LIST || unsafe { list.vval.v_list }.is_null() {
+    if list.v_type != VAR_LIST || list.list_or_null().is_null() {
         let who = if retmatchpos {
             c"matchfuzzypos()".as_ptr()
         } else {
@@ -830,7 +830,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         return;
     }
     let pat = unsafe { &*args.add(1) };
-    if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
+    if pat.v_type != VAR_STRING || pat.string_or_null().is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe { c_str(numbuf.string(pat)) };
         semsg!("E475: Invalid argument: {arg0}");
@@ -847,12 +847,12 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         if unsafe { tv_check_for_nonnull_dict_arg(args, 2) }.is_err() {
             return;
         }
-        let d: *mut Dict = unsafe { (*args.add(2)).vval.v_dict };
+        let d: *mut Dict = unsafe { (*args.add(2)).dict_or_null() };
         let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_STRING
-                || unsafe { (*di).di_tv.vval.v_string }.is_null()
-                || unsafe { *(*di).di_tv.vval.v_string } == 0
+                || unsafe { (*di).di_tv.string_or_null() }.is_null()
+                || unsafe { *(*di).di_tv.string_or_null() } == 0
             {
                 let got = unsafe { numbuf2.string(&raw const (*di).di_tv) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -902,7 +902,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         retmatchpos,
         limit,
     };
-    unsafe { fuzzy_match_in_list(list.vval.v_list, &request, result) };
+    unsafe { fuzzy_match_in_list(list.list_or_null(), &request, result) };
     unsafe { callback_free(&raw mut cb) };
 }
 

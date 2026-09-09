@@ -149,9 +149,9 @@ impl Reader {
             reader.source = Source::File(fd);
         } else if !tv.is_null() {
             reader.source = if unsafe { (*tv).v_type } == VAR_STRING as VarType {
-                Source::Text(unsafe { (*tv).vval.v_string })
+                Source::Text(unsafe { (*tv).string_or_null() })
             } else if unsafe { (*tv).v_type } == VAR_LIST as VarType {
-                Source::List(unsafe { tv_list_first((*tv).vval.v_list) })
+                Source::List(unsafe { tv_list_first((*tv).list_or_null()) })
             } else {
                 Source::Unusable
             };
@@ -257,7 +257,7 @@ impl Reader {
         // SAFETY: the caller's list is live.
         while !at.is_null()
             && (unsafe { (*at).li_tv.v_type } != VAR_STRING as VarType
-                || unsafe { (*at).li_tv.vval.v_string }.is_null())
+                || unsafe { (*at).li_tv.string_or_null() }.is_null())
         {
             at = unsafe { (*at).li_next };
         }
@@ -265,7 +265,7 @@ impl Reader {
             self.source = Source::List(ptr::null_mut());
             return Status::EndOfInput;
         }
-        let text = unsafe { (*at).li_tv.vval.v_string };
+        let text = unsafe { (*at).li_tv.string_or_null() };
         self.len = self.fit(unsafe { cstr::bytes_at(text) }.len());
         unsafe { xstrlcpy(self.line(), text, self.len + 1) };
         self.source = Source::List(unsafe { (*at).li_next });

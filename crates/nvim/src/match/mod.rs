@@ -244,7 +244,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
         let mut skip = false;
 
         if unsafe { (*tv).v_type } == VAR_LIST {
-            let subl = unsafe { (*tv).vval.v_list };
+            let subl = unsafe { (*tv).list_or_null() };
             let mut subli = unsafe { tv_list_first(subl) };
             if subli.is_null() {
                 // SAFETY: `pos_list` holds `li`, as the caller established.
@@ -292,10 +292,10 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 }
             }
         } else if unsafe { (*tv).v_type } == VAR_NUMBER {
-            if unsafe { (*tv).vval.v_number } <= 0 {
+            if unsafe { (*tv).number_or_zero() } <= 0 {
                 skip = true;
             } else {
-                lnum = unsafe { (*tv).vval.v_number } as LineNr;
+                lnum = unsafe { (*tv).number_or_zero() } as LineNr;
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).col = 0 };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };

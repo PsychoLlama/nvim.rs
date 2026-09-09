@@ -104,8 +104,8 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
         let new_dict = |tv: *mut TypVal, ref_: LuaRef| {
             (*tv).write_dict(tv_dict_alloc());
-            (*(*tv).vval.v_dict).dv_refcount.retain();
-            (*(*tv).vval.v_dict).lua_table_ref = ref_;
+            (*(*tv).dict_or_null()).dv_refcount.retain();
+            (*(*tv).dict_or_null()).lua_table_ref = ref_;
         };
 
         let mut ret = true;
@@ -151,11 +151,11 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         // The value is not there yet; append a slot to fill.
                         tv_list_append_owned_tv(kv_pair, TV_INITIAL_VALUE);
                         stack.push(cur);
-                        tv_list_append_list((*cur.tv).vval.v_list, kv_pair);
+                        tv_list_append_list((*cur.tv).list_or_null(), kv_pair);
                         cur = TVPopStackItem::leaf(&raw mut (*tv_list_last(kv_pair)).li_tv);
                     } else {
                         let di = tv_dict_item_alloc_len(s, len);
-                        if tv_dict_add((*cur.tv).vval.v_dict, di).is_err() {
+                        if tv_dict_add((*cur.tv).dict_or_null(), di).is_err() {
                             abort();
                         }
                         stack.push(cur);
@@ -163,7 +163,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                     }
                 } else {
                     debug_assert!((*cur.tv).v_type == VAR_LIST);
-                    let list = (*cur.tv).vval.v_list;
+                    let list = (*cur.tv).list_or_null();
                     if usize::try_from(tv_list_len(list)).is_ok_and(|n| n == cur.list_len) {
                         lua_pop(lstate, 1);
                         continue;
@@ -232,8 +232,8 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                             kObjectTypeArray => {
                                 (*cur.tv)
                                     .write_list(tv_list_alloc(table_props.maxidx.cast_signed()));
-                                (*(*cur.tv).vval.v_list).lua_table_ref = table_ref;
-                                tv_list_ref((*cur.tv).vval.v_list);
+                                (*(*cur.tv).list_or_null()).lua_table_ref = table_ref;
+                                tv_list_ref((*cur.tv).list_or_null());
                                 cur.list_len = table_props.maxidx;
                                 if table_props.maxidx != 0 {
                                     cur.container = true;
@@ -258,13 +258,13 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                         );
                                         debug_assert!((*cur.tv).v_type == VAR_DICT);
                                         let val_di = tv_dict_find(
-                                            (*cur.tv).vval.v_dict,
+                                            (*cur.tv).dict_or_null(),
                                             c"_VAL".as_ptr(),
                                             4,
                                         );
                                         debug_assert!(!val_di.is_null());
                                         cur.tv = &raw mut (*val_di).di_tv;
-                                        (*(*cur.tv).vval.v_list).lua_table_ref = table_ref;
+                                        (*(*cur.tv).list_or_null()).lua_table_ref = table_ref;
                                         debug_assert!((*cur.tv).v_type == VAR_LIST);
                                         cur.list_len = table_props.string_keys_num;
                                     } else {

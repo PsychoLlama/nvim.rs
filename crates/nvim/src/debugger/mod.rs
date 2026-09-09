@@ -777,7 +777,7 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 
     // `EXPR_IS` answers "is the same value"; a false answer is a change.
     let changed = unsafe { typval_compare(tv, previous, EXPR_IS, false) }.is_ok()
-        && unsafe { (*tv).vval.v_number } == 0;
+        && unsafe { (*tv).number_or_zero() } == 0;
     if changed {
         // Render the old value before re-evaluating, because evaluating
         // can reach whatever the old value refers to.

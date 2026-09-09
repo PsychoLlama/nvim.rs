@@ -246,7 +246,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
                     line.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"lua_debug> %s".as_ptr(),
-                    input.vval.v_string,
+                    input.string_or_null(),
                 );
                 ui_ext_cmdline_block_append(0, line.as_ptr());
             } else {
@@ -254,9 +254,9 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
             }
 
             let done = input.v_type != VAR_STRING
-                || input.vval.v_string.is_null()
-                || *input.vval.v_string == 0
-                || cstr::eq_bytes(input.vval.v_string, b"cont");
+                || input.string_or_null().is_null()
+                || *input.string_or_null() == 0
+                || cstr::eq_bytes(input.string_or_null(), b"cont");
             if done {
                 tv_clear(&raw mut input);
                 if ui_has(kUICmdline) {
@@ -267,8 +267,8 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
 
             if luaL_loadbuffer(
                 lstate,
-                input.vval.v_string,
-                cstr::bytes_at(input.vval.v_string).len(),
+                input.string_or_null(),
+                cstr::bytes_at(input.string_or_null()).len(),
                 c"=(debug command)".as_ptr(),
             ) != 0
             {

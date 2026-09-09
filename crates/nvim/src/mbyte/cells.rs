@@ -329,12 +329,12 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// owns and will clear.
 pub unsafe fn f_setcellwidths(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { (*args).v_type } as c_uint != VAR_LIST as c_uint
-        || unsafe { (*args).vval.v_list }.is_null()
+        || unsafe { (*args).list_or_null() }.is_null()
     {
         emsg(gettext(e_listreq));
         return;
     }
-    let __v = unsafe { parse_cell_widths((*args).vval.v_list) };
+    let __v = unsafe { parse_cell_widths((*args).list_or_null()) };
     let Some(table) = __v else {
         return;
     };
@@ -369,12 +369,12 @@ unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
     while !li.is_null() {
         let li_tv = unsafe { &raw const (*li).li_tv };
         if unsafe { (*li_tv).v_type } as c_uint != VAR_LIST as c_uint
-            || unsafe { (*li_tv).vval.v_list }.is_null()
+            || unsafe { (*li_tv).list_or_null() }.is_null()
         {
             semsg!("E1109: List item {} is not a List", item);
             return None;
         }
-        rows.push(unsafe { parse_cell_width_row((*li_tv).vval.v_list, item) }?);
+        rows.push(unsafe { parse_cell_width_row((*li_tv).list_or_null(), item) }?);
         li = unsafe { (*li).li_next };
         item += 1;
     }
@@ -412,7 +412,7 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
         if unsafe { (*tv).v_type } as c_uint != VAR_NUMBER as c_uint {
             break;
         }
-        let n = unsafe { (*tv).vval.v_number };
+        let n = unsafe { (*tv).number_or_zero() };
         match seen {
             0 if n < 0x80 => {
                 emsg(gettext(c"E1114: Only values of 0x80 and higher supported"));
@@ -462,6 +462,6 @@ pub unsafe fn f_getcellwidths(_args: *mut TypVal, result: *mut TypVal, _fptr: Ev
         unsafe { tv_list_append_number(entry, row.first) };
         unsafe { tv_list_append_number(entry, row.last) };
         unsafe { tv_list_append_number(entry, row.width as VarNumber) };
-        unsafe { tv_list_append_list((*result).vval.v_list, entry) };
+        unsafe { tv_list_append_list((*result).list_or_null(), entry) };
     }
 }

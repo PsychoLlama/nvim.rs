@@ -367,7 +367,7 @@ pub unsafe fn f_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 unsafe fn alloc_dict_ret(result: *mut TypVal) -> *mut Dict {
     unsafe {
         tv_dict_alloc_ret(result);
-        (*result).vval.v_dict
+        (*result).dict_or_null()
     }
 }
 

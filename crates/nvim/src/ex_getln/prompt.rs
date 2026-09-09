@@ -124,7 +124,7 @@ pub unsafe fn get_user_input(
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
-        let dict = unsafe { (*args.offset(0)).vval.v_dict };
+        let dict = unsafe { (*args.offset(0)).dict_or_null() };
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
         let dict_str = |key: &::core::ffi::CStr,
                         numbuf: *mut ::core::ffi::c_char,
@@ -265,7 +265,7 @@ pub unsafe fn get_user_input(
     ex_normal_busy.set(save_ex_normal_busy);
     unsafe { callback_free(&raw mut input_callback) };
 
-    if unsafe { (*result).vval.v_string }.is_null() && !cancelreturn.is_null() {
+    if unsafe { (*result).string_or_null() }.is_null() && !cancelreturn.is_null() {
         unsafe { tv_copy(cancelreturn, result) };
     }
 

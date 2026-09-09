@@ -178,7 +178,7 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
     let msg = unsafe { &*opt_msg_tv };
     let blank = msg.v_type == VAR_STRING
-        && (unsafe { msg.vval.v_string }.is_null() || unsafe { *msg.vval.v_string } == 0);
+        && (msg.string_or_null().is_null() || unsafe { *msg.string_or_null() } == 0);
     if msg.v_type == VAR_UNKNOWN || blank {
         return;
     }
@@ -194,7 +194,7 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
 /// `tv` is a live typval.
 unsafe fn is_dict(tv: *mut TypVal) -> bool {
     // SAFETY: the caller's typval.
-    unsafe { (*tv).v_type == VAR_DICT && !(*tv).vval.v_dict.is_null() }
+    unsafe { (*tv).v_type == VAR_DICT && !(*tv).dict_or_null().is_null() }
 }
 
 /// Replace both dictionaries with copies holding only the entries that differ,
@@ -208,7 +208,7 @@ unsafe fn is_dict(tv: *mut TypVal) -> bool {
 unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_int {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
-    let (exp_d, got_d) = unsafe { ((*exp_tv).vval.v_dict, (*got_tv).vval.v_dict) };
+    let (exp_d, got_d) = unsafe { ((*exp_tv).dict_or_null(), (*got_tv).dict_or_null()) };
     // The pruned copies that replace them, which the caller then owns.
     let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
     unsafe { (*exp_tv).write_dict(exp) };

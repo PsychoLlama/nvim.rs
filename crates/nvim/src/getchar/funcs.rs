@@ -14,7 +14,7 @@ use crate::guard::{Keys, Suppress};
 use crate::keycodes::{Key, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{NUL, VAR_DICT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN};
 use crate::winlayer::windows;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -67,7 +67,7 @@ unsafe fn getchar_opts(args: *mut TypVal, allow_number: bool) -> Option<GetcharO
         return None;
     }
     if unsafe { (*args).v_type } != VAR_UNKNOWN && unsafe { (*args.add(1)).v_type } == VAR_DICT {
-        let d = unsafe { (*args.add(1)).vval.v_dict };
+        let d = unsafe { (*args.add(1)).dict_or_null() };
 
         if opts.allow_number {
             opts.allow_number = unsafe { tv_dict_get_bool(d, c"number".as_ptr(), 1) } != 0;
@@ -117,8 +117,8 @@ unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
 
         // SAFETY (this body): reads one key through the ordinary input stack;
         // the buffers it fills are this frame's own.
-        let blocking = unsafe { (*args).v_type } == VAR_UNKNOWN
-            || (unsafe { (*args).v_type } == VAR_NUMBER && unsafe { (*args).vval.v_number } == -1);
+        let blocking =
+            unsafe { (*args).v_type } == VAR_UNKNOWN || unsafe { (*args).as_number() } == Some(-1);
         let n: VarNumber = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?

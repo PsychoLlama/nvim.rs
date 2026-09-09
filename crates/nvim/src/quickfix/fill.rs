@@ -287,7 +287,7 @@ unsafe fn call_qftf_func(
     let locked = Lock::text();
     if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {
         if rettv.v_type == VAR_LIST {
-            answer = unsafe { rettv.vval.v_list };
+            answer = rettv.list_or_null();
             unsafe { tv_list_ref(answer) };
         }
         unsafe { tv_clear(&raw mut rettv) };

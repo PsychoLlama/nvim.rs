@@ -607,7 +607,7 @@ pub(crate) unsafe fn f_getmousepos(_args: *mut TypVal, result: *mut TypVal, _fpt
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(result);
-        (*result).vval.v_dict
+        (*result).dict_or_null()
     };
     let add = |key: &CStr, value: VarNumber| {
         // SAFETY: the dict just allocated, and a NUL-terminated literal key.

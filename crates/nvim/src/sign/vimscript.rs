@@ -82,8 +82,7 @@ unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut Dict {
     if !args.has(i) {
         return null();
     }
-    // SAFETY: the caller's check says the dictionary arm is live.
-    unsafe { args.get(i).vval.v_dict }
+    args.get(i).dict_or_null()
 }
 
 /// A `group` argument: `None` when it does not read as a string at all, and
@@ -144,7 +143,7 @@ unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut
     unsafe {
         for tv in list_items(l) {
             let retval = if (*tv).v_type == VAR_DICT {
-                one((*tv).vval.v_dict)
+                one((*tv).dict_or_null())
             } else {
                 emsg(gettext(e_dictreq));
                 -1
@@ -171,7 +170,7 @@ unsafe fn each_dict_arg(args: Args<'_>, result: &mut TypVal, one: impl FnMut(*mu
     }
     // SAFETY: the tag says the list arm is live, and `retlist` was just
     // allocated.
-    unsafe { each_dict(retlist, args.get(0).vval.v_list, one) };
+    unsafe { each_dict(retlist, args.get(0).list_or_null(), one) };
 }
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
@@ -380,7 +379,7 @@ pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-            each_dict(retlist, args.get(0).vval.v_list, |d| {
+            each_dict(retlist, args.get(0).list_or_null(), |d| {
                 sign_define_from_dict(null(), d)
             });
         };
@@ -450,7 +449,7 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
                 if tv_check_for_nonnull_dict_arg(args.ptr(0), 1).is_err() {
                     return;
                 }
-                let dict = args.get(1).vval.v_dict;
+                let dict = args.get(1).dict_or_null();
 
                 if let Some(tv) = key(dict, "lnum") {
                     lnum = tv_get_lnum(tv);
@@ -637,8 +636,7 @@ pub(crate) unsafe fn f_sign_place(args: *mut TypVal, result: *mut TypVal, _fptr:
         if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 4) }.is_err() {
             return;
         }
-        // SAFETY: the check above says the dictionary arm is live.
-        dict = unsafe { args.get(4).vval.v_dict };
+        dict = args.get(4).dict_or_null();
     }
     // SAFETY: the frame's argument slots and the dictionary just read.
     let id =
@@ -672,7 +670,7 @@ pub(crate) unsafe fn f_sign_undefine(args: *mut TypVal, result: *mut TypVal, _fp
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-            for tv in list_items(args.get(0).vval.v_list) {
+            for tv in list_items(args.get(0).list_or_null()) {
                 let name = numbuf.string_chk(tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });

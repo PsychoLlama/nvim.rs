@@ -196,7 +196,8 @@ unsafe fn qf_get_list_from_lines(
     retdict: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.vval.v_list }.is_null() {
+    if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.list_or_null() }.is_null()
+    {
         return Err(QfError::BadValue);
     }
 
@@ -204,11 +205,11 @@ unsafe fn qf_get_list_from_lines(
     let efm_di = unsafe { find(what, "efm") };
     if !efm_di.is_null() {
         if unsafe { (*efm_di).di_tv.v_type } != VAR_STRING
-            || unsafe { (*efm_di).di_tv.vval.v_string }.is_null()
+            || unsafe { (*efm_di).di_tv.string_or_null() }.is_null()
         {
             return Err(QfError::BadValue);
         }
-        errorformat = unsafe { (*efm_di).di_tv.vval.v_string };
+        errorformat = unsafe { (*efm_di).di_tv.string_or_null() };
     }
 
     // Only a List value is supported.
@@ -331,14 +332,14 @@ unsafe fn qf_getprop_qfidx(qi: *mut QfInfo, what: *mut Dict) -> Option<c_int> {
     if !di.is_null() {
         if unsafe { (*di).di_tv.v_type } == VAR_NUMBER {
             // For zero, use the current list.
-            if unsafe { (*di).di_tv.vval.v_number } != 0 {
-                qf_idx = unsafe { (*di).di_tv.vval.v_number } as c_int - 1;
+            if unsafe { (*di).di_tv.number_or_zero() } != 0 {
+                qf_idx = unsafe { (*di).di_tv.number_or_zero() } as c_int - 1;
                 if qf_idx < 0 || qf_idx >= unsafe { (*qi).qf_listcount } {
                     qf_idx = INVALID_QFIDX;
                 }
             }
         } else if unsafe { (*di).di_tv.v_type } == VAR_STRING
-            && unsafe { strequal((*di).di_tv.vval.v_string, c"$".as_ptr()) }
+            && unsafe { strequal((*di).di_tv.string_or_null(), c"$".as_ptr()) }
         {
             // Get the last list.
             qf_idx = unsafe { (*qi).qf_listcount } - 1;
@@ -352,8 +353,8 @@ unsafe fn qf_getprop_qfidx(qi: *mut QfInfo, what: *mut Dict) -> Option<c_int> {
     if !di.is_null() {
         if unsafe { (*di).di_tv.v_type } == VAR_NUMBER {
             // For zero, use the current list.
-            if unsafe { (*di).di_tv.vval.v_number } != 0 {
-                qf_idx = unsafe { qf_id2nr(qi, (*di).di_tv.vval.v_number as c_uint) };
+            if unsafe { (*di).di_tv.number_or_zero() } != 0 {
+                qf_idx = unsafe { qf_id2nr(qi, (*di).di_tv.number_or_zero() as c_uint) };
             }
         } else {
             qf_idx = INVALID_QFIDX;
@@ -557,7 +558,7 @@ pub(crate) unsafe fn qf_get_properties(
         if unsafe { (*di).di_tv.v_type } != VAR_NUMBER {
             return Err(QfError::BadValue);
         }
-        eidx = unsafe { (*di).di_tv.vval.v_number } as c_int;
+        eidx = unsafe { (*di).di_tv.number_or_zero() } as c_int;
     }
 
     let wanted = |flag: GetListProps| flags.has(flag);

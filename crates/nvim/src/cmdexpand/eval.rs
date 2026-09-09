@@ -173,10 +173,10 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     unsafe { expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep) };
     unsafe { tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t) };
 
+    // SAFETY: the frame's return slot, holding the list just allocated.
+    let retlist = unsafe { (*result).list_or_null() };
     for i in 0..xpc.xp_numfiles {
-        unsafe {
-            tv_list_append_string((*result).vval.v_list, *xpc.xp_files.offset(i as isize), -1)
-        };
+        unsafe { tv_list_append_string(retlist, *xpc.xp_files.offset(i as isize), -1) };
     }
     unsafe { xfree(pat as *mut c_void) };
     unsafe { expand_cleanup(&raw mut xpc) };
@@ -232,7 +232,7 @@ pub unsafe fn f_cmdcomplete_info(_args: *mut TypVal, result: *mut TypVal, _fptr:
     if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
         return;
     }
-    let retdict: *mut Dict = unsafe { (*result).vval.v_dict };
+    let retdict: *mut Dict = unsafe { (*result).dict_or_null() };
 
     // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
     // key type is a plain `&str`.

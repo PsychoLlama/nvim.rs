@@ -96,7 +96,7 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut Ty
         return;
     }
     for idx in 0..count {
-        let v_list2 = unsafe { (*result).vval.v_list };
+        let v_list2 = unsafe { (*result).list_or_null() };
         let str = unsafe { alist_name(entries.offset(idx as isize)) };
         let len = -1 as ssize_t;
         unsafe { tv_list_append_string(v_list2, str, len) };

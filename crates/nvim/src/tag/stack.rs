@@ -164,10 +164,10 @@ impl TagStack {
             li = unsafe { (*li).li_next };
 
             // Skip anything that is not a dict describing a jump.
-            if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).vval.v_dict.is_null() } {
+            if unsafe { (*tv).v_type } != VAR_DICT || unsafe { (*tv).dict_or_null().is_null() } {
                 continue;
             }
-            let item = unsafe { (*tv).vval.v_dict };
+            let item = unsafe { (*tv).dict_or_null() };
             let found = unsafe { find(item, c"from") };
             let Some(from) = found else {
                 continue;
@@ -355,7 +355,7 @@ pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result
             emsg(gettext(e_listreq));
             return Err(Failed);
         }
-        items = unsafe { (*di).di_tv.vval.v_list };
+        items = unsafe { (*di).di_tv.list_or_null() };
     }
 
     let mut stack = TagStack::of(window);

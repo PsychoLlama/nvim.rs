@@ -158,7 +158,8 @@ unsafe fn get_qf_loc_list(
         unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
         if is_qf || window.is_some() {
             // No list, or an empty one, is an empty answer, not an error.
-            let _ = unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*result).vval.v_list) };
+            let _ =
+                unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*result).list_or_null()) };
         }
         return;
     }
@@ -171,11 +172,11 @@ unsafe fn get_qf_loc_list(
         emsg(gettext(e_dictreq));
         return;
     }
-    let d = unsafe { (*what_arg).vval.v_dict };
+    let d = unsafe { (*what_arg).dict_or_null() };
     if !d.is_null() {
         // A request that names nothing readable answers the empty
         // dictionary that is already in `result`.
-        let _ = unsafe { qf_get_properties(window, d, (*result).vval.v_dict) };
+        let _ = unsafe { qf_get_properties(window, d, (*result).dict_or_null()) };
     }
 }
 
@@ -259,9 +260,9 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
                 return;
             }
         } else if unsafe { (*what_arg).v_type } == VAR_DICT
-            && !unsafe { (*what_arg).vval.v_dict }.is_null()
+            && !unsafe { (*what_arg).dict_or_null() }.is_null()
         {
-            what = unsafe { (*what_arg).vval.v_dict };
+            what = unsafe { (*what_arg).dict_or_null() };
         } else if unsafe { (*what_arg).v_type } != VAR_UNKNOWN {
             emsg(gettext(e_dictreq));
             return;
@@ -277,7 +278,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
     }
 
     let _recursing = Depth::of(&RECURSIVE);
-    let l = unsafe { (*list_arg).vval.v_list };
+    let l = unsafe { (*list_arg).list_or_null() };
     if unsafe { set_errorlist(window, l, c_int::from(action), title.cast_mut(), what) }.is_ok() {
         unsafe { (*result).write_number(0) };
     }

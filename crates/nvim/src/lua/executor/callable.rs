@@ -64,8 +64,8 @@ const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
 unsafe fn lua_table_ref(arg: *const TypVal) -> LuaRef {
     unsafe {
         match (*arg).v_type {
-            VAR_DICT => (*(*arg).vval.v_dict).lua_table_ref,
-            VAR_LIST => (*(*arg).vval.v_list).lua_table_ref,
+            VAR_DICT => (*(*arg).dict_or_null()).lua_table_ref,
+            VAR_LIST => (*(*arg).list_or_null()).lua_table_ref,
             _ => LUA_NOREF,
         }
     }

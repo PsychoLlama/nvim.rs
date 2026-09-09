@@ -94,8 +94,8 @@ pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     result.write_number(offset);
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
-    if result.number_or_zero() >= 0 {
-        unsafe { result.vval.v_number += 1 };
+    if offset >= 0 {
+        result.write_number(offset + 1);
     }
 }
 

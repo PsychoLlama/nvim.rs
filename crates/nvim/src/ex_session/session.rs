@@ -593,7 +593,7 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
                 return false;
             }
         } else if kind == VAR_FLOAT && sessionable {
-            let f = unsafe { (*item).di_tv.vval.v_float };
+            let f = unsafe { (*item).di_tv.float_or_zero() };
             let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
             if unsafe {
                 fprintf(

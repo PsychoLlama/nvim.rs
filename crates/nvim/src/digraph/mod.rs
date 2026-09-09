@@ -421,7 +421,7 @@ unsafe fn digraph_getlist_common(list_all: bool, result: *mut TypVal) {
     // itself from here on.
     let list = unsafe {
         tv_list_alloc_ret(result, capacity);
-        (*result).vval.v_list
+        (*result).list_or_null()
     };
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
@@ -624,7 +624,7 @@ unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
-        (*arg).vval.v_list
+        (*arg).list_or_null()
     };
     if pl.is_null() {
         return true;
@@ -637,7 +637,7 @@ unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
-        let l = unsafe { (*pli).li_tv.vval.v_list };
+        let l = unsafe { (*pli).li_tv.list_or_null() };
         if l.is_null() || unsafe { (*l).lv_len } != 2 {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;

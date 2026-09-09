@@ -53,7 +53,7 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `buf` is the scratch `tv_get_string_buf_chk` may answer with.
     if unsafe { (*args).v_type } == VAR_DICT as _ {
-        d = unsafe { (*args).vval.v_dict };
+        d = unsafe { (*args).dict_or_null() };
         // SAFETY: `d` is the dict just taken off the argument.
         let abbr = unsafe {
             which = numbuf.dict_string(d, c"mode".as_ptr());
@@ -77,7 +77,7 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
             return;
         }
         // SAFETY: `tv_check_for_dict_arg` just said slot 2 is a dict.
-        d = unsafe { (*args.add(2)).vval.v_dict };
+        d = unsafe { (*args.add(2)).dict_or_null() };
     }
 
     // SAFETY: `which` is a NUL-terminated mode string.
@@ -107,7 +107,7 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
         let key = c"callback".count_bytes() as _;
         let callback_di = tv_dict_find(d, c"callback".as_ptr(), key);
         if !callback_di.is_null() && (*callback_di).di_tv.v_type == VAR_FUNC as _ {
-            let fp = find_func((*callback_di).di_tv.vval.v_string);
+            let fp = find_func((*callback_di).di_tv.string_or_null());
             if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
                 orig_rhs = c"".as_ptr().cast_mut();

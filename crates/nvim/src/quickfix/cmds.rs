@@ -24,7 +24,7 @@
 
 use super::*;
 use crate::types::CmdIdx;
-use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST, VAR_STRING};
+use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -298,8 +298,9 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
     // unusable.
     let (qi, wp) = qf_cmd_stack_or_alloc(args);
 
-    let usable = unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() }
-        || unsafe { (*tv).v_type } == VAR_LIST;
+    // A non-string reads as a NULL string, so the tag test is the accessor's.
+    let usable =
+        !unsafe { (*tv).string_or_null() }.is_null() || unsafe { (*tv).v_type } == VAR_LIST;
     if !usable {
         qf_emsg(c"E777: String or List expected".as_ptr());
         return Err(Failed);

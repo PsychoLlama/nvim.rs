@@ -245,7 +245,7 @@ pub(crate) unsafe fn f_menu_info(args: *mut TypVal, result: *mut TypVal, _fptr: 
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(result);
-        ((*result).vval.v_dict, numbuf.string_chk(args))
+        ((*result).dict_or_null(), numbuf.string_chk(args))
     };
     if menu_name.is_null() {
         // Before the second argument is looked at: `tv_get_string_chk`

@@ -110,7 +110,7 @@ pub(crate) unsafe fn tv_str(
 /// `tvs` must point at an initialized typval.
 pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_void {
     match unsafe { next_arg(tvs.cast_mut(), idxp) } {
-        Some(tv) => unsafe { (*tv).vval.v_string as *const c_void },
+        Some(tv) => unsafe { (*tv).string_or_null() as *const c_void },
         None => ptr::null(),
     }
 }
@@ -126,8 +126,8 @@ pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
         return 0.0;
     };
     match unsafe { (*tv).v_type } {
-        VAR_FLOAT => unsafe { (*tv).vval.v_float },
-        VAR_NUMBER => unsafe { (*tv).vval.v_number as Float },
+        VAR_FLOAT => unsafe { (*tv).float_or_zero() },
+        VAR_NUMBER => unsafe { (*tv).number_or_zero() as Float },
         _ => {
             emsg(gettext(E_EXPECTED_FLOAT));
             0.0

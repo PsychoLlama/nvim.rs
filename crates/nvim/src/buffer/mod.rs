@@ -208,9 +208,9 @@ pub const NMARKS: ::core::ffi::c_int =
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline(always)]
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
-    // SAFETY: `b:changedtick`'s dict item is always a `VAR_NUMBER`, which is
-    // the only variant this union is ever given here.
-    unsafe { buffer.changedtick_di.di_tv.vval.v_number }
+    // `b:changedtick`'s dict item is always a `VAR_NUMBER`, so the tag test
+    // inside the accessor never answers the zero.
+    buffer.changedtick_di.di_tv.number_or_zero()
 }
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
