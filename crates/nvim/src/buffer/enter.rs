@@ -53,7 +53,7 @@ use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::terminal_check_size;
 use crate::types::{
     ChangedtickDictItem, CmdModFlags, ColNr, DictItem, Failed, LineNr, NUL, OptInt, ShmFlag,
-    Terminal, TypVal, VAR_NUMBER, VarLock, time_t, typval_vval_union, uint8_t, uint64_t,
+    Terminal, TypVal, VarLock, time_t, uint8_t, uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
@@ -506,12 +506,8 @@ const CHANGEDTICK_KEY: [c_char; 12] = {
 pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
     buffer.changedtick_di = ChangedtickDictItem {
         di_tv: TypVal {
-            v_type: VAR_NUMBER,
             v_lock: VarLock::Fixed,
-            vval: typval_vval_union {
-                // SAFETY: a live buffer.
-                v_number: buf_get_changedtick(buffer),
-            },
+            ..TypVal::number(buf_get_changedtick(buffer))
         },
         // Must not include DI_FLAGS_ALLOC.
         di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,

@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::semsg;
 use crate::winlayer::{Ea, Live};
 use core::ffi::{c_char, c_int};
@@ -44,17 +45,12 @@ use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     DictItem, EvalArg, ExArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, kBoolVarFalse, kBoolVarTrue,
-    size_t, typval_vval_union,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarFalse, kBoolVarTrue, size_t,
 };
 
 /// A freshly declared typval, which is what every level starts a second
 /// operand as.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// The `EvalArg` a level substitutes when the caller supplied none. It
 /// exists only to carry the "do not evaluate" flag across a short circuit.

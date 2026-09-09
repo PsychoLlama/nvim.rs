@@ -160,7 +160,7 @@ use crate::types::{
     OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
     ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
     String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window,
-    XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
+    XpPrefix, ptrdiff_t, size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

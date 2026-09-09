@@ -13,11 +13,12 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
 use crate::tr_plural;
-use crate::types::{NUL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock};
+use crate::types::{NUL, VAR_LIST};
 
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0.
@@ -185,18 +186,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
     }
 
     let mut arg_allocated = false;
-    let mut arg = TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_string: colored_ccline.text(),
-        },
-    };
-    let mut tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut arg = TypVal::string(colored_ccline.text());
+    let mut tv = TV_INITIAL_VALUE;
 
     // Both are C function-level statics. `prev_prompt_id` starts at
     // UINT_MAX so that the first prompt of a session, whatever its id,

@@ -11,9 +11,10 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock};
+use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -85,11 +86,7 @@ unsafe fn qf_add_entry_from_dict(
     if text.is_null() {
         text = unsafe { xcalloc(1, 1) }.cast();
     }
-    let mut user_data = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut user_data = TV_INITIAL_VALUE;
     let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
 
     // An entry that names neither a file nor a position cannot be

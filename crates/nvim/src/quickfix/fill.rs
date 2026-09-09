@@ -14,9 +14,10 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
-use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock};
+use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -280,16 +281,8 @@ unsafe fn call_qftf_func(
     add(c"end_idx", end_idx as VarNumber);
     unsafe { (*dict).dv_refcount.retain() };
 
-    let mut args = [TypVal {
-        v_type: VAR_DICT,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_dict: dict },
-    }];
-    let mut rettv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut args = [TypVal::dict(dict)];
+    let mut rettv = TV_INITIAL_VALUE;
     let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();
     if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {

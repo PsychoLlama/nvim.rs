@@ -26,10 +26,7 @@ use crate::eval::typval::{
 use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
-use crate::types::{
-    DictItem, List, MessagePackType, TypVal, VAR_LIST, VAR_STRING, VarLock, ptrdiff_t, size_t,
-    typval_vval_union,
-};
+use crate::types::{DictItem, List, MessagePackType, TypVal, VAR_LIST, VarLock, ptrdiff_t, size_t};
 use ::libc::memchr;
 
 mod json;
@@ -129,15 +126,9 @@ pub unsafe fn decode_string(
         }
         return tv;
     }
-    TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_string: if s.is_null() || s_allocated {
-                s as *mut c_char
-            } else {
-                unsafe { xmemdupz(s.cast(), len) as *mut c_char }
-            },
-        },
-    }
+    TypVal::string(if s.is_null() || s_allocated {
+        s as *mut c_char
+    } else {
+        unsafe { xmemdupz(s.cast(), len) as *mut c_char }
+    })
 }

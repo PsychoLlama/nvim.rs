@@ -7,6 +7,7 @@ use super::wrappers::{arg_copy, arg_string, check_arg};
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear,
     tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first, tv_list_len, tv_list_locked,
@@ -21,17 +22,13 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, DictItem, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, typval_vval_union,
+    Blob, DictItem, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 use core::ffi::{c_char, c_int, c_void};
 
 /// A cleared typval.
-const EMPTY_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 /// The byte offset from a `DictItem`'s inline key to the item itself, as
 /// the C's `TV_DICT_HI2DI` spells it.
@@ -42,23 +39,12 @@ const DI_KEY_OFFSET: isize = 17;
 /// # Safety
 /// `p` has at least `len` readable bytes.
 unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
-    TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        // SAFETY throughout: the caller's obligation; `xmemdupz` copies and terminates.
-        vval: typval_vval_union {
-            v_string: unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char,
-        },
-    }
+    TypVal::string(unsafe { xmemdupz(p as *const c_void, len as usize) } as *mut c_char)
 }
 
 /// A Number typval.
 const fn number_tv(n: VarNumber) -> TypVal {
-    TypVal {
-        v_type: VAR_NUMBER,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: n },
-    }
+    TypVal::number(n)
 }
 
 /// The shared body of `max()` and `min()`.

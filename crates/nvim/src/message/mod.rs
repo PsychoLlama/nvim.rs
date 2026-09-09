@@ -161,7 +161,7 @@ use crate::types::{
     ApiDict, Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FILE, FlushBuffers, GridView,
     HlMessage, HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt,
     ScreenAttr, ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, ptrdiff_t, size_t, ssize_t,
-    typval_vval_union, uint64_t,
+    uint64_t,
 };
 use crate::ui::state::{Columns, Rows, resize_events};
 use crate::ui::{

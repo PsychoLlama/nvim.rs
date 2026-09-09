@@ -17,6 +17,7 @@
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api_error;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc_len,
     tv_dict_item_remove, tv_dict_watcher_notify,
@@ -24,8 +25,8 @@ use crate::eval::typval::{
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::message_fmt::c_str;
 use crate::types::{
-    Arena, Dict, DictItem, Error, Object, String_0, TypVal, VAR_UNKNOWN, VarLock,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, size_t, typval_vval_union,
+    Arena, Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, size_t,
 };
 use core::ffi::c_int;
 use core::ptr;
@@ -165,20 +166,12 @@ pub(crate) unsafe fn dict_set_var(
         return rv;
     }
 
-    let mut tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut tv = TV_INITIAL_VALUE;
     // SAFETY: `tv` is this frame's and `err` the caller's slot.
     unsafe { object_to_vim(value, &raw mut tv) };
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.
-    let mut oldtv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut oldtv = TV_INITIAL_VALUE;
 
     if di.is_null() {
         // SAFETY: `key` names its own bytes and `dict` is live.

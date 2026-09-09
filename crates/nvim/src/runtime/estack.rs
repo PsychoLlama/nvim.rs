@@ -328,9 +328,8 @@ unsafe fn stacktrace_push_item(
     // final append hands the dict to the list.
     let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
     let mut tv = TypVal {
-        v_type: VAR_DICT,
         v_lock: VarLock::Locked,
-        vval: typval_vval_union { v_dict: d },
+        ..TypVal::dict(d)
     };
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };

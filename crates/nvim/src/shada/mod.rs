@@ -13,6 +13,7 @@ use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfp
 use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view};
 use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string, tv_list_len,
 };
@@ -65,9 +66,8 @@ use crate::types::{
     KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
     KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet, MotionType, OptionalKeys,
     PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray, SubReplacementString,
-    Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, XFileMark, YankReg, int64_t, ptrdiff_t,
-    size_t, ssize_t, typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t,
-    uv_uid_t,
+    Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t, size_t, ssize_t, uid_t,
+    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -663,13 +663,7 @@ const DEFAULT_REGISTER: ShadaRegister = ShadaRegister {
 /// What a variable entry defaults to.
 const DEFAULT_VARIABLE: ShadaGlobalVar = ShadaGlobalVar {
     name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    value: TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        },
-    },
+    value: TV_INITIAL_VALUE,
 };
 
 /// What a buffer-list entry defaults to.

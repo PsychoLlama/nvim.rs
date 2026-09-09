@@ -84,8 +84,8 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::State;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VAR_NUMBER,
-    VarLock, VarNumber, Vv, int64_t, size_t, stl_hlrec_t, typval_vval_union,
+    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VarNumber,
+    Vv, int64_t, size_t, stl_hlrec_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
@@ -710,13 +710,7 @@ pub unsafe fn build_stl_str_hl(
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
     let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = TypVal {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_number: win.handle as VarNumber,
-            },
-        };
+        let mut winid = TypVal::number(win.handle as VarNumber);
         let name = c"g:statusline_winid";
         // SAFETY: a NUL-terminated name with its own length, and a typval
         // this frame owns, which `set_var` copies.

@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::eval::Parsed;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -19,8 +20,7 @@ use crate::eval::typval::{
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{
-    Dict, EvalArg, Failed, List, NUL, TypVal, VAR_UNKNOWN, VarLock, kListLenShouldKnow, ptrdiff_t,
-    size_t, typval_vval_union,
+    Dict, EvalArg, Failed, List, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
 
@@ -28,11 +28,7 @@ use crate::winlayer::Live;
 const NUMBUFLEN: usize = 65;
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Is this `evalarg` asking for the expression to actually be evaluated?
 ///

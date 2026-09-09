@@ -4,6 +4,7 @@
 
 use super::args::frame;
 use super::wrappers::{arg_number, check_arg, list_alloc_ret};
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_check_for_number_arg, tv_check_for_opt_number_arg,
     tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_append_number, tv_list_find_nr,
@@ -27,7 +28,7 @@ use crate::semsg;
 use crate::startup::main_loop;
 use crate::types::{
     Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, TypVal, VAR_LIST, VAR_NUMBER,
-    VAR_UNKNOWN, VarLock, VarNumber, int32_t, kListLenUnknown, time_t, typval_vval_union,
+    VAR_UNKNOWN, VarNumber, int32_t, kListLenUnknown, time_t,
 };
 use crate::ui::ui_flush;
 use ::libc::time;
@@ -35,11 +36,7 @@ use core::ffi::{c_int, c_void};
 use core::ptr;
 
 /// A cleared typval, the shape the evaluator's out-parameters start in.
-const EMPTY_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 /// `wait()`'s idle timer keeps the event loop turning; it is only closed
 /// here when the loop itself is shutting down, since `f_wait` cannot run to

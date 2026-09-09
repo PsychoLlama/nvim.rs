@@ -13,6 +13,7 @@ use super::{
 use crate::cstr;
 use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
     tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear,
@@ -37,18 +38,14 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfre
 use crate::semsg;
 use crate::types::{
     Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
-    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
-    kListLenMayKnow, kListLenUnknown, typval_vval_union,
+    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, kListLenMayKnow,
+    kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
-const TV_UNKNOWN: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const TV_UNKNOWN: TypVal = TV_INITIAL_VALUE;
 
 /// A cleared `RegMatch`, which `vim_regcomp`'s result is dropped into.
 const EMPTY_REGMATCH: RegMatch = RegMatch {
@@ -690,16 +687,7 @@ unsafe fn item_string(
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
             unsafe { (*(*tv).vval.v_dict).dv_refcount.retain() };
-            let mut argv = [
-                TypVal {
-                    v_type: VAR_DICT,
-                    v_lock: VarLock::Unlocked,
-                    vval: typval_vval_union {
-                        v_dict: unsafe { (*tv).vval.v_dict },
-                    },
-                },
-                TV_UNKNOWN,
-            ];
+            let mut argv = [TypVal::dict(unsafe { (*tv).vval.v_dict }), TV_UNKNOWN];
             let called = unsafe { callback_call(cb, 1, argv.as_mut_ptr(), result) };
             unsafe { tv_dict_unref((*tv).vval.v_dict) };
             if called && unsafe { (*result).v_type } == VAR_STRING {

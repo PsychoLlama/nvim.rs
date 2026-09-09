@@ -12,6 +12,7 @@ use crate::channel::{
     channel_proc, channel_pty, channel_terminal_alloc, find_channel,
 };
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
     tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove, tv_list_alloc,
@@ -47,8 +48,7 @@ use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
     EvalFuncData, IOSIZE, Integer, List, ListItem, MAXPATHL, NUL, Object, TypVal, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, Vv, typval_vval_union,
-    uint16_t, uint64_t,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -328,11 +328,7 @@ unsafe fn create_environment(
         // Start from our own environment. `f_environ` is the builtin,
         // called directly because it is the only thing that knows how
         // to turn `environ` into a Dict.
-        let mut inherited = TypVal {
-            v_type: VAR_UNKNOWN,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: 0 },
-        };
+        let mut inherited = TV_INITIAL_VALUE;
         let out = &raw mut inherited;
         let row = EvalFuncData::None;
         // SAFETY: `f_environ` reads no arguments and fills `inherited`.

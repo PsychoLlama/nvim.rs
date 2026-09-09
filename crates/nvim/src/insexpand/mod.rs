@@ -3,6 +3,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
@@ -119,9 +120,8 @@ use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData,
     Expand, ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet,
-    Pos, PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, typval_vval_union, uint8_t,
-    uint64_t,
+    Pos, PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VarNumber, Vv, XpPrefix,
+    extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -281,11 +281,7 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextStat
 };
 /// An unset `TypVal`, which the transpile writes out at every declaration
 /// (C leaves these uninitialised and has the callee fill them in).
-pub(crate) const TYPVAL_T_INIT: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+pub(crate) const TYPVAL_T_INIT: TypVal = TV_INITIAL_VALUE;
 
 /// A zeroed `Pos`.
 pub(crate) const POS_T_INIT: Pos = Pos {

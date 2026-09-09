@@ -41,7 +41,7 @@ use crate::runtime::state::current_sctx;
 use crate::tr_c;
 use crate::types::{
     Blob, EvalFuncData, FileDescriptor, List, ListItem, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING,
-    VarLock, VarNumber, ptrdiff_t, size_t, typval_vval_union,
+    VarNumber, ptrdiff_t, size_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -327,11 +327,7 @@ fn defer_delete(fname: &CStr) {
     // SAFETY: `fname` is NUL-terminated; the answer is a string in nvim's
     // heap, which the deferred call takes over.
     let full = unsafe { full_name_save(fname.as_ptr(), false) };
-    let mut tv = TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_string: full },
-    };
+    let mut tv = TypVal::string(full);
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: one argument, at `tv`, whose contents the callee takes over.
     unsafe { add_defer(name, 1, &raw mut tv) };

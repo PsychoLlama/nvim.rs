@@ -14,6 +14,7 @@ use crate::eval::encode::{
     ListRead, encode_init_lrstate, encode_list_write, encode_read_from_list, encode_tv2json,
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_first, tv_list_len,
 };
@@ -23,19 +24,15 @@ use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::semsg;
 use crate::types::{
-    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock,
-    kListLenMayKnow, mpack_parser_t, typval_vval_union,
+    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow,
+    mpack_parser_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;
 use core::ptr;
 
 /// A cleared typval, the shape the decoders write their result into.
-const EMPTY_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
 /// lines joined by NLs.

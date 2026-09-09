@@ -16,6 +16,7 @@
 )]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_void};
@@ -31,20 +32,10 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
 use crate::types::{
-    CallbackReader, Channel, List, RStream, TypVal, VAR_UNKNOWN, VarLock, VarNumber,
-    kListLenMayKnow, size_t, typval_vval_union,
+    CallbackReader, Channel, List, RStream, TypVal, VarNumber, kListLenMayKnow, size_t,
 };
 
 use super::{channel_decref, channel_incref};
-
-/// A `TypVal` of no type, which is what an argument slot starts as.
-fn unknown_tv() -> TypVal {
-    TypVal {
-        v_type: VAR_UNKNOWN as _,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    }
-}
 
 /// Starts buffering a reader's output under `type_0`, which names it in the
 /// callback and in the `self` dict.
@@ -259,8 +250,8 @@ unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
 /// # Safety
 /// `chan` is live; `reader` is null or one of its readers.
 unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
-    let mut argv: [TypVal; 4] = [unknown_tv(); 4];
-    let mut rettv = unknown_tv();
+    let mut argv: [TypVal; 4] = [TV_INITIAL_VALUE; 4];
+    let mut rettv = TV_INITIAL_VALUE;
 
     // SAFETY: the caller's live channel and reader. The list built for a
     // reader is owned by `argv[1]` until it is unreferenced below.

@@ -37,9 +37,7 @@ use crate::eval::list::{
 use crate::memory::handoff::owned_cstr;
 use crate::message::state::did_emsg;
 use crate::message::{e_invalblob, e_string_required};
-use crate::types::{
-    TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv, typval_vval_union,
-};
+use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv};
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a Dict.
 ///
@@ -149,11 +147,7 @@ pub(crate) fn filter_map_blob(
     let mut idx = 0;
     while i < b.len() {
         let val = VarNumber::from(b.byte(i));
-        let mut tv = TypVal {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: val },
-        };
+        let mut tv = TypVal::number(val);
         set_key_nr(idx);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;

@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy, copy_nonoverlapping};
 
@@ -22,9 +23,7 @@ use crate::memory::xrealloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
-use crate::types::{
-    Blob, Float, TypVal, VAR_FLOAT, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, typval_vval_union,
-};
+use crate::types::{Blob, Float, TypVal, VAR_FLOAT, VAR_STRING, VarNumber};
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
 /// or a Float into. `NUMBUFLEN` in the C.
@@ -109,11 +108,7 @@ pub(crate) unsafe fn eval_addblob(tv1: *mut TypVal, tv2: *mut TypVal) {
 /// # Safety
 /// Both operands must be Lists.
 pub(crate) unsafe fn eval_addlist(tv1: *mut TypVal, tv2: *mut TypVal) -> bool {
-    let mut joined = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut joined = TV_INITIAL_VALUE;
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `List`, and `joined` is this frame's own.
     let (l1, l2) = unsafe { ((*tv1).list_or_null(), (*tv2).list_or_null()) };

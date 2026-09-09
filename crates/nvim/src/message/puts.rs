@@ -11,11 +11,12 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::types::builders::static_cstring;
-use crate::types::{Callback, NUL, VAR_STRING, VAR_UNKNOWN, VarLock};
+use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
 
@@ -461,18 +462,8 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // over the *pointer* instead, so a caller that asked for a prefix
         // of a longer string had the whole of it printed.
         let text = cstr::owned(bytes);
-        let mut argv = [TypVal {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_string: text.as_ptr().cast_mut(),
-            },
-        }];
-        let mut rettv = TypVal {
-            v_type: VAR_UNKNOWN,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: 0 },
-        };
+        let mut argv = [TypVal::string(text.as_ptr().cast_mut())];
+        let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
         unsafe { callback_call(on_print_cb(), 1, argv.as_mut_ptr(), &raw mut rettv) };
         // SAFETY: `rettv` is whatever the callback answered.

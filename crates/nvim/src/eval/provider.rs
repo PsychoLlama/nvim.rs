@@ -7,6 +7,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -43,8 +44,8 @@ use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncCallEntry,
-    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
+    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber,
+    caller_scope, ptrdiff_t, size_t, ssize_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -66,11 +67,7 @@ pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::
 pub(crate) static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// The scratch a provider function name is rendered into.
 const NAMEBUF: usize = 256;
@@ -218,11 +215,7 @@ pub unsafe fn eval_call_provider(
         // SAFETY: the format takes one NUL-terminated string.
         let provider = unsafe { c_str(provider) };
         semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
-        return TypVal {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number: 0 },
-        };
+        return TypVal::number(0);
     }
 
     let mut func: [c_char; NAMEBUF] = [0; NAMEBUF];
@@ -251,19 +244,7 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    let mut argvars: [TypVal; 3] = [
-        TypVal {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_string: method },
-        },
-        TypVal {
-            v_type: VAR_LIST,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_list: arguments },
-        },
-        UNSET_TV,
-    ];
+    let mut argvars: [TypVal; 3] = [TypVal::string(method), TypVal::list(arguments), UNSET_TV];
     let mut rettv = UNSET_TV;
     // The argument array borrows the List, so the reference is taken
     // for the duration of the call and given back after it.

@@ -44,9 +44,9 @@ use crate::message::emsg;
 use crate::narrow::float_as_i64;
 use crate::os::cshim::gettext;
 use crate::types::{
-    LuaRef, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VarLock, kBoolVarFalse, kBoolVarTrue,
-    kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull,
-    lua_Number, lua_State, size_t, typval_vval_union,
+    LuaRef, TypVal, VAR_DICT, VAR_LIST, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray,
+    kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State,
+    size_t,
 };
 use ::libc::abort;
 
@@ -178,11 +178,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                 }
             }
             debug_assert!(!cur.container);
-            *cur.tv = TypVal {
-                v_type: VAR_NUMBER,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_number: 0 },
-            };
+            *cur.tv = TypVal::number(0);
             'converted: {
                 match lua_type(lstate, -1) {
                     LUA_TNIL => {
@@ -320,11 +316,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
         }
         if !ret {
             tv_clear(ret_tv);
-            *ret_tv = TypVal {
-                v_type: VAR_NUMBER,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_number: 0 },
-            };
+            *ret_tv = TypVal::number(0);
             lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);
         }
         debug_assert!(lua_gettop(lstate) == initial_size - 1);

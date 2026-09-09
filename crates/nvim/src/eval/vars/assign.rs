@@ -272,11 +272,7 @@ pub unsafe fn ex_let_vars(
                 unsafe { tv_list_append_tv(rest_list, &raw mut (*item).li_tv) };
                 item = unsafe { (*item).li_next };
             }
-            let mut ltv = TypVal {
-                v_type: VAR_LIST,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_list: rest_list },
-            };
+            let mut ltv = TypVal::list(rest_list);
             unsafe { tv_list_ref(rest_list) };
 
             // SAFETY: `arg` is inside the caller's string and `ltv` a live

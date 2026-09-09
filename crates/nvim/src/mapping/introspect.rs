@@ -11,10 +11,11 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::kvec::InitVec;
 use crate::memory::handoff::owned_cstr;
 use crate::types::builders::static_cstring;
-use crate::types::{NUL, VAR_DICT, VAR_UNKNOWN, VarLock, kListLenUnknown};
+use crate::types::{NUL, VAR_DICT, VAR_UNKNOWN, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -381,11 +382,7 @@ pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
                 (alt, COwned::new(keys_buf))
             };
 
-            let mut d = TypVal {
-                v_type: VAR_UNKNOWN,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union { v_number: 0 },
-            };
+            let mut d = TV_INITIAL_VALUE;
             // SAFETY: `mp` is a live entry of the table being walked, `arena`
             // is this frame's own, and `result`'s list was allocated above.
             unsafe {

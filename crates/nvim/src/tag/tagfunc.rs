@@ -12,9 +12,9 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::types::{
-    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    kSpecialVarNull,
+    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VarLock, kSpecialVarNull,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -160,20 +160,12 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // list's.
     unsafe { (*info).dv_refcount.retain() };
 
-    let mut args = [TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    }; 4];
+    let mut args = [TV_INITIAL_VALUE; 4];
     args[0].write_string(pat);
     args[1].write_string(flag_string.as_mut_ptr());
     args[2].write_dict(info);
 
-    let mut rettv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
     let mut result = unsafe {
         callback_call(

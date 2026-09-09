@@ -9,6 +9,7 @@ use super::wrappers::{
     arg_copy, arg_number_chk, arg_string, check_arg, dict_alloc_ret, list_alloc_ret,
 };
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
@@ -33,18 +34,14 @@ use crate::types::{
     Blob, BoolVarValue, EvalFuncData, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_BLOB,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
     VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC,
-    VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, kBoolVarTrue, kSpecialVarNull, typval_vval_union,
+    VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
+    kBoolVarTrue, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// A cleared typval, the shape both dispatchers start every slot from.
-const NIL: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const NIL: TypVal = TV_INITIAL_VALUE;
 
 /// `copy({expr})` — one level deep.
 ///

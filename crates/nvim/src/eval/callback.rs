@@ -11,6 +11,7 @@
 )]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr::{null, null_mut};
@@ -32,17 +33,12 @@ use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
     Arena, Callback, CallbackReader, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,
-    TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv,
-    typval_vval_union,
+    TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
 };
 use crate::winlayer::Win;
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Build a `Callback` out of whatever the user handed a builtin.
 ///

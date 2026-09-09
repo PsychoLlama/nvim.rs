@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -30,16 +31,12 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, size_t, typval_vval_union,
+    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, VarNumber,
+    size_t,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Read the `for x in expr` header and set up the iteration. The answer is
 /// always a `ForInfo` the caller owns, even on the error paths, because

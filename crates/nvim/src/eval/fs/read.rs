@@ -37,8 +37,8 @@ use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::tr_c;
 use crate::types::{
-    Blob, EvalFuncData, FILE, FileInfo, FileOffset, List, READBIN, TypVal, VAR_STRING, VarLock,
-    int64_t, kListLenUnknown, off_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
+    Blob, EvalFuncData, FILE, FileInfo, FileOffset, List, READBIN, TypVal, int64_t,
+    kListLenUnknown, off_t, ptrdiff_t, size_t, uint64_t,
 };
 use ::libc::{fclose, fileno, fread, fseeko};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -160,11 +160,7 @@ impl Lines {
     /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
     /// from here on.
     fn push(self, s: *mut c_char) {
-        let tv = TypVal {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_string: s },
-        };
+        let tv = TypVal::string(s);
         // SAFETY: a live list, and `tv` an owned String the list takes over.
         unsafe { tv_list_append_owned_tv(self.0, tv) };
     }

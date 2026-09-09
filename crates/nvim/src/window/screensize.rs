@@ -37,8 +37,7 @@ use crate::option::vars::{p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock, VarNumber,
-    ptrdiff_t, size_t, typval_vval_union,
+    Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
@@ -157,13 +156,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut Dict {
         c"skipcol".to_bytes(),
     ];
     for (key, value) in keys.iter().zip(deltas) {
-        let mut tv = TypVal {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_number: value as VarNumber,
-            },
-        };
+        let mut tv = TypVal::number(value as VarNumber);
         let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
         // SAFETY: a live dictionary, a static key of the given length, and a
         // value the dictionary takes over.
@@ -234,13 +227,7 @@ fn scan_windows(what: &mut Scan) {
         if size_changed {
             match what {
                 Scan::Winlist(list) => {
-                    let tv = TypVal {
-                        v_type: VAR_NUMBER,
-                        v_lock: VarLock::Unlocked,
-                        vval: typval_vval_union {
-                            v_number: wp.handle as VarNumber,
-                        },
-                    };
+                    let tv = TypVal::number(wp.handle as VarNumber);
                     // SAFETY: a live list, which takes ownership of `tv`.
                     unsafe { tv_list_append_owned_tv(*list, tv) };
                 }

@@ -124,7 +124,7 @@ use crate::types::{
     DoBufAction, EvalFuncData, ExArg, ExtmarkOp, FILE, FileInfo, GetFileFlags, LineNr, List,
     ListItem, OptInt, OptSet, OptVal, Pos, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfInfo,
     QfLine, QfList, QfListType, RegMMatch, RegMatch, RegProg, ScriptId, TypVal, VarNumber, VarType,
-    VimConv, ptrdiff_t, size_t, time_t, typval_vval_union,
+    VimConv, ptrdiff_t, size_t, time_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_flush;

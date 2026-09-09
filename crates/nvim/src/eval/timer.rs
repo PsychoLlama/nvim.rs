@@ -12,6 +12,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -34,8 +35,8 @@ use crate::message::state::{called_emsg, did_emsg};
 use crate::registry::SlotTable;
 use crate::startup::main_loop;
 use crate::types::{
-    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VAR_UNKNOWN, VarLock,
-    VarNumber, int64_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
+    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VarNumber, int64_t, ptrdiff_t,
+    size_t, uint64_t,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -43,11 +44,7 @@ use crate::types::{
 const MAX_ERRORS: c_int = 3;
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Every live timer, in registration order.
 ///

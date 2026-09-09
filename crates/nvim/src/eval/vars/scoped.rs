@@ -245,13 +245,7 @@ pub(crate) unsafe fn tv_to_optval(
 /// An option's value as a typval.  `numbool` renders a Boolean option as a
 /// Number, which is what the old spelling of the accessors answered.
 pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
-    let mut rettv = TypVal {
-        v_type: VAR_SPECIAL,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_special: kSpecialVarNull,
-        },
-    };
+    let mut rettv = TypVal::special(kSpecialVarNull);
     match value {
         OptVal::Boolean(word) => {
             if numbool {

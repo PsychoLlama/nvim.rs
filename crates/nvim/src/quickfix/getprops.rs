@@ -14,7 +14,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenMayKnow};
+use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -502,11 +503,7 @@ unsafe fn qf_getprop_qftf(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Ke
     if !unsafe { &(*qfl).qf_qftf_cb }.is_set() {
         return unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) };
     }
-    let mut tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut tv = TV_INITIAL_VALUE;
     unsafe { callback_put(&raw mut (*qfl).qf_qftf_cb, &raw mut tv) };
     let status = unsafe { add_tv(retdict, "quickfixtextfunc", &raw mut tv) };
     unsafe { tv_clear(&raw mut tv) };

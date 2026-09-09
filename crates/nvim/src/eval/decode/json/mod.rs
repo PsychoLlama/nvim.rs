@@ -25,9 +25,8 @@ use crate::eval::typval::{
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Failed, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock,
-    kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
-    typval_vval_union,
+    Failed, List, TypVal, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
 };
 
 mod scan;
@@ -68,22 +67,10 @@ const E474_UNIDENTIFIED_BYTE: &CStr = c"E474: Unidentified byte: %.*s";
 const E474_TRAILING_CHARACTERS: &CStr = c"E474: Trailing characters: %.*s";
 const E474_UNEXPECTED_END: &CStr = c"E474: Unexpected end of input: %.*s";
 
-const NULL_TV: TypVal = TypVal {
-    v_type: VAR_SPECIAL,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union {
-        v_special: kSpecialVarNull,
-    },
-};
+const NULL_TV: TypVal = TypVal::special(kSpecialVarNull);
 
 const fn bool_tv(value: bool) -> TypVal {
-    TypVal {
-        v_type: VAR_BOOL,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_bool: if value { kBoolVarTrue } else { kBoolVarFalse },
-        },
-    }
+    TypVal::boolean(if value { kBoolVarTrue } else { kBoolVarFalse })
 }
 
 /// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
@@ -283,11 +270,7 @@ pub unsafe fn json_decode_string(
                     b'[' => {
                         let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
                         unsafe { tv_list_ref(list) };
-                        let tv = TypVal {
-                            v_type: VAR_LIST,
-                            v_lock: VarLock::Unlocked,
-                            vval: typval_vval_union { v_list: list },
-                        };
+                        let tv = TypVal::list(list);
                         dec.open(tv, ::core::ptr::null_mut(), p);
                     }
                     b'{' => {
@@ -301,11 +284,7 @@ pub unsafe fn json_decode_string(
                         } else {
                             let dict = unsafe { tv_dict_alloc() };
                             unsafe { (*dict).dv_refcount.retain() };
-                            tv = TypVal {
-                                v_type: VAR_DICT,
-                                v_lock: VarLock::Unlocked,
-                                vval: typval_vval_union { v_dict: dict },
-                            };
+                            tv = TypVal::dict(dict);
                         }
                         dec.open(tv, special_val, p);
                     }

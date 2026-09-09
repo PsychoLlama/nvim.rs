@@ -19,9 +19,7 @@ use super::{
 };
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
-use crate::types::{
-    EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VarLock, int64_t, typval_vval_union, uint8_t,
-};
+use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
@@ -78,11 +76,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     d1.extend_with(d2, action);
 
     if is_new {
-        *result = TypVal {
-            v_type: VAR_DICT,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_dict: d1.raw() },
-        };
+        *result = TypVal::dict(d1.raw());
     } else {
         copy_tv(args.get_mut(0), result);
     }
@@ -134,11 +128,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     l1.extend_with(l2, before);
 
     if is_new {
-        *result = TypVal {
-            v_type: VAR_LIST,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_list: l1.raw() },
-        };
+        *result = TypVal::list(l1.raw());
     } else {
         copy_tv(args.get_mut(0), result);
     }

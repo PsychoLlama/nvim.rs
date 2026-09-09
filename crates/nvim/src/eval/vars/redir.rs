@@ -120,13 +120,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // appending to it -- an empty string.
     let called_emsg_before = called_emsg.get();
     did_emsg.set(0);
-    let mut tv = TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            v_string: c"".as_ptr() as *mut c_char,
-        },
-    };
+    let mut tv = TypVal::string(c"".as_ptr() as *mut c_char);
     let op = if append { c"." } else { c"=" };
     let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut tv);
     // SAFETY: the lvalue just resolved, and a live local value.
@@ -182,13 +176,7 @@ pub unsafe fn var_redir_stop() {
         // Store the text, unless the start failed.
         if !redir_endp.get().is_null() {
             text.push(NUL as u8);
-            let mut tv = TypVal {
-                v_type: VAR_STRING,
-                v_lock: VarLock::Unlocked,
-                vval: typval_vval_union {
-                    v_string: text.as_mut_ptr().cast::<c_char>(),
-                },
-            };
+            let mut tv = TypVal::string(text.as_mut_ptr().cast::<c_char>());
             // Resolve the name again: inside a Dict or List it may have
             // moved since.
             // SAFETY: as [`var_redir_start`] -- the saved name and lvalue.

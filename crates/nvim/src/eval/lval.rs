@@ -25,6 +25,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::semsg;
 use crate::strings::has_char;
@@ -65,15 +66,11 @@ use crate::message::{e_cannot_mod, e_listreq};
 use crate::types::{
     Dict, DictItem, FAIL, Failed, HashTab, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE,
     VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
-    typval_vval_union, uint8_t,
+    uint8_t,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// The namespace letters a `x:` prefix may use. A `:` anywhere else ends
 /// the name.

@@ -11,12 +11,12 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock,
+    ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -274,11 +274,7 @@ pub(crate) unsafe fn call_user_expand_func(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    let mut args = [TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    }; 4];
+    let mut args = [TV_INITIAL_VALUE; 4];
     let save_current_sctx = current_sctx.get();
 
     if expand.xp_arg.is_null()
@@ -483,11 +479,7 @@ pub(crate) unsafe fn expand_user_lua(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    let mut rettv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut rettv = TV_INITIAL_VALUE;
     unsafe { nlua_call_user_expand_func(expand.raw(), &raw mut rettv) };
     if rettv.v_type != VAR_LIST {
         unsafe { tv_clear(&raw mut rettv) };

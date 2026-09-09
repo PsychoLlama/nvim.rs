@@ -24,6 +24,7 @@ use crate::api::private::helpers::{
 };
 use crate::api::vimscript::exec_impl;
 use crate::eval::encode::encode_vim_list_to_buf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::func_tbl_get;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -39,8 +40,7 @@ use crate::shada::{
 };
 use crate::types::{
     ApiDict, Arena, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, String_0, TypVal, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone,
-    key_value_pair, size_t, typval_vval_union, uint8_t,
+    OptionSetFlags, String_0, VAR_LIST, kErrorTypeNone, key_value_pair, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -303,11 +303,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 /// Main-thread editor call; `err` is a live error object.
 unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     let mut sbuf = String_0::NULL;
-    let mut list_tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut list_tv = TV_INITIAL_VALUE;
     // SAFETY: the caller's array and error; `list_tv` owns the conversion
     // result until `tv_clear`.
     let wrapped = Object::Array(array);

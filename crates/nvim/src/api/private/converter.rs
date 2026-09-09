@@ -26,6 +26,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string};
@@ -44,7 +45,7 @@ use crate::memory::xstrdup;
 use crate::types::{
     ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair, List,
     LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, VarLock, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, size_t, typval_vval_union,
+    kSpecialVarNull, size_t,
 };
 use crate::winlayer::Live;
 
@@ -462,11 +463,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
         Object::Array(array) => {
             let list: *mut List = tv_list_alloc(array.size.cast_signed());
             for i in 0..array.size {
-                let mut li_tv: TypVal = TypVal {
-                    v_type: VAR_UNKNOWN,
-                    v_lock: VarLock::Unlocked,
-                    vval: typval_vval_union { v_number: 0 },
-                };
+                let mut li_tv: TypVal = TV_INITIAL_VALUE;
                 // SAFETY: `i` is below `size`, so the slot is inside
                 // `items`, and `li_tv` is this frame's.
                 unsafe {

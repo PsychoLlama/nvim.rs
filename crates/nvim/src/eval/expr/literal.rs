@@ -13,6 +13,7 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::keycodes::ModMask;
 use crate::memory::handoff::owned_cstr;
 use crate::semsg;
@@ -39,17 +40,13 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, size_t, typval_vval_union, uint8_t,
+    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_STRING, VarLock,
+    VarNumber, size_t, uint8_t,
 };
 use ::libc::{strtod, toupper};
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// A walk over a NUL-terminated buffer: the `*mut c_char` a scan steps
 /// along, with its byte reads checked once here.

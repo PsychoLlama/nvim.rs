@@ -16,6 +16,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_void};
@@ -40,7 +41,7 @@ use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
     ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
-    VAR_UNKNOWN, VarLock, key_value_pair, typval_vval_union, uint64_t,
+    key_value_pair, uint64_t,
 };
 
 use super::known::*;
@@ -58,20 +59,12 @@ fn literal_obj(text: &'static CStr) -> Object {
 
 /// A fresh `TypVal` of no type, which is what every consumer here starts
 /// from before something writes into it.
-pub(super) fn unknown_tv() -> TypVal {
-    TypVal {
-        v_type: VAR_UNKNOWN as _,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    }
-}
-
 /// `chan`'s info dict, as the `TypVal` the Vimscript layer wants.
 ///
 /// # Safety
 /// `id` may name any channel; `arena` owns the dict's storage.
 unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> TypVal {
-    let mut tv = unknown_tv();
+    let mut tv = TV_INITIAL_VALUE;
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.
     let info = unsafe { channel_info(id, arena) };

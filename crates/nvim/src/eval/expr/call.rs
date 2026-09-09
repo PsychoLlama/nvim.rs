@@ -12,6 +12,7 @@
 
 use crate::cstr;
 use crate::eval::Parsed;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -35,16 +36,12 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Dict, EvalArg, Failed, FuncExe, NUL, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN,
-    VarLock, Vv, size_t, typval_vval_union,
+    Dict, EvalArg, Failed, FuncExe, NUL, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, Vv,
+    size_t,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// Is this `evalarg` asking for the expression to actually be evaluated?
 ///

@@ -13,6 +13,7 @@
 
 use crate::cstr;
 use crate::eval::Parsed;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::{Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -51,17 +52,13 @@ use crate::types::{
     Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL,
     Object, OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
-    size_t, ssize_t, typval_vval_union, uint8_t,
+    size_t, ssize_t, uint8_t,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// A freshly declared `EvalArg`, before `fill_evalarg_from_eap`.
 const UNSET_EVALARG: EvalArg = EvalArg {

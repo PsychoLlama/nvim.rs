@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -39,17 +40,12 @@ use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     EvalArg, ExArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, size_t,
-    typval_vval_union,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VarFlavour, size_t,
 };
 use crate::ui::ui_has;
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// A freshly declared `EvalArg`.
 const UNSET_EVALARG: EvalArg = EvalArg {

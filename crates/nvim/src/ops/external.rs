@@ -24,6 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -167,11 +168,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         kMTBlockWise => c"block",
         _ => c"char",
     };
-    let mut argv: [TypVal; 2] = [TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    }; 2];
+    let mut argv: [TypVal; 2] = [TV_INITIAL_VALUE; 2];
     argv[0].write_string(kind.as_ptr() as *mut c_char);
 
     // Reset virtual_op so that 'virtualedit' can be changed in the
@@ -181,11 +178,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     let save_finish_op: bool = finish_op.get();
     finish_op.set(false);
 
-    let mut rettv: TypVal = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut rettv: TypVal = TV_INITIAL_VALUE;
     let args = (&raw mut argv).cast::<TypVal>();
     if unsafe { callback_call(global_opfunc(), 1, args, &raw mut rettv) } {
         unsafe { tv_clear(&raw mut rettv) };

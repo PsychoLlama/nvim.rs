@@ -39,10 +39,7 @@ use crate::message::state::{
 };
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
-use crate::types::{
-    EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
-    typval_vval_union,
-};
+use crate::types::{EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, Vv};
 use crate::ui::state::Rows;
 
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
@@ -223,27 +220,9 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
 unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch: &FailsMismatch) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let mut actual_tv = match mismatch.index {
-        3 => TypVal {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_number: emsg_assert_fails_lnum.get() as VarNumber,
-            },
-        },
-        4 => TypVal {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_string: emsg_assert_fails_context.get(),
-            },
-        },
-        _ => TypVal {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union {
-                v_string: mismatch.actual,
-            },
-        },
+        3 => TypVal::number(emsg_assert_fails_lnum.get() as VarNumber),
+        4 => TypVal::string(emsg_assert_fails_context.get()),
+        _ => TypVal::string(mismatch.actual),
     };
     let mut ga = unsafe { prepare_assert_error() };
     let gap = &mut ga;

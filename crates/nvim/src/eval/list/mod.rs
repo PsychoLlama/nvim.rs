@@ -36,6 +36,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
 use core::mem::offset_of;
@@ -70,8 +71,7 @@ use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimConv, Vv, int64_t, ptrdiff_t, size_t,
-    typval_vval_union, uint8_t,
+    VAR_STRING, VarLock, VarNumber, VarType, VimConv, Vv, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -94,11 +94,7 @@ static e_argument_of_str_must_be_list_string_dictionary_or_blob: &CStr =
 
 /// A cleared `TypVal`, the `{ .v_type = VAR_UNKNOWN }` every walk starts
 /// its per-item result from.
-pub(crate) const UNKNOWN_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+pub(crate) const UNKNOWN_TV: TypVal = TV_INITIAL_VALUE;
 
 // ---------------------------------------------------------------------
 // The argument vector, and a value held as a pointer
@@ -739,14 +735,7 @@ pub(crate) fn cstr_of_chk<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> Option<&'
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.
 #[inline(always)]
 pub(crate) fn string_tv(bytes: &[u8]) -> TypVal {
-    TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union {
-            // SAFETY: `xmemdupz` reads `bytes` and appends the NUL itself.
-            v_string: unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() },
-        },
-    }
+    TypVal::string(unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()).cast() })
 }
 
 /// Whether `lock` forbids a change, reporting `E741`/`E742` naming `what`.

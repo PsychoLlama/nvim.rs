@@ -18,6 +18,7 @@ use crate::api::private::helpers::api_free_object;
 use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret, tv_get_bool,
     tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
@@ -41,18 +42,14 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, kBoolVarTrue, ptrdiff_t, typval_vval_union,
+    VAR_UNKNOWN, VarNumber, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
 /// A cleared typval, which is what an unfilled argument slot holds.
-const EMPTY_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
 
 // -- Reading an argument, writing a return value ----------------------------
 //

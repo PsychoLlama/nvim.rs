@@ -46,9 +46,8 @@ use crate::os::state::globaldir;
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::tr_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, Tabpage, TypVal, VAR_NUMBER, VAR_STRING, VarLock,
-    VarNumber, Window, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t,
-    typval_vval_union, uint64_t,
+    CdScope, EvalFuncData, MAXPATHL, OK, Tabpage, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
+    Window, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
@@ -558,11 +557,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
     let how = if recurse { c"rf" } else { c"d" };
     // SAFETY: a NUL-terminated literal; the copy is nvim's heap.
     let how = unsafe { xstrdup(how.as_ptr()) };
-    let string = |s| TypVal {
-        v_type: VAR_STRING,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_string: s },
-    };
+    let string = |s| TypVal::string(s);
     let mut tv = [string(created), string(how)];
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: two arguments, at `tv`, whose contents the callee takes over.

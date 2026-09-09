@@ -54,6 +54,7 @@ pub(crate) mod state;
 mod trycmd;
 
 use crate::debugger::dbg_check_skipped;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{tv_clear, tv_free};
 use crate::eval::{
     clear_evalarg, eval_for_line, eval_to_bool, eval0, fill_evalarg_from_eap, free_for_info,
@@ -69,10 +70,7 @@ use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{
-    CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock,
-    typval_vval_union,
-};
+use crate::types::{CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, TypVal};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -257,11 +255,7 @@ pub(crate) fn aborted_in_try() -> bool {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn ex_eval(args: *mut ExArg) {
-    let mut tv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut tv = TV_INITIAL_VALUE;
     let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,

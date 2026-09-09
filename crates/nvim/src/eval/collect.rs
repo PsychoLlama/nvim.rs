@@ -28,6 +28,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
@@ -75,16 +76,11 @@ use crate::types::{
     ListStack, NUL, OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc,
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VimConv, Window, XFileMark, YankReg, size_t,
-    typval_vval_union,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
 /// A freshly declared typval.
-const UNSET_TV: TypVal = TypVal {
-    v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
-    vval: typval_vval_union { v_number: 0 },
-};
+const UNSET_TV: TypVal = TV_INITIAL_VALUE;
 
 /// How much slack the execution stack may keep before a collection trims
 /// it back.

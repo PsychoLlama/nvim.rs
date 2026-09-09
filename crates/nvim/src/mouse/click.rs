@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::c_char;
 
 use super::*;
@@ -25,9 +26,7 @@ use crate::mouse::state::{mouse_grid, mouse_row};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
 use crate::pos::{lt, ltoreq};
-use crate::types::{
-    OptInt, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, typval_vval_union,
-};
+use crate::types::{OptInt, TypVal, VarLock};
 use crate::ui::state::Rows;
 use crate::ui::ui_flush;
 
@@ -37,14 +36,12 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     let def = click_defs.at(col);
     let mut modifiers = modifier_letters(mod_mask.get());
     let number = |v: VarNumber| TypVal {
-        v_type: VAR_NUMBER,
         v_lock: VarLock::Fixed,
-        vval: typval_vval_union { v_number: v },
+        ..TypVal::number(v)
     };
     let string = |v: *mut c_char| TypVal {
-        v_type: VAR_STRING,
         v_lock: VarLock::Fixed,
-        vval: typval_vval_union { v_string: v },
+        ..TypVal::string(v)
     };
     let mut argv = [
         number(def.tabnr as VarNumber),
@@ -52,11 +49,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
         string(button_name(which_button).as_ptr().cast_mut()),
         string(modifiers.as_mut_ptr()),
     ];
-    let mut rettv = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut rettv = TV_INITIAL_VALUE;
 
     // SAFETY: `func` is the name the statusline parser recorded, the four
     // arguments are live for the call, and `rettv` is a live typval.

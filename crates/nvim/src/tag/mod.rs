@@ -79,8 +79,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileComparison, FileMark,
     FileMarkView, FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptInt, OptMagic, OptSet,
-    Pos, RegMatch, Taggy, Timestamp, TypVal, VarNumber, VimConv, int64_t, ptrdiff_t, size_t,
-    typval_vval_union,
+    Pos, RegMatch, Taggy, Timestamp, VarNumber, VimConv, int64_t, ptrdiff_t, size_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_has;

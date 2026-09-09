@@ -11,8 +11,9 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::handoff::owned_cstr;
-use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_UNKNOWN, VarLock};
+use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_UNKNOWN};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -107,11 +108,7 @@ pub unsafe fn get_user_input(
     let prompt: *const ::core::ffi::c_char;
     let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
     let mut cancelreturn: *mut TypVal = ::core::ptr::null_mut::<TypVal>();
-    let mut cancelreturn_strarg2 = TypVal {
-        v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
-        vval: typval_vval_union { v_number: 0 },
-    };
+    let mut cancelreturn_strarg2 = TV_INITIAL_VALUE;
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback = Callback::None;
     let mut prompt_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
