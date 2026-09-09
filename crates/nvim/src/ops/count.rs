@@ -65,7 +65,16 @@ fn line_count_info(
         chars += 1;
         // The guard above says `i` is inside the line, so the step is at
         // least one byte and the walk terminates.
-        i += cluster_len(&line[i as usize..]) as VarNumber;
+        //
+        // ASCII followed by ASCII is one byte, and on a text buffer that is
+        // every step: `cluster_len` opens with the same test, but it is too
+        // large to inline into this loop and the call alone costs more than
+        // the answer. Ask it here, and leave everything else to the callee.
+        let rest = &line[i as usize..];
+        i += match rest {
+            [first, next, ..] if *first < 0x80 && *next < 0x80 => 1,
+            _ => cluster_len(rest) as VarNumber,
+        };
     }
 
     if is_word {
