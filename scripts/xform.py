@@ -159,16 +159,29 @@ def masked(src: bytes) -> bytes:
     return bytes(out)
 
 
+# `fn name(`, with the visibility and the `unsafe`/`const`/`async` that may
+# stand between: the definition of the very function a sweep is rewriting the
+# *calls* of. Anchored at the end so it only matches immediately before the
+# name.
+FN_HEADER = re.compile(rb"\bfn\s+$")
+
+
 def call_spans(src: bytes, name: bytes):
     """(start, open, close, [(argstart, argend)]) for each `name(...)`.
 
     Matched against `masked(src)` so that prose naming a C function costs
     nothing, and offsets still index the real bytes.
+
+    A `fn name(` header is refused: it is not a call, and rewriting it is how
+    a `ret_string` retirement turned its own definition into something that
+    did not parse, six local `fn strlen` shims before that.
     """
     pat = re.compile(rb"(?<![\w.])" + re.escape(name) + rb"\s*\(")
     hay = masked(src)
     out = []
     for m in pat.finditer(hay):
+        if FN_HEADER.search(hay, 0, m.start()):
+            continue
         i, j, n = m.end() - 1, m.end() - 1, len(hay)
         depth, args, argstart = 0, [], m.end()
         while j < n:
@@ -229,8 +242,18 @@ def arg(src, span):
     sweep folded it along with everything else and quietly re-spaced eighteen
     literals -- column headers, indent runs, `"  (Already listed)"` -- which
     nothing but the legacy suite noticed, and only twelve tests later.
+
+    An argument carrying a `//` comment raises instead: folded onto one line
+    the comment swallows everything after it, which is how the `ret_string`
+    retirement ate the tail of two files. Hoist the comment out of the call
+    and run the sweep again.
     """
     lo, hi = span
+    if any(kind == b"//" for kind, _, _ in lexed(src[lo:hi])):
+        raise ValueError(
+            "argument spans a `//` comment; folding it would comment out the "
+            "rest of the line: " + src[lo:hi].decode(errors="replace")
+        )
     out, at = [], lo
     for kind, a, b in lexed(src[lo:hi]):
         if kind in (b"//", b"/*"):
