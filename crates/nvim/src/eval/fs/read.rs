@@ -22,7 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{__S_IFMT, Args, SEEK_END, SEEK_SET, frame, no_fileinfo, str_arg};
+use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{
     tv_blob_alloc_ret, tv_blob_free, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv,
@@ -463,14 +463,14 @@ fn err_path(fmt: &'static CStr, p: *const c_char) {
 
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and
 /// size and `readfile()` its maximum line count.
-fn nr(args: Args<'_>, i: usize) -> int64_t {
+fn nr(args: &[TypVal], i: usize) -> int64_t {
     // SAFETY: a live typval; `tv_get_number` reports its own error and reads
     // as 0 for a type that has no number form.
-    unsafe { tv_get_number(args.ptr(i)) }
+    unsafe { tv_get_number(&args[i]) }
 }
 
 /// The body both builtins share.
-fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
+fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -480,10 +480,10 @@ fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
     let mut offset: FileOffset = 0;
     let mut size: FileOffset = -1;
 
-    if args.has(1) {
+    if args.len() > 1 {
         if always_blob {
             offset = nr(args, 1) as FileOffset;
-            if args.has(2) {
+            if args.len() > 2 {
                 size = nr(args, 2) as FileOffset;
             }
         } else {
@@ -494,7 +494,7 @@ fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
             } else if str_arg(args, 1, &mut numbuf2).to_bytes() == b"B" {
                 blob = true;
             }
-            if args.has(2) {
+            if args.len() > 2 {
                 maxline = nr(args, 2);
             }
         }
@@ -533,20 +533,11 @@ fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
 }
 
 /// `readblob({fname} [, {offset} [, {size}]])`: the file's bytes as a Blob.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1..3, and `result`
-/// a cleared result.
-pub unsafe fn f_readblob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_readblob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     read_file_or_blob(args, result, true);
 }
 
 /// `readfile({fname} [, {type} [, {max}]])`: the file's lines as a List.
-///
-/// # Safety
-/// As [`f_readblob`].
-pub unsafe fn f_readfile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_readfile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     read_file_or_blob(args, result, false);
 }

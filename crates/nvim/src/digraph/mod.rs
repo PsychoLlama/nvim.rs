@@ -41,8 +41,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_LIST,
-    VAR_UNKNOWN, VarNumber, int16_t,
+    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_LIST, VarNumber,
+    int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -537,16 +537,12 @@ unsafe fn set_bool_ret(result: *mut TypVal, value: bool) {
 }
 
 /// `digraph_get()`.
-///
-/// # Safety
-///
-/// Standard eval-function contract: `args` and `result` are valid.
-pub unsafe fn f_digraph_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
         (*result).write_string(core::ptr::null_mut());
-        numbuf.string_chk(args)
+        numbuf.string_chk(&args[0])
     };
     if digraphs.is_null() {
         return;
@@ -571,42 +567,29 @@ pub unsafe fn f_digraph_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `digraph_getlist()`.
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_digraph_getlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
-    if unsafe { tv_check_for_opt_bool_arg(args, 0) }.is_err() {
+    if tv_check_for_opt_bool_arg(args, 0).is_err() {
         return;
     }
     // SAFETY: caller contract; the optional argument was just type-checked.
-    let list_all =
-        unsafe { (*args).v_type() != VAR_UNKNOWN && tv_get_bool(args) != 0 as VarNumber };
+    let list_all = unsafe { !args.is_empty() && tv_get_bool(&args[0]) != 0 as VarNumber };
     // SAFETY: caller contract.
     unsafe { digraph_getlist_common(list_all, result) };
 }
 
 /// `digraph_set()`.
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_digraph_set(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_digraph_set(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract; `digraph_set()` takes two arguments.
-    let set = unsafe { digraph_set_common(args, args.offset(1)) };
+    let set = unsafe { digraph_set_common(&args[0], &args[1]) };
     // SAFETY: caller contract.
     unsafe { set_bool_ret(result, set) };
 }
 
 /// `digraph_setlist()`.
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_digraph_setlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
-    let set = unsafe { digraph_setlist_common(args) };
+    let set = unsafe { digraph_setlist_common(&args[0]) };
     // SAFETY: caller contract.
     unsafe { set_bool_ret(result, set) };
 }

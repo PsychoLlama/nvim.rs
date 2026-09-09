@@ -3,7 +3,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::frame;
 use super::wrappers::{arg_number, arg_number_chk, arg_string, arg_string_chk};
 use super::{
     SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
@@ -53,15 +52,8 @@ const DIALOG_TYPES: [(u8, c_int); 5] = [
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_confirm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut buttons_buf = NumBuf::new();
     let mut type_buf = NumBuf::new();
     let mut buttons = ptr::null::<c_char>();
@@ -72,22 +64,22 @@ pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY throughout: the frame is live; the two scratch buffers outlive the
     // strings `tv_get_string_buf_chk` may park in them and the dialog runs
     // before they go out of scope.
-    let message = arg_string_chk(&mut numbuf, args.get(0));
+    let message = arg_string_chk(&mut numbuf, &args[0]);
     if message.is_null() {
         error = true;
     }
     // Each optional argument is only read when the one before it was
     // supplied, and a coercion failure anywhere cancels the dialog --
     // but not the rest of the parse.
-    if args.has(1) {
-        buttons = arg_string_chk(&mut buttons_buf, args.get(1));
+    if args.len() > 1 {
+        buttons = arg_string_chk(&mut buttons_buf, &args[1]);
         if buttons.is_null() {
             error = true;
         }
-        if args.has(2) {
-            default = arg_number_chk(args.get(2), Some(&mut error)) as c_int;
-            if args.has(3) {
-                let typestr = arg_string_chk(&mut type_buf, args.get(3));
+        if args.len() > 2 {
+            default = arg_number_chk(&args[2], Some(&mut error)) as c_int;
+            if args.len() > 3 {
+                let typestr = arg_string_chk(&mut type_buf, &args[3]);
                 if typestr.is_null() {
                     error = true;
                 } else {
@@ -114,17 +106,10 @@ pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 
 /// `debugbreak({pid})` — SIGINT to a process, which on Windows is how a
 /// debugger is attached. Answers FAIL; there is no success value.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_debugbreak(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_debugbreak(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(FAIL as VarNumber);
     // SAFETY throughout: the frame is live.
-    let pid = arg_number(args.get(0)) as c_int;
+    let pid = arg_number(&args[0]) as c_int;
     if pid == 0 {
         emsg(gettext(e_invarg));
         return;
@@ -133,24 +118,18 @@ pub unsafe fn f_debugbreak(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `feedkeys({string} [, {mode}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_feedkeys(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_feedkeys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(args, result);
+    let _rettv = result;
     let mut mode_buf = NumBuf::new();
     // SAFETY throughout: the frame is live and both strings outlive the call.
     if check_secure() {
         return;
     }
-    let keys = arg_string(&mut numbuf, args.get(0));
+    let keys = arg_string(&mut numbuf, &args[0]);
     // A missing {mode} is spelled as a null string, not as "".
-    let mode = if args.has(1) {
-        arg_string(&mut mode_buf, args.get(1))
+    let mode = if args.len() > 1 {
+        arg_string(&mut mode_buf, &args[1])
     } else {
         ptr::null()
     };
@@ -162,60 +141,35 @@ pub unsafe fn f_feedkeys(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 static INPUTSECRET: GlobalCell<bool> = GlobalCell::new(false);
 
 /// `input({prompt} [, {text} [, {completion}]])`, or the options-Dict form.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_input(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_input(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(args, result, false, INPUTSECRET.get()) };
 }
 
 /// `inputdialog()` — as `input()`, but cancelling answers the third
 /// argument rather than an empty string.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_inputdialog(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_inputdialog(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(args, result, true, INPUTSECRET.get()) };
 }
 
 /// `inputsecret({prompt} [, {text}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_inputsecret(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub fn f_inputsecret(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
     let secret = Suppress::cmdline_echo();
     INPUTSECRET.set(true);
-    unsafe { f_input(args, result, fptr) };
+    f_input(args, result, fptr);
     drop(secret);
     INPUTSECRET.set(false);
 }
 
 /// `inputlist({textlist})` — print the list and read a number.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and the List is held by an argument for the
     // whole call.
-    if args.ty(0) != VAR_LIST {
+    if args[0].v_type() != VAR_LIST {
         let arg0 = "inputlist()";
         semsg!("E686: Argument of {arg0} must be a List");
         return;
@@ -228,7 +182,7 @@ pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     msg_scroll.set(1);
     unsafe { msg_clr_eos() };
 
-    let list = args.get(0).list_or_null();
+    let list = args[0].list_or_null();
     if !list.is_null() {
         let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
@@ -260,13 +214,7 @@ static SAVED_TYPEAHEAD: GlobalCell<Vec<TypeaheadSave>> = GlobalCell::new(Vec::ne
 
 /// `inputsave()` — push the typeahead aside so that a prompt reads real
 /// keys.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_inputsave(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_inputsave(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut saved = TypeaheadSave::default();
     // SAFETY: `saved` is a fresh state of the right type, and the stack owns
     // it from here on.
@@ -276,13 +224,7 @@ pub unsafe fn f_inputsave(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalF
 
 /// `inputrestore()` — pop it back. Answers 1 only for an underflow, and
 /// only when 'verbose' is high enough to have said something.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_inputrestore(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The pop happens outside the restore: `restore_typeahead` reaches the
     // typeahead cells, not this one, but keeping the borrow a leaf is the rule.
     if let Some(mut saved) = SAVED_TYPEAHEAD.with_mut(Vec::pop) {
@@ -292,18 +234,12 @@ pub unsafe fn f_inputrestore(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
         unsafe { verb_msg(gettext(msg).as_ptr()) };
-        unsafe { (*result).write_number(1) };
+        result.write_number(1);
     }
 }
 
 /// `interrupt()` — raise the same flag CTRL-C does.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_interrupt(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_interrupt(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     got_int.set(true);
 }
 
@@ -312,7 +248,7 @@ pub unsafe fn f_interrupt(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// `arg` is a live typval.
-unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
+unsafe fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation -- `tv_get_buf_from_arg` answers a live
     // buffer or null.
     let buf = unsafe { tv_get_buf_from_arg(arg) };
@@ -321,34 +257,20 @@ unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
 
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
 /// not a prompt buffer.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_getprompt(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_prompt_getprompt(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `result` owns the duplicate.
-    if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
+    if let Some(buf) = unsafe { prompt_buffer(&args[0]) } {
         result.write_string(unsafe { xstrdup(buf_prompt_text(buf)) });
     }
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_getinput(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_prompt_getinput(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `result` then owns.
-    if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
+    if let Some(buf) = unsafe { prompt_buffer(&args[0]) } {
         result.write_string(unsafe { prompt_get_input(Some(buf)) });
     }
 }

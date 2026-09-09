@@ -101,14 +101,7 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 }
 
 /// `win_execute({winid}, {command} [, {silent}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the arguments and `result` are live typvals; the saved state is a
     // live local that `win_execute_after` is given whatever happens between.
@@ -118,7 +111,7 @@ pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     };
     let mut saved: WinExecute = unsafe { mem::zeroed() };
     if unsafe { win_execute_before(&raw mut saved, wp, tp) } {
-        unsafe { execute_common(args.ptr(0), result, 1) };
+        unsafe { execute_common(args, result, 1) };
     }
     unsafe { win_execute_after(&raw mut saved) };
 }

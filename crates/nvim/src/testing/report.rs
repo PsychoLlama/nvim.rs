@@ -17,13 +17,13 @@ use core::{ptr, slice};
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::{
-    tv_clear, tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_dict_hi2di, tv_dict_iter, tv_equal,
+    tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_dict_hi2di, tv_dict_iter, tv_equal,
 };
 use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
 use crate::runtime::estack_sfile;
-use crate::types::{LineNr, TypVal, VAR_DICT, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{LineNr, TypVal, VAR_DICT, VAR_STRING};
 
 use super::{AssertType, ESTACK_NONE};
 
@@ -174,15 +174,17 @@ unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
 ///
 /// # Safety
 /// `gap` is open and `opt_msg_tv` is a live typval.
-unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
+unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
+    let Some(msg) = opt_msg_tv else {
+        return;
+    };
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
-    let msg = unsafe { &*opt_msg_tv };
     let blank = msg.v_type() == VAR_STRING
         && (msg.string_or_null().is_null() || unsafe { *msg.string_or_null() } == 0);
-    if msg.v_type() == VAR_UNKNOWN || blank {
+    if blank {
         return;
     }
-    let tofree = unsafe { encode_tv2echo(opt_msg_tv, ptr::null_mut()) };
+    let tofree = unsafe { encode_tv2echo(msg, ptr::null_mut()) };
     unsafe { ga_concat_cstr(gap, tofree) };
     unsafe { xfree(tofree.cast()) };
     ga_concat_lit(gap, c": ");
@@ -192,27 +194,27 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
 ///
 /// # Safety
 /// `tv` is a live typval.
-unsafe fn is_dict(tv: *mut TypVal) -> bool {
+unsafe fn is_dict(tv: *const TypVal) -> bool {
     // SAFETY: the caller's typval.
     unsafe { (*tv).v_type() == VAR_DICT && !(*tv).dict_or_null().is_null() }
 }
 
-/// Replace both dictionaries with copies holding only the entries that differ,
-/// and answer how many equal ones were dropped.
+/// Copies of both dictionaries holding only the entries that differ, and how
+/// many equal ones were dropped.
 ///
 /// Comparing two large dictionaries is unreadable unless the equal items go
-/// away. The caller owns the two new dictionaries and clears them.
+/// away. The two answers own their dictionaries.
 ///
 /// # Safety
 /// Both typvals hold non-null dictionaries.
-unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_int {
+unsafe fn prune_equal_dict_items(
+    exp_tv: *const TypVal,
+    got_tv: *const TypVal,
+) -> (TypVal, TypVal, c_int) {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
     let (exp_d, got_d) = unsafe { ((*exp_tv).dict_or_null(), (*got_tv).dict_or_null()) };
-    // The pruned copies that replace them, which the caller then owns.
     let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
-    unsafe { (*exp_tv).write_dict(exp) };
-    unsafe { (*got_tv).write_dict(got) };
 
     let mut omitted = 0;
     for hi in unsafe { tv_dict_iter(exp_d) } {
@@ -239,7 +241,7 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_
             let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), tv) };
         }
     }
-    omitted
+    (TypVal::Dict(exp), TypVal::Dict(got), omitted)
 }
 
 /// Fill `gap` with what was expected and what arrived.
@@ -253,14 +255,29 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_
 /// when `exp_str` is not.
 pub(super) unsafe fn fill_assert_error(
     gap: &mut Vec<u8>,
-    opt_msg_tv: *mut TypVal,
+    opt_msg_tv: Option<&TypVal>,
     exp_str: *const c_char,
-    exp_tv: *mut TypVal,
-    got_tv: *mut TypVal,
+    exp_tv: *const TypVal,
+    got_tv: *const TypVal,
     atype: AssertType,
 ) {
-    let mut did_copy = false;
     let mut omitted = 0;
+    // Two dictionaries read better with their equal entries taken out; the
+    // pruned copies belong to this frame and go with it.
+    let pruned = (exp_str.is_null()
+        && atype != AssertType::NotEqual
+        // SAFETY: the caller's typvals.
+        && unsafe { is_dict(exp_tv) }
+        && unsafe { is_dict(got_tv) })
+    // SAFETY: as above; both hold non-null dictionaries.
+    .then(|| unsafe { prune_equal_dict_items(exp_tv, got_tv) });
+    let (exp_tv, got_tv) = match &pruned {
+        Some((exp, got, n)) => {
+            omitted = *n;
+            (ptr::from_ref(exp), ptr::from_ref(got))
+        }
+        None => (exp_tv, got_tv),
+    };
 
     // SAFETY: the caller's garray and typvals; each `encode_tv2*` allocation
     // is freed where it is made.
@@ -275,11 +292,6 @@ pub(super) unsafe fn fill_assert_error(
     );
 
     if exp_str.is_null() {
-        if atype != AssertType::NotEqual && unsafe { is_dict(exp_tv) } && unsafe { is_dict(got_tv) }
-        {
-            did_copy = true;
-            omitted = unsafe { prune_equal_dict_items(exp_tv, got_tv) };
-        }
         let tofree = unsafe { encode_tv2string(exp_tv, ptr::null_mut()) };
         unsafe { ga_concat_shorten_esc(gap, tofree) };
         unsafe { xfree(tofree.cast()) };
@@ -312,10 +324,5 @@ pub(super) unsafe fn fill_assert_error(
             let text = format!(" - {omitted} equal item{plural} omitted");
             gap.extend_from_slice(text.as_bytes());
         }
-    }
-
-    if did_copy {
-        unsafe { tv_clear(exp_tv) };
-        unsafe { tv_clear(got_tv) };
     }
 }

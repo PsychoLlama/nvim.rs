@@ -22,12 +22,15 @@
 #![allow(non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::typval::{NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len};
+use crate::eval::typval::{
+    ArgFrame, NumBuf, UNSET_ARG, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
+};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::memory::{xmalloc, xstrdup};
@@ -56,19 +59,6 @@ const CALLBACK_NONE: Callback = Callback::None;
 /// `CALLBACK_READER_INIT`: a stream nobody is listening to.
 const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 
-/// The evaluator's argument vector: the declared arguments plus the
-/// `VAR_UNKNOWN` that ends them.
-///
-/// Every builtin here declares at most two, so two slots are always readable
-/// — the second being `VAR_UNKNOWN` when the caller passed one argument.
-///
-/// # Safety
-/// `args` must be a builtin's own argument vector.
-#[inline(always)]
-unsafe fn arg_slice<'a>(args: *mut TypVal) -> &'a mut [TypVal] {
-    unsafe { slice::from_raw_parts_mut(args, 2) }
-}
-
 /// The items of `list`, front to back.  A NULL list is an empty one.
 ///
 /// # Safety
@@ -93,13 +83,10 @@ unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
 ///
 /// Deprecated in favour of `jobstart(..., {'rpc': v:true})`.
-///
-/// # Safety
-/// As the module doc; arity 1..2.
-pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise about `result`.
-    let result = unsafe { &mut *result };
+    let result = &mut *result;
     result.write_number(0);
 
     // SAFETY: `check_secure` only reads the option and reports.
@@ -108,7 +95,7 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     }
 
     // SAFETY: the caller's promise about `args`.
-    let argv = unsafe { arg_slice(args) };
+    let argv = args;
     if argv[0].v_type() != VAR_STRING
         || (argv[1].v_type() != VAR_LIST && argv[1].v_type() != VAR_UNKNOWN)
     {
@@ -191,12 +178,9 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `rpcstop(id)`: stop a job, or close a channel that is not one.
-///
-/// # Safety
-/// As the module doc; arity 1.
-pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `result`.
-    let ret = unsafe { &mut *result };
+    let ret = &mut *result;
     ret.write_number(0);
 
     // SAFETY: `check_secure` only reads the option and reports.
@@ -205,7 +189,7 @@ pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncDa
     }
 
     // SAFETY: the caller's promise about `args`.
-    let argv = unsafe { arg_slice(args) };
+    let argv = args;
     if argv[0].v_type() != VAR_NUMBER {
         // Wrong argument types.
         emsg_static(e_invarg);
@@ -218,7 +202,7 @@ pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncDa
     // SAFETY: `find_job` only looks the id up.
     if !unsafe { find_job(id, false) }.is_null() {
         // SAFETY: the arguments are this call's own.
-        unsafe { f_jobstop(args, result, fptr) };
+        f_jobstop(args, result, fptr);
     } else {
         let mut error: *const c_char = core::ptr::null();
         // SAFETY: `error` is written whenever the close fails.
@@ -235,52 +219,47 @@ pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncDa
 ///
 /// Not the same answer as `bufnr("$")` once the highest-numbered buffer has
 /// been wiped, which is the only reason it still exists.
-///
-/// # Safety
-/// As the module doc; arity 0.
-pub unsafe fn f_last_buffer_nr(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_last_buffer_nr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut n = 0;
     for buf in buffers() {
         n = n.max(buf.handle());
     }
     // SAFETY: the caller's promise about `result`.
-    unsafe { (*result).write_number(n as VarNumber) };
+    result.write_number(n as VarNumber);
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.
-///
-/// # Safety
-/// As the module doc; arity 1..2.
-pub unsafe fn f_termopen(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
-    // SAFETY: `check_secure` only reads the option and reports.
+pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
 
-    // SAFETY: the caller's promise about `args`.
-    let argv = unsafe { arg_slice(args) };
-    // With no options at all, borrow a dictionary for the one flag this adds
-    // and free it again on the way out.
-    let must_free = argv[1].v_type() == VAR_UNKNOWN;
-    if must_free {
+    // `jobstart()` reads its options from a dictionary, and this one always
+    // has the `term` flag in it; with no options given, a dictionary is
+    // borrowed for the call and freed again on the way out.  The frame
+    // borrows the caller's values, so nothing in it is released.
+    let borrowed = args.len() < 2;
+    let mut frame = [UNSET_ARG; 2];
+    // SAFETY: the caller's value, borrowed for the length of the call.
+    frame[0] = ManuallyDrop::new(unsafe { args[0].bit_copy() });
+    frame[1] = match args.get(1) {
+        // SAFETY: as above.
+        Some(opts) => ManuallyDrop::new(unsafe { opts.bit_copy() }),
         // SAFETY: `tv_dict_alloc` never answers NULL.
-        argv[1].write_dict(unsafe { tv_dict_alloc() });
-    }
+        None => ManuallyDrop::new(TypVal::Dict(unsafe { tv_dict_alloc() })),
+    };
 
-    if argv[1].v_type() != VAR_DICT {
-        // Wrong argument types. // SAFETY: `e_invarg2` takes one string.
+    if frame[1].v_type() != VAR_DICT {
+        // Wrong argument types.
         semsg!("E475: Invalid argument: {}", "expected dictionary");
         return;
     }
 
-    // SAFETY: `argv[1]` holds a live dictionary, either the caller's or the
-    // one allocated above; `f_jobstart` takes the whole argument vector.
-    let dict = argv[1].dict_or_null();
-    // SAFETY: as above -- `dict` is that dictionary.
+    let dict = frame[1].dict_or_null();
+    // SAFETY: `dict` is the dictionary the frame's second slot names.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
-    // SAFETY: as above -- the whole argument vector goes to `jobstart()`.
-    unsafe { f_jobstart(args, result, fptr) };
-    if must_free {
+    f_jobstart(frame.borrowed(2), result, fptr);
+    if borrowed {
         // SAFETY: the dictionary was borrowed for this call only.
         unsafe { tv_dict_free(dict) };
     }

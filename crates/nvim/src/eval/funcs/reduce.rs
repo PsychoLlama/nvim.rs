@@ -2,8 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, frame};
-use super::wrappers::{arg_copy, arg_string, check_arg};
+use super::wrappers::{arg_copy, arg_string};
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
@@ -105,29 +104,15 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
 }
 
 /// `max({expr})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_max(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_max(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the argument is the frame's.
-    unsafe { max_min(args.ptr(0), result, true) }
+    unsafe { max_min(&args[0], result, true) }
 }
 
 /// `min({expr})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_min(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_min(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the argument is the frame's.
-    unsafe { max_min(args.ptr(0), result, false) }
+    unsafe { max_min(&args[0], result, false) }
 }
 
 /// What a fold arm owns, which the three arms genuinely disagree about.
@@ -171,7 +156,7 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 /// # Safety
 /// `expr` is a live callable typval and `result` the fold's accumulator.
 unsafe fn fold_step(
-    expr: *mut TypVal,
+    expr: &TypVal,
     result: &mut TypVal,
     item: &TypVal,
     cleanup: Cleanup,
@@ -208,15 +193,15 @@ unsafe fn fold_step(
 ///
 /// # Safety
 /// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
+unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
-    let l = args.get(0).list_or_null();
+    let l = args[0].list_or_null();
     let called_emsg_start = called_emsg.get();
     // The accumulator starts as a copy of the initial value, or of the
     // first item when the call gave none.
-    let mut li = if args.has(2) {
-        unsafe { tv_copy(args.ptr(2), result) };
+    let mut li = if args.len() > 2 {
+        unsafe { tv_copy(&args[2], result) };
         unsafe { tv_list_first(l) }
     } else {
         if unsafe { tv_list_len(l) } == 0 {
@@ -247,13 +232,13 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
 ///
 /// # Safety
 /// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
+unsafe fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
-    let mut p = arg_string(&mut numbuf, args.get(0));
+    let mut p = arg_string(&mut numbuf, &args[0]);
     let called_emsg_start = called_emsg.get();
-    if !args.has(2) {
+    if args.len() <= 2 {
         if unsafe { *p } as c_int == NUL {
             semsg!(
                 "E998: Reduce of an empty {} with no initial value",
@@ -265,10 +250,10 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) 
         let len = unsafe { utfc_ptr2len(p) };
         *result = unsafe { owned_str(p, len) };
         p = unsafe { p.add(len as usize) };
-    } else if check_arg(args, 2, tv_check_for_string_arg).is_err() {
+    } else if tv_check_for_string_arg(args, 2).is_err() {
         return;
     } else {
-        arg_copy(args.get(2), result);
+        arg_copy(&args[2], result);
     }
     while unsafe { *p } as c_int != NUL {
         let len = unsafe { utfc_ptr2len(p) };
@@ -288,16 +273,16 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) 
 ///
 /// # Safety
 /// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
+unsafe fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
-    let b: *const Blob = args.get(0).blob_or_null();
+    let b: *const Blob = args[0].blob_or_null();
     let called_emsg_start = called_emsg.get();
-    let mut i = if args.has(2) {
-        if check_arg(args, 2, tv_check_for_number_arg).is_err() {
+    let mut i = if args.len() > 2 {
+        if tv_check_for_number_arg(args, 2).is_err() {
             return;
         }
-        unsafe { tv_copy(args.ptr(2), result) };
+        unsafe { tv_copy(&args[2], result) };
         0
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
@@ -318,17 +303,10 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
 }
 
 /// `reduce({object}, {func} [, {initial}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_reduce(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: everything read below is the frame's.
-    let ty = args.ty(0);
+    let ty = args[0].v_type();
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
         emsg(gettext(e_string_list_or_blob_required));
         return;
@@ -336,16 +314,16 @@ pub unsafe fn f_reduce(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // The callable is checked for emptiness here rather than by
     // `eval_expr_typval`, so that an empty name reports E1132 instead of
     // an "unknown function" for the empty string.
-    let func_name = match args.ty(1) {
-        VAR_FUNC => args.get(1).func_name_or_null(),
-        VAR_PARTIAL => unsafe { partial_name(args.get(1).partial_or_null()) },
-        _ => arg_string(&mut numbuf, args.get(1)),
+    let func_name = match args[1].v_type() {
+        VAR_FUNC => args[1].func_name_or_null(),
+        VAR_PARTIAL => unsafe { partial_name(args[1].partial_or_null()) },
+        _ => arg_string(&mut numbuf, &args[1]),
     };
     if func_name.is_null() || unsafe { *func_name } as c_int == NUL {
         emsg(gettext(e_missing_function_argument));
         return;
     }
-    let expr = args.ptr(1);
+    let expr = &args[1];
     match ty {
         VAR_LIST => unsafe { reduce_list(args, expr, result) },
         VAR_STRING => unsafe { reduce_string(args, expr, result) },

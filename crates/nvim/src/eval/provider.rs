@@ -175,12 +175,13 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 ///
 /// # Safety
 /// `name` must be NUL-terminated; `args` and `result` valid.
-pub unsafe fn script_host_eval(name: *mut c_char, args: *mut TypVal, result: *mut TypVal) {
+pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: *mut TypVal) {
     if check_secure() {
         return;
     }
     // SAFETY: the caller's promise -- both typvals outlive the call.
-    let (arg, mut ret) = unsafe { (Tv::new(args), Tv::new(result)) };
+    let first = core::ptr::from_ref(&args[0]).cast_mut();
+    let (arg, mut ret) = unsafe { (Tv::new(first), Tv::new(result)) };
     if arg.v_type() != VAR_STRING {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);

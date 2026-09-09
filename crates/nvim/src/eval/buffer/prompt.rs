@@ -33,13 +33,9 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
 
 /// The last item of the List `lines` holds, or NULL when it is not a non-empty
 /// List.
-///
-/// # Safety
-/// `lines` must be a live typval.
-unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
-    // SAFETY: the caller's obligation; a `VAR_LIST` holds a live list or
-    // NULL.
-    let l = unsafe { (*lines).list_or_null() };
+fn list_last(lines: &TypVal) -> *mut ListItem {
+    // SAFETY: a `VAR_LIST` holds a live list or NULL.
+    let l = lines.list_or_null();
     if l.is_null() {
         return ptr::null_mut();
     }
@@ -52,31 +48,28 @@ unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
 /// Text appended while the prompt line is being edited joins onto the last
 /// line rather than starting a new one, unless the previous append ended in a
 /// newline.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(1);
     // SAFETY: the arguments and `result` are live typvals; every list item
     // reached below belongs to the argument's own list, and `concat_str`
     // hands back an owned string the typval takes over.
     let did_emsg_before = did_emsg.get();
-    let Some(buf) = (unsafe { tv_get_buf_from_arg(args.ptr(0)) }) else {
+    let Some(buf) = (unsafe { tv_get_buf_from_arg(&args[0]) }) else {
         return;
     };
     if !buf_is_prompt(Some(buf)) {
         return;
     }
     let lnum: LineNr = (buf.b_prompt_start.mark.lnum - 1).max(0);
-    let lines = args.ptr(1);
+    // A String argument that is glued onto the prompt line is replaced by
+    // the joined text, which this local owns; a List argument is joined in
+    // place, in the caller's own list.
+    let joined_string;
+    let mut lines = &args[1];
     let mut did_concat = false;
     if !buf.b_prompt_append_new_line {
         // The text so far on the prompt's last line, which the first item
@@ -86,9 +79,8 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
         } else {
             c"".as_ptr()
         };
-        let mut tv = unsafe { Tv::new(lines) };
-        if tv.v_type() == VAR_LIST {
-            let l = tv.list_or_null();
+        if lines.v_type() == VAR_LIST {
+            let l = lines.list_or_null();
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
                 let mut item = unsafe { Li::new((*l).lv_first) };
                 let itv = item.field_ptr(offset_of!(ListItem, li_tv));
@@ -97,19 +89,18 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
                 item.li_tv.write_string(joined);
                 did_concat = true;
             }
-        } else if tv.v_type() == VAR_STRING {
+        } else if lines.v_type() == VAR_STRING {
             let joined = unsafe { concat_str(text, numbuf2.string(lines)) };
-            unsafe { tv_clear(lines) };
-            tv.write_string(joined);
+            joined_string = TypVal::String(joined);
+            lines = &joined_string;
         }
     }
-    let tv = unsafe { Tv::new(lines) };
     if did_emsg.get() == did_emsg_before {
-        let split = did_concat && unsafe { (*tv.list_or_null()).lv_len } > 1;
+        let split = did_concat && unsafe { (*lines.list_or_null()).lv_len } > 1;
         if split {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked.
-            let l = tv.list_or_null();
+            let l = lines.list_or_null();
             let li = unsafe { (*l).lv_first };
             let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(ListItem, li_tv));
             unsafe { set_buffer_lines(Some(buf), lnum, false, itv, result) };
@@ -124,38 +115,24 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
     }
     if result.number_or_zero() == 0 {
         let mut buf = buf;
-        buf.b_prompt_append_new_line = if tv.v_type() == VAR_LIST {
-            let last = unsafe { list_last(lines) };
+        buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
+            let last = list_last(lines);
             let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(ListItem, li_tv));
             !last.is_null() && unsafe { ends_in_newline(numbuf3.string(ltv)) }
         } else {
-            tv.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
+            lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
         };
     }
 }
 
 /// `prompt_setcallback({buf}, {callback})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_setcallback(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _) = frame!(args, _result);
+pub fn f_prompt_setcallback(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
 }
 
 /// `prompt_setinterrupt({buf}, {callback})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_setinterrupt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _) = frame!(args, _result);
+pub fn f_prompt_setinterrupt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_interrupt) };
 }
@@ -169,16 +146,16 @@ pub unsafe fn f_prompt_setinterrupt(args: *mut TypVal, _result: *mut TypVal, _fp
 /// # Safety
 /// The arguments must be live typvals, and `slot` must answer a field of the
 /// buffer it is handed.
-unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut Callback) {
+unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(&mut Buffer) -> *mut Callback) {
     // SAFETY: the caller's obligation.
     let mut callback = Callback::None;
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { tv_get_buf(args.ptr(0), 0) }) else {
+    let Some(mut buf) = (unsafe { tv_get_buf(&args[0], 0) }) else {
         return;
     };
-    if !unsafe { callback_from_typval(&raw mut callback, args.ptr(1)) } {
+    if !unsafe { callback_from_typval(&raw mut callback, &args[1]) } {
         return;
     }
     let slot = slot(&mut buf);
@@ -192,25 +169,18 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut
 /// changing it has to rewrite the line the old prompt is sitting in — unless
 /// that line no longer starts with the old prompt, in which case the whole
 /// line is replaced.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_prompt_setprompt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals; every line index below is
     // clamped into the buffer first, and `concat_str` hands back an owned
     // string which `ml_replace_buf` takes over or which is freed here.
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { tv_get_buf(args.ptr(0), 0) }) else {
+    let Some(mut buf) = (unsafe { tv_get_buf(&args[0], 0) }) else {
         return;
     };
-    let new_prompt = unsafe { numbuf.string(args.ptr(1)) };
+    let new_prompt = unsafe { numbuf.string(&args[1]) };
     let new_prompt_len = len_as_int(unsafe { cstr::bytes_at(new_prompt) }.len());
     if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
         unsafe { rewrite_prompt_line(buf, new_prompt, new_prompt_len) };

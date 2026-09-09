@@ -408,49 +408,37 @@ pub unsafe fn tv_list_join(
 }
 
 /// `join()` the builtin.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { (*args).v_type() } != VAR_LIST {
+    if args[0].v_type() != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
-    let sep = if unsafe { (*args.add(1)).v_type() } == VAR_UNKNOWN {
+    let sep = if args.len() <= 1 {
         c" ".as_ptr()
     } else {
-        unsafe { numbuf.string_chk(args.add(1)) }
+        unsafe { numbuf.string_chk(&args[1]) }
     };
 
-    unsafe { (*result).write_empty(VAR_STRING) };
+    result.write_empty(VAR_STRING);
     if sep.is_null() {
-        unsafe { (*result).write_string(::core::ptr::null_mut()) };
+        result.write_string(::core::ptr::null_mut());
         return;
     }
 
     let mut ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    let _ = unsafe { tv_list_join(&raw mut ga, (*args).list_or_null(), sep) };
+    let _ = unsafe { tv_list_join(&raw mut ga, args[0].list_or_null(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*result).write_string(ga.ga_data as *mut ::core::ffi::c_char) };
+    result.write_string(ga.ga_data as *mut ::core::ffi::c_char);
 }
 
 /// `list2str()`: a list of codepoints as a string.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).write_string(::core::ptr::null_mut()) };
+pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    result.write_string(::core::ptr::null_mut());
     // SAFETY: the builtin's argument array.
-    let args = unsafe { Tv::new(args) };
+    let args = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };
     if args.v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
         return;
@@ -470,5 +458,5 @@ pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };
     }
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*result).write_string(ga.ga_data as *mut ::core::ffi::c_char) };
+    result.write_string(ga.ga_data as *mut ::core::ffi::c_char);
 }

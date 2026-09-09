@@ -9,22 +9,19 @@
 //!
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::{CStr, c_int};
 
-use super::{
-    Args, Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, frame, number_of,
-};
+use super::{Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, number_of};
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
-fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
-    let Container::Dict(mut d1) = Container::of(args.get_mut(0)) else {
+fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
+    let Container::Dict(mut d1) = Container::of(&args[0]) else {
         unreachable!("dispatched on VAR_DICT")
     };
     if d1.is_null() {
@@ -33,12 +30,12 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
         debug_assert!(locked, "locked == true");
         return;
     }
-    let Container::Dict(d2) = Container::of(args.get_mut(1)) else {
+    let Container::Dict(d2) = Container::of(&args[1]) else {
         unreachable!("dispatched on VAR_DICT")
     };
     if d2.is_null() {
         // Do nothing.
-        copy_tv(args.get_mut(0), result);
+        copy_tv(&args[0], result);
         return;
     }
 
@@ -55,8 +52,8 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     // Check the third argument.
     let mut numbuf = NumBuf::new();
     let mut action = c"force";
-    if args.has(2) {
-        let Some(name) = cstr_of_chk(args.get_mut(2), &mut numbuf) else {
+    if args.len() > 2 {
+        let Some(name) = cstr_of_chk(&args[2], &mut numbuf) else {
             // Type error; error message already given.
             if is_new {
                 d1.unref();
@@ -78,18 +75,18 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     if is_new {
         *result = TypVal::Dict(d1.raw());
     } else {
-        copy_tv(args.get_mut(0), result);
+        copy_tv(&args[0], result);
     }
 }
 
 /// `extend()`/`extendnew()` over two Lists: splice `argvars[1]` into
 /// `argvars[0]` (or into a copy of it) before index `argvars[2]`.
-fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
+fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut TypVal) {
     let mut error = false;
-    let Container::List(mut l1) = Container::of(args.get_mut(0)) else {
+    let Container::List(mut l1) = Container::of(&args[0]) else {
         unreachable!("dispatched on VAR_LIST")
     };
-    let Container::List(l2) = Container::of(args.get_mut(1)) else {
+    let Container::List(l2) = Container::of(&args[1]) else {
         unreachable!("dispatched on VAR_LIST")
     };
 
@@ -106,10 +103,10 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     // The item to splice in before, or None for "at the end".  Every way out
     // of this block that is not an item has to undo the copy above.
     let before = 'find: {
-        if !args.has(2) {
+        if args.len() <= 2 {
             break 'find None;
         }
-        let idx = number_of(args.get_mut(2), &mut error) as c_int;
+        let idx = number_of(&args[2], &mut error) as c_int;
         if !error {
             if idx == l1.len() {
                 break 'find None;
@@ -130,17 +127,14 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, result: &mut
     if is_new {
         *result = TypVal::List(l1.raw());
     } else {
-        copy_tv(args.get_mut(0), result);
+        copy_tv(&args[0], result);
     }
 }
 
 /// The shared body of `extend()` and `extendnew()`: two Lists or two Dicts,
 /// nothing else.
-fn extend(mut args: Args<'_>, result: &mut TypVal, arg_errmsg: &CStr, is_new: bool) {
-    match (
-        Container::of(args.get_mut(0)),
-        Container::of(args.get_mut(1)),
-    ) {
+fn extend(args: &[TypVal], result: &mut TypVal, arg_errmsg: &CStr, is_new: bool) {
+    match (Container::of(&args[0]), Container::of(&args[1])) {
         (Container::List(_), Container::List(_)) => extend_list(args, arg_errmsg, is_new, result),
         (Container::Dict(_), Container::Dict(_)) => extend_dict(args, arg_errmsg, is_new, result),
         _ => err_str(
@@ -152,75 +146,61 @@ fn extend(mut args: Args<'_>, result: &mut TypVal, arg_errmsg: &CStr, is_new: bo
 
 /// `extend(list, list [, idx])` / `extend(dict, dict [, action])`: change the
 /// first container in place and answer it.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
-/// a cleared result.
-pub unsafe fn f_extend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_extend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (args, result) = frame!(args, result);
     extend(args, result, c"extend() argument", false);
 }
 
 /// `extendnew(list, list [, idx])` / `extendnew(dict, dict [, action])`:
 /// [`f_extend`] over a shallow copy, leaving the argument alone.
-///
-/// # Safety
-/// As [`f_extend`].
-pub unsafe fn f_extendnew(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_extendnew(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (args, result) = frame!(args, result);
     extend(args, result, c"extendnew() argument", true);
 }
 
 /// `insert(container, item [, idx])`: put one item into a List, or one byte
 /// into a Blob, before `idx`.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
-/// a cleared result.
-pub unsafe fn f_insert(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, result) = frame!(args, result);
     let mut error = false;
-    match Container::of(args.get_mut(0)) {
+    match Container::of(&args[0]) {
         Container::Blob(b) => {
             if b.is_null() || check_lock(b.lock(), c"insert() argument") {
                 return;
             }
             let len = b.len();
             let mut before = 0;
-            if args.has(2) {
-                before = number_of(args.get_mut(2), &mut error) as c_int;
+            if args.len() > 2 {
+                before = number_of(&args[2], &mut error) as c_int;
                 if error {
                     // Type error; errmsg already given.
                     return;
                 }
                 if before < 0 || before > len {
                     let mut numbuf = NumBuf::new();
-                    err_str(e_invarg2, cstr_of(args.get_mut(2), &mut numbuf));
+                    err_str(e_invarg2, cstr_of(&args[2], &mut numbuf));
                     return;
                 }
             }
-            let val = number_of(args.get_mut(1), &mut error) as c_int;
+            let val = number_of(&args[1], &mut error) as c_int;
             if error {
                 return;
             }
             if !(0..=255).contains(&val) {
                 let mut numbuf = NumBuf::new();
-                err_str(e_invarg2, cstr_of(args.get_mut(1), &mut numbuf));
+                err_str(e_invarg2, cstr_of(&args[1], &mut numbuf));
                 return;
             }
             b.insert_byte(before, val as uint8_t);
-            copy_tv(args.get_mut(0), result);
+            copy_tv(&args[0], result);
         }
         Container::List(l) => {
             if check_lock(l.locked(), c"insert() argument") {
                 return;
             }
             let mut before: int64_t = 0;
-            if args.has(2) {
-                before = number_of(args.get_mut(2), &mut error);
+            if args.len() > 2 {
+                before = number_of(&args[2], &mut error);
             }
             if error {
                 // Type error; errmsg already given.
@@ -234,8 +214,8 @@ pub unsafe fn f_insert(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
                     return;
                 }
             }
-            l.insert_tv(args.get_mut(1), item);
-            copy_tv(args.get_mut(0), result);
+            l.insert_tv(&args[1], item);
+            copy_tv(&args[0], result);
         }
         _ => err_str(e_listblobarg, c"insert()"),
     }

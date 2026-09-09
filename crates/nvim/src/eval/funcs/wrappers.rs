@@ -7,7 +7,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, MAX_ARGS};
 use super::table::{BUILTINS, builtin_index};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY,
@@ -41,10 +40,11 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
+    VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
+use core::mem::ManuallyDrop;
 use core::{ptr, slice};
 
 // -- Reading an argument, writing a return value ----------------------------
@@ -114,24 +114,6 @@ pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
     // SAFETY: both are live values; `to` is the caller's cleared return
     // value or its own local.
     unsafe { tv_copy(tv, to) }
-}
-
-/// Run one of `eval::typval`'s `tv_check_for_*_arg` predicates over argument
-/// `idx`, which report `E1174` and friends for the wrong type.
-///
-/// The predicates take the argument array and an index rather than one
-/// value, because the message names the position; [`Args`] answers for every
-/// slot through `MAX_ARGS`, terminator included, which is the whole of what
-/// they ask for.
-pub(crate) fn check_arg(
-    args: Args<'_>,
-    idx: c_int,
-    check: unsafe fn(*const TypVal, c_int) -> Result<(), Failed>,
-) -> Result<(), Failed> {
-    debug_assert!(idx >= 0 && idx as usize <= MAX_ARGS);
-    // SAFETY: the frame's array is `MAX_ARGS + 1` long and terminated, and
-    // `idx` is in it.
-    unsafe { check(args.ptr(0), idx) }
 }
 
 /// Make `result` a fresh List of `len` items, or of unknown length for one of
@@ -208,85 +190,80 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
 /// Call the builtin `fname` spells.
 ///
 /// # Safety
-/// `fname` is a NUL-terminated string; `args` points at an array of at
-/// least `MAX_FUNC_ARGS + 1` typvals of which the first `argcount` are
-/// filled; `result` is the cleared return value.
+/// `fname` is a NUL-terminated string.
 pub unsafe fn call_internal_func(
     fname: *const c_char,
-    argcount: c_int,
-    args: *mut TypVal,
-    result: *mut TypVal,
+    args: &[TypVal],
+    result: &mut TypVal,
 ) -> c_int {
-    // SAFETY: the caller's obligation. Writing the terminator at `argcount`
-    // is what makes `Args` total for the body about to run.
+    // SAFETY: the caller's obligation.
     let fdef = unsafe { find_internal_func(fname) };
     if fdef.is_null() {
         return FCERR_UNKNOWN as c_int;
     }
-    match unsafe { (*fdef).arity }.accepts(argcount.cast_unsigned() as usize) {
+    // SAFETY: `find_internal_func` answers a live row of the generated table.
+    let fdef = unsafe { &*fdef };
+    match fdef.arity.accepts(args.len()) {
         Ok(()) => {}
         Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
         Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
     }
-    unsafe { (*args.add(argcount as usize)).write_empty(VAR_UNKNOWN) };
-    let func = unsafe { (*fdef).func }.expect("non-null function pointer");
-    let data = unsafe { (*fdef).data };
-    // SAFETY: the row's body takes exactly the frame built above.
-    unsafe { func(args, result, data) };
+    let func = fdef.func.expect("non-null function pointer");
+    func(args, result, fdef.data);
     FCERR_NONE as c_int
 }
 
 /// Call the builtin `fname` spells as a method: `base->fname(args)`.
 ///
 /// The row says where the base value goes among the arguments, so this
-/// builds a fresh argument array with it spliced in rather than asking the
-/// body to know about methods at all.
+/// splices it in rather than asking the body to know about methods at all.
+/// The spliced frame borrows: every slot names a value the caller owns for
+/// the length of the call, which is why it is `ManuallyDrop`.
 ///
 /// # Safety
-/// As [`call_internal_func`], plus `basetv` is a live typval.
+/// As [`call_internal_func`], plus `base` is a live typval.
 pub unsafe fn call_internal_method(
     fname: *const c_char,
-    argcount: c_int,
-    args: *mut TypVal,
-    result: *mut TypVal,
-    basetv: *mut TypVal,
+    args: &[TypVal],
+    result: &mut TypVal,
+    base: *mut TypVal,
 ) -> c_int {
-    // SAFETY: the caller's obligation; `argv` is `MAX_FUNC_ARGS + 1` long
-    // and the arity checks above bound every index written into it.
+    // SAFETY: the caller's obligation.
     let fdef = unsafe { find_internal_func(fname) };
     if fdef.is_null() {
         return FCERR_UNKNOWN as c_int;
     }
-    let Some(base_index) = unsafe { (*fdef).base_arg }.index() else {
+    // SAFETY: `find_internal_func` answers a live row of the generated table.
+    let fdef = unsafe { &*fdef };
+    let Some(base_index) = fdef.base_arg.index() else {
         return FCERR_NOTMETHOD as c_int;
     };
     // The base counts as one of the arguments.
-    match unsafe { (*fdef).arity }.accepts(argcount as usize + 1) {
+    match fdef.arity.accepts(args.len() + 1) {
         Ok(()) => {}
         Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
         Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
     }
-    let base_index = c_int::try_from(base_index).expect("a base index is one of at most 20");
-    if argcount < base_index {
+    if args.len() < base_index {
         return FCERR_TOOFEW as c_int;
     }
 
-    let mut argv = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
-    let out = argv.args();
-    unsafe { ptr::copy_nonoverlapping(args, out, base_index as usize) };
-    // The frame borrows the caller's values: the `ptr::copy` above does
-    // the same for the rest of them, and nothing here owns what it holds.
-    unsafe { out.add(base_index as usize).write((*basetv).bit_copy()) };
-    let from = unsafe { args.add(base_index as usize) };
-    let to = unsafe { out.add(base_index as usize + 1) };
-    let rest = (argcount - base_index) as usize;
-    unsafe { ptr::copy_nonoverlapping(from, to, rest) };
-    unsafe { (*out.add(argcount as usize + 1)).write_empty(VAR_UNKNOWN) };
+    let mut frame = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
+    let (before, after) = args.split_at(base_index);
+    for (slot, arg) in frame.iter_mut().zip(before) {
+        // SAFETY: the caller's value, borrowed for the length of the call.
+        *slot = ManuallyDrop::new(unsafe { arg.bit_copy() });
+    }
+    // SAFETY: the caller's promise -- `base` is a live typval, borrowed the
+    // same way.
+    frame[base_index] = ManuallyDrop::new(unsafe { (*base).bit_copy() });
+    for (slot, arg) in frame[base_index + 1..].iter_mut().zip(after) {
+        // SAFETY: as the first splice.
+        *slot = ManuallyDrop::new(unsafe { arg.bit_copy() });
+    }
 
-    let func = unsafe { (*fdef).func }.expect("non-null function pointer");
-    let data = unsafe { (*fdef).data };
-    // SAFETY: the row's body takes exactly the frame built above.
-    unsafe { func(out, result, data) };
+    let func = fdef.func.expect("non-null function pointer");
+    func(frame.borrowed(args.len() + 1), result, fdef.data);
     FCERR_NONE as c_int
 }
 
@@ -371,13 +348,7 @@ pub unsafe fn get_expr_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
 /// Deliberately not `tv_get_bool`: only these three types count, and
 /// anything else -- a List, a Float, a missing argument -- is false rather
 /// than an error.
-///
-/// # Safety
-/// `args` is a live call frame's argument array.
-pub(crate) unsafe fn non_zero_arg(args: *mut TypVal) -> bool {
-    // SAFETY: the caller's obligation; each union read is guarded by the
-    // type tag that names it.
-    let tv = unsafe { &*args };
+pub(crate) fn non_zero_arg(tv: &TypVal) -> bool {
     match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
@@ -412,17 +383,11 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> b
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
 ///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
-    // SAFETY throughout: the dispatcher's argument array and return value; the row's
-    // payload is the float function for exactly these rows.
+pub fn float_op_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     let mut f: Float = 0.0;
-    unsafe { (*result).write_empty(VAR_FLOAT) };
-    let value = if unsafe { tv_get_float_chk(args, &raw mut f) } {
+    result.write_empty(VAR_FLOAT);
+    // SAFETY: an argument is a live value and `f` is this frame's local.
+    let value = if unsafe { tv_get_float_chk(&args[0], &raw mut f) } {
         let EvalFuncData::Float(op) = fptr else {
             unreachable!("a float builtin's row carries its operation")
         };
@@ -430,19 +395,14 @@ pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: Eva
     } else {
         0.0
     };
-    unsafe { (*result).write_float(value) };
+    result.write_float(value);
 }
 
 /// The body every builtin that is really an API function shares. The
 /// generated table puts the RPC handler in the row's payload.
 ///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
-    // SAFETY throughout: the dispatcher's argument array and return value; `items`
+pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
+    // SAFETY throughout: the dispatcher's arguments and return value; `items`
     // outlives the `Array` that borrows it, and the arena owns what the
     // conversion allocates until it is freed below.
     if check_secure() {
@@ -459,14 +419,9 @@ pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFunc
     array.items = items.as_mut_ptr();
     let mut arena: Arena = ARENA_EMPTY;
 
-    let frame = unsafe { Args::new(args) };
-    let mut i = 0;
-    while frame.has(i) {
-        unsafe {
-            *array.items.add(array.size) = vim_to_object(frame.ptr(i), &raw mut arena, false)
-        };
+    for arg in args {
+        unsafe { *array.items.add(array.size) = vim_to_object(arg, &raw mut arena, false) };
         array.size += 1;
-        i += 1;
     }
 
     let mut err = Error::none();
@@ -495,16 +450,16 @@ pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFunc
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> Option<Buf> {
+pub unsafe fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
-    if unsafe { (*tv).v_type() } == VAR_NUMBER {
-        return find_buf(unsafe { (*tv).number_or_zero() } as c_int);
+    if (*tv).v_type() == VAR_NUMBER {
+        return find_buf((*tv).number_or_zero() as c_int);
     }
-    if unsafe { (*tv).v_type() } != VAR_STRING {
+    if (*tv).v_type() != VAR_STRING {
         return None;
     }
-    let name = unsafe { (*tv).string_or_null() };
+    let name = (*tv).string_or_null();
     // The empty string is the current buffer, `$` the last one.
     if name.is_null() || unsafe { *name } as c_int == NUL {
         return Buf::current_or_none();
@@ -538,7 +493,7 @@ pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> Option<Buf> {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> Option<Buf> {
+pub unsafe fn tv_get_buf_from_arg(tv: &TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation.
     if !unsafe { tv_check_str_or_nr(tv) } {
         return None;
@@ -551,7 +506,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> Option<Buf> {
 ///
 /// # Safety
 /// `arg` is a live typval.
-pub unsafe fn get_buf_arg(arg: *mut TypVal) -> Option<Buf> {
+pub unsafe fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
@@ -572,12 +527,12 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> Option<Buf> {
 ///
 /// # Safety
 /// `args` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> Option<Win> {
-    // SAFETY: the caller's obligation.
-    if unsafe { (*args.add(idx as usize)).v_type() } == VAR_UNKNOWN {
+pub unsafe fn get_optional_window(args: &[TypVal], idx: usize) -> Option<Win> {
+    let Some(arg) = args.get(idx) else {
         return Win::current_or_none();
-    }
-    let win = unsafe { find_win_by_nr_or_id(args.add(idx as usize)) };
+    };
+    // SAFETY: the caller's obligation.
+    let win = unsafe { find_win_by_nr_or_id(arg) };
     if win.is_none() {
         emsg(gettext(e_invalwindow));
     }

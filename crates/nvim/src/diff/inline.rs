@@ -327,13 +327,7 @@ pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLin
 /// column of a line -- but only under `inline:none`/`inline:simple`, where
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
@@ -350,7 +344,7 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     };
     let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
     // SAFETY: the caller's argument list.
-    let lnum = unsafe { tv_get_lnum(args) }.max(0);
+    let lnum = unsafe { tv_get_lnum(&args[0]) }.max(0);
 
     let stale = !cache_results
         || lnum != prev_lnum.get()
@@ -397,7 +391,7 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
     if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
         // SAFETY: `diff_hlID()` is declared with two arguments.
-        let col = unsafe { tv_get_number(args.offset(1)) } as c_int - 1;
+        let col = unsafe { tv_get_number(&args[1]) } as c_int - 1;
         if cache_results {
             hlID.set(if col >= change_start.get() && col < change_end.get() {
                 HLF_TXD
@@ -430,5 +424,5 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     }
     let id = hlID.get() as VarNumber;
     // SAFETY: the caller's result cell.
-    unsafe { (*result).write_number(id) };
+    result.write_number(id);
 }

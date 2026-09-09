@@ -17,7 +17,6 @@
 )]
 
 use super::*;
-use crate::eval::funcs::args::{Args, frame};
 use crate::eval::typval::NumBuf;
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
@@ -59,7 +58,7 @@ fn null<T>() -> *mut T {
 ///
 /// # Safety
 /// `d` must be null or a live dictionary; the answer borrows from it.
-unsafe fn key(d: *const Dict, key: &str) -> Option<*mut TypVal> {
+unsafe fn key<'a>(d: *const Dict, key: &str) -> Option<&'a TypVal> {
     // SAFETY: the caller's dictionary.
     let di: *mut DictItem = unsafe {
         tv_dict_find(
@@ -70,7 +69,7 @@ unsafe fn key(d: *const Dict, key: &str) -> Option<*mut TypVal> {
     };
     // SAFETY: a non-null answer is a live item of that dictionary. No read
     // happens here.
-    (!di.is_null()).then(|| unsafe { &raw mut (*di).di_tv })
+    (!di.is_null()).then(|| unsafe { &(*di).di_tv })
 }
 
 /// Argument `i` as a dictionary, or null when it was not supplied.
@@ -78,11 +77,11 @@ unsafe fn key(d: *const Dict, key: &str) -> Option<*mut TypVal> {
 /// # Safety
 /// The caller must already have checked that a supplied argument `i` is a
 /// dictionary -- `tv_check_for_*_dict_arg` is what does that.
-unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut Dict {
-    if !args.has(i) {
+unsafe fn dict_arg(args: &[TypVal], i: usize) -> *mut Dict {
+    if args.len() <= i {
         return null();
     }
-    args.get(i).dict_or_null()
+    args[i].dict_or_null()
 }
 
 /// A `group` argument: `None` when it does not read as a string at all, and
@@ -90,7 +89,7 @@ unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut Dict {
 ///
 /// # Safety
 /// `tv` must be a live typval.
-unsafe fn group_arg(tv: *mut TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char> {
+unsafe fn group_arg(tv: &TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char> {
     // SAFETY: the caller's typval.
     let group = unsafe { numbuf.string_chk(tv) }.cast_mut();
     if group.is_null() {
@@ -161,16 +160,16 @@ unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut
 ///
 /// # Safety
 /// `args` and `result` are the frame's.
-unsafe fn each_dict_arg(args: Args<'_>, result: &mut TypVal, one: impl FnMut(*mut Dict) -> c_int) {
+unsafe fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(*mut Dict) -> c_int) {
     // SAFETY: the frame's return slot.
     let retlist = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
-    if args.ty(0) != VAR_LIST {
+    if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         emsg(gettext(e_listreq));
         return;
     }
     // SAFETY: the tag says the list arm is live, and `retlist` was just
     // allocated.
-    unsafe { each_dict(retlist, args.get(0).list_or_null(), one) };
+    unsafe { each_dict(retlist, args[0].list_or_null(), one) };
 }
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
@@ -369,17 +368,13 @@ unsafe fn sign_define_from_dict(
 }
 
 /// `sign_define()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
-    if args.ty(0) == VAR_LIST && !args.has(1) {
+    if args[0].v_type() == VAR_LIST && args.len() <= 1 {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-            each_dict(retlist, args.get(0).list_or_null(), |d| {
+            each_dict(retlist, args[0].list_or_null(), |d| {
                 sign_define_from_dict(null(), d)
             });
         };
@@ -388,9 +383,9 @@ pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr
 
     result.write_number(-1);
     // SAFETY: the argument slots the frame named.
-    let name = unsafe { numbuf.string_chk(args.ptr(0)) }.cast_mut();
+    let name = unsafe { numbuf.string_chk(&args[0]) }.cast_mut();
     // SAFETY: as above.
-    if name.is_null() || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) }.is_err() {
+    if name.is_null() || tv_check_for_opt_dict_arg(args, 1).is_err() {
         return;
     }
     // SAFETY: the tag says the dictionary arm is live.
@@ -400,21 +395,13 @@ pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr
 }
 
 /// `sign_getdefined()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_getdefined(
-    args: *mut TypVal,
-    result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
+pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY: the frame's return slot and argument.
     unsafe {
         let l = tv_list_alloc_ret(result, 0);
-        let defs = if args.has(0) {
-            sign_find(numbuf.string(args.ptr(0))).into_iter().collect()
+        let defs = if !args.is_empty() {
+            sign_find(numbuf.string(&args[0])).into_iter().collect()
         } else {
             sign_defs()
         };
@@ -425,12 +412,8 @@ pub(crate) unsafe fn f_sign_getdefined(
 }
 
 /// `sign_getplaced()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY: the frame's return slot and argument slots.
     unsafe {
         let mut buf = None;
@@ -440,16 +423,16 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
 
         let l = tv_list_alloc_ret(result, 0);
 
-        if args.has(0) {
-            buf = get_buf_arg(args.ptr(0));
+        if !args.is_empty() {
+            buf = get_buf_arg(&args[0]);
             if buf.is_none() {
                 return;
             }
-            if args.has(1) {
-                if tv_check_for_nonnull_dict_arg(args.ptr(0), 1).is_err() {
+            if args.len() > 1 {
+                if tv_check_for_nonnull_dict_arg(args, 1).is_err() {
                     return;
                 }
-                let dict = args.get(1).dict_or_null();
+                let dict = args[1].dict_or_null();
 
                 if let Some(tv) = key(dict, "lnum") {
                     lnum = tv_get_lnum(tv);
@@ -482,17 +465,13 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
 }
 
 /// `sign_jump()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_sign_jump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(-1);
 
     let mut notanum = false;
     // SAFETY: the frame's argument slots.
-    let id = number_as_int(unsafe { tv_get_number_chk(args.ptr(0), &raw mut notanum) });
+    let id = number_as_int(unsafe { tv_get_number_chk(&args[0], &raw mut notanum) });
     if notanum {
         return;
     }
@@ -502,11 +481,11 @@ pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: 
     }
 
     // SAFETY: the frame's argument slots.
-    let Some(group) = (unsafe { group_arg(args.ptr(1), &mut numbuf) }) else {
+    let Some(group) = (unsafe { group_arg(&args[1], &mut numbuf) }) else {
         return;
     };
     // SAFETY: as above.
-    let buf = unsafe { get_buf_arg(args.ptr(2)) };
+    let buf = unsafe { get_buf_arg(&args[2]) };
     if buf.is_none() {
         return;
     }
@@ -520,9 +499,9 @@ pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: 
 ///
 /// # Safety
 /// `tv` and `dict` must be null or live.
-unsafe fn slot(tv: *mut TypVal, dict: *mut Dict, name: &str) -> Option<*mut TypVal> {
-    if !tv.is_null() {
-        return Some(tv);
+unsafe fn slot<'a>(tv: Option<&'a TypVal>, dict: *mut Dict, name: &str) -> Option<&'a TypVal> {
+    if tv.is_some() {
+        return tv;
     }
     // SAFETY: the caller's dictionary.
     unsafe { key(dict, name) }
@@ -536,10 +515,10 @@ unsafe fn slot(tv: *mut TypVal, dict: *mut Dict, name: &str) -> Option<*mut TypV
 /// # Safety
 /// The typvals and `dict` must be null or live.
 unsafe fn sign_place_from_dict(
-    id_tv: *mut TypVal,
-    group_tv: *mut TypVal,
-    name_tv: *mut TypVal,
-    buf_tv: *mut TypVal,
+    id_tv: Option<&TypVal>,
+    group_tv: Option<&TypVal>,
+    name_tv: Option<&TypVal>,
+    buf_tv: Option<&TypVal>,
     dict: *mut Dict,
 ) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
@@ -624,53 +603,42 @@ unsafe fn sign_place_from_dict(
 }
 
 /// `sign_place()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_place(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub(crate) fn f_sign_place(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
     let mut dict = null();
-    if args.has(4) {
+    if args.len() > 4 {
         // SAFETY: the frame's argument slots.
-        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 4) }.is_err() {
+        if tv_check_for_nonnull_dict_arg(args, 4).is_err() {
             return;
         }
-        dict = args.get(4).dict_or_null();
+        dict = args[4].dict_or_null();
     }
     // SAFETY: the frame's argument slots and the dictionary just read.
-    let id =
-        unsafe { sign_place_from_dict(args.ptr(0), args.ptr(1), args.ptr(2), args.ptr(3), dict) };
+    let (id_tv, group_tv) = (Some(&args[0]), Some(&args[1]));
+    let (name_tv, buf_tv) = (Some(&args[2]), Some(&args[3]));
+    let id = unsafe { sign_place_from_dict(id_tv, group_tv, name_tv, buf_tv, dict) };
     result.write_number(VarNumber::from(id));
 }
 
 /// `sign_placelist()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_placelist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub(crate) fn f_sign_placelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the frame's return slot and argument.
     unsafe {
         each_dict_arg(args, result, |d| {
-            sign_place_from_dict(null(), null(), null(), null(), d)
+            sign_place_from_dict(None, None, None, None, d)
         });
     };
 }
 
 /// `sign_undefine()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_undefine(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, result) = frame!(args, result);
-    if args.ty(0) == VAR_LIST && !args.has(1) {
+    if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) && args.len() <= 1 {
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-            for tv in list_items(args.get(0).list_or_null()) {
+            for tv in list_items(args[0].list_or_null()) {
                 let name = numbuf.string_chk(tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
@@ -680,13 +648,13 @@ pub(crate) unsafe fn f_sign_undefine(args: *mut TypVal, result: *mut TypVal, _fp
     }
 
     result.write_number(-1);
-    if !args.has(0) {
+    if args.is_empty() {
         free_signs();
         result.write_number(0);
         return;
     }
     // SAFETY: the frame's argument slot.
-    let name = unsafe { numbuf2.string_chk(args.ptr(0)) };
+    let name = unsafe { numbuf2.string_chk(&args[0]) };
     // SAFETY: a name the argument owns, NUL-terminated.
     if !name.is_null() && unsafe { sign_undefine_by_name(name) }.is_ok() {
         result.write_number(0);
@@ -700,16 +668,15 @@ pub(crate) unsafe fn f_sign_undefine(args: *mut TypVal, result: *mut TypVal, _fp
 ///
 /// # Safety
 /// The typval and `dict` must be null or live.
-unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::core::ffi::c_int {
+unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's typval and dictionary.
     let mut id = 0;
     let mut buf = ::core::ptr::null_mut();
-    let mut group = if !group_tv.is_null() {
-        unsafe { numbuf.string(group_tv) }
-    } else {
-        unsafe { numbuf2.dict_string(dict, c"group".as_ptr()) }
+    let mut group = match group_tv {
+        Some(tv) => unsafe { numbuf.string(tv) },
+        None => unsafe { numbuf2.dict_string(dict, c"group".as_ptr()) },
     };
     if !group.is_null() && unsafe { *group } == 0 {
         group = ::core::ptr::null();
@@ -735,35 +702,21 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::co
 }
 
 /// `sign_unplace()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_unplace(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub(crate) fn f_sign_unplace(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
     // SAFETY: the frame's argument slots.
-    if unsafe { tv_check_for_string_arg(args.ptr(0), 0) }.is_err()
-        || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) }.is_err()
-    {
+    if tv_check_for_string_arg(args, 0).is_err() || tv_check_for_opt_dict_arg(args, 1).is_err() {
         return;
     }
     // SAFETY: the check above says the dictionary arm is live if it is set.
     let dict = unsafe { dict_arg(args, 1) };
     // SAFETY: the frame's first argument and the dictionary just read.
-    let unplaced = unsafe { sign_unplace_from_dict(args.ptr(0), dict) };
+    let unplaced = unsafe { sign_unplace_from_dict(Some(&args[0]), dict) };
     result.write_number(VarNumber::from(unplaced));
 }
 
 /// `sign_unplacelist()`.
-///
-/// # Safety
-/// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_unplacelist(
-    args: *mut TypVal,
-    result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
-    let (args, result) = frame!(args, result);
+pub(crate) fn f_sign_unplacelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the frame's return slot and argument.
-    unsafe { each_dict_arg(args, result, |d| sign_unplace_from_dict(null(), d)) };
+    unsafe { each_dict_arg(args, result, |d| sign_unplace_from_dict(None, d)) };
 }

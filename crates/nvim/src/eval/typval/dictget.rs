@@ -25,8 +25,8 @@ use crate::types::NUL;
 /// `argvars[0]` must be a `VAR_BLOB`; argvars` must point at the builtin's argument array, terminated by a
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
-pub(crate) unsafe fn tv_blob2items(args: *mut TypVal, result: *mut TypVal) {
-    let blob = unsafe { (*args).blob_or_null() };
+pub(crate) unsafe fn tv_blob2items(args: &[TypVal], result: *mut TypVal) {
+    let blob = args[0].blob_or_null();
     unsafe { tv_list_alloc_ret(result, tv_blob_len(blob) as ptrdiff_t) };
     for i in 0..unsafe { tv_blob_len(blob) } {
         let l2 = tv_list_alloc(2);
@@ -42,7 +42,7 @@ pub(crate) unsafe fn tv_blob2items(args: *mut TypVal, result: *mut TypVal) {
 /// `argvars[0]` must be a `VAR_DICT`; argvars` must point at the builtin's argument array, terminated by a
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
-pub(crate) unsafe fn tv_dict2items(args: *mut TypVal, result: *mut TypVal) {
+pub(crate) unsafe fn tv_dict2items(args: &[TypVal], result: *mut TypVal) {
     unsafe { tv_dict2list(args, result, kDict2ListItems) };
 }
 
@@ -52,8 +52,8 @@ pub(crate) unsafe fn tv_dict2items(args: *mut TypVal, result: *mut TypVal) {
 /// `argvars[0]` must be a `VAR_LIST`; argvars` must point at the builtin's argument array, terminated by a
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
-pub(crate) unsafe fn tv_list2items(args: *mut TypVal, result: *mut TypVal) {
-    let l = unsafe { (*args).list_or_null() };
+pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: *mut TypVal) {
+    let l = args[0].list_or_null();
     unsafe { tv_list_alloc_ret(result, tv_list_len(l) as ptrdiff_t) };
     if l.is_null() {
         return;
@@ -73,8 +73,8 @@ pub(crate) unsafe fn tv_list2items(args: *mut TypVal, result: *mut TypVal) {
 /// NUL-terminated; argvars` must point at the builtin's argument array, terminated by a
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
-pub(crate) unsafe fn tv_string2items(args: *mut TypVal, result: *mut TypVal) {
-    let mut p = unsafe { (*args).string_or_null() }.cast_const();
+pub(crate) unsafe fn tv_string2items(args: &[TypVal], result: *mut TypVal) {
+    let mut p = args[0].string_or_null().cast_const();
 
     unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     if p.is_null() {
@@ -356,13 +356,13 @@ pub unsafe fn tv_dict_wrong_func_name(
 /// `args` must point at the builtin's argument array, terminated by a
 /// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
 /// yet.
-pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: DictListType) {
-    if unsafe { tv_check_for_dict_arg(args, 0) }.is_err() {
+pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: *mut TypVal, what: DictListType) {
+    if tv_check_for_dict_arg(args, 0).is_err() {
         unsafe { tv_list_alloc_ret(result, 0) };
         return;
     }
 
-    let d = unsafe { (*args).dict_or_null() };
+    let d = args[0].dict_or_null();
     unsafe { tv_list_alloc_ret(result, tv_dict_len(d) as ptrdiff_t) };
     if d.is_null() {
         // NULL dict behaves like an empty dict
@@ -397,13 +397,8 @@ pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: 
 }
 
 /// `items()`: index/value pairs of a string, list, blob or dictionary.
-///
-/// # Safety
-/// `args` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub unsafe fn f_items(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    match unsafe { (*args).v_type() } {
+pub fn f_items(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    match args[0].v_type() {
         VAR_STRING => unsafe { tv_string2items(args, result) },
         VAR_LIST => unsafe { tv_list2items(args, result) },
         VAR_BLOB => unsafe { tv_blob2items(args, result) },
@@ -418,43 +413,28 @@ pub unsafe fn f_items(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `keys()`: the keys of a dictionary.
-///
-/// # Safety
-/// `args` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub unsafe fn f_keys(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_keys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_dict2list(args, result, kDict2ListKeys) };
 }
 
 /// `values()`: the values of a dictionary.
-///
-/// # Safety
-/// `args` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub unsafe fn f_values(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_values(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_dict2list(args, result, kDict2ListValues) };
 }
 
 /// `has_key()`: whether a dictionary has a key.
-///
-/// # Safety
-/// `args` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub unsafe fn f_has_key(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { tv_check_for_dict_arg(args, 0) }.is_err() {
+    if tv_check_for_dict_arg(args, 0).is_err() {
         return;
     }
-    let d = unsafe { (*args).dict_or_null() };
+    let d = args[0].dict_or_null();
     if d.is_null() {
         return;
     }
-    let key = unsafe { numbuf.string(args.add(1)) };
+    let key = unsafe { numbuf.string(&args[1]) };
     let found = !unsafe { tv_dict_find(d, key, -1) }.is_null();
-    unsafe { (*result).write_number(VarNumber::from(found)) };
+    result.write_number(VarNumber::from(found));
 }
 
 impl NumBuf {

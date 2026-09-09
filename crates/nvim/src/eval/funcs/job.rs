@@ -2,7 +2,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::frame;
 use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
 use crate::api::private::helpers::{cstr_as_string, dict_set_var};
 use crate::autocmd::apply_autocmds;
@@ -73,21 +72,14 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_jobpid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
         return;
     }
-    let Some(id) = job_id(args.get(0)) else {
+    let Some(id) = job_id(&args[0]) else {
         return;
     };
     let data = unsafe { find_job(id, true) };
@@ -98,14 +90,7 @@ pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_jobresize(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
@@ -114,11 +99,14 @@ pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     }
     // All three arguments are checked together, so a bad width reports
     // the same message a bad job id does.
-    if args.ty(0) != VAR_NUMBER || args.ty(1) != VAR_NUMBER || args.ty(2) != VAR_NUMBER {
+    if args[0].v_type() != VAR_NUMBER
+        || args[1].v_type() != VAR_NUMBER
+        || args[2].v_type() != VAR_NUMBER
+    {
         emsg(gettext(e_invarg));
         return;
     }
-    let data = unsafe { find_job(args.get(0).number_or_zero() as uint64_t, true) };
+    let data = unsafe { find_job(args[0].number_or_zero() as uint64_t, true) };
     if data.is_null() {
         return;
     }
@@ -128,29 +116,22 @@ pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     }
     // SAFETY: the tags checked above say both arguments are Numbers, and
     // `data` is the live channel the id resolved to.
-    let width = args.get(1).number_or_zero() as uint16_t;
-    let height = args.get(2).number_or_zero() as uint16_t;
+    let width = args[1].number_or_zero() as uint16_t;
+    let height = args[2].number_or_zero() as uint16_t;
     let pty = unsafe { channel_pty(data) };
     unsafe { pty_proc_resize(pty, width, height) };
     result.write_number(1);
 }
 
 /// `jobstop({job})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_jobstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null, and `error` is a borrowed static message.
     if check_secure() {
         return;
     }
-    let Some(id) = job_id(args.get(0)) else {
+    let Some(id) = job_id(&args[0]) else {
         return;
     };
     // `false`: a job that has already gone is not an error here.
@@ -171,26 +152,21 @@ pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `jobwait({jobs} [, {timeout}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
     // its whole length, and every channel in it holds a reference.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_LIST || (args.ty(1) != VAR_NUMBER && args.has(1)) {
+    if args[0].v_type() != VAR_LIST
+        || (!args.get(1).is_some_and(|arg| arg.v_type() == VAR_NUMBER) && args.len() > 1)
+    {
         emsg(gettext(e_invarg));
         return;
     }
 
-    let list: *mut List = args.get(0).list_or_null();
+    let list: *mut List = args[0].list_or_null();
     let count = unsafe { tv_list_len(list) };
     let jobs = unsafe { xcalloc(count as usize, size_of::<*mut Channel>()) } as *mut *mut Channel;
     // The waiting jobs' events are parked on a queue of our own so that
@@ -231,8 +207,8 @@ pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // A negative or absent timeout means "no limit".
     let mut remaining = -1;
     let mut before = 0u64;
-    if args.ty(1) == VAR_NUMBER && args.get(1).number_or_zero() >= 0 {
-        remaining = args.get(1).number_or_zero() as c_int;
+    if args.get(1).is_some_and(|arg| arg.v_type() == VAR_NUMBER) && args[1].number_or_zero() >= 0 {
+        remaining = args[1].number_or_zero() as c_int;
         before = os_hrtime();
     }
     // Only mark the UI busy when this actually blocks.
@@ -331,8 +307,8 @@ unsafe fn create_environment(
         let mut inherited = TV_INITIAL_VALUE;
         let out = &raw mut inherited;
         let row = EvalFuncData::None;
-        // SAFETY: `f_environ` reads no arguments and fills `inherited`.
-        unsafe { f_environ(ptr::null_mut(), out, row) };
+        // SAFETY: `out` is this frame's own value.
+        f_environ(&[], unsafe { &mut *out }, row);
         unsafe { tv_dict_extend(env, inherited.dict_or_null(), c"force".as_ptr()) };
         unsafe { tv_dict_free(inherited.dict_or_null()) };
         // Freed outright rather than released, so the value that named it
@@ -395,18 +371,11 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut cmdbuf = NumBuf::new();
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(0);
     // SAFETY throughout: the frame is live; `argv` is released on every path that does
     // not hand it to `channel_job_start`, which adopts it.
@@ -416,7 +385,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
     let mut cmd = ptr::null::<c_char>();
     let mut executable = true;
-    let argv = unsafe { tv_to_argv(args.ptr(0), &raw mut cmd, &raw mut executable, &mut cmdbuf) };
+    let argv = unsafe { tv_to_argv(&args[0], &raw mut cmd, &raw mut executable, &mut cmdbuf) };
     if argv.is_null() {
         // A malformed command answers 0; a command that is simply not
         // executable answers -1.
@@ -431,7 +400,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         }};
     }
 
-    if args.ty(1) != VAR_DICT && args.has(1) {
+    if !args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) && args.len() > 1 {
         let arg0 = "expected dictionary";
         semsg!("E475: Invalid argument: {arg0}");
         bail!();
@@ -451,8 +420,8 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut cwd = ptr::null::<c_char>();
     let mut job_env = ptr::null_mut::<DictItem>();
 
-    if args.ty(1) == VAR_DICT {
-        job_opts = args.get(1).dict_or_null();
+    if args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
+        job_opts = args[1].dict_or_null();
         detach = unsafe { tv_dict_get_number(job_opts, c"detach".as_ptr()) } != 0;
         rpc = unsafe { tv_dict_get_number(job_opts, c"rpc".as_ptr()) } != 0;
         term = unsafe { tv_dict_get_number(job_opts, c"term".as_ptr()) } != 0;

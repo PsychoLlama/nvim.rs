@@ -13,7 +13,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::memory::handoff::owned_cstr;
-use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_UNKNOWN};
+use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 use core::mem::ManuallyDrop;
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
@@ -92,10 +92,10 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 ///
 /// # Safety
 ///
-/// `args` must point at an initialized typval. `result` must point at the
-/// caller's return slot: an initialized typval it owns and will clear.
+/// `result` must point at the caller's return slot: an initialized typval it
+/// owns and will clear.
 pub unsafe fn get_user_input(
-    args: *const TypVal,
+    args: &[TypVal],
     result: *mut TypVal,
     inputdialog: bool,
     secret: bool,
@@ -122,12 +122,12 @@ pub unsafe fn get_user_input(
     // a distinct object from the `""` literal `defstr` starts as.
     let def: [::core::ffi::c_char; 1] = [0];
 
-    if unsafe { (*args.offset(0)).v_type() } == VAR_DICT {
-        if unsafe { (*args.offset(1)).v_type() } != VAR_UNKNOWN {
+    if args[0].v_type() == VAR_DICT {
+        if args.len() > 1 {
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
-        let dict = unsafe { (*args.offset(0)).dict_or_null() };
+        let dict = args[0].dict_or_null();
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
         let dict_str = |key: &::core::ffi::CStr,
                         numbuf: *mut ::core::ffi::c_char,
@@ -185,18 +185,18 @@ pub unsafe fn get_user_input(
             return;
         }
     } else {
-        prompt = unsafe { tv_get_string_buf_chk(args.offset(0), prompt_buf.as_mut_ptr()) };
+        prompt = unsafe { tv_get_string_buf_chk(&args[0], prompt_buf.as_mut_ptr()) };
         if prompt.is_null() {
             return;
         }
-        if unsafe { (*args.offset(1)).v_type() } != VAR_UNKNOWN {
-            defstr = unsafe { tv_get_string_buf_chk(args.offset(1), defstr_buf.as_mut_ptr()) };
+        if args.len() > 1 {
+            defstr = unsafe { tv_get_string_buf_chk(&args[1], defstr_buf.as_mut_ptr()) };
             if defstr.is_null() {
                 return;
             }
-            if unsafe { (*args.offset(2)).v_type() } != VAR_UNKNOWN {
+            if args.len() > 2 {
                 let strarg2 =
-                    unsafe { tv_get_string_buf_chk(args.offset(2), cancelreturn_buf.as_mut_ptr()) };
+                    unsafe { tv_get_string_buf_chk(&args[2], cancelreturn_buf.as_mut_ptr()) };
                 if strarg2.is_null() {
                     return;
                 }

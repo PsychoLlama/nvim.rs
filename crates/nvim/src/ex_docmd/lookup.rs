@@ -286,16 +286,10 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// The generated builtin-function table holds it as a `VimLFunc` fn
 /// pointer, and apigen's line-based scan needs the declaration spelled out
 /// literally.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_fullcommand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut name = unsafe { numbuf.string(args) } as *mut c_char;
-    unsafe { (*result).write_string(ptr::null_mut()) };
+    let mut name = unsafe { numbuf.string(&args[0]) } as *mut c_char;
+    result.write_string(ptr::null_mut());
     while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };
     }

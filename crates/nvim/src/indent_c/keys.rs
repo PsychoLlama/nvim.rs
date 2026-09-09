@@ -382,13 +382,10 @@ pub unsafe fn do_c_expr_indent() {
 
 /// `cindent(lnum)`: what `get_c_indent` would answer for line `lnum`, or -1
 /// when the line is out of range.
-///
-/// # Safety
-/// Moves the cursor and restores it; `result` must be a valid number typval.
-pub unsafe fn f_cindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pos = Win::current().w_cursor;
     // SAFETY: the caller's promise -- `args` is the call's argument list.
-    let lnum = unsafe { tv_get_lnum(args) } as LineNr;
+    let lnum = unsafe { tv_get_lnum(&args[0]) } as LineNr;
     let amount = if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
         Win::current().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it
@@ -400,5 +397,5 @@ pub unsafe fn f_cindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         -1
     };
     // SAFETY: the caller's promise -- `result` is a number typval to fill in.
-    unsafe { (*result).write_number(amount) };
+    result.write_number(amount);
 }

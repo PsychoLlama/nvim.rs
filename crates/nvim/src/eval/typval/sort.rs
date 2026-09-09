@@ -395,7 +395,7 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
 /// `args` must point at an initialized typval, unaliased for the call. `info`
 /// must point at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn parse_sort_uniq_args(
-    args: *mut TypVal,
+    args: &[TypVal],
     info: *mut SortInfo,
     how: &mut NumBuf,
 ) -> Result<(), Failed> {
@@ -410,11 +410,9 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     sort_info.item_compare_partial = ::core::ptr::null_mut();
     sort_info.item_compare_selfdict = ::core::ptr::null_mut();
 
-    // SAFETY: the builtin's argument array, which has at least two slots.
-    let arg1 = unsafe { Tv::new(args.add(1)) };
-    if arg1.v_type() == VAR_UNKNOWN {
+    let Some(arg1) = args.get(1) else {
         return Ok(());
-    }
+    };
 
     // optional second argument: {func}
     if arg1.v_type() == VAR_FUNC {
@@ -423,14 +421,14 @@ pub(crate) unsafe fn parse_sort_uniq_args(
         sort_info.item_compare_partial = arg1.partial_or_null();
     } else {
         let mut error = false;
-        let nr = unsafe { tv_get_number_chk(args.add(1), &raw mut error) } as ::core::ffi::c_int;
+        let nr = unsafe { tv_get_number_chk(&args[1], &raw mut error) } as ::core::ffi::c_int;
         if error {
             return Err(Failed); // type error; errmsg already given
         }
         if nr == 1 {
             sort_info.item_compare_ic = 1;
         } else if arg1.v_type() != VAR_NUMBER {
-            let name = unsafe { how.string(args.add(1)) };
+            let name = unsafe { how.string(&args[1]) };
             sort_info.item_compare_func = name;
         } else if nr != 0 {
             emsg(gettext(e_invarg));
@@ -461,10 +459,10 @@ pub(crate) unsafe fn parse_sort_uniq_args(
         }
     }
 
-    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
+    if args.len() > 2 {
         // optional third argument: {dict}
-        unsafe { tv_check_for_dict_arg(args, 2) }?;
-        unsafe { (*info).item_compare_selfdict = (*args.add(2)).dict_or_null() };
+        tv_check_for_dict_arg(args, 2)?;
+        unsafe { (*info).item_compare_selfdict = args[2].dict_or_null() };
     }
 
     Ok(())
@@ -481,10 +479,10 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 /// `args` must point at an initialized typval, unaliased for the call.
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: bool) {
+pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: *mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
-    let first = unsafe { Tv::new(args) };
+    let first = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };
     if first.v_type() != VAR_LIST {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe {
@@ -525,23 +523,11 @@ pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: 
 }
 
 /// `sort()`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_sort(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_sort(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(args, result, true) };
 }
 
 /// `uniq()`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_uniq(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_uniq(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(args, result, false) };
 }

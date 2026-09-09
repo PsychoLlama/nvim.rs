@@ -324,12 +324,9 @@ pub unsafe fn textpos2screenpos(
 }
 
 /// `screenpos({winid}, {lnum}, {col})`.
-///
-/// # Safety
-/// The evaluator's calling convention: `args` and `result` must be valid.
-pub unsafe fn f_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
-    let (dict, wp) = unsafe { (alloc_dict_ret(result), find_win_by_nr_or_id(args)) };
+    let (dict, wp) = unsafe { (alloc_dict_ret(result), find_win_by_nr_or_id(&args[0])) };
     let Some(wp) = wp else {
         return;
     };
@@ -375,8 +372,8 @@ unsafe fn alloc_dict_ret(result: *mut TypVal) -> *mut Dict {
 ///
 /// # Safety
 /// `args` must hold at least `n + 1` values.
-unsafe fn arg_number(args: *mut TypVal, n: isize) -> VarNumber {
-    unsafe { tv_get_number(args.offset(n)) }
+unsafe fn arg_number(args: &[TypVal], n: isize) -> VarNumber {
+    unsafe { tv_get_number(&args[n as usize]) }
 }
 
 /// `tv_dict_add_nr` with the key spelled as a C string literal.
@@ -421,34 +418,31 @@ unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
 }
 
 /// `virtcol2col({winid}, {lnum}, {col})`.
-///
-/// # Safety
-/// The evaluator's calling convention: `args` and `result` must be valid.
-pub unsafe fn f_virtcol2col(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*result).write_number(-1) };
+    result.write_number(-1);
     // SAFETY: the evaluator's calling convention: three arguments.
-    let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(args, n).is_ok()) };
+    let typed = (0..3).all(|n| tv_check_for_number_arg(args, n).is_ok());
     if !typed {
         return;
     }
     // SAFETY: the evaluator's calling convention.
-    let Some(win) = (unsafe { find_win_by_nr_or_id(args) }) else {
+    let Some(win) = (unsafe { find_win_by_nr_or_id(&args[0]) }) else {
         return;
     };
     let mut error = false;
     // SAFETY: the evaluator's calling convention, and `error` is of this frame.
-    let lnum = unsafe { tv_get_number_chk(args.offset(1), &raw mut error) } as LineNr;
+    let lnum = unsafe { tv_get_number_chk(&args[1], &raw mut error) } as LineNr;
     if error || lnum < 0 || lnum > win.buffer().line_count() {
         return;
     }
     // SAFETY: the evaluator's calling convention, and `error` is of this frame.
-    let screencol = unsafe { tv_get_number_chk(args.offset(2), &raw mut error) } as c_int;
+    let screencol = unsafe { tv_get_number_chk(&args[2], &raw mut error) } as c_int;
     if error || screencol < 0 {
         return;
     }
     // SAFETY: a live window and a line of its buffer.
     let col = unsafe { virtcol2col(win, lnum, screencol) };
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*result).write_number(col as VarNumber) };
+    result.write_number(col as VarNumber);
 }

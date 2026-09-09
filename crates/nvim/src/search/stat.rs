@@ -19,7 +19,7 @@ use crate::message_fmt::c_str;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;
-use crate::types::{FAIL, NUL, VAR_LIST, VAR_UNKNOWN};
+use crate::types::{FAIL, NUL, VAR_LIST};
 use crate::winlayer::{Buf, BufId, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -356,11 +356,7 @@ unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c
 }
 
 /// `searchcount()`: the match counts as a dictionary.
-///
-/// # Safety
-/// The Vimscript function ABI: `args` is the argument array and
-/// `result` the return value.
-pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut pos = Win::current().w_cursor;
     let mut pattern = ptr::null_mut::<c_char>();
@@ -372,11 +368,11 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
     unsafe { tv_dict_alloc_ret(result) };
 
-    if unsafe { (*args).v_type() } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(args, 0) }.is_err() {
+    if !args.is_empty() {
+        if tv_check_for_nonnull_dict_arg(args, 0).is_err() {
             return;
         }
-        let dict = unsafe { (*args).dict_or_null() };
+        let dict = args[0].dict_or_null();
         let found = unsafe { dict_number(dict, c"timeout", timeout) };
         let Some(t) = found else {
             return;
@@ -453,7 +449,7 @@ pub unsafe fn f_searchcount(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         let stat = unsafe { update_search_stat(0, pos, pos, recompute, maxcount, timeout) };
         // SAFETY: `result` is the caller's return value, a dictionary this
         // function itself allocated above.
-        let dict = unsafe { (*result).dict_or_null() };
+        let dict = result.dict_or_null();
         let add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
             // SAFETY: adding a number under a static key.

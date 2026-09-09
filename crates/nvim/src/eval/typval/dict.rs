@@ -704,23 +704,23 @@ pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut TypVal) {
 /// argument. `result` must be writable and hold no value yet, and
 /// `arg_errmsg` must be a NUL-terminated string.
 pub unsafe fn tv_dict_remove(
-    args: *mut TypVal,
+    args: &[TypVal],
     result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let mut numbuf = NumBuf::new();
-    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
+    if args.len() > 2 {
         let arg0 = "remove()";
         semsg!("E118: Too many arguments for function: {arg0}");
         return;
     }
 
-    let d = unsafe { (*args).dict_or_null() };
+    let d = args[0].dict_or_null();
     if d.is_null() || unsafe { value_check_lock((*d).dv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
     {
         return;
     }
-    let key = unsafe { numbuf.string_chk(args.add(1)) };
+    let key = unsafe { numbuf.string_chk(&args[1]) };
     if key.is_null() {
         return;
     }

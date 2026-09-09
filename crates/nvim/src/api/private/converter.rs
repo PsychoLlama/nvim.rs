@@ -389,7 +389,7 @@ impl TypvalSink for ObjectSink {
 ///
 /// # Safety
 /// `obj` must point at a live typval, and `arena` be null or a live arena.
-pub unsafe fn vim_to_object(obj: *mut TypVal, arena: *mut Arena, reuse_strdata: bool) -> Object {
+pub unsafe fn vim_to_object(obj: *const TypVal, arena: *mut Arena, reuse_strdata: bool) -> Object {
     let mut sink = ObjectSink {
         stack: InlineStack::new(),
         arena,
@@ -397,6 +397,7 @@ pub unsafe fn vim_to_object(obj: *mut TypVal, arena: *mut Arena, reuse_strdata: 
     };
     // SAFETY: the caller's typval, walked by a sink that cannot fail on any
     // value a live one can hold.
+    let obj = obj.cast_mut();
     let converted = unsafe { encode_typval(&mut sink, obj, c"vim_to_object argument".as_ptr()) };
     debug_assert!(converted);
     debug_assert!(sink.stack.len() == 1);

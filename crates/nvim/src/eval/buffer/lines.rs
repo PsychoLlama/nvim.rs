@@ -29,7 +29,7 @@ pub(crate) unsafe fn set_buffer_lines(
     buffer: Option<Buf>,
     lnum_arg: LineNr,
     append: bool,
-    lines: *mut TypVal,
+    lines: *const TypVal,
     result: *mut TypVal,
 ) {
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
@@ -58,7 +58,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let mut l: *mut List = ptr::null_mut();
     let mut li: *mut ListItem = ptr::null_mut();
     let mut line: *mut c_char = ptr::null_mut();
-    let src = unsafe { Tv::new(lines) };
+    let src = unsafe { Tv::new(lines.cast_mut()) };
     '_cleanup: {
         if src.v_type() == VAR_LIST {
             l = src.list_or_null();
@@ -137,7 +137,7 @@ pub(crate) unsafe fn set_buffer_lines(
 ///
 /// # Safety
 /// The arguments and `result` must be live typvals.
-unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool) {
+unsafe fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
@@ -148,7 +148,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool)
     // reports; only then is anything written.
     let lnum = unsafe { arg_lnum_buf(args, 1, Some(buf)) };
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Some(buf), lnum, append, args.ptr(2), result) };
+        unsafe { set_buffer_lines(Some(buf), lnum, append, &args[2], result) };
     }
 }
 
@@ -195,7 +195,7 @@ unsafe fn get_buffer_lines(
 ///
 /// # Safety
 /// The arguments and `result` must be live typvals.
-unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
+unsafe fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
@@ -203,7 +203,7 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     if did_emsg.get() > did_emsg_before {
         return;
     }
-    let end = if args.has(2) {
+    let end = if args.len() > 2 {
         unsafe { arg_lnum_buf(args, 2, buf) }
     } else {
         lnum
@@ -212,78 +212,43 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
 }
 
 /// `append({lnum}, {string/list})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_append(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, true, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, true, &args[1], result) };
     }
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_appendbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_appendbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { buf_set_append_line(args, result, true) };
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_setbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_setbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { buf_set_append_line(args, result, false) };
 }
 
 /// `setline({lnum}, {string/list})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_setline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, false, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, false, &args[1], result) };
     }
 }
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let lnum = arg_lnum(args, 0);
     // One argument answers a string, a range answers a list.
-    let (end, retlist) = if args.has(1) {
+    let (end, retlist) = if args.len() > 1 {
         (arg_lnum(args, 1), true)
     } else {
         (lnum, false)
@@ -292,40 +257,19 @@ pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { getbufline(args, result, true) };
 }
 
 /// `getbufoneline({buf}, {lnum})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getbufoneline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getbufoneline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { getbufline(args, result, false) };
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(1);
     // SAFETY: the arguments and `result` are live typvals; `cob` is a live
     // local, restored on every path out of the change.
@@ -337,7 +281,7 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if did_emsg.get() > did_emsg_before {
         return;
     }
-    let mut last = if args.has(2) {
+    let mut last = if args.len() > 2 {
         unsafe { arg_lnum_buf(args, 2, Some(buf)) }
     } else {
         first

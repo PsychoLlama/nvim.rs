@@ -30,10 +30,7 @@ const REQUIRES_EXPR: &CStr = c"\"replace_keycodes\" requires \"expr\"";
 ///
 /// Two call shapes: one dict argument carrying `"mode"` and `"abbr"` as well,
 /// or a mode string, an abbreviation flag and the dict.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -52,8 +49,8 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY (this block): the Vimscript call convention — `args` is a live
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `buf` is the scratch `tv_get_string_buf_chk` may answer with.
-    if unsafe { (*args).v_type() } == VAR_DICT as _ {
-        d = unsafe { (*args).dict_or_null() };
+    if args[0].v_type() == VAR_DICT as _ {
+        d = args[0].dict_or_null();
         // SAFETY: `d` is the dict just taken off the argument.
         let abbr = unsafe {
             which = numbuf.dict_string(d, c"mode".as_ptr());
@@ -66,18 +63,19 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
         is_abbr = abbr != 0;
     } else {
         // SAFETY: as above.
-        which = unsafe { tv_get_string_buf_chk(args, buf.as_mut_ptr()) };
+        which = unsafe { tv_get_string_buf_chk(&args[0], buf.as_mut_ptr()) };
         if which.is_null() {
             return;
         }
+        // An absent argument reads as upstream's empty slot did: E685, false.
         // SAFETY: as above.
-        is_abbr = unsafe { tv_get_bool(args.add(1)) } != 0;
+        is_abbr = unsafe { tv_get_bool(args.get(1).unwrap_or(&TypVal::Unknown)) } != 0;
         // SAFETY: as above.
-        if unsafe { tv_check_for_dict_arg(args, 2) }.is_err() {
+        if tv_check_for_dict_arg(args, 2).is_err() {
             return;
         }
         // SAFETY: `tv_check_for_dict_arg` just said slot 2 is a dict.
-        d = unsafe { (*args.add(2)).dict_or_null() };
+        d = args[2].dict_or_null();
     }
 
     // SAFETY: `which` is a NUL-terminated mode string.

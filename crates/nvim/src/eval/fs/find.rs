@@ -28,8 +28,8 @@
 #![allow(unsafe_code)]
 
 use super::{
-    Args, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg,
-    str_arg, str_arg_chk,
+    FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, kDirectionNotSet, nr_arg, str_arg,
+    str_arg_chk,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
@@ -45,7 +45,7 @@ use crate::memory::xfree;
 use crate::option::vars::{p_path, p_wic};
 use crate::types::{
     BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
+    VAR_STRING, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -237,7 +237,7 @@ fn set_val(name: *const c_char) {
 /// The shared body of `finddir()` and `findfile()`: walk 'path' for `count`
 /// matches of a name, answering the last one -- or, for a negative count,
 /// all of them as a List.
-fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
+fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut numbuf = NumBuf::new();
     let mut fresult: *mut c_char = ptr::null_mut();
     let mut path = search_path();
@@ -248,14 +248,14 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
     let fname = str_arg(args, 0, &mut numbuf);
 
     let mut pathbuf = NumBuf::new();
-    if args.has(1) {
+    if args.len() > 1 {
         match str_arg_chk(args, 1, &mut pathbuf) {
             None => error = true,
             Some(p) => {
                 if !p.to_bytes().is_empty() {
                     path = p.as_ptr().cast_mut();
                 }
-                if args.has(2) {
+                if args.len() > 2 {
                     count = nr_arg(args, 2, &mut error) as c_int;
                 }
             }
@@ -319,21 +319,12 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
 }
 
 /// `finddir({name} [, {path} [, {count}]])`.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1..3, and `result`
-/// a cleared result.
-pub unsafe fn f_finddir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_finddir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     findfilendir(args, result, FINDFILE_DIR as c_int);
 }
 
 /// `findfile({name} [, {path} [, {count}]])`.
-///
-/// # Safety
-/// As [`f_finddir`].
-pub unsafe fn f_findfile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_findfile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     findfilendir(args, result, FINDFILE_FILE as c_int);
 }
 
@@ -342,26 +333,21 @@ pub unsafe fn f_findfile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// A non-zero `{nosuf}` keeps the matches 'wildignore' would drop and leaves
 /// the ones 'suffixes' would push to the end where they are; `{list}` asks
 /// for a List rather than newline-joined text.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1..4, and `result`
-/// a cleared result.
-pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
 
     result.write_empty(VAR_STRING);
-    if args.has(1) {
+    if args.len() > 1 {
         if nr_arg(args, 1, &mut error) != 0 {
             options |= WildOpts::KEEP_ALL;
         }
-        if args.has(2) {
+        if args.len() > 2 {
             if nr_arg(args, 2, &mut error) != 0 {
                 ret_list(result);
             }
-            if args.has(3) && nr_arg(args, 3, &mut error) != 0 {
+            if args.len() > 3 && nr_arg(args, 3, &mut error) != 0 {
                 options |= WildOpts::ALLLINKS;
             }
         }
@@ -390,26 +376,21 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 
 /// `globpath({path}, {pattern} [, {nosuf} [, {list} [, {alllinks}]]])`: the
 /// pattern expanded once under every directory in `{path}`.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2..5, and `result`
-/// a cleared result.
-pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
 
     result.write_empty(VAR_STRING);
-    if args.has(2) {
+    if args.len() > 2 {
         if nr_arg(args, 2, &mut error) != 0 {
             flags |= WildOpts::KEEP_ALL;
         }
-        if args.has(3) {
+        if args.len() > 3 {
             if nr_arg(args, 3, &mut error) != 0 {
                 ret_list(result);
             }
-            if args.has(4) && nr_arg(args, 4, &mut error) != 0 {
+            if args.len() > 4 && nr_arg(args, 4, &mut error) != 0 {
                 flags |= WildOpts::ALLLINKS;
             }
         }
@@ -445,14 +426,14 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// when there is no expression at all.
 ///
 /// # Safety
-/// `context` is the `TypVal` `f_readdir` handed `readdir_core`, and `name`
-/// a NUL-terminated entry name.
+/// `context` is null, or the `TypVal` `f_readdir` handed `readdir_core`; and
+/// `name` is a NUL-terminated entry name.
 unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNumber {
-    // SAFETY: the caller's contract.
-    let expr = unsafe { &mut *context.cast::<TypVal>() };
-    if expr.v_type() == VAR_UNKNOWN {
+    if context.is_null() {
         return 1;
     }
+    // SAFETY: the caller's contract.
+    let expr = unsafe { &mut *context.cast::<TypVal>() };
 
     let mut save_val = TV_INITIAL_VALUE;
     // SAFETY: `Vv::Val` names a `v:` variable and `save_val` is a live local.
@@ -488,21 +469,20 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 
 /// `readdir({directory} [, {expr}])`: the entries of one directory, sorted,
 /// with `{expr}` deciding which of them to keep.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1..2, and `result`
-/// a cleared result.
-pub unsafe fn f_readdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_readdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (mut args, result) = frame!(args, result);
     let list = RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
     let path = str_arg(args, 0, &mut numbuf).as_ptr();
-    let expr: *mut TypVal = args.get_mut(1);
+    // No filter expression is a null context, which the callback reads as
+    // "keep everything".
+    let expr = args
+        .get(1)
+        .map_or(ptr::null_mut(), |tv| ptr::from_ref(tv).cast_mut().cast());
 
     let mut found = StrArray::new();
-    // SAFETY: `path` is NUL-terminated, `expr` is the argument slot the
+    // SAFETY: `path` is NUL-terminated, `expr` is null or the argument the
     // filter reads back through, and the array is a fresh one to fill.
-    let ret = unsafe { readdir_core(found.raw(), path, expr.cast(), Some(readdir_checkitem)) };
+    let ret = unsafe { readdir_core(found.raw(), path, expr, Some(readdir_checkitem)) };
     if ret.is_ok() {
         for &name in found.names() {
             list.push(name);

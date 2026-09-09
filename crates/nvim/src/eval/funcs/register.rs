@@ -5,7 +5,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string_chk, dict_alloc_ret};
 use super::{
     YREG_YANK, kGRegExprSrc, kGRegList, kMTBlockWise, kMTCharWise, kMTLineWise, kMTUnknown,
@@ -43,11 +42,11 @@ type TypeBuf = [c_char; 67];
 /// means the unnamed register.
 ///
 /// # Safety
-/// `args.ptr(0)` is a live typval.
-unsafe fn regname(args: Args<'_>) -> Option<c_int> {
+/// `&args[0]` is a live typval.
+unsafe fn regname(args: &[TypVal]) -> Option<c_int> {
     let mut numbuf = NumBuf::new();
-    let name = if args.has(0) {
-        let name = arg_string_chk(&mut numbuf, args.get(0));
+    let name = if !args.is_empty() {
+        let name = arg_string_chk(&mut numbuf, &args[0]);
         if name.is_null() {
             return None;
         }
@@ -62,14 +61,7 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals.
     let Some(regname) = (unsafe { regname(args) }) else {
         return;
@@ -77,11 +69,11 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // The two flag arguments are only read when a register was named:
     // `getreg()` alone cannot have them.
     let (mut expr_src, mut return_list) = (false, false);
-    if args.has(0) && args.has(1) {
+    if !args.is_empty() && args.len() > 1 {
         let mut error = false;
-        expr_src = arg_number_chk(args.get(1), Some(&mut error)) != 0;
-        if !error && args.has(2) {
-            return_list = arg_number_chk(args.get(2), Some(&mut error)) != 0;
+        expr_src = arg_number_chk(&args[1], Some(&mut error)) != 0;
+        if !error && args.len() > 2 {
+            return_list = arg_number_chk(&args[2], Some(&mut error)) != 0;
         }
         if error {
             return;
@@ -103,14 +95,7 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `getregtype([{regname}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the arguments are live typvals and `buf` outlives the call
     // that fills it.
@@ -125,14 +110,7 @@ pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getreginfo([{regname}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getreginfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; `buf` outlives
     // the two `tv_dict_add_str` calls that copy from it.
     let Some(mut regname) = (unsafe { regname(args) }) else {
@@ -193,37 +171,19 @@ unsafe fn return_register(regname: c_int, result: &mut TypVal) {
 }
 
 /// `reg_executing()` — the register a macro is being played from.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_reg_executing(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_reg_executing(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_executing.get(), &mut *result) };
 }
 
 /// `reg_recording()` — the register `q` is recording into.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_reg_recording(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_reg_recording(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recording.get(), &mut *result) };
 }
 
 /// `reg_recorded()` — the register the last recording went into.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_reg_recorded(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_reg_recorded(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the dispatcher's cleared return value.
     unsafe { return_register(reg_recorded.get(), &mut *result) };
 }
@@ -261,25 +221,18 @@ unsafe fn get_yank_type(
 }
 
 /// `setreg({regname}, {value} [, {options}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     let mut numbuf5 = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the arguments and `result` are live typvals; every string
     // read below is NUL-terminated and outlives its use.
     // Non-zero means "did not set anything", which is what every early
     // return leaves behind.
     result.write_number(1);
-    let strregname = arg_string_chk(&mut numbuf, args.get(0));
+    let strregname = arg_string_chk(&mut numbuf, &args[0]);
     if strregname.is_null() {
         return;
     }
@@ -293,8 +246,8 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let mut regcontents: *const TypVal = ptr::null();
     let mut pointreg: c_char = 0;
 
-    if args.ty(1) == VAR_DICT {
-        let d = args.get(1).dict_or_null();
+    if args[1].v_type() == VAR_DICT {
+        let d = args[1].dict_or_null();
         // An empty dict clears the register outright.
         if unsafe { tv_dict_len(d) } == 0 {
             let mut empty: [*mut c_char; 2] = [ptr::null_mut(); 2];
@@ -331,12 +284,12 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
             pointreg = regname;
         }
     } else {
-        regcontents = args.ptr(1);
+        regcontents = &args[1];
     }
 
     let mut append = false;
     let mut set_unnamed = false;
-    if args.has(2) {
+    if args.len() > 2 {
         // A dict value already carried the type; a third argument on
         // top of it is one argument too many.
         if yank_type != kMTUnknown {
@@ -344,7 +297,7 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
             semsg!("E118: Too many arguments for function: {arg0}");
             return;
         }
-        let opts = arg_string_chk(&mut numbuf4, args.get(2));
+        let opts = arg_string_chk(&mut numbuf4, &args[2]);
         if opts.is_null() {
             return;
         }

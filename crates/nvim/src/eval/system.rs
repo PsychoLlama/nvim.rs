@@ -52,7 +52,7 @@ use crate::types::{
 /// the scratch a Number command is spelled into and must outlive `*cmd`,
 /// which may point into it.
 pub unsafe fn tv_to_argv(
-    cmd_tv: *mut TypVal,
+    cmd_tv: *const TypVal,
     cmd: *mut *const c_char,
     executable: *mut bool,
     numbuf: &mut NumBuf,
@@ -60,7 +60,7 @@ pub unsafe fn tv_to_argv(
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     // SAFETY: the caller's promise -- the typval outlives the call.
-    let tv = unsafe { Tv::new(cmd_tv) };
+    let tv = unsafe { Tv::new(cmd_tv.cast_mut()) };
     if tv.v_type() == VAR_STRING {
         // SAFETY: `numbuf` is the caller's scratch, which outlives `*cmd`.
         let cmd_str = unsafe { numbuf.string(cmd_tv) };
@@ -182,7 +182,7 @@ pub(crate) unsafe fn string_to_list(
 /// # Safety
 /// `args` must hold the builtin's arguments; `result` must be valid.
 pub(crate) unsafe fn get_system_output_as_rettv(
-    args: *mut TypVal,
+    args: &[TypVal],
     result: *mut TypVal,
     retlist: bool,
 ) {
@@ -196,9 +196,12 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     }
 
     let mut input_len: ptrdiff_t = 0;
-    // SAFETY: the builtin's vector always has a second slot, which is
-    // `VAR_UNKNOWN` when the caller passed one argument.
-    let input = unsafe { save_tv_as_string(args.add(1), &raw mut input_len, false, false) };
+    // SAFETY: an argument is a live typval; with no input argument there is
+    // nothing to feed the command.
+    let input = match args.get(1) {
+        Some(tv) => unsafe { save_tv_as_string(tv, &raw mut input_len, false, false) },
+        None => null_mut(),
+    };
     if input_len < 0 {
         debug_assert!(input.is_null());
         return;
@@ -207,7 +210,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     let mut executable = true;
     // SAFETY: `args` is the builtin's own vector, and `cmdbuf` outlives
     // the argv a Number command is spelled into.
-    let argv = unsafe { tv_to_argv(args, null_mut(), &raw mut executable, &mut cmdbuf) };
+    let argv = unsafe { tv_to_argv(&args[0], null_mut(), &raw mut executable, &mut cmdbuf) };
     if argv.is_null() {
         // A command that does not exist reports -1 rather than a shell
         // exit status.
@@ -269,13 +272,9 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // The `keepempty` argument is the third, so it is only read
         // when the second was given too.
         let mut keepempty = 0;
-        // SAFETY: the builtin declares three slots, and the third is only
-        // reached once the second turned out to be given.
-        let given = unsafe { (*args.add(1)).v_type() } != VAR_UNKNOWN
-            && unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN;
-        if given {
+        if args.len() > 2 {
             // SAFETY: as above.
-            keepempty = unsafe { tv_get_number(args.add(2)) } as c_int;
+            keepempty = unsafe { tv_get_number(&args[2]) } as c_int;
         }
         // SAFETY: `res` holds `nread` readable bytes.
         let list = unsafe { string_to_list(res, nread, keepempty != 0) };
@@ -293,18 +292,12 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 }
 
 /// `system()`
-///
-/// # Safety
-/// Called through the builtin table.
-pub unsafe fn f_system(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_system(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(args, result, false) }
 }
 
 /// `systemlist()`
-///
-/// # Safety
-/// Called through the builtin table.
-pub unsafe fn f_systemlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_systemlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(args, result, true) }
 }
 
@@ -361,14 +354,14 @@ unsafe fn copy_swapping_nl(src: *const c_char, dest: *mut c_char) -> *mut c_char
 /// # Safety
 /// `tv` and `len` must be valid.
 pub unsafe fn save_tv_as_string(
-    tv: *mut TypVal,
+    tv: *const TypVal,
     len: *mut ptrdiff_t,
     endnl: bool,
     crlf: bool,
 ) -> *mut c_char {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- both outlive the call.
-    let value = unsafe { Tv::new(tv) };
+    let value = unsafe { Tv::new(tv.cast_mut()) };
     // SAFETY: as above.
     unsafe { *len = 0 };
     if value.v_type() == VAR_UNKNOWN {
@@ -389,7 +382,7 @@ pub unsafe fn save_tv_as_string(
     }
     if value.v_type() == VAR_NUMBER {
         // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
-        return unsafe { buffer_as_string(tv, len) };
+        return unsafe { buffer_as_string(tv.cast_mut(), len) };
     }
     // SAFETY: `VAR_LIST` says the value holds a List.
     unsafe { list_as_string(value.list_or_null(), len, endnl, crlf) }

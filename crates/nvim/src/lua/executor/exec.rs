@@ -76,9 +76,10 @@ unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
 ///
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
-pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut TypVal, ret_tv: *mut TypVal) {
+pub unsafe fn nlua_typval_eval(str: String_0, arg: *const TypVal, ret_tv: *mut TypVal) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
+    let arg = arg.cast_mut();
     unsafe {
         let head = EVALHEADER.count_bytes();
         let lcmd_len = head + str.len() + 1;

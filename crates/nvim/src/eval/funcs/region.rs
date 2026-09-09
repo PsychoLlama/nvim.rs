@@ -3,8 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, frame};
-use super::wrappers::{check_arg, list_alloc_ret};
+use super::wrappers::list_alloc_ret;
 use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
 use crate::buffer::find_buf;
@@ -131,15 +130,15 @@ impl Drop for BufferSwap {
 
 /// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
 /// the current buffer pointed at the one the positions name.
-fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
+fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
     list_alloc_ret(result, kListLenMayKnow as isize);
-    if check_arg(args, 0, tv_check_for_list_arg).is_err()
-        || check_arg(args, 1, tv_check_for_list_arg).is_err()
-        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
+    if tv_check_for_list_arg(args, 0).is_err()
+        || tv_check_for_list_arg(args, 1).is_err()
+        || tv_check_for_opt_dict_arg(args, 2).is_err()
     {
         return None;
     }
@@ -151,8 +150,8 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     // SAFETY: both arguments are live typvals and the four out-parameters
     // are locals. The second is only read when the first parsed, as
     // upstream's short-circuit has it.
-    if unsafe { list2fpos(args.ptr(0), out1, buf1, nul, false) }.is_err()
-        || unsafe { list2fpos(args.ptr(1), out2, buf2, nul, false) }.is_err()
+    if unsafe { list2fpos(&args[0], out1, buf1, nul, false) }.is_err()
+        || unsafe { list2fpos(&args[1], out2, buf2, nul, false) }.is_err()
         || fnum1 != fnum2
     {
         return None;
@@ -160,7 +159,8 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
 
     // 'selection' decides the default exclusivity; an option dict may
     // override it and may name the region type.
-    let opts = (args.ty(2) == VAR_DICT).then(|| args.get(2).dict_or_null());
+    let opts =
+        (args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)).then(|| args[2].dict_or_null());
     let exclusive_by_default = unsafe { *p_sel.get() } == b'e' as c_char;
     let (is_select_exclusive, spec) = match opts {
         Some(d) => (
@@ -352,14 +352,7 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
 /// per line.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _swap = BufferSwap::save();
     let Some(r) = resolve(args, result) else {
         return;
@@ -385,21 +378,14 @@ pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
 /// positions per line.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getregionpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _swap = BufferSwap::save();
     let Some(r) = resolve(args, result) else {
         return;
     };
     // Whether a position may sit one past the end of its line.
-    let allow_eol = args.ty(2) == VAR_DICT
-        && unsafe { tv_dict_get_bool(args.get(2).dict_or_null(), c"eol".as_ptr(), 0) } != 0;
+    let allow_eol = args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)
+        && unsafe { tv_dict_get_bool(args[2].dict_or_null(), c"eol".as_ptr(), 0) } != 0;
 
     for lnum in r.p1.lnum..=r.p2.lnum {
         let line = ml_get(lnum);

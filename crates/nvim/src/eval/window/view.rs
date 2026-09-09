@@ -17,13 +17,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
 /// never has.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getwinpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value, and the list it is given
     // stays alive for the two appends.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
@@ -32,34 +26,22 @@ pub unsafe fn f_getwinpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getwinposx()` — always -1; there is no GUI window.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getwinposx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getwinposx(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).write_number(-1) };
+    result.write_number(-1);
 }
 
 /// `getwinposy()` — always -1; there is no GUI window.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getwinposy(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getwinposy(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).write_number(-1) };
+    result.write_number(-1);
 }
 
 /// The window and the offset a `win_move_*()` call names, once the window has
 /// been checked for the two things neither of them can move: a float, which
 /// has no separators, and a window in another tab page, whose sizes are not
 /// the ones on screen.
-fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
+fn drag_target(args: &[TypVal]) -> Option<(Win, c_int)> {
     let wp = arg_win(args, 0)?;
     if wp.w_floating {
         return None;
@@ -72,14 +54,7 @@ fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_move_separator(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     let Some((wp, offset)) = drag_target(args) else {
         return;
@@ -89,14 +64,7 @@ pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr
 }
 
 /// `win_move_statusline({nr}, {offset})` — drag a status line.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     let Some((wp, offset)) = drag_target(args) else {
         return;
@@ -107,14 +75,7 @@ pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fpt
 
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
 /// a window that does not exist.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list stays
     // alive for the two appends because `result` owns it.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
@@ -129,10 +90,10 @@ pub unsafe fn f_win_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 ///
 /// # Safety
 /// `opts` must be a live typval holding a non-null Dictionary.
-unsafe fn splitmove_options(opts: *mut TypVal) -> (c_int, c_int) {
+unsafe fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
     // SAFETY: the caller's obligation; `tv_dict_find` hands back a live entry
     // of the same dictionary or NULL.
-    let d = unsafe { (*opts).dict_or_null() };
+    let d = (*opts).dict_or_null();
     let mut flags = 0;
     if unsafe { tv_dict_get_number(d, c"vertical".as_ptr()) } != 0 {
         flags |= WSP_VERT.cast_signed();
@@ -153,14 +114,7 @@ unsafe fn splitmove_options(opts: *mut TypVal) -> (c_int, c_int) {
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
@@ -177,11 +131,11 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         crate::semsg!("E957: Invalid window number");
         return;
     }
-    let (flags, size) = if args.has(2) {
-        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 2) }.is_err() {
+    let (flags, size) = if args.len() > 2 {
+        if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        unsafe { splitmove_options(args.ptr(2)) }
+        unsafe { splitmove_options(&args[2]) }
     } else {
         (0, 0)
     };
@@ -204,56 +158,30 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `wincol()` — the cursor's screen column within the window, one-based.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_wincol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_wincol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
-    unsafe { (*result).write_number(VarNumber::from(win.w_wcol + 1)) };
+    result.write_number(VarNumber::from(win.w_wcol + 1));
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_winline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
-    unsafe { (*result).write_number(VarNumber::from(win.w_wrow + 1)) };
+    result.write_number(VarNumber::from(win.w_wrow + 1));
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winheight(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_winheight(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height)));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_winwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width)));
@@ -264,13 +192,7 @@ pub unsafe fn f_winwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 ///
 /// The whole thing is emitted twice: setting one window's height changes its
 /// neighbours', so a single pass cannot land on the sizes it names.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winrestcmd(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curtab` is set, and `result` takes the text over at the end.
     let mut cmds = Vec::<u8>::new();
     let tp = TabPage::current();
@@ -287,25 +209,19 @@ pub unsafe fn f_winrestcmd(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
             }
         }
     }
-    unsafe { (*result).write_string(owned_cstr(cmds)) };
+    result.write_string(owned_cstr(cmds));
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.
 ///
 /// Every key is optional: what the dictionary does not mention keeps its
 /// current value.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and `curwin` is set.
-    if unsafe { tv_check_for_nonnull_dict_arg(args, 0) }.is_err() {
+    if tv_check_for_nonnull_dict_arg(args, 0).is_err() {
         return;
     }
-    let dict = unsafe { (*args).dict_or_null() };
+    let dict = args[0].dict_or_null();
     let mut win = Win::current();
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
@@ -373,17 +289,11 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 }
 
 /// `winsaveview()` — everything `winrestview()` puts back.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winsaveview(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `result` owns it.
     unsafe { tv_dict_alloc_ret(result) };
-    let dict = unsafe { (*result).dict_or_null() };
+    let dict = result.dict_or_null();
     let win = Win::current();
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.

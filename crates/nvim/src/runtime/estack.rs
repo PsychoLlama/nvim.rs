@@ -420,12 +420,7 @@ unsafe fn script_path(sctx: ScriptCtx) -> CString {
 }
 
 /// `getstacktrace()` function
-///
-/// # Safety
-///
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_getstacktrace(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getstacktrace(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the caller's return slot.
     unsafe { tv_list_set_ret(result, stacktrace_create()) };
 }

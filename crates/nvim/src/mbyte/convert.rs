@@ -199,27 +199,21 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_iconv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_iconv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(core::ptr::null_mut()) };
+    result.write_string(core::ptr::null_mut());
 
-    let str = unsafe { numbuf.string(args) };
+    let str = unsafe { numbuf.string(&args[0]) };
     let mut buf1 = [0 as c_char; NUMBUFLEN];
     let from = unsafe {
         enc_canonize(enc_skip(
-            tv_get_string_buf(args.add(1), buf1.as_mut_ptr()).cast_mut(),
+            tv_get_string_buf(&args[1], buf1.as_mut_ptr()).cast_mut(),
         ))
     };
     let mut buf2 = [0 as c_char; NUMBUFLEN];
     let to = unsafe {
         enc_canonize(enc_skip(
-            tv_get_string_buf(args.add(2), buf2.as_mut_ptr()).cast_mut(),
+            tv_get_string_buf(&args[2], buf2.as_mut_ptr()).cast_mut(),
         ))
     };
 

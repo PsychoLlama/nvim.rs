@@ -198,23 +198,6 @@ pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 /// items are real copies.
 pub(crate) const UNSET_ARG: ManuallyDrop<TypVal> = ManuallyDrop::new(TV_INITIAL_VALUE);
 
-/// The address of an argument frame's slots, as the `*mut TypVal` every call
-/// that reads one takes.
-///
-/// [`ManuallyDrop`] is `#[repr(transparent)]`, so this is the same address
-/// under a different name; what it is not is a promise that the callee may
-/// release what it finds. See [`UNSET_ARG`].
-pub(crate) trait ArgFrame {
-    /// The frame's first slot.
-    fn args(&mut self) -> *mut TypVal;
-}
-
-impl ArgFrame for [ManuallyDrop<TypVal>] {
-    #[inline(always)]
-    fn args(&mut self) -> *mut TypVal {
-        self.as_mut_ptr().cast()
-    }
-}
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());

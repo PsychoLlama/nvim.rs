@@ -4,10 +4,7 @@
 #![allow(unsafe_code)]
 
 use super::TV_TRANSLATE;
-use super::args::{Args, frame};
-use super::wrappers::{
-    arg_copy, arg_number_chk, arg_string, check_arg, dict_alloc_ret, list_alloc_ret,
-};
+use super::wrappers::{arg_copy, arg_number_chk, arg_string, dict_alloc_ret, list_alloc_ret};
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
@@ -45,49 +42,28 @@ use core::ptr;
 const NIL: TypVal = TV_INITIAL_VALUE;
 
 /// `copy({expr})` — one level deep.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_copy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    // SAFETY: `args.ptr(0)` and `result` are live typvals.
-    let _ = unsafe { var_item_copy(ptr::null(), args.ptr(0), result, false, 0) };
+pub fn f_copy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `&args[0]` and `result` are live typvals.
+    let _ = unsafe { var_item_copy(ptr::null(), &args[0], result, false, 0) };
 }
 
 /// `deepcopy({expr} [, {noref}])`.
 ///
 /// Without `noref` the copy is given a copy id, which is what lets it
 /// reproduce a self-referential structure rather than recursing forever.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_deepcopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_deepcopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments and `result` are live typvals.
-    if check_arg(args, 1, tv_check_for_opt_bool_arg).is_err() {
+    if tv_check_for_opt_bool_arg(args, 1).is_err() {
         return;
     }
-    let noref = args.has(1) && unsafe { tv_get_bool_chk(args.ptr(1), ptr::null_mut()) } != 0;
+    let noref = args.len() > 1 && unsafe { tv_get_bool_chk(&args[1], ptr::null_mut()) } != 0;
     let copy_id = if noref { 0 } else { get_copy_id() };
-    let _ = unsafe { var_item_copy(ptr::null(), args.ptr(0), result, true, copy_id) };
+    let _ = unsafe { var_item_copy(ptr::null(), &args[0], result, true, copy_id) };
 }
 
 /// `empty({expr})` — what "empty" means for each type.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    let tv = args.get(0);
+pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    let tv = &args[0];
     // SAFETY throughout: every read is guarded by the type tag that says
     // which union member is live. A String, List, Dict or Blob pointer may
     // still be null, which each reader treats as empty.
@@ -116,45 +92,31 @@ pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_flatten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_flatten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     flatten_common(args, result, false);
 }
 
 /// `flattennew({list} [, {maxdepth}])` — into a copy.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_flattennew(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_flattennew(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     flatten_common(args, result, true);
 }
 
 /// The shared body. `make_copy` is what separates `flattennew()` from
 /// `flatten()`: the copying form never checks the source for a lock,
 /// because it does not write to it.
-fn flatten_common(args: Args<'_>, result: &mut TypVal, make_copy: bool) {
+fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     // SAFETY throughout: the tag checked here says which union member is
     // live, and the List it names outlives the call.
-    if args.ty(0) != VAR_LIST {
+    if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         let arg0 = "flatten()";
         semsg!("E686: Argument of {arg0} must be a List");
         return;
     }
-    let maxdepth = if !args.has(1) {
+    let maxdepth = if args.len() <= 1 {
         999_999
     } else {
         let mut error = false;
-        let depth = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+        let depth = arg_number_chk(&args[1], Some(&mut error)) as c_int;
         if error {
             return;
         }
@@ -166,7 +128,7 @@ fn flatten_common(args: Args<'_>, result: &mut TypVal, make_copy: bool) {
         depth
     };
 
-    let mut list = args.get(0).list_or_null();
+    let mut list = args[0].list_or_null();
     result.write_list(list);
     if list.is_null() {
         return;
@@ -193,21 +155,14 @@ fn flatten_common(args: Args<'_>, result: &mut TypVal, make_copy: bool) {
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
 /// Funcref or Partial.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments and `result` are live typvals; each union read
     // is guarded by the type tag above it.
-    let found: *mut TypVal = match args.ty(0) {
+    let found: *mut TypVal = match args[0].v_type() {
         VAR_BLOB => get_from_blob(args, result),
         VAR_LIST => get_from_list(args),
         VAR_DICT => get_from_dict(args),
-        _ if args.get(0).is_func() => {
+        _ if args[0].is_func() => {
             if !get_from_func(args, result) {
                 return;
             }
@@ -223,22 +178,22 @@ pub unsafe fn f_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
     };
     if !found.is_null() {
         unsafe { tv_copy(found, result) };
-    } else if args.has(2) {
-        arg_copy(args.get(2), result);
+    } else if args.len() > 2 {
+        arg_copy(&args[2], result);
     }
 }
 
 /// `get()` over a Blob. The caller has checked the tag, which is what
 /// makes the union read below the right member.
-fn get_from_blob(args: Args<'_>, result: &mut TypVal) -> *mut TypVal {
+fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> *mut TypVal {
     // SAFETY throughout: the caller has checked the tag, so the union
     // holds the Blob the reads below name.
     let mut error = false;
-    let mut idx = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+    let mut idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
     if error {
         return ptr::null_mut();
     }
-    let blob = args.get(0).blob_or_null();
+    let blob = args[0].blob_or_null();
     result.write_empty(VAR_NUMBER);
     if idx < 0 {
         idx += unsafe { tv_blob_len(blob) };
@@ -255,14 +210,14 @@ fn get_from_blob(args: Args<'_>, result: &mut TypVal) -> *mut TypVal {
 }
 
 /// `get()` over a List. The caller has checked the tag.
-fn get_from_list(args: Args<'_>) -> *mut TypVal {
+fn get_from_list(args: &[TypVal]) -> *mut TypVal {
     // SAFETY: the caller's obligation.
-    let l = args.get(0).list_or_null();
+    let l = args[0].list_or_null();
     if l.is_null() {
         return ptr::null_mut();
     }
     let mut error = false;
-    let idx = arg_number_chk(args.get(1), Some(&mut error)) as c_int;
+    let idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
     let li = unsafe { tv_list_find(l, idx) };
     if error || li.is_null() {
         return ptr::null_mut();
@@ -271,14 +226,14 @@ fn get_from_list(args: Args<'_>) -> *mut TypVal {
 }
 
 /// `get()` over a Dictionary. The caller has checked the tag.
-fn get_from_dict(args: Args<'_>) -> *mut TypVal {
+fn get_from_dict(args: &[TypVal]) -> *mut TypVal {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation.
-    let d = args.get(0).dict_or_null();
+    let d = args[0].dict_or_null();
     if d.is_null() {
         return ptr::null_mut();
     }
-    let di = unsafe { tv_dict_find(d, arg_string(&mut numbuf, args.get(1)), -1) };
+    let di = unsafe { tv_dict_find(d, arg_string(&mut numbuf, &args[1]), -1) };
     if di.is_null() {
         return ptr::null_mut();
     }
@@ -288,7 +243,7 @@ fn get_from_dict(args: Args<'_>) -> *mut TypVal {
 /// Answer `get()` for a Funcref or Partial. Returns whether the caller
 /// should fall through to the default-argument handling, which only the
 /// "dict" selector does — and then only when the Partial had no dict.
-fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
+fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller has checked the tag. A plain Funcref is answered through
     // a stack Partial holding just its name, which lives as long as this
@@ -303,13 +258,13 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
         pt_argv: ptr::null_mut(),
         pt_dict: ptr::null_mut(),
     };
-    let pt = if args.ty(0) == VAR_PARTIAL {
-        args.get(0).partial_or_null()
+    let pt = if args.first().is_some_and(|arg| arg.v_type() == VAR_PARTIAL) {
+        args[0].partial_or_null()
     } else {
-        fref.pt_name = args.get(0).func_name_or_null();
+        fref.pt_name = args[0].func_name_or_null();
         &raw mut fref
     };
-    let what = arg_string(&mut numbuf, args.get(1));
+    let what = arg_string(&mut numbuf, &args[1]);
     match unsafe { CStr::from_ptr(what) }.to_bytes() {
         b"func" | b"name" => {
             let mut name: *const c_char = unsafe { partial_name(pt) };
@@ -392,17 +347,10 @@ unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_index(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_index(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
     // SAFETY throughout: the arguments are live typvals.
-    match args.ty(0) {
+    match args[0].v_type() {
         VAR_BLOB => index_blob(args, result),
         VAR_LIST => index_list(args, result),
         _ => {
@@ -412,18 +360,18 @@ pub unsafe fn f_index(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `index()` over a Blob. The caller has checked the tag.
-fn index_blob(args: Args<'_>, result: &mut TypVal) {
+fn index_blob(args: &[TypVal], result: &mut TypVal) {
     // SAFETY throughout: the caller has checked the tag, so the union
     // holds the Blob the reads below name.
     let mut start: c_int = 0;
-    if args.has(2) {
+    if args.len() > 2 {
         let mut error = false;
-        start = arg_number_chk(args.get(2), Some(&mut error)) as c_int;
+        start = arg_number_chk(&args[2], Some(&mut error)) as c_int;
         if error {
             return;
         }
     }
-    let b = args.get(0).blob_or_null();
+    let b = args[0].blob_or_null();
     if b.is_null() {
         return;
     }
@@ -436,7 +384,7 @@ fn index_blob(args: Args<'_>, result: &mut TypVal) {
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
-        if unsafe { tv_equal(&raw mut tv, args.ptr(1), false) } {
+        if unsafe { tv_equal(&raw mut tv, &args[1], false) } {
             result.write_number(idx as VarNumber);
             return;
         }
@@ -444,33 +392,33 @@ fn index_blob(args: Args<'_>, result: &mut TypVal) {
 }
 
 /// `index()` over a List. The caller has checked the tag.
-fn index_list(args: Args<'_>, result: &mut TypVal) {
+fn index_list(args: &[TypVal], result: &mut TypVal) {
     // SAFETY: the caller's obligation.
-    let l = args.get(0).list_or_null();
+    let l = args[0].list_or_null();
     if l.is_null() {
         return;
     }
     let mut idx: c_int = 0;
     let mut item = unsafe { tv_list_first(l) };
     let mut ic = false;
-    if args.has(2) {
+    if args.len() > 2 {
         let mut error = false;
-        idx = unsafe { tv_list_uidx(l, arg_number_chk(args.get(2), Some(&mut error)) as c_int) };
+        idx = unsafe { tv_list_uidx(l, arg_number_chk(&args[2], Some(&mut error)) as c_int) };
         if error || idx == -1 {
             item = ptr::null_mut();
         } else {
             item = unsafe { tv_list_find(l, idx) };
             debug_assert!(!item.is_null());
         }
-        if args.has(3) {
-            ic = arg_number_chk(args.get(3), Some(&mut error)) != 0;
+        if args.len() > 3 {
+            ic = arg_number_chk(&args[3], Some(&mut error)) != 0;
             if error {
                 item = ptr::null_mut();
             }
         }
     }
     while !item.is_null() {
-        if unsafe { tv_equal(&raw mut (*item).li_tv, args.ptr(1), ic) } {
+        if unsafe { tv_equal(&raw mut (*item).li_tv, &args[1], ic) } {
             result.write_number(idx as VarNumber);
             return;
         }
@@ -481,25 +429,18 @@ fn index_list(args: Args<'_>, result: &mut TypVal) {
 
 /// `indexof({object}, {expr} [, {opts}])` — the first index whose value
 /// satisfies `expr`, which sees the item as `v:key` and `v:val`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1);
     // SAFETY throughout: the arguments are live typvals; the two `v:` variables are
     // saved and put back around the search whatever it does.
-    if check_arg(args, 0, tv_check_for_list_or_blob_arg).is_err()
-        || check_arg(args, 1, tv_check_for_string_or_func_arg).is_err()
-        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
+    if tv_check_for_list_or_blob_arg(args, 0).is_err()
+        || tv_check_for_string_or_func_arg(args, 1).is_err()
+        || tv_check_for_opt_dict_arg(args, 2).is_err()
     {
         return;
     }
     // An empty expression matches nothing rather than everything.
-    let expr = args.get(1);
+    let expr = &args[1];
     let vacuous = match expr.v_type() {
         VAR_STRING => {
             expr.string_or_null().is_null() || unsafe { *expr.string_or_null() } == NUL as c_char
@@ -512,8 +453,8 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if vacuous {
         return;
     }
-    let startidx = if args.ty(2) == VAR_DICT {
-        unsafe { tv_dict_get_number_def(args.get(2).dict_or_null(), c"startidx".as_ptr(), 0) }
+    let startidx = if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
+        unsafe { tv_dict_get_number_def(args[2].dict_or_null(), c"startidx".as_ptr(), 0) }
     } else {
         0
     };
@@ -523,10 +464,10 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     unsafe { prepare_vimvar(Vv::Key, &raw mut save_key) };
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
-    result.write_number(if args.ty(0) == VAR_BLOB {
-        unsafe { indexof_blob(args.get(0).blob_or_null(), startidx, args.ptr(1)) }
+    result.write_number(if args[0].v_type() == VAR_BLOB {
+        unsafe { indexof_blob(args[0].blob_or_null(), startidx, &args[1]) }
     } else {
-        unsafe { indexof_list(args.get(0).list_or_null(), startidx, args.ptr(1)) }
+        unsafe { indexof_list(args[0].list_or_null(), startidx, &args[1]) }
     });
     unsafe { restore_vimvar(Vv::Key, &raw mut save_key) };
     unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
@@ -541,7 +482,7 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 ///
 /// # Safety
 /// `expr` is a live String or Funcref typval.
-unsafe fn indexof_matches(expr: *mut TypVal) -> bool {
+unsafe fn indexof_matches(expr: &TypVal) -> bool {
     // SAFETY throughout: the caller's obligation; `argv` and `newtv` are locals that
     // outlive the evaluation, and `newtv` is cleared before returning.
     // A frame borrowing the two `v:` slots for the length of the call.
@@ -562,7 +503,7 @@ unsafe fn indexof_matches(expr: *mut TypVal) -> bool {
 
 /// # Safety
 /// `b` is a Blob pointer or null and `expr` is a live predicate typval.
-unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: *mut TypVal) -> VarNumber {
+unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: &TypVal) -> VarNumber {
     if b.is_null() {
         return -1;
     }
@@ -591,7 +532,7 @@ unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: *mut TypVal) -> 
 
 /// # Safety
 /// `l` is a List pointer or null and `expr` is a live predicate typval.
-unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: *mut TypVal) -> VarNumber {
+unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarNumber {
     if l.is_null() {
         return -1;
     }
@@ -630,21 +571,14 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: *mut TypVal) -> 
 }
 
 /// `len({expr})` — bytes for a String or Number, items otherwise.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
-    let tv = args.get(0);
+    let tv = &args[0];
     // SAFETY throughout: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
     result.write_number(match tv.v_type() {
         VAR_STRING | VAR_NUMBER => {
-            let s = arg_string(&mut numbuf, args.get(0));
+            let s = arg_string(&mut numbuf, &args[0]);
             unsafe { cstr::bytes_at(s).len() as VarNumber }
         }
         VAR_BLOB => unsafe { tv_blob_len(tv.blob_or_null()) as VarNumber },
@@ -660,15 +594,8 @@ pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 }
 
 /// `type({expr})` — the `v:t_*` number for the value's type.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_type(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    let n: c_int = match args.ty(0) {
+pub fn f_type(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    let n: c_int = match args[0].v_type() {
         VAR_NUMBER => VAR_TYPE_NUMBER as c_int,
         VAR_STRING => VAR_TYPE_STRING as c_int,
         VAR_PARTIAL | VAR_FUNC => VAR_TYPE_FUNC as c_int,

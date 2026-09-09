@@ -15,7 +15,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::kvec::InitVec;
 use crate::memory::handoff::owned_cstr;
 use crate::types::builders::static_cstring;
-use crate::types::{NUL, VAR_DICT, VAR_UNKNOWN, kListLenUnknown};
+use crate::types::{NUL, VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -23,63 +23,21 @@ use core::ptr;
 /// Size of the scratch buffer `tv_get_string_buf` may answer with.
 const NUMBUFLEN: usize = 65;
 
-/// A Vimscript argument vector, whose caller has promised it is live and
-/// terminated by a `VAR_UNKNOWN` slot.
-///
-/// The whole convention is "read slot `n` only once every earlier slot held a
-/// value", which upstream spells as a staircase of `v_type != VAR_UNKNOWN`
-/// tests around the reads.  Finding the terminator once, at construction,
-/// turns the staircase into an `Option` and every argument read after it into
-/// ordinary checked code.
-pub(crate) struct Argv {
-    at: *mut TypVal,
-    len: usize,
-}
-
-impl Argv {
-    /// # Safety
-    /// `args` must be a live argument vector terminated by `VAR_UNKNOWN`.
-    pub(crate) unsafe fn new(args: *mut TypVal) -> Self {
-        // SAFETY: the caller's promise — the vector runs to a `VAR_UNKNOWN`,
-        // so the walk stops inside it.
-        let len = (0..)
-            .find(|&n| unsafe { (*args.add(n)).v_type() } == VAR_UNKNOWN)
-            .expect("a Vimscript argument vector is terminated");
-        Self { at: args, len }
-    }
-
-    /// Argument `n`, or `None` when the call did not give one.
-    pub(crate) fn get(&self, n: usize) -> Option<*mut TypVal> {
-        // SAFETY: `n` is below the terminator's index, so the slot is one the
-        // caller's vector holds.
-        (n < self.len).then(|| unsafe { self.at.add(n) })
-    }
-
-    /// Argument `n` as a number, or `None` when the call did not give one.
-    pub(crate) fn number(&self, n: usize) -> Option<VarNumber> {
-        // SAFETY: `get` answers a slot of the caller's live vector.
-        self.get(n).map(|at| unsafe { tv_get_number(at) })
-    }
-}
-
 /// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
 /// RHS.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-pub unsafe fn f_hasmapto(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector, and `numbuf` outlives the string it lends back.
-    let (argv, name) = unsafe { (Argv::new(args), numbuf.string(args)) };
-    let mode = match argv.get(1) {
-        // SAFETY: a slot the vector holds, and `buf` is the scratch
-        // `tv_get_string_buf` may answer with.
-        Some(at) => unsafe { tv_get_string_buf(at, buf.as_mut_ptr()) },
+    let name = unsafe { numbuf.string(&args[0]) };
+    let mode = match args.get(1) {
+        // SAFETY: `buf` is the scratch `tv_get_string_buf` may answer with.
+        Some(tv) => unsafe { tv_get_string_buf(tv, buf.as_mut_ptr()) },
         None => c"nvo".as_ptr(),
     };
-    let abbr = argv.number(2).is_some_and(|n| n != 0);
+    let number = |n: usize| args.get(n).map(|tv| unsafe { tv_get_number(tv) });
+    let abbr = number(2).is_some_and(|n| n != 0);
     // SAFETY: both strings are NUL-terminated, and `result` is the caller's
     // writable answer slot.
     unsafe {
@@ -231,7 +189,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
 ///
 /// # Safety
 /// The Vimscript call convention: `args` is a live argument vector.
-unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
+unsafe fn get_maparg(args: &[TypVal], result: *mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };
@@ -240,21 +198,20 @@ unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
 
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector whose first entry is the keys, NUL-terminated.
-    let keys = unsafe { numbuf.string(args) }.cast_mut();
+    let keys = unsafe { numbuf.string(&args[0]) }.cast_mut();
     // SAFETY: as above.
     if unsafe { c_int::from(*keys) } == NUL {
         return;
     }
 
     let mut buf = [0 as c_char; NUMBUFLEN];
-    // SAFETY: as above — a live argument vector.
-    let argv = unsafe { Argv::new(args) };
-    let abbr = argv.number(2).is_some_and(|n| n != 0);
-    let get_dict = argv.number(3).is_some_and(|n| n != 0);
-    let mut which: *mut c_char = match argv.get(1) {
-        // SAFETY: a slot the vector holds, and `buf` is
-        // `tv_get_string_buf_chk`'s scratch.
-        Some(at) => unsafe { tv_get_string_buf_chk(at, buf.as_mut_ptr()) }.cast_mut(),
+    // SAFETY: as above.
+    let number = |n: usize| args.get(n).map(|tv| unsafe { tv_get_number(tv) });
+    let abbr = number(2).is_some_and(|n| n != 0);
+    let get_dict = number(3).is_some_and(|n| n != 0);
+    let mut which: *mut c_char = match args.get(1) {
+        // SAFETY: `buf` is `tv_get_string_buf_chk`'s scratch.
+        Some(tv) => unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) }.cast_mut(),
         None => c"".as_ptr().cast_mut(),
     };
     if which.is_null() {
@@ -342,18 +299,15 @@ unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
 }
 
 /// `maplist()`: every mapping, global then buffer-local, as a list of dicts.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let cpo = p_cpo.get();
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector and `result` the writable answer slot.
-    let abbr = unsafe { Argv::new(args) }
-        .get(0)
-        // SAFETY: a slot the vector holds.
-        .is_some_and(|at| unsafe { tv_get_bool(at) } != 0);
+    // SAFETY: an argument is a live value.
+    let abbr = args
+        .first()
+        .is_some_and(|tv| unsafe { tv_get_bool(tv) } != 0);
     // SAFETY: as above.
     unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
     let cur = Buf::current();
@@ -403,20 +357,14 @@ pub unsafe fn f_maplist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `maparg()`.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-pub unsafe fn f_maparg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_maparg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): the Vimscript call convention, passed straight
     // through.
     unsafe { get_maparg(args, result, true) }
 }
 
 /// `mapcheck()`.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-pub unsafe fn f_mapcheck(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_mapcheck(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_maparg`].
     unsafe { get_maparg(args, result, false) }
 }

@@ -222,7 +222,7 @@ pub unsafe fn tv_blob_set_range(
     dest: *mut Blob,
     n1: VarNumber,
     n2: VarNumber,
-    src: *mut TypVal,
+    src: *const TypVal,
 ) -> Result<(), Failed> {
     if n2 - n1 + 1 != VarNumber::from(unsafe { tv_blob_len((*src).blob_or_null()) }) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
@@ -271,18 +271,18 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 /// `arg_errmsg` must point at the NUL-terminated message to raise when the
 /// blob is locked.
 pub unsafe fn tv_blob_remove(
-    args: *mut TypVal,
+    args: &[TypVal],
     result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
-    let b = unsafe { (*args).blob_or_null() };
+    let b = args[0].blob_or_null();
     if !b.is_null() && unsafe { value_check_lock((*b).bv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
     {
         return;
     }
 
     let mut error = false;
-    let mut idx = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
+    let mut idx = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
     if error {
         return;
     }
@@ -300,7 +300,7 @@ pub unsafe fn tv_blob_remove(
     // cannot be, so this is the caller's live blob.
     let mut blob = unsafe { Bl::new(b) };
 
-    if unsafe { (*args.add(2)).v_type() } == VAR_UNKNOWN {
+    if args.len() <= 2 {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
         unsafe { (*result).write_number(VarNumber::from(*p.offset(idx as isize))) };
@@ -313,7 +313,7 @@ pub unsafe fn tv_blob_remove(
     }
 
     // Remove range of items, return blob with values.
-    let mut end = unsafe { tv_get_number_chk(args.add(2), &raw mut error) };
+    let mut end = unsafe { tv_get_number_chk(&args[2], &raw mut error) };
     if error {
         return;
     }
@@ -350,19 +350,13 @@ pub unsafe fn tv_blob_remove(
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_blob2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
-    if unsafe { tv_check_for_blob_arg(args, 0) }.is_err() {
+    if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }
-    let blob = unsafe { (*args).blob_or_null() };
-    let l = unsafe { (*result).list_or_null() };
+    let blob = args[0].blob_or_null();
+    let l = result.list_or_null();
     for i in 0..unsafe { tv_blob_len(blob) } {
         unsafe { tv_list_append_number(l, VarNumber::from(tv_blob_get(blob, i))) };
     }
@@ -371,18 +365,12 @@ pub unsafe fn f_blob2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// `list2blob()`: a list of byte numbers as a blob.
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_list2blob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let blob = unsafe { tv_blob_alloc_ret(result) };
-    if unsafe { tv_check_for_list_arg(args, 0) }.is_err() {
+    if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
-    let l = unsafe { (*args).list_or_null() };
+    let l = args[0].list_or_null();
     if l.is_null() {
         return;
     }

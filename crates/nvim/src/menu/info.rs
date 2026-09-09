@@ -32,7 +32,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::message::e_invarg;
-use crate::types::{Dict, EvalFuncData, ExArg, TypVal, VAR_UNKNOWN};
+use crate::types::{Dict, EvalFuncData, ExArg, TypVal};
 
 /// One `:menutranslate from to` entry.
 struct Translation {
@@ -236,16 +236,13 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict)
 
 /// `menu_info({name} [, {mode}])`: everything known about a menu, its child
 /// menus included.
-///
-/// # Safety
-/// The eval layer must pass live argument and return typvals.
-pub(crate) unsafe fn f_menu_info(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
         tv_dict_alloc_ret(result);
-        ((*result).dict_or_null(), numbuf.string_chk(args))
+        ((*result).dict_or_null(), numbuf.string_chk(&args[0]))
     };
     if menu_name.is_null() {
         // Before the second argument is looked at: `tv_get_string_chk`
@@ -254,14 +251,10 @@ pub(crate) unsafe fn f_menu_info(args: *mut TypVal, result: *mut TypVal, _fptr: 
         return;
     }
     // SAFETY: the caller's obligation; the second argument if there is one.
-    let which = unsafe {
-        let second = args.add(1);
-        if (*second).v_type() != VAR_UNKNOWN {
-            numbuf2.string_chk(second)
-        } else {
-            // The default is the modes of plain ":menu".
-            c"".as_ptr()
-        }
+    let which = match args.get(1) {
+        Some(second) => unsafe { numbuf2.string_chk(second) },
+        // The default is the modes of plain ":menu".
+        None => c"".as_ptr(),
     };
     if which.is_null() {
         return;

@@ -97,12 +97,8 @@ static e_argument_of_str_must_be_list_string_dictionary_or_blob: &CStr =
 pub(crate) const UNKNOWN_TV: TypVal = TV_INITIAL_VALUE;
 
 // ---------------------------------------------------------------------
-// The argument vector, and a value held as a pointer
+// A value held as a pointer
 // ---------------------------------------------------------------------
-
-/// A builtin's argument vector is the tree's own [`Args`], shared with every
-/// other `f_*` family, and [`frame`] is how a builtin opens onto it.
-pub(crate) use crate::eval::funcs::args::{Args, frame};
 
 // TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
 // left 0, which is a valid pointer-sentinel value and would corrupt any
@@ -234,8 +230,9 @@ impl ListRef {
 
     /// Append a copy of `tv`.
     #[inline(always)]
-    pub(crate) fn append_tv(self, tv: &mut TypVal) {
+    pub(crate) fn append_tv(self, tv: &TypVal) {
         // SAFETY: live or NULL, and `tv` is a live value.
+        let tv = core::ptr::from_ref(tv).cast_mut();
         unsafe { tv_list_append_tv(self.0, tv) };
     }
 
@@ -248,9 +245,10 @@ impl ListRef {
 
     /// Insert a copy of `tv` before `before`, or at the end when it is None.
     #[inline(always)]
-    pub(crate) fn insert_tv(self, tv: &mut TypVal, before: Option<Item>) {
+    pub(crate) fn insert_tv(self, tv: &TypVal, before: Option<Item>) {
         // SAFETY: live, `tv` is a live value, and `before` is an item of this
         // very list -- `find` is the only thing that produces one.
+        let tv = core::ptr::from_ref(tv).cast_mut();
         unsafe { tv_list_insert_tv(self.0, tv, Item::raw(before)) };
     }
 
@@ -348,8 +346,8 @@ impl Item {
 
     /// Whether the item's value equals `needle`, `ic` ignoring case.
     #[inline(always)]
-    pub(crate) fn equals(self, needle: &mut TypVal, ic: bool) -> bool {
-        equal(&mut self.get().li_tv, needle, ic)
+    pub(crate) fn equals(self, needle: &TypVal, ic: bool) -> bool {
+        equal(&self.get().li_tv, needle, ic)
     }
 }
 
@@ -533,8 +531,8 @@ impl DictItemRef {
 
     /// Whether the value equals `needle`, `ic` ignoring case.
     #[inline(always)]
-    pub(crate) fn equals(self, needle: &mut TypVal, ic: bool) -> bool {
-        equal(&mut self.get().di_tv, needle, ic)
+    pub(crate) fn equals(self, needle: &TypVal, ic: bool) -> bool {
+        equal(&self.get().di_tv, needle, ic)
     }
 }
 
@@ -678,7 +676,7 @@ pub(crate) fn clear_tv(tv: &mut TypVal) {
 
 /// `tv` as a Number, setting `error` (and reporting one) if it is not.
 #[inline(always)]
-pub(crate) fn number_of(tv: &mut TypVal, error: &mut bool) -> VarNumber {
+pub(crate) fn number_of(tv: &TypVal, error: &mut bool) -> VarNumber {
     // SAFETY: a live typval.
     unsafe { tv_get_number_chk(tv, error) }
 }
@@ -698,7 +696,7 @@ pub(crate) fn number_arm(tv: &TypVal) -> VarNumber {
 
 /// Whether `a` and `b` are equal, `ic` ignoring case in strings.
 #[inline(always)]
-fn equal(a: &mut TypVal, b: &mut TypVal, ic: bool) -> bool {
+fn equal(a: &TypVal, b: &TypVal, ic: bool) -> bool {
     // SAFETY: two live typvals; `tv_equal` only reads them.
     unsafe { tv_equal(a, b, ic) }
 }
@@ -720,7 +718,7 @@ pub(crate) fn string_bytes<'a>(tv: &TypVal) -> &'a [u8] {
 /// spelled into; the answer borrows `buf` or the value, whichever it came
 /// from, and lives no longer than either.
 #[inline(always)]
-pub(crate) fn cstr_of<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> &'a CStr {
+pub(crate) fn cstr_of<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> &'a CStr {
     // SAFETY: the scratch is the promised length and the answer is
     // NUL-terminated, never NULL.
     unsafe { CStr::from_ptr(tv_get_string_buf(tv, buf.as_mut_ptr())) }
@@ -730,7 +728,7 @@ pub(crate) fn cstr_of<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> &'a CStr {
 /// for a type that has no string form. As [`cstr_of`], the caller lends the
 /// scratch a Number is spelled into.
 #[inline(always)]
-pub(crate) fn cstr_of_chk<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
+pub(crate) fn cstr_of_chk<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
     // SAFETY: as `cstr_of`; the answer may also be NULL.
     unsafe { cstr::at_opt(tv_get_string_buf_chk(tv, buf.as_mut_ptr())) }
 }
@@ -871,7 +869,7 @@ pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
 /// container being walked.
 #[inline(always)]
 pub(crate) fn eval_expr(
-    expr: &mut TypVal,
+    expr: &TypVal,
     argv: &mut [ManuallyDrop<TypVal>; 3],
     newtv: &mut TypVal,
 ) -> bool {
@@ -913,20 +911,14 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 ///
 /// Each container type has its own `tv_*_remove` in `typval.rs`, which is
 /// where the index arithmetic and the `end` argument live.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
-/// a cleared result.
-pub unsafe fn f_remove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument".as_ptr();
-    // SAFETY: the caller's contract.
-    let mut args = unsafe { Args::new(args) };
-    match Container::of(args.get_mut(0)) {
+    match Container::of(&args[0]) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
-        Container::Dict(_) => unsafe { tv_dict_remove(args.ptr(0), result, arg_errmsg) },
-        Container::Blob(_) => unsafe { tv_blob_remove(args.ptr(0), result, arg_errmsg) },
-        Container::List(_) => unsafe { tv_list_remove(args.ptr(0), result, arg_errmsg) },
+        Container::Dict(_) => unsafe { tv_dict_remove(args, result, arg_errmsg) },
+        Container::Blob(_) => unsafe { tv_blob_remove(args, result, arg_errmsg) },
+        Container::List(_) => unsafe { tv_list_remove(args, result, arg_errmsg) },
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }
@@ -935,18 +927,13 @@ pub unsafe fn f_remove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 ///
 /// The List and the Blob are reversed in place; the String is rebuilt,
 /// character by character, by `reverse_text`.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1, and `result` a
-/// cleared result.
-pub unsafe fn f_reverse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_reverse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract; the check reports E1252 for a type
     // that cannot be reversed.
-    if unsafe { tv_check_for_string_or_list_or_blob_arg(args, 0) }.is_err() {
+    if tv_check_for_string_or_list_or_blob_arg(args, 0).is_err() {
         return;
     }
-    let (mut args, result) = frame!(args, result);
-    match Container::of(args.get_mut(0)) {
+    match Container::of(&args[0]) {
         Container::Blob(b) => {
             let len = b.len();
             for i in 0..len / 2 {

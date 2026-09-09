@@ -24,7 +24,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{Owned, at, err, frame, from, is_sep, str_arg, str_arg_chk};
+use super::{Owned, at, err, from, is_sep, str_arg, str_arg_chk};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_reg_pat;
@@ -160,13 +160,8 @@ fn simplify(s: *mut c_char) {
 // ---------------------------------------------------------------------
 
 /// `glob2regpat({pattern})`: the wildcard pattern as a regular expression.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 1, and `result` a
-/// cleared result.
-pub unsafe fn f_glob2regpat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_glob2regpat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let pat = str_arg_chk(args, 0, &mut numbuf);
     result.write_string(pat.map_or(ptr::null_mut(), |pat| {
         // SAFETY: `pat` is NUL-terminated, which is what a NULL end
@@ -176,12 +171,8 @@ pub unsafe fn f_glob2regpat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `isabsolutepath({path})`: whether the path starts at the root.
-///
-/// # Safety
-/// As [`f_glob2regpat`].
-pub unsafe fn f_isabsolutepath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_isabsolutepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(path_is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber);
 }
 
@@ -190,16 +181,12 @@ pub unsafe fn f_isabsolutepath(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 ///
 /// The length is coerced first, as upstream does, so a bad second argument
 /// reports before a bad first one does.
-///
-/// # Safety
-/// As [`f_glob2regpat`], arity 1..2.
-pub unsafe fn f_pathshorten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
-    let trim_len = if args.has(1) {
+    let trim_len = if args.len() > 1 {
         // SAFETY: a live typval; `tv_get_number` reports its own error and
         // reads as 0 for a type that has no number form.
-        (unsafe { tv_get_number(args.ptr(1)) } as c_int).max(1)
+        (unsafe { tv_get_number(&args[1]) } as c_int).max(1)
     } else {
         1
     };
@@ -217,24 +204,16 @@ pub unsafe fn f_pathshorten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `simplify({path})`: `.`, `..` and duplicate separators collapsed, without
 /// asking the filesystem anything.
-///
-/// # Safety
-/// As [`f_glob2regpat`].
-pub unsafe fn f_simplify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_simplify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
     simplify(simplified);
     result.write_string(simplified);
 }
 
 /// `resolve({path})`: the symlink chain followed to its end.
-///
-/// # Safety
-/// As [`f_glob2regpat`].
-pub unsafe fn f_resolve(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_resolve(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_string(ptr::null_mut());
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         let raw = resolved.into_raw();

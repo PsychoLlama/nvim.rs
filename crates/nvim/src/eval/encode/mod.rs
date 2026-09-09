@@ -806,9 +806,10 @@ unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
 ///
 /// # Safety
 /// `tv` must be live; `len` must be NULL or writable.
-pub unsafe fn encode_tv2string(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2string(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`; `string()` never refuses.
+    let tv = tv.cast_mut();
     let evs_ret =
         unsafe { encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument".as_ptr()) };
     debug_assert!(evs_ret);
@@ -821,13 +822,14 @@ pub unsafe fn encode_tv2string(tv: *mut TypVal, len: *mut size_t) -> *mut c_char
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2echo(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2echo(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
     // A string or function reference echoes as its own bytes, which is
     // the whole difference between `:echo` and `string()` at the top
     // level; below it, the sink says it again.
     // SAFETY: the caller's promise: a live typval.
+    let tv = tv.cast_mut();
     let val = unsafe { Tv::new(tv) };
     if val.v_type() == VAR_STRING || val.v_type() == VAR_FUNC {
         let s = val.string_or_func_name();
@@ -845,9 +847,10 @@ pub unsafe fn encode_tv2echo(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2json(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2json(tv: *const TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
+    let tv = tv.cast_mut();
     let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument".as_ptr()) };
     if !evj_ret {
         ga.clear();

@@ -4,8 +4,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::args::{Args, frame};
-use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, check_arg, list_alloc_ret};
+use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
 use super::{
     NSUBEXP, SomeMatchType, kSomeMatch, kSomeMatchEnd, kSomeMatchList, kSomeMatchStr,
     kSomeMatchStrPos, tv_get_buf,
@@ -39,7 +38,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfre
 use crate::semsg;
 use crate::types::{
     Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
-    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, kListLenMayKnow,
+    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow,
     kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -121,7 +120,7 @@ impl Drop for Echoed {
 ///
 /// # Safety
 /// `args` is the call frame and `result` its cleared return value.
-unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchType) {
+unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. Every pointer below either points
     // into an argument (which outlives the call), into `patbuf`, or into
@@ -164,27 +163,27 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
     // trailing fixup, so the body is one labelled block as the C's
     // `goto theend` was.
     'theend: {
-        if args.ty(0) == VAR_LIST {
-            l = args.get(0).list_or_null();
+        if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
+            l = args[0].list_or_null();
             if l.is_null() {
                 break 'theend;
             }
             li = unsafe { tv_list_first(l) };
         } else {
-            str = arg_string(&mut numbuf, args.get(0)) as *mut c_char;
+            str = arg_string(&mut numbuf, &args[0]) as *mut c_char;
             expr = str;
             len = unsafe { cstr::bytes_at(str) }.len() as i64;
         }
 
         let mut patbuf = NumBuf::new();
-        let pat = arg_string_chk(&mut patbuf, args.get(1));
+        let pat = arg_string_chk(&mut patbuf, &args[1]);
         if pat.is_null() {
             break 'theend;
         }
 
-        if args.has(2) {
+        if args.len() > 2 {
             let mut error = false;
-            start = arg_number_chk(args.get(2), Some(&mut error)) as i64;
+            start = arg_number_chk(&args[2], Some(&mut error)) as i64;
             if error {
                 break 'theend;
             }
@@ -205,15 +204,15 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
                 // told about, so that `^` still anchors to the real
                 // start of the string; without one the string itself
                 // moves forward.
-                if args.has(3) {
+                if args.len() > 3 {
                     startcol = start as ColNr;
                 } else {
                     str = unsafe { str.offset(start as isize) };
                     len -= start;
                 }
             }
-            if args.has(3) {
-                nth = arg_number_chk(args.get(3), Some(&mut error)) as i64;
+            if args.len() > 3 {
+                nth = arg_number_chk(&args[3], Some(&mut error)) as i64;
             }
             if error {
                 break 'theend;
@@ -402,34 +401,27 @@ unsafe fn get_matches_in_str(
 }
 
 /// `matchbufline({buf}, {pat}, {lnum}, {end} [, {dict}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
     result.write_number(-1);
     list_alloc_ret(result, kListLenUnknown as isize);
     let retlist = result.list_or_null();
-    if check_arg(args, 0, tv_check_for_buffer_arg).is_err()
-        || check_arg(args, 1, tv_check_for_string_arg).is_err()
-        || check_arg(args, 2, tv_check_for_lnum_arg).is_err()
-        || check_arg(args, 3, tv_check_for_lnum_arg).is_err()
-        || check_arg(args, 4, tv_check_for_opt_dict_arg).is_err()
+    if tv_check_for_buffer_arg(args, 0).is_err()
+        || tv_check_for_string_arg(args, 1).is_err()
+        || tv_check_for_lnum_arg(args, 2).is_err()
+        || tv_check_for_lnum_arg(args, 3).is_err()
+        || tv_check_for_opt_dict_arg(args, 4).is_err()
     {
         return;
     }
     let prev_did_emsg = did_emsg.get();
-    let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf = unsafe { tv_get_buf(&args[0], 0) };
     let Some(buf) = buf else {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
-            let what = arg_string(&mut numbuf, args.get(0));
+            let what = arg_string(&mut numbuf, &args[0]);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
             semsg!("E158: Invalid buffer name: {what}");
@@ -441,10 +433,10 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         return;
     }
     let mut patbuf = NumBuf::new();
-    let pat = arg_string(&mut patbuf, args.get(1));
+    let pat = arg_string(&mut patbuf, &args[1]);
 
     let did_emsg_before = did_emsg.get();
-    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), Some(buf)) };
+    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(&args[2], Some(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -453,7 +445,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), Some(buf)) };
+    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(&args[3], Some(buf)) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -485,11 +477,11 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// `args` is the call frame.
-unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
-    if !args.has(i) {
+unsafe fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
+    if args.len() <= i {
         return Some(false);
     }
-    let d = args.get(i).dict_or_null();
+    let d = args[i].dict_or_null();
     if d.is_null() {
         return Some(false);
     }
@@ -506,95 +498,53 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_match(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_match(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatch) }
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchend(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_matchend(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchEnd) }
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchlist(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_matchlist(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchList) }
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchstr(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_matchstr(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchStr) }
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchstrpos(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_matchstrpos(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchStrPos) }
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_matchstrlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the List and its items outlive the call.
     result.write_number(-1);
     list_alloc_ret(result, kListLenUnknown as isize);
     let retlist = result.list_or_null();
-    if check_arg(args, 0, tv_check_for_list_arg).is_err()
-        || check_arg(args, 1, tv_check_for_string_arg).is_err()
-        || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
+    if tv_check_for_list_arg(args, 0).is_err()
+        || tv_check_for_string_arg(args, 1).is_err()
+        || tv_check_for_opt_dict_arg(args, 2).is_err()
     {
         return;
     }
-    let l = args.get(0).list_or_null();
+    let l = args[0].list_or_null();
     if l.is_null() {
         return;
     }
     let mut patbuf = NumBuf::new();
-    let pat = arg_string_chk(&mut patbuf, args.get(1));
+    let pat = arg_string_chk(&mut patbuf, &args[1]);
     if pat.is_null() {
         return;
     }
@@ -817,12 +767,12 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
 ///
 /// `args` must point at an initialized typval. `result` must point at the
 /// caller's return slot: an initialized typval it owns and will clear.
-unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: bool) {
+unsafe fn do_fuzzymatch(args: &[TypVal], result: *mut TypVal, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    let list = unsafe { &*args };
+    let list = &args[0];
     if list.v_type() != VAR_LIST || list.list_or_null().is_null() {
         let who = if retmatchpos {
             c"matchfuzzypos()".as_ptr()
@@ -834,7 +784,7 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
         semsg!("E686: Argument of {who} must be a List");
         return;
     }
-    let pat = unsafe { &*args.add(1) };
+    let pat = &args[1];
     if pat.v_type() != VAR_STRING || pat.string_or_null().is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe { c_str(numbuf.string(pat)) };
@@ -848,11 +798,11 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
     let mut key = ptr::null();
     let mut matchseq = false;
     let mut limit = 0;
-    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(args, 2) }.is_err() {
+    if args.len() > 2 {
+        if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        let d: *mut Dict = unsafe { (*args.add(2)).dict_or_null() };
+        let d: *mut Dict = args[2].dict_or_null();
         let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type() } != VAR_STRING
@@ -912,18 +862,12 @@ unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: b
 }
 
 /// `matchfuzzy()`: the items of a list that fuzzy match a pattern.
-///
-/// # Safety
-/// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_matchfuzzy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_fuzzymatch(args, result, false) }
 }
 
 /// `matchfuzzypos()`: as [`f_matchfuzzy`], plus where each match landed and
 /// what it scored.
-///
-/// # Safety
-/// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzypos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_matchfuzzypos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_fuzzymatch(args, result, true) }
 }

@@ -88,19 +88,12 @@ unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
 }
 
 /// `gettabinfo([{tabnr}])` — every tab page, or just the one named.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_gettabinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     // The length hint is upstream's, and is the way round it looks: one entry
     // is expected when *no* tab page was named.
-    let one = args.has(0);
+    let one = !args.is_empty();
     let hint = if one { kListLenMayKnow as ptrdiff_t } else { 1 };
     let list = unsafe { tv_list_alloc_ret(result, hint) };
     let wanted = if one {
@@ -131,18 +124,11 @@ pub unsafe fn f_gettabinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// place this function knowingly differs: past 32,767 tab pages upstream's
 /// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
 /// that takes 33,000 `:tabnew`s, so no test can see either answer.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getwininfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
-    let wanted = if args.has(0) {
+    let wanted = if !args.is_empty() {
         match win_by_id(number_as_int(arg_number(args, 0))) {
             Some(wp) => Some(wp),
             None => return,
@@ -216,18 +202,11 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
 }
 
 /// `winlayout([{tabnr}])` — the tab page's window layout tree.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_winlayout(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
-    let tp = if !args.has(0) {
+    let tp = if args.is_empty() {
         TabPage::current()
     } else {
         let n = number_as_int(arg_number(args, 0));
@@ -240,17 +219,10 @@ pub unsafe fn f_winlayout(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the arguments are live typvals and `curwin` is set.
-    let wp = if !args.has(0) {
+    let wp = if args.is_empty() {
         Win::current()
     } else {
         match arg_win(args, 0) {
@@ -283,17 +255,11 @@ pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `getcmdwintype()` — the one-character type of the command-line window, or
 /// the empty string when it is not open.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getcmdwintype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getcmdwintype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; `xmallocz(1)` hands back
     // two writable bytes, the second already NUL.
-    unsafe { (*result).write_empty(VAR_STRING) };
+    result.write_empty(VAR_STRING);
     let s = unsafe { xmallocz(1) }.cast::<c_char>();
     unsafe { *s = cmdwin_type.get().to_le_bytes()[0].cast_signed() };
-    unsafe { (*result).write_string(s) };
+    result.write_string(s);
 }

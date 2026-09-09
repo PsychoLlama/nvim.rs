@@ -648,7 +648,7 @@ pub unsafe fn set_ref_in_item(
 /// `from` and `to` must be valid; `conv` null or valid.
 pub unsafe fn var_item_copy(
     conv: *const VimConv,
-    from: *mut TypVal,
+    from: *const TypVal,
     to: *mut TypVal,
     deep: bool,
     copy_id: c_int,
@@ -665,7 +665,7 @@ pub unsafe fn var_item_copy(
     // SAFETY: the caller's promise -- both typvals outlive the call. Every
     // union member read below is the one `src.v_type()` names, and the
     // matching member of `dst` is written before it is read.
-    let (src, mut dst) = unsafe { (Tv::new(from), Tv::new(to)) };
+    let (src, mut dst) = unsafe { (Tv::new(from.cast_mut()), Tv::new(to)) };
     let mut ret = Ok(());
     match src.v_type() {
         VAR_STRING => {

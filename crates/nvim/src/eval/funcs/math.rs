@@ -4,7 +4,6 @@
 #![allow(unsafe_code)]
 
 use super::VARNUMBER_MAX;
-use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
@@ -22,20 +21,13 @@ use core::ptr;
 /// `abs({expr})` — magnitude, as a Float for a Float and as a Number
 /// otherwise. A value that is not coercible to a number reports through
 /// `tv_get_number_chk` and yields -1, as upstream does.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_abs(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    if args.ty(0) == VAR_FLOAT {
-        result.write_float(args.get(0).float_or_zero().abs());
+pub fn f_abs(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    if args[0].v_type() == VAR_FLOAT {
+        result.write_float(args[0].float_or_zero().abs());
         return;
     }
     let mut error = false;
-    let n = arg_number_chk(args.get(0), Some(&mut error));
+    let n = arg_number_chk(&args[0], Some(&mut error));
     result.write_number(if error {
         -1
     } else if n > 0 {
@@ -50,91 +42,47 @@ pub unsafe fn f_abs(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 /// The bitwise operators. Each coerces both arguments with a null error
 /// pointer, so a non-coercible argument reports its own message and
 /// contributes zero.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_and(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_and(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(number(args, 0) & number(args, 1));
 }
 
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_or(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_or(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(number(args, 0) | number(args, 1));
 }
 
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_xor(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_xor(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(number(args, 0) ^ number(args, 1));
 }
 
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_invert(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_invert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(!number(args, 0));
 }
 
 /// Argument `i` as a Number, reporting its own error and reading as 0 when
 /// it cannot be coerced. The bitwise builtins' shared coercion.
-fn number(args: Args<'_>, i: usize) -> VarNumber {
-    arg_number_chk(args.get(i), None)
+fn number(args: &[TypVal], i: usize) -> VarNumber {
+    arg_number_chk(&args[i], None)
 }
 
 /// The two-argument float builtins. Both arguments are read left to right
 /// and the second is only read once the first succeeded, so a pair of bad
 /// arguments reports E808 once.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_atan2(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_atan2(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     float2(args, result, |x, y| x.atan2(y));
 }
 
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_fmod(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_fmod(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Rust's `%` on floats is C's `fmod`.
     float2(args, result, |x, y| x % y);
 }
 
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_pow(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_pow(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     float2(args, result, c_double::powf);
 }
 
 /// Apply `op` to the first two arguments coerced to Float, or return 0.0
 /// having reported E808.
-fn float2(args: Args<'_>, result: &mut TypVal, op: impl FnOnce(c_double, c_double) -> c_double) {
+fn float2(args: &[TypVal], result: &mut TypVal, op: impl FnOnce(c_double, c_double) -> c_double) {
     result.write_float(match (float_arg(args, 0), float_arg(args, 1)) {
         (Some(x), Some(y)) => op(x, y),
         _ => 0.0,
@@ -207,22 +155,15 @@ pub fn trunc(x: Float) -> Float {
 
 /// Argument `i` coerced to Float, reporting E808 if it is neither a Float
 /// nor a Number.
-fn float_arg(args: Args<'_>, i: usize) -> Option<Float> {
+fn float_arg(args: &[TypVal], i: usize) -> Option<Float> {
     let mut f: Float = 0.0;
-    // SAFETY: `args.ptr(i)` is a live typval and `f` is a live local.
-    unsafe { tv_get_float_chk(args.ptr(i), &raw mut f) }.then_some(f)
+    // SAFETY: `&args[i]` is a live typval and `f` is a live local.
+    unsafe { tv_get_float_chk(&args[i], &raw mut f) }.then_some(f)
 }
 
 /// `float2nr({expr})` — truncation towards zero, saturating at the Number
 /// range rather than invoking the undefined behaviour C's cast would.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_float2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_float2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(f) = float_arg(args, 0) else {
         return;
     };
@@ -239,15 +180,8 @@ pub unsafe fn f_float2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
 /// `isinf({expr})` — 1, -1, or (for anything that is not an infinite Float)
 /// the return value left as it was, which is 0.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_isinf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    if let Some(f) = args.get(0).as_float()
+pub fn f_isinf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    if let Some(f) = args[0].as_float()
         && f.is_infinite()
     {
         result.write_number(if f > 0.0 { 1 } else { -1 });
@@ -255,15 +189,8 @@ pub unsafe fn f_isinf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `isnan({expr})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_isnan(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
-    result.write_number(args.get(0).as_float().is_some_and(c_double::is_nan) as VarNumber);
+pub fn f_isnan(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    result.write_number(args[0].as_float().is_some_and(c_double::is_nan) as VarNumber);
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the
@@ -307,19 +234,12 @@ fn xoshiro128starstar(s: &mut [u32; 4]) -> u32 {
 
 /// `rand([{expr}])` — the next value of the process-wide generator, or of
 /// the four-Number list handed in, which is advanced in place.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_rand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_rand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     /// The process-wide generator, seeded from the OS on first use.
     static STATE: GlobalCell<Option<[u32; 4]>> = GlobalCell::new(None);
 
-    let (args, result) = frame!(args, result);
-    let value = if !args.has(0) {
+    let value = if args.is_empty() {
         let mut state = STATE.get().unwrap_or_else(|| {
             let mut x = init_srand();
             [
@@ -333,13 +253,13 @@ pub unsafe fn f_rand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         STATE.set(Some(state));
         draw
     } else {
-        let Some(seed) = seed_list(args.get(0)) else {
+        let Some(seed) = seed_list(&args[0]) else {
             // Kept on the variadic message call rather than moved to
             // `semsg!`: the argument is arbitrary user bytes, and a Rust
             // format string can only carry UTF-8.
-            // SAFETY throughout: `args.ptr(0)` is a live typval, and `tv_get_string`
+            // SAFETY throughout: `&args[0]` is a live typval, and `tv_get_string`
             // hands back a NUL-terminated buffer that outlives the call.
-            let what = arg_string(&mut numbuf, args.get(0));
+            let what = arg_string(&mut numbuf, &args[0]);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
             semsg!("E475: Invalid argument: {what}");
@@ -391,19 +311,12 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
 
 /// `srand([{expr}])` — a four-Number seed list, from the OS or from the
 /// Number handed in.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_srand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `result` is the dispatcher's cleared return value.
     list_alloc_ret(result, 4);
-    let mut x = if args.has(0) {
+    let mut x = if !args.is_empty() {
         let mut error = false;
-        let n = arg_number_chk(args.get(0), Some(&mut error));
+        let n = arg_number_chk(&args[0], Some(&mut error));
         if error {
             // The list stays empty, as upstream leaves it.
             return;
@@ -419,25 +332,18 @@ pub unsafe fn f_srand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 }
 
 /// `range({expr} [, {max} [, {stride}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_range(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut error = false;
     // The errors accumulate into one flag, so every argument is still read —
     // matching upstream, which reports each bad argument in turn.
     let (mut start, end, stride) = {
-        let first = arg_number_chk(args.get(0), Some(&mut error));
-        if !args.has(1) {
+        let first = arg_number_chk(&args[0], Some(&mut error));
+        if args.len() <= 1 {
             (0, first.wrapping_sub(1), 1)
         } else {
-            let end = arg_number_chk(args.get(1), Some(&mut error));
-            let stride = if args.has(2) {
-                arg_number_chk(args.get(2), Some(&mut error))
+            let end = arg_number_chk(&args[1], Some(&mut error));
+            let stride = if args.len() > 2 {
+                arg_number_chk(&args[2], Some(&mut error))
             } else {
                 1
             };
@@ -486,19 +392,12 @@ pub unsafe fn f_range(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 
 /// `str2float({string})` — the leading sign and any whitespace around it are
 /// consumed here; `string2float` parses what is left.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_str2float(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_str2float(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
-    // SAFETY: `args.ptr(0)` is a live typval; `tv_get_string` hands back a
+    // SAFETY: `&args[0]` is a live typval; `tv_get_string` hands back a
     // NUL-terminated buffer that outlives this call, and `skipwhite` only
     // walks forward over it.
-    let mut p = unsafe { skipwhite(arg_string(&mut numbuf, args.get(0))) };
+    let mut p = unsafe { skipwhite(arg_string(&mut numbuf, &args[0])) };
     // Only one sign is consumed, and the whitespace skip after it is
     // what makes `"- 1"` parse as -1.
     let negate = unsafe { *p } == b'-' as c_char;

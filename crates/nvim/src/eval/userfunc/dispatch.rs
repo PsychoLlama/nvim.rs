@@ -14,6 +14,7 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
+use core::slice;
 
 use super::*;
 use crate::eval::typval::{ArgFrame, UNSET_ARG};
@@ -23,6 +24,33 @@ use crate::types::Failed;
 /// `base->Method()` base is put in front of them.
 const ARGV_INIT: [ManuallyDrop<TypVal>; MAX_FUNC_ARGS as usize + 1] =
     [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
+
+/// Call the builtin `fname` spells, with the base of a `base->method()` call
+/// spliced in when there is one.
+///
+/// The evaluator's own argument array is the slice the body reads, and the
+/// evaluator owns the values in it for the length of the call.
+///
+/// # Safety
+/// `name` is NUL-terminated, `arguments` holds `count` initialised values,
+/// `result` is the cleared return value, and `base` is null or live.
+unsafe fn call_builtin(
+    name: *const c_char,
+    arguments: *mut TypVal,
+    count: c_int,
+    result: *mut TypVal,
+    base: *mut TypVal,
+) -> c_int {
+    // SAFETY: the caller's obligation.
+    let args = unsafe { slice::from_raw_parts(arguments.cast_const(), count as usize) };
+    // SAFETY: as above.
+    let result = unsafe { &mut *result };
+    if base.is_null() {
+        unsafe { call_internal_func(name, args, result) }
+    } else {
+        unsafe { call_internal_method(name, args, result, base) }
+    }
+}
 
 /// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
 /// make the call.
@@ -95,7 +123,7 @@ pub unsafe fn get_func_tv(
 /// `name` is NUL-terminated and `args` holds a list (or nothing).
 pub unsafe fn func_call(
     name: *mut c_char,
-    args: *mut TypVal,
+    args: *const TypVal,
     partial: *mut Partial,
     selfdict: *mut Dict,
     result: *mut TypVal,
@@ -319,15 +347,10 @@ pub unsafe fn call_func(
                         call_user_func_check(fp, argcount, args, result, funcexe, selfdict)
                     };
                 }
-            } else if !unsafe { (*funcexe).fe_basetv }.is_null() {
-                // expr->method(): find the method name in the table and
-                // call it with the base as one of the arguments.
-                error = unsafe {
-                    call_internal_method(fname, argcount, argvars, result, (*funcexe).fe_basetv)
-                };
             } else {
-                // Find the function name in the table and call it.
-                error = unsafe { call_internal_func(fname, argcount, argvars, result) };
+                // SAFETY: as the two calls above.
+                let base = unsafe { (*funcexe).fe_basetv };
+                error = unsafe { call_builtin(fname, argvars, argcount, result, base) };
             }
 
             // The call (or the FuncUndefined autocommand sequence) may

@@ -687,19 +687,10 @@ pub fn ins_compl_enable_autocomplete() {
 }
 
 /// `preinserted()`: is a previewed match currently in the buffer?
-///
-/// # Safety
-///
-/// `_args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_preinserted(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_preinserted(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `ins_compl_preinsert_effect` has no precondition left, and
     // `result` is the live return value the caller allocated.
-    unsafe {
-        if ins_compl_preinsert_effect() {
-            (*result).write_number(1);
-        }
+    if ins_compl_preinsert_effect() {
+        result.write_number(1);
     }
 }

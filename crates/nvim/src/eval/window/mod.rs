@@ -54,7 +54,6 @@ pub use view::{
 use crate::autocmd::{block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, do_autochdir};
 use crate::cursor::{check_cursor, check_pos};
-use crate::eval::funcs::args::{Args, frame};
 use crate::eval::funcs::execute_common;
 use crate::eval::typval::{
     tv_check_for_nonnull_dict_arg, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr,

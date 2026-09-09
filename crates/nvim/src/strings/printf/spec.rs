@@ -24,7 +24,7 @@ use core::ptr;
 use crate::ascii::ascii_isdigit;
 use crate::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
 use crate::os::cshim::gettext;
-use crate::types::{TypVal, VAR_UNKNOWN, size_t};
+use crate::types::{TypVal, size_t};
 
 /// The format string cannot be used, and the `E15xx` saying why has already
 /// been reported.
@@ -283,13 +283,12 @@ pub(crate) unsafe fn get_unsigned_int(
 ///
 /// # Safety
 ///
-/// `fmt` must point at a NUL-terminated string. `tvs` must point at an
-/// initialized typval, unaliased for the call.
+/// `fmt` must point at a NUL-terminated string.
 pub(crate) unsafe fn parse_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
     fmt: *const c_char,
-    tvs: *mut TypVal,
+    tvs: Option<&[TypVal]>,
 ) -> Result<(), BadFormat> {
     if fmt.is_null() {
         return Ok(());
@@ -307,17 +306,16 @@ pub(crate) unsafe fn parse_fmt_types(
 ///
 /// # Safety
 ///
-/// `fmt` must point at a NUL-terminated string. `tvs` must point at an
-/// initialized typval, unaliased for the call.
+/// `fmt` must point at a NUL-terminated string.
 unsafe fn scan_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
     fmt: *const c_char,
-    tvs: *mut TypVal,
+    tvs: Option<&[TypVal]>,
 ) -> Result<(), BadFormat> {
     // Whether the arguments are typvals, which is what says an out-of-range
     // width is worth reporting rather than ignoring.
-    let typed = !tvs.is_null();
+    let typed = tvs.is_some();
     // A format may address its arguments positionally (`%2$s`) or in
     // order, never both.
     let mut any_pos = false;
@@ -486,7 +484,7 @@ unsafe fn scan_fmt_types(
             );
             return Err(BadFormat);
         }
-        if !tvs.is_null() && unsafe { (*tvs.offset(arg_idx as isize)).v_type() } == VAR_UNKNOWN {
+        if tvs.is_some_and(|tvs| usize::try_from(arg_idx).is_ok_and(|i| i >= tvs.len())) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg1 = unsafe { c_str(fmt) };
             semsg!(

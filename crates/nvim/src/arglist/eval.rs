@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::narrow::number_as_int;
-use crate::types::{VAR_NUMBER, VAR_UNKNOWN};
+use crate::types::VAR_NUMBER;
 use crate::winlayer::Win;
 
 /// The argument list a `{winid}`-style argument selects: the current
@@ -25,49 +25,36 @@ use crate::winlayer::Win;
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
+unsafe fn selected_arglist(arg: Option<&TypVal>) -> Option<*mut ArgList> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
-    if unsafe { (*arg).v_type() } == VAR_UNKNOWN {
+    let Some(arg) = arg else {
         return Some(win_alist(Win::current()));
-    }
-    if unsafe { (*arg).v_type() } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber
-    {
+    };
+    if arg.v_type() == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber {
         return Some(global_arglist());
     }
     unsafe { find_win_by_nr_or_id(arg) }.map(win_alist)
 }
 
 /// "argc()" function
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_argc(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
-    let count = unsafe { selected_arglist(args) }.map_or(-1, alist_count);
-    unsafe { (*result).write_number(VarNumber::from(count)) };
+    let count = unsafe { selected_arglist(args.first()) }.map_or(-1, alist_count);
+    result.write_number(VarNumber::from(count));
 }
 
 /// "argidx()" function
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_argidx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_argidx(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*result).write_number(VarNumber::from(Win::current().w_arg_idx)) };
+    result.write_number(VarNumber::from(Win::current().w_arg_idx));
 }
 
 /// "arglistid()" function
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_arglistid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract -- the caller's argument array, which
     // holds both slots.
-    let found = unsafe { find_tabwin(args.offset(0), args.offset(1)) };
+    let found = unsafe { find_tabwin(args.first(), args.get(1)) };
     let id = match found {
         Some(wp) => {
             // SAFETY: a window the registry answered with, so it is live,
@@ -78,7 +65,7 @@ pub unsafe fn f_arglistid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         None => -1 as VarNumber,
     };
     // SAFETY: the caller's return slot.
-    unsafe { (*result).write_number(id) };
+    result.write_number(id);
 }
 
 /// Return `count` argument entries as a List of file names. A null
@@ -105,14 +92,10 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut Ty
 }
 
 /// "argv()" function
-///
-/// # Safety
-///
-/// Standard eval-function contract.
-pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
-    if unsafe { (*args.offset(0)).v_type() } == VAR_UNKNOWN {
+    if args.is_empty() {
         // No index: the whole current argument list.
         let (entries, count) = alist_entries(win_alist(Win::current()));
         unsafe { arglist_as_rettv(entries, count, result) };
@@ -121,9 +104,9 @@ pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // A window that does not exist leaves no list and a count of -1, so
     // every index is out of range.
     let (entries, count) =
-        unsafe { selected_arglist(args.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
-    unsafe { (*result).write_string(ptr::null_mut()) };
-    let idx = number_as_int(unsafe { tv_get_number_chk(args.offset(0), ptr::null_mut()) });
+        unsafe { selected_arglist(args.get(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
+    result.write_string(ptr::null_mut());
+    let idx = number_as_int(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) });
     if !entries.is_null() && idx >= 0 && idx < count {
         unsafe { (*result).write_string(xstrdup(alist_name(entries.offset(idx as isize)))) };
     } else if idx == -1 {

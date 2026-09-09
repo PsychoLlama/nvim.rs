@@ -2,7 +2,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::frame;
 use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
@@ -27,84 +26,72 @@ use core::ptr;
 const NO_CALLBACK: Callback = Callback::None;
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_dictwatcheradd(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(args, _result);
+    let _rettv = _result;
     // SAFETY throughout: every callee below is a C entry point taking live typvals from
     // the frame; the callback is handed to the watcher, which takes it over.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_DICT {
+    if args[0].v_type() != VAR_DICT {
         semsg!("E475: Invalid argument: dict");
         return;
     }
-    if args.get(0).dict_or_null().is_null() {
+    if args[0].dict_or_null().is_null() {
         // The C spells the name through the read-only-variable message's
         // `%.*s`, with the length `strlen` gives it; the text is fixed.
         semsg!("E46: Cannot change read-only variable \"dictwatcheradd() argument\"");
         return;
     }
-    if args.ty(1) != VAR_STRING && args.ty(1) != VAR_NUMBER {
+    if args[1].v_type() != VAR_STRING && args[1].v_type() != VAR_NUMBER {
         semsg!("E475: Invalid argument: key");
         return;
     }
-    let key_pattern = arg_string_chk(&mut numbuf, args.get(1));
+    let key_pattern = arg_string_chk(&mut numbuf, &args[1]);
     if key_pattern.is_null() {
         return;
     }
     let key_pattern_len = unsafe { cstr::bytes_at(key_pattern) }.len();
     let mut callback = NO_CALLBACK;
-    if !unsafe { callback_from_typval(&raw mut callback, args.ptr(2)) } {
+    if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
         semsg!("E475: Invalid argument: funcref");
         return;
     }
     // SAFETY: the kind checked above says the value holds a Dict pointer;
     // the watcher takes the callback over.
-    let d = args.get(0).dict_or_null();
+    let d = args[0].dict_or_null();
     unsafe { tv_dict_watcher_add(d, key_pattern, key_pattern_len, callback) };
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_dictwatcherdel(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(args, _result);
+    let _rettv = _result;
     // SAFETY throughout: as `f_dictwatcheradd`; the callback built here is only used to
     // identify a watcher and is freed before returning.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_DICT {
+    if args[0].v_type() != VAR_DICT {
         semsg!("E475: Invalid argument: dict");
         return;
     }
-    if args.ty(2) != VAR_FUNC && args.ty(2) != VAR_STRING {
+    if args[2].v_type() != VAR_FUNC && args[2].v_type() != VAR_STRING {
         semsg!("E475: Invalid argument: funcref");
         return;
     }
-    let key_pattern = arg_string_chk(&mut numbuf, args.get(1));
+    let key_pattern = arg_string_chk(&mut numbuf, &args[1]);
     if key_pattern.is_null() {
         return;
     }
     let mut callback = NO_CALLBACK;
-    if !unsafe { callback_from_typval(&raw mut callback, args.ptr(2)) } {
+    if !unsafe { callback_from_typval(&raw mut callback, &args[2]) } {
         return;
     }
     // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
     // watcher here and is freed below.
-    let d = args.get(0).dict_or_null();
+    let d = args[0].dict_or_null();
     let len = unsafe { cstr::bytes_at(key_pattern) }.len();
     if !unsafe { tv_dict_watcher_remove(d, key_pattern, len, &callback) } {
         semsg!("Couldn't find a watcher matching key and callback");
@@ -114,20 +101,13 @@ pub unsafe fn f_dictwatcherdel(args: *mut TypVal, _result: *mut TypVal, _fptr: E
 
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,
 /// 0 when it is not, -1 when there is no such variable.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(-1);
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
     // read below comes back from it; `clear_lval` runs on every path.
     let mut lv = unsafe { core::mem::zeroed() };
-    let name = arg_string(&mut numbuf, args.get(0)) as *mut c_char;
+    let name = arg_string(&mut numbuf, &args[0]) as *mut c_char;
     let out = &raw mut lv;
     let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int;
     let nul = ptr::null_mut();
@@ -176,17 +156,10 @@ pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// The address is formatted by `vim_vsnprintf_typval`'s `%p`, which reads
 /// its operand from the typval array rather than from a `va_list`; the
 /// `va_list` handed in is a zeroed placeholder that is never read.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.
-    let base = args.ptr(0);
+    let base = Some(&args[..1]);
     let fmt = c"%p".as_ptr();
     let nul = ptr::null_mut();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };

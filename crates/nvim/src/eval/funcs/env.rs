@@ -3,7 +3,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::frame;
 use super::wrappers::{
     arg_number_chk, arg_string, arg_string_chk, dict_alloc_ret, list_alloc_ret, list_set_ret,
 };
@@ -45,14 +44,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// `environ()` — the process environment as a Dictionary.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_environ(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (_args, result) = frame!(_args, result);
+pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `env` is an array of `env_size` strings plus a NULL, filled by
     // `os_copy_fullenv` and released by `os_free_fullenv`. Every string is
     // NUL-terminated and writable — the split below writes a NUL into one
@@ -88,17 +80,10 @@ pub unsafe fn f_environ(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getenv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getenv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY: `vim_getenv` returns an owned string or null.
-    let p = unsafe { vim_getenv(arg_string(&mut numbuf, args.get(0))) };
+    let p = unsafe { vim_getenv(arg_string(&mut numbuf, &args[0])) };
     if p.is_null() {
         result.write_special(kSpecialVarNull);
     } else {
@@ -107,15 +92,8 @@ pub unsafe fn f_getenv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `expand({string} [, {nosuf} [, {list}]])`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
     let mut error = false;
     result.write_empty(VAR_STRING);
@@ -123,10 +101,11 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // `xpc` is cleared by `expand_init` before use and cleaned up after.
     // The `{list}` argument is only honoured when `{nosuf}` was given
     // too, because it is the third.
-    if args.has(1) && args.has(2) && arg_number_chk(args.get(2), Some(&mut error)) != 0 && !error {
+    if args.len() > 1 && args.len() > 2 && arg_number_chk(&args[2], Some(&mut error)) != 0 && !error
+    {
         list_set_ret(result, ptr::null_mut::<List>());
     }
-    let s = arg_string(&mut numbuf, args.get(0));
+    let s = arg_string(&mut numbuf, &args[0]);
     if matches!(unsafe { *s } as u8, b'%' | b'#' | b'<') {
         // A `%`/`#`/`<` item is resolved by the Ex-command machinery,
         // whose own errors are suppressed unless 'verbose' is set.
@@ -155,7 +134,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         }
         return;
     }
-    if args.has(1) && arg_number_chk(args.get(1), Some(&mut error)) != 0 {
+    if args.len() > 1 && arg_number_chk(&args[1], Some(&mut error)) != 0 {
         options |= WildOpts::KEEP_ALL;
     }
     if error {
@@ -197,28 +176,21 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// `expandcmd({string} [, {options}])` — expand the `%`, `#` and wildcard
 /// items in a command line.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_empty(VAR_STRING);
     // SAFETY throughout: `cmdstr` is owned here and handed to the return value;
     // `expand_filename` may replace it with another owned string.
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
-    let errmsg = args.ty(1) == VAR_DICT && {
+    let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) && {
         // SAFETY: the kind says the value holds a Dict pointer.
-        let d = args.get(1).dict_or_null();
+        let d = args[1].dict_or_null();
         let no = kBoolVarFalse as c_int;
         unsafe { tv_dict_get_bool(d, c"errmsg".as_ptr(), no) != 0 }
     };
     let quiet = !errmsg;
-    let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) };
+    let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, &args[0])) };
     let mut eap: ExArg = unsafe { core::mem::zeroed() };
     eap.arg = cmdstr;
     eap.cmd = cmdstr;
@@ -238,50 +210,37 @@ pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_setenv(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _rettv) = frame!(args, _result);
+pub fn f_setenv(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
+    let _rettv = _result;
     // SAFETY throughout: the two scratch buffers outlive the strings coerced into them.
     let mut namebuf = NumBuf::new();
     let mut valbuf = NumBuf::new();
     // Coerced before the sandbox check, as upstream has it: the
     // coercion can report an error of its own.
-    let name = arg_string(&mut namebuf, args.get(0));
+    let name = arg_string(&mut namebuf, &args[0]);
     if check_secure() {
         return;
     }
-    if args.get(1).as_special() == Some(kSpecialVarNull) {
+    if args[1].as_special() == Some(kSpecialVarNull) {
         unsafe { vim_unsetenv_ext(name) };
     } else {
-        unsafe { vim_setenv_ext(name, arg_string(&mut valbuf, args.get(1))) };
+        unsafe { vim_setenv_ext(name, arg_string(&mut valbuf, &args[1])) };
     }
 }
 
 /// `setfperm({fname}, {mode})` — `{mode}` is nine "rwxrwxrwx" characters,
 /// any of which is "off" only when it is a `-`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(0);
     // SAFETY throughout: both strings are coerced from the frame and NUL-terminated;
     // the nine bytes read below are covered by the length check.
-    let fname = arg_string_chk(&mut numbuf, args.get(0));
+    let fname = arg_string_chk(&mut numbuf, &args[0]);
     if fname.is_null() {
         return;
     }
     let mut modebuf = NumBuf::new();
-    let mode_str = arg_string_chk(&mut modebuf, args.get(1));
+    let mode_str = arg_string_chk(&mut modebuf, &args[1]);
     if mode_str.is_null() {
         return;
     }
@@ -333,19 +292,12 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
 }
 
 /// `stdpath({what})`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_string(ptr::null_mut());
     // SAFETY throughout: `p` is coerced from the frame and NUL-terminated once the
     // null check has passed.
-    let p = arg_string_chk(&mut numbuf, args.get(0));
+    let p = arg_string_chk(&mut numbuf, &args[0]);
     if p.is_null() {
         return;
     }
@@ -371,14 +323,7 @@ pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_swapfilelist(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (_args, result) = frame!(_args, result);
+pub fn f_swapfilelist(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `recover_names` appends to the list just allocated.
     list_alloc_ret(result, kListLenUnknown as isize);
     let list = result.list_or_null();
@@ -387,34 +332,20 @@ pub unsafe fn f_swapfilelist(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_swapinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_swapinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the dict is allocated into the return value first, so
     // `swapfile_dict` has somewhere to write.
     dict_alloc_ret(result);
-    unsafe { swapfile_dict(arg_string(&mut numbuf, args.get(0)), result.dict_or_null()) };
+    unsafe { swapfile_dict(arg_string(&mut numbuf, &args[0]), result.dict_or_null()) };
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_swapname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_swapname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
     // SAFETY: the buffer comes from the buffer list; the memfile and its
     // name are checked before either is read.
-    let buf = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf = unsafe { tv_get_buf(&args[0], 0) };
     let memfile = buf.map(|b| b.b_ml.ml_mfp).filter(|mfp| !mfp.is_null());
     let name = memfile
         .map(|mfp| unsafe { mf_fname(mfp) })

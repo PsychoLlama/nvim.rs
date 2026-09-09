@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::buffer::buf_get_changedtick;
-use crate::types::{VAR_DICT, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{VAR_DICT, kListLenMayKnow};
 
 /// One `getbufinfo()` entry: a buffer's options, variables and attributes.
 ///
@@ -96,22 +96,15 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_getbufinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.
     let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     let mut argbuf: *mut Buffer = ptr::null_mut();
     let mut filter = Filter::default();
-    if args.ty(0) == VAR_DICT {
-        let sel_d = args.get(0).dict_or_null();
+    if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {
+        let sel_d = args[0].dict_or_null();
         if !sel_d.is_null() {
             let flag = |key: &CStr| {
                 let di =
@@ -125,7 +118,7 @@ pub unsafe fn f_getbufinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
                 bufmodified: flag(c"bufmodified"),
             };
         }
-    } else if args.ty(0) != VAR_UNKNOWN {
+    } else if !args.is_empty() {
         argbuf = arg_buf_chk(args, 0).map_or(ptr::null_mut(), Buf::raw);
         if argbuf.is_null() {
             return;

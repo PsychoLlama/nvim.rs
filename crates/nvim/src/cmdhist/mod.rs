@@ -40,7 +40,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    RegMatch, Timestamp, TypVal, VAR_NUMBER, VAR_UNKNOWN, VarNumber, size_t,
+    RegMatch, Timestamp, TypVal, VAR_NUMBER, VarNumber, size_t,
 };
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -326,21 +326,15 @@ unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
 }
 
 /// "histadd()" function
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_histadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
-    unsafe { (*result).write_number(0) };
+    result.write_number(0);
     // SAFETY: reads the 'secure'/sandbox globals.
     if check_secure() {
         return;
     }
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(args) };
+    let histype = unsafe { arg_histtype(&args[0]) };
     if histype == HIST_INVALID {
         return;
     }
@@ -348,7 +342,7 @@ pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY: `histadd()` takes two arguments; the entry is NUL-terminated
     // and lives in the typval or in `buf`, both of which outlive the add.
     let added = unsafe {
-        let entry = tv_get_string_buf(args.offset(1), buf.as_mut_ptr());
+        let entry = tv_get_string_buf(&args[1], buf.as_mut_ptr());
         *entry != 0 && {
             init_history();
             add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
@@ -357,32 +351,26 @@ pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     };
     if added {
         // SAFETY: eval-function contract.
-        unsafe { (*result).write_number(1) };
+        result.write_number(1);
     }
 }
 
 /// "histdel()" function
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
     let n = unsafe {
-        let name = numbuf.string_chk(args);
+        let name = numbuf.string_chk(&args[0]);
         if name.is_null() {
             0
         } else {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let arg = args.offset(1);
-            if (*arg).v_type() == VAR_UNKNOWN {
+            let Some(arg) = args.get(1) else {
                 // Only one argument: clear the whole history.
-                clr_history(histype).is_ok() as c_int
-            } else if (*arg).v_type() == VAR_NUMBER {
+                return result.write_number(VarNumber::from(clr_history(histype).is_ok() as c_int));
+            };
+            if arg.v_type() == VAR_NUMBER {
                 // Delete by history number.
                 del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
             } else {
@@ -393,20 +381,14 @@ pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         }
     };
     // SAFETY: eval-function contract.
-    unsafe { (*result).write_number(VarNumber::from(n)) };
+    result.write_number(VarNumber::from(n));
 }
 
 /// "histget()" function
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
-    let name = unsafe { numbuf.string_chk(args) };
+    let name = unsafe { numbuf.string_chk(&args[0]) };
     let text = if name.is_null() {
         core::ptr::null_mut()
     } else {
@@ -415,10 +397,10 @@ pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         // `xstrnsave` copies the entry text before returning.
         unsafe {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let num = if (*args.offset(1)).v_type() == VAR_UNKNOWN {
+            let num = if args.len() <= 1 {
                 get_history_idx(histype)
             } else {
-                tv_get_number_chk(args.offset(1), core::ptr::null_mut()) as c_int
+                tv_get_number_chk(&args[1], core::ptr::null_mut()) as c_int
             };
             let idx = calc_hist_idx(histype, num);
             match hist_entry_ref(histype, idx) {
@@ -428,28 +410,20 @@ pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         }
     };
     // SAFETY: eval-function contract.
-    unsafe {
-        (*result).write_string(text);
-    }
+    result.write_string(text);
 }
 
 /// "histnr()" function
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(args) };
+    let histype = unsafe { arg_histtype(&args[0]) };
     let n = if histype == HIST_INVALID {
         HIST_INVALID
     } else {
         get_history_idx(histype)
     };
     // SAFETY: eval-function contract.
-    unsafe { (*result).write_number(VarNumber::from(n)) };
+    result.write_number(VarNumber::from(n));
 }
 
 /// ":history" command: list history entries, optionally filtered by

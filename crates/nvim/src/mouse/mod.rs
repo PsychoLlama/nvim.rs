@@ -600,10 +600,7 @@ pub(crate) fn setmouse() {
 
 /// `getmousepos()` -- where the pointer last was, in every coordinate system
 /// the editor knows.
-///
-/// # Safety
-/// `result` must be a live, unset return value.
-pub(crate) unsafe fn f_getmousepos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(result);

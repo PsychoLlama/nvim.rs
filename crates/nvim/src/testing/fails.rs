@@ -40,13 +40,15 @@ use crate::message::state::{
 };
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::gettext;
-use crate::types::{EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, Vv};
+use crate::types::{
+    EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
+};
 use crate::ui::state::Rows;
 
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
 use super::{
     AssertType, E_ASSERT_FAILS_FIFTH_ARGUMENT, E_ASSERT_FAILS_FOURTH_ARGUMENT,
-    E_ASSERT_FAILS_SECOND_ARG, NUMBUFLEN, arg, arg_given, arg_type, assert_append_cmd_or_arg,
+    E_ASSERT_FAILS_SECOND_ARG, NUMBUFLEN, assert_append_cmd_or_arg,
 };
 
 /// What checking `assert_fails()`'s expectations against the reported error
@@ -81,20 +83,20 @@ struct FailsMismatch {
 ///
 /// # Safety
 /// `args` has five slots.
-unsafe fn assert_fails_args_ok(args: *mut TypVal) -> bool {
+unsafe fn assert_fails_args_ok(args: &[TypVal]) -> bool {
     // SAFETY: the caller's arguments.
-    if unsafe { tv_check_for_string_or_number_arg(args, 0) }.is_err()
-        || unsafe { tv_check_for_opt_string_or_list_arg(args, 1) }.is_err()
+    if tv_check_for_string_or_number_arg(args, 0).is_err()
+        || tv_check_for_opt_string_or_list_arg(args, 1).is_err()
     {
         return false;
     }
-    if !unsafe { arg_given(args, 1) } || !unsafe { arg_given(args, 2) } {
+    if args.len() <= 1 || args.len() <= 2 {
         return true;
     }
-    if unsafe { tv_check_for_opt_number_arg(args, 3) }.is_err() {
+    if tv_check_for_opt_number_arg(args, 3).is_err() {
         return false;
     }
-    !unsafe { arg_given(args, 3) } || unsafe { tv_check_for_opt_string_arg(args, 4) }.is_ok()
+    args.len() <= 3 || tv_check_for_opt_string_arg(args, 4).is_ok()
 }
 
 /// Match the error the command reported against the caller's second argument.
@@ -105,7 +107,7 @@ unsafe fn assert_fails_args_ok(args: *mut TypVal) -> bool {
 ///
 /// # Safety
 /// `args` has five slots; `tofree` receives an allocation the caller frees.
-unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> FailsCheck {
+unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> FailsCheck {
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the caller's arguments and out-parameter.
     let unknown = c"[unknown]".as_ptr().cast_mut();
@@ -116,9 +118,9 @@ unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> F
         reported
     };
 
-    match unsafe { arg_type(args, 1) } {
+    match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
-            let expected = unsafe { tv_get_string_buf_chk(arg(args, 1), buf.as_mut_ptr()) };
+            let expected = unsafe { tv_get_string_buf_chk(&args[1], buf.as_mut_ptr()) };
             if !expected.is_null()
                 && unsafe { has_bytes(cstr::at(actual), cstr::bytes_at(expected)) }
             {
@@ -131,7 +133,7 @@ unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> F
             })
         }
         VAR_LIST => {
-            let list: *const List = unsafe { (*arg(args, 1)).list_or_null() };
+            let list: *const List = args[1].list_or_null();
             if list.is_null() || !(1..=2).contains(&unsafe { tv_list_len(list) }) {
                 return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
             }
@@ -179,15 +181,15 @@ unsafe fn check_reported_error(args: *mut TypVal, tofree: &mut *mut c_char) -> F
 ///
 /// # Safety
 /// `args` has five slots.
-unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
+unsafe fn check_error_position(args: &[TypVal]) -> FailsCheck {
     // SAFETY: the caller's arguments.
-    if !unsafe { arg_given(args, 2) } || !unsafe { arg_given(args, 3) } {
+    if args.len() <= 2 || args.len() <= 3 {
         return FailsCheck::Matched;
     }
-    if unsafe { arg_type(args, 3) } != VAR_NUMBER {
+    if !args.get(3).is_some_and(|arg| arg.v_type() == VAR_NUMBER) {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
     }
-    let want_lnum = unsafe { (*arg(args, 3)).number_or_zero() };
+    let want_lnum = args[3].number_or_zero();
     if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as VarNumber {
         return FailsCheck::Mismatch(FailsMismatch {
             expected_str: ptr::null(),
@@ -195,13 +197,13 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
             actual: ptr::null_mut(),
         });
     }
-    if !unsafe { arg_given(args, 4) } {
+    if args.len() <= 4 {
         return FailsCheck::Matched;
     }
-    if unsafe { arg_type(args, 4) } != VAR_STRING {
+    if !args.get(4).is_some_and(|arg| arg.v_type() == VAR_STRING) {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FIFTH_ARGUMENT);
     }
-    let want_context = unsafe { (*arg(args, 4)).string_or_null() };
+    let want_context = args[4].string_or_null();
     if want_context.is_null()
         || unsafe { pattern_match(want_context, emsg_assert_fails_context.get(), false) }
     {
@@ -218,7 +220,7 @@ unsafe fn check_error_position(args: *mut TypVal) -> FailsCheck {
 ///
 /// # Safety
 /// `args` has five slots and `cmd` is the command that was run.
-unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch: &FailsMismatch) {
+unsafe fn report_fails_mismatch(args: &[TypVal], cmd: *const c_char, mismatch: &FailsMismatch) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let mut actual_tv = ManuallyDrop::new(match mismatch.index {
         3 => TypVal::Number(emsg_assert_fails_lnum.get() as VarNumber),
@@ -230,9 +232,9 @@ unsafe fn report_fails_mismatch(args: *mut TypVal, cmd: *const c_char, mismatch:
     unsafe {
         fill_assert_error(
             gap,
-            arg(args, 2),
+            args.get(2),
             mismatch.expected_str,
-            arg(args, mismatch.index),
+            &args[mismatch.index],
             &raw mut *actual_tv,
             AssertType::Fails,
         )
@@ -270,13 +272,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is
@@ -299,7 +295,7 @@ pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fpt
     // hit-enter prompt.
     let no_prompt = Suppress::wait_return();
 
-    let cmd = unsafe { numbuf.string_chk(arg(args, 0)) };
+    let cmd = unsafe { numbuf.string_chk(&args[0]) };
     let _ = unsafe { do_cmdline_cmd(cmd) };
 
     // Reset here for any errors reported below.
@@ -311,8 +307,8 @@ pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fpt
         ga_concat_lit(&mut ga, c"command did not fail: ");
         unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd) };
         report_assert_error(&ga);
-        unsafe { (*result).write_number(1) };
-    } else if unsafe { arg_given(args, 1) } {
+        result.write_number(1);
+    } else if args.len() > 1 {
         let mut check = unsafe { check_reported_error(args, &mut tofree) };
         if matches!(check, FailsCheck::Matched) {
             check = unsafe { check_error_position(args) };
@@ -322,7 +318,7 @@ pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fpt
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
                 unsafe { report_fails_mismatch(args, cmd, &mismatch) };
-                unsafe { (*result).write_number(1) };
+                result.write_number(1);
             }
         }
     }

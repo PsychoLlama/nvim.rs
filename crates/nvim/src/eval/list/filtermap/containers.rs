@@ -49,7 +49,7 @@ pub(crate) fn filter_map_dict(
     d: DictRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut TypVal,
+    expr: &TypVal,
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
@@ -118,7 +118,7 @@ pub(crate) fn filter_map_blob(
     blob_arg: BlobRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut TypVal,
+    expr: &TypVal,
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
@@ -190,7 +190,7 @@ pub(crate) fn filter_map_blob(
 pub(crate) fn filter_map_string(
     s: &[u8],
     filtermap: FilterMap,
-    expr: &mut TypVal,
+    expr: &TypVal,
     result: &mut TypVal,
 ) {
     result.write_string(ptr::null_mut());
@@ -251,7 +251,7 @@ pub(crate) fn filter_map_list(
     l: ListRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut TypVal,
+    expr: &TypVal,
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {

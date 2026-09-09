@@ -37,9 +37,7 @@ use crate::mbyte::{cells_at, cluster_len};
 use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf};
-use crate::types::{
-    TypVal, VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t,
-};
+use crate::types::{TypVal, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t};
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
 
@@ -140,12 +138,11 @@ impl Sink {
 
 /// Where a conversion's argument comes from.
 ///
-/// `tvs` non-null means Vimscript's `printf()`, whose arguments are a
-/// `VAR_UNKNOWN`-terminated `TypVal` array that can be indexed; otherwise
-/// it is a C `va_list`, which can only be read forwards -- hence `position`,
-/// `ap_start` and the recorded `ap_types`.
+/// A `tvs` slice means Vimscript's `printf()`, whose arguments can be
+/// indexed; otherwise it is a C `va_list`, which can only be read forwards --
+/// hence `position`, `ap_start` and the recorded `ap_types`.
 pub(super) struct Args<'f> {
-    tvs: *mut TypVal,
+    tvs: Option<&'f [TypVal]>,
     ap: VaList<'f>,
     ap_start: VaList<'f>,
     ap_types: *mut *const c_char,
@@ -162,14 +159,12 @@ impl<'f> Args<'f> {
     /// # Safety
     ///
     /// `fmt` must be NUL-terminated, and `ap_types` the table
-    /// `parse_fmt_types` filled in for exactly that format. Either `tvs`
-    /// points at a `VAR_UNKNOWN`-terminated array of initialized typvals
-    /// long enough for the conversions `fmt` names, or it is null and
-    /// `ap_start` holds exactly those arguments at exactly those types --
-    /// neither list carries its own length, so reading one against the wrong
-    /// format is what this constructor exists to make visible.
+    /// `parse_fmt_types` filled in for exactly that format. With no `tvs`,
+    /// `ap_start` must hold exactly the arguments `fmt` names at exactly
+    /// those types -- a `va_list` carries no length, so reading one against
+    /// the wrong format is what this constructor exists to make visible.
     unsafe fn new(
-        tvs: *mut TypVal,
+        tvs: Option<&'f [TypVal]>,
         ap_start: VaList<'f>,
         ap_types: *mut *const c_char,
         fmt: *const c_char,
@@ -185,8 +180,8 @@ impl<'f> Args<'f> {
         }
     }
 
-    fn reads_typvals(&self) -> bool {
-        !self.tvs.is_null()
+    fn typvals(&self) -> Option<&'f [TypVal]> {
+        self.tvs
     }
 
     /// Move the `va_list` onto argument `arg_idx`.
@@ -222,8 +217,8 @@ impl<'f> Args<'f> {
         tofree: &mut *mut c_char,
         numbuf: *mut c_char,
     ) -> *const c_char {
-        if self.reads_typvals() {
-            unsafe { tv_str(self.tvs, &mut self.arg_idx, tofree, numbuf) }
+        if let Some(tvs) = self.typvals() {
+            unsafe { tv_str(tvs, &mut self.arg_idx, tofree, numbuf) }
         } else {
             unsafe { self.position() };
             unsafe { self.ap.next_arg::<*const c_char>() }
@@ -237,8 +232,8 @@ impl<'f> Args<'f> {
     /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
     /// reaches must have been passed as a pointer.
     unsafe fn next_pointer(&mut self) -> *const c_void {
-        if self.reads_typvals() {
-            unsafe { tv_ptr(self.tvs, &mut self.arg_idx) }
+        if let Some(tvs) = self.typvals() {
+            tv_ptr(tvs, &mut self.arg_idx)
         } else {
             unsafe { self.position() };
             unsafe { self.ap.next_arg::<*mut c_void>() as *const c_void }
@@ -252,8 +247,8 @@ impl<'f> Args<'f> {
     /// `fmt`, its `arg_cur` must say where `ap` really is, and the argument it
     /// reaches must have been passed as a `double`.
     pub(super) unsafe fn next_float(&mut self) -> c_double {
-        if self.reads_typvals() {
-            unsafe { tv_float(self.tvs, &mut self.arg_idx) }
+        if let Some(tvs) = self.typvals() {
+            tv_float(tvs, &mut self.arg_idx)
         } else {
             unsafe { self.position() };
             unsafe { self.ap.next_arg::<c_double>() }
@@ -270,8 +265,8 @@ impl<'f> Args<'f> {
 /// the same 64-bit field.
 macro_rules! next_number {
     ($args:expr, $ty:ty) => {
-        if $args.reads_typvals() {
-            unsafe { tv_nr($args.tvs, &mut $args.arg_idx) as $ty }
+        if let Some(tvs) = $args.typvals() {
+            tv_nr(tvs, &mut $args.arg_idx) as $ty
         } else {
             unsafe { $args.position() };
             unsafe { $args.ap.next_arg::<$ty>() }
@@ -330,12 +325,12 @@ unsafe fn star_argument(
     // `*N$` addresses the width argument positionally.
     if ascii_isdigit(unsafe { **p as c_int }) {
         args.arg_idx =
-            unsafe { get_unsigned_int(digstart, p, args.reads_typvals()) }.ok_or(())? as c_int;
+            unsafe { get_unsigned_int(digstart, p, args.typvals().is_some()) }.ok_or(())? as c_int;
         *p = unsafe { p.add(1) }; // step over the '$'
     }
     let mut j = next_number!(args, c_int);
     if j > MAX_ALLOWED_STRING_WIDTH {
-        if args.reads_typvals() {
+        if args.typvals().is_some() {
             unsafe { format_overflow_error(digstart) };
             return Err(());
         }
@@ -792,7 +787,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
     str_m: size_t,
     fmt: *const c_char,
     ap_start: VaList<'f>,
-    tvs: *mut TypVal,
+    tvs: Option<&[TypVal]>,
 ) -> c_int {
     let mut ap_types = ptr::null_mut::<*const c_char>();
     let mut num_posarg = 0;
@@ -806,7 +801,6 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
     // SAFETY: the caller's promise -- `str_m` writable bytes at `str`.
     let mut sink = unsafe { Sink::new(str, str_m) };
     let mut p = if fmt.is_null() { c"".as_ptr() } else { fmt };
-    let tvs_present = !tvs.is_null();
 
     'error: {
         while unsafe { *p } != 0 {
@@ -818,7 +812,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
                 continue;
             }
 
-            let Ok(mut c) = (unsafe { parse_conversion(&mut args, &mut p, tvs_present) }) else {
+            let Ok(mut c) = (unsafe { parse_conversion(&mut args, &mut p, tvs.is_some()) }) else {
                 break 'error;
             };
             let mut tmp = [0 as c_char; TMP];
@@ -862,7 +856,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
         } else {
             args.arg_idx - 1
         };
-        if tvs_present && unsafe { (*tvs.offset(unused as isize)).v_type() } != VAR_UNKNOWN {
+        if tvs.is_some_and(|tvs| usize::try_from(unused).is_ok_and(|n| n < tvs.len())) {
             emsg(gettext(E_TOO_MANY_ARGS));
         }
     }

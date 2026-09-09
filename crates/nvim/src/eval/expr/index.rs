@@ -157,7 +157,7 @@ pub(crate) unsafe fn eval_index(
 /// # Safety
 /// `result` must be valid.
 pub(crate) unsafe fn check_can_index(
-    result: *mut TypVal,
+    result: *const TypVal,
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -183,22 +183,14 @@ pub(crate) unsafe fn check_can_index(
 }
 
 /// `slice()`
-///
-/// # Safety
-/// Called through the builtin table with a terminated argument array.
-pub(crate) unsafe fn f_slice(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    if unsafe { check_can_index(args, true, false) }.is_err() {
+pub(crate) fn f_slice(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY throughout: the arguments and `result` are live typvals.
+    if unsafe { check_can_index(&args[0], true, false) }.is_err() {
         return;
     }
-    unsafe { tv_copy(args, result) };
-    // SAFETY: the builtin table hands in three argument slots, terminated by
-    // a `VAR_UNKNOWN` when the third was not given.
-    let (first, last) = unsafe { (args.add(1), args.add(2)) };
-    let end = if unsafe { (*last).v_type() } == VAR_UNKNOWN {
-        null_mut()
-    } else {
-        last
-    };
+    unsafe { tv_copy(&args[0], result) };
+    let first: *const TypVal = &args[1];
+    let end: *const TypVal = args.get(2).map_or(null(), core::ptr::from_ref);
     let _ = unsafe { eval_index_inner(result, true, first, end, true, null(), 0, false) };
 }
 
@@ -216,8 +208,8 @@ pub(crate) unsafe fn f_slice(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 pub(crate) unsafe fn eval_index_inner(
     result: *mut TypVal,
     is_range: bool,
-    var1: *mut TypVal,
-    var2: *mut TypVal,
+    var1: *const TypVal,
+    var2: *const TypVal,
     exclusive: bool,
     key: *const c_char,
     keylen: ptrdiff_t,

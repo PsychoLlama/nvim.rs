@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{ExpandContext, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, VAR_STRING};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -31,26 +31,20 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 /// `expand_one`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     let mut filtered = false;
     let mut options = GETCOMPLETION;
 
-    if unsafe { tv_check_for_string_arg(args, 1) }.is_err() {
+    if tv_check_for_string_arg(args, 1).is_err() {
         return;
     }
-    let type_0 = unsafe { numbuf.string(args.add(1)) };
+    let type_0 = unsafe { numbuf.string(&args[1]) };
 
-    if unsafe { (*args.add(2)).v_type() } != VAR_UNKNOWN {
-        filtered = unsafe { tv_get_number_chk(args.add(2), ptr::null_mut()) } != 0;
+    if args.len() > 2 {
+        filtered = unsafe { tv_get_number_chk(&args[2], ptr::null_mut()) } != 0;
     }
 
     if p_wic.get() != 0 {
@@ -62,11 +56,11 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         options |= WildOpts::KEEP_ALL;
     }
 
-    if unsafe { (*args).v_type() } != VAR_STRING {
+    if args[0].v_type() != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
     }
-    let pattern = unsafe { numbuf2.string(args) };
+    let pattern = unsafe { numbuf2.string(&args[0]) };
     let mut pattern_start = pattern;
 
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
@@ -174,7 +168,7 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     unsafe { tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t) };
 
     // SAFETY: the frame's return slot, holding the list just allocated.
-    let retlist = unsafe { (*result).list_or_null() };
+    let retlist = result.list_or_null();
     for i in 0..xpc.xp_numfiles {
         unsafe { tv_list_append_string(retlist, *xpc.xp_files.offset(i as isize), -1) };
     }
@@ -183,22 +177,15 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(ptr::null_mut()) };
+    result.write_string(ptr::null_mut());
 
-    if unsafe { tv_check_for_string_arg(args, 0) }.is_err() {
+    if tv_check_for_string_arg(args, 0).is_err() {
         return;
     }
 
-    let pat = unsafe { numbuf.string(args) };
+    let pat = unsafe { numbuf.string(&args[0]) };
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
 
@@ -218,21 +205,14 @@ pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr:
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
-///
-/// # Safety
-///
-/// `_args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_cmdcomplete_info(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let xpc = Cc::current().xpc();
 
     unsafe { tv_dict_alloc_ret(result) };
     if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
         return;
     }
-    let retdict: *mut Dict = unsafe { (*result).dict_or_null() };
+    let retdict: *mut Dict = result.dict_or_null();
 
     // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
     // key type is a plain `&str`.

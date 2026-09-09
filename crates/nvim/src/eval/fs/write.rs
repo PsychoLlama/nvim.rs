@@ -21,8 +21,8 @@
 #![allow(unsafe_code)]
 
 use super::{
-    Args, e_error_while_writing_str, frame, from, kFileAppend, kFileCreate, kFileMkDir,
-    kFileTruncate, str_arg_chk,
+    e_error_while_writing_str, from, kFileAppend, kFileCreate, kFileMkDir, kFileTruncate,
+    str_arg_chk,
 };
 use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk};
@@ -335,15 +335,17 @@ fn defer_delete(fname: &CStr) {
 
 /// Whether the first argument is something this builtin can write, having
 /// reported if not.
-fn writable(args: Args<'_>) -> bool {
+fn writable(args: &[TypVal]) -> bool {
     // XXX: this logic is a bit weird because of how `decode_string` works
     // (#39328): it assigns VAR_BLOB when it finds a NUL in the Lua string,
     // and VAR_STRING when it does not.
-    if args.ty(0) == VAR_LIST {
-        return items(list_of(args.get(0))).all(Item::is_str_or_nr);
+    if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
+        return items(list_of(&args[0])).all(Item::is_str_or_nr);
     }
     // A Lua string is always treated as blob data.
-    if args.ty(0) == VAR_BLOB || (args.ty(0) == VAR_STRING && in_lua_script()) {
+    if args.first().is_some_and(|arg| arg.v_type() == VAR_BLOB)
+        || (args.first().is_some_and(|arg| arg.v_type() == VAR_STRING) && in_lua_script())
+    {
         return true;
     }
     let what = c"writefile() first argument must be a List or a Blob";
@@ -362,7 +364,7 @@ struct Flags {
 }
 
 impl Flags {
-    fn read(args: Args<'_>) -> Option<Self> {
+    fn read(args: &[TypVal]) -> Option<Self> {
         let mut numbuf = NumBuf::new();
         let mut f = Self {
             binary: false,
@@ -371,7 +373,7 @@ impl Flags {
             do_fsync: p_fs.get() != 0,
             mkdir_p: false,
         };
-        if !args.has(2) {
+        if args.len() <= 2 {
             return Some(f);
         }
         let flags = str_arg_chk(args, 2, &mut numbuf)?;
@@ -397,12 +399,7 @@ impl Flags {
 
 /// `writefile({object}, {fname} [, {flags}])`: the List, Blob or Lua string
 /// written to the file, 0 on success and -1 on failure.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
-/// a cleared result.
-pub unsafe fn f_writefile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(-1 as VarNumber);
     if secure() || !writable(args) {
         return;
@@ -437,13 +434,13 @@ pub unsafe fn f_writefile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         defer_delete(fname);
     }
 
-    let write_ok = match args.ty(0) {
-        VAR_BLOB => match blob_of(args.get(0)) {
+    let write_ok = match args[0].v_type() {
+        VAR_BLOB => match blob_of(&args[0]) {
             Some(blob) => write_blob(&mut out, blob),
             None => true,
         },
-        VAR_STRING => write_string(&mut out, string_of(args.get(0))),
-        _ => write_list(&mut out, list_of(args.get(0)), flags.binary),
+        VAR_STRING => write_string(&mut out, string_of(&args[0])),
+        _ => write_list(&mut out, list_of(&args[0]), flags.binary),
     };
     if write_ok {
         result.write_number(0 as VarNumber);

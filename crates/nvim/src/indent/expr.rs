@@ -442,30 +442,22 @@ pub unsafe fn fix_indent() {
 }
 
 /// `indent()`.
-///
-/// # Safety
-/// The evaluator's contract: `args` and `result` are live typvals.
-pub unsafe fn f_indent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals, and there is a current buffer.
-    let lnum = unsafe { tv_get_lnum(args) };
-    unsafe {
-        (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-            get_indent_lnum(lnum) as VarNumber
-        } else {
-            -1
-        });
-    }
+    let lnum = unsafe { tv_get_lnum(&args[0]) };
+    result.write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        get_indent_lnum(lnum) as VarNumber
+    } else {
+        -1
+    });
 }
 /// `lispindent(lnum)`.
-///
-/// # Safety
-/// The evaluator's contract: `args` and `result` are live typvals.
-pub unsafe fn f_lispindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals; the cursor is moved onto the asked-for
     // line and put back.
     let mut win = Win::current();
     let pos = win.w_cursor;
-    let lnum = unsafe { tv_get_lnum(args) };
+    let lnum = unsafe { tv_get_lnum(&args[0]) };
     unsafe {
         (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
             win.w_cursor.lnum = lnum;

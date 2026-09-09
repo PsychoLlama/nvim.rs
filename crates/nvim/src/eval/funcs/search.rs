@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
 use crate::cstr;
 
@@ -33,7 +32,7 @@ use crate::search::{
 use crate::semsg;
 use crate::types::{
     Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, SearchItArg, TypVal,
-    VAR_UNKNOWN, VarNumber, int64_t, size_t,
+    VarNumber, int64_t, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -123,13 +122,13 @@ impl Drop for SavedWrapScan {
 ///
 /// # Safety
 /// `varp` is a live typval.
-unsafe fn search_direction(varp: *mut TypVal, flags: &mut c_int) -> c_int {
+unsafe fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
     // SAFETY: the caller's obligation; `nbuf` outlives the string
     // `tv_get_string_buf_chk` may park in it.
-    if unsafe { (*varp).v_type() } == VAR_UNKNOWN {
+    let Some(varp) = varp else {
         return FORWARD as c_int;
-    }
+    };
     let mut nbuf = [0 as c_char; NUMBUFLEN];
     let mut p = unsafe { tv_get_string_buf_chk(varp, nbuf.as_mut_ptr()) };
     if p.is_null() {
@@ -169,7 +168,7 @@ unsafe fn search_direction(varp: *mut TypVal, flags: &mut c_int) -> c_int {
 ///
 /// # Safety
 /// `args` is a live call frame.
-unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
+unsafe fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
@@ -181,9 +180,9 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
     // SAFETY throughout: the frame's arguments and the current window are live for the
     // whole call; `pos`/`firstpos`/`tm` are locals handed to `searchit` by
     // pointer and outlive it.
-    let pat = arg_string(&mut numbuf, args.get(0));
+    let pat = arg_string(&mut numbuf, &args[0]);
     // May set 'wrapscan'.
-    let dir = unsafe { search_direction(args.ptr(1), flagsp) };
+    let dir = unsafe { search_direction(args.get(1), flagsp) };
     if dir == 0 {
         return 0;
     }
@@ -201,17 +200,19 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
     // The optional {stopline}, {timeout} and {skip} arguments. Each is
     // only read when the one before it was supplied, so a {skip} passed
     // without a {flags} is silently ignored.
-    if args.has(1) && args.has(2) {
-        lnum_stop = arg_number_chk(args.get(2), None) as LineNr;
+    if args.len() > 1 && args.len() > 2 {
+        lnum_stop = arg_number_chk(&args[2], None) as LineNr;
         if lnum_stop < 0 {
             return 0;
         }
-        if args.has(3) {
-            time_limit = arg_number_chk(args.get(3), None) as int64_t;
+        if args.len() > 3 {
+            time_limit = arg_number_chk(&args[3], None) as int64_t;
             if time_limit < 0 {
                 return 0;
             }
-            use_skip = unsafe { eval_expr_valid_arg(args.ptr(4)) };
+            use_skip = args
+                .get(4)
+                .is_some_and(|tv| unsafe { eval_expr_valid_arg(tv) });
         }
     }
     let mut tm = profile_setlimit(time_limit);
@@ -221,7 +222,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
     if flags & (SP_REPEAT | SP_RETCOUNT) != 0
         || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0)
     {
-        let what = arg_string(&mut numbuf2, args.get(1));
+        let what = arg_string(&mut numbuf2, &args[1]);
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
         semsg!("E475: Invalid argument: {what}");
@@ -266,7 +267,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
         let save_pos = Win::current().w_cursor;
         Win::current().w_cursor = pos;
         let mut err = false;
-        let do_skip = unsafe { eval_expr_to_bool(args.ptr(4), &raw mut err) };
+        let do_skip = unsafe { eval_expr_to_bool(&args[4], &raw mut err) };
         Win::current().w_cursor = save_pos;
         if err {
             subpatnum = FAIL;
@@ -307,14 +308,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = 0;
     // SAFETY: the frame is live.
     result.write_number(unsafe { search_cmn(args, None, &mut flags) } as VarNumber);
@@ -322,14 +316,7 @@ pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
 /// sub-pattern number under the `p` flag.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_searchpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,
@@ -353,15 +340,8 @@ pub unsafe fn f_searchpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut locally = true;
     let mut thisblock = false;
     let mut error = false;
@@ -370,11 +350,11 @@ pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
     // SAFETY throughout: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
-    let name = arg_string_chk(&mut numbuf, args.get(0));
-    if args.has(1) {
-        locally = arg_number_chk(args.get(1), Some(&mut error)) == 0;
-        if !error && args.has(2) {
-            thisblock = arg_number_chk(args.get(2), Some(&mut error)) != 0;
+    let name = arg_string_chk(&mut numbuf, &args[0]);
+    if args.len() > 1 {
+        locally = arg_number_chk(&args[1], Some(&mut error)) == 0;
+        if !error && args.len() > 2 {
+            thisblock = arg_number_chk(&args[2], Some(&mut error)) != 0;
         }
     }
     if !error && !name.is_null() {
@@ -392,7 +372,7 @@ pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 ///
 /// # Safety
 /// `args` is a live call frame.
-unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
+unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -407,23 +387,23 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
     // and the three patterns outlive the `do_searchpair` call.
     let mut nbuf1 = NumBuf::new();
     let mut nbuf2 = NumBuf::new();
-    let spat = arg_string_chk(&mut numbuf, args.get(0));
-    let mpat = arg_string_chk(&mut nbuf1, args.get(1));
-    let epat = arg_string_chk(&mut nbuf2, args.get(2));
+    let spat = arg_string_chk(&mut numbuf, &args[0]);
+    let mpat = arg_string_chk(&mut nbuf1, &args[1]);
+    let epat = arg_string_chk(&mut nbuf2, &args[2]);
     if spat.is_null() || mpat.is_null() || epat.is_null() {
         // Type error, already reported.
         return 0;
     }
 
     // May set 'wrapscan'.
-    let dir = unsafe { search_direction(args.ptr(3), &mut flags) };
+    let dir = unsafe { search_direction(args.get(3), &mut flags) };
     if dir == 0 {
         return 0;
     }
 
     // `e` and `p` belong to search(); `n` and `s` contradict each other.
     if flags & (SP_END | SP_SUBPAT) != 0 || (flags & SP_NOMOVE != 0 && flags & SP_SETPCMARK != 0) {
-        let what = arg_string(&mut numbuf2, args.get(3));
+        let what = arg_string(&mut numbuf2, &args[3]);
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
         semsg!("E475: Invalid argument: {what}");
@@ -437,23 +417,23 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 
     // The optional {skip}, {stopline} and {timeout}. As in search(),
     // each is only read when the one before it was supplied.
-    let skip = if !args.has(3) || !args.has(4) {
+    let skip = if args.len() <= 3 || args.len() <= 4 {
         ptr::null()
     } else {
         // The type is checked later, when the expression is evaluated.
-        if args.has(5) {
-            lnum_stop = arg_number_chk(args.get(5), None) as LineNr;
+        if args.len() > 5 {
+            lnum_stop = arg_number_chk(&args[5], None) as LineNr;
             if lnum_stop < 0 {
-                let what = arg_string(&mut numbuf3, args.get(5));
+                let what = arg_string(&mut numbuf3, &args[5]);
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let what = unsafe { c_str(what) };
                 semsg!("E475: Invalid argument: {what}");
                 return 0;
             }
-            if args.has(6) {
-                time_limit = arg_number_chk(args.get(6), None) as int64_t;
+            if args.len() > 6 {
+                time_limit = arg_number_chk(&args[6], None) as int64_t;
                 if time_limit < 0 {
-                    let what = arg_string(&mut numbuf4, args.get(6));
+                    let what = arg_string(&mut numbuf4, &args[6]);
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let what = unsafe { c_str(what) };
                     semsg!("E475: Invalid argument: {what}");
@@ -461,7 +441,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
                 }
             }
         }
-        args.ptr(4) as *const TypVal
+        &args[4] as *const TypVal
     };
 
     let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut Pos);
@@ -473,27 +453,13 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_searchpair(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the frame is live.
     result.write_number(unsafe { searchpair_cmn(args, None) } as VarNumber);
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_searchpairpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,

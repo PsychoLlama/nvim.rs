@@ -3,8 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, frame};
-use super::wrappers::{arg_number, arg_string, arg_string_chk, check_arg};
+use super::wrappers::{arg_number, arg_string, arg_string_chk};
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
@@ -70,39 +69,32 @@ impl Drop for Owned {
 }
 
 /// `call({func}, {arglist} [, {dict}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
-    if check_arg(args, 1, tv_check_for_list_arg).is_err() {
+    if tv_check_for_list_arg(args, 1).is_err() {
         return;
     }
     // A null List is v:_null_list, which calls nothing.
-    if args.get(1).list_or_null().is_null() {
+    if args[1].list_or_null().is_null() {
         return;
     }
 
     let mut partial = ptr::null_mut::<Partial>();
     // Only the Lua-table arm allocates; the others borrow.
     let mut owned = false;
-    let mut func = match args.ty(0) {
-        VAR_FUNC => args.get(0).func_name_or_null(),
+    let mut func = match args[0].v_type() {
+        VAR_FUNC => args[0].func_name_or_null(),
         VAR_PARTIAL => {
-            partial = args.get(0).partial_or_null();
+            partial = args[0].partial_or_null();
             unsafe { partial_name(partial) }
         }
-        _ if unsafe { nlua_is_table_from_lua(args.ptr(0)) } => {
+        _ if unsafe { nlua_is_table_from_lua(&args[0]) } => {
             owned = true;
-            unsafe { nlua_register_table_as_callable(args.ptr(0)) }
+            unsafe { nlua_register_table_as_callable(&args[0]) }
         }
-        _ => arg_string(&mut numbuf, args.get(0)) as *mut c_char,
+        _ => arg_string(&mut numbuf, &args[0]) as *mut c_char,
     };
     if func.is_null() || unsafe { *func } as c_int == NUL {
         // Upstream returns here without releasing an owned name.
@@ -112,7 +104,7 @@ pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // A String name is resolved through the function-name translator,
     // which is what turns `s:`/`<SID>` into the real name.
     let tofree;
-    if args.ty(0) == VAR_STRING {
+    if args[0].v_type() == VAR_STRING {
         let mut p = func;
         let name = &raw mut p;
         let flags = TFN_INT as c_int | TFN_QUIET as c_int;
@@ -127,15 +119,15 @@ pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     }
 
     // A bad {dict} skips the call but still runs the cleanup below.
-    let selfdict = if !args.has(2) {
+    let selfdict = if args.len() <= 2 {
         Some(ptr::null_mut())
-    } else if check_arg(args, 2, tv_check_for_dict_arg).is_err() {
+    } else if tv_check_for_dict_arg(args, 2).is_err() {
         None
     } else {
-        Some(args.get(2).dict_or_null())
+        Some(args[2].dict_or_null())
     };
     if let Some(selfdict) = selfdict {
-        let _ = unsafe { func_call(func, args.ptr(1), partial, selfdict, result) };
+        let _ = unsafe { func_call(func, &args[1], partial, selfdict, result) };
     }
 
     if owned {
@@ -144,18 +136,11 @@ pub unsafe fn f_call(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 }
 
 /// `eval({string})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_eval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and `s` walks a string an argument owns.
-    let mut s = arg_string_chk(&mut numbuf, args.get(0));
+    let mut s = arg_string_chk(&mut numbuf, &args[0]);
     if !s.is_null() {
         s = unsafe { skipwhite(s) };
     }
@@ -220,10 +205,8 @@ unsafe fn get_list_line(
 ///
 /// # Safety
 /// `args` is a dispatcher argument array and `result` its return value.
-pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_int) {
+pub unsafe fn execute_common(args: &[TypVal], result: *mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's obligation, which is `Args::new`'s.
-    let args = unsafe { Args::new(args) };
     let cmd_idx = arg_off as usize;
     let silent_idx = cmd_idx + 1;
 
@@ -241,9 +224,9 @@ pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_
         return;
     }
 
-    if args.has(silent_idx) {
+    if args.len() > silent_idx {
         let mut buf = NumBuf::new();
-        let s = arg_string_chk(&mut buf, args.get(silent_idx));
+        let s = arg_string_chk(&mut buf, &args[silent_idx]);
         if s.is_null() {
             return;
         }
@@ -278,10 +261,13 @@ pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_
         msg_col.set(0);
     }
 
-    if args.ty(cmd_idx) != VAR_LIST {
-        let _ = unsafe { do_cmdline_cmd(arg_string(&mut numbuf, args.get(cmd_idx))) };
-    } else if !args.get(cmd_idx).list_or_null().is_null() {
-        let list = args.get(cmd_idx).list_or_null();
+    if !args
+        .get(cmd_idx)
+        .is_some_and(|arg| arg.v_type() == VAR_LIST)
+    {
+        let _ = unsafe { do_cmdline_cmd(arg_string(&mut numbuf, &args[cmd_idx])) };
+    } else if !args[cmd_idx].list_or_null().is_null() {
+        let list = args[cmd_idx].list_or_null();
         // The List is held across the run: a command may drop the
         // variable holding it.
         unsafe { tv_list_ref(list) };
@@ -313,30 +299,17 @@ pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_
 }
 
 /// `execute({command} [, {silent}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: this is the dispatcher's argument array, which is what
     // `execute_common` needs.
     unsafe { execute_common(args, result, 0) };
 }
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_exists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
-    let mut p = arg_string(&mut numbuf, args.get(0));
+    let mut p = arg_string(&mut numbuf, &args[0]);
     // Not a bool: the `:` arm answers 2 for an exact command name, and
     // that grading is part of `exists()`'s contract.
     let found: c_int = match unsafe { *p } as u8 {
@@ -378,25 +351,25 @@ pub unsafe fn f_exists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 ///
 /// `funcref()` binds the function the name resolves to *now*; `function()`
 /// keeps the name and resolves it at call time.
-fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
+fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY throughout: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
     let mut arg_pt = ptr::null_mut::<Partial>();
     let mut use_string = false;
-    let mut s = match args.ty(0) {
+    let mut s = match args[0].v_type() {
         // function(MyFunc, [arg], dict)
-        VAR_FUNC => args.get(0).func_name_or_null(),
+        VAR_FUNC => args[0].func_name_or_null(),
         // function(dict.MyFunc, [arg])
-        VAR_PARTIAL if !args.get(0).partial_or_null().is_null() => {
-            arg_pt = args.get(0).partial_or_null();
+        VAR_PARTIAL if !args[0].partial_or_null().is_null() => {
+            arg_pt = args[0].partial_or_null();
             unsafe { partial_name(arg_pt) }
         }
         // function('MyFunc', [arg], dict)
         _ => {
             use_string = true;
-            arg_string(&mut numbuf, args.get(0)) as *mut c_char
+            arg_string(&mut numbuf, &args[0]) as *mut c_char
         }
     };
 
@@ -425,7 +398,7 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
         || (is_funcref && trans_name.0.is_null())
     {
         let what = if use_string {
-            arg_string(&mut numbuf2, args.get(0))
+            arg_string(&mut numbuf2, &args[0])
         } else {
             s as *const c_char
         };
@@ -462,33 +435,33 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
     let mut dict_idx = 0;
     let mut arg_idx = 0;
     let mut list = ptr::null_mut::<List>();
-    if args.has(1) {
-        if args.has(2) {
+    if args.len() > 1 {
+        if args.len() > 2 {
             arg_idx = 1;
             dict_idx = 2;
-        } else if args.ty(1) == VAR_DICT {
+        } else if args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
             dict_idx = 1;
         } else {
             arg_idx = 1;
         }
         if dict_idx > 0 {
-            if check_arg(args, dict_idx, tv_check_for_dict_arg).is_err() {
+            if tv_check_for_dict_arg(args, dict_idx).is_err() {
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
             // v:_null_dict binds nothing.
-            if args.get(dict_idx as usize).dict_or_null().is_null() {
+            if args[dict_idx].dict_or_null().is_null() {
                 dict_idx = 0;
             }
         }
         if arg_idx > 0 {
-            if args.ty(arg_idx as usize) != VAR_LIST {
+            if args[arg_idx as usize].v_type() != VAR_LIST {
                 let msg = c"E923: Second argument of function() must be a list or a dict";
                 emsg(gettext(msg));
                 unsafe { xfree(name as *mut c_void) };
                 return;
             }
-            list = args.get(arg_idx as usize).list_or_null();
+            list = args[arg_idx as usize].list_or_null();
             if unsafe { tv_list_len(list) } == 0 {
                 arg_idx = 0;
             } else if unsafe { tv_list_len(list) } > MAX_FUNC_ARGS as c_int {
@@ -538,7 +511,7 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
 
     if dict_idx > 0 {
         // Bound explicitly, so `pt_auto` stays false.
-        unsafe { (*pt).pt_dict = args.get(dict_idx as usize).dict_or_null() };
+        unsafe { (*pt).pt_dict = args[dict_idx].dict_or_null() };
         unsafe { (*(*pt).pt_dict).dv_refcount.retain() };
     } else if !arg_pt.is_null() {
         // A dict bound automatically stays bound automatically. This
@@ -567,47 +540,27 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_funcref(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_funcref(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     common_function(args, result, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_function(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_function(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     common_function(args, result, false);
 }
 
 /// `garbagecollect([{atexit}])` — schedules a collection; the argument asks
 /// for one on exit as well.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_garbagecollect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _rettv) = frame!(args, result);
+pub fn f_garbagecollect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    let _rettv = result;
     want_garbage_collect.set(true);
-    if args.has(0) && arg_number(args.get(0)) == 1 {
+    if !args.is_empty() && arg_number(&args[0]) == 1 {
         garbage_collect_at_exit.set(true);
     }
 }
 
 /// `libcall()` and `libcallnr()`.
-fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
+fn libcall_common(args: &[TypVal], result: &mut TypVal, out_type: VarType) {
     result.write_empty(out_type);
     if out_type != VAR_NUMBER {
         result.write_string(ptr::null_mut());
@@ -617,12 +570,14 @@ fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
+    if !args.first().is_some_and(|arg| arg.v_type() == VAR_STRING)
+        || !args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING)
+    {
         return;
     }
-    let libname = args.get(0).string_or_null();
-    let funcname = args.get(1).string_or_null();
-    let arg3 = args.get(2);
+    let libname = args[0].string_or_null();
+    let funcname = args[1].string_or_null();
+    let arg3 = &args[2];
     let str_in = if arg3.v_type() == VAR_STRING {
         arg3.string_or_null()
     } else {
@@ -660,79 +615,44 @@ fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
 }
 
 /// `libcall({lib}, {func}, {arg})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_libcall(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_libcall(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     libcall_common(args, result, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_libcallnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_libcallnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     libcall_common(args, result, VAR_NUMBER);
 }
 
 /// `luaeval({expr} [, {expr}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_luaeval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_luaeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and the chunk outlives the call.
-    let chunk = arg_string_chk(&mut numbuf, args.get(0));
+    let chunk = arg_string_chk(&mut numbuf, &args[0]);
     if chunk.is_null() {
         return;
     }
-    unsafe { nlua_typval_eval(cstr_as_string(chunk), args.ptr(1), result) };
+    // Lua sees `_A`; with no second argument that is upstream's empty slot,
+    // which `nlua_push_typval` reads as nil.
+    let absent = TypVal::Unknown;
+    let arg = args.get(1).unwrap_or(&absent);
+    unsafe { nlua_typval_eval(cstr_as_string(chunk), arg, result) };
 }
 
 /// `py3eval({expr})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_py3eval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_py3eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, args, result) };
 }
 
 /// `perleval({expr})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_perleval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_perleval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, args, result) };
 }
 
 /// `rubyeval({expr})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_rubyeval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_rubyeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, args, result) };
 }

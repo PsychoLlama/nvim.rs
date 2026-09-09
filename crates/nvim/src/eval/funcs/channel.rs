@@ -3,7 +3,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::{Args, frame};
 use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
     ARENA_EMPTY, ARRAY_DICT_INIT, MAX_FUNC_ARGS, kChannelPartAll, kChannelPartRpc,
@@ -69,7 +68,7 @@ const CHANNEL_PARTS: [(&CStr, ChannelPart); 4] = [
 /// and outlives the returned `Array`, and `arena` is a live arena that owns
 /// what the conversion allocates.
 unsafe fn trailing_args(
-    args: Args,
+    args: &[TypVal],
     first: usize,
     items: &mut [Object; MAX_FUNC_ARGS as usize],
     arena: *mut Arena,
@@ -80,8 +79,8 @@ unsafe fn trailing_args(
     // SAFETY throughout: the caller's obligation; the loop stops at the terminator,
     // which the dispatcher writes at or before `MAX_ARGS`.
     let mut i = first;
-    while args.has(i) {
-        unsafe { *out.items.add(out.size) = vim_to_object(args.ptr(i), arena, true) };
+    while args.len() > i {
+        unsafe { *out.items.add(out.size) = vim_to_object(&args[i], arena, true) };
         out.size += 1;
         i += 1;
     }
@@ -89,28 +88,23 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_chanclose(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(0);
     // SAFETY throughout: the frame is live; `error` is a borrowed static message.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_NUMBER || (args.ty(1) != VAR_STRING && args.has(1)) {
+    if args[0].v_type() != VAR_NUMBER
+        || (!args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) && args.len() > 1)
+    {
         emsg(gettext(e_invarg));
         return;
     }
 
     let mut part = kChannelPartAll;
-    if args.ty(1) == VAR_STRING {
-        let stream = arg_string(&mut numbuf, args.get(1));
+    if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
+        let stream = arg_string(&mut numbuf, &args[1]);
         let found = CHANNEL_PARTS
             .iter()
             .find(|(name, _)| unsafe { cstr::eq(stream, name.as_ptr()) });
@@ -127,11 +121,7 @@ pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
     let mut error = ptr::null::<c_char>();
     result.write_number(unsafe {
-        channel_close(
-            args.get(0).number_or_zero() as uint64_t,
-            part,
-            &raw mut error,
-        )
+        channel_close(args[0].number_or_zero() as uint64_t, part, &raw mut error)
     } as VarNumber);
     if result.number_or_zero() == 0 {
         unsafe { emsg_ptr(error) };
@@ -139,30 +129,23 @@ pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `chansend({id}, {data})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
     // SAFETY throughout: the frame is live; `input` is an allocation `channel_send`
     // adopts.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_NUMBER || !args.has(1) {
+    if args[0].v_type() != VAR_NUMBER || args.len() <= 1 {
         emsg(gettext(e_invarg));
         return;
     }
 
     let mut input_len = 0isize;
-    let input = if args.ty(1) == VAR_BLOB {
+    let input = if args[1].v_type() == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        let b: *const Blob = args.get(1).blob_or_null();
+        let b: *const Blob = args[1].blob_or_null();
         input_len = unsafe { tv_blob_len(b) } as isize;
         if input_len > 0 {
             unsafe { xmemdup((*b).bv_ga.ga_data, input_len as usize) as *mut c_char }
@@ -172,14 +155,14 @@ pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     } else {
         // `false` for both: a List joins with NL, not CR-NL, and the
         // trailing NL is the caller's business.
-        unsafe { save_tv_as_string(args.ptr(1), &raw mut input_len, false, false) }
+        unsafe { save_tv_as_string(&args[1], &raw mut input_len, false, false) }
     };
     if input.is_null() {
         return;
     }
 
     let mut error = ptr::null::<c_char>();
-    let id = args.get(0).number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero() as uint64_t;
     let len = input_len as usize;
     let err = &raw mut error;
     let sent = unsafe { channel_send(id, input, len, true, err) };
@@ -190,15 +173,8 @@ pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_rpcnotify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(0);
     // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
     // it and the arena owns what the conversion allocates.
@@ -207,14 +183,14 @@ pub unsafe fn f_rpcnotify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     }
     // Channel 0 is the broadcast channel, so zero is allowed here where
     // `rpcrequest()` insists on a real one.
-    if args.ty(0) != VAR_NUMBER || args.get(0).number_or_zero() < 0 {
+    if args[0].v_type() != VAR_NUMBER || args[0].number_or_zero() < 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
         semsg!("E475: Invalid argument: {what}");
         return;
     }
-    if args.ty(1) != VAR_STRING {
+    if args[1].v_type() != VAR_STRING {
         let what = c"Event type must be a string".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -225,8 +201,8 @@ pub unsafe fn f_rpcnotify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
     let mut arena: Arena = ARENA_EMPTY;
     let event_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
-    let id = args.get(0).number_or_zero() as uint64_t;
-    let event = arg_string(&mut numbuf, args.get(1));
+    let id = args[0].number_or_zero() as uint64_t;
+    let event = arg_string(&mut numbuf, &args[1]);
     let ok = unsafe { rpc_send_event(id, event, event_args) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
@@ -309,15 +285,8 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_number(0);
     // Read before `check_secure`, because that is when it still describes
     // this call rather than anything the request goes on to do.
@@ -328,14 +297,14 @@ pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_NUMBER || args.get(0).number_or_zero() <= 0 {
+    if args[0].v_type() != VAR_NUMBER || args[0].number_or_zero() <= 0 {
         let what = c"Channel id must be a positive integer".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
         semsg!("E475: Invalid argument: {what}");
         return;
     }
-    if args.ty(1) != VAR_STRING {
+    if args[1].v_type() != VAR_STRING {
         let what = c"Method name must be a string".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
@@ -350,8 +319,8 @@ pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
 
     let mut err = Error::none();
-    let chan_id = args.get(0).number_or_zero() as uint64_t;
-    let method = arg_string(&mut numbuf, args.get(1));
+    let chan_id = args[0].number_or_zero() as uint64_t;
+    let method = arg_string(&mut numbuf, &args[1]);
     let mut res_mem: ArenaMem = ptr::null_mut();
     let object = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
@@ -397,14 +366,7 @@ pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
     let mut n = 0usize;
@@ -422,8 +384,8 @@ pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         addrs_arr.size += 1;
     }
 
-    if args.ty(0) == VAR_DICT
-        && unsafe { tv_dict_get_bool(args.get(0).dict_or_null(), c"peer".as_ptr(), 0) } != 0
+    if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)
+        && unsafe { tv_dict_get_bool(args[0].dict_or_null(), c"peer".as_ptr(), 0) } != 0
     {
         let mut items = [Object::Nil; 1];
         let mut lua_args = ARRAY_DICT_INIT;
@@ -469,28 +431,21 @@ pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `serverstart([{address}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_serverstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_serverstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     result.write_string(ptr::null_mut());
     // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
     // body owns, bar the one entry handed to `result`.
     if check_secure() {
         return;
     }
-    let address = if !args.has(0) {
+    let address = if args.is_empty() {
         unsafe { server_address_new(ptr::null()) }
-    } else if args.ty(0) != VAR_STRING {
+    } else if !args.first().is_some_and(|arg| arg.v_type() == VAR_STRING) {
         emsg(gettext(e_invarg));
         return;
     } else {
-        unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) }
+        unsafe { xstrdup(arg_string(&mut numbuf, &args[0])) }
     };
 
     let status = unsafe { server_start(address) };
@@ -520,19 +475,12 @@ pub unsafe fn f_serverstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `serverstop({address})`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_serverstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_serverstop(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
     }
-    if args.ty(0) != VAR_STRING {
+    if args[0].v_type() != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
     }
@@ -541,37 +489,29 @@ pub unsafe fn f_serverstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     // already-cleared return value rather than by this assignment.
     result.write_number(0);
     // v:_null_string stops nothing.
-    if !args.get(0).string_or_null().is_null() {
-        result
-            .write_number(unsafe { server_stop(args.get(0).string_or_null(), false) } as VarNumber);
+    if !args[0].string_or_null().is_null() {
+        result.write_number(unsafe { server_stop(args[0].string_or_null(), false) } as VarNumber);
     }
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
-    if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
+    if args[0].v_type() != VAR_STRING || args[1].v_type() != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
     }
-    if args.ty(2) != VAR_DICT && args.has(2) {
+    if !args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) && args.len() > 2 {
         let arg0 = "expected dictionary";
         semsg!("E475: Invalid argument: {arg0}");
         return;
     }
 
-    let mode = arg_string(&mut numbuf, args.get(0));
-    let address = arg_string(&mut numbuf2, args.get(1));
+    let mode = arg_string(&mut numbuf, &args[0]);
+    let address = arg_string(&mut numbuf2, &args[1]);
     let tcp = if unsafe { cstr::eq_bytes(mode, b"tcp") } {
         true
     } else if unsafe { cstr::eq_bytes(mode, b"pipe") } {
@@ -584,8 +524,8 @@ pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
     let mut rpc = false;
     let mut on_data = NO_READER;
-    if args.ty(2) == VAR_DICT {
-        let opts = args.get(2).dict_or_null();
+    if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
+        let opts = args[2].dict_or_null();
         rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
         if !unsafe { tv_dict_get_callback(opts, c"on_data".as_ptr(), 7, &raw mut on_data.cb) } {
             return;
@@ -610,21 +550,14 @@ pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_stdioopen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.
-    if args.ty(0) != VAR_DICT {
+    if args[0].v_type() != VAR_DICT {
         emsg(gettext(e_invarg));
         return;
     }
-    let opts = args.get(0).dict_or_null();
+    let opts = args[0].dict_or_null();
     let mut on_stdin = NO_READER;
     let rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
     if !unsafe { tv_dict_get_callback(opts, c"on_stdin".as_ptr(), 8, &raw mut on_stdin.cb) } {

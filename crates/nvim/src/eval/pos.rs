@@ -277,14 +277,14 @@ pub unsafe fn var2fpos(
 /// # Safety
 /// `arg` and `posp` must be valid; `fnump` and `curswantp` null or valid.
 pub unsafe fn list2fpos(
-    arg: *mut TypVal,
+    arg: *const TypVal,
     posp: *mut Pos,
     fnump: *mut c_int,
     curswantp: *mut ColNr,
     charcol: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
-    let (arg, mut posp) = unsafe { (Tv::new(arg), Live::<Pos>::new(posp)) };
+    let (arg, mut posp) = unsafe { (Tv::new(arg.cast_mut()), Live::<Pos>::new(posp)) };
     if arg.v_type() != VAR_LIST {
         return Err(Failed);
     }

@@ -30,7 +30,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, str_arg_chk};
+use super::{Owned, VALID_HEAD, VALID_PATH, at, from, is_sep, str_arg_chk};
 use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
@@ -618,13 +618,8 @@ pub unsafe fn modify_fname(
 }
 
 /// `fnamemodify({fname}, {mods})`.
-///
-/// # Safety
-/// `args` is the evaluator's own argument vector, arity 2, and `result` a
-/// cleared result.
-pub unsafe fn f_fnamemodify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_fnamemodify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(args, result);
     let mut buf = NumBuf::new();
     let (fname, mods) = (
         str_arg_chk(args, 0, &mut numbuf),

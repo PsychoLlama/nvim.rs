@@ -23,7 +23,12 @@ pub struct EvalFuncDef {
     pub data: EvalFuncData,
 }
 
-pub type VimLFunc = Option<unsafe fn(*mut TypVal, *mut TypVal, EvalFuncData) -> ()>;
+/// A builtin's implementation: the arguments the call supplied, the return
+/// value to fill in, and the row's own payload.
+///
+/// The slice *is* the arity -- an optional argument is one the slice does not
+/// have -- so no body counts its arguments and none reads a terminator.
+pub type VimLFunc = Option<fn(&[TypVal], &mut TypVal, EvalFuncData)>;
 
 /// How many arguments a builtin takes.
 ///

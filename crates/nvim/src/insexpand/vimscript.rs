@@ -85,7 +85,7 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> *mut Dict 
 /// # Safety
 ///
 /// `tv` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn ins_compl_add_tv(tv: *mut TypVal, dir: Direction, fast: bool) -> c_int {
+pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: *const c_char;
@@ -341,14 +341,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
 }
 
 /// The `complete()` function; a `VimLFunc` row in the builtin table.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `_result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if State.get() & MODE_INSERT == 0 {
         emsg(gettext(c"E785: complete() can only be used in Insert mode"));
         return;
@@ -361,40 +354,28 @@ pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFun
         return;
     }
 
-    if unsafe { (*args.offset(1)).v_type() } != VAR_LIST {
+    if args[1].v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
     } else {
-        let startcol = unsafe { tv_get_number_chk(args, ptr::null_mut()) } as ColNr;
+        let startcol = unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as ColNr;
         if startcol > 0 {
-            unsafe { set_completion(startcol - 1, (*args.offset(1)).list_or_null()) };
+            unsafe { set_completion(startcol - 1, args[1].list_or_null()) };
         }
     }
 }
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_complete_add(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).write_number(ins_compl_add_tv(args, kDirectionNotSet, false) as VarNumber) };
+pub fn f_complete_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    unsafe {
+        (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false) as VarNumber)
+    };
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
-///
-/// # Safety
-///
-/// `_args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_complete_check(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_complete_check(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     ins_compl_check_keys(0, true);
-    unsafe { (*result).write_number(ins_compl_interrupted() as VarNumber) };
+    result.write_number(ins_compl_interrupted() as VarNumber);
 }
 
 /// Fill `di` with one match, as `complete_info()` reports it.
@@ -563,23 +544,16 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
 }
 
 /// The `complete_info()` function; a `VimLFunc` row in the builtin table.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
-/// pointer fields point at live data for the call.
-pub unsafe fn f_complete_info(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_complete_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_dict_alloc_ret(result) };
 
     let mut what_list: *mut List = ptr::null_mut();
-    if unsafe { (*args).v_type() } != VAR_UNKNOWN {
-        if unsafe { (*args).v_type() } != VAR_LIST {
+    if !args.is_empty() {
+        if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
             emsg(gettext(e_listreq));
             return;
         }
-        what_list = unsafe { (*args).list_or_null() };
+        what_list = args[0].list_or_null();
     }
     unsafe { get_complete_info(what_list, (*result).dict_or_null()) };
 }

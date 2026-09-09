@@ -14,7 +14,7 @@ use crate::guard::{Keys, Suppress};
 use crate::keycodes::{Key, key_escape};
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{NUL, VAR_DICT, VAR_STRING};
 use crate::winlayer::windows;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -49,7 +49,7 @@ struct GetcharOpts {
 ///
 /// # Safety
 /// `args` must be a valid argument vector.
-unsafe fn getchar_opts(args: *mut TypVal, allow_number: bool) -> Option<GetcharOpts> {
+unsafe fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
     let mut numbuf = NumBuf::new();
     let mut opts = GetcharOpts {
         allow_number,
@@ -61,14 +61,11 @@ unsafe fn getchar_opts(args: *mut TypVal, allow_number: bool) -> Option<GetcharO
     // SAFETY (this body): the Vimscript call convention -- `args` is a live
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `numbuf` outlives the strings it lends back.
-    if unsafe { (*args).v_type() } != VAR_UNKNOWN
-        && unsafe { tv_check_for_opt_dict_arg(args, 1) }.is_err()
-    {
+    if !args.is_empty() && tv_check_for_opt_dict_arg(args, 1).is_err() {
         return None;
     }
-    if unsafe { (*args).v_type() } != VAR_UNKNOWN && unsafe { (*args.add(1)).v_type() } == VAR_DICT
-    {
-        let d = unsafe { (*args.add(1)).dict_or_null() };
+    if !args.is_empty() && args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
+        let d = args[1].dict_or_null();
 
         if opts.allow_number {
             opts.allow_number = unsafe { tv_dict_get_bool(d, c"number".as_ptr(), 1) } != 0;
@@ -109,7 +106,7 @@ unsafe fn getchar_opts(args: *mut TypVal, allow_number: bool) -> Option<GetcharO
 ///
 /// # Safety
 /// `args` must be a valid argument vector.
-unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
+unsafe fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
     let mut error = false;
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
@@ -118,8 +115,7 @@ unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
 
         // SAFETY (this body): reads one key through the ordinary input stack;
         // the buffers it fills are this frame's own.
-        let blocking = unsafe { (*args).v_type() } == VAR_UNKNOWN
-            || unsafe { (*args).as_number() } == Some(-1);
+        let blocking = args.is_empty() || args[0].as_number() == Some(-1);
         let n: VarNumber = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
@@ -141,7 +137,7 @@ unsafe fn getchar_read(args: *mut TypVal, cursor: CursorFlag) -> VarNumber {
                 }
             }
             safe_vgetc() as VarNumber
-        } else if unsafe { tv_get_number_chk(args, &raw mut error) } == 1 {
+        } else if unsafe { tv_get_number_chk(&args[0], &raw mut error) } == 1 {
             // getchar(1): only check whether a character is available.
             vpeekc_any() as VarNumber
         } else if error || vpeekc_any() == NUL {
@@ -194,7 +190,7 @@ fn set_mouse_vars() {
 ///
 /// # Safety
 /// `args` and `result` must be a valid argument vector and return slot.
-pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allow_number: bool) {
+pub(crate) unsafe fn getchar_common(args: &[TypVal], result: *mut TypVal, allow_number: bool) {
     // SAFETY (this body): as [`getchar_opts`] -- a live argument vector and a
     // writable `result`; the scratch buffers are this frame's own.
     let Some(opts) = (unsafe { getchar_opts(args, allow_number) }) else {
@@ -257,29 +253,20 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
 /// The `getchar()` Vimscript function.
 ///
 /// The eval function table holds it as a `VimLFunc` pointer.
-///
-/// # Safety
-/// As [`getchar_common`].
-pub unsafe fn f_getchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): the Vimscript call convention, passed straight
     // through.
     unsafe { getchar_common(args, result, true) };
 }
 
 /// The `getcharstr()` Vimscript function.
-///
-/// # Safety
-/// As [`getchar_common`].
-pub unsafe fn f_getcharstr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getcharstr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
     unsafe { getchar_common(args, result, false) };
 }
 
 /// The `getcharmod()` Vimscript function: the modifiers of the last key.
-///
-/// # Safety
-/// `result` must be a valid return slot.
-pub unsafe fn f_getcharmod(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_getcharmod(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    unsafe { (*result).write_number(VarNumber::from(mod_mask.get().bits())) };
+    result.write_number(VarNumber::from(mod_mask.get().bits()));
 }

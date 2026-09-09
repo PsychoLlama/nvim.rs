@@ -292,19 +292,11 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 }
 
 /// `charclass({string})` — the class of the string's first character.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn f_charclass(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
-        || unsafe { (*args).string_or_null() }.is_null()
-    {
+pub fn f_charclass(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+    if tv_check_for_string_arg(args, 0).is_err() || args[0].string_or_null().is_null() {
         return;
     }
-    unsafe { (*result).write_number(mb_get_class((*args).string_or_null()) as VarNumber) };
+    unsafe { (*result).write_number(mb_get_class(args[0].string_or_null()) as VarNumber) };
 }
 
 #[cfg(test)]

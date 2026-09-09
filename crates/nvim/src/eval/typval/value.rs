@@ -399,7 +399,7 @@ pub unsafe fn value_check_lock(
 ///
 /// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
 /// must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
+pub unsafe fn tv_equal(tv1: *const TypVal, tv2: *const TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
@@ -429,7 +429,7 @@ pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     // there would be an indirect call on a measured phase. [`Depth`] costs
     // nothing extra -- it is the same two `set`s, moved onto the scope.
     // SAFETY: the caller's promise: two live typvals.
-    let (a, b) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
+    let (a, b) = unsafe { (Tv::new(tv1.cast_mut()), Tv::new(tv2.cast_mut())) };
     match a.v_type() {
         VAR_LIST => {
             let _recursing = Depth::of(&recursive_cnt);

@@ -2,7 +2,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::args::frame;
 use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::context::{
@@ -28,16 +27,14 @@ const NO_ERROR: Error = Error::none();
 ///
 /// # Safety
 /// `tv` is a live typval from the call frame.
-unsafe fn context_index(tv: *const TypVal, what: &str) -> Option<usize> {
-    // SAFETY: the caller's obligation.
-    let tv = unsafe { &*tv };
-    if tv.v_type() == VAR_NUMBER {
-        Some(tv.number_or_zero() as usize)
-    } else if tv.v_type() == VAR_UNKNOWN {
-        Some(0)
-    } else {
-        semsg!("E475: Invalid argument: {what}");
-        None
+fn context_index(tv: Option<&TypVal>, what: &str) -> Option<usize> {
+    match tv {
+        None => Some(0),
+        Some(tv) if tv.v_type() == VAR_NUMBER => Some(tv.number_or_zero() as usize),
+        Some(_) => {
+            semsg!("E475: Invalid argument: {what}");
+            None
+        }
     }
 }
 
@@ -52,19 +49,10 @@ fn context_at(index: usize) -> Option<*mut Context> {
 }
 
 /// `ctxget([{index}])` — the context at `index` as a Dictionary.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_ctxget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(args, result);
+pub fn f_ctxget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arena and the error are owned here and freed on the way
     // out; `object_to_vim` copies what it keeps out of the arena's dict.
-    let arg = args.ptr(0);
-    let Some(index) =
-        (unsafe { context_index(arg, "expected nothing or a Number as an argument") })
+    let Some(index) = context_index(args.first(), "expected nothing or a Number as an argument")
     else {
         return;
     };
@@ -80,13 +68,7 @@ pub unsafe fn f_ctxget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `ctxpop()` — restore and drop the context on top of the stack.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_ctxpop(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_ctxpop(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: restores from the context stack; main thread only.
     if !unsafe { ctx_restore(ptr::null_mut(), kCtxAll.get()) } {
         semsg!("Context stack is empty");
@@ -95,19 +77,13 @@ pub unsafe fn f_ctxpop(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFunc
 
 /// `ctxpush([{types}])` — push a context holding the named parts of the
 /// editor state, or all of them when no list is given.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_ctxpush(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _rettv) = frame!(args, _result);
+pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
+    let _rettv = _result;
     // SAFETY throughout: walks the argument list, whose items live for the call.
-    let types = match args.ty(0) {
+    let types = match args.first().map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_LIST => {
             let mut types: c_int = 0;
-            let mut li = unsafe { tv_list_first(args.get(0).list_or_null()) };
+            let mut li = unsafe { tv_list_first(args[0].list_or_null()) };
             while !li.is_null() {
                 let tv = unsafe { &(*li).li_tv };
                 // An unrecognised name is silently ignored, as is a
@@ -139,23 +115,16 @@ pub unsafe fn f_ctxpush(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `ctxset({context} [, {index}])` — replace the context at `index`.
-///
-/// # Safety
-///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and
-/// `_result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _rettv) = frame!(args, _result);
+pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
+    let _rettv = _result;
     // SAFETY throughout: the arena, the error and the scratch context are owned here;
     // `tmp` is either installed in place of `ctx` or freed.
-    if args.ty(0) != VAR_DICT {
+    if args[0].v_type() != VAR_DICT {
         semsg!("E475: Invalid argument: expected dictionary as first argument");
         return;
     }
-    let arg = args.ptr(1);
     let msg = "expected nothing or a Number as second argument";
-    let Some(index) = (unsafe { context_index(arg, msg) }) else {
+    let Some(index) = context_index(args.get(1), msg) else {
         return;
     };
     let Some(ctx) = context_at(index) else {
@@ -166,7 +135,7 @@ pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
     let save_did_emsg = did_emsg.get();
     did_emsg.set(0);
     let mut arena = ARENA_EMPTY;
-    let dict = unsafe { vim_to_object(args.ptr(0), &raw mut arena, true) }
+    let dict = unsafe { vim_to_object(&args[0], &raw mut arena, true) }
         .as_dict()
         .expect("a VAR_DICT converts to a Dict object");
     let mut tmp = CONTEXT_INIT;
@@ -189,13 +158,6 @@ pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 }
 
 /// `ctxsize()` — how many contexts are on the stack.
-///
-/// # Safety
-///
-/// `_args` must be the evaluator's argument buffer (`Args::new`) and
-/// `result` its live return value: the contract the two builtin
-/// dispatchers keep.
-pub unsafe fn f_ctxsize(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (_args, result) = frame!(_args, result);
+pub fn f_ctxsize(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(ctx_size() as VarNumber);
 }

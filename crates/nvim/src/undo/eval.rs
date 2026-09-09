@@ -21,7 +21,7 @@ use super::store::Marks;
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::highlight_group::HLF_T;
-use crate::types::{VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{VAR_STRING, kListLenMayKnow};
 use crate::winlayer::Buf;
 
 /// `tv_dict_add_nr` for a literal key, whose length the `CStr` already knows.
@@ -129,20 +129,16 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
 }
 
 /// `undofile({name})` — where the undo file for `{name}` would be written.
-///
-/// # Safety
-///
-/// The eval-function contract: one argument and a return value to fill in.
-pub unsafe fn f_undofile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe { (*result).write_empty(VAR_STRING) };
+    result.write_empty(VAR_STRING);
     // SAFETY: as above.
-    let fname: *const c_char = unsafe { numbuf.string(args) };
+    let fname: *const c_char = unsafe { numbuf.string(&args[0]) };
     // SAFETY: a NUL-terminated name.
     if unsafe { *fname } == 0 {
         // SAFETY: the return value to fill in.
-        unsafe { (*result).write_string(ptr::null_mut()) };
+        result.write_string(ptr::null_mut());
         return;
     }
     // SAFETY: a NUL-terminated name.
@@ -156,23 +152,16 @@ pub unsafe fn f_undofile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 }
 
 /// `undotree([{buf}])` — the whole tree, plus where in it the buffer sits.
-///
-/// # Safety
-///
-/// The eval-function contract, and a live current buffer.
-pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     unsafe { tv_dict_alloc_ret(result) };
-    let tv: *mut TypVal = args;
-    // SAFETY: as above.
-    let raw = if unsafe { (*tv).v_type() } == VAR_UNKNOWN {
-        Buf::current_raw()
-    } else {
+    let raw = match args.first() {
         // SAFETY: as above.
-        unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) }
+        Some(tv) => unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) },
+        None => Buf::current_raw(),
     };
     // SAFETY: the return value the contract gives us.
-    let dict = unsafe { (*result).dict_or_null() };
+    let dict = result.dict_or_null();
     // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or NULL.
     let buf = unsafe { Buf::from_raw(raw) };
     let Some(buf) = buf else { return };

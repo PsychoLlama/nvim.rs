@@ -32,17 +32,24 @@ use crate::types::NUL;
 /// with exactly one `%d`. Being on the editor's main thread is the ambient
 /// precondition of the whole `eval/` tree, not this helper's own.
 #[inline]
-fn arg_check(
-    ok: bool,
+fn arg_is(
+    args: &[TypVal],
+    idx: usize,
     errmsg: *const ::core::ffi::c_char,
-    idx: ::core::ffi::c_int,
+    ok: impl Fn(&TypVal) -> bool,
 ) -> Result<(), Failed> {
+    arg_check(args.get(idx).is_some_and(ok), errmsg, idx)
+}
+
+#[inline]
+fn arg_check(ok: bool, errmsg: *const ::core::ffi::c_char, idx: usize) -> Result<(), Failed> {
     if ok {
         return Ok(());
     }
     // SAFETY: `errmsg` is one of the module's NUL-terminated statics.
     let errmsg = unsafe { gettext_ptr(errmsg) };
-    emsg_text(tr_plural!(errmsg, idx + 1));
+    let position = ::core::ffi::c_int::try_from(idx + 1).expect("an argument position");
+    emsg_text(tr_plural!(errmsg, position));
     Err(Failed)
 }
 
@@ -109,37 +116,19 @@ pub unsafe fn tv_check_str(tv: *const TypVal) -> bool {
 }
 
 /// `E1174`: argument `idx` must be a String.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_string_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_STRING,
-        e_string_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_string_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_STRING,
     )
 }
 
 /// `E1175`: argument `idx` must be a String that is not empty.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_nonempty_string_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    unsafe { tv_check_for_string_arg(args, idx) }?;
-    let s = unsafe { (*args.offset(idx as isize)).string_or_null() };
+pub fn tv_check_for_nonempty_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    tv_check_for_string_arg(args, idx)?;
+    let s = args[idx].string_or_null();
     let nonempty = !s.is_null() && ::core::ffi::c_int::from(unsafe { *s }) != NUL;
     arg_check(
         nonempty,
@@ -149,185 +138,83 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
 }
 
 /// [`tv_check_for_string_arg`], accepting a missing argument.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` values, the last of which may
-/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_opt_string_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
+pub fn tv_check_for_opt_string_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    if args.len() <= idx {
         return Ok(());
     }
-    unsafe { tv_check_for_string_arg(args, idx) }
+    tv_check_for_string_arg(args, idx)
 }
 
 /// `E1210`: argument `idx` must be a Number.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_number_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_NUMBER,
-        e_number_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_number_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_number_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_NUMBER,
     )
 }
 
 /// [`tv_check_for_number_arg`], accepting a missing argument.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` values, the last of which may
-/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_opt_number_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
+pub fn tv_check_for_opt_number_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    if args.len() <= idx {
         return Ok(());
     }
-    unsafe { tv_check_for_number_arg(args, idx) }
+    tv_check_for_number_arg(args, idx)
 }
 
 /// `E1219`: argument `idx` must be a Float or a Number.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_float_or_nr_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_FLOAT || arg.v_type() == VAR_NUMBER,
-        e_float_or_number_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_float_or_nr_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_float_or_number_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_FLOAT || arg.v_type() == VAR_NUMBER,
     )
 }
 
 /// `E1212`: argument `idx` must be a Bool, or the Number 0 or 1.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_bool_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    let numeric_bool =
-        arg.v_type() == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
-    arg_check(
-        arg.v_type() == VAR_BOOL || numeric_bool,
-        e_bool_required_for_argument_nr.as_ptr(),
-        idx,
-    )
+pub fn tv_check_for_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(args, idx, e_bool_required_for_argument_nr.as_ptr(), |arg| {
+        let numeric_bool =
+            arg.v_type() == VAR_NUMBER && (arg.number_or_zero() == 0 || arg.number_or_zero() == 1);
+        arg.v_type() == VAR_BOOL || numeric_bool
+    })
 }
 
 /// [`tv_check_for_bool_arg`], accepting a missing argument.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` values, the last of which may
-/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_opt_bool_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
+pub fn tv_check_for_opt_bool_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    if args.len() <= idx {
         return Ok(());
     }
-    unsafe { tv_check_for_bool_arg(args, idx) }
+    tv_check_for_bool_arg(args, idx)
 }
 
 /// `E1238`: argument `idx` must be a Blob.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_blob_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_BLOB,
-        e_blob_required_for_argument_nr.as_ptr(),
-        idx,
-    )
+pub fn tv_check_for_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(args, idx, e_blob_required_for_argument_nr.as_ptr(), |arg| {
+        arg.v_type() == VAR_BLOB
+    })
 }
 
 /// `E1211`: argument `idx` must be a List.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_list_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_LIST,
-        e_list_required_for_argument_nr.as_ptr(),
-        idx,
-    )
+pub fn tv_check_for_list_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(args, idx, e_list_required_for_argument_nr.as_ptr(), |arg| {
+        arg.v_type() == VAR_LIST
+    })
 }
 
 /// `E1206`: argument `idx` must be a Dictionary.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_dict_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_DICT,
-        e_dict_required_for_argument_nr.as_ptr(),
-        idx,
-    )
+pub fn tv_check_for_dict_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(args, idx, e_dict_required_for_argument_nr.as_ptr(), |arg| {
+        arg.v_type() == VAR_DICT
+    })
 }
 
 /// `E1297`: argument `idx` must be a Dictionary that is not the NULL one.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_nonnull_dict_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    unsafe { tv_check_for_dict_arg(args, idx) }?;
-    let dict = unsafe { (*args.offset(idx as isize)).dict_or_null() };
+pub fn tv_check_for_nonnull_dict_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    tv_check_for_dict_arg(args, idx)?;
+    let dict = args[idx].dict_or_null();
     arg_check(
         !dict.is_null(),
         e_non_null_dict_required_for_argument_nr.as_ptr(),
@@ -336,158 +223,77 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
 }
 
 /// [`tv_check_for_dict_arg`], accepting a missing argument.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` values, the last of which may
-/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_opt_dict_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
+pub fn tv_check_for_opt_dict_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    if args.len() <= idx {
         return Ok(());
     }
-    unsafe { tv_check_for_dict_arg(args, idx) }
+    tv_check_for_dict_arg(args, idx)
 }
 
 /// `E1220`: argument `idx` must be a String or a Number.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_string_or_number_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_STRING || arg.v_type() == VAR_NUMBER,
-        e_string_or_number_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_string_or_number_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_string_or_number_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_NUMBER,
     )
 }
 
 /// Argument `idx` must name a buffer: a String or a Number.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_buffer_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    unsafe { tv_check_for_string_or_number_arg(args, idx) }
+pub fn tv_check_for_buffer_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    tv_check_for_string_or_number_arg(args, idx)
 }
 
 /// Argument `idx` must name a line: a String or a Number.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_lnum_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    unsafe { tv_check_for_string_or_number_arg(args, idx) }
+pub fn tv_check_for_lnum_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    tv_check_for_string_or_number_arg(args, idx)
 }
 
 /// `E1222`: argument `idx` must be a String or a List.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_string_or_list_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST,
-        e_string_or_list_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_string_or_list_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_string_or_list_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST,
     )
 }
 
 /// `E1252`: argument `idx` must be a String, a List or a Blob.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
-        e_string_list_or_blob_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_string_or_list_or_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_string_list_or_blob_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_STRING || arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
     )
 }
 
 /// [`tv_check_for_string_or_list_arg`], accepting a missing argument.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` values, the last of which may
-/// be the `VAR_UNKNOWN` terminator, and `idx` must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_opt_string_or_list_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    if unsafe { (*args.offset(idx as isize)).v_type() } == VAR_UNKNOWN {
+pub fn tv_check_for_opt_string_or_list_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    if args.len() <= idx {
         return Ok(());
     }
-    unsafe { tv_check_for_string_or_list_arg(args, idx) }
+    tv_check_for_string_or_list_arg(args, idx)
 }
 
 /// `E1256`: argument `idx` must be a String, a Funcref or a partial.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_string_or_func_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_PARTIAL || arg.v_type() == VAR_FUNC || arg.v_type() == VAR_STRING,
-        e_string_or_function_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_string_or_func_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_string_or_function_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_PARTIAL || arg.v_type() == VAR_FUNC || arg.v_type() == VAR_STRING,
     )
 }
 
 /// `E1226`: argument `idx` must be a List or a Blob.
-///
-/// # Safety
-/// `args` must point at at least `idx + 1` initialised values and `idx`
-/// must be non-negative.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_for_list_or_blob_arg(
-    args: *const TypVal,
-    idx: ::core::ffi::c_int,
-) -> Result<(), Failed> {
-    let arg = unsafe { &*args.offset(idx as isize) };
-    arg_check(
-        arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
-        e_list_or_blob_required_for_argument_nr.as_ptr(),
+pub fn tv_check_for_list_or_blob_arg(args: &[TypVal], idx: usize) -> Result<(), Failed> {
+    arg_is(
+        args,
         idx,
+        e_list_or_blob_required_for_argument_nr.as_ptr(),
+        |arg| arg.v_type() == VAR_LIST || arg.v_type() == VAR_BLOB,
     )
 }

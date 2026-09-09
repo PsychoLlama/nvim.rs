@@ -795,13 +795,13 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
 ///
 /// # Safety
 /// `arg` must be null or valid.
-pub unsafe fn typval_tostring(arg: *mut TypVal, quotes: bool) -> *mut c_char {
+pub unsafe fn typval_tostring(arg: *const TypVal, quotes: bool) -> *mut c_char {
     if arg.is_null() {
         // SAFETY: the text is a NUL-terminated literal.
         return unsafe { xstrdup(c"(does not exist)".as_ptr()) };
     }
     // SAFETY: the caller's promise -- a non-null typval outlives the call.
-    let value = unsafe { Tv::new(arg) };
+    let value = unsafe { Tv::new(arg.cast_mut()) };
     if !quotes && value.v_type() == VAR_STRING {
         let s = value.string_or_null();
         let s = if s.is_null() {

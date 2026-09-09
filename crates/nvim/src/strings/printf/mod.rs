@@ -19,7 +19,6 @@ use crate::cstr;
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;
 
-use super::given;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
 use crate::memory::{arena_alloc, arena_alloc_block};
@@ -42,31 +41,21 @@ const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 
 /// The `*idxp`-th Vimscript argument, or `None` with `E766` raised.
 ///
-/// Indexing is one-based -- the C writes `tvs[*idxp - 1]` at every fetcher
-/// -- and the array is terminated by a `VAR_UNKNOWN` entry rather than by a
-/// count, so that entry is the only bound there is. The index moves on only
-/// when an argument was actually there.
-///
-/// # Safety
-///
-/// `tvs` must point at an initialized typval, unaliased for the call.
-unsafe fn next_arg(tvs: *mut TypVal, idxp: &mut c_int) -> Option<*mut TypVal> {
-    let tv = unsafe { tvs.offset(*idxp as isize - 1) };
-    if !given(unsafe { &*tv }) {
+/// Indexing is one-based -- the C writes `tvs[*idxp - 1]` at every fetcher.
+/// The index moves on only when an argument was actually there.
+fn next_arg<'a>(tvs: &'a [TypVal], idxp: &mut c_int) -> Option<&'a TypVal> {
+    let Some(tv) = usize::try_from(*idxp - 1).ok().and_then(|i| tvs.get(i)) else {
         emsg(gettext(E_INSUFFICIENT_ARGS));
         return None;
-    }
+    };
     *idxp += 1;
     Some(tv)
 }
 
 /// The next argument as a number; 0 if it is not one.
 ///
-/// # Safety
-///
-/// `tvs` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn tv_nr(tvs: *mut TypVal, idxp: &mut c_int) -> VarNumber {
-    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+pub(crate) fn tv_nr(tvs: &[TypVal], idxp: &mut c_int) -> VarNumber {
+    let Some(tv) = next_arg(tvs, idxp) else {
         return 0;
     };
     let mut err = false;
@@ -83,15 +72,15 @@ pub(crate) unsafe fn tv_nr(tvs: *mut TypVal, idxp: &mut c_int) -> VarNumber {
 /// # Safety
 /// `numbuf` must be writable for `NUMBUFLEN` bytes.
 pub(crate) unsafe fn tv_str(
-    tvs: *mut TypVal,
+    tvs: &[TypVal],
     idxp: &mut c_int,
     tofree: &mut *mut c_char,
     numbuf: *mut c_char,
 ) -> *const c_char {
-    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+    let Some(tv) = next_arg(tvs, idxp) else {
         return ptr::null();
     };
-    if matches!(unsafe { (*tv).v_type() }, VAR_STRING | VAR_NUMBER) {
+    if matches!(tv.v_type(), VAR_STRING | VAR_NUMBER) {
         *tofree = ptr::null_mut();
         unsafe { tv_get_string_buf_chk(tv, numbuf) }
     } else {
@@ -107,12 +96,9 @@ pub(crate) unsafe fn tv_str(
 /// argument is; see [`TypVal::payload_address`], which is why this one read
 /// is not keyed on the tag.
 ///
-/// # Safety
-///
-/// `tvs` must point at an initialized typval.
-pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_void {
-    match unsafe { next_arg(tvs.cast_mut(), idxp) } {
-        Some(tv) => unsafe { (*tv).payload_address() },
+pub(crate) fn tv_ptr(tvs: &[TypVal], idxp: &mut c_int) -> *const c_void {
+    match next_arg(tvs, idxp) {
+        Some(tv) => tv.payload_address(),
         None => ptr::null(),
     }
 }
@@ -120,16 +106,13 @@ pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_vo
 /// The next argument as a float; a Number is widened, anything else is
 /// `E807` and zero.
 ///
-/// # Safety
-///
-/// `tvs` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
-    let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
+pub(crate) fn tv_float(tvs: &[TypVal], idxp: &mut c_int) -> Float {
+    let Some(tv) = next_arg(tvs, idxp) else {
         return 0.0;
     };
-    match unsafe { (*tv).v_type() } {
-        VAR_FLOAT => unsafe { (*tv).float_or_zero() },
-        VAR_NUMBER => unsafe { (*tv).number_or_zero() as Float },
+    match tv.v_type() {
+        VAR_FLOAT => tv.float_or_zero(),
+        VAR_NUMBER => tv.number_or_zero() as Float,
         _ => {
             emsg(gettext(E_EXPECTED_FLOAT));
             0.0
@@ -198,7 +181,7 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     if str_m == 0 {
         return 0;
     }
-    let str_l = unsafe { vim_vsnprintf_typval(str, str_m, fmt, args.clone(), ptr::null_mut()) };
+    let str_l = unsafe { vim_vsnprintf_typval(str, str_m, fmt, args.clone(), None) };
     if str_l < 0 {
         unsafe { *str = 0 };
         return 0;
@@ -216,7 +199,7 @@ pub unsafe fn vim_vsnprintf(
     fmt: *const c_char,
     ap: VaList,
 ) -> c_int {
-    unsafe { vim_vsnprintf_typval(str, str_m, fmt, ap, ptr::null_mut()) }
+    unsafe { vim_vsnprintf_typval(str, str_m, fmt, ap, None) }
 }
 
 /// How infinity prints, for every combination of sign, forced sign, the

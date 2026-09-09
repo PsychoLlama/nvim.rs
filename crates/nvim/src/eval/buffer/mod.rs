@@ -51,7 +51,6 @@ use crate::buffer::{
 use crate::change::{appended_lines_mark, changed_lines, deleted_lines_mark, inserted_bytes};
 use crate::cursor::check_cursor_col;
 use crate::edit::buf_prompt_text;
-use crate::eval::funcs::args::{Args, frame};
 use crate::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     callback_free, tv_check_str_or_nr, tv_clear, tv_dict_add_dict, tv_dict_add_list,
@@ -96,31 +95,31 @@ pub(super) type Li = Live<ListItem>;
 /// Argument `i` as a Number.
 ///
 /// Argument `i` as a line number in the current buffer, reported and clamped.
-pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
+pub(super) fn arg_lnum(args: &[TypVal], i: usize) -> LineNr {
     // SAFETY: as [`arg_number`].
-    unsafe { tv_get_lnum(args.ptr(i)) }
+    unsafe { tv_get_lnum(&args[i]) }
 }
 
 /// Argument `i` as a line number in `buffer`.
 ///
 /// # Safety
 /// `buffer` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: Option<Buf>) -> LineNr {
+pub(super) unsafe fn arg_lnum_buf(args: &[TypVal], i: usize, buffer: Option<Buf>) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(args.ptr(i), buffer) }
+    unsafe { tv_get_lnum_buf(&args[i], buffer) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
 /// which takes a number, a name or a pattern.
-pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> Option<Buf> {
+pub(super) fn arg_buf(args: &[TypVal], i: usize, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: as [`arg_number`].
-    unsafe { tv_get_buf(args.ptr(i), curtab_only) }
+    unsafe { tv_get_buf(&args[i], curtab_only) }
 }
 
 /// The buffer argument `i` names, reporting for a type that names none.
-pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> Option<Buf> {
+pub(super) fn arg_buf_chk(args: &[TypVal], i: usize) -> Option<Buf> {
     // SAFETY: as [`arg_number`].
-    unsafe { tv_get_buf_from_arg(args.ptr(i)) }
+    unsafe { tv_get_buf_from_arg(&args[i]) }
 }
 
 /// The editor state [`SavedBufferState::prepare`] saves so that
