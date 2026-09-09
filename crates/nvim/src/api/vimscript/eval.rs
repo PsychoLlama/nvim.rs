@@ -295,7 +295,7 @@ unsafe fn call_in_dict(
             return Object::Nil;
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
-        let name = unsafe { (*di).di_tv.string_or_null() };
+        let name = unsafe { (*di).di_tv.func_name_or_null() };
         // SAFETY: as above.
         *fn_0 = String_0::from_raw_parts(name, unsafe { cstr::bytes_at(name) }.len());
     }

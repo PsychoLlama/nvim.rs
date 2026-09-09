@@ -207,6 +207,30 @@ impl TypVal {
     }
 }
 
+impl TypVal {
+    /// The union's pointer arm read **without asking the tag**: the address
+    /// `printf("%p")` and `id()` answer.
+    ///
+    /// The one deliberate exception to [`union_readers`]' rule, and the
+    /// reason it is here rather than at the call site.  Every pointer-shaped
+    /// value -- a string, a function name, a list, a dictionary, a blob, a
+    /// partial -- sits in this slot, and `%p` is the address of whichever one
+    /// the value is; upstream reads the slot with no tag test at all, so a
+    /// Number prints as the pointer its bits spell.  Nothing is dereferenced:
+    /// the answer is printed, and `id()` uses it as an identity, so narrowing
+    /// it by tag would make `%p` answer NULL for six of the nine types.
+    ///
+    /// When the union becomes an enum this is a `match` over the pointer
+    /// arms; the scalar arms have no address and answer their bits.
+    #[inline(always)]
+    pub(crate) fn payload_address(&self) -> *const ::core::ffi::c_void {
+        // SAFETY: every bit pattern is a valid value of every member, so the
+        // read is defined for any initialised typval. Only its *meaning*
+        // needs a tag, and this caller wants the bits.
+        unsafe { self.vval.v_string.cast_const().cast() }
+    }
+}
+
 impl Tv {
     /// The *address* of `vval.v_dict`, for the sinks that are handed a
     /// `*mut *mut Dict` so they can clear the slot; see [`field_of`].

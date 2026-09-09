@@ -102,15 +102,17 @@ pub(crate) unsafe fn tv_str(
 
 /// The next argument as a pointer, for `%p`.
 ///
-/// Every pointer-shaped value -- String, List, Dict, Blob, Partial --
-/// occupies the same union slot, so reading `v_string` reads all of them.
+/// Every pointer-shaped value -- String, Func, List, Dict, Blob, Partial --
+/// occupies the same union slot, and `%p` is the address of whichever one the
+/// argument is; see [`TypVal::payload_address`], which is why this one read
+/// is not keyed on the tag.
 ///
 /// # Safety
 ///
 /// `tvs` must point at an initialized typval.
 pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_void {
     match unsafe { next_arg(tvs.cast_mut(), idxp) } {
-        Some(tv) => unsafe { (*tv).string_or_null() as *const c_void },
+        Some(tv) => unsafe { (*tv).payload_address() },
         None => ptr::null(),
     }
 }

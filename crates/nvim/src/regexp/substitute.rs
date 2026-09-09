@@ -566,7 +566,7 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     funcexe.fe_argv_func = Some(fill_submatch_list);
     funcexe.fe_evaluate = true;
     let name = if unsafe { (*expr).v_type } == VAR_FUNC {
-        Some(unsafe { (*expr).string_or_null() })
+        Some(unsafe { (*expr).func_name_or_null() })
     } else if unsafe { (*expr).v_type } == VAR_PARTIAL {
         let partial: *mut Partial = unsafe { (*expr).partial_or_null() };
         funcexe.fe_partial = partial;
