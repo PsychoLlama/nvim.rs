@@ -142,7 +142,10 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut TypVal, dir: Direction, fast: boo
     // frame's own locals, and there is no file name.
     let status =
         unsafe { ins_compl_add(text, -1, none, cpt, true, data, dir, flags, dup, hl, score) };
-    if status == FAIL {
+    // Anything but `OK` leaves the value with this frame -- `NOTDONE` (the
+    // word was already in the list) included, which the transpile read as
+    // success and leaked.
+    if status != OK {
         unsafe { tv_clear(&raw mut user_data) };
     }
     status
