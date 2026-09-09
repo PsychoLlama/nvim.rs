@@ -235,7 +235,8 @@ pub unsafe fn call_func(
                     argv_clear += 1;
                 }
                 for i in 0..argcount_in {
-                    argv[(i + argv_clear) as usize] = unsafe { *argvars_in.offset(i as isize) };
+                    argv[(i + argv_clear) as usize] =
+                        unsafe { (*argvars_in.offset(i as isize)).bit_copy() };
                 }
                 argvars = argv.as_mut_ptr();
                 argcount = unsafe { (*partial).pt_argc } + argcount_in;

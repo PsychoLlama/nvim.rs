@@ -17,7 +17,7 @@ use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::eval::typval::{callback_free, tv_clear, tv_list_copy, tv_list_find};
+use crate::eval::typval::{TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
@@ -48,7 +48,7 @@ use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, ListItem, MAXPATHL,
     NUL, OK, OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    VarLock, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
+    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
 };
 
 /// The parsed `'findfunc'`.
@@ -78,20 +78,16 @@ pub(crate) fn get_findfunc_callback() -> *mut Callback {
 /// The text lock is held across the call: the callback must not edit.
 pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut List {
     let saved_sctx: ScriptCtx = current_sctx.get();
-    let mut args: [TypVal; 3] = unsafe { core::mem::zeroed() };
-    args[0].v_lock = VarLock::Unlocked;
+    let mut args = [TV_INITIAL_VALUE; 3];
     args[0].write_string(pat);
-    args[1].v_lock = VarLock::Unlocked;
     args[1].write_boolean(cmdcomplete);
-    args[2].v_type = VAR_UNKNOWN;
-    args[2].v_lock = VarLock::Unlocked;
 
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not
     // against whatever is running now.
     current_sctx.set(option_last_set(kOptFindfunc));
     let cb = get_findfunc_callback();
-    let mut rettv: TypVal = unsafe { core::mem::zeroed() };
+    let mut rettv = TV_INITIAL_VALUE;
     rettv.v_type = VAR_UNKNOWN;
     let called = unsafe { callback_call(cb, 2, &raw mut args as *mut TypVal, &raw mut rettv) };
     current_sctx.set(saved_sctx);

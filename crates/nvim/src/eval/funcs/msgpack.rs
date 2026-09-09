@@ -206,8 +206,7 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
             if status != MPACK_OK as c_int {
                 break;
             }
-            unsafe { tv_list_append_owned_tv(ret_list, cur_item) };
-            cur_item.v_type = VAR_UNKNOWN;
+            unsafe { tv_list_append_owned_tv(ret_list, cur_item.take()) };
         }
         if rlret == Ok(ListRead::Drained) {
             break;

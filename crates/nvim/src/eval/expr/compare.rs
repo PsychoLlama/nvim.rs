@@ -20,7 +20,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
     tv_blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
-    tv_get_string_buf, tv_is_func, tv_list_equal,
+    tv_get_string_buf, tv_list_equal,
 };
 use crate::eval::{
     _ISalnum, Cur, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
@@ -269,7 +269,7 @@ pub(crate) unsafe fn typval_compare(
             Some(n) => n,
             None => return Err(Failed),
         }
-    } else if tv_is_func(unsafe { *typ1 }) || tv_is_func(unsafe { *typ2 }) {
+    } else if unsafe { (*typ1).is_func() } || unsafe { (*typ2).is_func() } {
         if op != EXPR_EQUAL && op != EXPR_NEQUAL && !type_is {
             emsg(gettext(c"E694: Invalid operation for Funcrefs"));
             unsafe { tv_clear(typ1) };

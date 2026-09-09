@@ -320,7 +320,7 @@ pub unsafe fn tv_list_remove(
     if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         unsafe { tv_list_drop_items(l, item, item) };
-        unsafe { *result = (*item).li_tv };
+        unsafe { *result = (*item).li_tv.take() };
         unsafe { xfree(item.cast()) };
         return;
     }

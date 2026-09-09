@@ -91,7 +91,7 @@ pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         }
     };
     let timeout = args.get(0).number_or_zero() as c_int;
-    let expr = *args.get(1);
+    let expr = args.ptr(1);
 
     let tw = unsafe { xmalloc(size_of::<TimeWatcher>()) } as *mut TimeWatcher;
     unsafe { time_watcher_init(main_loop.ptr(), tw, ptr::null_mut()) };
@@ -111,7 +111,7 @@ pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // outlive the wait, and the main loop is running.
     let done = || {
         let out = &raw mut exprval;
-        let got = unsafe { eval_expr_typval(&raw const expr, false, &raw mut argv, 0, out) };
+        let got = unsafe { eval_expr_typval(expr, false, &raw mut argv, 0, out) };
         got.is_err()
             || unsafe { tv_get_number_chk(out, &raw mut error) } != 0
             || called_emsg.get() > called_emsg_before

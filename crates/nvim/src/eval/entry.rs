@@ -812,14 +812,3 @@ pub unsafe fn typval_tostring(arg: *mut TypVal, quotes: bool) -> *mut c_char {
     // SAFETY: the caller's typval.
     unsafe { encode_tv2string(arg, null_mut()) }
 }
-
-/// Blank a typval in place.
-///
-/// # Safety
-/// `tv` must be null or valid.
-#[inline]
-pub(crate) unsafe fn tv_init(tv: *mut TypVal) {
-    if !tv.is_null() {
-        unsafe { tv.cast::<u8>().write_bytes(0, size_of::<TypVal>()) };
-    }
-}

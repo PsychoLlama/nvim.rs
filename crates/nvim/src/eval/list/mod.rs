@@ -804,7 +804,7 @@ pub(crate) fn err_not_countable(func_name: &CStr) {
 #[inline(always)]
 pub(crate) fn vim_var_value(idx: Vv) -> TypVal {
     // SAFETY: `idx` names a `v:` variable, whose slot is always live.
-    unsafe { *get_vim_var_tv(idx) }
+    unsafe { (*get_vim_var_tv(idx)).bit_copy() }
 }
 
 /// Release whatever the `v:` variable `idx` holds.

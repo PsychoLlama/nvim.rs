@@ -103,7 +103,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut TypVal) {
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is the value the paired
     // `prepare_vimvar` filled.
-    *tv = unsafe { *save_tv };
+    *tv = unsafe { (*save_tv).take() };
     if tv.v_type != VAR_UNKNOWN {
         return;
     }
@@ -648,9 +648,8 @@ pub(crate) unsafe fn set_vvar_item(
     } else {
         // SAFETY: as above; the value is moved out and blanked.
         let mut cur = unsafe { Tv::new(cur) };
-        *cur = unsafe { *val };
+        *cur = unsafe { (*val).take() };
         cur.v_lock = VarLock::Unlocked;
-        unsafe { tv_init(val) };
     }
     if watched {
         // SAFETY: the `v:` dictionary, this item's value and a live local.

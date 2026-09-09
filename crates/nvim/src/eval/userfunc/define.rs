@@ -220,7 +220,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
             // need not follow the function naming rules, so the
             // identifier check is skipped for it.
             if !arg.is_null()
-                && (fudi.fd_di.is_null() || !tv_is_func(unsafe { (*fudi.fd_di).di_tv }))
+                && (fudi.fd_di.is_null() || !unsafe { (*fudi.fd_di).di_tv.is_func() })
                 && arg != fudi.fd_newkey
             {
                 let mut name_base = arg;

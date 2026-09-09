@@ -101,11 +101,12 @@ pub unsafe fn tv_free(tv: *mut TypVal) {
 /// `from` must point at an initialized typval. `to` must point at an
 /// initialized typval, unaliased for the call.
 pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
-    unsafe { (*to).v_type = (*from).v_type };
+    // A real copy starts as a bit copy of tag and payload; each arm below
+    // then takes the reference that makes the destination an owner too.
+    unsafe { *to = (*from).bit_copy() };
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };
     dst.v_lock = VarLock::Unlocked;
-    unsafe { (*to).vval = (*from).vval };
 
     // SAFETY: the caller's promise: a live source typval.
     let src = unsafe { Tv::new(from.cast_mut()) };
@@ -341,7 +342,7 @@ pub unsafe fn tv_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    if !(tv_is_func(unsafe { *tv1 }) && tv_is_func(unsafe { *tv2 }))
+    if !(unsafe { (*tv1).is_func() } && unsafe { (*tv2).is_func() })
         && unsafe { (*tv1).v_type } != unsafe { (*tv2).v_type }
     {
         return false;

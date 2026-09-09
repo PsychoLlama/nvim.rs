@@ -317,7 +317,7 @@ pub unsafe fn tv_dict_get_callback(
     if di.is_null() {
         return true;
     }
-    if !tv_is_func(unsafe { (*di).di_tv }) && unsafe { (*di).di_tv.v_type } != VAR_STRING {
+    if !unsafe { (*di).di_tv.is_func() } && unsafe { (*di).di_tv.v_type } != VAR_STRING {
         let msg = tr(c"E6000: Argument is not a function or function name");
         unsafe { emsg_ptr(msg) };
         return false;
@@ -346,7 +346,7 @@ pub unsafe fn tv_dict_wrong_func_name(
     name: *const ::core::ffi::c_char,
 ) -> ::core::ffi::c_int {
     ((d == get_globvar_dict() || dv_hashtab(d) == get_funccal_local_ht())
-        && tv_is_func(unsafe { *tv })
+        && unsafe { (*tv).is_func() }
         && unsafe { var_wrong_func_name(name, true) }) as ::core::ffi::c_int
 }
 

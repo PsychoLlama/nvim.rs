@@ -19,7 +19,7 @@ use core::ptr::{null, null_mut};
 use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{
     NumBuf, tv_blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
-    tv_get_number, tv_is_func, tv_list_slice_or_index,
+    tv_get_number, tv_list_slice_or_index,
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
@@ -501,7 +501,7 @@ pub(crate) unsafe fn handle_subscript(
         let c = cur.byte();
         let opens = c == b'['
             || (c == b'.' && rv.v_type == VAR_DICT)
-            || (c == b'(' && (!evaluate || tv_is_func(*rv)));
+            || (c == b'(' && (!evaluate || rv.is_func()));
         // SAFETY: the caller's promise -- the byte before the cursor is
         // readable, and only an opening character asks for it.
         (opens && !ascii_iswhite(unsafe { *cur.get().offset(-1) } as c_int))
@@ -554,7 +554,7 @@ pub(crate) unsafe fn handle_subscript(
     }
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
-    if !selfdict.is_null() && tv_is_func(*rv) {
+    if !selfdict.is_null() && rv.is_func() {
         unsafe { set_selfdict(result, selfdict) };
     }
     unsafe { tv_dict_unref(selfdict) };

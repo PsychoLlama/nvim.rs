@@ -14,8 +14,8 @@ use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_set_range, tv_check_for_nonempty_string_arg,
-    tv_check_for_string_arg, tv_check_num, tv_is_func, tv_list_append_allocated_string,
-    tv_list_append_string, tv_list_extend, tv_list_len,
+    tv_check_for_string_arg, tv_check_num, tv_list_append_allocated_string, tv_list_append_string,
+    tv_list_extend, tv_list_len,
 };
 use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::{ga_clear, ga_grow};
@@ -793,7 +793,7 @@ pub unsafe fn f_substitute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let flg = arg_string_chk(&mut flagsbuf, args.get(3));
     let mut sub: *const c_char = ptr::null();
     let mut expr: *mut TypVal = ptr::null_mut();
-    if tv_is_func(*args.get(2)) {
+    if args.get(2).is_func() {
         expr = args.ptr(2);
     } else {
         sub = arg_string_chk(&mut subbuf, args.get(2));

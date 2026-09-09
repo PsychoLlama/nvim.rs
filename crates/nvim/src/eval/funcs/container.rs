@@ -14,9 +14,9 @@ use crate::eval::typval::{
     NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
     tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
-    tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_is_func, tv_list_append_tv, tv_list_copy,
-    tv_list_find, tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref,
-    tv_list_uidx, value_check_lock,
+    tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy, tv_list_find,
+    tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx,
+    value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
@@ -206,7 +206,7 @@ pub unsafe fn f_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
         VAR_BLOB => get_from_blob(args, result),
         VAR_LIST => get_from_list(args),
         VAR_DICT => get_from_dict(args),
-        _ if tv_is_func(*args.get(0)) => {
+        _ if args.get(0).is_func() => {
             if !get_from_func(args, result) {
                 return;
             }
@@ -543,9 +543,10 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 unsafe fn indexof_matches(expr: *mut TypVal) -> bool {
     // SAFETY throughout: the caller's obligation; `argv` and `newtv` are locals that
     // outlive the evaluation, and `newtv` is cleared before returning.
+    // A frame borrowing the two `v:` slots for the length of the call.
     let mut argv = [
-        unsafe { *get_vim_var_tv(Vv::Key) },
-        unsafe { *get_vim_var_tv(Vv::Val) },
+        unsafe { (*get_vim_var_tv(Vv::Key)).bit_copy() },
+        unsafe { (*get_vim_var_tv(Vv::Val)).bit_copy() },
         NIL,
     ];
     let mut newtv = NIL;

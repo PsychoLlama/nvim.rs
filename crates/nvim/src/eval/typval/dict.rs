@@ -742,8 +742,7 @@ pub unsafe fn tv_dict_remove(
 
     // Move the value out rather than copying it: `result` takes the
     // reference the item held.
-    unsafe { *result = item.di_tv };
-    item.di_tv = TV_INITIAL_VALUE;
+    unsafe { *result = item.di_tv.take() };
     unsafe { tv_dict_item_remove(d, di) };
     if unsafe { tv_dict_is_watched(d) } {
         unsafe { tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), result) };

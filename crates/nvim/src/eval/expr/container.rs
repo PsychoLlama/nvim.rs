@@ -224,7 +224,7 @@ pub(crate) unsafe fn eval_dict(
                 }
                 // SAFETY: a fresh item of this call's own.
                 let mut item = unsafe { Live::new(tv_dict_item_alloc(key)) };
-                item.di_tv = tv;
+                item.di_tv = tv.take();
                 item.di_tv.v_lock = VarLock::Unlocked;
                 let item = item.raw();
                 if unsafe { tv_dict_add(dict, item) }.is_err() {

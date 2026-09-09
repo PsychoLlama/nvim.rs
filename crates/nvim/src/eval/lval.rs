@@ -41,7 +41,7 @@ use crate::eval::typval::{
     NumBuf, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
     tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy,
     tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
-    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk, tv_is_func,
+    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
     tv_list_check_range_index_two, value_check_lock,
 };
@@ -54,7 +54,7 @@ use crate::eval::vars::{
 use crate::eval::{
     FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, GlvStatus,
     TV_CSTRING, e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1,
-    find_name_end, make_expanded_name, tv_init, tv_is_luafunc,
+    find_name_end, make_expanded_name, tv_is_luafunc,
 };
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
@@ -180,7 +180,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         // SAFETY: `result` is the caller's, and `key` is NUL-terminated either way now.
         let existing = lval.ll_di.is_null();
         let wrong = (dv_scope == VAR_DEF_SCOPE
-            && unsafe { tv_is_func(*result) }
+            && unsafe { (*result).is_func() }
             && unsafe { var_wrong_func_name(key, existing) })
             || !unsafe { valid_varname(key) };
         if len != -1 {
@@ -826,11 +826,10 @@ pub unsafe fn set_var_lval(
         } else {
             // SAFETY: the value moves out of `result`, which is reset after it.
             let mut target = unsafe { Tv::new(lval.ll_tv) };
-            // SAFETY: as above.
-            *target = unsafe { *result };
+            // SAFETY: as above -- the take resets `result`, so nothing
+            // frees the value twice.
+            *target = unsafe { (*result).take() };
             target.v_lock = VarLock::Unlocked;
-            // SAFETY: `result` is reset so nothing frees the value twice.
-            unsafe { tv_init(result) };
         }
     }
 

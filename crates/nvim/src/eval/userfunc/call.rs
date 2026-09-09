@@ -225,13 +225,14 @@ pub unsafe fn call_user_func(
         };
 
         // Note: the argument is not copied, so its value is shared with
-        // the caller's.  A default's value is this call's own, and is
-        // cleared at the end.
+        // the caller's -- the `a:` item is a borrowed view for the length
+        // of the call.  A default's value is this call's own and moves in;
+        // `tv_to_free` below is what clears it at the end.
         let value = if isdefault {
-            def_rettv
+            def_rettv.take()
         } else {
             // SAFETY: `i` is inside the caller's argument array.
-            unsafe { *args.offset(i as isize) }
+            unsafe { (*args.offset(i as isize)).bit_copy() }
         };
         unsafe { (*v).di_tv = value };
         unsafe { (*v).di_tv.v_lock = VarLock::Fixed };
@@ -254,7 +255,8 @@ pub unsafe fn call_user_func(
             // listitem storage.
             let li =
                 unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
-            unsafe { (*li).li_tv = *args.offset(i as isize) };
+            // As `a:name` above: `a:000`'s item borrows the caller's value.
+            unsafe { (*li).li_tv = (*args.offset(i as isize)).bit_copy() };
             unsafe { (*li).li_tv.v_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
         }

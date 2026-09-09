@@ -220,6 +220,15 @@ impl TypVal {
     ///
     /// When the union becomes an enum this is a `match` over the pointer
     /// arms; the scalar arms have no address and answer their bits.
+    /// Whether this value is callable: `VAR_FUNC` or `VAR_PARTIAL`.
+    ///
+    /// Upstream's `tv_is_func`, which took the whole typval by value for
+    /// two tag comparisons.
+    #[inline(always)]
+    pub(crate) fn is_func(&self) -> bool {
+        self.v_type == VAR_FUNC || self.v_type == VAR_PARTIAL
+    }
+
     #[inline(always)]
     pub(crate) fn payload_address(&self) -> *const ::core::ffi::c_void {
         // SAFETY: every bit pattern is a valid value of every member, so the
@@ -365,9 +374,51 @@ impl TypVal {
     /// `mem::replace` that keeps the discriminant.
     #[inline(always)]
     pub(crate) fn take_value(&mut self) -> TypVal {
-        let taken = *self;
-        self.vval = EMPTY_PAYLOAD;
-        taken
+        TypVal {
+            v_type: self.v_type,
+            v_lock: self.v_lock,
+            vval: ::core::mem::replace(&mut self.vval, EMPTY_PAYLOAD),
+        }
+    }
+
+    /// Move the value out, leaving an unset slot.
+    ///
+    /// The whole slot goes — tag, lock and payload — and what stays behind
+    /// is [`TV_INITIAL_VALUE`], the `VAR_UNKNOWN` a typval is born as.  This
+    /// is the shape of every "hand the value on and reset the source" site
+    /// the tree had spelled `*to = *from; tv_init(from)`.
+    ///
+    /// Where the slot has to keep saying what type it held, the take is
+    /// [`TypVal::take_value`] instead.
+    #[inline(always)]
+    pub(crate) fn take(&mut self) -> TypVal {
+        ::core::mem::replace(self, TV_INITIAL_VALUE)
+    }
+
+    /// Duplicate the slot's bits, **sharing** whatever it points at.
+    ///
+    /// This is not a copy of the *value*: no string is duplicated and no
+    /// reference count moves, so the payload now has two holders and only
+    /// one of them may release it.  The caller owns that reasoning, and
+    /// every use of this is a place where upstream relies on two typvals
+    /// naming one object for a bounded window — an argument vector that
+    /// borrows the caller's values for the length of a call, a handle kept
+    /// beside a value that outlives it, a slot packed for output while the
+    /// original is still the owner.
+    ///
+    /// A real copy — one that duplicates the string and takes the
+    /// reference — is [`tv_copy`](crate::eval::typval::tv_copy).
+    #[inline(always)]
+    pub(crate) fn bit_copy(&self) -> TypVal {
+        TypVal {
+            v_type: self.v_type,
+            v_lock: self.v_lock,
+            // SAFETY: every bit pattern is a valid value of every member, so
+            // reading the payload without asking the tag is defined; what
+            // the bits *mean* is the caller's problem, and the doc comment
+            // above hands them the ownership half of it.
+            vval: unsafe { ::core::ptr::read(&self.vval) },
+        }
     }
 }
 
@@ -775,12 +826,6 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
             .sub(::core::mem::offset_of!(DictWatcher, node))
     }
     .cast::<DictWatcher>()
-}
-
-/// Whether `tv` holds a function: either `VAR_FUNC` or `VAR_PARTIAL`.
-#[inline(always)]
-pub fn tv_is_func(tv: TypVal) -> bool {
-    tv.v_type == VAR_FUNC || tv.v_type == VAR_PARTIAL
 }
 
 #[cfg(test)]

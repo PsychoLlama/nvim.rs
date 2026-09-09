@@ -111,8 +111,8 @@ pub unsafe fn set_var_const(
     }
 
     // SAFETY: the caller's obligation -- a live value.
-    let tvh = unsafe { Tv::new(tv) };
-    if tv_is_func(*tvh) && unsafe { var_wrong_func_name(name, di.is_null()) } {
+    let mut tvh = unsafe { Tv::new(tv) };
+    if tvh.is_func() && unsafe { var_wrong_func_name(name, di.is_null()) } {
         return;
     }
 
@@ -198,9 +198,8 @@ pub unsafe fn set_var_const(
         unsafe { tv_copy(tv, cur) };
     } else {
         let mut into = unsafe { Tv::new(cur) };
-        *into = *tvh;
+        *into = tvh.take();
         into.v_lock = VarLock::Unlocked;
-        unsafe { tv_init(tv) };
     }
 
     if watched {

@@ -249,7 +249,7 @@ pub(crate) unsafe fn ins_compl_add(
     if !user_data.is_null() {
         // SAFETY: a non-null `user_data` is a live `TypVal`, which the
         // caller has handed over.
-        match_0.cp_user_data = unsafe { *user_data };
+        match_0.cp_user_data = unsafe { (*user_data).take() };
     }
 
     // Link the new match after (FORWARD) or before (BACKWARD) the current

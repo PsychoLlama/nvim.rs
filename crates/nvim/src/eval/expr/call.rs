@@ -145,8 +145,7 @@ pub(crate) unsafe fn call_func_rettv(
     let funcname: *const c_char;
 
     if evaluate {
-        functv = *rv;
-        rv.v_type = VAR_UNKNOWN;
+        functv = rv.take();
         if functv.v_type == VAR_PARTIAL {
             // SAFETY: the tag says the union holds a partial, which
             // `is_luafunc` and `partial_name` both take null or valid.
@@ -214,8 +213,7 @@ pub(crate) unsafe fn eval_lambda(
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     cur.bump(2); // skip over the `->`
-    let mut base = *rv;
-    rv.v_type = VAR_UNKNOWN;
+    let mut base = rv.take();
 
     if unsafe { get_lambda_tv(arg, result, evalarg) } != Ok(Parsed::Done) {
         // `base` is not cleared: `get_lambda_tv` failing means the
@@ -265,8 +263,7 @@ pub(crate) unsafe fn eval_method(
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     cur.bump(2); // skip over the `->`
-    let mut base = *rv;
-    rv.v_type = VAR_UNKNOWN;
+    let mut base = rv.take();
 
     // Locate the method name.
     let mut len: c_int;

@@ -361,7 +361,7 @@ pub(crate) unsafe fn eval1(
         return Err(Failed);
     }
     if !op_falsy || !truthy {
-        *rv = var2;
+        *rv = var2.take();
     }
 
     if !op_falsy {
@@ -384,7 +384,7 @@ pub(crate) unsafe fn eval1(
             return Err(Failed);
         }
         if evaluate && !truthy {
-            *rv = var2;
+            *rv = var2.take();
         }
     }
 

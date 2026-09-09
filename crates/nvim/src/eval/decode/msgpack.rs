@@ -222,7 +222,7 @@ pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
 /// `pairs` points at `len * 2` decoded typvals and `result` is writable.
 unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bool {
     for i in 0..len {
-        let key = unsafe { *pairs.add(i * 2) };
+        let key = unsafe { &*pairs.add(i * 2) };
         if key.v_type != VAR_STRING
             || key.string_or_null().is_null()
             || unsafe { *key.string_or_null() } == 0
@@ -252,7 +252,11 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
             unsafe { xfree(di.cast()) };
             return false;
         }
-        unsafe { (*di).di_tv = *pairs.add(i * 2 + 1) };
+        // The value moves out of the pair array, which is freed
+        // uncleared.  On the duplicate-key path above the move is undone:
+        // every item added so far is disowned, leaving the pair array the
+        // owner again for the special-map path to re-use.
+        unsafe { (*di).di_tv = ptr::read(pairs.add(i * 2 + 1)) };
     }
 
     // The keys were copied into the items; the originals are ours to free.
@@ -305,8 +309,8 @@ unsafe extern "C-unwind" fn typval_parse_exit(
                 for i in 0..len {
                     let kv_pair = tv_list_alloc(2);
                     unsafe { tv_list_append_list(list, kv_pair) };
-                    unsafe { tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2)) };
-                    unsafe { tv_list_append_owned_tv(kv_pair, *pairs.add(i * 2 + 1)) };
+                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(pairs.add(i * 2))) };
+                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(pairs.add(i * 2 + 1))) };
                 }
             }
             unsafe { xfree((*node).data[1].p) };

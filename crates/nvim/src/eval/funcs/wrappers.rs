@@ -288,7 +288,9 @@ pub unsafe fn call_internal_method(
     let mut argv = [EMPTY_TV; MAX_FUNC_ARGS as usize + 1];
     let out = argv.as_mut_ptr();
     unsafe { ptr::copy_nonoverlapping(args, out, base_index as usize) };
-    unsafe { *out.add(base_index as usize) = *basetv };
+    // The frame borrows the caller's values: the `ptr::copy` above does
+    // the same for the rest of them, and nothing here owns what it holds.
+    unsafe { *out.add(base_index as usize) = (*basetv).bit_copy() };
     let from = unsafe { args.add(base_index as usize) };
     let to = unsafe { out.add(base_index as usize + 1) };
     let rest = (argcount - base_index) as usize;

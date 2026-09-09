@@ -178,7 +178,7 @@ pub(crate) unsafe fn tv_to_optval(
 
     let value = if !is_tty_opt
         && get_option(opt_idx).flags & kOptFlagFunc as uint32_t != 0
-        && tv_is_func(*tvh)
+        && tvh.is_func()
     {
         // An option that takes a function reference or a lambda stores
         // the name of one.

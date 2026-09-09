@@ -262,7 +262,7 @@ pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, args: *mut TypVa
     unsafe { (*dr).dr_argcount = argcount };
     while argcount > 0 {
         argcount -= 1;
-        unsafe { (*dr).dr_argvars[argcount as usize] = *args.offset(argcount as isize) };
+        unsafe { (*dr).dr_argvars[argcount as usize] = (*args.offset(argcount as isize)).take() };
     }
 }
 
@@ -482,7 +482,7 @@ pub unsafe fn do_return(
                 // Store the value of the pending return.
                 let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe { *saved.cast::<TypVal>() = *result.cast::<TypVal>() };
+                unsafe { *saved.cast::<TypVal>() = (*result.cast::<TypVal>()).take() };
             }
             if reanimate {
                 // The return value is not available yet.
@@ -494,7 +494,7 @@ pub unsafe fn do_return(
         unsafe { (*current_funccal.get()).fc_returned = 1 };
         if !reanimate && !result.is_null() {
             unsafe { tv_clear((*current_funccal.get()).fc_rettv) };
-            unsafe { *(*current_funccal.get()).fc_rettv = *(result as *mut TypVal) };
+            unsafe { *(*current_funccal.get()).fc_rettv = (*(result as *mut TypVal)).take() };
             if !is_cmd {
                 unsafe { xfree(result) };
             }

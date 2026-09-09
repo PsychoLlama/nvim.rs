@@ -178,15 +178,20 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 unsafe fn fold_step(
     expr: *mut TypVal,
     result: &mut TypVal,
-    item: TypVal,
+    item: &TypVal,
     cleanup: Cleanup,
     called_emsg_start: c_int,
 ) -> bool {
-    // SAFETY throughout: the caller's obligation. `argv` outlives the call, and
-    // `result`'s old value moves into `argv[0]`.
+    // SAFETY throughout: the caller's obligation. `argv` outlives the call.
     let mut argv = [EMPTY_TV; 3];
-    argv[0] = *result;
-    argv[1] = item;
+    // The accumulator and the item are *borrowed* by the frame; `cleanup`
+    // says which of the two the callee is expected to have taken over, and
+    // the caller owns whatever it does not clear here.  Upstream's shape:
+    // the List fold blanks `rettv` so that only `argv[0]` holds the old
+    // accumulator, the String fold owns the character it just measured, and
+    // the Blob fold's accumulator starts as a Number that owns nothing.
+    argv[0] = result.bit_copy();
+    argv[1] = item.bit_copy();
     if cleanup.blank_rettv {
         result.v_type = VAR_UNKNOWN;
     }
@@ -209,17 +214,20 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     // modification for the whole fold and restored afterwards.
     let l = args.get(0).list_or_null();
     let called_emsg_start = called_emsg.get();
-    let (initial, mut li) = if args.has(2) {
-        (*args.get(2), unsafe { tv_list_first(l) })
+    // The accumulator starts as a copy of the initial value, or of the
+    // first item when the call gave none.
+    let mut li = if args.has(2) {
+        unsafe { tv_copy(args.ptr(2), result) };
+        unsafe { tv_list_first(l) }
     } else {
         if unsafe { tv_list_len(l) } == 0 {
             semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
         }
         let first = unsafe { tv_list_first(l) };
-        (unsafe { (*first).li_tv }, unsafe { (*first).li_next })
+        unsafe { tv_copy(&raw const (*first).li_tv, result) };
+        unsafe { (*first).li_next }
     };
-    unsafe { tv_copy(&raw const initial, result) };
     // A null List is `v:_null_list`: nothing to fold, and nothing to
     // lock either.
     if l.is_null() {
@@ -228,7 +236,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     let prev_locked = unsafe { tv_list_locked(l) };
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
     while !li.is_null() {
-        if !unsafe { fold_step(expr, result, (*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, &(*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
             break;
         }
         li = unsafe { (*li).li_next };
@@ -268,7 +276,7 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) 
         let item = unsafe { owned_str(p, len) };
         // SAFETY: `expr` is the caller's callback and `result` the running
         // accumulator; `item` is the character just measured.
-        if !unsafe { fold_step(expr, result, item, STRING_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) } {
             break;
         }
         p = unsafe { p.add(len as usize) };
@@ -284,23 +292,24 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     // as the C does, so a fold that shortens it cannot walk off the end.
     let b: *const Blob = args.get(0).blob_or_null();
     let called_emsg_start = called_emsg.get();
-    let (initial, mut i) = if args.has(2) {
+    let mut i = if args.has(2) {
         if check_arg(args, 2, tv_check_for_number_arg).is_err() {
             return;
         }
-        (*args.get(2), 0)
+        unsafe { tv_copy(args.ptr(2), result) };
+        0
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
             semsg!("E998: Reduce of an empty {} with no initial value", "Blob");
             return;
         }
-        (number_tv(unsafe { tv_blob_get(b, 0) } as VarNumber), 1)
+        result.write_number(unsafe { tv_blob_get(b, 0) } as VarNumber);
+        1
     };
-    unsafe { tv_copy(&raw const initial, result) };
     while i < unsafe { tv_blob_len(b) } {
         let item = number_tv(unsafe { tv_blob_get(b, i) } as VarNumber);
         // SAFETY: as the String walk above; `i` is inside the Blob.
-        if !unsafe { fold_step(expr, result, item, BLOB_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) } {
             return;
         }
         i += 1;
