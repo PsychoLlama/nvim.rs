@@ -151,7 +151,9 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             let li = tv::list_item_alloc();
             (*li).li_next = ptr::null_mut();
             (*li).li_prev = ptr::null_mut();
-            (*li).li_tv = inner_tv;
+            // Every item names the same container; the retain above is
+            // what pays for the extra holder.
+            (*li).li_tv = tv::bit_copy(&inner_tv);
             tv_list_append(outer, li);
         }
         TypVal {

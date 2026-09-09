@@ -504,14 +504,12 @@ pub struct StaticList10 {
     pub sl_list: List,
     pub sl_items: [ListItem; 10],
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TypVal {
     pub v_type: VarType,
     pub v_lock: VarLock,
     pub vval: typval_vval_union,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub union typval_vval_union {
     pub v_number: VarNumber,

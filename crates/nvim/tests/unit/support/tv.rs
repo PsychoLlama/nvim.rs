@@ -303,6 +303,24 @@ impl Container {
     }
 }
 
+/// A bit copy of a typval: the payload is *shared*, so the copy and the
+/// original name one object and only one of them may release it.
+///
+/// The crate's own `TypVal::bit_copy` is `pub(crate)`; this is the harness's
+/// copy of it, for the specs that deliberately put one value in two places
+/// and hand out the reference counts themselves.
+///
+/// # Safety
+/// The caller owns the refcount reasoning; see above.
+pub(crate) unsafe fn bit_copy(tv: &TypVal) -> TypVal {
+    TypVal {
+        v_type: tv.v_type,
+        v_lock: tv.v_lock,
+        // SAFETY: every bit pattern is a valid value of every member.
+        vval: unsafe { ptr::read(&tv.vval) },
+    }
+}
+
 /// `typvalt2lua`: read a value back out.
 ///
 /// # Safety
@@ -333,7 +351,7 @@ pub(crate) unsafe fn read_dict(d: *const Dict) -> Tv {
 /// # Safety
 /// As [`read`].
 unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
-    let vval = unsafe { (*tv).vval };
+    let vval = unsafe { &(*tv).vval };
     match unsafe { (*tv).v_type } {
         VAR_UNKNOWN => Tv::Unknown,
         VAR_SPECIAL => {

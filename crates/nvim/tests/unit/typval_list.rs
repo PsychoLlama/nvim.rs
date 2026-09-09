@@ -804,11 +804,12 @@ fn appending_an_owned_value_moves_it() {
         log.check(&[alloc::li((*l).lv_first)]);
 
         let s_tv = Tv::s("test").build();
-        log.check(&[alloc::string(s_tv.vval.v_string, "test".len())]);
+        let s_ptr = s_tv.vval.v_string;
+        log.check(&[alloc::string(s_ptr, "test".len())]);
         tv_list_append_owned_tv(l, s_tv);
         assert_eq!(
             (*(*l).lv_last).li_tv.vval.v_string,
-            s_tv.vval.v_string,
+            s_ptr,
             "the string itself moved in"
         );
         log.check(&[alloc::li((*l).lv_last)]);

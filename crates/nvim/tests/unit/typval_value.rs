@@ -1493,8 +1493,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
             ("string_buf", false, scratch.cast_const()),
             ("string_buf_chk", true, scratch.cast_const()),
         ] {
-            for (v_type, vval, emsg, answer) in rows {
-                let tv = raw(v_type, vval);
+            for &(v_type, ref vval, emsg, answer) in &rows {
+                let tv = raw(v_type, ptr::read(vval));
                 log.check(&[]);
                 let got = check_emsg(
                     log.editor(),

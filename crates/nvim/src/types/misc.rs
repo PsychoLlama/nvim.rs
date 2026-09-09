@@ -99,7 +99,6 @@ pub struct caller_scope {
     pub autocmd_bufnr: ::core::ffi::c_int,
     pub funccalp: *mut ::core::ffi::c_void,
 }
-#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct DictItem {
     pub di_tv: TypVal,
