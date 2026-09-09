@@ -177,7 +177,6 @@ pub const GARRAY_EMPTY: GArray = GArray {
 /// of.  c2rust wrote the designated initialiser out at every use site.
 pub const TV_INITIAL_VALUE: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
-    v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);

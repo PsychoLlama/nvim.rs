@@ -406,6 +406,10 @@ pub struct LVal {
     pub ll_name_len: size_t,
     pub ll_exp_name: *mut ::core::ffi::c_char,
     pub ll_tv: *mut TypVal,
+    /// The lock of the slot [`ll_tv`](Self::ll_tv) points into -- a list
+    /// item's or a dictionary item's -- since the lock belongs to the place
+    /// and not to the value sitting in it.  Null exactly when `ll_tv` is.
+    pub ll_lock: *mut VarLock,
     pub ll_li: *mut ListItem,
     pub ll_list: *mut List,
     pub ll_range: bool,

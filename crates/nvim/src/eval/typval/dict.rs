@@ -60,7 +60,7 @@ pub unsafe fn tv_dict_item_alloc_len(
     // SAFETY: freshly allocated just above.
     let mut item = unsafe { Di::new(di) };
     item.di_flags = DI_FLAGS_ALLOC as uint8_t;
-    item.di_tv.v_lock = VarLock::Unlocked;
+    item.di_lock = VarLock::Unlocked;
     item.di_tv.v_type = VAR_UNKNOWN;
     di
 }
@@ -528,7 +528,7 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
             semsg!("E737: Key already exists: {di2_key}");
             break;
         } else if action == b'f' && di2 != di1 {
-            if unsafe { value_check_lock((*di1).di_tv.v_lock, arg_errmsg, arg_errmsg_len) } || {
+            if unsafe { value_check_lock((*di1).di_lock, arg_errmsg, arg_errmsg_len) } || {
                 let flags = unsafe { (*di1).di_flags } as ::core::ffi::c_int;
                 unsafe { var_check_ro(flags, arg_errmsg, arg_errmsg_len) }
             } {

@@ -394,12 +394,36 @@ pub struct FuncCall {
     pub fc_copy_id: ::core::ffi::c_int,
     pub fc_ufuncs: GArray,
 }
+/// One of a funccall's twelve embedded short-named variables, laid out as a
+/// [`DictItem`](crate::types::DictItem) prefix so the scope's hash table can
+/// point into it.
 #[repr(C)]
 pub struct funccall_S_fc_fixvar {
     pub di_tv: TypVal,
+    pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 21],
 }
+
+/// Every `DictItem`-prefixed struct is handed out as a bare `*mut DictItem`,
+/// and a hashtab slot finds its item by subtracting
+/// `offset_of!(DictItem, di_key)` from the key pointer it stores.  So they
+/// have to agree on where all four fields sit -- a mismatch is a wild
+/// pointer, not a compile error, which is why this is checked here.
+const _: () = {
+    use crate::types::{ChangedtickDictItem, DictItem, ScopeDictDictItem};
+    use ::core::mem::offset_of;
+
+    macro_rules! same_prefix {
+        ($($t:ty),* $(,)?) => {$(
+            assert!(offset_of!($t, di_tv) == offset_of!(DictItem, di_tv));
+            assert!(offset_of!($t, di_lock) == offset_of!(DictItem, di_lock));
+            assert!(offset_of!($t, di_flags) == offset_of!(DictItem, di_flags));
+            assert!(offset_of!($t, di_key) == offset_of!(DictItem, di_key));
+        )*};
+    }
+    same_prefix!(ScopeDictDictItem, ChangedtickDictItem, funccall_S_fc_fixvar);
+};
 pub struct HtStack {
     pub ht: *mut HashTab,
     pub prev: *mut HtStack,
@@ -408,11 +432,17 @@ pub struct ListStack {
     pub list: *mut List,
     pub prev: *mut ListStack,
 }
+/// One item of a [`List`].
+///
+/// `li_lock` is the *slot's* lock -- `:lockvar l[0]` locks the place, not the
+/// value that happens to sit in it -- so it lives here rather than in the
+/// value.  See [`TypVal`].
 #[repr(C)]
 pub struct ListItem {
     pub li_next: *mut ListItem,
     pub li_prev: *mut ListItem,
     pub li_tv: TypVal,
+    pub li_lock: VarLock,
 }
 #[repr(C)]
 pub struct List {
@@ -507,7 +537,6 @@ pub struct StaticList10 {
 #[repr(C)]
 pub struct TypVal {
     pub v_type: VarType,
-    pub v_lock: VarLock,
     pub vval: typval_vval_union,
 }
 #[repr(C)]

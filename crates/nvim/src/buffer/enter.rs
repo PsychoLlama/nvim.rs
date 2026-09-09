@@ -505,10 +505,8 @@ const CHANGEDTICK_KEY: [c_char; 12] = {
 /// Initialise `b:changedtick` and its `changedtick_val` attribute.
 pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
     buffer.changedtick_di = ChangedtickDictItem {
-        di_tv: TypVal {
-            v_lock: VarLock::Fixed,
-            ..TypVal::number(buf_get_changedtick(buffer))
-        },
+        di_tv: TypVal::number(buf_get_changedtick(buffer)),
+        di_lock: VarLock::Fixed,
         // Must not include DI_FLAGS_ALLOC.
         di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
         di_key: CHANGEDTICK_KEY,

@@ -19,15 +19,15 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::funcs::{tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, queue_init, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_alloc, tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_is_watched, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_dict_item_key, tv_dict_item_remove, tv_dict_set_keys_readonly,
-    tv_dict_set_ret, tv_dict_unref, tv_dict_watcher_notify, tv_free, tv_get_bool_chk,
-    tv_get_number, tv_get_number_chk, tv_get_string_buf_chk, tv_ht_iter, tv_item_lock,
-    tv_list_alloc, tv_list_append_allocated_string, tv_list_append_string, tv_list_append_tv,
-    tv_list_find_nr, tv_list_find_str, tv_list_first, tv_list_free, tv_list_item_remove,
-    tv_list_len, tv_list_locked, tv_list_ref, tv_list_remove_items, tv_list_set_lock,
-    tv_list_set_ret, value_check_lock,
+    TV_INITIAL_VALUE, di_lock, di_tv, li_lock, li_tv, queue_init, tv_check_str_or_nr, tv_clear,
+    tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_alloc_lock, tv_dict_hi2di, tv_dict_is_watched,
+    tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_key, tv_dict_item_remove,
+    tv_dict_set_keys_readonly, tv_dict_set_ret, tv_dict_unref, tv_dict_watcher_notify, tv_free,
+    tv_get_bool_chk, tv_get_number, tv_get_number_chk, tv_get_string_buf_chk, tv_ht_iter,
+    tv_item_lock, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_string,
+    tv_list_append_tv, tv_list_find_nr, tv_list_find_str, tv_list_first, tv_list_free,
+    tv_list_item_remove, tv_list_len, tv_list_locked, tv_list_ref, tv_list_remove_items,
+    tv_list_set_lock, tv_list_set_ret, value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
@@ -150,14 +150,26 @@ pub const GLV_QUIET: c_int = 2;
 /// out at the longest name the table holds (`VIMVAR_KEY_LEN`, 16, plus the
 /// NUL), so that the whole table can be a `static`.
 /// `#[repr(C)]`: the table hands a row's `vv_di` out as a bare
-/// `*mut DictItem`, so the three fields have to sit where `DictItem`'s
+/// `*mut DictItem`, so the four fields have to sit where `DictItem`'s
 /// do and `di_key` has to stay last.
 #[repr(C)]
 pub struct VimVarItem {
     pub di_tv: TypVal,
+    pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: [c_char; 17],
 }
+
+/// As [`DictItem`](crate::types::DictItem)'s own check: a row of the table is
+/// handed out as a bare `*mut DictItem`, so the four fields have to sit where
+/// that struct's do.
+const _: () = {
+    use ::core::mem::offset_of;
+    assert!(offset_of!(VimVarItem, di_tv) == offset_of!(DictItem, di_tv));
+    assert!(offset_of!(VimVarItem, di_lock) == offset_of!(DictItem, di_lock));
+    assert!(offset_of!(VimVarItem, di_flags) == offset_of!(DictItem, di_flags));
+    assert!(offset_of!(VimVarItem, di_key) == offset_of!(DictItem, di_key));
+};
 
 /// One row of the `v:` table.
 pub struct VimVar {
@@ -230,6 +242,7 @@ pub(crate) const LVAL_INITIAL_VALUE: LVal = LVal {
     ll_name_len: 0,
     ll_exp_name: ::core::ptr::null_mut(),
     ll_tv: ::core::ptr::null_mut(),
+    ll_lock: ::core::ptr::null_mut(),
     ll_li: ::core::ptr::null_mut(),
     ll_list: ::core::ptr::null_mut(),
     ll_range: false,
@@ -294,6 +307,7 @@ const EMPTY_SCOPE_DICT: Dict = Dict {
 /// string; `init_var_dict` fills the rest in.
 const EMPTY_SCOPE_VAR: ScopeDictDictItem = ScopeDictDictItem {
     di_tv: TV_INITIAL_VALUE,
+    di_lock: VarLock::Unlocked,
     di_flags: 0,
     di_key: [0; 1],
 };
@@ -313,6 +327,7 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
                 v_type,
                 ..TV_INITIAL_VALUE
             },
+            di_lock: VarLock::Unlocked,
             di_flags: 0,
             di_key: [0; 17],
         },

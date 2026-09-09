@@ -128,7 +128,7 @@ pub unsafe fn set_var_const(
         // the variable's.
         // SAFETY: `find_var_in_ht` answers a live item of a live scope.
         let item = unsafe { Di::new(di) };
-        let (flags, lock) = (item.di_flags as c_int, item.di_tv.v_lock);
+        let (flags, lock) = (item.di_flags as c_int, item.di_lock);
         if unsafe { var_check_ro(flags, name, name_len) }
             || unsafe { value_check_lock(lock, name, name_len) }
             || unsafe { var_check_lock(flags, name, name_len) }
@@ -199,8 +199,12 @@ pub unsafe fn set_var_const(
     } else {
         let mut into = unsafe { Tv::new(cur) };
         *into = tvh.take();
-        into.v_lock = VarLock::Unlocked;
     }
+    // Upstream leaves the stored value `VAR_UNLOCKED`, through `tv_copy` on
+    // one branch and by hand on the other; the lock is the item's, so the
+    // store clears it here.  Written through the field's address rather than
+    // a borrow of the item, for the reason `cur` is.
+    unsafe { *di_lock(di) = VarLock::Unlocked };
 
     if watched {
         let key = tv_dict_item_key(di);
@@ -212,7 +216,7 @@ pub unsafe fn set_var_const(
         // Like `:lockvar! name`: lock the value and what it contains,
         // but only where the reference count is one, so that only
         // literal values are locked.
-        unsafe { tv_item_lock(cur, DICT_MAXNEST, true, true) };
+        unsafe { tv_item_lock(di_lock(di), cur, DICT_MAXNEST, true, true) };
     }
 }
 

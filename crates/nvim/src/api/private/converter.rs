@@ -44,7 +44,7 @@ use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
     ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair, List,
-    LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, VarLock, int64_t, kBoolVarFalse, kBoolVarTrue,
+    LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, int64_t, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, size_t,
 };
 use crate::winlayer::Live;
@@ -436,7 +436,6 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
     // SAFETY: as above.
     let mut obj = unsafe { Live::<Object>::new(obj) };
     tv.v_type = VAR_UNKNOWN;
-    tv.v_lock = VarLock::Unlocked;
     let value = *obj;
     match value {
         Object::Nil => {

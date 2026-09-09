@@ -649,8 +649,10 @@ pub(crate) unsafe fn set_vvar_item(
         // SAFETY: as above; the value is moved out and blanked.
         let mut cur = unsafe { Tv::new(cur) };
         *cur = unsafe { (*val).take() };
-        cur.v_lock = VarLock::Unlocked;
     }
+    // As `set_var_const`: the value stored is unlocked, which with the lock
+    // on the slot means this item.
+    unsafe { *di_lock(di) = VarLock::Unlocked };
     if watched {
         // SAFETY: the `v:` dictionary, this item's value and a live local.
         unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };

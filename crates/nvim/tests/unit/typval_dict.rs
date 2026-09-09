@@ -1016,8 +1016,8 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
             ("di_ro_sbx", f(4.0)),
         ];
         let d = tv::new_dict(&target);
-        (*tv::di_of(d, "tv_locked")).di_tv.v_lock = VarLock::Locked;
-        (*tv::di_of(d, "tv_fixed")).di_tv.v_lock = VarLock::Fixed;
+        (*tv::di_of(d, "tv_locked")).di_lock = VarLock::Locked;
+        (*tv::di_of(d, "tv_fixed")).di_lock = VarLock::Fixed;
         let di_ro = tv::di_of(d, "di_ro");
         (*di_ro).di_flags |= u8::try_from(DI_FLAGS_RO).unwrap();
         let di_ro_sbx = tv::di_of(d, "di_ro_sbx");

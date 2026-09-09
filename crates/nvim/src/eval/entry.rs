@@ -781,7 +781,7 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
         // SAFETY: as above.
         unsafe { tv_list_append_string(l, arg, -1 as ssize_t) };
         // SAFETY: the item just appended is the List's last.
-        unsafe { (*tv_list_last(l)).li_tv.v_lock = VarLock::Fixed };
+        unsafe { (*tv_list_last(l)).li_lock = VarLock::Fixed };
     }
     // SAFETY: `v:argv` takes the List over.
     unsafe { set_vim_var_list(Vv::Argv, l) };

@@ -35,7 +35,7 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, ProfTime, String_0, TypVal,
-    VAR_STRING, VarLock, intptr_t, lua_State, size_t,
+    VAR_STRING, intptr_t, lua_State, size_t,
 };
 use crate::ui::ui_has;
 
@@ -230,10 +230,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
     let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         let input_args: [TypVal; 2] = [
-            TypVal {
-                v_lock: VarLock::Fixed,
-                ..TypVal::string(c"lua_debug> ".as_ptr().cast_mut())
-            },
+            TypVal::string(c"lua_debug> ".as_ptr().cast_mut()),
             TV_INITIAL_VALUE,
         ];
         loop {

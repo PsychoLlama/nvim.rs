@@ -291,8 +291,8 @@ fn check_changedtick_item(buffer: Buf) {
         "changedtick_di->di_tv.v_type == VAR_NUMBER"
     );
     assert!(
-        item.di_tv.v_lock == VarLock::Fixed,
-        "changedtick_di->di_tv.v_lock == VarLock::Fixed"
+        item.di_lock == VarLock::Fixed,
+        "changedtick_di->di_lock == VarLock::Fixed"
     );
     assert!(
         item.di_flags as c_int == DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int,

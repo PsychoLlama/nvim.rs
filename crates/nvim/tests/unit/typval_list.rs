@@ -476,7 +476,6 @@ fn inserting_an_item_puts_it_before_the_one_named() {
             let li = tv::li_alloc();
             (*li).li_tv = TypVal {
                 v_type: VAR_FLOAT,
-                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_float: n },
             };
             li
@@ -533,7 +532,6 @@ fn inserting_into_an_empty_list_makes_it_the_only_item() {
         let li = tv::li_alloc();
         (*li).li_tv = TypVal {
             v_type: VAR_FLOAT,
-            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_float: 100500.0 },
         };
         tv_list_insert(l, li, ptr::null_mut());

@@ -324,7 +324,7 @@ impl Item {
 
     #[inline(always)]
     pub(crate) fn lock(self) -> VarLock {
-        self.get().li_tv.v_lock
+        self.get().li_lock
     }
 
     /// The item after this one, read *now*: a callback runs between two of
@@ -337,11 +337,13 @@ impl Item {
 
     /// Replace the item's value with `newtv`, clearing what was there.
     #[inline(always)]
-    pub(crate) fn set_tv(self, mut newtv: TypVal) {
-        newtv.v_lock = VarLock::Unlocked;
+    pub(crate) fn set_tv(self, newtv: TypVal) {
         let li = self.get();
         clear_tv(&mut li.li_tv);
         li.li_tv = newtv;
+        // Upstream unlocks the value it is about to store; with the lock on
+        // the slot, what it unlocks is this item.
+        li.li_lock = VarLock::Unlocked;
     }
 
     /// Whether the item's value equals `needle`, `ic` ignoring case.
@@ -510,7 +512,7 @@ impl DictItemRef {
 
     #[inline(always)]
     pub(crate) fn lock(self) -> VarLock {
-        self.get().di_tv.v_lock
+        self.get().di_lock
     }
 
     /// `DI_FLAGS_*`: read-only, fixed, allocated, ...
@@ -521,11 +523,12 @@ impl DictItemRef {
 
     /// Replace the value with `newtv`, clearing what was there.
     #[inline(always)]
-    pub(crate) fn set_tv(self, mut newtv: TypVal) {
-        newtv.v_lock = VarLock::Unlocked;
+    pub(crate) fn set_tv(self, newtv: TypVal) {
         let di = self.get();
         clear_tv(&mut di.di_tv);
         di.di_tv = newtv;
+        // As `Li::set_tv`: the lock unlocked here is the slot's.
+        di.di_lock = VarLock::Unlocked;
     }
 
     /// Whether the value equals `needle`, `ic` ignoring case.

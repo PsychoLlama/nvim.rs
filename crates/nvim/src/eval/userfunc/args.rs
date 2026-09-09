@@ -306,7 +306,7 @@ pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_ch
     let mut item = unsafe { Live::new(v) };
     item.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     let _ = unsafe { hash_add(&raw mut (*dp).dv_hashtab, key) };
-    item.di_tv.v_lock = VarLock::Fixed;
+    item.di_lock = VarLock::Fixed;
     item.di_tv.write_number(nr);
 }
 

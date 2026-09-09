@@ -108,7 +108,7 @@ pub unsafe fn tv_list_assign_range(
     let mut dest_li = first_li;
     let mut src_li = unsafe { tv_list_first(src) };
     while !src_li.is_null() && !dest_li.is_null() {
-        if unsafe { value_check_lock((*dest_li).li_tv.v_lock, varname, TV_CSTRING as size_t) } {
+        if unsafe { value_check_lock((*dest_li).li_lock, varname, TV_CSTRING as size_t) } {
             return Err(Failed);
         }
         src_li = unsafe { (*src_li).li_next };

@@ -9,7 +9,7 @@ use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
-use neovim::types::{List, Refcount, TypVal, VarLock, typval_vval_union};
+use neovim::types::{List, Refcount, TypVal, typval_vval_union};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Tv};
@@ -118,7 +118,6 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
             }
             let mut tv = TypVal {
                 v_type: neovim::types::VAR_LIST,
-                v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: l },
             };
             tv_clear(&raw mut tv);
@@ -158,7 +157,6 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
         }
         TypVal {
             v_type: neovim::types::VAR_LIST,
-            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: outer },
         }
     }

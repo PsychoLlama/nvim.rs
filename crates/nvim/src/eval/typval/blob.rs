@@ -424,7 +424,6 @@ pub unsafe fn tv_blob_copy(from: *mut Blob, to: *mut TypVal) {
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };
     dst.v_type = VAR_BLOB;
-    dst.v_lock = VarLock::Unlocked;
     if from.is_null() {
         unsafe { (*to).write_blob(::core::ptr::null_mut()) };
         return;

@@ -7,7 +7,8 @@ use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, callback_free, tv_dict_watcher_add, tv_dict_watcher_remove, tv_islocked,
+    NumBuf, callback_free, di_lock, di_tv, li_lock, li_tv, tv_dict_watcher_add,
+    tv_dict_watcher_remove, tv_islocked,
 };
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
@@ -146,7 +147,7 @@ pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             let di = unsafe { find_var(lv.ll_name, lv.ll_name_len, ptr::null_mut(), true) };
             if !di.is_null() {
                 let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
-                    || unsafe { tv_islocked(&raw mut (*di).di_tv) };
+                    || unsafe { tv_islocked(*di_lock(di), di_tv(di)) };
                 result.write_number(locked as VarNumber);
             }
         } else if lv.ll_range {
@@ -156,9 +157,15 @@ pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             let ll_newkey = unsafe { c_str(lv.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
-            result.write_number(unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber);
+            let li = lv.ll_li;
+            // SAFETY: a resolved lvalue's own item, whose lock is its own.
+            let locked = unsafe { tv_islocked(*li_lock(li), li_tv(li)) };
+            result.write_number(locked as VarNumber);
         } else {
-            result.write_number(unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber);
+            let di = lv.ll_di;
+            // SAFETY: as above, for a dictionary item.
+            let locked = unsafe { tv_islocked(*di_lock(di), di_tv(di)) };
+            result.write_number(locked as VarNumber);
         }
     }
     unsafe { clear_lval(&raw mut lv) };

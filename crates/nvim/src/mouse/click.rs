@@ -14,7 +14,6 @@
 #![allow(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::c_char;
 
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
@@ -26,7 +25,7 @@ use crate::mouse::state::{mouse_grid, mouse_row};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
 use crate::pos::{lt, ltoreq};
-use crate::types::{OptInt, TypVal, VarLock};
+use crate::types::{OptInt, TypVal};
 use crate::ui::state::Rows;
 use crate::ui::ui_flush;
 
@@ -35,14 +34,10 @@ use crate::ui::ui_flush;
 pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
     let def = click_defs.at(col);
     let mut modifiers = modifier_letters(mod_mask.get());
-    let number = |v: VarNumber| TypVal {
-        v_lock: VarLock::Fixed,
-        ..TypVal::number(v)
-    };
-    let string = |v: *mut c_char| TypVal {
-        v_lock: VarLock::Fixed,
-        ..TypVal::string(v)
-    };
+    // Upstream builds these argument slots `VAR_FIXED`; an argument vector's
+    // lock is never read, and with the lock on the slot there is none to set.
+    let number = TypVal::number;
+    let string = TypVal::string;
     let mut argv = [
         number(def.tabnr as VarNumber),
         number(click_count(mod_mask.get())),

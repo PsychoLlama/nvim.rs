@@ -123,7 +123,7 @@ pub unsafe fn call_user_func(
         let v = take_fixvar(&mut fixvar_idx);
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab }, c"self");
         unsafe { (*v).di_tv.v_type = VAR_DICT };
-        unsafe { (*v).di_tv.v_lock = VarLock::Unlocked };
+        unsafe { (*v).di_lock = VarLock::Unlocked };
         unsafe { (*v).di_tv.write_dict(selfdict) };
         unsafe { (*selfdict).dv_refcount.retain() };
     }
@@ -146,7 +146,7 @@ pub unsafe fn call_user_func(
         let v = take_fixvar(&mut fixvar_idx);
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_avars.dv_hashtab }, c"000");
         unsafe { (*v).di_tv.v_type = VAR_LIST };
-        unsafe { (*v).di_tv.v_lock = VarLock::Fixed };
+        unsafe { (*v).di_lock = VarLock::Fixed };
         unsafe { (*v).di_tv.write_list(&raw mut (*fc).fc_l_varlist) };
     }
     unsafe { tv_list_init_static(&raw mut (*fc).fc_l_varlist) };
@@ -235,7 +235,7 @@ pub unsafe fn call_user_func(
             unsafe { (*args.offset(i as isize)).bit_copy() }
         };
         unsafe { (*v).di_tv = value };
-        unsafe { (*v).di_tv.v_lock = VarLock::Fixed };
+        unsafe { (*v).di_lock = VarLock::Fixed };
         if isdefault {
             tv_to_free[tv_to_free_len] = unsafe { &raw mut (*v).di_tv };
             tv_to_free_len += 1;
@@ -257,7 +257,7 @@ pub unsafe fn call_user_func(
                 unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
             // As `a:name` above: `a:000`'s item borrows the caller's value.
             unsafe { (*li).li_tv = (*args.offset(i as isize)).bit_copy() };
-            unsafe { (*li).li_tv.v_lock = VarLock::Fixed };
+            unsafe { (*li).li_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
         }
         i += 1;

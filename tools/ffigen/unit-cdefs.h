@@ -598,11 +598,11 @@ union typval_vval_union {
 };
 struct TypVal {
   VarType v_type;
-  VarLock v_lock;
   typval_vval_union vval;
 };
 struct ChangedtickDictItem {
   TypVal di_tv;
+  VarLock di_lock;
   uint8_t di_flags;
   char di_key[12];
 };
@@ -864,6 +864,7 @@ struct DecorSignHighlight {
 };
 struct DictItem {
   TypVal di_tv;
+  VarLock di_lock;
   uint8_t di_flags;
   char di_key[0];
 };
@@ -1367,6 +1368,7 @@ struct ListItem {
   ListItem *li_next;
   ListItem *li_prev;
   TypVal li_tv;
+  VarLock li_lock;
 };
 struct MTPos {
   int32_t row;
@@ -1415,6 +1417,7 @@ struct RegProg {
 };
 struct ScopeDictDictItem {
   TypVal di_tv;
+  VarLock di_lock;
   uint8_t di_flags;
   char di_key[1];
 };
@@ -1920,6 +1923,7 @@ struct extmark_undo_vec_t {
 };
 struct funccall_S_fc_fixvar {
   TypVal di_tv;
+  VarLock di_lock;
   uint8_t di_flags;
   char di_key[21];
 };
@@ -2735,7 +2739,6 @@ static const int DI_FLAGS_FIX = 4;
 static const int DI_FLAGS_LOCK = 8;
 static const int DI_FLAGS_RO = 1;
 static const int DI_FLAGS_RO_SBX = 2;
-static const int DI_KEY_OFFSET = 17;
 static const int DLG_BUTTON_SEP = 10;
 static const int DLG_HOTKEY_CHAR = 38;
 static const int DOBUF_CURRENT = 0;

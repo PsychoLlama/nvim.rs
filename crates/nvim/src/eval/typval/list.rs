@@ -25,8 +25,16 @@ use crate::types::Refcount;
 /// allocation or aborts, so the only obligation left is the ambient one every
 /// allocation in the editor carries — being on the main thread — and *using*
 /// what comes back is the caller's business, not this call's.
+///
+/// The three links and the value are the caller's to fill in; `li_lock` is
+/// not, because an item is born unlocked and no caller says so.  Upstream got
+/// it for free — the lock lived in the value being assigned — and here it is
+/// one store into an `xmalloc`'d slot that would otherwise stay uninitialised.
 pub(crate) fn tv_list_item_alloc() -> *mut ListItem {
-    unsafe { xmalloc(::core::mem::size_of::<ListItem>()).cast::<ListItem>() }
+    let li = unsafe { xmalloc(::core::mem::size_of::<ListItem>()).cast::<ListItem>() };
+    // SAFETY: the allocation just made, whose lock nothing has read yet.
+    unsafe { li_lock(li).write(VarLock::Unlocked) };
+    li
 }
 
 /// Remove `item` from `l`, clear its value and free it.
@@ -321,6 +329,5 @@ pub unsafe fn tv_list_move_items(
 pub unsafe fn tv_list_alloc_ret(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
     let l = tv_list_alloc(len);
     unsafe { tv_list_set_ret(ret_tv, l) };
-    unsafe { (*ret_tv).v_lock = VarLock::Unlocked };
     l
 }

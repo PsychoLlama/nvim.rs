@@ -40,8 +40,8 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_STRING, VarLock,
-    VarNumber, size_t, uint8_t,
+    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_STRING, VarNumber,
+    size_t, uint8_t,
 };
 use ::libc::{strtod, toupper};
 
@@ -786,6 +786,5 @@ pub(crate) unsafe fn eval_env_var(
     unsafe { *end = cc };
 
     rv.write_string(string);
-    rv.v_lock = VarLock::Unlocked;
     Ok(())
 }

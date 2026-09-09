@@ -106,7 +106,6 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
     unsafe { *to = (*from).bit_copy() };
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };
-    dst.v_lock = VarLock::Unlocked;
 
     // SAFETY: the caller's promise: a live source typval.
     let src = unsafe { Tv::new(from.cast_mut()) };
@@ -150,8 +149,14 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
     }
 }
 
-/// `:lockvar` / `:unlockvar` over `tv`, descending `deep` levels into
-/// containers (negative meaning all the way down).
+/// `:lockvar` / `:unlockvar` over the slot `slot_lock`/`tv` name, descending
+/// `deep` levels into containers (negative meaning all the way down).
+///
+/// `slot_lock` is the lock of the place the value sits in — a list item's,
+/// a dictionary item's — because that is what `:lockvar l[0]` locks: the
+/// slot, not whatever value is in it today.  The containers below it carry
+/// their own (`lv_lock`, `dv_lock`, `bv_lock`), which is what the descent
+/// writes.
 ///
 /// With `check_refcount`, a container held by more than one reference is left
 /// alone — that is what keeps `:lockvar` on a function argument from locking
@@ -159,8 +164,10 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
 ///
 /// # Safety
 ///
-/// `tv` must point at an initialized typval, unaliased for the call.
+/// `tv` must point at an initialized typval and `slot_lock` at the lock of
+/// the slot holding it; both unaliased for the call.
 pub unsafe fn tv_item_lock(
+    slot_lock: *mut VarLock,
     tv: *mut TypVal,
     deep: ::core::ffi::c_int,
     lock: bool,
@@ -178,8 +185,8 @@ pub unsafe fn tv_item_lock(
     }
     let _recurse = Depth::of(&recurse);
 
-    // lock/unlock the item itself
-    unsafe { (*tv).v_lock = (*tv).v_lock.changed(lock) };
+    // lock/unlock the slot itself
+    unsafe { *slot_lock = (*slot_lock).changed(lock) };
 
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
@@ -201,8 +208,8 @@ pub unsafe fn tv_item_lock(
                 if !(0..=1).contains(&deep) {
                     // Recursive: lock/unlock the items the List contains.
                     for li in tv_list_iter(unsafe { l.as_ref() }) {
-                        let item = li_tv(li);
-                        unsafe { tv_item_lock(item, deep - 1, lock, check_refcount) };
+                        let (lock_of, value) = (li_lock(li), li_tv(li));
+                        unsafe { tv_item_lock(lock_of, value, deep - 1, lock, check_refcount) };
                     }
                 }
             }
@@ -217,8 +224,8 @@ pub unsafe fn tv_item_lock(
                     // recursive: lock/unlock the items the Dict contains
                     for hi in unsafe { tv_dict_iter(d) } {
                         let di = unsafe { tv_dict_hi2di(hi) };
-                        let item = di_tv(di);
-                        unsafe { tv_item_lock(item, deep - 1, lock, check_refcount) };
+                        let (lock_of, value) = (di_lock(di), di_tv(di));
+                        unsafe { tv_item_lock(lock_of, value, deep - 1, lock, check_refcount) };
                     }
                 }
             }
@@ -228,36 +235,40 @@ pub unsafe fn tv_item_lock(
     }
 }
 
-/// Whether `tv` is locked, either itself or as the container it names.
+/// Whether the slot `slot_lock`/`tv` names is locked, either as a slot or as
+/// the container it holds.
 ///
 /// # Safety
 ///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_islocked(tv: *const TypVal) -> bool {
+/// `tv` must point at an initialized typval, and `slot_lock` be the lock of
+/// the slot holding it.
+pub unsafe fn tv_islocked(slot_lock: VarLock, tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
-    let (v_lock, v_type) = (val.v_lock, val.v_type);
-    let container_lock = match v_type {
+    let container_lock = match val.v_type {
         VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
         VAR_DICT => {
             unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
         }
         _ => VarLock::Unlocked,
     };
-    v_lock == VarLock::Locked || container_lock == VarLock::Locked
+    slot_lock == VarLock::Locked || container_lock == VarLock::Locked
 }
 
-/// Whether `tv` may not be changed, raising the matching error if so.
+/// Whether the slot `slot_lock`/`tv` names may not be changed, raising the
+/// matching error if so.
 ///
 /// `name` is what the error names; `name_len` may be `TV_TRANSLATE` or
 /// `TV_CSTRING` instead of a real length.
 ///
 /// # Safety
 ///
-/// `tv` must point at an initialized typval. `name` must be null, or point at
+/// `tv` must point at an initialized typval, and `slot_lock` be the lock of
+/// the slot holding it. `name` must be null, or point at
 /// the name the error reports — NUL-terminated for
 /// `TV_CSTRING`/`TV_TRANSLATE`, otherwise `name_len` readable bytes.
 pub unsafe extern "C" fn tv_check_lock(
+    slot_lock: VarLock,
     tv: *const TypVal,
     name: *const ::core::ffi::c_char,
     name_len: size_t,
@@ -278,7 +289,7 @@ pub unsafe extern "C" fn tv_check_lock(
         }
         _ => VarLock::Unlocked,
     };
-    (unsafe { value_check_lock((*tv).v_lock, name, name_len) })
+    (unsafe { value_check_lock(slot_lock, name, name_len) })
         || (lock.is_locked() && unsafe { value_check_lock(lock, name, name_len) })
 }
 

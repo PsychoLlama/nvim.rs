@@ -33,7 +33,7 @@ use super::{
 };
 use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, di_of_key, tv_dict_item_key};
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::memory::xfree;
@@ -47,8 +47,7 @@ use crate::os::env::home_replace_save;
 use crate::os::state::globaldir;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    DictItem, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window,
-    int64_t,
+    NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, Window, int64_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tab_index;
@@ -584,8 +583,8 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     // it is embedded in.
     let ht = unsafe { &(*get_globvar_dict()).dv_hashtab };
     for hi in ht.items() {
-        let item = unsafe { hi.hi_key.byte_sub(DI_KEY_OFFSET) }.cast::<DictItem>();
-        let key = (unsafe { &raw mut (*item).di_key }).cast::<c_char>();
+        let item = di_of_key(hi.hi_key);
+        let key = tv_dict_item_key(item);
         let kind = unsafe { (*item).di_tv.v_type };
         let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
@@ -612,10 +611,6 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     }
     true
 }
-
-/// A `DictItem`'s key sits at a fixed offset inside it, which is how the
-/// hashtab walk gets from one back to the other.
-const DI_KEY_OFFSET: usize = 17;
 
 /// `let <name> = <value>` for one Number or String global. The value is
 /// escaped so that the script reads it back unchanged: backslash, quote, and

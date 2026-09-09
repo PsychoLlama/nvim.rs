@@ -407,9 +407,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                         } else {
                             // Can't change an existing function if it is
                             // locked.
-                            unsafe {
-                                value_check_lock((*fudi.fd_di).di_tv.v_lock, ea.arg, TV_CSTRING)
-                            }
+                            unsafe { value_check_lock((*fudi.fd_di).di_lock, ea.arg, TV_CSTRING) }
                         };
                         if locked {
                             break 'erret;

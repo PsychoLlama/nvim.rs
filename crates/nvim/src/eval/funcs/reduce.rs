@@ -9,9 +9,9 @@ use super::{
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_clear,
-    tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first, tv_list_len, tv_list_locked,
-    tv_list_set_lock,
+    NumBuf, di_of_key, di_tv, tv_blob_get, tv_blob_len, tv_check_for_number_arg,
+    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first,
+    tv_list_len, tv_list_locked, tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -22,17 +22,13 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, DictItem, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
+    Blob, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
     VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
 };
 use core::ffi::{c_char, c_int, c_void};
 
 /// A cleared typval.
 const EMPTY_TV: TypVal = TV_INITIAL_VALUE;
-
-/// The byte offset from a `DictItem`'s inline key to the item itself, as
-/// the C's `TV_DICT_HI2DI` spells it.
-const DI_KEY_OFFSET: isize = 17;
 
 /// A one-character String typval owning a copy of `len` bytes at `p`.
 ///
@@ -84,8 +80,10 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
             }
             let ht = unsafe { &(*tv.dict_or_null()).dv_hashtab };
             for hi in ht.items() {
-                let di = unsafe { hi.hi_key.offset(-DI_KEY_OFFSET) } as *mut DictItem;
-                let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
+                let di = di_of_key(hi.hi_key);
+                // SAFETY: an occupied slot of the dictionary's own table, so
+                // the item its key points into is live.
+                let i = unsafe { tv_get_number_chk(di_tv(di), &raw mut error) };
                 if error {
                     return;
                 }

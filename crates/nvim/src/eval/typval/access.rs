@@ -89,6 +89,22 @@ pub(crate) fn li_tv(li: *mut ListItem) -> *mut TypVal {
     field_of(li, ::core::mem::offset_of!(ListItem, li_tv))
 }
 
+/// The address of a dictionary item's lock; see [`field_of`].
+///
+/// The lock belongs to the *slot*, not to the value in it: `:lockvar d.k`
+/// locks the place `d.k` names, and the value that replaces it is locked
+/// too.  Every `DictItem`-prefixed struct carries the field at this offset.
+#[inline(always)]
+pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
+    field_of(di, ::core::mem::offset_of!(DictItem, di_lock))
+}
+
+/// The address of a list item's lock; see [`di_lock`].
+#[inline(always)]
+pub(crate) fn li_lock(li: *mut ListItem) -> *mut VarLock {
+    field_of(li, ::core::mem::offset_of!(ListItem, li_lock))
+}
+
 /// The address of a dictionary's hash table; see [`field_of`].
 #[inline(always)]
 pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut HashTab {
@@ -290,12 +306,10 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
 /// The `TypVal::x(v)` form **makes** a value: c2rust wrote the designated
 /// initialiser out in full at every site — three fields, one of them a union
 /// literal, over six to nine lines — and every one of them was a `v_type`
-/// tag, `VarLock::Unlocked`, and the one union member that tag selects.
+/// tag, a lock, and the one union member that tag selects.
 ///
 /// The `tv.write_x(v)` form **overwrites a slot**: it sets the tag and the
-/// payload and leaves `v_lock` alone, because the lock belongs to the slot
-/// (a list item, a dictionary item, a variable) and not to the value sitting
-/// in it. It is deliberately not called `set`: it does **not** release what
+/// payload, and nothing else.  It is deliberately not called `set`: it does **not** release what
 /// the slot held, so a caller replacing a value rather than filling a fresh
 /// one still clears it first. When the union becomes an enum that release is
 /// `Drop`'s job and this comment goes away.
@@ -318,12 +332,11 @@ macro_rules! union_writers {
                 $(
                     #[doc = concat!("A `", stringify!($tag), "` over ", $what, ".")]
                     #[doc = ""]
-                    #[doc = "Unlocked, and taking no reference: see [`union_writers`]."]
+                    #[doc = "Taking no reference: see [`union_writers`]."]
                     #[inline(always)]
                     pub(crate) const fn $new_fn($member: $ty) -> Self {
                         Self {
                             v_type: $tag,
-                            v_lock: VarLock::Unlocked,
                             vval: typval_vval_union { $member },
                         }
                     }
@@ -331,7 +344,7 @@ macro_rules! union_writers {
 
                 #[doc = concat!("Overwrite this slot with a `", stringify!($tag), "` over ", $what, ".")]
                 #[doc = ""]
-                #[doc = "Keeps the slot's `v_lock` and releases nothing: see [`union_writers`]."]
+                #[doc = "Releases nothing: see [`union_writers`]."]
                 #[inline(always)]
                 pub(crate) fn $write_fn(&mut self, $member: $ty) {
                     self.v_type = $tag;
@@ -369,14 +382,13 @@ impl TypVal {
     /// still-untyped `v:val` out of the `v:` dictionary.  What the slot no
     /// longer holds is anything to free: the caller owns that now.
     ///
-    /// `v_lock` travels with the value, because the one caller saves and
-    /// restores the whole slot.  When the union becomes an enum this is a
-    /// `mem::replace` that keeps the discriminant.
+    /// The slot's lock stays where it is: it belongs to the place, not to
+    /// the value that was sitting in it.  When the union becomes an enum
+    /// this is a `mem::replace` that keeps the discriminant.
     #[inline(always)]
     pub(crate) fn take_value(&mut self) -> TypVal {
         TypVal {
             v_type: self.v_type,
-            v_lock: self.v_lock,
             vval: ::core::mem::replace(&mut self.vval, EMPTY_PAYLOAD),
         }
     }
@@ -412,7 +424,6 @@ impl TypVal {
     pub(crate) fn bit_copy(&self) -> TypVal {
         TypVal {
             v_type: self.v_type,
-            v_lock: self.v_lock,
             // SAFETY: every bit pattern is a valid value of every member, so
             // reading the payload without asking the tag is defined; what
             // the bits *mean* is the caller's problem, and the doc comment
@@ -686,11 +697,22 @@ pub(crate) fn tv_dict_item_key(di: *const DictItem) -> *mut ::core::ffi::c_char 
 /// slot yields a wild pointer rather than null.
 #[inline(always)]
 pub(crate) unsafe fn tv_dict_hi2di(hi: Slot) -> *mut DictItem {
-    unsafe {
-        hi.hi_key
-            .sub(::core::mem::offset_of!(DictItem, di_key))
-            .cast::<DictItem>()
-    }
+    di_of_key(hi.hi_key)
+}
+
+/// [`tv_dict_hi2di`] from the key pointer alone, for the walks that hold a
+/// `&HashItem` rather than a [`Slot`].
+///
+/// Safe, and the only spelling of this arithmetic: an offset written out by
+/// hand goes stale the moment a field is added to `DictItem`, and the wrong
+/// answer is a wild pointer rather than a compile error.  The obligation that
+/// `key` really is a `DictItem`'s own `di_key` belongs to whoever
+/// dereferences the result.
+#[inline(always)]
+pub(crate) fn di_of_key(key: *const ::core::ffi::c_char) -> *mut DictItem {
+    key.cast_mut()
+        .wrapping_byte_sub(::core::mem::offset_of!(DictItem, di_key))
+        .cast::<DictItem>()
 }
 
 /// A walk over the occupied slots of a dictionary's hashtab.
@@ -839,7 +861,6 @@ mod tests {
     fn tagged(v_type: VarType, bits: VarNumber) -> TypVal {
         TypVal {
             v_type,
-            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: bits },
         }
     }

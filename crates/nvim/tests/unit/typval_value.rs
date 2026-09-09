@@ -6,7 +6,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
 use neovim::eval::list::kTVCstring;
@@ -38,11 +38,7 @@ fn f(n: f64) -> Tv {
 /// `typvalt(typ, vval)` — used where a case needs a value whose contents
 /// are deliberately not a real one.
 fn raw(v_type: VarType, vval: typval_vval_union) -> TypVal {
-    TypVal {
-        v_type,
-        v_lock: VarLock::Unlocked,
-        vval,
-    }
+    TypVal { v_type, vval }
 }
 
 // --------------------------------------------------------------- alloc
@@ -370,34 +366,80 @@ fn copying_a_null_container_answers_a_null_container() {
     }
 }
 
-/// The copy is **always unlocked**, whatever the source's lock says — the
-/// lock belongs to the slot a value sits in, not to the value. The
-/// container's own lock is a different lock and is not touched, so a copy of
-/// a locked list still names a locked list.
+/// A copy carries **no lock at all**: the lock belongs to the slot a value
+/// sits in, not to the value, so `tv_copy` neither reads the source slot's
+/// nor writes the destination's. The container's own lock is a different
+/// lock and travels with the container, so a copy of a locked list still
+/// names a locked list.
 #[test]
-fn copying_never_carries_the_lock() {
+fn copying_leaves_every_lock_where_it_is() {
     let _log = AllocLog::start();
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         for lock in [VarLock::Locked, VarLock::Fixed] {
-            let mut from = Tv::List(vec![Tv::Int(1)]).build();
-            from.v_lock = lock;
-            (*from.vval.v_list).lv_lock = lock;
+            let mut from = Slot::new(Tv::List(vec![Tv::Int(1)]).build());
+            from.lock = lock;
+            (*from.tv.vval.v_list).lv_lock = lock;
 
-            let mut to = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
-            tv_copy(&raw const from, &raw mut to);
-            assert_eq!(to.v_lock, VarLock::Unlocked, "the copy took the {lock:?}");
+            let mut to = Slot::new(raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 }));
+            to.lock = lock;
+            tv_copy(&raw const from.tv, &raw mut to.tv);
+            assert_eq!(to.lock, lock, "the copy moved the destination's lock");
             assert_eq!(
-                (*to.vval.v_list).lv_lock,
+                (*to.tv.vval.v_list).lv_lock,
                 lock,
                 "the container's own lock moved",
             );
 
-            (*from.vval.v_list).lv_lock = VarLock::Unlocked;
-            from.v_lock = VarLock::Unlocked;
-            tv_clear(&raw mut from);
-            tv_clear(&raw mut to);
+            (*from.tv.vval.v_list).lv_lock = VarLock::Unlocked;
+            tv_clear(&raw mut from.tv);
+            tv_clear(&raw mut to.tv);
         }
+    }
+}
+
+/// A value beside the lock of the slot it sits in — a `ListItem` or a
+/// `DictItem` minus the links.
+///
+/// A `TypVal` carries no lock of its own: `:lockvar l[0]` locks the *place*,
+/// which is why the lock lives on the item and `tv_item_lock`/`tv_islocked`/
+/// `tv_check_lock` are handed it. A case that locks a bare value keeps one
+/// here.
+struct Slot {
+    lock: VarLock,
+    tv: TypVal,
+}
+
+impl Slot {
+    fn new(tv: TypVal) -> Slot {
+        Slot {
+            lock: VarLock::Unlocked,
+            tv,
+        }
+    }
+
+    /// `tv_item_lock` over this slot.
+    ///
+    /// # Safety
+    /// As `tv_item_lock`.
+    unsafe fn item_lock(&mut self, deep: c_int, lock: bool, check_refcount: bool) {
+        unsafe {
+            tv_item_lock(
+                &raw mut self.lock,
+                &raw mut self.tv,
+                deep,
+                lock,
+                check_refcount,
+            );
+        }
+    }
+
+    /// `tv_islocked` over this slot.
+    ///
+    /// # Safety
+    /// As `tv_islocked`.
+    unsafe fn islocked(&self) -> bool {
+        unsafe { tv_islocked(self.lock, &raw const self.tv) }
     }
 }
 
@@ -428,16 +470,17 @@ fn locking_a_partial_leaves_its_dict_alone() {
     let _log = AllocLog::start();
     // SAFETY: the partial is this case's own.
     unsafe {
-        let mut p_tv = Tv::Partial(Box::new(Pt {
+        let p_tv = Tv::Partial(Box::new(Pt {
             value: b"tr".to_vec(),
             auto: false,
             args: vec![],
             dict: Some(Tv::Dict(vec![])),
         }))
         .build();
-        tv_item_lock(&raw mut p_tv, -1, true, false);
-        assert_eq!((*(*p_tv.vval.v_partial).pt_dict).dv_lock, VarLock::Unlocked);
-        tv_clear(&raw mut p_tv);
+        let mut p = Slot::new(p_tv);
+        p.item_lock(-1, true, false);
+        assert_eq!((*(*p.tv.vval.v_partial).pt_dict).dv_lock, VarLock::Unlocked);
+        tv_clear(&raw mut p.tv);
     }
 }
 
@@ -448,50 +491,50 @@ fn locking_never_moves_a_fixed_value() {
     let log = AllocLog::start();
     // SAFETY: both values are this case's own.
     unsafe {
-        let mut d_tv = Tv::Dict(vec![]).build();
-        let mut l_tv = Tv::List(vec![]).build();
+        let mut d_tv = Slot::new(Tv::Dict(vec![]).build());
+        let mut l_tv = Slot::new(Tv::List(vec![]).build());
         log.clear();
-        d_tv.v_lock = VarLock::Fixed;
-        (*d_tv.vval.v_dict).dv_lock = VarLock::Fixed;
-        l_tv.v_lock = VarLock::Fixed;
-        (*l_tv.vval.v_list).lv_lock = VarLock::Fixed;
+        d_tv.lock = VarLock::Fixed;
+        (*d_tv.tv.vval.v_dict).dv_lock = VarLock::Fixed;
+        l_tv.lock = VarLock::Fixed;
+        (*l_tv.tv.vval.v_list).lv_lock = VarLock::Fixed;
 
         for lock in [true, false] {
-            tv_item_lock(&raw mut d_tv, 1, lock, false);
-            tv_item_lock(&raw mut l_tv, 1, lock, false);
-            assert_eq!(d_tv.v_lock, VarLock::Fixed);
-            assert_eq!(l_tv.v_lock, VarLock::Fixed);
-            assert_eq!((*d_tv.vval.v_dict).dv_lock, VarLock::Fixed);
-            assert_eq!((*l_tv.vval.v_list).lv_lock, VarLock::Fixed);
+            d_tv.item_lock(1, lock, false);
+            l_tv.item_lock(1, lock, false);
+            assert_eq!(d_tv.lock, VarLock::Fixed);
+            assert_eq!(l_tv.lock, VarLock::Fixed);
+            assert_eq!((*d_tv.tv.vval.v_dict).dv_lock, VarLock::Fixed);
+            assert_eq!((*l_tv.tv.vval.v_list).lv_lock, VarLock::Fixed);
         }
         log.check(&[]);
 
-        tv_clear(&raw mut d_tv);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&raw mut d_tv.tv);
+        tv_clear(&raw mut l_tv.tv);
     }
 }
 
 /// The same `describe`'s `itp('works with NULL values')`, spec line 2823:
-/// the `TypVal` locks even when there is no container behind it.
+/// the *slot* locks even when there is no container behind it.
 #[test]
-fn locking_a_null_container_locks_the_value_itself() {
+fn locking_a_null_container_locks_the_slot_itself() {
     let log = AllocLog::start();
     // SAFETY: none of the three values owns anything.
     unsafe {
-        let mut tvs = [
-            Tv::NullList.build(),
-            Tv::NullDict.build(),
-            Tv::NullStr.build(),
+        let mut slots = [
+            Slot::new(Tv::NullList.build()),
+            Slot::new(Tv::NullDict.build()),
+            Slot::new(Tv::NullStr.build()),
         ];
         log.clear();
-        for tv in &mut tvs {
-            tv_item_lock(&raw mut *tv, 1, true, false);
+        for slot in &mut slots {
+            slot.item_lock(1, true, false);
         }
-        assert_eq!(tv::read(&raw const tvs[0]), Tv::NullList);
-        assert_eq!(tv::read(&raw const tvs[1]), Tv::NullDict);
-        assert_eq!(tv::read(&raw const tvs[2]), Tv::NullStr);
-        for tv in &tvs {
-            assert_eq!(tv.v_lock, VarLock::Locked);
+        assert_eq!(tv::read(&raw const slots[0].tv), Tv::NullList);
+        assert_eq!(tv::read(&raw const slots[1].tv), Tv::NullDict);
+        assert_eq!(tv::read(&raw const slots[2].tv), Tv::NullStr);
+        for slot in &slots {
+            assert_eq!(slot.lock, VarLock::Locked);
         }
         log.check(&[]);
     }
@@ -505,10 +548,10 @@ fn a_null_container_is_not_locked() {
     let _log = AllocLog::start();
     // SAFETY: neither value owns anything.
     unsafe {
-        let l_tv = Tv::NullList.build();
-        let d_tv = Tv::NullDict.build();
-        assert!(!tv_islocked(&raw const l_tv));
-        assert!(!tv_islocked(&raw const d_tv));
+        let l_tv = Slot::new(Tv::NullList.build());
+        let d_tv = Slot::new(Tv::NullDict.build());
+        assert!(!l_tv.islocked());
+        assert!(!d_tv.islocked());
     }
 }
 
@@ -520,61 +563,58 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
     let log = AllocLog::start();
     // SAFETY: every value is this case's own.
     unsafe {
-        let mut tv = Tv::Nil.build();
-        let mut d_tv = Tv::Dict(vec![]).build();
-        let mut l_tv = Tv::List(vec![]).build();
+        let mut tv = Slot::new(Tv::Nil.build());
+        let mut d_tv = Slot::new(Tv::Dict(vec![]).build());
+        let mut l_tv = Slot::new(Tv::List(vec![]).build());
         log.clear();
-        let d = d_tv.vval.v_dict;
-        let l = l_tv.vval.v_list;
-        let locked = |tv: &TypVal| tv_islocked(&raw const *tv);
+        let d = d_tv.tv.vval.v_dict;
+        let l = l_tv.tv.vval.v_list;
 
         assert_eq!(
-            (locked(&tv), locked(&l_tv), locked(&d_tv)),
+            (tv.islocked(), l_tv.islocked(), d_tv.islocked()),
             (false, false, false)
         );
 
         // The container's lock alone.
         (*d).dv_lock = VarLock::Locked;
         (*l).lv_lock = VarLock::Locked;
-        assert_eq!((locked(&l_tv), locked(&d_tv)), (true, true));
+        assert_eq!((l_tv.islocked(), d_tv.islocked()), (true, true));
 
-        // And the value's own, which holds whatever the container says.
-        tv.v_lock = VarLock::Locked;
-        d_tv.v_lock = VarLock::Locked;
-        l_tv.v_lock = VarLock::Locked;
+        // And the slot's own, which holds whatever the container says.
+        tv.lock = VarLock::Locked;
+        d_tv.lock = VarLock::Locked;
+        l_tv.lock = VarLock::Locked;
         assert_eq!(
-            (locked(&tv), locked(&l_tv), locked(&d_tv)),
+            (tv.islocked(), l_tv.islocked(), d_tv.islocked()),
             (true, true, true)
         );
         (*d).dv_lock = VarLock::Unlocked;
         (*l).lv_lock = VarLock::Unlocked;
         assert_eq!(
-            (locked(&tv), locked(&l_tv), locked(&d_tv)),
+            (tv.islocked(), l_tv.islocked(), d_tv.islocked()),
             (true, true, true)
         );
 
         // `VarLock::Fixed` is not "locked" to this question.
-        tv.v_lock = VarLock::Fixed;
-        d_tv.v_lock = VarLock::Fixed;
-        l_tv.v_lock = VarLock::Fixed;
+        tv.lock = VarLock::Fixed;
+        d_tv.lock = VarLock::Fixed;
+        l_tv.lock = VarLock::Fixed;
         assert_eq!(
-            (locked(&tv), locked(&l_tv), locked(&d_tv)),
+            (tv.islocked(), l_tv.islocked(), d_tv.islocked()),
             (false, false, false)
         );
         (*d).dv_lock = VarLock::Locked;
         (*l).lv_lock = VarLock::Locked;
-        assert_eq!((locked(&l_tv), locked(&d_tv)), (true, true));
+        assert_eq!((l_tv.islocked(), d_tv.islocked()), (true, true));
         (*d).dv_lock = VarLock::Fixed;
         (*l).lv_lock = VarLock::Fixed;
-        assert_eq!((locked(&l_tv), locked(&d_tv)), (false, false));
+        assert_eq!((l_tv.islocked(), d_tv.islocked()), (false, false));
         log.check(&[]);
 
         (*d).dv_lock = VarLock::Unlocked;
         (*l).lv_lock = VarLock::Unlocked;
-        d_tv.v_lock = VarLock::Unlocked;
-        l_tv.v_lock = VarLock::Unlocked;
-        tv_clear(&raw mut d_tv);
-        tv_clear(&raw mut l_tv);
+        tv_clear(&raw mut d_tv.tv);
+        tv_clear(&raw mut l_tv.tv);
     }
 }
 
@@ -644,12 +684,13 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
     let _log = AllocLog::start();
     // SAFETY: the structure is this case's own and is cleared at the end.
     unsafe {
-        let mut tv = Tv::List(vec![
+        let tv = Tv::List(vec![
             Tv::List(vec![Tv::Int(1)]),
             Tv::dict([("a", Tv::List(vec![Tv::Int(2)]))]),
         ])
         .build();
-        let outer = tv.vval.v_list;
+        let mut tv = Slot::new(tv);
+        let outer = tv.tv.vval.v_list;
         let items = tv::list_items(outer);
         let inner_list = (*items[0]).li_tv.vval.v_list;
         let inner_dict = (*items[1]).li_tv.vval.v_dict;
@@ -670,13 +711,13 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
         );
         assert_eq!(locks(), unlocked);
 
-        // `deep == 0` is "do nothing at all", the value included.
-        tv_item_lock(&raw mut tv, 0, true, false);
-        assert_eq!((tv.v_lock, locks()), (VarLock::Unlocked, unlocked));
+        // `deep == 0` is "do nothing at all", the slot included.
+        tv.item_lock(0, true, false);
+        assert_eq!((tv.lock, locks()), (VarLock::Unlocked, unlocked));
 
-        // One level: the value and the list it names, nothing inside it.
-        tv_item_lock(&raw mut tv, 1, true, false);
-        assert_eq!(tv.v_lock, VarLock::Locked);
+        // One level: the slot and the list it names, nothing inside it.
+        tv.item_lock(1, true, false);
+        assert_eq!(tv.lock, VarLock::Locked);
         assert_eq!(
             locks(),
             (
@@ -687,7 +728,7 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
         );
 
         // Two: its items as well, but not what *they* name.
-        tv_item_lock(&raw mut tv, 2, true, false);
+        tv.item_lock(2, true, false);
         assert_eq!(
             locks(),
             (
@@ -699,7 +740,7 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
 
         // All the way down, and back up again: unlocking takes the same
         // depth argument and undoes exactly what locking did.
-        tv_item_lock(&raw mut tv, -1, true, false);
+        tv.item_lock(-1, true, false);
         assert_eq!(
             locks(),
             (
@@ -708,10 +749,10 @@ fn locking_descends_exactly_as_deep_as_it_is_told() {
                 VarLock::Locked
             ),
         );
-        tv_item_lock(&raw mut tv, -1, false, false);
-        assert_eq!((tv.v_lock, locks()), (VarLock::Unlocked, unlocked));
+        tv.item_lock(-1, false, false);
+        assert_eq!((tv.lock, locks()), (VarLock::Unlocked, unlocked));
 
-        tv_clear(&raw mut tv);
+        tv_clear(&raw mut tv.tv);
     }
 }
 
@@ -723,36 +764,36 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
     let _log = AllocLog::start();
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
-        let mut tv = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
-        let outer = tv.vval.v_list;
+        let mut tv = Slot::new(Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build());
+        let outer = tv.tv.vval.v_list;
         let inner = (*(*outer).lv_first).li_tv.vval.v_list;
 
         // A second name for the outer list, as an argument binding is.
         let mut other = raw(VAR_UNKNOWN, typval_vval_union { v_number: 0 });
-        tv_copy(&raw const tv, &raw mut other);
+        tv_copy(&raw const tv.tv, &raw mut other);
         assert_eq!((*outer).lv_refcount.get(), 2);
 
-        tv_item_lock(&raw mut tv, -1, true, true);
+        tv.item_lock(-1, true, true);
         assert_eq!((*outer).lv_lock, VarLock::Unlocked, "a shared list locked");
         assert_eq!(
             (*inner).lv_lock,
             VarLock::Unlocked,
             "the walk went inside a list it refused to lock",
         );
-        // The *value* still locks: it is this slot's, not the container's.
-        assert_eq!(tv.v_lock, VarLock::Locked);
+        // The *slot* still locks: it is this place's, not the container's.
+        assert_eq!(tv.lock, VarLock::Locked);
 
         // Unshared, the same call reaches both.
         tv_clear(&raw mut other);
         assert_eq!((*outer).lv_refcount.get(), 1);
-        tv_item_lock(&raw mut tv, -1, true, true);
+        tv.item_lock(-1, true, true);
         assert_eq!(
             ((*outer).lv_lock, (*inner).lv_lock),
             (VarLock::Locked, VarLock::Locked)
         );
 
-        tv_item_lock(&raw mut tv, -1, false, true);
-        tv_clear(&raw mut tv);
+        tv.item_lock(-1, false, true);
+        tv_clear(&raw mut tv.tv);
     }
 }
 
@@ -768,17 +809,17 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
     unsafe {
         let name = cstr("v");
         let cstring = kTVCstring.get();
-        let check = |tv: &TypVal, msg| {
+        let check = |slot: &Slot, msg| {
             check_emsg(
                 log.editor(),
-                || tv_check_lock(&raw const *tv, name.as_ptr(), cstring),
+                || tv_check_lock(slot.lock, &raw const slot.tv, name.as_ptr(), cstring),
                 msg,
             )
         };
         let locked = "E741: Value is locked: v";
         let fixed = "E742: Cannot change value of v";
 
-        for (mut tv, set_container) in [
+        for (tv, set_container) in [
             (
                 Tv::List(vec![]).build(),
                 Box::new(|tv: &TypVal, lock| (*tv.vval.v_list).lv_lock = lock)
@@ -793,37 +834,38 @@ fn checking_a_lock_reads_the_value_and_then_its_container() {
                 Box::new(|tv: &TypVal, lock| (*tv.vval.v_blob).bv_lock = lock),
             ),
         ] {
-            assert!(!check(&tv, None), "an unlocked value refused a change");
+            let mut slot = Slot::new(tv);
+            assert!(!check(&slot, None), "an unlocked value refused a change");
 
             // The slot's own lock, whatever the container says.
-            tv.v_lock = VarLock::Locked;
-            assert!(check(&tv, Some(locked)));
-            tv.v_lock = VarLock::Fixed;
-            assert!(check(&tv, Some(fixed)));
-            tv.v_lock = VarLock::Unlocked;
+            slot.lock = VarLock::Locked;
+            assert!(check(&slot, Some(locked)));
+            slot.lock = VarLock::Fixed;
+            assert!(check(&slot, Some(fixed)));
+            slot.lock = VarLock::Unlocked;
 
             // The container's, which only an unlocked slot reaches.
-            set_container(&tv, VarLock::Locked);
-            assert!(check(&tv, Some(locked)));
-            set_container(&tv, VarLock::Fixed);
+            set_container(&slot.tv, VarLock::Locked);
+            assert!(check(&slot, Some(locked)));
+            set_container(&slot.tv, VarLock::Fixed);
             // A `VarLock::Fixed` container reports too, because the second
             // question is asked of `is_locked()` -- which is true for both
             // locked states. `tv_islocked` next door asks `== Locked`, so
             // it answers *false* for exactly this value: the two questions
             // are not the same question.
-            assert!(check(&tv, Some(fixed)));
-            assert!(!tv_islocked(&raw const tv));
-            set_container(&tv, VarLock::Unlocked);
+            assert!(check(&slot, Some(fixed)));
+            assert!(!slot.islocked());
+            set_container(&slot.tv, VarLock::Unlocked);
 
-            tv_clear(&raw mut tv);
+            tv_clear(&raw mut slot.tv);
         }
 
         // A NULL container has no lock to read, so only the slot's counts.
         for value in [Tv::NullList, Tv::NullDict, Tv::NullBlob] {
-            let mut tv = value.build();
-            assert!(!check(&tv, None));
-            tv.v_lock = VarLock::Locked;
-            assert!(check(&tv, Some(locked)));
+            let mut slot = Slot::new(value.build());
+            assert!(!check(&slot, None));
+            slot.lock = VarLock::Locked;
+            assert!(check(&slot, Some(locked)));
         }
     }
 }

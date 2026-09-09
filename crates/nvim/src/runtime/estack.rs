@@ -327,10 +327,9 @@ unsafe fn stacktrace_push_item(
     // allocated, so every `tv_dict_add_*` writes into memory we own until the
     // final append hands the dict to the list.
     let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
-    let mut tv = TypVal {
-        v_lock: VarLock::Locked,
-        ..TypVal::dict(d)
-    };
+    // Upstream marks this local `VAR_LOCKED`; the lock never travels, because
+    // `tv_list_append_tv` copies it into a fresh item and a copy is unlocked.
+    let mut tv = TypVal::dict(d);
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }

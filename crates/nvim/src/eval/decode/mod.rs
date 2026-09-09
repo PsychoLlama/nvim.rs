@@ -59,7 +59,7 @@ pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePack
     // SAFETY: the item just added to the special dictionary.
     let mut type_item = unsafe { Di::new(type_di) };
     type_item.di_tv.v_type = VAR_LIST;
-    type_item.di_tv.v_lock = VarLock::Unlocked;
+    type_item.di_lock = VarLock::Unlocked;
     unsafe { (*type_di).di_tv.write_list(msgpack_type_list(type_)) };
     unsafe { tv_list_ref((*type_di).di_tv.list_or_null()) };
     let _ = unsafe { tv_dict_add(dict, type_di) };

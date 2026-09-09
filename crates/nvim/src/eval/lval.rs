@@ -38,9 +38,9 @@ use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    NumBuf, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
-    tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
+    NumBuf, di_lock, li_lock, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range,
+    tv_blob_len, tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear,
+    tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
     tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
     tv_list_check_range_index_two, value_check_lock,
@@ -253,6 +253,7 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // SAFETY: `ll_di` is a live item, whose typval is the target.
     lval.ll_tv = unsafe { &raw mut (*lval.ll_di).di_tv };
+    lval.ll_lock = di_lock(lval.ll_di);
     GLV_OK
 }
 
@@ -289,6 +290,7 @@ pub(crate) unsafe fn get_lval_blob(
     // SAFETY: as above -- the typval still holds the Blob.
     lval.ll_blob = unsafe { Tv::new(lval.ll_tv).blob_or_null() };
     lval.ll_tv = null_mut();
+    lval.ll_lock = null_mut();
     Ok(())
 }
 
@@ -353,6 +355,7 @@ pub(crate) unsafe fn get_lval_list(
     }
     // SAFETY: `ll_li` is a live item, whose typval is the target.
     unsafe { (*rec).ll_tv = &raw mut (*li).li_tv };
+    unsafe { (*rec).ll_lock = li_lock(li) };
     Ok(())
 }
 
@@ -663,6 +666,7 @@ pub unsafe fn get_lval(
 
     // SAFETY: `v` is the live dictionary item the name resolved to.
     lval.ll_tv = unsafe { &raw mut (*v).di_tv };
+    lval.ll_lock = di_lock(v);
     // SAFETY: `ll_tv` is that item's typval.
     if unsafe { tv_is_luafunc(lval.ll_tv) } {
         return p;
@@ -726,7 +730,9 @@ pub unsafe fn set_var_lval(
     // SAFETY: a pending new key means `ll_tv` holds the Dict it goes into.
     let target = unsafe { Tv::new(lval.ll_tv) };
     let lock = if lval.ll_newkey.is_null() {
-        target.v_lock
+        // SAFETY: `ll_lock` is the lock of the slot `ll_tv` points into,
+        // set beside it whenever it is.
+        unsafe { *lval.ll_lock }
     } else {
         // SAFETY: as above -- the Dict the key is being added to.
         unsafe { (*target.dict_or_null()).dv_lock }
@@ -806,6 +812,7 @@ pub unsafe fn set_var_lval(
             }
             // SAFETY: `di` belongs to the Dict; its typval is the target.
             lval.ll_tv = unsafe { &raw mut (*di).di_tv };
+            lval.ll_lock = di_lock(di);
         } else {
             if watched {
                 // SAFETY: `oldtv` is this frame's separate record of the old value.
@@ -829,8 +836,11 @@ pub unsafe fn set_var_lval(
             // SAFETY: as above -- the take resets `result`, so nothing
             // frees the value twice.
             *target = unsafe { (*result).take() };
-            target.v_lock = VarLock::Unlocked;
         }
+        // Upstream leaves the assigned value unlocked, by hand on one branch
+        // and through `tv_copy` on the other; the lock is the slot's.
+        // SAFETY: `ll_lock` is that slot's lock.
+        unsafe { *lval.ll_lock = VarLock::Unlocked };
     }
 
     if !watched {
@@ -897,17 +907,20 @@ unsafe fn set_whole_var(
         let found = unsafe { eval_variable(name, name_len as c_int, tvp, dip, true, false) };
         if found.is_ok() {
             // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
-            let (n, dtv) = if di.is_null() {
-                (0, null_mut())
+            let (n, dtv, dlock) = if di.is_null() {
+                (0, null_mut(), VarLock::Unlocked)
             } else {
-                // SAFETY: `di` is live, so naming its typval reads nothing.
-                (unsafe { (*di).di_flags } as c_int, unsafe {
-                    &raw mut (*di).di_tv
-                })
+                // SAFETY: `di` is live, so naming its typval reads nothing,
+                // and its lock is the slot's.
+                (
+                    unsafe { (*di).di_flags } as c_int,
+                    unsafe { &raw mut (*di).di_tv },
+                    unsafe { *di_lock(di) },
+                )
             };
             let writable = di.is_null()
                 || (!unsafe { var_check_ro(n, name, TV_CSTRING as size_t) }
-                    && !unsafe { tv_check_lock(dtv, name, TV_CSTRING as size_t) });
+                    && !unsafe { tv_check_lock(dlock, dtv, name, TV_CSTRING as size_t) });
             if writable && unsafe { eexe_mod_op(&raw mut tv, result, op) }.is_ok() {
                 // SAFETY: as above -- the folded value goes back by name.
                 unsafe { set_var(name, name_len, &raw mut tv, false) };

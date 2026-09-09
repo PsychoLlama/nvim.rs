@@ -75,7 +75,7 @@ use crate::types::{
     DictWatcher, Failed, FileMark, FileMarkView, HashItem, HashTab, HtStack, List, ListItem,
     ListStack, NUL, OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc,
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VimConv, Window, XFileMark, YankReg, size_t,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window, XFileMark, YankReg, size_t,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -681,7 +681,6 @@ pub unsafe fn var_item_copy(
                 // SAFETY: both typvals are the caller's.
                 unsafe { tv_copy(from, to) };
             } else {
-                dst.v_lock = VarLock::Unlocked;
                 let (cv, s) = (conv as *mut VimConv, src.string_or_null());
                 // SAFETY: `s` is the source string and `cv` the conversion.
                 dst.write_string(unsafe { string_convert(cv, s, null_mut::<size_t>()) });
@@ -693,7 +692,6 @@ pub unsafe fn var_item_copy(
             }
         }
         VAR_LIST => {
-            dst.v_lock = VarLock::Unlocked;
             let l = src.list_or_null();
             if l.is_null() {
                 dst.write_list(null_mut::<List>());
@@ -713,7 +711,6 @@ pub unsafe fn var_item_copy(
             }
         }
         VAR_DICT => {
-            dst.v_lock = VarLock::Unlocked;
             let d = src.dict_or_null();
             if d.is_null() {
                 dst.write_dict(null_mut::<Dict>());

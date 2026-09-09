@@ -38,9 +38,11 @@ pub struct ParserHighlight {
     pub items: *mut ParserHighlightChunk,
     pub init_array: [ParserHighlightChunk; 16],
 }
+/// A [`DictItem`] whose key is the one-letter scope name; see [`DictItem`].
 #[repr(C)]
 pub struct ScopeDictDictItem {
     pub di_tv: TypVal,
+    pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 1],
 }
@@ -99,9 +101,17 @@ pub struct caller_scope {
     pub autocmd_bufnr: ::core::ffi::c_int,
     pub funccalp: *mut ::core::ffi::c_void,
 }
+/// One entry of a [`Dict`](crate::types::Dict), allocated around its own key.
+///
+/// `di_lock` is the *slot's* lock: `:lockvar` on a variable locks the item it
+/// lives in, not the value it currently holds.  Every layout-compatible
+/// prefix of this struct -- [`ScopeDictDictItem`],
+/// [`ChangedtickDictItem`](crate::types::ChangedtickDictItem) and
+/// `funccall_S_fc_fixvar` -- carries the field at the same offset.
 #[repr(C)]
 pub struct DictItem {
     pub di_tv: TypVal,
+    pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 0],
 }

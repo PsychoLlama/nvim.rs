@@ -268,7 +268,6 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> R
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.v_type = VAR_LIST;
-    val.v_lock = VarLock::Unlocked;
     let l = if l1.is_null() && l2.is_null() {
         ::core::ptr::null_mut()
     } else if l1.is_null() {

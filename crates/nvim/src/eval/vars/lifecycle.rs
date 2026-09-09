@@ -273,7 +273,7 @@ pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictDictItem, s
     d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
     d.dv_copy_id = 0;
     var.di_tv.write_dict(dict);
-    var.di_tv.v_lock = VarLock::Fixed;
+    var.di_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key[0] = NUL as c_char;
     // The watcher queue's head points at its own node, so `queue_init` goes

@@ -239,18 +239,13 @@ impl Tv {
             Tv::Copied(from) => {
                 let mut to = TypVal {
                     v_type: VAR_UNKNOWN,
-                    v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_number: 0 },
                 };
                 unsafe { tv_copy(*from, &raw mut to) };
                 return to;
             }
         };
-        TypVal {
-            v_type,
-            v_lock: VarLock::Unlocked,
-            vval,
-        }
+        TypVal { v_type, vval }
     }
 }
 
@@ -315,7 +310,6 @@ impl Container {
 pub(crate) unsafe fn bit_copy(tv: &TypVal) -> TypVal {
     TypVal {
         v_type: tv.v_type,
-        v_lock: tv.v_lock,
         // SAFETY: every bit pattern is a valid value of every member.
         vval: unsafe { ptr::read(&tv.vval) },
     }
@@ -459,13 +453,19 @@ fn seen(path: &[Container], at: *const c_void) -> Option<usize> {
     path.iter().position(|c| c.addr() == at)
 }
 
-/// `tv_list_item_alloc`, which the crate keeps private: an uninitialised
-/// item the caller fills in and hands to `tv_list_append`.
+/// `tv_list_item_alloc`, which the crate keeps private: an item whose links
+/// and value the caller fills in and hands to `tv_list_append`.
+///
+/// The lock is written here for the same reason the crate's copy writes it:
+/// it is the *slot's*, so no caller sets it and an `xmalloc`'d one would be
+/// whatever the heap last held.
 ///
 /// # Safety
 /// The editor must be up.
 pub(crate) unsafe fn list_item_alloc() -> *mut ListItem {
-    unsafe { xmalloc(size_of::<ListItem>()) }.cast()
+    let li: *mut ListItem = unsafe { xmalloc(size_of::<ListItem>()) }.cast();
+    unsafe { (&raw mut (*li).li_lock).write(VarLock::Unlocked) };
+    li
 }
 
 /// The spec's `li_alloc`: an item holding `VAR_UNKNOWN`, unlinked.
@@ -479,7 +479,6 @@ pub(crate) unsafe fn li_alloc() -> *mut ListItem {
         (*li).li_prev = ptr::null_mut();
         (*li).li_tv = TypVal {
             v_type: VAR_UNKNOWN,
-            v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
         };
     }
@@ -674,7 +673,6 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
 
     let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
-        v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
     let mut evalarg = EvalArg {
