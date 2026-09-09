@@ -32,7 +32,7 @@ const ARITHMETIC: &CStr = c"+-*/%";
 
 /// One `:let` target parser, dispatched on the sigil the target starts with.
 type LetTarget =
-    unsafe fn(*mut c_char, *mut TypVal, bool, *const c_char, *const c_char) -> *mut c_char;
+    unsafe fn(*mut c_char, &mut TypVal, bool, *const c_char, *const c_char) -> *mut c_char;
 
 /// The assignment's operator character: `None` when there is none, which is
 /// the `op == NULL` every caller below tests for first.
@@ -124,7 +124,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     // Assign to the target or targets, whatever produced the value. The
     // command's argument text is re-read here rather than reused from above
     // because `heredoc_get` moves it.
-    let assign = |tv: *mut TypVal, op: *const c_char| {
+    let assign = |tv: &mut TypVal, op: *const c_char| {
         let a = ea.arg;
         // SAFETY: the command's own argument text, and a live value.
         let _ = unsafe { ex_let_vars(a, tv, false, semicolon, var_count, is_const, op) };
@@ -144,7 +144,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
             unsafe { tv_list_set_ret(&raw mut rettv, l) };
             if ea.skip == 0 {
                 let op = [b'=' as c_char, NUL as c_char];
-                assign(&raw mut rettv, op.as_ptr());
+                assign(&mut rettv, op.as_ptr());
             }
             // SAFETY: a live local.
             clear_local(&mut rettv);
@@ -181,12 +181,12 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     // SAFETY: a live command, a live local `evalarg`, and `expr` inside the
     // command's own argument text.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, skip) };
-    let eval_res = unsafe { eval0(expr, &raw mut rettv, args, &raw mut evalarg) };
+    let eval_res = unsafe { eval0(expr, &mut rettv, args, &raw mut evalarg) };
     drop(skipping);
     unsafe { clear_evalarg(&raw mut evalarg, args) };
 
     if ea.skip == 0 && eval_res.is_ok() {
-        assign(&raw mut rettv, op.as_ptr());
+        assign(&mut rettv, op.as_ptr());
     }
     if eval_res.is_ok() {
         // SAFETY: a live local.
@@ -205,7 +205,7 @@ pub unsafe fn ex_let(args: *mut ExArg) {
 /// `arg_start` is a NUL-terminated string and `tv` a live value.
 pub unsafe fn ex_let_vars(
     arg_start: *mut c_char,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     copy: bool,
     semicolon: c_int,
     var_count: c_int,
@@ -254,7 +254,7 @@ pub unsafe fn ex_let_vars(
         // SAFETY: `arg` is inside the caller's NUL-terminated string, and
         // `item` is a live item of `l` -- the length checks above are what
         // keep the walk inside it.
-        let (next, itv) = unsafe { (skipwhite(arg.add(1)), &raw mut (*item).li_tv) };
+        let (next, itv) = unsafe { (skipwhite(arg.add(1)), &mut (*item).li_tv) };
         arg = unsafe { ex_let_one(next, itv, true, is_const, c",;]".as_ptr(), op) };
         if arg.is_null() {
             return Err(Failed);
@@ -278,9 +278,8 @@ pub unsafe fn ex_let_vars(
             // SAFETY: `arg` is inside the caller's string and `ltv` a live
             // local.
             let rest_arg = unsafe { skipwhite(arg.add(1)) };
-            let ltvp = &raw mut ltv;
-            arg = unsafe { ex_let_one(rest_arg, ltvp, false, is_const, c"]".as_ptr(), op) };
-            unsafe { tv_clear(ltvp) };
+            arg = unsafe { ex_let_one(rest_arg, &mut ltv, false, is_const, c"]".as_ptr(), op) };
+            unsafe { tv_clear(&raw mut ltv) };
             if arg.is_null() {
                 return Err(Failed);
             }
@@ -381,7 +380,7 @@ unsafe fn skip_var_one(arg: *const c_char) -> *const c_char {
 /// `arg` points at the `$`; `tv` is a live value.
 unsafe fn ex_let_env(
     mut arg: *mut c_char,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -451,7 +450,7 @@ unsafe fn ex_let_env(
 /// `arg` points at the `&`; `tv` is a live value.
 unsafe fn ex_let_option(
     mut arg: *mut c_char,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -595,7 +594,7 @@ pub(crate) fn tristate_from_int(n: OptInt) -> Option<bool> {
 /// `arg` points at the `@`; `tv` is a live value.
 unsafe fn ex_let_register(
     mut arg: *mut c_char,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -663,7 +662,7 @@ unsafe fn ex_let_register(
 /// `arg` is a NUL-terminated string; `tv` is a live value.
 unsafe fn ex_let_one(
     arg: *mut c_char,
-    tv: *mut TypVal,
+    tv: &mut TypVal,
     copy: bool,
     is_const: bool,
     endchars: *const c_char,
@@ -695,7 +694,7 @@ unsafe fn ex_let_one(
     let mut lv = LVAL_INITIAL_VALUE;
     let lvp = &raw mut lv;
     // SAFETY: the caller's obligation, and `lv` is a live local.
-    let p = unsafe { get_lval(arg, tv, lvp, false, false, 0, FNE_CHECK_START) };
+    let p = unsafe { get_lval(arg, Some(tv), lvp, false, false, 0, FNE_CHECK_START) };
     if !p.is_null() && !lv.ll_name.is_null() {
         if !unsafe { ends_target(endchars, p) } {
             emsg_static(e_letunexp);

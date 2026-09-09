@@ -89,7 +89,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
         need_clr_eos.set(true);
         let start = arg;
         // SAFETY: `arg`, `rettv` and `evalarg` are all this frame's.
-        if unsafe { eval1(&raw mut arg, &raw mut rettv, &raw mut evalarg) }.is_err() {
+        if unsafe { eval1(&raw mut arg, &mut rettv, &raw mut evalarg) }.is_err() {
             if !aborting()
                 && did_emsg.get() == did_emsg_before
                 && called_emsg.get() == called_emsg_before
@@ -192,7 +192,7 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
     // SAFETY: `arg` walks the command line, which is NUL-terminated.
     while !ends_args(unsafe { *arg }) {
         // SAFETY: `arg` and `rettv` are this frame's, `args` the caller's.
-        ret = unsafe { eval1_emsg(&raw mut arg, &raw mut rettv, args.raw()) };
+        ret = unsafe { eval1_emsg(&raw mut arg, &mut rettv, args.raw()) };
         if ret.is_err() {
             break;
         }

@@ -114,7 +114,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *const TypVal, dir: Direction, fast: b
         user_hl[0] = unsafe { get_user_highlight_attr(borrowed(c"abbr_hlgroup", &mut numbuf2)) };
         user_hl[1] = unsafe { get_user_highlight_attr(borrowed(c"kind_hlgroup", &mut numbuf2)) };
 
-        let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
+        let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &mut user_data) };
 
         if get_nr(c"icase") != 0 {
             flags |= CP_ICASE;

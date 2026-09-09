@@ -60,7 +60,7 @@ pub(crate) unsafe fn eval_func(
     evalarg: *mut EvalArg,
     name: *mut c_char,
     name_len: c_int,
-    result: *mut TypVal,
+    result: &mut TypVal,
     flags: c_int,
     basetv: *mut TypVal,
 ) -> Result<(), Failed> {
@@ -127,7 +127,7 @@ pub(crate) unsafe fn eval_func(
 pub(crate) unsafe fn call_func_rettv(
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
     selfdict: *mut Dict,
     basetv: *mut TypVal,
@@ -204,7 +204,7 @@ pub(crate) unsafe fn call_func_rettv(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_lambda(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -253,7 +253,7 @@ pub(crate) unsafe fn eval_lambda(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_method(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -313,7 +313,7 @@ pub(crate) unsafe fn eval_method(
             // back at the end of the branch.
             unsafe { *paren = NUL as c_char };
             let mut callee = UNSET_TV;
-            if unsafe { eval7(arg, &raw mut callee, evalarg, false) }.is_err() {
+            if unsafe { eval7(arg, &mut callee, evalarg, false) }.is_err() {
                 cur.set(name.wrapping_offset(len as isize));
                 ret = Err(Failed);
             } else if unsafe { *skipwhite(cur.get()) } as c_int != NUL {

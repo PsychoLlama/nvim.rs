@@ -21,6 +21,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::CallFrame;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -32,9 +33,7 @@ use super::{
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
     reg_prev_sub, reg_prev_sublen, rsm,
 };
-use crate::eval::typval::{
-    ArgFrame, TV_INITIAL_VALUE, UNSET_ARG, tv_clear, tv_get_string_buf_chk, tv_list_len,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
@@ -558,8 +557,8 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     // argument at all, so it must outlive the call.
     let mut match_list: StaticList10 = unsafe { core::mem::zeroed() };
     match_list.sl_list.lv_lock = VarLock::Fixed;
-    let mut argv = [UNSET_ARG; 2];
-    argv[0].write_list(&raw mut match_list.sl_list);
+    // The list is this frame's own storage, so the slot names it.
+    let argv = CallFrame::naming([TypVal::List(&raw mut match_list.sl_list)]);
 
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_string(core::ptr::null_mut());
@@ -577,10 +576,8 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
         None
     };
     if let Some(name) = name {
-        let rettv = &raw mut rettv;
-        let argv = argv.args();
         let funcexe = &raw mut funcexe;
-        let _ = unsafe { call_func(name, -1, rettv, 1, argv, funcexe) };
+        let _ = unsafe { call_func(name, -1, &mut rettv, argv.args(), funcexe) };
     }
     if unsafe { tv_list_len(&raw mut match_list.sl_list) } > 0 {
         // A non-empty list means `fill_submatch_list` ran and allocated.

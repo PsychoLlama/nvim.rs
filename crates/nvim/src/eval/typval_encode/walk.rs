@@ -184,22 +184,39 @@ unsafe fn convert_one_value<S: TypvalSink>(
     sink.check_before();
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv) };
+    // The hook's borrow of the slot the walk is standing on.  Taken *after*
+    // whatever else the arm reads out of it, so that no read goes through the
+    // raw pointer while the borrow is live.
+    macro_rules! slot {
+        () => {
+            tv.as_mut()
+        };
+    }
     match val.v_type() {
         VAR_STRING => {
-            item_hook!(unsafe { sink.conv_string(tv, (*tv).string_or_null(), tv_strlen(tv)) });
+            let (buf, len) = (val.string_or_null(), unsafe { tv_strlen(tv) });
+            item_hook!(unsafe { sink.conv_string(slot!(), buf, len) });
         }
-        VAR_NUMBER => unsafe { sink.conv_number(tv, (*tv).number_or_zero()) },
-        VAR_FLOAT => item_hook!(unsafe { sink.conv_float(tv, (*tv).float_or_zero()) }),
+        VAR_NUMBER => {
+            let n = val.number_or_zero();
+            unsafe { sink.conv_number(slot!(), n) };
+        }
+        VAR_FLOAT => {
+            let f = val.float_or_zero();
+            item_hook!(unsafe { sink.conv_float(slot!(), f) });
+        }
         VAR_BLOB => {
             let blob = val.blob_or_null();
-            unsafe { sink.conv_blob(tv, blob, tv_blob_len(blob)) };
+            let len = unsafe { tv_blob_len(blob) };
+            unsafe { sink.conv_blob(slot!(), blob, len) };
         }
         VAR_FUNC => {
+            let name = val.func_name_or_null();
             let path = ConvPath { stack, objname };
-            item_hook!(unsafe { sink.conv_func_start(tv, (*tv).func_name_or_null(), c"", &path) });
-            unsafe { sink.conv_func_before_args(tv, 0) };
-            unsafe { sink.conv_func_before_self(tv, -1) };
-            unsafe { sink.conv_func_end(tv, copyid) };
+            item_hook!(unsafe { sink.conv_func_start(slot!(), name, c"", &path) });
+            unsafe { sink.conv_func_before_args(slot!(), 0) };
+            unsafe { sink.conv_func_before_self(slot!(), -1) };
+            unsafe { sink.conv_func_end(slot!(), copyid) };
         }
         VAR_PARTIAL => {
             let pt = val.partial_or_null();
@@ -220,7 +237,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                 };
             {
                 let path = ConvPath { stack, objname };
-                item_hook!(unsafe { sink.conv_func_start(tv, fun, prefix, &path) });
+                item_hook!(unsafe { sink.conv_func_start(slot!(), fun, prefix, &path) });
             }
             stack.push(ConvFrame {
                 tv,
@@ -234,7 +251,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
         VAR_LIST => {
             let list = val.list_or_null();
             if list.is_null() || unsafe { tv_list_len(list) } == 0 {
-                unsafe { sink.conv_empty_list(tv) };
+                unsafe { sink.conv_empty_list(slot!()) };
             } else {
                 let saved_copyid = unsafe { tv_list_copyid(list) };
                 {
@@ -242,7 +259,8 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     let ty = ConvType::List;
                     item_hook!(unsafe { check_list_seen(sink, list, ty, copyid, &path) });
                 }
-                item_hook!(unsafe { sink.conv_list_start(tv, tv_list_len(list)) });
+                let len = unsafe { tv_list_len(list) };
+                item_hook!(unsafe { sink.conv_list_start(slot!(), len) });
                 debug_assert!(saved_copyid != copyid);
                 stack.push(ConvFrame {
                     tv,
@@ -252,7 +270,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                         li: unsafe { tv_list_first(list) },
                     },
                 });
-                item_hook!(unsafe { sink.conv_real_list_after_start(tv, stack.last_mut()) });
+                item_hook!(unsafe { sink.conv_real_list_after_start(slot!(), stack.last_mut()) });
             }
         }
         VAR_BOOL => {
@@ -260,12 +278,12 @@ unsafe fn convert_one_value<S: TypvalSink>(
             // anything else.
             let b = val.as_bool().unwrap_or(kBoolVarFalse);
             if b == kBoolVarTrue || b == kBoolVarFalse {
-                unsafe { sink.conv_bool(tv, b == kBoolVarTrue) };
+                unsafe { sink.conv_bool(slot!(), b == kBoolVarTrue) };
             }
         }
         VAR_SPECIAL => {
             if val.as_special() == Some(kSpecialVarNull) {
-                unsafe { sink.conv_nil(tv) };
+                unsafe { sink.conv_nil(slot!()) };
             }
         }
         VAR_DICT => {
@@ -273,7 +291,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             // SAFETY: the typval's own dictionary, live while the typval is.
             let d = unsafe { Dt::new(dict) };
             if dict.is_null() || d.dv_hashtab.ht_used == 0 {
-                unsafe { sink.conv_empty_dict(tv, Some(DictSlot::Value(tv))) };
+                unsafe { sink.conv_empty_dict(Some(DictSlot::Value(tv))) };
             } else {
                 if S::ALLOW_SPECIALS
                     && let Some(flow) =
@@ -289,7 +307,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                 }
                 let dictp = DictSlot::Value(tv);
                 let used = d.dv_hashtab.ht_used;
-                item_hook!(unsafe { sink.conv_dict_start(tv, used) });
+                item_hook!(unsafe { sink.conv_dict_start(slot!(), used) });
                 debug_assert!(saved_copyid != copyid);
                 stack.push(ConvFrame {
                     tv,
@@ -302,7 +320,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     },
                 });
                 let dp = Some(dictp);
-                item_hook!(unsafe { sink.conv_real_dict_after_start(tv, dp, stack.last_mut()) });
+                item_hook!(unsafe { sink.conv_real_dict_after_start(dp, stack.last_mut()) });
             }
         }
         VAR_UNKNOWN => {
@@ -359,14 +377,21 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     let val_tv = di_tv(val_di.cast_mut());
     // SAFETY: the `_VAL` item's value, live while the dictionary is.
     let val = unsafe { Tv::new(val_tv) };
+    // As `convert_one_value`: the borrow is taken last.
+    macro_rules! slot {
+        () => {
+            tv.as_mut()
+        };
+    }
 
     match SPECIAL_KINDS[found] {
-        SpecialKind::Nil => unsafe { sink.conv_nil(tv) },
+        SpecialKind::Nil => unsafe { sink.conv_nil(slot!()) },
         SpecialKind::Bool => {
             if val.v_type() != VAR_NUMBER {
                 return Ok(None);
             }
-            unsafe { sink.conv_bool(tv, val.number_or_zero() != 0) };
+            let b = val.number_or_zero() != 0;
+            unsafe { sink.conv_bool(slot!(), b) };
         }
         SpecialKind::Integer => {
             // A list of four integers: a sign (nominally ±1), then the
@@ -404,9 +429,10 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             let number =
                 ((highest_bits as u64) << 62) | ((high_bits as u64) << 31) | (low_bits as u64);
             if sign > 0 {
-                unsafe { sink.conv_unsigned_number(tv, number) };
+                unsafe { sink.conv_unsigned_number(slot!(), number) };
             } else {
-                unsafe { sink.conv_number(tv, number.wrapping_neg() as int64_t) };
+                let n = number.wrapping_neg() as int64_t;
+                unsafe { sink.conv_number(slot!(), n) };
             }
         }
         SpecialKind::Float => {
@@ -414,7 +440,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             let f = val.float_or_zero();
-            return Ok(Some(unsafe { sink.conv_float(tv, f) }));
+            return Ok(Some(unsafe { sink.conv_float(slot!(), f) }));
         }
         SpecialKind::String => {
             if val.v_type() != VAR_LIST {
@@ -426,7 +452,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if !unsafe { encode_vim_list_to_buf(val_list, &raw mut len, &raw mut buf) } {
                 return Ok(None);
             }
-            let flow = unsafe { sink.conv_str_string(tv, buf, len) };
+            let flow = unsafe { sink.conv_str_string(slot!(), buf, len) };
             if flow == Flow::Go {
                 unsafe { xfree(buf.cast()) };
             }
@@ -446,7 +472,8 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                     other => return Ok(Some(other)),
                 }
             }
-            match unsafe { sink.conv_list_start(tv, tv_list_len(val_list)) } {
+            let len = unsafe { tv_list_len(val_list) };
+            match unsafe { sink.conv_list_start(slot!(), len) } {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
             }
@@ -466,7 +493,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             }
             let val_list = val.list_or_null();
             if val_list.is_null() || unsafe { tv_list_len(val_list) } == 0 {
-                unsafe { sink.conv_empty_dict(tv, None) };
+                unsafe { sink.conv_empty_dict(None) };
                 return Ok(Some(Flow::Go));
             }
             // Every item has to be a two-element list, or this is not a
@@ -490,7 +517,8 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                     other => return Ok(Some(other)),
                 }
             }
-            match unsafe { sink.conv_dict_start(tv, tv_list_len(val_list) as size_t) } {
+            let len = unsafe { tv_list_len(val_list) } as size_t;
+            match unsafe { sink.conv_dict_start(slot!(), len) } {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
             }
@@ -530,7 +558,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if !unsafe { encode_vim_list_to_buf(bytes, &raw mut len, &raw mut buf) } {
                 return Ok(None);
             }
-            let flow = unsafe { sink.conv_ext_string(tv, buf, len, ext_type as i8) };
+            let flow = unsafe { sink.conv_ext_string(slot!(), buf, len, ext_type as i8) };
             if flow == Flow::Go {
                 unsafe { xfree(buf.cast()) };
             }
@@ -601,11 +629,11 @@ unsafe fn walk<S: TypvalSink>(
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     d.dv_copy_id = saved_copyid;
-                    unsafe { sink.conv_dict_end(cur_tv, Some(dictp)) };
+                    unsafe { sink.conv_dict_end(Some(dictp)) };
                     continue;
                 }
                 if todo != d.dv_hashtab.ht_used {
-                    unsafe { sink.conv_dict_between_items(cur_tv, Some(dictp)) };
+                    unsafe { sink.conv_dict_between_items(Some(dictp)) };
                 }
                 while !d.dv_hashtab.slot(slot).is_kept() {
                     slot += 1;
@@ -623,10 +651,8 @@ unsafe fn walk<S: TypvalSink>(
                     *todo_slot = todo;
                 }
                 let key = tv_dict_item_key(di);
-                walk_hook!(unsafe {
-                    sink.conv_str_string(ptr::null_mut(), key, cstr::bytes_at(key).len())
-                });
-                unsafe { sink.conv_dict_after_key(cur_tv, Some(dictp)) };
+                walk_hook!(unsafe { sink.conv_str_string(None, key, cstr::bytes_at(key).len()) });
+                unsafe { sink.conv_dict_after_key(Some(dictp)) };
                 tv = di_tv(di);
             }
             Frame::List { list, li } => {
@@ -634,11 +660,11 @@ unsafe fn walk<S: TypvalSink>(
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     unsafe { tv_list_set_copyid(list, saved_copyid) };
-                    unsafe { sink.conv_list_end(cur_tv) };
+                    unsafe { sink.conv_list_end(cur_tv.as_mut()) };
                     continue;
                 }
                 if li != unsafe { tv_list_first(list) } {
-                    unsafe { sink.conv_list_between_items(cur_tv) };
+                    unsafe { sink.conv_list_between_items(cur_tv.as_mut()) };
                 }
                 tv = li_tv(li);
                 if let Frame::List { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
@@ -651,24 +677,26 @@ unsafe fn walk<S: TypvalSink>(
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     unsafe { tv_list_set_copyid(list, saved_copyid) };
-                    unsafe { sink.conv_dict_end(cur_tv, None) };
+                    unsafe { sink.conv_dict_end(None) };
                     continue;
                 }
                 if li != unsafe { tv_list_first(list) } {
-                    unsafe { sink.conv_dict_between_items(cur_tv, None) };
+                    unsafe { sink.conv_dict_between_items(None) };
                 }
                 // SAFETY: an item of the frame's list, checked non-null above.
                 let item = unsafe { Li::new(li) };
                 let kv_pair = item.list();
                 let key = li_tv(unsafe { tv_list_first(kv_pair) });
-                walk_hook!(unsafe { sink.special_dict_key_check(key) });
+                // SAFETY: an item of a `[key, value]` pair, live while the
+                // list is.
+                walk_hook!(unsafe { sink.special_dict_key_check(&*key) });
                 // The key goes through the whole walk, and may itself be a
                 // container: this frame is not necessarily the top one by
                 // the time it returns, which is why the advance below is
                 // by index.  It also stays *un*advanced across the key, so
                 // that an error raised there names this pair's index.
                 unsafe { convert_one_value(sink, &mut stack, key, copyid, objname) }?;
-                unsafe { sink.conv_dict_after_key(cur_tv, None) };
+                unsafe { sink.conv_dict_after_key(None) };
                 tv = li_tv(unsafe { tv_list_last(kv_pair) });
                 if let Frame::Pairs { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
                     *li_slot = item.li_next;
@@ -681,15 +709,15 @@ unsafe fn walk<S: TypvalSink>(
                 match stage {
                     PartialStage::Args => {
                         let argc = if pt.is_null() { 0 } else { part.pt_argc };
-                        unsafe { sink.conv_func_before_args(cur_tv, argc as ptrdiff_t) };
+                        let argc = argc as ptrdiff_t;
+                        unsafe { sink.conv_func_before_args(cur_tv.as_mut(), argc) };
                         if let Frame::Partial { stage: slot, .. } = &mut stack.get_mut(idx).frame {
                             *slot = PartialStage::Self_;
                         }
                         if !pt.is_null() && part.pt_argc > 0 {
-                            let nul: *mut TypVal = ptr::null_mut();
                             let pt_argc = part.pt_argc;
                             let pt_argv = part.pt_argv;
-                            walk_hook!(unsafe { sink.conv_list_start(nul, pt_argc) });
+                            walk_hook!(sink.conv_list_start(None, pt_argc));
                             stack.push(ConvFrame {
                                 tv: ptr::null_mut(),
                                 saved_copyid: copyid - 1,
@@ -711,17 +739,18 @@ unsafe fn walk<S: TypvalSink>(
                             part.pt_dict
                         };
                         if dict.is_null() {
-                            unsafe { sink.conv_func_before_self(cur_tv, -1) };
+                            unsafe { sink.conv_func_before_self(cur_tv.as_mut(), -1) };
                         } else {
                             // SAFETY: the dictionary the frame was pushed for.
                             let frame_dict = unsafe { Dt::new(dict) };
                             let used = frame_dict.dv_hashtab.ht_used;
-                            unsafe { sink.conv_func_before_self(cur_tv, used as ptrdiff_t) };
+                            let count = used as ptrdiff_t;
+                            unsafe { sink.conv_func_before_self(cur_tv.as_mut(), count) };
                             let dictp = DictSlot::Field(
                                 part.field_ptr(::core::mem::offset_of!(Partial, pt_dict)),
                             );
                             if used == 0 {
-                                unsafe { sink.conv_empty_dict(ptr::null_mut(), Some(dictp)) };
+                                unsafe { sink.conv_empty_dict(Some(dictp)) };
                                 continue;
                             }
                             let saved_copyid = frame_dict.dv_copy_id;
@@ -732,7 +761,7 @@ unsafe fn walk<S: TypvalSink>(
                                 };
                                 walk_hook!(unsafe { check_dict_seen(sink, dict, copyid, &path) });
                             }
-                            walk_hook!(unsafe { sink.conv_dict_start(ptr::null_mut(), used) });
+                            walk_hook!(sink.conv_dict_start(None, used));
                             debug_assert!(saved_copyid != copyid && saved_copyid != copyid - 1);
                             stack.push(ConvFrame {
                                 tv: ptr::null_mut(),
@@ -744,15 +773,14 @@ unsafe fn walk<S: TypvalSink>(
                                     todo: used,
                                 },
                             });
-                            let nul: *mut TypVal = ptr::null_mut();
                             let dp = Some(dictp);
                             walk_hook!(unsafe {
-                                sink.conv_real_dict_after_start(nul, dp, stack.last_mut())
+                                sink.conv_real_dict_after_start(dp, stack.last_mut())
                             });
                         }
                     }
                     PartialStage::End => {
-                        unsafe { sink.conv_func_end(cur_tv, copyid) };
+                        unsafe { sink.conv_func_end(cur_tv.as_mut(), copyid) };
                         stack.pop();
                     }
                 }
@@ -761,11 +789,11 @@ unsafe fn walk<S: TypvalSink>(
             Frame::PartialArgs { arg, argv, todo } => {
                 if todo == 0 {
                     stack.pop();
-                    unsafe { sink.conv_list_end(ptr::null_mut()) };
+                    sink.conv_list_end(None);
                     continue;
                 }
                 if argv != arg {
-                    unsafe { sink.conv_list_between_items(ptr::null_mut()) };
+                    sink.conv_list_between_items(None);
                 }
                 tv = arg;
                 if let Frame::PartialArgs {

@@ -8,6 +8,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
 use crate::semsg;
 use crate::smsg;
@@ -17,9 +18,7 @@ use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::eval::typval::{
-    TV_INITIAL_VALUE, UNSET_ARG, callback_free, tv_clear, tv_list_copy, tv_list_find,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
@@ -80,9 +79,9 @@ pub(crate) fn get_findfunc_callback() -> *mut Callback {
 /// The text lock is held across the call: the callback must not edit.
 pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut List {
     let saved_sctx: ScriptCtx = current_sctx.get();
-    let mut args = [UNSET_ARG; 3];
-    args[0].write_string(pat);
-    args[1].write_boolean(cmdcomplete);
+    // The pattern is the caller's, so the frame names it rather than
+    // owning it.
+    let args = CallFrame::naming([TypVal::String(pat), TypVal::Bool(cmdcomplete)]);
 
     let locked = Lock::text();
     // Errors are reported against the script that *set* the option, not
@@ -91,7 +90,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     let cb = get_findfunc_callback();
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_empty(VAR_UNKNOWN);
-    let called = unsafe { callback_call(cb, 2, &raw mut args as *mut TypVal, &raw mut rettv) };
+    let called = unsafe { callback_call(cb, args.args(), &mut rettv) };
     current_sctx.set(saved_sctx);
     drop(locked);
 

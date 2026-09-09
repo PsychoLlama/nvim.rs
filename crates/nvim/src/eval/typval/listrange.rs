@@ -255,7 +255,7 @@ pub unsafe fn tv_list_slice_or_index(
     n1_arg: VarNumber,
     n2_arg: VarNumber,
     exclusive: bool,
-    result: *mut TypVal,
+    result: &mut TypVal,
     verbose: bool,
 ) -> Result<(), Failed> {
     let len = unsafe { tv_list_len((*result).list_or_null()) };
@@ -299,7 +299,7 @@ pub unsafe fn tv_list_slice_or_index(
         let li = unsafe { tv_list_find((*result).list_or_null(), n1 as ::core::ffi::c_int) };
         unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut var1) };
         unsafe { tv_clear(result) };
-        unsafe { *result = var1 };
+        *result = var1;
     }
     Ok(())
 }

@@ -149,11 +149,11 @@ impl Walk {
 /// expression; `result` must be null or valid.
 pub(crate) unsafe fn eval_option(
     arg: *mut *const c_char,
-    result: *mut TypVal,
+    result: Option<&mut TypVal>,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
-    // NUL-terminated expression, and `result` is null or valid.
+    // NUL-terminated expression.
     let working = unsafe { **arg } == b'+' as c_char; // has("+option")
     let mut opt_idx: OptIndex = kOptAleph;
     let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
@@ -162,7 +162,7 @@ pub(crate) unsafe fn eval_option(
     let (idxp, flagsp) = (&raw mut opt_idx, &raw mut opt_flags);
     let option_end = unsafe { find_option_var_end(arg, idxp, flagsp) } as *mut c_char;
     if option_end.is_null() {
-        if !result.is_null() {
+        if result.is_some() {
             let name = unsafe { *arg };
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
@@ -185,21 +185,23 @@ pub(crate) unsafe fn eval_option(
     let is_tty_opt = is_tty_option(opt_name);
     let ret = if opt_idx == kOptInvalid && !is_tty_opt {
         // Only report it when the result is going to be used.
-        if !result.is_null() {
+        if result.is_some() {
             let name = unsafe { *arg };
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E113: Unknown option: {name}");
         }
         Err(Failed)
-    } else if !result.is_null() {
+    } else if let Some(result) = result {
         let value: OptVal = if is_tty_opt {
             get_tty_option(opt_name)
         } else {
             get_option_value(opt_idx, opt_flags)
         };
         debug_assert!(!value.is_nil());
-        unsafe { *result = optval_as_tv(value, true) };
+        // The slot has never held a value, so the old bytes are not released.
+        // SAFETY: `result` is the caller's writable slot.
+        unsafe { ::core::ptr::write(result, optval_as_tv(value, true)) };
         Ok(())
     } else if working && !is_tty_opt && is_option_hidden(opt_idx) {
         Err(Failed)
@@ -221,7 +223,7 @@ pub(crate) unsafe fn eval_option(
 /// `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_number(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
     want_string: bool,
 ) -> Result<(), Failed> {
@@ -334,7 +336,7 @@ pub(crate) unsafe fn eval_number(
 /// `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_string(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
@@ -556,7 +558,7 @@ pub(crate) unsafe fn eval_string(
 /// As `eval_string`.
 pub(crate) unsafe fn eval_lit_string(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
@@ -650,7 +652,7 @@ pub(crate) unsafe fn eval_lit_string(
 /// As `eval_string`.
 pub(crate) unsafe fn eval_interp_string(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
@@ -669,11 +671,10 @@ pub(crate) unsafe fn eval_interp_string(
         // The piece up to the matching quote or to a single `{`; `arg`
         // is left on whichever it was.
         let mut tv = UNSET_TV;
-        let two = &raw mut tv;
         ret = if quote == b'"' {
-            unsafe { eval_string(arg, two, evaluate, true) }
+            unsafe { eval_string(arg, &mut tv, evaluate, true) }
         } else {
-            unsafe { eval_lit_string(arg, two, evaluate, true) }
+            unsafe { eval_lit_string(arg, &mut tv, evaluate, true) }
         };
         if ret.is_err() {
             break;
@@ -684,7 +685,7 @@ pub(crate) unsafe fn eval_interp_string(
             if !piece.is_null() {
                 text.extend_from_slice(unsafe { cstr::bytes_at(piece) });
             }
-            unsafe { tv_clear(two) };
+            unsafe { tv_clear(&raw mut tv) };
         }
         if cur.byte() != b'{' {
             // Found the terminating quote.
@@ -749,7 +750,7 @@ pub(crate) unsafe fn string2float(text: *const c_char) -> (Float, size_t) {
 /// expression; `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_env_var(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,

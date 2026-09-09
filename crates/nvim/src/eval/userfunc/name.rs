@@ -426,7 +426,7 @@ pub unsafe fn trans_function_name(
     let at = start as *mut c_char;
     // SAFETY: `start` is inside the caller's command line and `lv` is this
     // frame's own left-hand side.
-    let end: *const c_char = unsafe { get_lval(at, ptr::null_mut(), lvp, false, skip, glv, fne) };
+    let end: *const c_char = unsafe { get_lval(at, None, lvp, false, skip, glv, fne) };
 
     'theend: {
         if end == start {

@@ -87,7 +87,7 @@ pub(crate) unsafe fn tv_blob_slice(
     mut n1: VarNumber,
     mut n2: VarNumber,
     exclusive: bool,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     // The resulting variable is a sub-blob.  If the indexes
     // are out of range the result is empty.
@@ -108,7 +108,7 @@ pub(crate) unsafe fn tv_blob_slice(
 
     if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
         unsafe { tv_clear(result) };
-        unsafe { (*result).write_blob(::core::ptr::null_mut()) };
+        (*result).write_blob(::core::ptr::null_mut());
     } else {
         let new_blob = tv_blob_alloc();
         let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
@@ -140,7 +140,7 @@ pub(crate) unsafe fn tv_blob_index(
     _blob: *const Blob,
     len: ::core::ffi::c_int,
     mut idx: VarNumber,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     // The resulting variable is a byte value.
     // If the index is too big or negative that is an error.
@@ -154,7 +154,7 @@ pub(crate) unsafe fn tv_blob_index(
 
     let v = unsafe { tv_blob_get((*result).blob_or_null(), idx as ::core::ffi::c_int) };
     unsafe { tv_clear(result) };
-    unsafe { (*result).write_number(VarNumber::from(v)) };
+    (*result).write_number(VarNumber::from(v));
     Ok(())
 }
 
@@ -170,7 +170,7 @@ pub unsafe fn tv_blob_slice_or_index(
     n1: VarNumber,
     n2: VarNumber,
     exclusive: bool,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     let len = unsafe { tv_blob_len((*result).blob_or_null()) };
     if is_range {
@@ -222,7 +222,7 @@ pub unsafe fn tv_blob_set_range(
     dest: *mut Blob,
     n1: VarNumber,
     n2: VarNumber,
-    src: *const TypVal,
+    src: &TypVal,
 ) -> Result<(), Failed> {
     if n2 - n1 + 1 != VarNumber::from(unsafe { tv_blob_len((*src).blob_or_null()) }) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
@@ -272,7 +272,7 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 /// blob is locked.
 pub unsafe fn tv_blob_remove(
     args: &[TypVal],
-    result: *mut TypVal,
+    result: &mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let b = args[0].blob_or_null();
@@ -396,7 +396,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// `ret_tv` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-pub unsafe fn tv_blob_alloc_ret(ret_tv: *mut TypVal) -> *mut Blob {
+pub unsafe fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> *mut Blob {
     let b = tv_blob_alloc();
     unsafe { tv_blob_set_ret(ret_tv, b) };
     b
@@ -408,12 +408,12 @@ pub unsafe fn tv_blob_alloc_ret(ret_tv: *mut TypVal) -> *mut Blob {
 ///
 /// `from` must point at a live blob, unaliased for the call. `to` must point
 /// at an initialized typval, unaliased for the call.
-pub unsafe fn tv_blob_copy(from: *mut Blob, to: *mut TypVal) {
+pub unsafe fn tv_blob_copy(from: *mut Blob, to: &mut TypVal) {
     // SAFETY: the caller's promise: a writable typval.
     let mut dst = unsafe { Tv::new(to) };
     dst.write_empty(VAR_BLOB);
     if from.is_null() {
-        unsafe { (*to).write_blob(::core::ptr::null_mut()) };
+        (*to).write_blob(::core::ptr::null_mut());
         return;
     }
 

@@ -12,7 +12,7 @@ use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::{ManuallyDrop, offset_of, size_of};
+use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
@@ -20,8 +20,8 @@ use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
-    ArgFrame, UNSET_ARG, callback_free, tv_clear, tv_dict_get_callback, tv_dict_get_number,
-    tv_list_alloc, tv_list_append_string, tv_list_ref, tv_list_unref,
+    callback_free, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc, tv_list_append_string,
+    tv_list_ref,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -44,8 +44,8 @@ use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncCallEntry,
-    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber,
-    caller_scope, ptrdiff_t, size_t, ssize_t, uint64_t,
+    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope,
+    ptrdiff_t, size_t, ssize_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -245,28 +245,28 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    let mut argvars = [
-        ManuallyDrop::new(TypVal::String(method)),
-        ManuallyDrop::new(TypVal::List(arguments)),
-        UNSET_ARG,
+    // The argument array holds the two values, so the reference is taken
+    // for the duration of the call and given back when the array drops --
+    // which is why the method name is duplicated rather than borrowed.
+    // SAFETY: the caller's promise -- `arguments` is a live List and
+    // `method` a NUL-terminated string.
+    unsafe { tv_list_ref(arguments) };
+    let argvars = [
+        TypVal::String(unsafe { xstrdup(method) }),
+        TypVal::List(arguments),
     ];
     let mut rettv = UNSET_TV;
-    // The argument array borrows the List, so the reference is taken
-    // for the duration of the call and given back after it.
-    // SAFETY: the caller's promise -- `arguments` is a live List.
-    unsafe { tv_list_ref(arguments) };
 
     let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_firstline = Win::current().w_cursor.lnum;
     funcexe.fe_lastline = Win::current().w_cursor.lnum;
     funcexe.fe_evaluate = true;
-    let (name, args) = (func.as_mut_ptr(), argvars.args());
-    // SAFETY: `name` is the NUL-terminated name rendered above, `args` the
-    // two argument typvals, and `rettv` and `funcexe` are this frame's.
-    let _ = unsafe { call_func(name, name_len, &raw mut rettv, 2, args, &raw mut funcexe) };
+    let name = func.as_mut_ptr();
+    // SAFETY: `name` is the NUL-terminated name rendered above, and
+    // `rettv` and `funcexe` are this frame's.
+    let _ = unsafe { call_func(name, name_len, &mut rettv, &argvars, &raw mut funcexe) };
+    drop(argvars);
 
-    // SAFETY: this gives back the reference taken above.
-    unsafe { tv_list_unref(arguments) };
     // SAFETY: this undoes the save above.
     unsafe { restore_funccal() };
     provider_caller_scope.set(saved_provider_caller_scope);
@@ -346,14 +346,14 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
     // SAFETY (every call below): `bp` names this frame's `NAMEBUF` bytes,
     // `nm` the NUL-terminated provider name, and `tv` is this frame's.
     let mut len = unsafe { loaded_var(bp, nm) };
-    if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) }.is_err() {
+    if unsafe { eval_variable(bp, len, Some(&mut tv), null_mut(), false, true) }.is_err() {
         // Not loaded yet: sourcing any function in the provider's
         // autoload namespace is what pulls the script in.
         len = unsafe { provider_fn(bp, nm, c"provider#%s#bogus") };
         unsafe { script_autoload(bp, len as size_t, false) };
 
         len = unsafe { loaded_var(bp, nm) };
-        if unsafe { eval_variable(bp, len, &raw mut tv, null_mut(), false, true) }.is_err() {
+        if unsafe { eval_variable(bp, len, Some(&mut tv), null_mut(), false, true) }.is_err() {
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
             let defined = !unsafe { find_func(bp) }.is_null();
@@ -467,16 +467,14 @@ pub unsafe fn prompt_invoke_callback() {
         unsafe { xfree(user_input as *mut c_void) };
     } else {
         let mut rettv = UNSET_TV;
-        let mut argv = [UNSET_ARG; 2];
-        argv[0].write_string(user_input);
-        argv[1].write_empty(VAR_UNKNOWN);
+        // The array takes the input over and frees it.
+        let argv = [TypVal::String(user_input)];
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
         let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
         // SAFETY: as above.
-        unsafe { callback_call(cb, 1, argv.args(), &raw mut rettv) };
-        // SAFETY: the argument array and the result are this frame's.
-        unsafe { tv_clear(argv.args()) };
+        unsafe { callback_call(cb, &argv, &mut rettv) };
+        drop(argv);
         clear_local(&mut rettv);
     }
 
@@ -495,16 +493,14 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
         return false;
     }
     let mut rettv = UNSET_TV;
-    let mut argv = [UNSET_ARG; 1];
-    argv[0].write_empty(VAR_UNKNOWN);
     // The interrupt is consumed here; the callback decides what to do
     // about it.
     got_int.set(false);
-    // SAFETY: the callback is the current buffer's own, and the argument
-    // array and result are this frame's.
+    // SAFETY: the callback is the current buffer's own, and the result is
+    // this frame's.
     let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_interrupt };
     // SAFETY: as above.
-    let ret = unsafe { callback_call(cb, 0, argv.args(), &raw mut rettv) };
+    let ret = unsafe { callback_call(cb, &[], &mut rettv) };
     // SAFETY: `rettv` is this frame's.
     clear_local(&mut rettv);
     ret as c_int != FAIL

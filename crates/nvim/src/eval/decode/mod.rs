@@ -112,7 +112,7 @@ pub unsafe fn decode_string(
     debug_assert!(!s.is_null() || len == 0);
     if force_blob || (!s.is_null() && !unsafe { memchr(s.cast(), 0, len) }.is_null()) {
         let mut tv = TV_INITIAL_VALUE;
-        let b = unsafe { tv_blob_alloc_ret(&raw mut tv) };
+        let b = unsafe { tv_blob_alloc_ret(&mut tv) };
         if s_allocated {
             // The caller's allocation becomes the blob's, sized exactly to
             // `len`: nothing is copied and nothing is left to grow into.

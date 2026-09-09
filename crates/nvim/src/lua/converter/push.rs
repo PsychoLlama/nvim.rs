@@ -135,43 +135,23 @@ impl TypvalSink for LuaSink {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_lua_convert_one_value()";
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
+    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
         self.push_nil();
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
+    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
         self.pushboolean(num);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
+    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
         self.pushnumber(num as lua_Number);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_unsigned_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
+    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
         self.pushnumber(num as lua_Number);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
+    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
         self.pushnumber(flt);
         Flow::Go
     }
@@ -183,7 +163,12 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_string`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_string(
+        &mut self,
+        _tv: Option<&mut TypVal>,
+        buf: *mut c_char,
+        len: size_t,
+    ) -> Flow {
         unsafe { self.pushlstring(buf, len) };
         Flow::Go
     }
@@ -196,7 +181,7 @@ impl TypvalSink for LuaSink {
     /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         _buf: *mut c_char,
         _len: size_t,
         _ext_type: i8,
@@ -209,7 +194,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
         unsafe {
             let data = if blob.is_null() {
                 c"".as_ptr()
@@ -231,7 +216,7 @@ impl TypvalSink for LuaSink {
     /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         fun: *mut c_char,
         _prefix: &'static CStr,
         _path: &ConvPath,
@@ -255,11 +240,7 @@ impl TypvalSink for LuaSink {
         Flow::Stop
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
+    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
         self.createtable(0, 0);
     }
 
@@ -271,7 +252,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
         } else {
@@ -283,11 +264,7 @@ impl TypvalSink for LuaSink {
 
     /// The table, then the index its first item will be stored under.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
+    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, len: c_int) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -298,29 +275,17 @@ impl TypvalSink for LuaSink {
 
     /// Store the item just converted and push the next index.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
+    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {
         let idx = unsafe { lua_tonumber(self.lstate, -2) };
         self.rawset();
         self.pushnumber(idx + 1.0);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
+    fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
         self.rawset();
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -335,7 +300,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 
@@ -343,7 +308,7 @@ impl TypvalSink for LuaSink {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 

@@ -10,14 +10,12 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
+use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{
-    ExpandContext, Failed, IOSIZE, NUL, ShmFlag, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-};
+use crate::types::{ExpandContext, Failed, IOSIZE, NUL, ShmFlag};
 use crate::winlayer::{Buf, Win};
 
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
@@ -306,16 +304,12 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         cb = get_insert_callback(ctrl_x_mode.get());
     }
 
-    let mut args = [UNSET_ARG; 3];
-    args[0].write_empty(VAR_NUMBER);
-    args[1].write_empty(VAR_STRING);
-    args[2].write_empty(VAR_UNKNOWN);
-    args[0].write_number(1);
-    args[1].write_string(c"".as_ptr().cast_mut());
+    // A static empty string, which the frame names rather than owning.
+    let args = CallFrame::naming([TypVal::Number(1), TypVal::String(c"".as_ptr().cast_mut())]);
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();
-    let col = unsafe { callback_call_retnr(cb, 2, args.args()) } as ColNr;
+    let col = unsafe { callback_call_retnr(cb, args.args()) } as ColNr;
     drop(locked);
 
     State.set(save_state);

@@ -29,7 +29,6 @@ use crate::types::{
     kErrorTypeValidation, size_t,
 };
 use core::ffi::c_int;
-use core::ptr;
 
 // -- Vimscript dictionaries ------------------------------------------------
 
@@ -155,7 +154,7 @@ pub(crate) unsafe fn dict_set_var(
         let old = unsafe { &raw mut (*di).di_tv };
         if watched {
             // SAFETY: as above; a removal has no new value to show.
-            unsafe { tv_dict_watcher_notify(dict, key.data(), ptr::null_mut(), old) };
+            unsafe { tv_dict_watcher_notify(dict, key.data(), None, Some(&*old)) };
         }
         if retval {
             // SAFETY: as above.
@@ -218,7 +217,7 @@ pub(crate) unsafe fn dict_set_var(
     if watched {
         // SAFETY: as above, and `oldtv` is this frame's.
         unsafe {
-            tv_dict_watcher_notify(dict, key.data(), &raw mut tv, &raw mut oldtv);
+            tv_dict_watcher_notify(dict, key.data(), Some(&tv), Some(&oldtv));
             tv_clear(&raw mut oldtv);
         }
     }

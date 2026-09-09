@@ -268,7 +268,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
         err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
-        let cbcall_ret = unsafe { callback_call(&raw mut color_cb, 1, &raw mut *arg, &raw mut tv) };
+        let cbcall_ret =
+            unsafe { callback_call(&raw mut color_cb, ::core::slice::from_ref(&arg), &mut tv) };
         drop(silenced);
         msg_col.set(saved_msg_col);
         if got_int.get() {

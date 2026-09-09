@@ -133,17 +133,11 @@ pub fn get_callback_depth() -> c_int {
 /// The prefix that makes a funcref name a Lua one.
 const VLUA: &CStr = c"v:lua.";
 
-/// Call `callback` with `argcount_in` arguments.
+/// Call `callback` with `args`.
 ///
 /// # Safety
-/// `callback` and `result` must be valid; `argvars_in` must hold
-/// `argcount_in` typvals.
-pub unsafe fn callback_call(
-    callback: *mut Callback,
-    argcount_in: c_int,
-    argvars_in: *mut TypVal,
-    result: *mut TypVal,
-) -> bool {
+/// `callback` must be valid.
+pub unsafe fn callback_call(callback: *mut Callback, args: &[TypVal], result: &mut TypVal) -> bool {
     if OptInt::from(callback_depth.get()) > p_mfd.get() {
         // SAFETY: the message is a NUL-terminated literal.
         emsg_static(e_command_too_recursive);
@@ -198,9 +192,8 @@ pub unsafe fn callback_call(
     funcexe.fe_partial = partial;
     // The un-bump is the guard's, so that an early exit cannot skip it.
     let depth = Depth::of(&callback_depth);
-    // SAFETY: `name` is a NUL-terminated function name, and the caller's
-    // promise covers `argvars_in`, `argcount_in` and `result`.
-    let ret = unsafe { call_func(name, -1, result, argcount_in, argvars_in, &raw mut funcexe) };
+    // SAFETY: `name` is a NUL-terminated function name.
+    let ret = unsafe { call_func(name, -1, result, args, &raw mut funcexe) };
     drop(depth);
     ret.is_ok()
 }

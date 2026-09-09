@@ -27,7 +27,7 @@ use super::{
 };
 use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_leave};
 use crate::api_error;
-use crate::eval::typval::{ArgFrame, TV_INITIAL_VALUE, UNSET_ARG, tv_clear};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
@@ -79,22 +79,20 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, fmt, refused.as_ptr());
         }
 
-        let nargs = lua_gettop(lstate) - 1;
-        if nargs > MAX_FUNC_ARGS.cast_signed() {
+        let nargs = usize::try_from(lua_gettop(lstate) - 1).unwrap_or(0);
+        if nargs > MAX_FUNC_ARGS as usize {
             return luaL_error(lstate, c"Function called with too many arguments".as_ptr());
         }
 
-        let mut vim_args = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
-        let mut i: c_int = 0;
+        let mut vim_args = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
         'free_vim_args: {
-            while i < nargs {
-                lua_pushvalue(lstate, i + 2);
-                if !nlua_pop_typval(lstate, vim_args.args().offset(i as isize)) {
+            for (i, slot) in vim_args.iter_mut().enumerate().take(nargs) {
+                lua_pushvalue(lstate, len_as_int(i) + 2);
+                if !nlua_pop_typval(lstate, slot) {
                     let n = i + 1;
                     err = api_error!(kErrorTypeException, "error converting argument {n}");
                     break 'free_vim_args;
                 }
-                i += 1;
             }
 
             // Start the call from a clean exception state: a Lua caller has
@@ -113,12 +111,12 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
+            let args = &vim_args[..nargs];
             let _ = call_func(
                 name,
                 len_as_int(name_len),
-                &raw mut rettv,
-                nargs,
-                vim_args.args(),
+                &mut rettv,
+                args,
                 &raw mut funcexe,
             );
             try_leave(&raw mut tstate, &mut err);
@@ -128,11 +126,6 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 nlua_push_typval(lstate, &raw mut rettv, 0);
             }
             tv_clear(&raw mut rettv);
-        }
-
-        while i > 0 {
-            i -= 1;
-            tv_clear(vim_args.args().offset(i as isize));
         }
 
         if err.is_set() {

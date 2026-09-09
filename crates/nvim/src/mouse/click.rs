@@ -14,12 +14,11 @@
 #![allow(unsafe_code)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::mem::ManuallyDrop;
 
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;
-use crate::eval::typval::{ArgFrame, tv_clear};
+use crate::eval::typval::{CallFrame, tv_clear};
 use crate::getchar::state::mod_mask;
 use crate::menu::show_popupmenu;
 use crate::mouse::state::{mouse_grid, mouse_row};
@@ -39,20 +38,17 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
     // lock is never read, and with the lock on the slot there is none to set.
     // The two strings are a literal and this frame's own buffer, so the
     // frame releases nothing.
-    let number = |n| ManuallyDrop::new(TypVal::Number(n));
-    let string = |s| ManuallyDrop::new(TypVal::String(s));
-    let mut argv = [
-        number(def.tabnr as VarNumber),
-        number(click_count(mod_mask.get())),
-        string(button_name(which_button).as_ptr().cast_mut()),
-        string(modifiers.as_mut_ptr()),
-    ];
+    let argv = CallFrame::naming([
+        TypVal::Number(def.tabnr as VarNumber),
+        TypVal::Number(click_count(mod_mask.get())),
+        TypVal::String(button_name(which_button).as_ptr().cast_mut()),
+        TypVal::String(modifiers.as_mut_ptr()),
+    ]);
     let mut rettv = TV_INITIAL_VALUE;
 
     // SAFETY: `func` is the name the statusline parser recorded, the four
     // arguments are live for the call, and `rettv` is a live typval.
-    let argc = argv.len() as c_int;
-    let _ = unsafe { call_vim_function(def.func, argc, argv.args(), &raw mut rettv) };
+    let _ = unsafe { call_vim_function(def.func, argv.args(), &mut rettv) };
     unsafe { tv_clear(&raw mut rettv) };
 
     // Make sure next click does not register as drag when callback absorbs

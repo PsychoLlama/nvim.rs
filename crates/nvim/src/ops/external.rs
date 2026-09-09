@@ -24,12 +24,12 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::eval::typval::UNSET_ARG;
 use crate::ex_docmd::cmdmod_has;
 use crate::types::NUL;
 
@@ -169,8 +169,8 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         kMTBlockWise => c"block",
         _ => c"char",
     };
-    let mut argv = [UNSET_ARG; 2];
-    argv[0].write_string(kind.as_ptr() as *mut c_char);
+    // A static string, which the frame names rather than owning.
+    let argv = CallFrame::naming([TypVal::String(kind.as_ptr() as *mut c_char)]);
 
     // Reset virtual_op so that 'virtualedit' can be changed in the
     // function, and finish_op so that mode() returns the right value.
@@ -180,8 +180,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     finish_op.set(false);
 
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    let args = (&raw mut argv).cast::<TypVal>();
-    if unsafe { callback_call(global_opfunc(), 1, args, &raw mut rettv) } {
+    if unsafe { callback_call(global_opfunc(), argv.args(), &mut rettv) } {
         unsafe { tv_clear(&raw mut rettv) };
     }
 

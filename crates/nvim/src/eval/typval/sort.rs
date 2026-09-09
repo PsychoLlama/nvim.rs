@@ -20,7 +20,6 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, NUL};
@@ -196,19 +195,17 @@ pub(crate) unsafe fn item_compare2(
 
     // Copy the values.  This is needed to be able to set v_lock to
     // VarLock::Fixed in the copy without changing the original list items.
-    let mut argv = [UNSET_ARG; 3];
-    unsafe { tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut *argv[0]) };
-    unsafe { tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut *argv[1]) };
+    let mut argv = [TV_INITIAL_VALUE; 2];
+    unsafe { tv_copy(&raw mut (*(*si1).item).li_tv, &raw mut argv[0]) };
+    unsafe { tv_copy(&raw mut (*(*si2).item).li_tv, &raw mut argv[1]) };
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
     funcexe.fe_selfdict = sort_info.item_compare_selfdict;
-    let argp = argv.args();
-    let called = unsafe { call_func(func_name, -1, &raw mut rettv, 2, argp, &raw mut funcexe) };
-    unsafe { tv_clear(&raw mut *argv[0]) };
-    unsafe { tv_clear(&raw mut *argv[1]) };
+    let called = unsafe { call_func(func_name, -1, &mut rettv, &argv, &raw mut funcexe) };
+    drop(argv);
 
     let mut res;
     if called.is_err() {
@@ -479,7 +476,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 /// `args` must point at an initialized typval, unaliased for the call.
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: *mut TypVal, sort: bool) {
+pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
     let first = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };

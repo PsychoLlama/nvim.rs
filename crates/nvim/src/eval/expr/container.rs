@@ -44,7 +44,7 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// `arg` must point at the cursor into a NUL-terminated expression.
 pub(crate) unsafe fn eval_list(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -62,7 +62,7 @@ pub(crate) unsafe fn eval_list(
     let ok = 'items: {
         while cur.byte() != b']' && cur.byte() != NUL as u8 {
             let mut tv = UNSET_TV;
-            if unsafe { eval1(arg, &raw mut tv, evalarg) }.is_err() {
+            if unsafe { eval1(arg, &mut tv, evalarg) }.is_err() {
                 break 'items false;
             }
             if evaluate {
@@ -112,7 +112,7 @@ pub(crate) unsafe fn eval_list(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression.
-pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut TypVal) -> Result<(), Failed> {
+pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: &mut TypVal) -> Result<(), Failed> {
     /// Letters, digits, `_` and `-`: what a literal key may contain.
     fn is_key_char(c: c_char) -> bool {
         let b = c as u8;
@@ -144,7 +144,7 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut TypVal) -> 
 /// `arg` must point at the cursor, on the `{`.
 pub(crate) unsafe fn eval_dict(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
     literal: bool,
 ) -> Result<Parsed, Failed> {
@@ -163,7 +163,7 @@ pub(crate) unsafe fn eval_dict(
     let mut curly_expr = unsafe { skipwhite(cur.get().add(1)) };
     if unsafe { *curly_expr } != b'}' as c_char
         && !literal
-        && unsafe { eval1(&raw mut curly_expr, &raw mut tv, null_mut()) }.is_ok()
+        && unsafe { eval1(&raw mut curly_expr, &mut tv, null_mut()) }.is_ok()
         && unsafe { *skipwhite(curly_expr) } == b'}' as c_char
     {
         return Ok(Parsed::NotThis);
@@ -181,9 +181,9 @@ pub(crate) unsafe fn eval_dict(
     let ok = 'items: {
         while cur.byte() != b'}' && cur.byte() != NUL as u8 {
             let read_key = if literal {
-                unsafe { get_literal_key(arg, &raw mut tvkey) }
+                unsafe { get_literal_key(arg, &mut tvkey) }
             } else {
-                unsafe { eval1(arg, &raw mut tvkey, evalarg) }
+                unsafe { eval1(arg, &mut tvkey, evalarg) }
             };
             if read_key.is_err() {
                 break 'items false;
@@ -208,7 +208,7 @@ pub(crate) unsafe fn eval_dict(
                 }
             }
             cur.skip(1);
-            if unsafe { eval1(arg, &raw mut tv, evalarg) }.is_err() {
+            if unsafe { eval1(arg, &mut tv, evalarg) }.is_err() {
                 unsafe { tv_clear(&raw mut tvkey) };
                 break 'items false;
             }
@@ -277,7 +277,7 @@ pub(crate) unsafe fn eval_dict(
 /// As `eval_dict`.
 pub(crate) unsafe fn eval_lit_dict(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor, on the `#`.

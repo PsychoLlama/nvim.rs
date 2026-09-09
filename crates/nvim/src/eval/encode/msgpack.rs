@@ -57,43 +57,23 @@ impl TypvalSink for MsgpackSink<'_> {
         mpack_check_buffer(self.packer);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
+    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
         mpack_nil(self.packer.cursor_mut());
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
+    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
         mpack_bool(self.packer.cursor_mut(), num);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
+    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
         mpack_integer(self.packer.cursor_mut(), num as Integer);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_unsigned_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
+    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
         mpack_uint64(self.packer.cursor_mut(), num);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
+    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
         mpack_float8(self.packer.cursor_mut(), flt);
         Flow::Go
     }
@@ -105,7 +85,12 @@ impl TypvalSink for MsgpackSink<'_> {
     ///
     /// As [`TypvalSink::conv_string`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_string(
+        &mut self,
+        _tv: Option<&mut TypVal>,
+        buf: *mut c_char,
+        len: size_t,
+    ) -> Flow {
         unsafe { mpack_bin(Self::buf(buf, len), self.packer) };
         Flow::Go
     }
@@ -116,7 +101,12 @@ impl TypvalSink for MsgpackSink<'_> {
     ///
     /// As [`TypvalSink::conv_str_string`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_str_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_str_string(
+        &mut self,
+        _tv: Option<&mut TypVal>,
+        buf: *mut c_char,
+        len: size_t,
+    ) -> Flow {
         unsafe { mpack_str(Self::buf(buf, len), self.packer) };
         Flow::Go
     }
@@ -127,7 +117,7 @@ impl TypvalSink for MsgpackSink<'_> {
     /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         buf: *mut c_char,
         len: size_t,
         ext_type: i8,
@@ -140,7 +130,7 @@ impl TypvalSink for MsgpackSink<'_> {
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
         let data = if blob.is_null() {
             ::core::ptr::null_mut()
         } else {
@@ -156,7 +146,7 @@ impl TypvalSink for MsgpackSink<'_> {
     /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         _fun: *mut c_char,
         _prefix: &'static CStr,
         path: &ConvPath,
@@ -164,11 +154,7 @@ impl TypvalSink for MsgpackSink<'_> {
         unsafe { conv_error(gettext(E5004_FUNCREF).as_ptr(), path) }
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
+    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
         mpack_array(self.packer.cursor_mut(), 0);
     }
 
@@ -176,25 +162,17 @@ impl TypvalSink for MsgpackSink<'_> {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         mpack_map(self.packer.cursor_mut(), 0);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
+    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, len: c_int) -> Flow {
         let len = u32::try_from(len).expect("a list length is never negative");
         mpack_array(self.packer.cursor_mut(), len);
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
         let len = u32::try_from(len).expect("a dict never holds four billion keys");
         mpack_map(self.packer.cursor_mut(), len);
         Flow::Go

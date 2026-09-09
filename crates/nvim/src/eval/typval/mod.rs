@@ -51,6 +51,8 @@ use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
 // The carve of the transpiled module; see each child's docs.
 mod access;
 pub use self::access::*;
+mod frame;
+pub(crate) use self::frame::CallFrame;
 mod list;
 pub use self::list::*;
 mod listops;

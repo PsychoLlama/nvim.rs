@@ -361,7 +361,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// # Safety
 /// `result` must be a writable return value.
-unsafe fn alloc_dict_ret(result: *mut TypVal) -> *mut Dict {
+unsafe fn alloc_dict_ret(result: &mut TypVal) -> *mut Dict {
     unsafe {
         tv_dict_alloc_ret(result);
         (*result).dict_or_null()

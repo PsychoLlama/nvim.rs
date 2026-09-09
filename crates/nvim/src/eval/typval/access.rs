@@ -25,7 +25,6 @@
 
 use super::*;
 use crate::winlayer::Live;
-use core::mem::ManuallyDrop;
 
 /// The `Copy` handles over the four objects this module manipulates through
 /// raw pointers, plus the two it reaches through them.
@@ -961,36 +960,31 @@ pub unsafe fn tv_dict_watcher_node_data(q: *mut QUEUE) -> *mut DictWatcher {
     .cast::<DictWatcher>()
 }
 
-/// The address of an argument frame's slots, as the `*mut TypVal` every call
-/// that reads one takes.
+/// The one step of a [`CallFrame`] that is not the frame's own business:
+/// duplicating a value the caller keeps, so that the frame can *name* it.
 ///
-/// [`ManuallyDrop`] is `#[repr(transparent)]`, so this is the same address
-/// under a different name; what it is not is a promise that the callee may
-/// release what it finds. See [`UNSET_ARG`].
-pub(crate) trait ArgFrame {
-    /// The frame's first slot.
-    fn args(&mut self) -> *mut TypVal;
-
-    /// The frame's first `n` slots, as the argument list a builtin takes.
-    ///
-    /// The borrow is the whole point: a builtin reads its arguments and
-    /// never releases one, which is exactly what a shared slice says.
-    fn borrowed(&self, n: usize) -> &[TypVal];
-}
-
-impl ArgFrame for [ManuallyDrop<TypVal>] {
-    #[inline(always)]
-    fn args(&mut self) -> *mut TypVal {
-        self.as_mut_ptr().cast()
+/// It lives here rather than beside the type because `bit_copy` is this
+/// module's, and a frame that never takes one is safe code end to end.
+impl<const N: usize> CallFrame<N> {
+    /// Append a bit copy of a value the caller keeps.
+    pub(crate) fn push_borrowed(&mut self, tv: &TypVal) {
+        // SAFETY: the duplicate is never released -- the slot's bit is
+        // clear, so `truncate` disowns it rather than clearing it.
+        self.push_naming(unsafe { tv.bit_copy() });
     }
 
-    #[inline(always)]
-    fn borrowed(&self, n: usize) -> &[TypVal] {
-        let slots = &self[..n];
-        // SAFETY: `ManuallyDrop<TypVal>` is `#[repr(transparent)]` over
-        // `TypVal`, so the two slices have the same layout, and the slicing
-        // above is what bounds the length.
-        unsafe { ::core::slice::from_raw_parts(slots.as_ptr().cast(), n) }
+    /// Append a bit copy of each of the caller's values.
+    pub(crate) fn extend_borrowed(&mut self, tvs: &[TypVal]) {
+        for tv in tvs {
+            self.push_borrowed(tv);
+        }
+    }
+
+    /// Put a bit copy of `tv` in front of everything already in the frame,
+    /// which is what makes `base->Method(a)` a call of `Method(base, a)`.
+    pub(crate) fn insert_borrowed_front(&mut self, tv: &TypVal) {
+        self.push_borrowed(tv);
+        self.rotate_last_to_front();
     }
 }
 

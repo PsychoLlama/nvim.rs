@@ -130,8 +130,7 @@ pub(crate) unsafe fn get_function_args(
                     let mut expr = p.raw();
                     // SAFETY: `&raw mut p` is this frame's own walk, which
                     // `eval1` advances in place.
-                    let parsed =
-                        unsafe { eval1((&raw mut p).cast(), &raw mut rettv, ptr::null_mut()) };
+                    let parsed = unsafe { eval1((&raw mut p).cast(), &mut rettv, ptr::null_mut()) };
                     if parsed.is_ok() {
                         unsafe { ga_grow(default_args, 1) };
                         while p.raw() > expr && ascii_iswhite(c_int::from(p.behind(1))) {
@@ -207,27 +206,28 @@ pub(crate) unsafe fn get_func_arguments(
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
     partial_argc: c_int,
-    args: *mut TypVal,
-    argcount: *mut c_int,
+    args: &mut [TypVal],
+    argcount: &mut usize,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `*arg` is on the `(` of a
-    // NUL-terminated argument list, and `args` has room past `*argcount`.
+    // NUL-terminated argument list.
     let mut argp = unsafe { Walk::new(*arg) };
     let mut ret = Ok(());
-    while unsafe { *argcount } < MAX_FUNC_ARGS - partial_argc {
+    let room = (MAX_FUNC_ARGS - partial_argc) as usize;
+    while *argcount < room {
         // skip the '(' or ','
         argp = unsafe { Walk::new(skipwhite(argp.raw().add(1))) };
         if matches!(argp.byte(), b')' | b',') || argp.byte() == NUL as u8 {
             break;
         }
-        let slot = unsafe { args.offset(*argcount as isize) };
         // SAFETY: `&raw mut argp` is this frame's own walk, which `eval1`
         // advances in place.
+        let slot = &mut args[*argcount];
         if unsafe { eval1((&raw mut argp).cast(), slot, evalarg) }.is_err() {
             ret = Err(Failed);
             break;
         }
-        unsafe { *argcount += 1 };
+        *argcount += 1;
         if argp.byte() != b',' {
             break;
         }
@@ -327,35 +327,5 @@ pub(crate) unsafe fn check_user_func_argcount(func: *mut UserFunc, argcount: c_i
         FCERR_TOOMANY
     } else {
         FCERR_UNKNOWN
-    }
-}
-
-/// Put `basetv` in front of the argument list, which is what makes
-/// `base->Method(a)` a call of `Method(base, a)`.
-///
-/// The arguments move into `new_argvars`, the caller's own array, because the
-/// one they came from has no room at the front.
-///
-/// # Safety
-/// `new_argvars` has room for `*argcount + 1` values, and the four
-/// out-parameters are writable.
-pub(crate) unsafe fn argv_add_base(
-    basetv: *mut TypVal,
-    args: *mut *mut TypVal,
-    argcount: *mut c_int,
-    new_argvars: *mut TypVal,
-    argv_base: *mut c_int,
-) {
-    if !basetv.is_null() {
-        // Method call: base->Method()
-        // SAFETY: the caller's promise -- `new_argvars` has room for
-        // `*argcount + 1` values and the out-parameters are writable.
-        let bytes = unsafe { size_of::<TypVal>().wrapping_mul(*argcount as size_t) };
-        let (into, from) = unsafe { (new_argvars.add(1) as *mut c_void, *args) };
-        unsafe { into.cast::<u8>().copy_from(from.cast(), bytes) };
-        unsafe { new_argvars.write((*basetv).bit_copy()) };
-        unsafe { *argcount += 1 };
-        unsafe { *args = new_argvars };
-        unsafe { *argv_base = 1 };
     }
 }

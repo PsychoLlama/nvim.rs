@@ -582,7 +582,7 @@ pub unsafe fn do_searchpair(
     if flags & SP_START != 0 {
         options |= SEARCH_START as c_int;
     }
-    let use_skip = !skip.is_null() && unsafe { eval_expr_valid_arg(skip) };
+    let use_skip = !skip.is_null() && unsafe { eval_expr_valid_arg(&*skip) };
 
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;

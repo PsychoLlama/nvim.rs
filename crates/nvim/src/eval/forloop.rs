@@ -86,7 +86,7 @@ pub unsafe fn eval_for_line(
     let mut tv = UNSET_TV;
     // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `args` and
     // `evalarg` are the caller's.
-    if unsafe { eval0(expr as *mut c_char, &raw mut tv, args, evalarg) }.is_ok() {
+    if unsafe { eval0(expr as *mut c_char, &mut tv, args, evalarg) }.is_ok() {
         // SAFETY: the caller's promise about `errp`.
         unsafe { *errp = false };
         if !skip {
@@ -121,7 +121,7 @@ pub unsafe fn eval_for_line(
                         // changes to the Blob it was handed.
                         let mut btv = UNSET_TV;
                         // SAFETY: as above; `btv` is this frame's.
-                        unsafe { tv_blob_copy(tv.blob_or_null(), &raw mut btv) };
+                        unsafe { tv_blob_copy(tv.blob_or_null(), &mut btv) };
                         // SAFETY: the copy left a Blob in `btv`.
                         fi.fi_blob = btv.blob_or_null();
                         // The reference the copy took is `fi`'s now.
@@ -186,7 +186,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_bi += 1 };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
-        return unsafe { assign(fi, arg, &raw mut tv) };
+        return unsafe { assign(fi, arg, &mut tv) };
     }
 
     if !fi.fi_string.is_null() {
@@ -204,7 +204,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_byte_idx += len };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
-        let ok = unsafe { assign(fi, arg, &raw mut tv) };
+        let ok = unsafe { assign(fi, arg, &mut tv) };
         // The typval was never handed over, so its String is ours.
         clear_local(&mut tv);
         return ok;
@@ -218,14 +218,14 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     // `rec` is the caller's record.
     unsafe { (*rec).fi_lw.lw_item = (*item).li_next };
     // SAFETY: as above -- the item's typval is the List's own.
-    unsafe { assign(fi, arg, &raw mut (*item).li_tv) }
+    unsafe { assign(fi, arg, &mut (*item).li_tv) }
 }
 
 /// Hand one item to the loop's variable list, copying it.
 ///
 /// # Safety
 /// As `next_for_item`.
-unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut TypVal) -> bool {
+unsafe fn assign(fi: Fi, arg: *mut c_char, tv: &mut TypVal) -> bool {
     let (semicolon, varcount) = (fi.fi_semicolon, fi.fi_varcount);
     // SAFETY: the caller's promise -- `arg` is the loop's variable list and
     // `tv` the item being assigned.

@@ -14,14 +14,13 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ArgFrame, NumBuf, UNSET_ARG, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg,
-    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
-    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list, tv_dict_add_nr,
-    tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback, tv_dict_has_key,
-    tv_dict_unref, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
-    tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_first, tv_list_item_remove,
-    tv_list_uidx,
+    NumBuf, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
+    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear,
+    tv_copy, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str_len, tv_dict_alloc, tv_dict_find,
+    tv_dict_get_callback, tv_dict_has_key, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk,
+    tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list,
+    tv_list_append_number, tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_first,
+    tv_list_item_remove, tv_list_uidx,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
@@ -42,7 +41,6 @@ use crate::types::{
     kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 /// An unset typval, as `VAR_UNKNOWN` spells it.
@@ -622,14 +620,14 @@ struct FuzzyItem {
 /// caller's return slot: an initialized typval it owns and will clear.
 unsafe fn item_string(
     request: &Request,
-    tv: *const TypVal,
-    result: *mut TypVal,
+    tv: &TypVal,
+    result: &mut TypVal,
     numbuf: &mut NumBuf,
 ) -> *const c_char {
-    if unsafe { (*tv).v_type() } == VAR_STRING {
-        return unsafe { (*tv).string_or_null() };
+    if (*tv).v_type() == VAR_STRING {
+        return (*tv).string_or_null();
     }
-    if unsafe { (*tv).v_type() } != VAR_DICT {
+    if (*tv).v_type() != VAR_DICT {
         return ptr::null();
     }
     match request.source {
@@ -639,14 +637,13 @@ unsafe fn item_string(
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
             unsafe { (*(*tv).dict_or_null()).dv_refcount.retain() };
-            let mut argv = [
-                ManuallyDrop::new(TypVal::Dict(unsafe { (*tv).dict_or_null() })),
-                UNSET_ARG,
-            ];
-            let called = unsafe { callback_call(cb, 1, argv.args(), result) };
-            unsafe { tv_dict_unref((*tv).dict_or_null()) };
-            if called && unsafe { (*result).v_type() } == VAR_STRING {
-                unsafe { (*result).string_or_null() }
+            let argv = [TypVal::Dict((*tv).dict_or_null())];
+            // SAFETY: `result` is the caller's return value.
+            let rv = &mut *result;
+            let called = unsafe { callback_call(cb, &argv, rv) };
+            drop(argv);
+            if called && (*result).v_type() == VAR_STRING {
+                (*result).string_or_null()
             } else {
                 ptr::null()
             }
@@ -688,8 +685,9 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
             break;
         }
         let mut rettv = TV_UNKNOWN;
-        let itemstr =
-            unsafe { item_string(request, &raw const (*li).li_tv, &raw mut rettv, &mut numbuf) };
+        // SAFETY: `li` is an item of the caller's live list.
+        let item_tv = unsafe { &(*li).li_tv };
+        let itemstr = unsafe { item_string(request, item_tv, &mut rettv, &mut numbuf) };
         if !itemstr.is_null() {
             let itemstr = unsafe { CStr::from_ptr(itemstr) };
             let (score, filled) = fuzzy_match(itemstr, pattern, request.matchseq, &mut matches);
@@ -767,7 +765,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
 ///
 /// `args` must point at an initialized typval. `result` must point at the
 /// caller's return slot: an initialized typval it owns and will clear.
-unsafe fn do_fuzzymatch(args: &[TypVal], result: *mut TypVal, retmatchpos: bool) {
+unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();

@@ -85,8 +85,7 @@ pub unsafe fn ex_lua(eap: *mut ExArg) {
             code,
             len,
             c":lua".as_ptr(),
-            ptr::null_mut::<TypVal>(),
-            0,
+            &[],
             false,
             ptr::null_mut::<TypVal>(),
         );

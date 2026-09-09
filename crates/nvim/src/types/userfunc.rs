@@ -11,14 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type ArgvFunc = Option<
-    unsafe fn(
-        ::core::ffi::c_int,
-        *mut TypVal,
-        ::core::ffi::c_int,
-        *mut UserFunc,
-    ) -> ::core::ffi::c_int,
->;
+pub type ArgvFunc = Option<unsafe fn(&[TypVal], usize, *mut UserFunc) -> usize>;
 pub struct FuncCallEntry {
     pub top_funccal: *mut ::core::ffi::c_void,
     pub next: *mut FuncCallEntry,

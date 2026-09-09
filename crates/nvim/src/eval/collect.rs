@@ -728,7 +728,8 @@ pub unsafe fn var_item_copy(
         VAR_BLOB => {
             // SAFETY: `VAR_BLOB` says `v_blob` is the live member, and `to`
             // is the caller's typval.
-            unsafe { tv_blob_copy(src.blob_or_null(), to) };
+            // SAFETY: `to` is the caller's slot.
+            unsafe { tv_blob_copy(src.blob_or_null(), &mut *to) };
         }
         VAR_UNKNOWN => {
             // SAFETY: the text is a NUL-terminated literal.

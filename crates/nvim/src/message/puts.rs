@@ -11,14 +11,14 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{ArgFrame, TV_INITIAL_VALUE};
+use crate::eval::typval::CallFrame;
+use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::types::builders::static_cstring;
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 /// The `on_print` callback an RPC client installed.
@@ -463,11 +463,11 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
         // over the *pointer* instead, so a caller that asked for a prefix
         // of a longer string had the whole of it printed.
         let text = cstr::owned(bytes);
-        // The frame borrows the copy above, which this frame frees.
-        let mut argv = [ManuallyDrop::new(TypVal::String(text.as_ptr().cast_mut()))];
+        // The frame names the copy above, which this frame frees.
+        let argv = CallFrame::naming([TypVal::String(text.as_ptr().cast_mut())]);
         let mut rettv = TV_INITIAL_VALUE;
         // SAFETY: one argument, and `rettv` is a live unset value.
-        unsafe { callback_call(on_print_cb(), 1, argv.args(), &raw mut rettv) };
+        unsafe { callback_call(on_print_cb(), argv.args(), &mut rettv) };
         // SAFETY: `rettv` is whatever the callback answered.
         unsafe { tv_clear(&raw mut rettv) };
         return;

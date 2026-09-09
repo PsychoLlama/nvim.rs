@@ -150,16 +150,16 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
 pub unsafe fn eval_variable(
     name: *const c_char,
     len: c_int,
-    result: *mut TypVal,
+    result: Option<&mut TypVal>,
     dip: *mut *mut DictItem,
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- `len` readable bytes, and `result`
-    // and `dip` writable or NULL.
+    // SAFETY: the caller's obligation -- `len` readable bytes and `dip`
+    // writable or NULL.
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
-        if !result.is_null() && verbose {
+        if result.is_some() && verbose {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str_len(name, len as usize) };
             semsg!("E121: Undefined variable: {name}");
@@ -169,7 +169,7 @@ pub unsafe fn eval_variable(
     if !dip.is_null() {
         unsafe { *dip = v };
     }
-    if !result.is_null() {
+    if let Some(result) = result {
         let item = unsafe { Di::new(v) };
         unsafe { tv_copy(item.field_ptr(offset_of!(DictItem, di_tv)), result) };
     }
@@ -422,11 +422,11 @@ pub unsafe fn var_exists(mut var: *const c_char) -> bool {
         if !tofree.is_null() {
             name = tofree;
         }
-        n = unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), false, true) }.is_ok();
+        n = unsafe { eval_variable(name, len, Some(&mut tv), ptr::null_mut(), false, true) }
+            .is_ok();
         if n {
             // Handle `d.key`, `l[idx]` and `Func()`.
-            n = unsafe { handle_subscript(&raw mut var, &raw mut tv, &raw mut evalarg, false) }
-                .is_ok();
+            n = unsafe { handle_subscript(&raw mut var, &mut tv, &raw mut evalarg, false) }.is_ok();
             if n {
                 clear_local(&mut tv);
             }

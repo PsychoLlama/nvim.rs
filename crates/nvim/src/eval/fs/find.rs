@@ -33,10 +33,9 @@ use super::{
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{
-    ArgFrame, TV_INITIAL_VALUE, UNSET_ARG, tv_clear, tv_get_number_chk, tv_list_set_ret,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
@@ -440,16 +439,14 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
     unsafe { prepare_vimvar(Vv::Val, &raw mut save_val) };
     set_val(name);
 
-    let mut argv = [UNSET_ARG; 2];
-    // The callee only reads it; `argv` is never cleared, which is why the
-    // name is not copied.
-    argv[0].write_string(name.cast_mut());
+    // The callee only reads it, so the frame names the caller's string
+    // rather than copying it.
+    let argv = CallFrame::naming([TypVal::String(name.cast_mut())]);
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;
-    // SAFETY: three live typvals, and `argv` holds the one argument the count
-    // names.
-    let ran = unsafe { eval_expr_typval(expr, false, argv.args(), 1, &raw mut rettv) };
+    // SAFETY: `expr` is the caller's, and the frame is this one's.
+    let ran = unsafe { eval_expr_typval(expr, false, argv.args(), &mut rettv) };
     if ran.is_ok() {
         let mut error = false;
         // SAFETY: a live typval; the callee reports through `error`.

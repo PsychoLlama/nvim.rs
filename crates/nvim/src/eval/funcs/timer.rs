@@ -94,18 +94,18 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let due = dummy_timer_due_cb;
     unsafe { time_watcher_start(tw, Some(due), every, every) };
 
-    let mut argv = EMPTY_TV;
     let mut exprval = EMPTY_TV;
     let mut error = false;
     let called_emsg_before = called_emsg.get();
     unsafe { ui_flush() };
     let loop_ = main_loop.ptr();
     let events = unsafe { (*loop_).events };
-    // SAFETY throughout: `expr`, `argv` and `exprval` are this frame's locals, which
+    // SAFETY throughout: `expr` and `exprval` are this frame's locals, which
     // outlive the wait, and the main loop is running.
     let done = || {
         let out = &raw mut exprval;
-        let got = unsafe { eval_expr_typval(expr, false, &raw mut argv, 0, out) };
+        // SAFETY: `out` is this frame's own local.
+        let got = unsafe { eval_expr_typval(expr, false, &[], &mut *out) };
         got.is_err()
             || unsafe { tv_get_number_chk(out, &raw mut error) } != 0
             || called_emsg.get() > called_emsg_before

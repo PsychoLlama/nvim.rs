@@ -189,7 +189,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
 ///
 /// # Safety
 /// The Vimscript call convention: `args` is a live argument vector.
-unsafe fn get_maparg(args: &[TypVal], result: *mut TypVal, exact: bool) {
+unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };

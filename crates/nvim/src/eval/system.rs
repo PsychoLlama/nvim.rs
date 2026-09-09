@@ -183,7 +183,7 @@ pub(crate) unsafe fn string_to_list(
 /// `args` must hold the builtin's arguments; `result` must be valid.
 pub(crate) unsafe fn get_system_output_as_rettv(
     args: &[TypVal],
-    result: *mut TypVal,
+    result: &mut TypVal,
     retlist: bool,
 ) {
     let mut cmdbuf = NumBuf::new();
@@ -354,14 +354,14 @@ unsafe fn copy_swapping_nl(src: *const c_char, dest: *mut c_char) -> *mut c_char
 /// # Safety
 /// `tv` and `len` must be valid.
 pub unsafe fn save_tv_as_string(
-    tv: *const TypVal,
+    tv: &TypVal,
     len: *mut ptrdiff_t,
     endnl: bool,
     crlf: bool,
 ) -> *mut c_char {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- both outlive the call.
-    let value = unsafe { Tv::new(tv.cast_mut()) };
+    let value = unsafe { Tv::new(::core::ptr::from_ref(tv).cast_mut()) };
     // SAFETY: as above.
     unsafe { *len = 0 };
     if value.v_type() == VAR_UNKNOWN {
@@ -382,7 +382,7 @@ pub unsafe fn save_tv_as_string(
     }
     if value.v_type() == VAR_NUMBER {
         // SAFETY: a `VAR_NUMBER`, which is what the callee wants.
-        return unsafe { buffer_as_string(tv.cast_mut(), len) };
+        return unsafe { buffer_as_string(tv, len) };
     }
     // SAFETY: `VAR_LIST` says the value holds a List.
     unsafe { list_as_string(value.list_or_null(), len, endnl, crlf) }
@@ -392,10 +392,9 @@ pub unsafe fn save_tv_as_string(
 ///
 /// # Safety
 /// `tv` must be a `VAR_NUMBER`; `len` valid.
-unsafe fn buffer_as_string(tv: *mut TypVal, len: *mut ptrdiff_t) -> *mut c_char {
-    // SAFETY: the caller's promise -- a `VAR_NUMBER`, so the value holds a
-    // buffer number.
-    let nr = unsafe { Tv::new(tv).number_or_zero() };
+unsafe fn buffer_as_string(tv: &TypVal, len: *mut ptrdiff_t) -> *mut c_char {
+    // A `VAR_NUMBER`, so the value holds a buffer number.
+    let nr = tv.number_or_zero();
     let Some(buf) = find_buf(nr as c_int) else {
         semsg!("E86: Buffer {} does not exist", nr);
         // SAFETY: the caller's promise about `len`.

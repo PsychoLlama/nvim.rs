@@ -105,7 +105,7 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut U
 /// `*arg` points at the `{`, and `result` is an uninitialised return value.
 pub unsafe fn get_lambda_tv(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
@@ -260,7 +260,7 @@ pub unsafe fn get_lambda_tv(
 /// # Safety
 /// `result` holds the funcref just read and `selfdict` the dictionary it came
 /// out of.
-pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
+pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
     // SAFETY: the caller's promise -- `result` holds the funcref just read.
     let mut rv = unsafe { Tv::new(result) };
     let mut fp: *mut UserFunc = ptr::null_mut();

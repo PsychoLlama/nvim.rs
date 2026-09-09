@@ -43,7 +43,7 @@ const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
 /// `tabpage`/`win`/`buffer` are live or NULL.
 unsafe fn get_var_from(
     mut varname: *const c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     deftv: Option<&TypVal>,
     htname: c_int,
     tabpage: Option<TabPage>,
@@ -87,7 +87,7 @@ unsafe fn get_var_from(
                         unsafe { tv_dict_set_ret(result, opts) };
                         done = true;
                     }
-                } else if unsafe { eval_option(&raw mut varname, result, true) }.is_ok() {
+                } else if unsafe { eval_option(&raw mut varname, Some(result), true) }.is_ok() {
                     done = true;
                 }
                 if let Some(scoped) = scoped {
@@ -137,7 +137,7 @@ unsafe fn get_var_from(
 ///
 /// # Safety
 /// `args` holds at least `off + 3` values; `result` is writable.
-unsafe fn getwinvar(args: &[TypVal], result: *mut TypVal, off: c_int) {
+unsafe fn getwinvar(args: &[TypVal], result: &mut TypVal, off: c_int) {
     let mut numbuf = NumBuf::new();
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as c_int)

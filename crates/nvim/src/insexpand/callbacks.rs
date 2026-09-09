@@ -10,13 +10,12 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
+use crate::eval::typval::CallFrame;
+
 use crate::guard::Lock;
 use crate::semsg;
 use crate::strings::vim_strchr;
-use crate::types::{
-    Failed, IOSIZE, NUL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-};
+use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 
 /// One of the three global completion-function callbacks.
@@ -608,16 +607,15 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     }
 
     // Call the function to obtain the list of matches.
-    let mut args = [UNSET_ARG; 3];
-    args[0].write_empty(VAR_NUMBER);
-    args[1].write_empty(VAR_STRING);
-    args[2].write_empty(VAR_UNKNOWN);
-    args[0].write_number(0);
-    args[1].write_string(if base.is_null() {
-        c"".as_ptr().cast_mut()
-    } else {
-        base
-    });
+    // The base is the caller's string, so the frame names it.
+    let args = CallFrame::naming([
+        TypVal::Number(0),
+        TypVal::String(if base.is_null() {
+            c"".as_ptr().cast_mut()
+        } else {
+            base
+        }),
+    ]);
 
     let mut matchlist: *mut List = ptr::null_mut();
     let mut matchdict: *mut Dict = ptr::null_mut();
@@ -629,7 +627,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     // switching to another window: it should not be needed and may end up
     // in Insert mode in another buffer.
     let locked = Lock::text();
-    if unsafe { callback_call(cb, 2, args.args(), &raw mut rettv) } {
+    if unsafe { callback_call(cb, args.args(), &mut rettv) } {
         // The two container arms take the reference out of `rettv` and
         // give it back by hand below.
         match rettv.v_type() {

@@ -110,9 +110,8 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let name = arg_string(&mut numbuf, &args[0]) as *mut c_char;
     let out = &raw mut lv;
     let flags = (GLV_NO_AUTOLOAD | GLV_READ_ONLY) as c_int;
-    let nul = ptr::null_mut();
     let start = FNE_CHECK_START;
-    let end = unsafe { get_lval(name, nul, out, false, false, flags, start) };
+    let end = unsafe { get_lval(name, None, out, false, false, flags, start) };
     if !end.is_null() && !lv.ll_name.is_null() {
         if unsafe { *end } as c_int != NUL {
             // SAFETY: `end` is the unconsumed remainder of the caller's

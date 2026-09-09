@@ -533,7 +533,8 @@ pub unsafe fn before_set_vvar(
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
-            unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
+            let vv_dict = get_vimvar_dict();
+            unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
             clear_local(&mut oldtv);
         }
         return false;
@@ -555,7 +556,8 @@ pub unsafe fn before_set_vvar(
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
-            unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
+            let vv_dict = get_vimvar_dict();
+            unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
             clear_local(&mut oldtv);
         }
         return false;
@@ -661,7 +663,8 @@ pub(crate) unsafe fn set_vvar_item(
     unsafe { *di_lock(di) = VarLock::Unlocked };
     if watched {
         // SAFETY: the `v:` dictionary, this item's value and a live local.
-        unsafe { tv_dict_watcher_notify(get_vimvar_dict(), varname, cur, &raw mut oldtv) };
+        let vv_dict = get_vimvar_dict();
+        unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
         clear_local(&mut oldtv);
     }
     // SAFETY: a live local.

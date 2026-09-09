@@ -174,16 +174,14 @@ pub(crate) unsafe fn list_arg_vars(
             }
 
             let mut tv = TV_INITIAL_VALUE;
-            if unsafe { eval_variable(name, len, &raw mut tv, ptr::null_mut(), true, false) }
+            if unsafe { eval_variable(name, len, Some(&mut tv), ptr::null_mut(), true, false) }
                 .is_err()
             {
                 error = true;
                 break 'done;
             }
             let arg_subsc = arg;
-            if unsafe { handle_subscript(&raw mut arg, &raw mut tv, &raw mut evalarg, true) }
-                .is_err()
-            {
+            if unsafe { handle_subscript(&raw mut arg, &mut tv, &raw mut evalarg, true) }.is_err() {
                 error = true;
                 break 'done;
             }

@@ -28,7 +28,6 @@ use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::message_fmt::{c_str, c_str_len};
 use crate::narrow::len_as_int;
 use crate::winlayer::Win;
@@ -70,10 +69,9 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     let ok = api_try(&mut error, |_| {
         let no_eap = ptr::null_mut::<ExArg>();
-        let (ret, ea) = (&raw mut rettv, &raw mut evalarg);
-        // SAFETY: `expr` names its own bytes, and `rettv`/`evalarg` are
-        // this frame's.
-        let ok = unsafe { eval0(expr.data(), ret, no_eap, ea) };
+        let ea = &raw mut evalarg;
+        // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
+        let ok = unsafe { eval0(expr.data(), &mut rettv, no_eap, ea) };
         // SAFETY: `evalarg` is this frame's.
         unsafe { clear_evalarg(ea, no_eap) };
         ok
@@ -118,12 +116,11 @@ unsafe fn call_function_with(
         *err = Error::validation(c"Function called with too many arguments");
         return Object::Nil;
     }
-    // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
-    let mut vim_args = [UNSET_ARG; 21];
+    let mut vim_args = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize];
     for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
         // SAFETY: `i` is below `size`, so the object is inside `items`; the
         // slot is this frame's and `err` the caller's.
-        unsafe { object_to_vim(*args.items.add(i), &raw mut **slot) };
+        unsafe { object_to_vim(*args.items.add(i), slot) };
     }
 
     let mut rv = Object::Nil;
@@ -141,11 +138,11 @@ unsafe fn call_function_with(
         // below.
         unsafe { try_enter(&raw mut tstate) };
         let (name, name_len) = (fn_0.data(), len_as_int(fn_0.len()));
-        let (argc, argv) = (len_as_int(args.size), vim_args.args());
+        let argv = &vim_args[..args.size];
         let (ret, fe) = (&raw mut rettv, &raw mut funcexe);
-        // SAFETY: `name` names `name_len` bytes, `argv` holds `argc`
-        // converted arguments, and `rettv`/`funcexe` are this frame's.
-        let _ = unsafe { call_func(name, name_len, ret, argc, argv, fe) };
+        // SAFETY: `name` names `name_len` bytes and `rettv`/`funcexe` are
+        // this frame's.
+        let _ = unsafe { call_func(name, name_len, &mut rettv, argv, fe) };
         // SAFETY: `tstate` is what the `try_enter` above filled in, and
         // `err` is the caller's slot.
         unsafe { try_leave(&raw mut tstate, err) };
@@ -155,11 +152,6 @@ unsafe fn call_function_with(
         }
         // SAFETY: `rettv` is this frame's.
         unsafe { tv_clear(ret) };
-    }
-    // Converted arguments are cleared in reverse, as the C did.
-    for i in (0..args.size).rev() {
-        // SAFETY: the slot is this frame's array.
-        unsafe { tv_clear(&raw mut *vim_args[i]) };
     }
     rv
 }
@@ -206,10 +198,9 @@ pub unsafe fn nvim_call_dict_function(
         // below.
         unsafe { try_enter(&raw mut tstate) };
         let no_eap = ptr::null_mut::<ExArg>();
-        let (ret, ea) = (&raw mut rettv, &raw mut evalarg);
-        // SAFETY: `expr` names its own bytes, and `rettv`/`evalarg` are
-        // this frame's.
-        let eval_ret = unsafe { eval0(expr.data(), ret, no_eap, ea) };
+        let ea = &raw mut evalarg;
+        // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
+        let eval_ret = unsafe { eval0(expr.data(), &mut rettv, no_eap, ea) };
         // SAFETY: `evalarg` is this frame's.
         unsafe { clear_evalarg(ea, no_eap) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.

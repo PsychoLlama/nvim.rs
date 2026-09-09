@@ -414,7 +414,7 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
 /// # Safety
 ///
 /// `result` must be a valid return-value slot.
-unsafe fn digraph_getlist_common(list_all: bool, result: *mut TypVal) {
+unsafe fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
     let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
     // SAFETY: `result` is a valid return slot, so the list it is given owns
@@ -521,19 +521,12 @@ unsafe fn digraph_set_common(argchars: *const TypVal, argdigraph: *const TypVal)
 }
 
 /// Store a `v:true`/`v:false` result.
-///
-/// # Safety
-///
-/// `result` must be a valid return-value slot.
-unsafe fn set_bool_ret(result: *mut TypVal, value: bool) {
-    // SAFETY: caller contract.
-    unsafe {
-        (*result).write_boolean(if value {
-            K_BOOL_VAR_TRUE
-        } else {
-            K_BOOL_VAR_FALSE
-        })
-    };
+fn set_bool_ret(result: &mut TypVal, value: bool) {
+    result.write_boolean(if value {
+        K_BOOL_VAR_TRUE
+    } else {
+        K_BOOL_VAR_FALSE
+    });
 }
 
 /// `digraph_get()`.
@@ -582,16 +575,14 @@ pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 pub fn f_digraph_set(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract; `digraph_set()` takes two arguments.
     let set = unsafe { digraph_set_common(&args[0], &args[1]) };
-    // SAFETY: caller contract.
-    unsafe { set_bool_ret(result, set) };
+    set_bool_ret(result, set);
 }
 
 /// `digraph_setlist()`.
 pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     let set = unsafe { digraph_setlist_common(&args[0]) };
-    // SAFETY: caller contract.
-    unsafe { set_bool_ret(result, set) };
+    set_bool_ret(result, set);
 }
 
 /// Body of `digraph_setlist()`: the argument must be a list of two-item

@@ -372,7 +372,7 @@ pub(crate) unsafe fn func_clear_free(func: *mut UserFunc, force: bool) {
 ///
 /// # Safety
 /// `func` is a live function and `result` outlives the call.
-pub unsafe fn create_funccal(func: *mut UserFunc, result: *mut TypVal) -> *mut FuncCall {
+pub unsafe fn create_funccal(func: *mut UserFunc, result: &mut TypVal) -> *mut FuncCall {
     // SAFETY: a fresh, zeroed allocation of the right size, and the
     // caller's promise that `func` is live and `result` outlives the call.
     let fc = unsafe { xcalloc(1, size_of::<FuncCall>()) } as *mut FuncCall;

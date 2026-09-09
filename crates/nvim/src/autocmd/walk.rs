@@ -155,10 +155,9 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     // the row owns the handler this clones.
     let mut callback = unsafe { (*ac).handler_fn.clone() };
     let Callback::Lua(luaref) = callback else {
-        let mut argsin = TV_INITIAL_VALUE;
         let mut rettv = TV_INITIAL_VALUE;
-        // SAFETY: three locals of this frame, which outlive the call.
-        unsafe { callback_call(&raw mut callback, 0, &raw mut argsin, &raw mut rettv) };
+        // SAFETY: two locals of this frame, which outlive the call.
+        unsafe { callback_call(&raw mut callback, &[], &mut rettv) };
         return false;
     };
 

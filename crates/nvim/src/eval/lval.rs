@@ -129,7 +129,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     var1: *mut TypVal,
     flags: c_int,
     unlet: bool,
-    result: *mut TypVal,
+    result: Option<&mut TypVal>,
 ) -> GlvStatus {
     let mut numbuf = NumBuf::new();
     let quiet = flags & GLV_QUIET as c_int != 0;
@@ -164,7 +164,9 @@ pub(crate) unsafe fn get_lval_dict_item(
     // Assigning into a scope dictionary: check that the name is a valid
     // variable name, and a valid *function* name too unless the scope is
     // `l:` or `g:`. Overwriting a builtin function is not allowed.
-    if !result.is_null() && dv_scope != 0 {
+    if let Some(value) = result.as_deref()
+        && dv_scope != 0
+    {
         // The two checks want a NUL-terminated key, so a `.key` is
         // terminated in place and put back.
         // SAFETY: a `.key`'s `len` bytes are inside the writable `name`.
@@ -177,10 +179,10 @@ pub(crate) unsafe fn get_lval_dict_item(
             // SAFETY: as above.
             unsafe { *key.offset(len as isize) = NUL as c_char };
         }
-        // SAFETY: `result` is the caller's, and `key` is NUL-terminated either way now.
+        // SAFETY: `key` is NUL-terminated either way now.
         let existing = lval.ll_di.is_null();
         let wrong = (dv_scope == VAR_DEF_SCOPE
-            && unsafe { (*result).is_func() }
+            && value.is_func()
             && unsafe { var_wrong_func_name(key, existing) })
             || !unsafe { valid_varname(key) };
         if len != -1 {
@@ -196,7 +198,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     let lua_key = !lval.ll_di.is_null()
         && unsafe { tv_is_luafunc(&raw mut (*lval.ll_di).di_tv) }
         && len == -1
-        && result.is_null();
+        && result.is_none();
     if lua_key {
         let what = c"v:['lua']".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
@@ -371,7 +373,7 @@ pub(crate) unsafe fn get_lval_subscript(
     lval: *mut LVal,
     mut p: *mut c_char,
     name: *mut c_char,
-    result: *mut TypVal,
+    mut result: Option<&mut TypVal>,
     _ht: *mut HashTab,
     _v: *mut DictItem,
     unlet: bool,
@@ -425,10 +427,12 @@ pub(crate) unsafe fn get_lval_subscript(
             }
 
             // A null List or Blob works like an empty one; allocate now.
+            // SAFETY: `ll_tv` is the live container being subscripted.
+            let target = unsafe { &mut *lval.ll_tv };
             if container.v_type() == VAR_LIST && container.list_or_null().is_null() {
-                unsafe { tv_list_alloc_ret(lval.ll_tv, kListLenUnknown as ptrdiff_t) };
+                unsafe { tv_list_alloc_ret(target, kListLenUnknown as ptrdiff_t) };
             } else if container.v_type() == VAR_BLOB && container.blob_or_null().is_null() {
-                unsafe { tv_blob_alloc_ret(lval.ll_tv) };
+                unsafe { tv_blob_alloc_ret(target) };
             }
 
             if lval.ll_range {
@@ -464,7 +468,7 @@ pub(crate) unsafe fn get_lval_subscript(
                     empty1 = true;
                 } else {
                     empty1 = false;
-                    if unsafe { eval1(&raw mut p, &raw mut var1, &raw mut evalarg) }.is_err() {
+                    if unsafe { eval1(&raw mut p, &mut var1, &raw mut evalarg) }.is_err() {
                         break 'done;
                     }
                     if !unsafe { tv_check_str(&raw mut var1) } {
@@ -481,13 +485,11 @@ pub(crate) unsafe fn get_lval_subscript(
                         break 'done;
                     }
                     // The value being assigned has to be sliceable too.
-                    // A null `result` is `:unlet`, which assigns nothing.
-                    // SAFETY: `result` is non-null here; `v_type` names the member read.
-                    let sliceable = result.is_null()
-                        || (unsafe { (*result).v_type() } == VAR_LIST
-                            && !unsafe { (*result).list_or_null() }.is_null())
-                        || (unsafe { (*result).v_type() } == VAR_BLOB
-                            && !unsafe { (*result).blob_or_null() }.is_null());
+                    // No `result` is `:unlet`, which assigns nothing.
+                    let sliceable = result.as_deref().is_none_or(|v| {
+                        (v.v_type() == VAR_LIST && !v.list_or_null().is_null())
+                            || (v.v_type() == VAR_BLOB && !v.blob_or_null().is_null())
+                    });
                     if !sliceable {
                         if !quiet {
                             emsg_static(c"E709: [:] requires a List or Blob value");
@@ -499,7 +501,7 @@ pub(crate) unsafe fn get_lval_subscript(
                         lval.ll_empty2 = true;
                     } else {
                         lval.ll_empty2 = false;
-                        let ev = unsafe { eval1(&raw mut p, &raw mut var2, &raw mut evalarg) };
+                        let ev = unsafe { eval1(&raw mut p, &mut var2, &raw mut evalarg) };
                         if ev.is_err() {
                             break 'done;
                         }
@@ -525,7 +527,8 @@ pub(crate) unsafe fn get_lval_subscript(
             if container.v_type() == VAR_DICT {
                 let (rec, end, idx) = (lval.raw(), &raw mut p, &raw mut var1);
                 let status = unsafe {
-                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, result)
+                    let value = result.as_deref_mut();
+                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, value)
                 };
                 match status {
                     GLV_FAIL => break 'done,
@@ -569,7 +572,7 @@ pub(crate) unsafe fn get_lval_subscript(
 /// `result` null or the value about to be assigned.
 pub unsafe fn get_lval(
     name: *mut c_char,
-    result: *mut TypVal,
+    result: Option<&mut TypVal>,
     lval: *mut LVal,
     unlet: bool,
     skip: bool,
@@ -705,7 +708,7 @@ pub unsafe fn clear_lval(lval: *mut LVal) {
 pub unsafe fn set_var_lval(
     lval: *mut LVal,
     endp: *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
@@ -835,7 +838,7 @@ pub unsafe fn set_var_lval(
             let mut target = unsafe { Tv::new(lval.ll_tv) };
             // SAFETY: as above -- the take resets `result`, so nothing
             // frees the value twice.
-            *target = unsafe { (*result).take() };
+            *target = (*result).take();
         }
         // Upstream leaves the assigned value unlocked, by hand on one branch
         // and through `tv_copy` on the other; the lock is the slot's.
@@ -850,14 +853,15 @@ pub unsafe fn set_var_lval(
         // Nothing was saved, so this is the new-key case.
         debug_assert!(!lval.ll_newkey.is_null());
         // SAFETY: the watched Dict, its new key, and the value just written.
-        unsafe { tv_dict_watcher_notify(dict, lval.ll_newkey, lval.ll_tv, null_mut()) };
+        unsafe { tv_dict_watcher_notify(dict, lval.ll_newkey, Some(&*lval.ll_tv), None) };
     } else {
         let di = lval.ll_di;
         // SAFETY: the key is inline, so naming its address reads nothing.
         let key = unsafe { &raw mut (*di).di_key } as *mut c_char;
         debug_assert!(!key.is_null());
         // SAFETY: the watched Dict, its key, the new value and the old copy.
-        unsafe { tv_dict_watcher_notify(dict, key, lval.ll_tv, &raw mut oldtv) };
+        let new = unsafe { &*lval.ll_tv };
+        unsafe { tv_dict_watcher_notify(dict, key, Some(new), Some(&oldtv)) };
         clear_local(&mut oldtv);
     }
 }
@@ -870,7 +874,7 @@ pub unsafe fn set_var_lval(
 unsafe fn set_whole_var(
     lval: *mut LVal,
     endp: *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
@@ -903,8 +907,9 @@ unsafe fn set_whole_var(
         let mut di: *mut DictItem = null_mut();
         let (name, name_len) = (lval.ll_name, lval.ll_name_len);
         // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
-        let (tvp, dip) = (&raw mut tv, &raw mut di);
-        let found = unsafe { eval_variable(name, name_len as c_int, tvp, dip, true, false) };
+        let dip = &raw mut di;
+        let found =
+            unsafe { eval_variable(name, name_len as c_int, Some(&mut tv), dip, true, false) };
         if found.is_ok() {
             // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
             let (n, dtv, dlock) = if di.is_null() {
@@ -942,7 +947,7 @@ unsafe fn set_whole_var(
 ///
 /// # Safety
 /// As `set_var_lval`, with `lval->ll_blob` set.
-unsafe fn set_blob_var(lval: *mut LVal, result: *mut TypVal, op: *const c_char) -> bool {
+unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {

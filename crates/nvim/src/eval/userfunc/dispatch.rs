@@ -12,45 +12,16 @@
 use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::ptr;
-use core::slice;
 
 use super::*;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
+use crate::eval::typval::CallFrame;
 use crate::types::Failed;
 
-/// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a
-/// `base->Method()` base is put in front of them.
-const ARGV_INIT: [ManuallyDrop<TypVal>; MAX_FUNC_ARGS as usize + 1] =
-    [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
-
-/// Call the builtin `fname` spells, with the base of a `base->method()` call
-/// spliced in when there is one.
-///
-/// The evaluator's own argument array is the slice the body reads, and the
-/// evaluator owns the values in it for the length of the call.
-///
-/// # Safety
-/// `name` is NUL-terminated, `arguments` holds `count` initialised values,
-/// `result` is the cleared return value, and `base` is null or live.
-unsafe fn call_builtin(
-    name: *const c_char,
-    arguments: *mut TypVal,
-    count: c_int,
-    result: *mut TypVal,
-    base: *mut TypVal,
-) -> c_int {
-    // SAFETY: the caller's obligation.
-    let args = unsafe { slice::from_raw_parts(arguments.cast_const(), count as usize) };
-    // SAFETY: as above.
-    let result = unsafe { &mut *result };
-    if base.is_null() {
-        unsafe { call_internal_func(name, args, result) }
-    } else {
-        unsafe { call_internal_method(name, args, result, base) }
-    }
-}
+/// An empty argument array for one call: `MAX_FUNC_ARGS` values plus the
+/// slot a `base->Method()` base is put in front of them.
+const ARGV_INIT: [TypVal; MAX_FUNC_ARGS as usize + 1] =
+    [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
 
 /// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
 /// make the call.
@@ -61,7 +32,7 @@ unsafe fn call_builtin(
 pub unsafe fn get_func_tv(
     name: *const c_char,
     len: c_int,
-    result: *mut TypVal,
+    result: &mut TypVal,
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
     funcexe: *mut FuncExe,
@@ -81,8 +52,8 @@ pub unsafe fn get_func_tv(
             (*(*funcexe).fe_partial).pt_argc
         }
     };
-    let (argpp, args, countp) = (&raw mut argp, argvars.args(), &raw mut argcount);
-    let mut ret = unsafe { get_func_arguments(argpp, evalarg, bound, args, countp) };
+    let argpp = &raw mut argp;
+    let mut ret = unsafe { get_func_arguments(argpp, evalarg, bound, &mut argvars, &mut argcount) };
     debug_assert!(ret.is_ok() || ret.is_err());
 
     if ret.is_ok() {
@@ -90,26 +61,27 @@ pub unsafe fn get_func_tv(
         // know which variables are used on the call stack.
         let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
             funcargs.with_mut(|args| {
-                args.extend((0..argcount).map(|i| unsafe { argvars.args().offset(i as isize) }));
+                args.extend(
+                    argvars[..argcount]
+                        .iter()
+                        .map(|tv| ptr::from_ref(tv).cast_mut()),
+                );
             });
-            argcount as usize
+            argcount
         } else {
             0
         };
-        ret = unsafe { call_func(name, len, result, argcount, argvars.args(), funcexe) };
+        // SAFETY: the caller's promise -- `result` is the return value.
+        let rv = &mut *result;
+        ret = unsafe { call_func(name, len, rv, &argvars[..argcount], funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
         funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
     } else if !aborting() && evaluate {
-        if argcount == MAX_FUNC_ARGS {
+        if argcount == MAX_FUNC_ARGS as usize {
             unsafe { emsg_funcname(c"E740: Too many arguments for function %s".as_ptr(), name) };
         } else {
             unsafe { emsg_funcname(c"E116: Invalid arguments for function %s".as_ptr(), name) };
         }
-    }
-
-    while argcount > 0 {
-        argcount -= 1;
-        unsafe { tv_clear(argvars.args().offset(argcount as isize)) };
     }
 
     unsafe { *arg = skipwhite(argp) };
@@ -126,7 +98,7 @@ pub unsafe fn func_call(
     args: *const TypVal,
     partial: *mut Partial,
     selfdict: *mut Dict,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     let mut argv = ARGV_INIT;
     let mut argc = 0;
@@ -141,14 +113,14 @@ pub unsafe fn func_call(
         // SAFETY: the caller's promise -- `args` holds a List or nothing.
         let items = unsafe { (*args).list_or_null().as_ref() };
         for item in tv_list_iter(items) {
-            if argc == MAX_FUNC_ARGS - bound {
+            if argc == (MAX_FUNC_ARGS - bound) as usize {
                 emsg(gettext(c"E699: Too many arguments"));
                 break 'skip_call;
             }
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
-            let (from, into) = unsafe { (&raw mut (*item).li_tv, argv.args()) };
-            unsafe { tv_copy(from, into.offset(argc as isize)) };
+            let from = unsafe { &raw mut (*item).li_tv };
+            unsafe { tv_copy(from, &raw mut argv[argc]) };
             argc += 1;
         }
 
@@ -158,12 +130,9 @@ pub unsafe fn func_call(
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = partial;
         funcexe.fe_selfdict = selfdict;
-        r = unsafe { call_func(name, -1, result, argc, argv.args(), &raw mut funcexe) };
-    }
-
-    while argc > 0 {
-        argc -= 1;
-        unsafe { tv_clear(argv.args().offset(argc as isize)) };
+        // SAFETY: the caller's promise -- `result` is the return value.
+        let rv = &mut *result;
+        r = unsafe { call_func(name, -1, rv, &argv[..argc], &raw mut funcexe) };
     }
     r
 }
@@ -172,14 +141,10 @@ pub unsafe fn func_call(
 /// failed.
 ///
 /// # Safety
-/// `callback` is live and `args` holds `argcount` values.
-pub unsafe fn callback_call_retnr(
-    callback: *mut Callback,
-    argcount: c_int,
-    args: *mut TypVal,
-) -> VarNumber {
+/// `callback` is live.
+pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
-    if !unsafe { callback_call(callback, argcount, args, &raw mut rettv) } {
+    if !unsafe { callback_call(callback, args, &mut rettv) } {
         return -2;
     }
     let retval = unsafe { tv_get_number_chk(&raw mut rettv, ptr::null_mut()) };
@@ -187,19 +152,73 @@ pub unsafe fn callback_call_retnr(
     retval
 }
 
+/// The argument frame one call is spliced into: `MAX_FUNC_ARGS` values plus
+/// the slot a `base->Method()` base is put in front of them.
+type Argv = CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>;
+
+/// The argument list as it stands: the frame, once something has been put in
+/// front of the caller's values; the caller's own slice until then.
+fn spliced_args<'a>(spliced: bool, argv: &'a Argv, args: &'a [TypVal], n: usize) -> &'a [TypVal] {
+    if spliced { argv.args() } else { &args[..n] }
+}
+
+/// Put a partial's bound arguments in front of the caller's own.
+///
+/// The bound values are *copied*: the call may free the partial, and the
+/// frame outlives it either way.  Answers `Err` when the two lists together
+/// are more arguments than a call can take.
+///
+/// # Safety
+/// `partial` is a live partial with `pt_argc` bound arguments.
+unsafe fn splice_bound(
+    argv: &mut Argv,
+    partial: *const Partial,
+    args: &[TypVal],
+) -> Result<(), ()> {
+    let bound = unsafe { (*partial).pt_argc } as usize;
+    if bound + args.len() > MAX_FUNC_ARGS as usize {
+        return Err(());
+    }
+    for i in 0..bound {
+        // SAFETY: the caller's promise -- `pt_argv` holds `pt_argc` values.
+        argv.push_owned(unsafe { (*(*partial).pt_argv.add(i)).clone() });
+    }
+    argv.extend_borrowed(args);
+    Ok(())
+}
+
+/// Put the base of a `base->Method()` call in front of the argument list,
+/// moving the caller's own values into the frame when nothing has yet.
+///
+/// Answers `Err` when there is no room for it.
+fn splice_base(
+    argv: &mut Argv,
+    spliced: &mut bool,
+    args: &[TypVal],
+    base: &TypVal,
+) -> Result<(), ()> {
+    if !*spliced {
+        argv.extend_borrowed(args);
+        *spliced = true;
+    }
+    if argv.is_full() {
+        return Err(());
+    }
+    argv.insert_borrowed_front(base);
+    Ok(())
+}
+
 /// Make a call: resolve `funcname` to a partial, a `v:lua` reference, a user
 /// function (autoloading one if need be) or a builtin, and run it.
 ///
 /// # Safety
 /// `funcname` has `len` readable bytes (or is NUL-terminated when `len` is
-/// not positive), `argvars_in` holds `argcount_in` values, and `funcexe`
-/// describes the call.
+/// not positive) and `funcexe` describes the call.
 pub unsafe fn call_func(
     mut funcname: *const c_char,
     mut len: c_int,
-    result: *mut TypVal,
-    argcount_in: c_int,
-    argvars_in: *mut TypVal,
+    result: &mut TypVal,
+    args_in: &[TypVal],
     funcexe: *mut FuncExe,
 ) -> Result<(), Failed> {
     let mut ret = Err(Failed);
@@ -209,18 +228,20 @@ pub unsafe fn call_func(
     let mut tofree: *mut c_char = ptr::null_mut();
     let mut fname: *mut c_char = ptr::null_mut();
     let mut name: *mut c_char = ptr::null_mut();
-    let mut argcount = argcount_in;
-    let mut argvars = argvars_in;
     let mut selfdict = unsafe { (*funcexe).fe_selfdict };
-    // Used when a partial or `fe_basetv` puts arguments in front.
-    let mut argv = ARGV_INIT;
-    let mut argv_clear = 0;
-    let mut argv_base = 0;
+    // How much of `args_in` is still the argument list, once an
+    // `fe_argv_func` has had its say.
+    let mut nargs = args_in.len();
+    // Used when a partial or `fe_basetv` puts arguments in front; while
+    // `spliced` is false the caller's own array is the argument list and
+    // this is empty.
+    let mut argv = Argv::new();
+    let mut spliced = false;
     let partial = unsafe { (*funcexe).fe_partial };
 
     // Initialise rettv so that the caller may `tv_clear` it even when
     // this answers FAIL.
-    unsafe { (*result).write_empty(VAR_UNKNOWN) };
+    result.write_empty(VAR_UNKNOWN);
 
     if len <= 0 {
         len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;
@@ -252,24 +273,12 @@ pub unsafe fn call_func(
                 selfdict = unsafe { (*partial).pt_dict };
             }
             if error == FCERR_NONE && unsafe { (*partial).pt_argc } > 0 {
-                while argv_clear < unsafe { (*partial).pt_argc } {
-                    if argv_clear + argcount_in >= MAX_FUNC_ARGS {
-                        error = FCERR_TOOMANY;
-                        break 'theend;
-                    }
-                    let bound = unsafe { (*partial).pt_argv };
-                    let at = argv_clear as isize;
-                    unsafe { tv_copy(bound.offset(at), argv.args().offset(at)) };
-                    argv_clear += 1;
+                // SAFETY: `funcexe`'s partial is live.
+                if unsafe { splice_bound(&mut argv, partial, args_in) }.is_err() {
+                    error = FCERR_TOOMANY;
+                    break 'theend;
                 }
-                for i in 0..argcount_in {
-                    // SAFETY: the caller's argument, borrowed for the
-                    // length of this call; the frame releases nothing.
-                    argv[(i + argv_clear) as usize] =
-                        ManuallyDrop::new(unsafe { (*argvars_in.offset(i as isize)).bit_copy() });
-                }
-                argvars = argv.args();
-                argcount = unsafe { (*partial).pt_argc } + argcount_in;
+                spliced = true;
             }
         }
 
@@ -285,19 +294,22 @@ pub unsafe fn call_func(
             };
 
             // the default is number zero
-            unsafe { (*result).write_number(0) };
+            result.write_number(0);
             error = FCERR_UNKNOWN;
 
             if unsafe { is_luafunc(partial) } {
                 if len > 0 {
                     error = FCERR_NONE;
-                    // SAFETY: `funcexe`'s base is null or valid and the
-                    // three out-parameters are this frame's locals.
-                    let base = unsafe { (*funcexe).fe_basetv };
-                    let (argsp, countp) = (&raw mut argvars, &raw mut argcount);
-                    let (into, basep) = (argv.args(), &raw mut argv_base);
-                    unsafe { argv_add_base(base, argsp, countp, into, basep) };
-                    unsafe { nlua_typval_call(funcname, len as size_t, argvars, argcount, result) };
+                    // SAFETY: `funcexe`'s base is null or a live typval.
+                    if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
+                        && splice_base(&mut argv, &mut spliced, &args_in[..nargs], base).is_err()
+                    {
+                        error = FCERR_TOOMANY;
+                        break 'theend;
+                    }
+                    let len = len as size_t;
+                    let args = spliced_args(spliced, &argv, args_in, nargs);
+                    unsafe { nlua_typval_call(funcname, len, args, result) };
                 } else {
                     // v:lua was called directly; show its name in the
                     // message.
@@ -335,22 +347,35 @@ pub unsafe fn call_func(
                 } else if !fp.is_null() {
                     if let Some(argv_func) = unsafe { (*funcexe).fe_argv_func } {
                         // Postponed filling in the arguments; do it now.
-                        argcount = unsafe { argv_func(argcount, argvars, argv_clear, fp) };
+                        let skip = argv.len().saturating_sub(args_in.len());
+                        // SAFETY: `fp` is the live function being called.
+                        let args = spliced_args(spliced, &argv, args_in, nargs);
+                        let n = unsafe { argv_func(args, skip, fp) };
+                        if spliced {
+                            argv.truncate(n);
+                        } else {
+                            nargs = n;
+                        }
                     }
                     // SAFETY: as the `v:lua` branch above.
-                    let base = unsafe { (*funcexe).fe_basetv };
-                    let (argsp, countp) = (&raw mut argvars, &raw mut argcount);
-                    let (into, basep) = (argv.args(), &raw mut argv_base);
-                    unsafe { argv_add_base(base, argsp, countp, into, basep) };
-                    let args = argvars;
-                    error = unsafe {
-                        call_user_func_check(fp, argcount, args, result, funcexe, selfdict)
-                    };
+                    if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
+                        && splice_base(&mut argv, &mut spliced, &args_in[..nargs], base).is_err()
+                    {
+                        error = FCERR_TOOMANY;
+                        break 'theend;
+                    }
+                    let args = spliced_args(spliced, &argv, args_in, nargs);
+                    error = unsafe { call_user_func_check(fp, args, result, funcexe, selfdict) };
                 }
             } else {
                 // SAFETY: as the two calls above.
                 let base = unsafe { (*funcexe).fe_basetv };
-                error = unsafe { call_builtin(fname, argvars, argcount, result, base) };
+                let args = spliced_args(spliced, &argv, args_in, nargs);
+                error = if base.is_null() {
+                    unsafe { call_internal_func(fname, args, result) }
+                } else {
+                    unsafe { call_internal_method(fname, args, result, base) }
+                };
             }
 
             // The call (or the FuncUndefined autocommand sequence) may
@@ -376,12 +401,7 @@ pub unsafe fn call_func(
         unsafe { user_func_error(error, what, found) };
     }
 
-    // Clear the copies made from the partial.
-    while argv_clear > 0 {
-        argv_clear -= 1;
-        unsafe { tv_clear(argv.args().offset((argv_clear + argv_base) as isize)) };
-    }
-
+    // The copies made from the partial go with the frame.
     unsafe { xfree(tofree as *mut c_void) };
     unsafe { xfree(name as *mut c_void) };
     ret

@@ -252,7 +252,7 @@ typedef struct uv_write_s uv_write_s;
 typedef unsigned int AlignTextPos;
 typedef Object (*ApiDispatchWrapper)(uint64_t, Array, Arena *, Error *);
 typedef ConsumedBlk *ArenaMem;
-typedef int (*ArgvFunc)(int, TypVal *, int, UserFunc *);
+typedef struct ArgvFunc ArgvFunc;
 typedef unsigned int AutoEvent;
 typedef ptrdiff_t BCount;
 typedef int BackslashEscape;

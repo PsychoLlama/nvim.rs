@@ -12,8 +12,9 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
+use crate::types::TypVal;
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
 };
@@ -161,19 +162,21 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // list's.
     unsafe { (*info).dv_refcount.retain() };
 
-    let mut args = [UNSET_ARG; 4];
-    args[0].write_string(pat);
-    args[1].write_string(flag_string.as_mut_ptr());
-    args[2].write_dict(info);
+    // Two of the caller's strings and the dictionary retained above: the
+    // frame names all three and releases none.
+    let args = CallFrame::naming([
+        TypVal::String(pat),
+        TypVal::String(flag_string.as_mut_ptr()),
+        TypVal::Dict(info),
+    ]);
 
     let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
     let mut result = unsafe {
         callback_call(
             &raw mut (*Buf::current_raw()).b_tfu_cb,
-            3,
             args.args(),
-            &raw mut rettv,
+            &mut rettv,
         )
     } as c_int;
     // The function may have moved the cursor, or left it somewhere

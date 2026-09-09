@@ -298,7 +298,7 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> R
 /// a NUL-terminated string.
 pub unsafe fn tv_list_remove(
     args: &[TypVal],
-    result: *mut TypVal,
+    result: &mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let l = args[0].list_or_null();

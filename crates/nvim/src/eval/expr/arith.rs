@@ -66,11 +66,11 @@ pub(crate) fn num_modulus(n1: VarNumber, n2: VarNumber) -> VarNumber {
 /// # Safety
 /// Both operands must be Blobs, which is what `eval5` checked before
 /// dispatching here.
-pub(crate) unsafe fn eval_addblob(tv1: *mut TypVal, tv2: *mut TypVal) {
+pub(crate) unsafe fn eval_addblob(tv1: &mut TypVal, tv2: &mut TypVal) {
     // SAFETY: the caller's promise -- both operands are Blobs, so each
     // union holds a live `Blob`, and `b` is a Blob of this call's own.
-    let b1: *const Blob = unsafe { (*tv1).blob_or_null() };
-    let b2: *const Blob = unsafe { (*tv2).blob_or_null() };
+    let b1: *const Blob = (*tv1).blob_or_null();
+    let b2: *const Blob = (*tv2).blob_or_null();
     let b: *mut Blob = tv_blob_alloc();
     let len1 = unsafe { tv_blob_len(b1) } as i64;
     let len2 = unsafe { tv_blob_len(b2) } as i64;
@@ -107,18 +107,18 @@ pub(crate) unsafe fn eval_addblob(tv1: *mut TypVal, tv2: *mut TypVal) {
 ///
 /// # Safety
 /// Both operands must be Lists.
-pub(crate) unsafe fn eval_addlist(tv1: *mut TypVal, tv2: *mut TypVal) -> bool {
+pub(crate) unsafe fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut joined = TV_INITIAL_VALUE;
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `List`, and `joined` is this frame's own.
-    let (l1, l2) = unsafe { ((*tv1).list_or_null(), (*tv2).list_or_null()) };
+    let (l1, l2) = ((*tv1).list_or_null(), (*tv2).list_or_null());
     if unsafe { tv_list_concat(l1, l2, &raw mut joined) }.is_err() {
         unsafe { tv_clear(tv1) };
         unsafe { tv_clear(tv2) };
         return false;
     }
     unsafe { tv_clear(tv1) };
-    unsafe { *tv1 = joined };
+    *tv1 = joined;
     true
 }
 
@@ -131,7 +131,7 @@ pub(crate) unsafe fn eval_addlist(tv1: *mut TypVal, tv2: *mut TypVal) -> bool {
 /// # Safety
 /// `tv1` must be a valid typval and `s2` a NUL-terminated string that does
 /// not point into `tv1`'s own allocation.
-pub(crate) unsafe fn grow_string_tv(tv1: *mut TypVal, s2: *const c_char) -> bool {
+pub(crate) unsafe fn grow_string_tv(tv1: &mut TypVal, s2: *const c_char) -> bool {
     // SAFETY: the caller's promise -- `tv1` is a valid typval.
     let mut one = unsafe { Tv::new(tv1) };
     let old = one.string_or_null();
@@ -153,7 +153,7 @@ pub(crate) unsafe fn grow_string_tv(tv1: *mut TypVal, s2: *const c_char) -> bool
 ///
 /// # Safety
 /// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_concat_str(tv1: *mut TypVal, tv2: *mut TypVal) -> bool {
+pub(crate) unsafe fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut buf1: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut buf2: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     // SAFETY: the caller's promise -- both operands are valid typvals, and
@@ -181,7 +181,7 @@ pub(crate) unsafe fn eval_concat_str(tv1: *mut TypVal, tv2: *mut TypVal) -> bool
 ///
 /// # Safety
 /// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: u8) -> bool {
+pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
     let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
@@ -246,7 +246,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
 ///
 /// # Safety
 /// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_multdiv_number(tv1: *mut TypVal, tv2: *mut TypVal, op: u8) -> bool {
+pub(crate) unsafe fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
     let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;

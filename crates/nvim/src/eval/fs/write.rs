@@ -330,7 +330,7 @@ fn defer_delete(fname: &CStr) {
     let mut tv = TypVal::String(full);
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: one argument, at `tv`, whose contents the callee takes over.
-    unsafe { add_defer(name, 1, &raw mut tv) };
+    unsafe { add_defer(name, ::core::slice::from_mut(&mut tv)) };
 }
 
 /// Whether the first argument is something this builtin can write, having

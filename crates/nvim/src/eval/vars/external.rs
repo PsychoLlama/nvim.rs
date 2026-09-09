@@ -168,8 +168,8 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     let mut rettv = TV_INITIAL_VALUE;
     // A bare `Func(v:val)` call is evaluated without the expression
     // parser; anything else goes through it.
-    let r = match unsafe { may_call_simple_func(p, &raw mut rettv) } {
-        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) },
+    let r = match unsafe { may_call_simple_func(p, &mut rettv) } {
+        Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &mut rettv, &raw mut evalarg) },
         other => other.map(|_| ()),
     };
     let mut list: *mut List = ptr::null_mut();

@@ -30,7 +30,7 @@ pub(crate) unsafe fn set_buffer_lines(
     lnum_arg: LineNr,
     append: bool,
     lines: *const TypVal,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) {
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
     // every path out; `line` is owned here and freed before each replacement
@@ -161,7 +161,7 @@ unsafe fn get_buffer_lines(
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) {
     // SAFETY: the caller's obligation; every line index is clamped to the
     // buffer before `ml_get_buf` sees it.

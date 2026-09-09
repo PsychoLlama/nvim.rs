@@ -12,11 +12,10 @@
 
 use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::ptr;
 
 use super::{in_fast_callback, nlua_error, nlua_pcall, nlua_pushref, require_ref};
-use crate::eval::typval::{ArgFrame, TV_INITIAL_VALUE, tv_clear};
+use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
@@ -231,13 +230,11 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
     let mut line = [0 as c_char; IOSIZE as usize];
     unsafe {
         // The prompt is a literal, so the frame must not release it.
-        let input_args = [ManuallyDrop::new(TypVal::String(
-            c"lua_debug> ".as_ptr().cast_mut(),
-        ))];
+        let input_args = CallFrame::naming([TypVal::String(c"lua_debug> ".as_ptr().cast_mut())]);
         loop {
             lua_settop(lstate, 0);
             let mut input = TV_INITIAL_VALUE;
-            get_user_input(input_args.borrowed(1), &raw mut input, false, false);
+            get_user_input(input_args.args(), &raw mut input, false, false);
 
             if ui_has(kUICmdline) {
                 snprintf(

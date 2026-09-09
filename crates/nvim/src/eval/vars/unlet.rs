@@ -97,8 +97,7 @@ unsafe fn ex_unletlock(
             name_end = arg;
         } else {
             let quiet = ea.skip != 0 || error;
-            let nil = ptr::null_mut();
-            name_end = unsafe { get_lval(arg, nil, lvp, true, quiet, glv_flags, FNE_CHECK_START) };
+            name_end = unsafe { get_lval(arg, None, lvp, true, quiet, glv_flags, FNE_CHECK_START) };
             if lv.ll_name.is_null() {
                 // An error, but carry on parsing.
                 error = true;
@@ -213,7 +212,7 @@ unsafe fn do_unlet_var(
         unsafe { tv_dict_item_remove(d, di.raw()) };
 
         if watched {
-            unsafe { tv_dict_watcher_notify(d, key, ptr::null_mut(), &raw mut oldtv) };
+            unsafe { tv_dict_watcher_notify(d, key, None, Some(&oldtv)) };
             clear_local(&mut oldtv);
             unsafe { xfree(key.cast()) };
         }
@@ -311,7 +310,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             unsafe { delete_var(ht, hi) };
 
             if watched {
-                unsafe { tv_dict_watcher_notify(dict, varname, ptr::null_mut(), &raw mut oldtv) };
+                unsafe { tv_dict_watcher_notify(dict, varname, None, Some(&oldtv)) };
                 clear_local(&mut oldtv);
             }
             return Ok(());

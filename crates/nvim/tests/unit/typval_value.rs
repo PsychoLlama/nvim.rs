@@ -71,13 +71,13 @@ fn allocating_into_a_return_value_leaves_an_empty_container() {
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         let mut rettv = TypVal::Unknown;
-        let l = tv_list_alloc_ret(&raw mut rettv, 0);
+        let l = tv_list_alloc_ret(&mut rettv, 0);
         assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
         assert_eq!(rettv.list(), l);
         tv_clear(&raw mut rettv);
 
         let mut rettv = TypVal::Unknown;
-        tv_dict_alloc_ret(&raw mut rettv);
+        tv_dict_alloc_ret(&mut rettv);
         assert_eq!(tv::read(&raw const rettv), Tv::Dict(vec![]));
         tv_clear(&raw mut rettv);
     }

@@ -18,7 +18,7 @@ use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
-    ArgFrame, NumBuf, UNSET_ARG, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
+    CallFrame, NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
     tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
     tv_list_set_ret,
 };
@@ -44,7 +44,6 @@ use crate::types::{
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
-use core::mem::ManuallyDrop;
 use core::{ptr, slice};
 
 // -- Reading an argument, writing a return value ----------------------------
@@ -248,22 +247,16 @@ pub unsafe fn call_internal_method(
         return FCERR_TOOFEW as c_int;
     }
 
-    let mut frame = [UNSET_ARG; MAX_FUNC_ARGS as usize + 1];
+    let mut frame = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
     let (before, after) = args.split_at(base_index);
-    for (slot, arg) in frame.iter_mut().zip(before) {
-        // SAFETY: the caller's value, borrowed for the length of the call.
-        *slot = ManuallyDrop::new(unsafe { arg.bit_copy() });
-    }
-    // SAFETY: the caller's promise -- `base` is a live typval, borrowed the
+    frame.extend_borrowed(before);
+    // SAFETY: the caller's promise -- `base` is a live typval, named the
     // same way.
-    frame[base_index] = ManuallyDrop::new(unsafe { (*base).bit_copy() });
-    for (slot, arg) in frame[base_index + 1..].iter_mut().zip(after) {
-        // SAFETY: as the first splice.
-        *slot = ManuallyDrop::new(unsafe { arg.bit_copy() });
-    }
+    frame.push_borrowed(unsafe { &*base });
+    frame.extend_borrowed(after);
 
     let func = fdef.func.expect("non-null function pointer");
-    func(frame.borrowed(args.len() + 1), result, fdef.data);
+    func(frame.args(), result, fdef.data);
     FCERR_NONE as c_int
 }
 

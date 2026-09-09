@@ -110,30 +110,30 @@ pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
 ///
 /// # Safety
 ///
-/// `argv` must point at an initialized typval, unaliased for the call. `func`
-/// must point at a live `UserFunc`, unaliased for the call.
+/// `func` must point at a live `UserFunc`, unaliased for the call.
 pub(crate) unsafe fn fill_submatch_list(
-    _argc: c_int,
-    argv: *mut TypVal,
-    argskip: c_int,
+    argv: &[TypVal],
+    argskip: usize,
     func: *mut UserFunc,
-) -> c_int {
-    // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
-    // holds the `StaticList10` the caller keeps alive across the call;
-    // `rsm` describes a live string match.
-    let listarg = unsafe { argv.offset(argskip as isize) };
-    if unsafe { (*func).uf_varargs } == 0 && unsafe { (*func).uf_args.ga_len } <= argskip {
+) -> usize {
+    // `argv[argskip]` holds the `StaticList10` the caller keeps alive
+    // across the call.
+    let listarg = &argv[argskip];
+    // SAFETY: the caller's promise -- a live function.
+    let declared = unsafe { (*func).uf_args.ga_len };
+    if unsafe { (*func).uf_varargs } == 0 && declared as usize <= argskip {
         return argskip;
     }
 
     // Relies on `sl_list` being the first member of `StaticList10`.
-    unsafe { tv_list_init_static10((*listarg).list_or_null() as *mut StaticList10) };
+    // SAFETY: the slot holds the caller's static list.
+    unsafe { tv_list_init_static10(listarg.list_or_null() as *mut StaticList10) };
 
     // A `StaticList10` always has exactly ten items, one per capture.
     // SAFETY: the caller promises a live string match.
     // SAFETY: the running string match is the caller's structure.
     let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
-    let mut li = unsafe { tv_list_first((*listarg).list_or_null()) };
+    let mut li = unsafe { tv_list_first(listarg.list_or_null()) };
     for i in 0..10 {
         let start = match_.startp[i];
         let text = if start.is_null() || match_.endp[i].is_null() {

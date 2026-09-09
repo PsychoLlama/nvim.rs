@@ -536,7 +536,7 @@ fn defer_delete(created: *mut c_char, recurse: bool) {
     let mut tv = [string(created), string(how)];
     let name = c"delete".as_ptr().cast_mut();
     // SAFETY: two arguments, at `tv`, whose contents the callee takes over.
-    unsafe { add_defer(name, 2, tv.as_mut_ptr()) };
+    unsafe { add_defer(name, &mut tv) };
 }
 
 /// `rename({from}, {to})`: move a file, 0 on success.

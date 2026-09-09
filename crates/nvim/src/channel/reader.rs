@@ -17,6 +17,7 @@
 
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::xstrdup;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_void};
@@ -25,8 +26,8 @@ use core::{mem, ptr, slice};
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    ArgFrame, UNSET_ARG, callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
-    tv_list_append_string, tv_list_ref, tv_list_unref,
+    callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
+    tv_list_ref,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -248,29 +249,27 @@ unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
 /// # Safety
 /// `chan` is live; `reader` is null or one of its readers.
 unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
-    let mut argv = [UNSET_ARG; 4];
+    let mut argv = [TV_INITIAL_VALUE; 3];
     let mut rettv = TV_INITIAL_VALUE;
 
-    // SAFETY: the caller's live channel and reader. The list built for a
-    // reader is owned by `argv[1]` until it is unreferenced below.
+    // SAFETY: the caller's live channel and reader. Every slot is this
+    // frame's own value, released when the array goes out of scope --
+    // which is why the stream name is duplicated rather than borrowed.
     argv[0].write_number(unsafe { (*chan).id }.cast_signed());
     let cb = if reader.is_null() {
         argv[1].write_number(VarNumber::from(unsafe { (*chan).exit_status }));
-        argv[2].write_string(c"exit".as_ptr() as *mut c_char);
+        argv[2].write_string(unsafe { xstrdup(c"exit".as_ptr()) });
         unsafe { &raw mut (*chan).on_exit }
     } else {
         argv[1].write_list(unsafe { reader_lines(reader) });
         unsafe { tv_list_ref(argv[1].list_or_null()) };
         unsafe { (*reader).buffer.clear() };
-        argv[2].write_string(unsafe { (*reader).type_0 } as *mut c_char);
+        argv[2].write_string(unsafe { xstrdup((*reader).type_0) });
         unsafe { &raw mut (*reader).cb }
     };
 
-    unsafe { callback_call(cb, 3, argv.args(), &raw mut rettv) };
+    unsafe { callback_call(cb, &argv, &mut rettv) };
     unsafe { tv_clear(&raw mut rettv) };
-    if !reader.is_null() {
-        unsafe { tv_list_unref(argv[1].list_or_null()) };
-    }
 }
 
 /// Everything a reader has accumulated, as the list of lines its callback is

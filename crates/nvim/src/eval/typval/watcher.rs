@@ -24,8 +24,6 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
-use core::mem::ManuallyDrop;
 
 /// Free `watcher` and the callback and pattern it owns.
 ///
@@ -303,32 +301,35 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
 /// # Safety
 ///
 /// `dict` must point at a live dictionary, unaliased for the call, and `key`
-/// at a NUL-terminated key. `newtv` and `oldtv` must each be null or point at
-/// an initialized typval.
+/// at a NUL-terminated key.
 pub unsafe fn tv_dict_watcher_notify(
     dict: *mut Dict,
     key: *const ::core::ffi::c_char,
-    newtv: *mut TypVal,
-    oldtv: *mut TypVal,
+    newtv: Option<&TypVal>,
+    oldtv: Option<&TypVal>,
 ) {
-    let mut argv = [UNSET_ARG; 3];
-    argv[0] = ManuallyDrop::new(TypVal::Dict(dict));
-    argv[1] = ManuallyDrop::new(TypVal::String(unsafe { xstrdup(key) }));
-    argv[2] = ManuallyDrop::new(TypVal::Dict(unsafe { tv_dict_alloc() }));
-    unsafe { (*argv[2].dict_or_null()).dv_refcount.retain() };
+    // Slot 0 names the caller's dictionary, which the retain below holds
+    // across the callbacks; the other two are this frame's own.
+    let mut argv = CallFrame::<3>::new();
+    argv.push_naming(TypVal::Dict(dict));
+    argv.push_owned(TypVal::String(unsafe { xstrdup(key) }));
+    argv.push_owned(TypVal::Dict(unsafe { tv_dict_alloc() }));
+    let event = argv.args()[2].dict_or_null();
+    unsafe { (*event).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
     // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
-    let event = argv[2].dict_or_null();
-    let add = |name: &str, from: *mut TypVal| {
+    let add = |name: &str, from: &TypVal| {
         let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
         unsafe { tv_copy(from, &raw mut (*v).di_tv) };
         let _ = unsafe { tv_dict_add(event, v) };
     };
-    if !newtv.is_null() {
+    if let Some(newtv) = newtv {
         add("new", newtv);
     }
-    if !oldtv.is_null() && unsafe { (*oldtv).v_type() } != VAR_UNKNOWN {
+    if let Some(oldtv) = oldtv
+        && oldtv.v_type() != VAR_UNKNOWN
+    {
         add("old", oldtv);
     }
 
@@ -355,8 +356,7 @@ pub unsafe fn tv_dict_watcher_notify(
             let mut wd = unsafe { Dw::new(watcher) };
             wd.busy = true;
             let cb = wd.field_ptr(::core::mem::offset_of!(DictWatcher, callback));
-            let argp = argv.args();
-            unsafe { callback_call(cb, 3, argp, &raw mut rettv) };
+            unsafe { callback_call(cb, argv.args(), &mut rettv) };
             wd.busy = false;
             unsafe { tv_clear(&raw mut rettv) };
             if wd.needs_free {
@@ -380,9 +380,4 @@ pub unsafe fn tv_dict_watcher_notify(
         }
     }
     unsafe { tv_dict_unref(dict) };
-
-    // From 1: `argv[0]` is the caller's dictionary, which it still owns.
-    for tv in &mut argv[1..] {
-        unsafe { tv_clear(&raw mut **tv) };
-    }
 }

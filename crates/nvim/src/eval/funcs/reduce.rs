@@ -6,10 +6,11 @@ use super::wrappers::{arg_copy, arg_string};
 use super::{
     VARNUMBER_MAX, VARNUMBER_MIN, e_missing_function_argument, e_string_list_or_blob_required,
 };
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    ArgFrame, NumBuf, UNSET_ARG, di_of_key, di_tv, tv_blob_get, tv_blob_len,
-    tv_check_for_number_arg, tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_len,
-    tv_get_number_chk, tv_list_first, tv_list_len, tv_list_locked, tv_list_set_lock,
+    NumBuf, di_of_key, di_tv, tv_blob_get, tv_blob_len, tv_check_for_number_arg,
+    tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first, tv_list_len,
+    tv_list_locked, tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -163,28 +164,24 @@ unsafe fn fold_step(
     called_emsg_start: c_int,
 ) -> bool {
     // SAFETY throughout: the caller's obligation. `argv` outlives the call.
-    let mut argv = [UNSET_ARG; 3];
-    // The accumulator and the item are *borrowed* by the frame; `cleanup`
-    // says which of the two the callee is expected to have taken over, and
-    // the caller owns whatever it does not clear here.  Upstream's shape:
-    // the List fold blanks `rettv` so that only `argv[0]` holds the old
-    // accumulator, the String fold owns the character it just measured, and
-    // the Blob fold's accumulator starts as a Number that owns nothing.
-    // SAFETY: the frame is this call's and is not released as a whole -- the
-    // `cleanup` flags below say which of the two slots the callee took over,
-    // and only that one is cleared.
-    argv[0] = ManuallyDrop::new(unsafe { result.bit_copy() });
-    // SAFETY: as above.
-    argv[1] = ManuallyDrop::new(unsafe { item.bit_copy() });
+    // The accumulator and the item are *named* by the frame; `cleanup` says
+    // which of the two the callee is expected to have taken over, and the
+    // caller owns whatever the frame is not told to claim.  Upstream's
+    // shape: the List fold blanks `rettv` so that only `argv[0]` holds the
+    // old accumulator, the String fold owns the character it just measured,
+    // and the Blob fold's accumulator starts as a Number that owns nothing.
+    let mut argv = CallFrame::<2>::new();
+    argv.push_borrowed(result);
+    argv.push_borrowed(item);
     if cleanup.blank_rettv {
         result.write_empty(VAR_UNKNOWN);
     }
-    let r = unsafe { eval_expr_typval(expr, true, argv.args(), 2, result) };
+    let r = unsafe { eval_expr_typval(expr, true, argv.args(), result) };
     if cleanup.clear_acc {
-        unsafe { tv_clear(&raw mut *argv[0]) };
+        argv.own(0);
     }
     if cleanup.clear_item {
-        unsafe { tv_clear(&raw mut *argv[1]) };
+        argv.own(1);
     }
     r.is_ok() && called_emsg.get() == called_emsg_start
 }

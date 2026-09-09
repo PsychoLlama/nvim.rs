@@ -59,7 +59,7 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// at the value being subscripted, and `evalarg` must be null or valid.
 pub(crate) unsafe fn eval_index(
     arg: *mut *mut c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -96,7 +96,7 @@ pub(crate) unsafe fn eval_index(
         cur.skip(1);
         if cur.byte() == b':' {
             empty1 = true;
-        } else if unsafe { eval1(arg, &raw mut var1, evalarg) }.is_err() {
+        } else if unsafe { eval1(arg, &mut var1, evalarg) }.is_err() {
             return Err(Failed);
         } else if evaluate && !unsafe { tv_check_str(&raw mut var1) } {
             unsafe { tv_clear(&raw mut var1) };
@@ -109,7 +109,7 @@ pub(crate) unsafe fn eval_index(
             cur.skip(1);
             if cur.byte() == b']' {
                 empty2 = true;
-            } else if unsafe { eval1(arg, &raw mut var2, evalarg) }.is_err() {
+            } else if unsafe { eval1(arg, &mut var2, evalarg) }.is_err() {
                 if !empty1 {
                     unsafe { tv_clear(&raw mut var1) };
                 }
@@ -157,11 +157,11 @@ pub(crate) unsafe fn eval_index(
 /// # Safety
 /// `result` must be valid.
 pub(crate) unsafe fn check_can_index(
-    result: *const TypVal,
+    result: &TypVal,
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let message = match unsafe { (*result).v_type() } {
+    let message = match (*result).v_type() {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
         VAR_FLOAT => e_using_float_as_string.as_ptr(),
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
@@ -206,7 +206,7 @@ pub(crate) fn f_slice(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// `keylen` readable bytes (or NUL-terminated when `keylen` is negative).
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn eval_index_inner(
-    result: *mut TypVal,
+    result: &mut TypVal,
     is_range: bool,
     var1: *const TypVal,
     var2: *const TypVal,
@@ -454,7 +454,7 @@ pub(crate) unsafe fn string_slice(
 /// valid.
 pub(crate) unsafe fn handle_subscript(
     arg: *mut *const c_char,
-    result: *mut TypVal,
+    result: &mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -558,7 +558,7 @@ pub(crate) unsafe fn handle_subscript(
 /// # Safety
 /// `result` must be valid and `selfdict` must be a reference this call takes
 /// over.
-pub(crate) unsafe fn set_selfdict(result: *mut TypVal, selfdict: *mut Dict) {
+pub(crate) unsafe fn set_selfdict(result: &mut TypVal, selfdict: *mut Dict) {
     // Not for a partial that was bound explicitly (`pt_auto` clear).
     // SAFETY: the caller's promise -- `result` is valid, and the tag says
     // whether the value holds a live partial.

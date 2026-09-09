@@ -195,7 +195,7 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     let s2 = unsafe { numbuf.string(tv2) };
     // An owned string with room to spare is extended in place.
     // SAFETY: as above.
-    if unsafe { grow_string_tv(tv1, s2) } {
+    if unsafe { grow_string_tv(&mut *tv1, s2) } {
         return Ok(());
     }
     // SAFETY: as above.

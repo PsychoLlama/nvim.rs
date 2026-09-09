@@ -36,7 +36,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
-    DictSlot, Ls, Pt, Tv, VAR_PARTIAL, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
+    DictSlot, Ls, Pt, VAR_PARTIAL, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
     tv_empty_string, tv_list_unref,
 };
 use crate::eval::typval_encode::{
@@ -49,50 +49,35 @@ use crate::types::{Blob, Float, TypVal, int64_t, kBoolVarFalse, kSpecialVarNull,
 /// handed.
 struct NothingSink;
 
+/// The slot the walk is standing on.
+///
+/// Every hook this sink implements *writes* to it, and the walk only leaves
+/// it out for the two frames a partial pushes -- which reach
+/// [`TypvalSink::conv_list_end`] and nothing else here.
+fn slot(tv: Option<&mut TypVal>) -> &mut TypVal {
+    tv.expect("the nothing sink is only handed frames that have a value")
+}
+
 impl TypvalSink for NothingSink {
     /// `{_TYPE, _VAL}` dictionaries are a msgpack round-trip device; to a free
     /// they are two ordinary keys and have to be freed as such.
     const ALLOW_SPECIALS: bool = false;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_nothing_convert_one_value()";
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_nil(&mut self, tv: *mut TypVal) {
-        // SAFETY: the walk's live typval.
-        let mut val = unsafe { Tv::new(tv) };
-        val.write_special(kSpecialVarNull);
+    fn conv_nil(&mut self, tv: Option<&mut TypVal>) {
+        slot(tv).write_special(kSpecialVarNull);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_bool(&mut self, tv: *mut TypVal, _num: bool) {
-        // SAFETY: the walk's live typval.
-        let mut val = unsafe { Tv::new(tv) };
-        val.write_boolean(kBoolVarFalse);
+    fn conv_bool(&mut self, tv: Option<&mut TypVal>, _num: bool) {
+        slot(tv).write_boolean(kBoolVarFalse);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_number(&mut self, tv: *mut TypVal, _num: int64_t) {
-        // SAFETY: the walk's live typval.
-        let mut val = unsafe { Tv::new(tv) };
-        val.write_number(0);
+    fn conv_number(&mut self, tv: Option<&mut TypVal>, _num: int64_t) {
+        slot(tv).write_number(0);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_float(&mut self, tv: *mut TypVal, _flt: Float) -> Flow {
-        // SAFETY: the walk's live typval.
-        let mut val = unsafe { Tv::new(tv) };
-        val.write_float(0.0);
+    fn conv_float(&mut self, tv: Option<&mut TypVal>, _flt: Float) -> Flow {
+        slot(tv).write_float(0.0);
         Flow::Go
     }
 
@@ -100,9 +85,14 @@ impl TypvalSink for NothingSink {
     ///
     /// As [`TypvalSink::conv_string`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_string(&mut self, tv: *mut TypVal, buf: *mut c_char, _len: size_t) -> Flow {
+    unsafe fn conv_string(
+        &mut self,
+        tv: Option<&mut TypVal>,
+        buf: *mut c_char,
+        _len: size_t,
+    ) -> Flow {
         unsafe { xfree(buf.cast::<c_void>()) };
-        unsafe { (*tv).write_string(ptr::null_mut()) };
+        slot(tv).write_string(ptr::null_mut());
         Flow::Go
     }
 
@@ -116,7 +106,7 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_str_string(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         _buf: *mut c_char,
         _len: size_t,
     ) -> Flow {
@@ -132,7 +122,7 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         _buf: *mut c_char,
         _len: size_t,
         _ext_type: i8,
@@ -144,9 +134,11 @@ impl TypvalSink for NothingSink {
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_blob(&mut self, tv: *mut TypVal, _blob: *const Blob, _len: c_int) {
-        unsafe { tv_blob_unref((*tv).blob_or_null()) };
-        unsafe { (*tv).write_blob(ptr::null_mut()) };
+    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, _blob: *const Blob, _len: c_int) {
+        let tv = slot(tv);
+        // SAFETY: the typval's own blob.
+        unsafe { tv_blob_unref(tv.blob_or_null()) };
+        tv.write_blob(ptr::null_mut());
     }
 
     /// A funcref releases its name here and is done.  A partial with another
@@ -159,20 +151,19 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
-        tv: *mut TypVal,
+        tv: Option<&mut TypVal>,
         fun: *mut c_char,
         _prefix: &'static CStr,
         _path: &ConvPath,
     ) -> Flow {
-        // SAFETY: the walk's live typval.
-        let val = unsafe { Tv::new(tv) };
-        if val.v_type() == VAR_PARTIAL {
-            let pt = val.partial_or_null();
+        let tv = slot(tv);
+        if tv.v_type() == VAR_PARTIAL {
+            let pt = tv.partial_or_null();
             // SAFETY: the typval's own partial.
             let mut part = unsafe { Pt::new(pt) };
             if !pt.is_null() && part.pt_refcount.is_shared() {
                 part.pt_refcount.release();
-                unsafe { (*tv).write_partial(ptr::null_mut()) };
+                tv.write_partial(ptr::null_mut());
                 return Flow::Stop;
             }
         } else {
@@ -180,7 +171,7 @@ impl TypvalSink for NothingSink {
             if !ptr::eq(fun, tv_empty_string.get()) {
                 unsafe { xfree(fun.cast::<c_void>()) };
             }
-            unsafe { (*tv).write_func_name(ptr::null_mut()) };
+            tv.write_func_name(ptr::null_mut());
         }
         Flow::Go
     }
@@ -188,17 +179,12 @@ impl TypvalSink for NothingSink {
     /// The last reference to a partial, its arguments and self dictionary
     /// already released by the frames the walk drained.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_func_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_func_end(&mut self, tv: *mut TypVal, copyid: c_int) {
-        // SAFETY: the walk's live typval.
-        let val = unsafe { Tv::new(tv) };
-        if val.v_type() != VAR_PARTIAL {
+    fn conv_func_end(&mut self, tv: Option<&mut TypVal>, copyid: c_int) {
+        let tv = slot(tv);
+        if tv.v_type() != VAR_PARTIAL {
             return;
         }
-        let pt = val.partial_or_null();
+        let pt = tv.partial_or_null();
         if pt.is_null() {
             return;
         }
@@ -211,42 +197,32 @@ impl TypvalSink for NothingSink {
         part.pt_argc = 0;
         debug_assert!(!part.pt_refcount.is_shared());
         unsafe { partial_unref(pt) };
-        unsafe { (*tv).write_partial(ptr::null_mut()) };
+        tv.write_partial(ptr::null_mut());
     }
 
     /// Nothing to announce; the frame surgery below is where the list is
     /// either released or skipped.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, _len: c_int) -> Flow {
+    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, _len: c_int) -> Flow {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, _len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, _len: size_t) -> Flow {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_list(&mut self, tv: *mut TypVal) {
-        unsafe { tv_list_unref((*tv).list_or_null()) };
-        unsafe { (*tv).write_list(ptr::null_mut()) };
+    fn conv_empty_list(&mut self, tv: Option<&mut TypVal>) {
+        let tv = slot(tv);
+        // SAFETY: the typval's own list.
+        unsafe { tv_list_unref(tv.list_or_null()) };
+        tv.write_list(ptr::null_mut());
     }
 
     /// # Safety
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, dictp: Option<DictSlot>) {
+    unsafe fn conv_empty_dict(&mut self, dictp: Option<DictSlot>) {
         // Upstream asserts the lvalue is a real one.  `None` is a special
         // map's `_VAL`, which cannot reach a sink that refuses specials.
         debug_assert!(dictp.is_some());
@@ -266,18 +242,16 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_real_list_after_start(
         &mut self,
-        tv: *mut TypVal,
+        tv: Option<&mut TypVal>,
         frame: &mut ConvFrame,
     ) -> Flow {
-        debug_assert!(!tv.is_null());
-        // SAFETY: the walk's live typval.
-        let val = unsafe { Tv::new(tv) };
-        let list = val.list_or_null();
+        let tv = slot(tv);
+        let list = tv.list_or_null();
         // SAFETY: the typval's own list.
         let mut ls = unsafe { Ls::new(list) };
         if ls.lv_refcount.is_shared() {
             ls.lv_refcount.release();
-            unsafe { (*tv).write_list(ptr::null_mut()) };
+            tv.write_list(ptr::null_mut());
             // Always a `List`: the walk calls this straight after pushing
             // one for this very value.
             if let Frame::List { li, .. } = &mut frame.frame {
@@ -288,18 +262,13 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_end(&mut self, tv: *mut TypVal) {
-        if tv.is_null() {
-            // A partial's argument list, which has no `TypVal` of its
-            // own; `conv_func_end` releases the partial that owns it.
-            return;
-        }
-        unsafe { tv_list_unref((*tv).list_or_null()) };
-        unsafe { (*tv).write_list(ptr::null_mut()) };
+    fn conv_list_end(&mut self, tv: Option<&mut TypVal>) {
+        // `None` is a partial's argument list, which has no `TypVal` of its
+        // own; `conv_func_end` releases the partial that owns it.
+        let Some(tv) = tv else { return };
+        // SAFETY: the typval's own list.
+        unsafe { tv_list_unref(tv.list_or_null()) };
+        tv.write_list(ptr::null_mut());
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
@@ -310,7 +279,6 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_real_dict_after_start(
         &mut self,
-        _tv: *mut TypVal,
         dictp: Option<DictSlot>,
         frame: &mut ConvFrame,
     ) -> Flow {
@@ -331,7 +299,7 @@ impl TypvalSink for NothingSink {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
         if let Some(dictp) = dictp {
             unsafe { tv_dict_unref(dictp.get()) };
             unsafe { dictp.clear() };

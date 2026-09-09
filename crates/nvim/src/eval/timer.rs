@@ -18,8 +18,8 @@ use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::eval::typval::{
-    ArgFrame, UNSET_ARG, callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc,
-    tv_dict_item_alloc, tv_list_alloc_ret, tv_list_append_dict,
+    callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_item_alloc,
+    tv_list_alloc_ret, tv_list_append_dict,
 };
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
@@ -65,7 +65,7 @@ pub fn find_timer_by_nr(id: VarNumber) -> *mut Timer {
 ///
 /// # Safety
 /// `rettv` must hold a List; `timer` must be valid.
-pub unsafe fn add_timer_info(result: *mut TypVal, timer: *mut Timer) {
+pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
     let (rettv, timer) = unsafe { (Tv::new(result), Tm::new(timer)) };
     // SAFETY: `tv_dict_alloc` never answers NULL.
@@ -106,7 +106,7 @@ pub unsafe fn add_timer_info(result: *mut TypVal, timer: *mut Timer) {
 ///
 /// # Safety
 /// `result` must be valid.
-pub unsafe fn add_timer_info_all(result: *mut TypVal) {
+pub unsafe fn add_timer_info_all(result: &mut TypVal) {
     let live = timer_snapshot();
     // SAFETY: the caller's promise about `result`.
     unsafe { tv_list_alloc_ret(result, live.len() as ptrdiff_t) };
@@ -149,13 +149,12 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
         unsafe { timer_stop(timer.raw()) };
     }
 
-    let mut argv = [UNSET_ARG; 2];
-    argv[0].write_number(timer.timer_id as VarNumber);
+    let argv = [TypVal::Number(timer.timer_id as VarNumber)];
     let mut rettv = UNSET_TV;
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference
     // above; `argv` and `rettv` are this frame's.
-    unsafe { callback_call(cb, 1, argv.args(), &raw mut rettv) };
+    unsafe { callback_call(cb, &argv, &mut rettv) };
 
     if called_emsg.get() > called_emsg_before && did_emsg.get() != 0 {
         timer.emsg_count += 1;

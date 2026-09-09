@@ -76,19 +76,11 @@ impl TypvalSink for JsonSink<'_> {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_json_convert_one_value()";
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_nil`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
+    fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
         self.gap.extend_from_slice(b"null");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_bool`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
+    fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
         self.gap.extend_from_slice(if num {
             b"true".as_slice()
         } else {
@@ -96,27 +88,15 @@ impl TypvalSink for JsonSink<'_> {
         });
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
+    fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: int64_t) {
         self.concat_num(c"%ld", num);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_unsigned_number`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
+    fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
         self.concat_num(c"%lu", num);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_float`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
+    fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
         match flt.classify() {
             ::core::num::FpCategory::Nan => {
                 err(E474_NAN);
@@ -140,7 +120,12 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_string`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_string(
+        &mut self,
+        _tv: Option<&mut TypVal>,
+        buf: *mut c_char,
+        len: size_t,
+    ) -> Flow {
         if unsafe { convert_to_json_string(self.gap, buf, len) }.is_ok() {
             Flow::Go
         } else {
@@ -154,7 +139,7 @@ impl TypvalSink for JsonSink<'_> {
     /// it is standing on.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         buf: *mut c_char,
         _len: size_t,
         _ext_type: i8,
@@ -172,7 +157,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
         if len == 0 {
             self.gap.extend_from_slice(b"[]");
             return;
@@ -193,7 +178,7 @@ impl TypvalSink for JsonSink<'_> {
     /// it is standing on.
     unsafe fn conv_func_start(
         &mut self,
-        _tv: *mut TypVal,
+        _tv: Option<&mut TypVal>,
         _fun: *mut c_char,
         _prefix: &'static CStr,
         path: &ConvPath,
@@ -201,11 +186,7 @@ impl TypvalSink for JsonSink<'_> {
         unsafe { conv_error(gettext(E474_FUNCREF).as_ptr(), path) }
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_list`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
+    fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
         self.gap.extend_from_slice(b"[]");
     }
 
@@ -213,51 +194,31 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b"{}");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, _len: c_int) -> Flow {
+    fn conv_list_start(&mut self, _tv: Option<&mut TypVal>, _len: c_int) -> Flow {
         self.gap.push(b'[');
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
+    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {
         self.gap.extend_from_slice(b", ");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_list_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
+    fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
         self.gap.push(b']');
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, _len: size_t) -> Flow {
+    fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, _len: size_t) -> Flow {
         self.gap.push(b'{');
         Flow::Go
     }
 
     /// A special map may carry any typval as a key; JSON may not.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::special_dict_key_check`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn special_dict_key_check(&mut self, key: *const TypVal) -> Flow {
+    fn special_dict_key_check(&mut self, key: &TypVal) -> Flow {
         if unsafe { encode_check_json_key(key) } {
             Flow::Go
         } else {
@@ -270,7 +231,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b": ");
     }
 
@@ -278,7 +239,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b", ");
     }
 
@@ -286,7 +247,7 @@ impl TypvalSink for JsonSink<'_> {
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<DictSlot>) {
+    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         self.gap.push(b'}');
     }
 

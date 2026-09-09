@@ -67,7 +67,7 @@ static redir_varname: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut())
 unsafe fn resolve_redir_lval() -> *mut c_char {
     let (name, lv) = (redir_varname.get(), redir_lval.get());
     // SAFETY: the caller's obligation.
-    unsafe { get_lval(name, ptr::null_mut(), lv, false, false, 0, FNE_CHECK_START) }
+    unsafe { get_lval(name, None, lv, false, false, 0, FNE_CHECK_START) }
 }
 
 /// Start capturing messages into the variable `name`, appending to it rather
@@ -124,9 +124,9 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // A literal, so the value must not release it.
     let mut tv = ManuallyDrop::new(TypVal::String(c"".as_ptr() as *mut c_char));
     let op = if append { c"." } else { c"=" };
-    let (lv, endp, tvp) = (redir_lval.get(), redir_endp.get(), &raw mut *tv);
+    let (lv, endp) = (redir_lval.get(), redir_endp.get());
     // SAFETY: the lvalue just resolved, and a live local value.
-    unsafe { set_var_lval(lv, endp, tvp, true, false, op.as_ptr()) };
+    unsafe { set_var_lval(lv, endp, &mut tv, true, false, op.as_ptr()) };
     unsafe { clear_lval(redir_lval.get()) };
     if called_emsg.get() > called_emsg_before {
         redir_endp.set(ptr::null_mut());
@@ -187,8 +187,7 @@ pub unsafe fn var_redir_stop() {
             redir_endp.set(unsafe { resolve_redir_lval() });
             let (lv, endp) = (redir_lval.get(), redir_endp.get());
             if !endp.is_null() && !unsafe { (*lv).ll_name }.is_null() {
-                let tvp = &raw mut *tv;
-                unsafe { set_var_lval(lv, endp, tvp, false, false, c".".as_ptr()) };
+                unsafe { set_var_lval(lv, endp, &mut tv, false, false, c".".as_ptr()) };
             }
             unsafe { clear_lval(redir_lval.get()) };
         }

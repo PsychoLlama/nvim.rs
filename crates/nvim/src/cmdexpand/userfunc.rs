@@ -11,14 +11,12 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{ArgFrame, UNSET_ARG};
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::strings::vim_strchr;
-use crate::types::{
-    ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-};
+use crate::types::{ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_STRING};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::{CStr, CString};
@@ -28,7 +26,7 @@ use std::ffi::{CStr, CString};
 /// Only [`call_user_expand_func`] takes one, and both of its callers pass a
 /// real function, so this is the bare pointer rather than upstream's nullable
 /// `user_expand_func_T`.
-type UserExpandFunc = unsafe fn(*const c_char, c_int, *mut TypVal) -> *mut c_void;
+type UserExpandFunc = unsafe fn(*const c_char, &[TypVal]) -> *mut c_void;
 
 /// Upstream's `STRLEN_LITERAL(PATHSEPSTR)`.
 const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
@@ -275,7 +273,6 @@ pub(crate) unsafe fn call_user_expand_func(
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    let mut args = [UNSET_ARG; 4];
     let save_current_sctx = current_sctx.get();
 
     if expand.xp_arg.is_null()
@@ -290,17 +287,17 @@ pub(crate) unsafe fn call_user_expand_func(
     // `CmdBuff`'s invariant now, so the byte it saved is always the NUL it
     // wrote, and both halves are gone.
     let pat = unsafe { xstrnsave(expand.xp_pattern, expand.xp_pattern_len) };
-    args[0].write_empty(VAR_STRING);
-    args[1].write_empty(VAR_STRING);
-    args[2].write_empty(VAR_NUMBER);
-    args[3].write_empty(VAR_UNKNOWN);
-    args[0].write_string(pat);
-    args[1].write_string(expand.xp_line);
-    args[2].write_number(expand.xp_col as VarNumber);
+    // The pattern copy is freed by hand below and the command line is the
+    // context's own, so the frame names both rather than owning them.
+    let args = CallFrame::naming([
+        TypVal::String(pat),
+        TypVal::String(expand.xp_line),
+        TypVal::Number(expand.xp_col as VarNumber),
+    ]);
 
     current_sctx.set(expand.xp_script_ctx);
 
-    let ret = unsafe { user_expand_func(expand.xp_arg, 3, args.args()) };
+    let ret = unsafe { user_expand_func(expand.xp_arg, args.args()) };
 
     current_sctx.set(save_current_sctx);
     unsafe { xfree(pat as *mut c_void) };

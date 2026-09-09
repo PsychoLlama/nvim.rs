@@ -22,14 +22,13 @@
 #![allow(non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int};
-use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
-    ArgFrame, NumBuf, UNSET_ARG, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
+    CallFrame, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
 };
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
@@ -239,26 +238,25 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     // borrowed for the call and freed again on the way out.  The frame
     // borrows the caller's values, so nothing in it is released.
     let borrowed = args.len() < 2;
-    let mut frame = [UNSET_ARG; 2];
-    // SAFETY: the caller's value, borrowed for the length of the call.
-    frame[0] = ManuallyDrop::new(unsafe { args[0].bit_copy() });
-    frame[1] = match args.get(1) {
-        // SAFETY: as above.
-        Some(opts) => ManuallyDrop::new(unsafe { opts.bit_copy() }),
-        // SAFETY: `tv_dict_alloc` never answers NULL.
-        None => ManuallyDrop::new(TypVal::Dict(unsafe { tv_dict_alloc() })),
-    };
+    let mut frame = CallFrame::<2>::new();
+    frame.push_borrowed(&args[0]);
+    match args.get(1) {
+        Some(opts) => frame.push_borrowed(opts),
+        // SAFETY: `tv_dict_alloc` never answers NULL; the dictionary is
+        // freed by hand below.
+        None => frame.push_naming(TypVal::Dict(unsafe { tv_dict_alloc() })),
+    }
 
-    if frame[1].v_type() != VAR_DICT {
+    if frame.args()[1].v_type() != VAR_DICT {
         // Wrong argument types.
         semsg!("E475: Invalid argument: {}", "expected dictionary");
         return;
     }
 
-    let dict = frame[1].dict_or_null();
+    let dict = frame.args()[1].dict_or_null();
     // SAFETY: `dict` is the dictionary the frame's second slot names.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
-    f_jobstart(frame.borrowed(2), result, fptr);
+    f_jobstart(frame.args(), result, fptr);
     if borrowed {
         // SAFETY: the dictionary was borrowed for this call only.
         unsafe { tv_dict_free(dict) };

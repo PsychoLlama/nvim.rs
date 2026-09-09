@@ -76,7 +76,7 @@ pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// `result` must be a valid return-value slot and `entries` hold `count`
 /// argument list entries, or be null.
-unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut TypVal) {
+unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: &mut TypVal) {
     // SAFETY: caller contract; every entry has a name that outlives the copy
     // `tv_list_append_string` takes.
     unsafe { tv_list_alloc_ret(result, count as ptrdiff_t) };
@@ -84,7 +84,7 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut Ty
         return;
     }
     for idx in 0..count {
-        let v_list2 = unsafe { (*result).list_or_null() };
+        let v_list2 = (*result).list_or_null();
         let str = unsafe { alist_name(entries.offset(idx as isize)) };
         let len = -1 as ssize_t;
         unsafe { tv_list_append_string(v_list2, str, len) };

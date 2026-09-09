@@ -43,9 +43,9 @@ pub(super) fn global_qftf() -> *mut Callback {
 /// # Safety
 ///
 /// `tv` must be a live value.
-unsafe fn holds_references(tv: *const TypVal) -> bool {
+unsafe fn holds_references(tv: &TypVal) -> bool {
     // SAFETY: the caller's value.
-    unsafe { !matches!((*tv).v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT) }
+    !matches!((*tv).v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT)
 }
 
 /// Mark the `user_data` of every entry of every list on the stack. Answers
@@ -67,7 +67,7 @@ unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
                 // The value is inline in the entry, so it is always
                 // there; only its type says whether to walk into it.
                 let user_data = unsafe { &raw mut (*qfp).qf_user_data };
-                if unsafe { holds_references(user_data) } {
+                if unsafe { holds_references(&*user_data) } {
                     aborted = aborted
                         || unsafe {
                             set_ref_in_item(user_data, copy_id, ptr::null_mut(), ptr::null_mut())
@@ -93,7 +93,7 @@ unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
     let mut i = 0;
     while i < unsafe { (*qi).max_count() } && !aborted {
         let ctx = unsafe { (*qf_get_list(qi, i)).qf_ctx };
-        if !ctx.is_null() && unsafe { holds_references(ctx) } {
+        if !ctx.is_null() && unsafe { holds_references(&*ctx) } {
             aborted = unsafe { set_ref_in_item(ctx, copy_id, ptr::null_mut(), ptr::null_mut()) };
         }
         let cb = unsafe { &raw mut (*qf_get_list(qi, i)).qf_qftf_cb };
@@ -150,7 +150,7 @@ unsafe fn get_qf_loc_list(
     is_qf: bool,
     window: Option<Win>,
     what_arg: Option<&TypVal>,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) {
     // SAFETY: forwarded from the caller.
     let Some(what_arg) = what_arg else {
@@ -198,7 +198,7 @@ pub fn f_getqflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// # Safety
 ///
 /// `window` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: *mut TypVal) {
+unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
@@ -207,7 +207,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: *mut TypV
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
     // SAFETY: forwarded from the caller.
-    unsafe { (*result).write_number(-1) };
+    (*result).write_number(-1);
 
     let list_arg = &args[0];
     if list_arg.v_type() != VAR_LIST {
@@ -269,7 +269,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: *mut TypV
     let _recursing = Depth::of(&RECURSIVE);
     let l = list_arg.list_or_null();
     if unsafe { set_errorlist(window, l, c_int::from(action), title.cast_mut(), what) }.is_ok() {
-        unsafe { (*result).write_number(0) };
+        (*result).write_number(0);
     }
 }
 

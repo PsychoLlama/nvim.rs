@@ -76,10 +76,9 @@ unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
 ///
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
-pub unsafe fn nlua_typval_eval(str: String_0, arg: *const TypVal, ret_tv: *mut TypVal) {
+pub unsafe fn nlua_typval_eval(str: String_0, arg: &TypVal, ret_tv: *mut TypVal) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
-    let arg = arg.cast_mut();
     unsafe {
         let head = EVALHEADER.count_bytes();
         let lcmd_len = head + str.len() + 1;
@@ -90,7 +89,8 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: *const TypVal, ret_tv: *mut T
             .cast::<u8>()
             .copy_from_nonoverlapping(str.data().cast(), str.len());
         *lcmd.add(lcmd_len - 1) = b')' as c_char;
-        nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, 1, true, ret_tv);
+        let arg = ::core::slice::from_ref(arg);
+        nlua_typval_exec(lcmd, lcmd_len, c"luaeval()".as_ptr(), arg, true, ret_tv);
         free_chunk_buffer(scratch, lcmd);
     }
 }
@@ -102,9 +102,8 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: *const TypVal, ret_tv: *mut T
 pub unsafe fn nlua_typval_call(
     str: *const c_char,
     len: size_t,
-    args: *mut TypVal,
-    argcount: c_int,
-    ret_tv: *mut TypVal,
+    args: &[TypVal],
+    ret_tv: &mut TypVal,
 ) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
@@ -121,15 +120,7 @@ pub unsafe fn nlua_typval_call(
         (lcmd.add(head + len))
             .cast::<u8>()
             .copy_from_nonoverlapping(CALLSUFFIX.as_ptr().cast(), tail);
-        nlua_typval_exec(
-            lcmd,
-            lcmd_len,
-            c"v:lua".as_ptr(),
-            args,
-            argcount,
-            false,
-            ret_tv,
-        );
+        nlua_typval_exec(lcmd, lcmd_len, c"v:lua".as_ptr(), args, false, ret_tv);
         free_chunk_buffer(scratch, lcmd);
     }
 }
@@ -153,7 +144,7 @@ pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: *mut TypVal) {
     }
 }
 
-/// Load and run one chunk with `argcount` typvals as its arguments.
+/// Load and run one chunk with `args` as its arguments.
 ///
 /// `special` decides how a Vimscript value with no Lua image is pushed; a
 /// `VAR_UNKNOWN` argument is `nil`, which is how a missing `luaeval()`
@@ -166,8 +157,7 @@ pub(crate) unsafe fn nlua_typval_exec(
     lcmd: *const c_char,
     lcmd_len: size_t,
     name: *const c_char,
-    args: *mut TypVal,
-    argcount: c_int,
+    args: &[TypVal],
     special: bool,
     ret_tv: *mut TypVal,
 ) {
@@ -183,7 +173,8 @@ pub(crate) unsafe fn nlua_typval_exec(
             nlua_error(lstate, gettext(c"E5107: Lua: %.*s").as_ptr());
             return;
         }
-        push_typval_args(lstate, args, argcount, special);
+        push_typval_args(lstate, args, special);
+        let argcount = args.len() as c_int;
         if nlua_pcall(lstate, argcount, if ret_tv.is_null() { 0 } else { 1 }) != 0 {
             nlua_error(lstate, gettext(c"E5108: Lua: %.*s").as_ptr());
             return;
@@ -194,28 +185,22 @@ pub(crate) unsafe fn nlua_typval_exec(
     }
 }
 
-/// Push `argcount` typvals, with `VAR_UNKNOWN` standing for `nil`.
+/// Push the arguments, with `VAR_UNKNOWN` standing for `nil`.
 ///
 /// # Safety
-/// `args` must point at `argcount` live typvals.
-unsafe fn push_typval_args(
-    lstate: *mut lua_State,
-    args: *mut TypVal,
-    argcount: c_int,
-    special: bool,
-) {
+/// `lstate` must be a live Lua state.
+unsafe fn push_typval_args(lstate: *mut lua_State, args: &[TypVal], special: bool) {
     unsafe {
         let flags = if special {
             kNluaPushSpecial as c_int
         } else {
             0
         };
-        for i in 0..argcount {
-            let arg = args.offset(i as isize);
-            if (*arg).v_type() == VAR_UNKNOWN {
+        for arg in args {
+            if arg.v_type() == VAR_UNKNOWN {
                 lua_pushnil(lstate);
             } else {
-                nlua_push_typval(lstate, arg, flags);
+                nlua_push_typval(lstate, ptr::from_ref(arg).cast_mut(), flags);
             }
         }
     }
@@ -242,8 +227,7 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
             code.as_mut_ptr().cast::<c_char>(),
             len,
             name,
-            ptr::null_mut::<TypVal>(),
-            0,
+            &[],
             false,
             ptr::null_mut::<TypVal>(),
         );
@@ -253,19 +237,17 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
 /// Call a Lua function stored as a Vimscript Funcref.
 ///
 /// # Safety
-/// `lua_cb` must be a live reference, `argvars` `argcount` live typvals, and
-/// `rettv` writable.
+/// `lua_cb` must be a live reference.
 pub unsafe fn typval_exec_lua_callable(
     lua_cb: LuaRef,
-    argcount: c_int,
-    argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    argvars: &[TypVal],
+    rettv: &mut TypVal,
 ) -> c_int {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, lua_cb);
-        push_typval_args(lstate, argvars, argcount, false);
-        if nlua_pcall(lstate, argcount, 1) != 0 {
+        push_typval_args(lstate, argvars, false);
+        if nlua_pcall(lstate, argvars.len() as c_int, 1) != 0 {
             nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
             return FCERR_OTHER as c_int;
         }

@@ -205,7 +205,7 @@ unsafe fn get_list_line(
 ///
 /// # Safety
 /// `args` is a dispatcher argument array and `result` its return value.
-pub unsafe fn execute_common(args: &[TypVal], result: *mut TypVal, arg_off: c_int) {
+pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
     let cmd_idx = arg_off as usize;
     let silent_idx = cmd_idx + 1;
@@ -325,7 +325,7 @@ pub fn f_exists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         b'&' | b'+' => {
             // An option, and nothing may follow it.
-            (unsafe { eval_option(&raw mut p, ptr::null_mut(), true) }.is_ok()
+            (unsafe { eval_option(&raw mut p, None, true) }.is_ok()
                 && unsafe { *skipwhite(p) } as c_int == NUL) as c_int
         }
         b'*' => {

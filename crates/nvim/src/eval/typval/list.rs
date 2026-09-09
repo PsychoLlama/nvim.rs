@@ -326,7 +326,7 @@ pub unsafe fn tv_list_move_items(
 ///
 /// `ret_tv` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
-pub unsafe fn tv_list_alloc_ret(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
+pub unsafe fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut List {
     let l = tv_list_alloc(len);
     unsafe { tv_list_set_ret(ret_tv, l) };
     l

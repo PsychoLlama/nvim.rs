@@ -507,9 +507,8 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
                     unsafe { hash_remove(&raw mut (*d2).dv_hashtab, hi2) };
                     // Note upstream does not gate this on `watched`, unlike
                     // the copying branch below.
-                    let newtv = di_tv(di2);
-                    let nul = ::core::ptr::null_mut();
-                    unsafe { tv_dict_watcher_notify(d1, di2_key, newtv, nul) };
+                    // SAFETY: the item just moved into `d1`.
+                    unsafe { tv_dict_watcher_notify(d1, di2_key, Some(&*di_tv(di2)), None) };
                 }
             } else {
                 let new_di = unsafe { tv_dict_item_copy(di2) };
@@ -517,9 +516,8 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
                     unsafe { tv_dict_item_free(new_di) };
                 } else if watched {
                     let key = tv_dict_item_key(new_di);
-                    let newtv = di_tv(new_di);
-                    let nul = ::core::ptr::null_mut();
-                    unsafe { tv_dict_watcher_notify(d1, key, newtv, nul) };
+                    // SAFETY: the item just added to `d1`.
+                    unsafe { tv_dict_watcher_notify(d1, key, Some(&*di_tv(new_di)), None) };
                 }
             }
         } else if action == b'e' {
@@ -549,8 +547,9 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
 
             if watched {
                 let key = tv_dict_item_key(di1);
-                let newtv = di_tv(di1);
-                unsafe { tv_dict_watcher_notify(d1, key, newtv, &raw mut oldtv) };
+                // SAFETY: the item just overwritten in `d1`.
+                let new = Some(unsafe { &*di_tv(di1) });
+                unsafe { tv_dict_watcher_notify(d1, key, new, Some(&oldtv)) };
                 unsafe { tv_clear(&raw mut oldtv) };
             }
         }
@@ -691,7 +690,7 @@ pub unsafe fn tv_dict_alloc_lock(lock: VarLock) -> *mut Dict {
 /// # Safety
 /// `ret_tv` must point at a writable `TypVal` that holds no value yet —
 /// whatever was there is overwritten, not cleared.
-pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut TypVal) {
+pub unsafe fn tv_dict_alloc_ret(ret_tv: &mut TypVal) {
     let d = unsafe { tv_dict_alloc_lock(VarLock::Unlocked) };
     unsafe { tv_dict_set_ret(ret_tv, d) };
 }
@@ -705,7 +704,7 @@ pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut TypVal) {
 /// `arg_errmsg` must be a NUL-terminated string.
 pub unsafe fn tv_dict_remove(
     args: &[TypVal],
-    result: *mut TypVal,
+    result: &mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let mut numbuf = NumBuf::new();
@@ -742,9 +741,9 @@ pub unsafe fn tv_dict_remove(
 
     // Move the value out rather than copying it: `result` takes the
     // reference the item held.
-    unsafe { *result = item.di_tv.take() };
+    *result = item.di_tv.take();
     unsafe { tv_dict_item_remove(d, di) };
     if unsafe { tv_dict_is_watched(d) } {
-        unsafe { tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), result) };
+        unsafe { tv_dict_watcher_notify(d, key, None, Some(result)) };
     }
 }

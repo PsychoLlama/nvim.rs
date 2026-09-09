@@ -208,7 +208,7 @@ pub unsafe fn set_var_const(
 
     if watched {
         let key = tv_dict_item_key(di);
-        unsafe { tv_dict_watcher_notify(dict, key, cur, &raw mut oldtv) };
+        unsafe { tv_dict_watcher_notify(dict, key, Some(&*cur), Some(&oldtv)) };
         clear_local(&mut oldtv);
     }
 

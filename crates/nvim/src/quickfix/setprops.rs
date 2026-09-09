@@ -87,7 +87,7 @@ unsafe fn qf_add_entry_from_dict(
         text = unsafe { xcalloc(1, 1) }.cast();
     }
     let mut user_data = TV_INITIAL_VALUE;
-    let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &raw mut user_data) };
+    let _ = unsafe { tv_dict_get_tv(d, c"user_data".as_ptr(), &mut user_data) };
 
     // An entry that names neither a file nor a position cannot be
     // jumped to.

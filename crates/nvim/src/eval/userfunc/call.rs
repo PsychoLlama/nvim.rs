@@ -24,7 +24,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::{ArgFrame, UNSET_ARG, di_tv, li_tv};
+use crate::eval::typval::{di_tv, li_tv};
 use crate::types::{Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
@@ -45,17 +45,16 @@ fn verbose_report(body: impl FnOnce()) {
 /// Call the user function `func`.
 ///
 /// # Safety
-/// `func` is a live function, `args` holds `argcount` values, and `result`
-/// is an uninitialised return value.
+/// `func` is a live function and `result` is an uninitialised return value.
 pub unsafe fn call_user_func(
     func: *mut UserFunc,
-    argcount: c_int,
-    args: *mut TypVal,
-    result: *mut TypVal,
+    args: &[TypVal],
+    result: &mut TypVal,
     firstline: LineNr,
     lastline: LineNr,
     selfdict: *mut Dict,
 ) {
+    let argcount = args.len() as c_int;
     // SAFETY: the caller's promise -- `func` is a live function.
     let mut f = unsafe { Uf::new(func) };
     // SAFETY: the caller's promise -- `result` is the return value being built.
@@ -196,7 +195,7 @@ pub unsafe fn call_user_func(
             if isdefault {
                 def_rettv.write_number(-1);
                 let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
-                if unsafe { eval1(&raw mut default_expr, &raw mut def_rettv, &raw mut evalarg) }
+                if unsafe { eval1(&raw mut default_expr, &mut def_rettv, &raw mut evalarg) }
                     .is_err()
                 {
                     default_arg_err = true;
@@ -232,8 +231,9 @@ pub unsafe fn call_user_func(
         let value = if isdefault {
             def_rettv.take()
         } else {
-            // SAFETY: `i` is inside the caller's argument array.
-            unsafe { (*args.offset(i as isize)).bit_copy() }
+            // SAFETY: the caller keeps the value for the length of the
+            // call, and the `a:` item releases nothing.
+            unsafe { args[i as usize].bit_copy() }
         };
         unsafe { di_tv(v).write(value) };
         unsafe { (*v).di_lock = VarLock::Fixed };
@@ -257,7 +257,7 @@ pub unsafe fn call_user_func(
             let li =
                 unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
             // As `a:name` above: `a:000`'s item borrows the caller's value.
-            unsafe { li_tv(li).write((*args.offset(i as isize)).bit_copy()) };
+            unsafe { li_tv(li).write(args[i as usize].bit_copy()) };
             unsafe { (*li).li_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
         }
@@ -282,15 +282,15 @@ pub unsafe fn call_user_func(
                     if i > 0 {
                         msg_str(c", ");
                     }
-                    // SAFETY: `i` is inside the caller's argument array.
-                    let tv = unsafe { Tv::new(args.offset(i as isize)) };
+                    let tv = &args[i as usize];
                     if tv.v_type() == VAR_NUMBER {
                         msg_outnum(tv.number_or_zero() as c_int);
                     } else {
                         // Do not want errors such as E724 here.
+                        let tvp = ptr::from_ref(tv).cast_mut();
                         let tofree = {
                             let _no_emsg = Suppress::emsg();
-                            unsafe { encode_tv2string(tv.raw(), ptr::null_mut()) }
+                            unsafe { encode_tv2string(tvp, ptr::null_mut()) }
                         };
                         if !tofree.is_null() {
                             let mut buf: [c_char; MSG_BUF_LEN as usize] = [0; MSG_BUF_LEN as usize];
@@ -472,22 +472,21 @@ pub unsafe fn call_user_func(
 /// `func` is a live function and `funcexe` describes the call.
 pub(crate) unsafe fn call_user_func_check(
     func: *mut UserFunc,
-    argcount: c_int,
-    args: *mut TypVal,
-    result: *mut TypVal,
+    args: &[TypVal],
+    result: &mut TypVal,
     funcexe: *mut FuncExe,
     selfdict: *mut Dict,
 ) -> c_int {
     // SAFETY: the caller's promise -- `func` is a live function.
     let f = unsafe { Uf::new(func) };
     if f.uf_flags.has(FuncFlags::LUAREF) {
-        return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, args, result) };
+        return unsafe { typval_exec_lua_callable(f.uf_luaref, args, result) };
     }
 
     if f.uf_flags.has(FuncFlags::RANGE) && !unsafe { (*funcexe).fe_doesrange }.is_null() {
         unsafe { *(*funcexe).fe_doesrange = true };
     }
-    let error = unsafe { check_user_func_argcount(func, argcount) };
+    let error = unsafe { check_user_func_argcount(func, args.len() as c_int) };
     if error != FCERR_UNKNOWN {
         return error;
     }
@@ -502,7 +501,7 @@ pub(crate) unsafe fn call_user_func_check(
     } else {
         ptr::null_mut()
     };
-    unsafe { call_user_func(func, argcount, args, result, first, last, dict) };
+    unsafe { call_user_func(func, args, result, first, last, dict) };
     FCERR_NONE
 }
 
@@ -552,16 +551,14 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
 pub unsafe fn call_simple_luafunc(
     funcname: *const c_char,
     len: size_t,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `result` is the return value.
-    let mut rv = unsafe { Tv::new(result) };
+    let rv = &mut *result;
     // the default is number zero
     rv.write_number(0);
 
-    let mut argvars = [UNSET_ARG; 1];
-    argvars[0].write_empty(VAR_UNKNOWN);
-    unsafe { nlua_typval_call(funcname, len, argvars.args(), 0, result) };
+    unsafe { nlua_typval_call(funcname, len, &[], rv) };
     Ok(())
 }
 
@@ -574,7 +571,7 @@ pub unsafe fn call_simple_luafunc(
 pub unsafe fn call_simple_func(
     funcname: *const c_char,
     len: size_t,
-    result: *mut TypVal,
+    result: &mut TypVal,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `result` is the return value.
     let mut rv = unsafe { Tv::new(result) };
@@ -607,12 +604,12 @@ pub unsafe fn call_simple_func(
     } else if unsafe { (*fp).uf_flags }.has(FuncFlags::DELETED) {
         error = FCERR_DELETED;
     } else {
-        let mut argvars = [UNSET_ARG; 1];
-        argvars[0].write_empty(VAR_UNKNOWN);
         let mut funcexe = FUNCEXE_INIT;
         funcexe.fe_evaluate = true;
-        let (args, exe) = (argvars.args(), &raw mut funcexe);
-        error = unsafe { call_user_func_check(fp, 0, args, result, exe, ptr::null_mut()) };
+        let exe = &raw mut funcexe;
+        // SAFETY: `result` is the caller's return value.
+        let rv = &mut *result;
+        error = unsafe { call_user_func_check(fp, &[], rv, exe, ptr::null_mut()) };
         if error == FCERR_NONE {
             ret = Ok(Parsed::Done);
         }

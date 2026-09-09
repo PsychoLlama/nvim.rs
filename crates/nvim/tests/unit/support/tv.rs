@@ -686,12 +686,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
     // what it consumed.
     let mut arg: Vec<c_char> = expr.bytes().map(|b| b as c_char).chain([0]).collect();
     let ok = unsafe {
-        neovim::eval::eval0(
-            arg.as_mut_ptr(),
-            &raw mut tv,
-            ptr::null_mut(),
-            &raw mut evalarg,
-        )
+        neovim::eval::eval0(arg.as_mut_ptr(), &mut tv, ptr::null_mut(), &raw mut evalarg)
     };
     ok.is_ok().then_some(tv)
 }
