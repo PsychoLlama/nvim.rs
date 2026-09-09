@@ -8,8 +8,7 @@
 //! leave a list.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`tv_list_alloc`, `tv_list_free`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
+// Every entry point here dereferences the caller's list.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -103,8 +102,7 @@ pub(crate) unsafe fn tv_list_watch_fix(l: *mut List, item: *const ListItem) {
 /// Allocate an empty list.  The caller owns the reference count.
 ///
 /// `len` is upstream's hint for a future array-backed list; nothing reads it.
-#[unsafe(no_mangle)]
-pub extern "C" fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
+pub fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
     let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
 
     // Prepend the list to the list of lists for garbage collection.
@@ -215,8 +213,7 @@ pub unsafe fn tv_list_free_list(l: *mut List) {
 /// # Safety
 ///
 /// `l` must point at a live list, unaliased for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn tv_list_free(l: *mut List) {
+pub unsafe fn tv_list_free(l: *mut List) {
     if tv_in_free_unref_items.get() {
         return;
     }

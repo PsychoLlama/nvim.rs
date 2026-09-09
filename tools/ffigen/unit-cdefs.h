@@ -6379,7 +6379,6 @@ static const int map_result_retry = 2;
 
 extern Window *curwin;
 extern DispTick display_tick;
-extern List *gc_first_list;
 extern int starting;
 extern bool test_disable_char_avail;
 extern const uint8_t utf8len_tab[256];
@@ -6390,8 +6389,6 @@ void early_init(MainParams *);
 void event_init(void);
 ScreenCell *getcell(const VTermScreen *, int, int);
 size_t schar_get(char *, ScreenChar);
-List *tv_list_alloc(ptrdiff_t);
-void tv_list_free(List *);
 void ui_call_chdir(String);
 void ui_call_set_title(String);
 void unblock_autocmds(void);

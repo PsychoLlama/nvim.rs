@@ -25,12 +25,19 @@
 //! minus the channel: a `Channel` needs a stream, a multiqueue and a
 //! `Callback` to reach the same two lines, and the event loop that drives
 //! them is what the functional specs already cover.
+//!
+//! The last two cases are the other half of that: not what the list *says*
+//! but what happens to it afterwards. `channel_callback_call` references the
+//! list around the callback and drops that reference again, so a callback
+//! that stored nothing leaves nothing behind — which is only observable as
+//! the garbage collector's chain head coming back to where it was.
 
 #![cfg(not(miri))]
 
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
-use neovim::eval::typval::{tv_list_ref, tv_list_unref};
-use neovim::types::CallbackReader;
+use neovim::eval::gc::gc_first_list;
+use neovim::eval::typval::{tv_list_alloc, tv_list_free, tv_list_ref, tv_list_unref};
+use neovim::types::{CallbackReader, kListLenUnknown};
 
 use crate::support::tv::{self, Tv};
 use crate::support::{Sandbox, cstr};
@@ -189,4 +196,95 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
         got
     };
     assert_eq!(got, Tv::List(vec![line("one"), line("two")]));
+}
+
+/// `test/functional/core/job_spec.lua`'s "lists passed to callbacks are freed
+/// if not stored" (`#25891`), which used to `ffi.cdef` `gc_first_list`,
+/// `tv_list_alloc` and `tv_list_free` and read the chain head across a live
+/// `jobstart()`. Nothing about that assertion needed the child process: what
+/// it watched was one list allocated *before* the deliveries still being the
+/// most recently allocated one *after* them, which says every list built for
+/// a callback in between was freed again.
+///
+/// The chain is the only place a leaked list is visible. It is not
+/// reachable from any root once the callback returns, so `garbagecollect()`
+/// would collect it and no Vimscript, Lua or API call can see it — which is
+/// why the spec reached past the API in the first place, and why the
+/// replacement is here rather than there.
+#[test]
+fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
+    let _sandbox = Sandbox::globals();
+    let stdout = cstr("stdout");
+    let mut reader = reader();
+    let at = &raw mut reader;
+    // SAFETY: as `delivered`. The sentinel is this case's own: it is never
+    // referenced, so nothing but the final `tv_list_free` can free it.
+    unsafe {
+        let sentinel = tv_list_alloc(kListLenUnknown as isize);
+        assert_eq!(
+            gc_first_list.get(),
+            sentinel,
+            "a fresh list heads the chain"
+        );
+
+        callback_reader_start(at, stdout.as_ptr());
+        for chunk in [&b"one\ntwo\n"[..], b"three\n", b""] {
+            (*at).buffer.extend_from_slice(chunk);
+            // `channel_callback_call` around a callback that reads the list
+            // and keeps no reference to it.
+            let list = reader_lines(at);
+            tv_list_ref(list);
+            let _ = tv::read_list(list);
+            tv_list_unref(list);
+            (*at).buffer.clear();
+            assert_eq!(
+                gc_first_list.get(),
+                sentinel,
+                "the delivered list outlived its callback",
+            );
+        }
+        callback_reader_free(at);
+
+        tv_list_free(sentinel);
+        assert_ne!(
+            gc_first_list.get(),
+            sentinel,
+            "freeing a list leaves it linked",
+        );
+    }
+}
+
+/// The teeth of the case above: a callback that *does* store the list keeps
+/// it alive, and the chain head says so. Without this, a `reader_lines` that
+/// forgot to link its list onto the chain at all would pass the first case.
+#[test]
+fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
+    let _sandbox = Sandbox::globals();
+    let stdout = cstr("stdout");
+    let mut reader = reader();
+    let at = &raw mut reader;
+    // SAFETY: as above. The stored reference is released before the list is
+    // freed, so this case owns everything it allocates.
+    unsafe {
+        let sentinel = tv_list_alloc(kListLenUnknown as isize);
+        assert_eq!(gc_first_list.get(), sentinel);
+
+        callback_reader_start(at, stdout.as_ptr());
+        (*at).buffer.extend_from_slice(b"one\n");
+        let list = reader_lines(at);
+        tv_list_ref(list);
+        // The callback stores it -- `let g:saved = a:data`, one more
+        // reference than `channel_callback_call` is about to drop.
+        tv_list_ref(list);
+        tv_list_unref(list);
+        (*at).buffer.clear();
+        callback_reader_free(at);
+
+        assert_eq!(gc_first_list.get(), list, "a stored list was freed anyway");
+        assert_eq!(tv::read_list(list), Tv::List(vec![line("one"), opened()]));
+
+        tv_list_unref(list);
+        assert_eq!(gc_first_list.get(), sentinel);
+        tv_list_free(sentinel);
+    }
 }

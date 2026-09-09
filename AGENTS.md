@@ -20,7 +20,7 @@
 - The cast deny is the per-module opt-in to clippy's cast family; a module that has finished its casts writes `#![deny(clippy::cast_lossless, clippy::cast_possible_truncation, clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::ptr_as_ptr)]` and the count of files without it may only fall. Adding it to a file that is not ready makes `just lint` fail outright, which is the point.
 - `internal_exports` is the abi-ledger's own number: exports nobody outside the
   crate resolves. It is 0, and [docs/abi-ledger.md](docs/abi-ledger.md) says why
-  each of the 49 remaining `test`-class rows is still there.
+  each of the 46 remaining `test`-class rows is still there.
 - `unsafe_lines_outside_perimeter` is the migration's debt number: unchecked lines in files off the `PERIMETER` list (the FFI/OS/raw-memory modules where unsafe legitimately bottoms out). See [docs/perimeter.md](docs/perimeter.md) for what qualifies and how the list prunes itself.
 - Narrowing an `unsafe` region is progress even when it adds regions; splitting a transpiled body into functions with tight regions lowers the count. Blank and comment-only lines inside a region are free, so SAFETY notes cost nothing.
 - Lines inside a `#[cfg(test)] mod … { … }` are exempt from the 1,000-line file cap, so tests can sit next to the code they cover. Every other metric still counts them — unchecked code in a test is still unchecked code.

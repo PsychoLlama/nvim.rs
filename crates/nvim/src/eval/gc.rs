@@ -13,9 +13,7 @@
     clippy::ptr_as_ptr
 )]
 #![deny(unsafe_op_in_unsafe_fn)]
-// The exports here are metrics/abi-ledger.jsonl rows (`gc_first_list`), and
-// `#[unsafe(no_mangle)]` is itself an unsafe attribute.
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
@@ -29,8 +27,10 @@ pub(crate) static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(fa
 /// Most recently allocated dict.
 pub static gc_first_dict: GlobalCell<*mut Dict> = GlobalCell::new(::core::ptr::null_mut::<Dict>());
 
-/// Most recently allocated list. Exported because
-/// `test/functional/core/job_spec.lua` reads it through the LuaJIT FFI to
-/// prove a list handed to a job callback is freed again.
-#[unsafe(no_mangle)]
+/// Most recently allocated list.
+///
+/// `pub` rather than `pub(crate)` because the chain's head *is* the
+/// assertion in `crates/nvim/tests/unit/channel_reader.rs`: a list handed to
+/// a job callback and not stored is freed again, which is only visible as
+/// the head coming back to where it was.
 pub static gc_first_list: GlobalCell<*mut List> = GlobalCell::new(::core::ptr::null_mut::<List>());
