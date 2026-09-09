@@ -81,13 +81,11 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut TypVal) {
     // invalidate it (see [`Live`]'s module docs). A `Live<TypVal>` borrows
     // only the value.
     let mut tv = vimvar_val(idx);
+    // A take, not a write: the value moves to `save_tv` and the tag stays
+    // behind, which is what the test below reads and what
+    // [`restore_vimvar`] puts back.  Nothing is freed from under the copy.
     // SAFETY: the caller's obligation -- `save_tv` is writable.
-    unsafe { *save_tv = *tv };
-    // Not `write_string`: the value moved to `save_tv` and what is left
-    // behind keeps its tag, which the test below reads and
-    // [`restore_vimvar`] puts back. Only the payload is forgotten, so the
-    // old string is not freed from under the copy.
-    tv.vval.v_string = ptr::null_mut();
+    unsafe { *save_tv = tv.take_value() };
     if tv.v_type == VAR_UNKNOWN {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
@@ -523,9 +521,9 @@ pub unsafe fn before_set_vvar(
                 stored.write_string(unsafe { xstrdup(val) });
             }
         } else {
-            // Take the string over, rather than copy and free.
-            stored.write_string(tv.string_or_null());
-            tv.write_string(ptr::null_mut());
+            // Take the string over, rather than copy and free: the value
+            // leaves `tv`, so the item now owns the only copy.
+            stored.write_string(tv.take_value().string_or_null());
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.

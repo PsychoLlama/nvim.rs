@@ -111,10 +111,17 @@ pub unsafe fn tv_copy(from: *const TypVal, to: *mut TypVal) {
     let src = unsafe { Tv::new(from.cast_mut()) };
     match src.v_type {
         VAR_STRING | VAR_FUNC => {
-            if !src.string_or_func_name().is_null() {
-                unsafe { (*to).vval.v_string = xstrdup((*from).string_or_func_name()) };
+            let text = src.string_or_func_name();
+            if !text.is_null() {
+                // SAFETY: the tag says the string arm holds a live
+                // NUL-terminated string.
+                let copy = unsafe { xstrdup(text) };
                 if src.v_type == VAR_FUNC {
-                    unsafe { func_ref((*to).string_or_func_name()) };
+                    dst.write_func_name(copy);
+                    // SAFETY: the name just copied.
+                    unsafe { func_ref(copy) };
+                } else {
+                    dst.write_string(copy);
                 }
             }
         }

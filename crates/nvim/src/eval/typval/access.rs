@@ -324,6 +324,31 @@ union_writers! {
     VAR_BLOB,    v_blob,    *mut Blob,                write_blob,      "a blob";
 }
 
+/// The payload every tag reads as owning nothing: a null pointer, a zero, a
+/// false.  A slot left holding this still says what type it is, and clearing
+/// it is a no-op whichever tag that is.
+const EMPTY_PAYLOAD: typval_vval_union = typval_vval_union { v_number: 0 };
+
+impl TypVal {
+    /// Move this slot's value out, leaving the tag and an empty payload.
+    ///
+    /// The slot keeps saying what type it is — which is the whole point:
+    /// `prepare_vimvar` blanks a `v:` variable and the tag it leaves behind
+    /// is what tells `restore_vimvar` there was one, and what keeps a
+    /// still-untyped `v:val` out of the `v:` dictionary.  What the slot no
+    /// longer holds is anything to free: the caller owns that now.
+    ///
+    /// `v_lock` travels with the value, because the one caller saves and
+    /// restores the whole slot.  When the union becomes an enum this is a
+    /// `mem::replace` that keeps the discriminant.
+    #[inline(always)]
+    pub(crate) fn take_value(&mut self) -> TypVal {
+        let taken = *self;
+        self.vval = EMPTY_PAYLOAD;
+        taken
+    }
+}
+
 /// True when an intrusive queue head has no entries.
 ///
 /// # Safety
