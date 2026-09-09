@@ -24,8 +24,37 @@ use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::types::{List, TypVal, VAR_LIST, VAR_STRING};
+use crate::types::{Dict, List, TypVal, VAR_STRING};
 use ::libc::abort;
+
+/// Which kind of container is open, and the container itself.
+///
+/// A **borrowed** handle, not a value: the container's own typval sits on
+/// [`Decoder::stack`] at [`Container::stack_index`] and is what holds the
+/// reference.  Nothing reached through here releases anything.
+#[derive(Copy, Clone)]
+pub(crate) enum OpenContainer {
+    /// A `[`, and the list it allocated.
+    List(*mut List),
+    /// A `{`, and the dictionary it allocated -- for a special map, the
+    /// special dictionary, whose `_VAL` list is [`Container::special_val`].
+    Dict(*mut Dict),
+}
+
+impl OpenContainer {
+    /// Whether the open container is a dictionary.
+    pub(crate) fn is_dict(self) -> bool {
+        matches!(self, OpenContainer::Dict(_))
+    }
+
+    /// The dictionary, on a path that has already established it is one.
+    pub(crate) fn dict(self) -> *mut Dict {
+        match self {
+            OpenContainer::Dict(d) => d,
+            OpenContainer::List(_) => unreachable!("the open container is a dictionary here"),
+        }
+    }
+}
 
 /// One container the decoder is currently inside.
 #[derive(Copy, Clone)]
@@ -38,14 +67,15 @@ pub(crate) struct Container {
     /// Offset of the byte that opened it: what the restart rewinds to, and
     /// what an error inside it is reported against.
     pub(crate) at: usize,
-    /// The container's own value: `VAR_LIST` for `[`, `VAR_DICT` for `{`
-    /// — a special map's is the special dictionary, with the `_VAL` list in
-    /// [`Self::special_val`].
-    pub(crate) container: TypVal,
+    /// A handle on the container itself; see [`OpenContainer`].
+    pub(crate) container: OpenContainer,
 }
 
 /// One decoded value not yet stored in any container.
-#[derive(Copy, Clone)]
+///
+/// The stack **owns** what it holds: a value leaves it by being stored in
+/// its container, by being cleared, or -- for the document's one value --
+/// by being written to the decoder's result.
 pub(crate) struct Value {
     /// The value is a special dictionary wrapping a string, so it can be a
     /// dictionary *value* but never a key.
@@ -146,19 +176,18 @@ impl<'a> Decoder<'a> {
         // Upstream reads `vval.v_list` for both cases, the two members
         // having the same size and offset; the tag has to pick the reader
         // here, or a Dict container would compare two NULLs and match.
-        let is_the_container = if last.container.v_type == VAR_LIST {
-            obj.val.as_list() == last.container.as_list()
-        } else {
-            obj.val.as_dict() == last.container.as_dict()
+        let is_the_container = match last.container {
+            OpenContainer::List(l) => obj.val.as_list() == Some(l),
+            OpenContainer::Dict(d) => obj.val.as_dict() == Some(d),
         };
-        if obj.val.v_type == last.container.v_type && is_the_container {
+        if is_the_container {
             self.containers.pop();
             val_location = last.at;
             last = self.innermost();
         }
 
-        if last.container.v_type == VAR_LIST {
-            if unsafe { tv_list_len(last.container.list_or_null()) } != 0 && !obj.didcomma {
+        if let OpenContainer::List(list) = last.container {
+            if unsafe { tv_list_len(list) } != 0 && !obj.didcomma {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
                 semsg!("E474: Expected comma before list item: {arg0}");
@@ -166,7 +195,7 @@ impl<'a> Decoder<'a> {
                 return false;
             }
             debug_assert!(last.special_val.is_null());
-            unsafe { tv_list_append_owned_tv(last.container.list_or_null(), obj.val) };
+            unsafe { tv_list_append_owned_tv(list, obj.val) };
             return true;
         }
 
@@ -187,7 +216,7 @@ impl<'a> Decoder<'a> {
                 debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
                 let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
                 unsafe { tv_clear(&raw mut key.val) };
-                if unsafe { tv_dict_add(last.container.dict_or_null(), obj_di) }.is_err() {
+                if unsafe { tv_dict_add(last.container.dict(), obj_di) }.is_err() {
                     unsafe { abort() };
                 }
                 unsafe { (*obj_di).di_tv = obj.val };
@@ -210,7 +239,7 @@ impl<'a> Decoder<'a> {
         }
         if !obj.didcomma
             && last.special_val.is_null()
-            && unsafe { (*last.container.dict_or_null()).dv_hashtab.ht_used } != 0
+            && unsafe { (*last.container.dict()).dv_hashtab.ht_used } != 0
         {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
@@ -227,24 +256,21 @@ impl<'a> Decoder<'a> {
         if last.special_val.is_null()
             && (obj.is_special_string
                 || obj.val.string_or_null().is_null()
-                || !unsafe {
-                    tv_dict_find(last.container.dict_or_null(), obj.val.string_or_null(), -1)
-                }
-                .is_null())
+                || !unsafe { tv_dict_find(last.container.dict(), obj.val.string_or_null(), -1) }
+                    .is_null())
         {
             unsafe { tv_clear(&raw mut obj.val) };
             // Rewind to the `{` and reopen it as a special map.
             // Everything decoded inside it is dropped — the container's
             // own value included, which frees the half-filled dictionary.
             self.containers.pop();
-            let reopened = self.stack[last.stack_index];
+            let reopened = &self.stack[last.stack_index];
+            (self.didcomma, self.didcolon) = (reopened.didcomma, reopened.didcolon);
             while self.stack.len() > last.stack_index {
                 let mut dropped = self.stack.pop().expect("the loop bound is the depth");
                 unsafe { tv_clear(&raw mut dropped.val) };
             }
             *at = last.at;
-            self.didcomma = reopened.didcomma;
-            self.didcolon = reopened.didcolon;
             self.next_map_special = true;
             return true;
         }

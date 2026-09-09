@@ -33,7 +33,7 @@ mod scan;
 mod stack;
 
 use self::scan::{parse_json_number, parse_json_string};
-use self::stack::{Container, Decoder};
+use self::stack::{Container, Decoder, OpenContainer};
 
 /// The ASCII bytes JSON's grammar names.  `BS`/`FF` are only reachable
 /// through an escape; the other three are the whitespace between tokens.
@@ -108,10 +108,11 @@ pub unsafe fn json_decode_string(
     let is_empty = |c: &Container| {
         if !c.special_val.is_null() {
             unsafe { tv_list_len(c.special_val) == 0 }
-        } else if c.container.v_type == VAR_DICT {
-            unsafe { (*c.container.dict_or_null()).dv_hashtab.ht_used == 0 }
         } else {
-            unsafe { tv_list_len(c.container.list_or_null()) == 0 }
+            match c.container {
+                OpenContainer::Dict(d) => unsafe { (*d).dv_hashtab.ht_used == 0 },
+                OpenContainer::List(l) => unsafe { tv_list_len(l) == 0 },
+            }
         }
     };
     'done: {
@@ -126,10 +127,10 @@ pub unsafe fn json_decode_string(
                             dec.emsg_rest(E474_NO_CONTAINER, p);
                             break 'fail;
                         };
-                        if bytes[p] == b'}' && last.container.v_type != VAR_DICT {
+                        if bytes[p] == b'}' && !last.container.is_dict() {
                             dec.emsg_rest(E474_CLOSE_LIST_CURLY, p);
                             break 'fail;
-                        } else if bytes[p] == b']' && last.container.v_type != VAR_LIST {
+                        } else if bytes[p] == b']' && last.container.is_dict() {
                             dec.emsg_rest(E474_CLOSE_DICT_SQUARE, p);
                             break 'fail;
                         } else if dec.didcomma {
@@ -169,7 +170,7 @@ pub unsafe fn json_decode_string(
                         } else if dec.didcolon {
                             dec.emsg_rest(E474_COMMA_AFTER_COLON, p);
                             break 'fail;
-                        } else if last.container.v_type == VAR_DICT
+                        } else if last.container.is_dict()
                             && last.stack_index != dec.stack.len() - 1
                         {
                             dec.emsg_rest(E474_COMMA_FOR_COLON, p);
@@ -187,7 +188,7 @@ pub unsafe fn json_decode_string(
                             dec.emsg_rest(E474_COLON_OUTSIDE, p);
                             break 'fail;
                         };
-                        if last.container.v_type != VAR_DICT {
+                        if !last.container.is_dict() {
                             dec.emsg_rest(E474_COLON_NOT_IN_DICT, p);
                             break 'fail;
                         } else if last.stack_index != dec.stack.len().wrapping_sub(2) {
@@ -327,11 +328,18 @@ impl Decoder<'_> {
     /// Push a container that has just opened, both onto the container stack
     /// and — as a value in its own right — onto the value stack.
     fn open(&mut self, container: TypVal, special_val: *mut List, at: usize) {
+        // The container stack keeps a handle; the value stack keeps the
+        // value, and is what owns the reference the handle names.
+        let handle = match container.v_type {
+            VAR_LIST => OpenContainer::List(container.list_or_null()),
+            _ => OpenContainer::Dict(container.dict_or_null()),
+        };
+        debug_assert!(container.v_type == VAR_LIST || container.v_type == VAR_DICT);
         self.containers.push(Container {
             stack_index: self.stack.len(),
             special_val,
             at,
-            container,
+            container: handle,
         });
         let value = self.value(container, false);
         self.stack.push(value);
