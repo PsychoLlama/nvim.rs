@@ -210,8 +210,8 @@ unsafe fn ex_defer_inner(
             if fdef.is_null() {
                 unsafe { emsg_funcname(e_unknown_function_str.as_ptr(), name) };
                 r = Err(Failed);
-            } else if unsafe { check_internal_func(fdef, argcount) } == -1 {
-                r = Err(Failed);
+            } else {
+                r = unsafe { check_internal_func(fdef, argcount) };
             }
         } else {
             let ufunc = unsafe { find_func(name) };

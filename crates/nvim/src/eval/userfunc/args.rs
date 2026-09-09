@@ -260,8 +260,10 @@ pub unsafe fn get_func_arity(
     let fdef = unsafe { find_internal_func(name) };
     if !fdef.is_null() {
         // SAFETY: `find_internal_func` answers a live table entry.
-        argcount = unsafe { (*fdef).max_argc } as c_int;
-        min_argcount = unsafe { (*fdef).min_argc } as c_int;
+        let arity = unsafe { (*fdef).arity };
+        // An open-ended builtin takes as many as the evaluator will pass.
+        argcount = arity.max().map_or(MAX_FUNC_ARGS, c_int::from);
+        min_argcount = c_int::from(arity.min());
         unsafe { *varargs = false };
     } else {
         let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];

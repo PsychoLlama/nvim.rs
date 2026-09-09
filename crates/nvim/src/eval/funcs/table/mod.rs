@@ -25,6 +25,8 @@
 
 mod lookup;
 mod table_1;
+mod table_2;
+mod table_3;
 
 pub(crate) use self::lookup::*;
 
@@ -143,19 +145,17 @@ use crate::testing::{
     f_assert_notmatch, f_assert_report, f_assert_true, f_test_garbagecollect_now,
     f_test_write_list_log,
 };
-use crate::types::{EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler, VimLFunc};
+use crate::types::{
+    Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler, VimLFunc,
+};
 use crate::undo::{f_undofile, f_undotree};
-
-/// `base_arg` for a function that cannot be used as a method.
-const BASE_NONE: u8 = 0;
 
 /// A row with every field at rest: nameless, argumentless, not a method, not
 /// fast, and calling nothing. It is also the table's terminator.
 const BLANK: EvalFuncDef = EvalFuncDef {
     name: ptr::null_mut(),
-    min_argc: 0,
-    max_argc: 0,
-    base_arg: BASE_NONE,
+    arity: Arity::Exact(0),
+    base_arg: BaseArg::Never,
     fast: false,
     func: None,
     data: EvalFuncData::None,
@@ -164,15 +164,13 @@ const BLANK: EvalFuncDef = EvalFuncDef {
 /// A builtin with a function of its own.
 const fn builtin(
     name: &'static CStr,
-    min_argc: u8,
-    max_argc: u8,
-    base_arg: u8,
+    arity: Arity,
+    base_arg: BaseArg,
     func: VimLFunc,
 ) -> EvalFuncDef {
     EvalFuncDef {
         name: name.as_ptr().cast_mut(),
-        min_argc,
-        max_argc,
+        arity,
         base_arg,
         func,
         ..BLANK
@@ -180,16 +178,10 @@ const fn builtin(
 }
 
 /// The same, for one that may also run during a fast event.
-const fn fast(
-    name: &'static CStr,
-    min_argc: u8,
-    max_argc: u8,
-    base_arg: u8,
-    func: VimLFunc,
-) -> EvalFuncDef {
+const fn fast(name: &'static CStr, arity: Arity, base_arg: BaseArg, func: VimLFunc) -> EvalFuncDef {
     EvalFuncDef {
         fast: true,
-        ..builtin(name, min_argc, max_argc, base_arg, func)
+        ..builtin(name, arity, base_arg, func)
     }
 }
 
@@ -197,7 +189,12 @@ const fn fast(
 const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
     EvalFuncDef {
         data: EvalFuncData::Float(op),
-        ..builtin(name, 1, 1, 1, Some(float_op_wrapper))
+        ..builtin(
+            name,
+            Arity::Exact(1),
+            BaseArg::At(1),
+            Some(float_op_wrapper),
+        )
     }
 }
 
@@ -209,7 +206,7 @@ const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
                 .cast::<MsgpackRpcRequestHandler>()
                 .wrapping_add(row),
         ),
-        ..builtin(name, argc, argc, BASE_NONE, Some(api_wrapper))
+        ..builtin(name, Arity::Exact(argc), BaseArg::Never, Some(api_wrapper))
     }
 }
 
@@ -232,6 +229,8 @@ const fn table() -> [EvalFuncDef; 644] {
     let mut table = [BLANK; 644];
     let mut base = 0;
     base = fill(&mut table, base, table_1::PART);
+    base = fill(&mut table, base, table_2::PART);
+    base = fill(&mut table, base, table_3::PART);
     assert!(base == 643);
     table
 }

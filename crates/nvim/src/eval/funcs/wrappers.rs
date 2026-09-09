@@ -10,8 +10,8 @@
 use super::args::{Args, MAX_ARGS};
 use super::table::{BUILTINS, builtin_index};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, BASE_LAST, BASE_NONE, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW,
-    FCERR_TOOMANY, FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
+    ARENA_EMPTY, ARRAY_DICT_INIT, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY,
+    FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
 };
 use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
 use crate::api::private::helpers::api_free_object;
@@ -41,7 +41,7 @@ use crate::semsg_multiline;
 use crate::types::{
     Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, kBoolVarTrue, ptrdiff_t,
+    VAR_UNKNOWN, VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -180,31 +180,29 @@ pub unsafe fn find_internal_func(name: *const c_char) -> *const EvalFuncDef {
     }
 }
 
-/// Check a call against a row's arity.
-///
-/// Answers the row's base-argument index for a well-formed call, or -1
-/// after reporting E118/E119.
+/// Check a call against a row's arity, reporting E118/E119 if it does not
+/// fit.
 ///
 /// # Safety
 /// `fdef` is a live table row.
-pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> c_int {
+pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's obligation; the row's name is a `'static` string
     // in the generated table.
-    let too_many = if argcount < unsafe { (*fdef).min_argc } as c_int {
-        false
-    } else if argcount > unsafe { (*fdef).max_argc } as c_int {
-        true
-    } else {
-        return unsafe { (*fdef).base_arg } as c_int;
+    let wrong = match unsafe { (*fdef).arity }.accepts(argcount.cast_unsigned() as usize) {
+        Ok(()) => return Ok(()),
+        Err(wrong) => wrong,
     };
     // SAFETY: the builtin's own name, NUL-terminated.
     let name = unsafe { c_str((*fdef).name) };
-    if too_many {
-        semsg!("E118: Too many arguments for function: {name}");
-    } else {
-        semsg!("E119: Not enough arguments for function: {name}");
+    match wrong {
+        WrongArity::TooMany => {
+            semsg!("E118: Too many arguments for function: {name}");
+        }
+        WrongArity::TooFew => {
+            semsg!("E119: Not enough arguments for function: {name}");
+        }
     }
-    -1
+    Err(Failed)
 }
 
 /// Call the builtin `fname` spells.
@@ -225,11 +223,10 @@ pub unsafe fn call_internal_func(
     if fdef.is_null() {
         return FCERR_UNKNOWN as c_int;
     }
-    if argcount < unsafe { (*fdef).min_argc } as c_int {
-        return FCERR_TOOFEW as c_int;
-    }
-    if argcount > unsafe { (*fdef).max_argc } as c_int {
-        return FCERR_TOOMANY as c_int;
+    match unsafe { (*fdef).arity }.accepts(argcount.cast_unsigned() as usize) {
+        Ok(()) => {}
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
     }
     unsafe { (*args.add(argcount as usize)).write_empty(VAR_UNKNOWN) };
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
@@ -260,23 +257,16 @@ pub unsafe fn call_internal_method(
     if fdef.is_null() {
         return FCERR_UNKNOWN as c_int;
     }
-    if unsafe { (*fdef).base_arg } as c_int == BASE_NONE as c_int {
+    let Some(base_index) = unsafe { (*fdef).base_arg }.index() else {
         return FCERR_NOTMETHOD as c_int;
-    }
-    // The base counts as one of the arguments.
-    if argcount + 1 < unsafe { (*fdef).min_argc } as c_int {
-        return FCERR_TOOFEW as c_int;
-    }
-    if argcount + 1 > unsafe { (*fdef).max_argc } as c_int {
-        return FCERR_TOOMANY as c_int;
-    }
-
-    // `base_arg` is one-based, or `BASE_LAST` for "after everything".
-    let base_index = if unsafe { (*fdef).base_arg } as c_int == BASE_LAST as c_int {
-        argcount
-    } else {
-        unsafe { (*fdef).base_arg as c_int - 1 }
     };
+    // The base counts as one of the arguments.
+    match unsafe { (*fdef).arity }.accepts(argcount as usize + 1) {
+        Ok(()) => {}
+        Err(WrongArity::TooFew) => return FCERR_TOOFEW as c_int,
+        Err(WrongArity::TooMany) => return FCERR_TOOMANY as c_int,
+    }
+    let base_index = c_int::try_from(base_index).expect("a base index is one of at most 20");
     if argcount < base_index {
         return FCERR_TOOFEW as c_int;
     }
@@ -342,7 +332,7 @@ pub unsafe fn get_function_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
     let buf = unsafe { &raw mut (*expand).xp_buf };
     unsafe { ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len) };
     unsafe { (*buf)[key_len] = b'(' as c_char };
-    if BUILTINS[BUILTIN_IDX.get() as usize].max_argc == 0 {
+    if BUILTINS[BUILTIN_IDX.get() as usize].arity.max() == Some(0) {
         unsafe { (*buf)[key_len + 1] = b')' as c_char };
         unsafe { (*buf)[key_len + 2] = NUL as c_char };
     } else {

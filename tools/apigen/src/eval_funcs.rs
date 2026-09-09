@@ -27,9 +27,6 @@ use crate::lua::{Table, Value, read_table};
 use crate::options::Symbols;
 use crate::{ApiFn, Emitted, Param, Spec, chunked, handler_rows, rustfmt, table_order};
 
-/// `MAX_FUNC_ARGS` — the ceiling an open-ended `args = { n }` means.
-const MAX_FUNC_ARGS: u8 = 20;
-
 /// What a row's `data` union holds.
 #[derive(Clone)]
 enum Data {
@@ -46,8 +43,11 @@ enum Data {
 struct Builtin {
     name: String,
     min_argc: u8,
-    max_argc: u8,
-    /// The 1-based argument a method call supplies, or 0 for `BASE_NONE`.
+    /// The most arguments accepted, or `None` for as many as the evaluator
+    /// will pass.
+    max_argc: Option<u8>,
+    /// The 1-based argument a method call supplies, 0 for none at all and
+    /// 255 for "after everything".
     base_arg: u8,
     fast: bool,
     /// The Rust function the row calls.
@@ -56,13 +56,16 @@ struct Builtin {
 }
 
 /// Read `args = 1` / `args = { 1, 3 }` / `args = { 2 }` / absent.
-fn arity(entry: &Table, name: &str) -> Result<(u8, u8), String> {
+///
+/// A one-element table is open-ended: `{ 2 }` is "two or more", which the
+/// row spells as no maximum at all rather than as the evaluator's ceiling.
+fn arity(entry: &Table, name: &str) -> Result<(u8, Option<u8>), String> {
     let small = |n: i64| {
         u8::try_from(n).map_err(|_| format!("eval.lua: {name} has an out-of-range arity {n}"))
     };
     match entry.get("args") {
-        None => Ok((0, 0)),
-        Some(Value::Int(n)) => Ok((small(*n)?, small(*n)?)),
+        None => Ok((0, Some(0))),
+        Some(Value::Int(n)) => Ok((small(*n)?, Some(small(*n)?))),
         Some(Value::Table(t)) => {
             let min = match t.array.first() {
                 Some(Value::Int(n)) => small(*n)?,
@@ -75,8 +78,8 @@ fn arity(entry: &Table, name: &str) -> Result<(u8, u8), String> {
                 }
             };
             let max = match t.array.get(1) {
-                Some(Value::Int(n)) => small(*n)?,
-                None => MAX_FUNC_ARGS,
+                Some(Value::Int(n)) => Some(small(*n)?),
+                None => None,
                 Some(other) => {
                     return Err(format!(
                         "eval.lua: {name}'s max arity is {}",
@@ -159,7 +162,7 @@ fn api_builtins(api: &BTreeMap<String, ApiFn>, specs: &[Spec]) -> Result<Vec<Bui
         out.push(Builtin {
             name: spec.name.clone(),
             min_argc: argc,
-            max_argc: argc,
+            max_argc: Some(argc),
             base_arg: 0,
             fast: false,
             func: "api_wrapper".into(),
@@ -228,16 +231,12 @@ fn child_header(what: &str) -> String {
 /// The module's own support code: the blank row every entry builds on and the
 /// three shapes a row comes in.
 const SUPPORT: &str = r#"
-/// `base_arg` for a function that cannot be used as a method.
-const BASE_NONE: u8 = 0;
-
 /// A row with every field at rest: nameless, argumentless, not a method, not
 /// fast, and calling nothing. It is also the table's terminator.
 const BLANK: EvalFuncDef = EvalFuncDef {
     name: ptr::null_mut(),
-    min_argc: 0,
-    max_argc: 0,
-    base_arg: BASE_NONE,
+    arity: Arity::Exact(0),
+    base_arg: BaseArg::Never,
     fast: false,
     func: None,
     data: EvalFuncData::None,
@@ -246,15 +245,13 @@ const BLANK: EvalFuncDef = EvalFuncDef {
 /// A builtin with a function of its own.
 const fn builtin(
     name: &'static CStr,
-    min_argc: u8,
-    max_argc: u8,
-    base_arg: u8,
+    arity: Arity,
+    base_arg: BaseArg,
     func: VimLFunc,
 ) -> EvalFuncDef {
     EvalFuncDef {
         name: name.as_ptr().cast_mut(),
-        min_argc,
-        max_argc,
+        arity,
         base_arg,
         func,
         ..BLANK
@@ -264,14 +261,13 @@ const fn builtin(
 /// The same, for one that may also run during a fast event.
 const fn fast(
     name: &'static CStr,
-    min_argc: u8,
-    max_argc: u8,
-    base_arg: u8,
+    arity: Arity,
+    base_arg: BaseArg,
     func: VimLFunc,
 ) -> EvalFuncDef {
     EvalFuncDef {
         fast: true,
-        ..builtin(name, min_argc, max_argc, base_arg, func)
+        ..builtin(name, arity, base_arg, func)
     }
 }
 
@@ -279,7 +275,7 @@ const fn fast(
 const fn float(name: &'static CStr, op: FloatFunc) -> EvalFuncDef {
     EvalFuncDef {
         data: EvalFuncData::Float(op),
-        ..builtin(name, 1, 1, 1, Some(float_op_wrapper))
+        ..builtin(name, Arity::Exact(1), BaseArg::At(1), Some(float_op_wrapper))
     }
 }
 
@@ -291,7 +287,7 @@ const fn api(name: &'static CStr, argc: u8, row: usize) -> EvalFuncDef {
                 .cast::<MsgpackRpcRequestHandler>()
                 .wrapping_add(row),
         ),
-        ..builtin(name, argc, argc, BASE_NONE, Some(api_wrapper))
+        ..builtin(name, Arity::Exact(argc), BaseArg::Never, Some(api_wrapper))
     }
 }
 
@@ -314,14 +310,19 @@ fn emit_row(out: &mut String, b: &Builtin) {
         Data::Handler(row) => writeln!(out, "    api({name}, {}, {row}),", b.min_argc).unwrap(),
         Data::None => {
             let base = match b.base_arg {
-                0 => "BASE_NONE".to_string(),
-                n => n.to_string(),
+                0 => "BaseArg::Never".to_string(),
+                n => format!("BaseArg::At({n})"),
+            };
+            let arity = match b.max_argc {
+                None => format!("Arity::AtLeast({})", b.min_argc),
+                Some(max) if max == b.min_argc => format!("Arity::Exact({max})"),
+                Some(max) => format!("Arity::Between({}, {max})", b.min_argc),
             };
             let shape = if b.fast { "fast" } else { "builtin" };
             writeln!(
                 out,
-                "    {shape}({name}, {}, {}, {base}, Some({})),",
-                b.min_argc, b.max_argc, b.func
+                "    {shape}({name}, {arity}, {base}, Some({})),",
+                b.func
             )
             .unwrap();
         }
@@ -376,7 +377,8 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
     }
     out.push_str(
         "use crate::types::{\n\
-         \x20   EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler, VimLFunc,\n\
+         \x20   Arity, BaseArg, EvalFuncData, EvalFuncDef, FloatFunc, MsgpackRpcRequestHandler,\n\
+         \x20   VimLFunc,\n\
          };\n",
     );
     Ok(())
