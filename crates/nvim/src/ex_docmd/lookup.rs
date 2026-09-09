@@ -24,7 +24,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
 
-use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, VAR_STRING, size_t};
+use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t};
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 use crate::winlayer::Ea;
 
@@ -295,8 +295,7 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 pub unsafe fn f_fullcommand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut name = unsafe { numbuf.string(args) } as *mut c_char;
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).write_string(ptr::null_mut()) };
     while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };
     }
@@ -312,11 +311,11 @@ pub unsafe fn f_fullcommand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         return;
     }
     unsafe {
-        (*result).vval.v_string = xstrdup(if is_user_cmd(ea.cmdidx) {
+        (*result).write_string(xstrdup(if is_user_cmd(ea.cmdidx) {
             get_user_command_name(ea.useridx, ea.cmdidx)
         } else {
             cmdnames[ea.cmdidx.index()].cmd_name
-        })
+        }))
     };
 }
 

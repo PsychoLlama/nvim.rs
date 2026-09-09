@@ -164,7 +164,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
     // SAFETY: the evaluator's slots.
     let win = unsafe { get_optional_window(args, 1) };
 
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
     if unsafe { (*args).v_type } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
@@ -263,7 +263,7 @@ pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr:
         li = unsafe { (*li).li_next };
     }
     if !match_add_failed {
-        unsafe { (*result).vval.v_number = 0 };
+        unsafe { (*result).write_number(0) };
     }
 }
 
@@ -321,7 +321,7 @@ pub(crate) unsafe fn f_matchadd(args: *mut TypVal, result: *mut TypVal, _fptr: E
     let grp = unsafe { grpbuf.string_chk(args) };
     let pat = unsafe { patbuf.string_chk(args.offset(1)) };
 
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
     if grp.is_null() || pat.is_null() {
         return;
     }
@@ -334,11 +334,9 @@ pub(crate) unsafe fn f_matchadd(args: *mut TypVal, result: *mut TypVal, _fptr: E
         return;
     }
 
-    unsafe {
-        let no_pos = ::core::ptr::null_mut();
-        (*result).vval.v_number =
-            match_add(win, grp, pat, prio, id, no_pos, conceal_char) as VarNumber
-    };
+    let no_pos = ::core::ptr::null_mut();
+    let added = unsafe { match_add(win, grp, pat, prio, id, no_pos, conceal_char) };
+    unsafe { (*result).write_number(added as VarNumber) };
 }
 
 /// `matchaddpos(group, positions [, priority [, id [, options]]])`.
@@ -349,7 +347,7 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
     let mut buf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 
     let group = unsafe { buf.string_chk(args) };
     if group.is_null() {
@@ -374,10 +372,9 @@ pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr
         return;
     }
 
-    unsafe {
-        (*result).vval.v_number =
-            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as VarNumber
-    };
+    let no_pat = ::core::ptr::null();
+    let added = unsafe { match_add(win, group, no_pat, prio, id, l, conceal_char) };
+    unsafe { (*result).write_number(added as VarNumber) };
 }
 
 /// `matcharg(id)` — the `[group, pattern]` of `:match`, `:2match` or
@@ -411,10 +408,12 @@ pub(crate) unsafe fn f_matcharg(args: *mut TypVal, result: *mut TypVal, _fptr: E
 pub(crate) unsafe fn f_matchdelete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     let win = unsafe { get_optional_window(args, 1) };
-    unsafe {
-        (*result).vval.v_number = match win {
-            None => -1,
-            Some(win) => match_delete(win, tv_get_number(args) as c_int, true) as VarNumber,
-        };
-    }
+    let deleted = match win {
+        None => -1,
+        Some(win) => {
+            let id = unsafe { tv_get_number(args) } as c_int;
+            unsafe { match_delete(win, id, true) as VarNumber }
+        }
+    };
+    unsafe { (*result).write_number(deleted) };
 }

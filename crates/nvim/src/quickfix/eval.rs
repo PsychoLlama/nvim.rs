@@ -215,7 +215,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
     // SAFETY: forwarded from the caller.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 
     let list_arg = args;
     if unsafe { (*list_arg).v_type } != VAR_LIST {
@@ -279,7 +279,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
     let _recursing = Depth::of(&RECURSIVE);
     let l = unsafe { (*list_arg).vval.v_list };
     if unsafe { set_errorlist(window, l, c_int::from(action), title.cast_mut(), what) }.is_ok() {
-        unsafe { (*result).vval.v_number = 0 };
+        unsafe { (*result).write_number(0) };
     }
 }
 
@@ -290,7 +290,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
 /// Called through the Vimscript function table with its argument array.
 pub unsafe fn f_setloclist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
     if let Some(win) = unsafe { find_win_by_nr_or_id(args) } {
         unsafe { set_qf_ll_list(Some(win), args.add(1), result) };
     }

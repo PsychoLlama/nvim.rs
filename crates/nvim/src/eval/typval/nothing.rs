@@ -62,7 +62,7 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_nil(&mut self, tv: *mut TypVal) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
-        val.vval.v_special = kSpecialVarNull;
+        val.write_special(kSpecialVarNull);
         val.v_lock = VarLock::Unlocked;
     }
 
@@ -73,7 +73,7 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_bool(&mut self, tv: *mut TypVal, _num: bool) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
-        val.vval.v_bool = kBoolVarFalse;
+        val.write_boolean(kBoolVarFalse);
         val.v_lock = VarLock::Unlocked;
     }
 
@@ -84,7 +84,7 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_number(&mut self, tv: *mut TypVal, _num: int64_t) {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
-        val.vval.v_number = 0;
+        val.write_number(0);
         val.v_lock = VarLock::Unlocked;
     }
 
@@ -95,7 +95,7 @@ impl TypvalSink for NothingSink {
     unsafe fn conv_float(&mut self, tv: *mut TypVal, _flt: Float) -> Flow {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
-        val.vval.v_float = 0.0;
+        val.write_float(0.0);
         val.v_lock = VarLock::Unlocked;
         Flow::Go
     }
@@ -106,7 +106,7 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_string(&mut self, tv: *mut TypVal, buf: *mut c_char, _len: size_t) -> Flow {
         unsafe { xfree(buf.cast::<c_void>()) };
-        unsafe { (*tv).vval.v_string = ptr::null_mut() };
+        unsafe { (*tv).write_string(ptr::null_mut()) };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
         Flow::Go
     }
@@ -151,7 +151,7 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_blob(&mut self, tv: *mut TypVal, _blob: *const Blob, _len: c_int) {
         unsafe { tv_blob_unref((*tv).blob_or_null()) };
-        unsafe { (*tv).vval.v_blob = ptr::null_mut() };
+        unsafe { (*tv).write_blob(ptr::null_mut()) };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
 
@@ -179,7 +179,7 @@ impl TypvalSink for NothingSink {
             let mut part = unsafe { Pt::new(pt) };
             if !pt.is_null() && part.pt_refcount.is_shared() {
                 part.pt_refcount.release();
-                unsafe { (*tv).vval.v_partial = ptr::null_mut() };
+                unsafe { (*tv).write_partial(ptr::null_mut()) };
                 return Flow::Stop;
             }
         } else {
@@ -187,7 +187,7 @@ impl TypvalSink for NothingSink {
             if !ptr::eq(fun, tv_empty_string.get()) {
                 unsafe { xfree(fun.cast::<c_void>()) };
             }
-            unsafe { (*tv).vval.v_string = ptr::null_mut() };
+            unsafe { (*tv).write_func_name(ptr::null_mut()) };
         }
         Flow::Go
     }
@@ -218,7 +218,7 @@ impl TypvalSink for NothingSink {
         part.pt_argc = 0;
         debug_assert!(!part.pt_refcount.is_shared());
         unsafe { partial_unref(pt) };
-        unsafe { (*tv).vval.v_partial = ptr::null_mut() };
+        unsafe { (*tv).write_partial(ptr::null_mut()) };
         debug_assert!(val.v_lock == VarLock::Unlocked);
     }
 
@@ -247,7 +247,7 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_empty_list(&mut self, tv: *mut TypVal) {
         unsafe { tv_list_unref((*tv).list_or_null()) };
-        unsafe { (*tv).vval.v_list = ptr::null_mut() };
+        unsafe { (*tv).write_list(ptr::null_mut()) };
         unsafe { (*tv).v_lock = VarLock::Unlocked };
     }
 
@@ -290,7 +290,7 @@ impl TypvalSink for NothingSink {
         let mut ls = unsafe { Ls::new(list) };
         if ls.lv_refcount.is_shared() {
             ls.lv_refcount.release();
-            unsafe { (*tv).vval.v_list = ptr::null_mut() };
+            unsafe { (*tv).write_list(ptr::null_mut()) };
             // Always a `List`: the walk calls this straight after pushing
             // one for this very value.
             if let Frame::List { li, .. } = &mut frame.frame {
@@ -312,7 +312,7 @@ impl TypvalSink for NothingSink {
             return;
         }
         unsafe { tv_list_unref((*tv).list_or_null()) };
-        unsafe { (*tv).vval.v_list = ptr::null_mut() };
+        unsafe { (*tv).write_list(ptr::null_mut()) };
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].

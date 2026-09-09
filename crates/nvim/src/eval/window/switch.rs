@@ -16,7 +16,6 @@ use crate::cstr;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
 use crate::types::Failed;
-use crate::types::VAR_STRING;
 use crate::window::valid_tab;
 use crate::window::valid_win;
 
@@ -110,8 +109,7 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 /// dispatchers keep.
 pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the arguments and `result` are live typvals; the saved state is a
     // live local that `win_execute_after` is given whatever happens between.
     let id = number_as_int(arg_number(args, 0));

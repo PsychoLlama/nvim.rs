@@ -122,24 +122,21 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: *mut TypVal) {
     // SAFETY: as above, and a live callback whose payload it owns.
     match unsafe { &*cb } {
         Callback::Partial(partial) => {
-            value.v_type = VAR_PARTIAL;
-            value.vval.v_partial = *partial;
+            value.write_partial(*partial);
             // SAFETY: the partial the callback holds; the reference the
             // typval is about to hold is what this counts.
             unsafe { (**partial).pt_refcount.retain() };
         }
         Callback::Funcref(name) => {
-            value.v_type = VAR_FUNC;
             // SAFETY: a funcref names its own NUL-terminated bytes.
             unsafe {
-                value.vval.v_string = xstrdup(*name);
+                value.write_func_name(xstrdup(*name));
                 func_ref(*name);
             }
         }
         // A Lua callback and no callback at all have no Vimscript form.
         Callback::Lua(_) | Callback::None => {
-            value.v_type = VAR_SPECIAL;
-            value.vval.v_special = kSpecialVarNull;
+            value.write_special(kSpecialVarNull);
         }
     }
 }
@@ -313,15 +310,9 @@ pub unsafe fn tv_dict_watcher_notify(
     oldtv: *mut TypVal,
 ) {
     let mut argv = [TV_INITIAL_VALUE; 3];
-    argv[0].v_type = VAR_DICT;
-    argv[0].v_lock = VarLock::Unlocked;
-    argv[0].vval.v_dict = dict;
-    argv[1].v_type = VAR_STRING;
-    argv[1].v_lock = VarLock::Unlocked;
-    argv[1].vval.v_string = unsafe { xstrdup(key) };
-    argv[2].v_type = VAR_DICT;
-    argv[2].v_lock = VarLock::Unlocked;
-    argv[2].vval.v_dict = unsafe { tv_dict_alloc() };
+    argv[0] = TypVal::dict(dict);
+    argv[1] = TypVal::string(unsafe { xstrdup(key) });
+    argv[2] = TypVal::dict(unsafe { tv_dict_alloc() });
     unsafe { (*argv[2].dict_or_null()).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends

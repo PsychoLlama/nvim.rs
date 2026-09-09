@@ -16,7 +16,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::narrow::len_as_int;
-use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING};
+use crate::types::{VAR_LIST, VAR_STRING};
 use core::mem::offset_of;
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
@@ -64,8 +64,7 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 1;
+    result.write_number(1);
     // SAFETY: the arguments and `result` are live typvals; every list item
     // reached below belongs to the argument's own list, and `concat_str`
     // hands back an owned string the typval takes over.
@@ -95,15 +94,13 @@ pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: 
                 let itv = item.field_ptr(offset_of!(ListItem, li_tv));
                 let joined = unsafe { concat_str(text, numbuf.string(itv)) };
                 unsafe { tv_clear(itv) };
-                item.li_tv.v_type = VAR_STRING;
-                item.li_tv.vval.v_string = joined;
+                item.li_tv.write_string(joined);
                 did_concat = true;
             }
         } else if tv.v_type == VAR_STRING {
             let joined = unsafe { concat_str(text, numbuf2.string(lines)) };
             unsafe { tv_clear(lines) };
-            tv.v_type = VAR_STRING;
-            tv.vval.v_string = joined;
+            tv.write_string(joined);
         }
     }
     let tv = unsafe { Tv::new(lines) };

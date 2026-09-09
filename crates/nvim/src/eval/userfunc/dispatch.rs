@@ -253,8 +253,8 @@ pub unsafe fn call_func(
                 fname
             };
 
-            unsafe { (*result).v_type = VAR_NUMBER }; // the default is number zero
-            unsafe { (*result).vval.v_number = 0 };
+            // the default is number zero
+            unsafe { (*result).write_number(0) };
             error = FCERR_UNKNOWN;
 
             if unsafe { is_luafunc(partial) } {

@@ -376,8 +376,7 @@ pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: 
 
         match what {
             kDict2ListKeys => {
-                tv_item.v_type = VAR_STRING;
-                tv_item.vval.v_string = unsafe { xstrdup(di_key) };
+                tv_item.write_string(unsafe { xstrdup(di_key) });
             }
             kDict2ListValues => {
                 unsafe { tv_copy(&raw mut (*di).di_tv, &raw mut tv_item) };
@@ -385,8 +384,7 @@ pub(crate) unsafe fn tv_dict2list(args: *mut TypVal, result: *mut TypVal, what: 
             kDict2ListItems => {
                 // items()
                 let sub_l = tv_list_alloc(2);
-                tv_item.v_type = VAR_LIST;
-                tv_item.vval.v_list = sub_l;
+                tv_item.write_list(sub_l);
                 unsafe { tv_list_ref(sub_l) };
                 unsafe { tv_list_append_string(sub_l, di_key, -1) };
                 unsafe { tv_list_append_tv(sub_l, &raw mut (*di).di_tv) };
@@ -456,7 +454,7 @@ pub unsafe fn f_has_key(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     }
     let key = unsafe { numbuf.string(args.add(1)) };
     let found = !unsafe { tv_dict_find(d, key, -1) }.is_null();
-    unsafe { (*result).vval.v_number = VarNumber::from(found) };
+    unsafe { (*result).write_number(VarNumber::from(found)) };
 }
 
 impl NumBuf {

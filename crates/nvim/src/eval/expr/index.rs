@@ -287,8 +287,7 @@ pub(crate) unsafe fn eval_index_inner(
                 unsafe { xmemdupz(at, 1) as *mut c_char }
             };
             unsafe { tv_clear(result) };
-            rv.v_type = VAR_STRING;
-            rv.vval.v_string = v;
+            rv.write_string(v);
         }
         VAR_BLOB => {
             // SAFETY: the tag says the union holds a Blob.

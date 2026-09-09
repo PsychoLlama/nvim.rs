@@ -331,7 +331,7 @@ pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fpt
         ga_concat_lit(&mut ga, c"command did not fail: ");
         unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd) };
         report_assert_error(&ga);
-        unsafe { (*result).vval.v_number = 1 };
+        unsafe { (*result).write_number(1) };
     } else if unsafe { arg_given(args, 1) } {
         let mut check = unsafe { check_reported_error(args, &mut tofree) };
         if matches!(check, FailsCheck::Matched) {
@@ -342,7 +342,7 @@ pub(crate) unsafe fn f_assert_fails(args: *mut TypVal, result: *mut TypVal, _fpt
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
                 unsafe { report_fails_mismatch(args, cmd, &mismatch) };
-                unsafe { (*result).vval.v_number = 1 };
+                unsafe { (*result).write_number(1) };
             }
         }
     }

@@ -23,8 +23,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
-    Blob, Float, TypVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
-    typval_vval_union,
+    Blob, Float, TypVal, VAR_FLOAT, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, typval_vval_union,
 };
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
@@ -151,7 +150,7 @@ pub(crate) unsafe fn grow_string_tv(tv1: *mut TypVal, s2: *const c_char) -> bool
     let grown = unsafe { xrealloc(old.cast(), len1 + len2 + 1) } as *mut c_char;
     // The terminator moves with the bytes.
     unsafe { copy(s2, grown.add(len1), len2 + 1) };
-    one.vval.v_string = grown;
+    one.write_string(grown);
     true
 }
 
@@ -179,8 +178,7 @@ pub(crate) unsafe fn eval_concat_str(tv1: *mut TypVal, tv2: *mut TypVal) -> bool
     // `s1` may point into `buf1`, so build the result before clearing.
     let joined = unsafe { concat_str(s1, s2) };
     unsafe { tv_clear(tv1) };
-    one.v_type = VAR_STRING;
-    one.vval.v_string = joined;
+    one.write_string(joined);
     true
 }
 
@@ -236,15 +234,13 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut TypVal, tv2: *mut TypVal, op: 
     // still sees a Float on the left, but a List or Blob that was
     // rejected above has become VAR_UNKNOWN.
     if one.v_type == VAR_FLOAT || two.v_type == VAR_FLOAT {
-        one.v_type = VAR_FLOAT;
-        one.vval.v_float = if op == b'+' { f1 + f2 } else { f1 - f2 };
+        one.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
     } else {
-        one.v_type = VAR_NUMBER;
-        one.vval.v_number = if op == b'+' {
+        one.write_number(if op == b'+' {
             n1.wrapping_add(n2)
         } else {
             n1.wrapping_sub(n2)
-        };
+        });
     }
     true
 }
@@ -316,15 +312,13 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut TypVal, tv2: *mut TypVal, op:
                 return false;
             }
         };
-        one.v_type = VAR_FLOAT;
-        one.vval.v_float = result;
+        one.write_float(result);
     } else {
-        one.v_type = VAR_NUMBER;
-        one.vval.v_number = match op {
+        one.write_number(match op {
             b'*' => n1.wrapping_mul(n2),
             b'/' => num_divide(n1, n2),
             _ => num_modulus(n1, n2),
-        };
+        });
     }
     true
 }

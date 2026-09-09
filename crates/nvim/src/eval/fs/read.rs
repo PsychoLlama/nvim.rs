@@ -330,7 +330,7 @@ fn read_blob(
     }
     // An empty blob is returned on error.
     blob.free();
-    result.vval.v_blob = ptr::null_mut();
+    result.write_blob(ptr::null_mut());
     false
 }
 

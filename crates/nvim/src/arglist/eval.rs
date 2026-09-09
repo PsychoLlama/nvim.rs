@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::narrow::number_as_int;
-use crate::types::{VAR_NUMBER, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{VAR_NUMBER, VAR_UNKNOWN};
 use crate::winlayer::Win;
 
 /// The argument list a `{winid}`-style argument selects: the current
@@ -45,7 +45,7 @@ pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     let count = unsafe { selected_arglist(args) }.map_or(-1, alist_count);
-    unsafe { (*result).vval.v_number = VarNumber::from(count) };
+    unsafe { (*result).write_number(VarNumber::from(count)) };
 }
 
 /// "argidx()" function
@@ -55,7 +55,7 @@ pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 /// Standard eval-function contract.
 pub unsafe fn f_argidx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*result).vval.v_number = VarNumber::from(Win::current().w_arg_idx) };
+    unsafe { (*result).write_number(VarNumber::from(Win::current().w_arg_idx)) };
 }
 
 /// "arglistid()" function
@@ -77,7 +77,7 @@ pub unsafe fn f_arglistid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         None => -1 as VarNumber,
     };
     // SAFETY: the caller's return slot.
-    unsafe { (*result).vval.v_number = id };
+    unsafe { (*result).write_number(id) };
 }
 
 /// Return `count` argument entries as a List of file names. A null
@@ -121,11 +121,10 @@ pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     // every index is out of range.
     let (entries, count) =
         unsafe { selected_arglist(args.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).write_string(ptr::null_mut()) };
     let idx = number_as_int(unsafe { tv_get_number_chk(args.offset(0), ptr::null_mut()) });
     if !entries.is_null() && idx >= 0 && idx < count {
-        unsafe { (*result).vval.v_string = xstrdup(alist_name(entries.offset(idx as isize))) };
+        unsafe { (*result).write_string(xstrdup(alist_name(entries.offset(idx as isize)))) };
     } else if idx == -1 {
         unsafe { arglist_as_rettv(entries, count, result) };
     }

@@ -255,7 +255,7 @@ pub fn buf_inc_changedtick(buffer: Buf) {
 pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
-    b.changedtick_di.di_tv.vval.v_number = changedtick;
+    b.changedtick_di.di_tv.write_number(changedtick);
     // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
     if unsafe { tv_dict_is_watched(b.b_vars) } {
         b.b_locked += 1;

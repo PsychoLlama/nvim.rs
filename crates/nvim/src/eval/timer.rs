@@ -34,8 +34,8 @@ use crate::message::state::{called_emsg, did_emsg};
 use crate::registry::SlotTable;
 use crate::startup::main_loop;
 use crate::types::{
-    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VAR_NUMBER, VAR_UNKNOWN,
-    VarLock, VarNumber, int64_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
+    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VAR_UNKNOWN, VarLock,
+    VarNumber, int64_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -153,8 +153,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     }
 
     let mut argv = [UNSET_TV; 2];
-    argv[0].v_type = VAR_NUMBER;
-    argv[0].vval.v_number = timer.timer_id as VarNumber;
+    argv[0].write_number(timer.timer_id as VarNumber);
     let mut rettv = UNSET_TV;
     let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference

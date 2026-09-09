@@ -153,7 +153,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     // SAFETY: as above.
     if container.dict_or_null().is_null() {
         // SAFETY: `tv_dict_alloc` never answers NULL.
-        container.vval.v_dict = unsafe { tv_dict_alloc() };
+        container.write_dict(unsafe { tv_dict_alloc() });
         // SAFETY: the typval now holds the reference this takes.
         unsafe { (*container.dict_or_null()).dv_refcount.retain() };
     }

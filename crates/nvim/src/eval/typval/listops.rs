@@ -283,7 +283,7 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> R
     if l.is_null() && !(l1.is_null() && l2.is_null()) {
         return Err(Failed);
     }
-    val.vval.v_list = l;
+    val.write_list(l);
     Ok(())
 }
 

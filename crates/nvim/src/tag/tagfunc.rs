@@ -165,12 +165,9 @@ pub(crate) unsafe fn find_tagfunc_tags(
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }; 4];
-    args[0].v_type = VAR_STRING;
-    args[0].vval.v_string = pat;
-    args[1].v_type = VAR_STRING;
-    args[1].vval.v_string = flag_string.as_mut_ptr();
-    args[2].v_type = VAR_DICT;
-    args[2].vval.v_dict = info;
+    args[0].write_string(pat);
+    args[1].write_string(flag_string.as_mut_ptr());
+    args[2].write_dict(info);
 
     let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,

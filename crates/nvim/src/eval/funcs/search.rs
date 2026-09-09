@@ -317,7 +317,7 @@ pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let (args, result) = frame!(args, result);
     let mut flags = 0;
     // SAFETY: the frame is live.
-    result.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as VarNumber;
+    result.write_number(unsafe { search_cmn(args, None, &mut flags) } as VarNumber);
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
@@ -366,7 +366,7 @@ pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let mut thisblock = false;
     let mut error = false;
     // Default: FAIL.
-    result.vval.v_number = 1;
+    result.write_number(1);
 
     // SAFETY throughout: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
@@ -383,7 +383,7 @@ pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         let len = unsafe { cstr::bytes_at(name) }.len();
         let keep = SEARCH_KEEP as c_int;
         let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
-        result.vval.v_number = (found as c_int == FAIL) as VarNumber;
+        result.write_number((found as c_int == FAIL) as VarNumber);
     }
 }
 
@@ -482,7 +482,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 pub unsafe fn f_searchpair(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
-    result.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
+    result.write_number(unsafe { searchpair_cmn(args, None) } as VarNumber);
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.

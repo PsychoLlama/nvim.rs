@@ -111,7 +111,7 @@ pub unsafe fn f_str2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let uns = ptr::null_mut();
     let ovf = ptr::null_mut();
     unsafe { vim_str2nr(p, pre, len, what, out, uns, 0, false, ovf) };
-    unsafe { (*result).vval.v_number = if isneg { -n } else { n } };
+    unsafe { (*result).write_number(if isneg { -n } else { n }) };
 }
 
 /// "stridx()" function: the byte index of the first occurrence.
@@ -124,7 +124,7 @@ pub unsafe fn f_str2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// pointer fields point at live data for the call.
 pub unsafe fn f_stridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 
     let mut buf = [0 as c_char; NUMBUFLEN];
     let needle = unsafe { numbuf.string_chk(args.add(1)) };
@@ -149,7 +149,7 @@ pub unsafe fn f_stridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let pos = unsafe { strstr(haystack, needle) };
     if !pos.is_null() {
         // Reported against the whole string, not against the start.
-        unsafe { (*result).vval.v_number = pos.offset_from(haystack_start) as VarNumber };
+        unsafe { (*result).write_number(pos.offset_from(haystack_start) as VarNumber) };
     }
 }
 
@@ -164,7 +164,7 @@ pub unsafe fn f_stridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// pointer fields point at live data for the call.
 pub unsafe fn f_strridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 
     let mut buf = [0 as c_char; NUMBUFLEN];
     let needle = unsafe { numbuf.string_chk(args.add(1)) };
@@ -202,7 +202,7 @@ pub unsafe fn f_strridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     };
 
     if !lastmatch.is_null() {
-        unsafe { (*result).vval.v_number = lastmatch.offset_from(haystack) as VarNumber };
+        unsafe { (*result).write_number(lastmatch.offset_from(haystack) as VarNumber) };
     }
 }
 
@@ -215,8 +215,7 @@ pub unsafe fn f_strridx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
 /// pointer fields point at live data for the call.
 pub unsafe fn f_string(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = encode_tv2string(args, ptr::null_mut()) };
+    unsafe { (*result).write_string(encode_tv2string(args, ptr::null_mut())) };
 }
 
 /// "strlen()" function: the length in bytes.
@@ -229,7 +228,7 @@ pub unsafe fn f_string(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// pointer fields point at live data for the call.
 pub unsafe fn f_strlen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).vval.v_number = cstr::bytes_at(numbuf.string(args)).len() as VarNumber };
+    unsafe { (*result).write_number(cstr::bytes_at(numbuf.string(args)).len() as VarNumber) };
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -255,7 +254,7 @@ unsafe fn strchar_common(args: *mut TypVal, result: *mut TypVal, skipcc: bool) {
         unsafe { next_char(&raw mut s) };
         len += 1;
     }
-    unsafe { (*result).vval.v_number = len };
+    unsafe { (*result).write_number(len) };
 }
 
 /// "strcharlen()" function: characters, composing characters folded in.
@@ -308,9 +307,7 @@ pub unsafe fn f_strdisplaywidth(args: *mut TypVal, result: *mut TypVal, _fptr: E
     } else {
         0
     };
-    unsafe {
-        (*result).vval.v_number = (linetabsize_col(col, s as *mut c_char) - col) as VarNumber
-    };
+    unsafe { (*result).write_number((linetabsize_col(col, s as *mut c_char) - col) as VarNumber) };
 }
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
@@ -323,7 +320,7 @@ pub unsafe fn f_strdisplaywidth(args: *mut TypVal, result: *mut TypVal, _fptr: E
 /// pointer fields point at live data for the call.
 pub unsafe fn f_strwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).vval.v_number = mb_string2cells(numbuf.string(args)) as VarNumber };
+    unsafe { (*result).write_number(mb_string2cells(numbuf.string(args)) as VarNumber) };
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
@@ -336,8 +333,7 @@ pub unsafe fn f_strwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// pointer fields point at live data for the call.
 pub unsafe fn f_strtrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = transstr(numbuf.string(args), true) };
+    unsafe { (*result).write_string(transstr(numbuf.string(args), true)) };
 }
 
 /// "tolower()" function.
@@ -350,8 +346,7 @@ pub unsafe fn f_strtrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// pointer fields point at live data for the call.
 pub unsafe fn f_tolower(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = strcase_save(numbuf.string(args), false) };
+    unsafe { (*result).write_string(strcase_save(numbuf.string(args), false)) };
 }
 
 /// "toupper()" function.
@@ -364,8 +359,7 @@ pub unsafe fn f_tolower(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// pointer fields point at live data for the call.
 pub unsafe fn f_toupper(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = strcase_save(numbuf.string(args), true) };
+    unsafe { (*result).write_string(strcase_save(numbuf.string(args), true)) };
 }
 
 /// "tr()" function: character-wise translation.
@@ -390,8 +384,7 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
     let fromstr = unsafe { tv_get_string_buf_chk(args.add(1), buf.as_mut_ptr()) };
     let tostr = unsafe { tv_get_string_buf_chk(args.add(2), buf2.as_mut_ptr()) };
 
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).write_string(ptr::null_mut()) };
     if fromstr.is_null() || tostr.is_null() {
         return; // Type error; the message is already out.
     }
@@ -458,7 +451,7 @@ pub unsafe fn f_tr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
             out.extend_from_slice(replacement);
             at += ch.len();
         }
-        unsafe { (*result).vval.v_string = owned_cstr(out) };
+        unsafe { (*result).write_string(owned_cstr(out)) };
         return;
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -487,8 +480,7 @@ pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     let mut mask = ptr::null::<c_char>();
     let mut dir = 0;
 
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).write_string(ptr::null_mut()) };
     if head.is_null() || unsafe { tv_check_for_opt_string_arg(args, 1) }.is_err() {
         return;
     }
@@ -549,5 +541,5 @@ pub unsafe fn f_trim(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     }
 
     // SAFETY: `start..end` is a span of the string at `head`.
-    unsafe { (*result).vval.v_string = xstrnsave(head.add(start), end - start) };
+    unsafe { (*result).write_string(xstrnsave(head.add(start), end - start)) };
 }

@@ -47,9 +47,8 @@ use crate::os::env::expand_env;
 use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, ListItem, MAXPATHL,
-    NUL, OK, OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
-    kCdScopeWindow, size_t,
+    NUL, OK, OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    VarLock, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
 };
 
 /// The parsed `'findfunc'`.
@@ -80,12 +79,10 @@ pub(crate) fn get_findfunc_callback() -> *mut Callback {
 pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut List {
     let saved_sctx: ScriptCtx = current_sctx.get();
     let mut args: [TypVal; 3] = unsafe { core::mem::zeroed() };
-    args[0].v_type = VAR_STRING;
     args[0].v_lock = VarLock::Unlocked;
-    args[0].vval.v_string = pat;
-    args[1].v_type = VAR_BOOL;
+    args[0].write_string(pat);
     args[1].v_lock = VarLock::Unlocked;
-    args[1].vval.v_bool = cmdcomplete;
+    args[1].write_boolean(cmdcomplete);
     args[2].v_type = VAR_UNKNOWN;
     args[2].v_lock = VarLock::Unlocked;
 

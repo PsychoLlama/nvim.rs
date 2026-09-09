@@ -24,9 +24,7 @@ use crate::memline::ml_get_len;
 use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
-use crate::types::{
-    ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VAR_STRING, VarNumber, kListLenMayKnow,
-};
+use crate::types::{ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
 use core::ffi::{CStr, c_char, c_int};
@@ -108,12 +106,12 @@ pub unsafe fn f_screenattr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     // SAFETY: the frame is live; the attribute row is as long as the grid is
     // wide, which the bounds check has established.
     let cell = unsafe { Cell::at(args) };
-    result.vval.v_number = if cell.on_grid() {
+    result.write_number(if cell.on_grid() {
         let offset = cell.grid.cell_offset(cell.row, cell.col);
         cell.grid.attr_at(offset) as c_int
     } else {
         -1
-    } as VarNumber;
+    } as VarNumber);
 }
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
@@ -128,11 +126,11 @@ pub unsafe fn f_screenchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
     let cell = unsafe { Cell::at(args) };
-    result.vval.v_number = if cell.on_grid() {
+    result.write_number(if cell.on_grid() {
         unsafe { schar_get_first_codepoint(cell.schar()) }
     } else {
         -1
-    } as VarNumber;
+    } as VarNumber);
 }
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
@@ -173,7 +171,7 @@ pub unsafe fn f_screenchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// dispatchers keep.
 pub unsafe fn f_screencol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = (ui_current_col() + 1) as VarNumber };
+    unsafe { (*result).write_number((ui_current_col() + 1) as VarNumber) };
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
@@ -185,7 +183,7 @@ pub unsafe fn f_screencol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// dispatchers keep.
 pub unsafe fn f_screenrow(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = (ui_current_row() + 1) as VarNumber };
+    unsafe { (*result).write_number((ui_current_row() + 1) as VarNumber) };
 }
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
@@ -197,12 +195,11 @@ pub unsafe fn f_screenrow(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// dispatchers keep.
 pub unsafe fn f_screenstring(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `result` now owns the duplicated string.
     let cell = unsafe { Cell::at(args) };
     if cell.on_grid() {
-        result.vval.v_string = unsafe { xstrdup(cell.text().as_ptr()) };
+        result.write_string(unsafe { xstrdup(cell.text().as_ptr()) });
     }
 }
 
@@ -217,8 +214,7 @@ pub unsafe fn f_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
-    result.vval.v_number =
-        unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
+    result.write_number(unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as VarNumber);
 }
 
 /// `hlexists({name})` — whether the group is defined.
@@ -232,8 +228,9 @@ pub unsafe fn f_hlexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
-    result.vval.v_number =
-        unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
+    result.write_number(
+        unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as VarNumber,
+    );
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -331,12 +328,11 @@ pub unsafe fn f_syn_id_attr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         Some(Attr::Bit(bit)) => highlight_has_attr(id, bit, modec),
         None => ptr::null(),
     };
-    result.v_type = VAR_STRING;
-    result.vval.v_string = if p.is_null() {
+    result.write_string(if p.is_null() {
         ptr::null_mut()
     } else {
         unsafe { xstrdup(p) }
-    };
+    });
 }
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
@@ -366,7 +362,7 @@ pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     {
         id = unsafe { syn_get_id(Win::current(), lnum, col, trans, ptr::null_mut(), 0) };
     }
-    result.vval.v_number = id as VarNumber;
+    result.write_number(id as VarNumber);
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
@@ -380,11 +376,11 @@ pub unsafe fn f_syn_id_trans(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
     let id = arg_number(args.get(0)) as c_int;
-    result.vval.v_number = if id > 0 {
+    result.write_number(if id > 0 {
         unsafe { syn_get_final_id(id) }
     } else {
         0
-    } as VarNumber;
+    } as VarNumber);
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.

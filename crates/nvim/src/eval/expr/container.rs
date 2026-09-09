@@ -19,8 +19,8 @@ use crate::eval::typval::{
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{
-    Dict, EvalArg, Failed, List, NUL, TypVal, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenShouldKnow,
-    ptrdiff_t, size_t, typval_vval_union,
+    Dict, EvalArg, Failed, List, NUL, TypVal, VAR_UNKNOWN, VarLock, kListLenShouldKnow, ptrdiff_t,
+    size_t, typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -135,8 +135,7 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut TypVal) -> 
     while is_key_char(cur.at(len) as c_char) {
         len += 1;
     }
-    key.v_type = VAR_STRING;
-    key.vval.v_string = unsafe { xmemdupz(cur.get().cast(), len as size_t) } as *mut c_char;
+    key.write_string(unsafe { xmemdupz(cur.get().cast(), len as size_t) } as *mut c_char);
     cur.skip(len);
     Ok(())
 }

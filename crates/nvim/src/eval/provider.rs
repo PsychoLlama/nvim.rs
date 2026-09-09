@@ -482,8 +482,7 @@ pub unsafe fn prompt_invoke_callback() {
     } else {
         let mut rettv = UNSET_TV;
         let mut argv = [UNSET_TV; 2];
-        argv[0].v_type = VAR_STRING;
-        argv[0].vval.v_string = user_input;
+        argv[0].write_string(user_input);
         argv[1].v_type = VAR_UNKNOWN;
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.

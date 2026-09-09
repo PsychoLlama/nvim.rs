@@ -26,7 +26,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{__S_IFMT, Args, FAIL, Owned, frame, no_fileinfo, ret_string, str_arg, str_arg_chk};
+use super::{__S_IFMT, Args, FAIL, Owned, frame, no_fileinfo, str_arg, str_arg_chk};
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk, tv_get_string_buf};
@@ -276,7 +276,7 @@ fn number_of(tv: &TypVal) -> VarNumber {
 pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    ret_string(result, ptr::null_mut());
+    result.write_string(ptr::null_mut());
     if args.ty(0) != VAR_STRING {
         // Returning an empty string means it failed.  No error message, for
         // historic reasons.
@@ -288,7 +288,7 @@ pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     {
         let cwd = Owned::zeroed(MAXPATHL as usize);
         if os_cwd(&cwd) {
-            result.vval.v_string = Owned::dup(cwd.cstr()).into_raw();
+            result.write_string(Owned::dup(cwd.cstr()).into_raw());
         }
     }
 
@@ -314,7 +314,7 @@ pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         // Directory change failed: answer the empty string after all.
         // SAFETY: the answer taken above is nvim's heap, or NULL.
         unsafe { xfree(result.string_or_null().cast::<c_void>()) };
-        result.vval.v_string = ptr::null_mut();
+        result.write_string(ptr::null_mut());
     }
 }
 
@@ -326,7 +326,7 @@ pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 pub unsafe fn f_delete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1 as VarNumber;
+    result.write_number(-1 as VarNumber);
     if secure() {
         return;
     }
@@ -344,7 +344,7 @@ pub unsafe fn f_delete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     };
     let name = name.as_ptr();
     let done = |ret: c_int| -> VarNumber { if ret == 0 { 0 } else { -1 } };
-    result.vval.v_number = match flags.to_bytes() {
+    result.write_number(match flags.to_bytes() {
         // SAFETY: `name` is NUL-terminated; each callee only reads it.
         b"" => done(unsafe { os_remove(cstr::at(name)) }),
         b"d" => done(unsafe { os_rmdir(cstr::at(name)) }),
@@ -353,7 +353,7 @@ pub unsafe fn f_delete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
             err1(e_invexpr2, flags.as_ptr());
             return;
         }
-    };
+    });
 }
 
 /// `filecopy({from}, {to})`: copy a regular file or a symlink, answering
@@ -366,7 +366,7 @@ pub unsafe fn f_filecopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = 0;
+    result.write_number(0);
     if secure() || !is_string_arg(args, 0) || !is_string_arg(args, 1) {
         return;
     }
@@ -385,7 +385,7 @@ pub unsafe fn f_filecopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             str_arg(args, 1, &mut numbuf3).as_ptr(),
         );
         // SAFETY: both are NUL-terminated.
-        result.vval.v_number = (unsafe { vim_copyfile(from, to) } == OK) as VarNumber;
+        result.write_number((unsafe { vim_copyfile(from, to) } == OK) as VarNumber);
     }
 }
 
@@ -396,7 +396,7 @@ pub unsafe fn f_filecopy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 /// As [`f_chdir`], arity 0..2.
 pub unsafe fn f_getcwd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    ret_string(result, ptr::null_mut());
+    result.write_string(ptr::null_mut());
     let Some(s) = Scope::read(args, false) else {
         return;
     };
@@ -426,7 +426,7 @@ pub unsafe fn f_getcwd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     if !from.is_null() {
         set_cwd(&cwd, from);
     }
-    result.vval.v_string = Owned::dup(cwd.cstr()).into_raw();
+    result.write_string(Owned::dup(cwd.cstr()).into_raw());
 }
 
 /// `haslocaldir([{win} [, {tab}]])`: whether the scope the arguments name
@@ -436,13 +436,12 @@ pub unsafe fn f_getcwd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// As [`f_getcwd`].
 pub unsafe fn f_haslocaldir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0 as VarNumber;
+    result.write_number(0 as VarNumber);
     let Some(s) = Scope::read(args, true) else {
         return;
     };
 
-    result.vval.v_number = match s.scope {
+    result.write_number(match s.scope {
         kCdScopeWindow => {
             debug_assert!(!s.win.is_null(), "win");
             !win_localdir(unsafe { Win::new(s.win) }).is_null() as VarNumber
@@ -458,7 +457,7 @@ pub unsafe fn f_haslocaldir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         }
         // The global scope never has a local directory.
         _ => 0 as VarNumber,
-    };
+    });
 }
 
 /// `mkdir({name} [, {flags} [, {prot}]])`: create a directory, with `p`
@@ -475,7 +474,7 @@ pub unsafe fn f_mkdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     // Held in a local and written back at each exit, so that the answer is
     // only ever written into the union, never read back out of it.
     let mut status = FAIL as VarNumber;
-    result.vval.v_number = status;
+    result.write_number(status);
     if secure() {
         return;
     }
@@ -521,7 +520,7 @@ pub unsafe fn f_mkdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
             if ret != 0 {
                 err2(e_mkdir, failed_dir, strerror(ret));
                 drop(Owned(failed_dir));
-                result.vval.v_number = FAIL as VarNumber;
+                result.write_number(FAIL as VarNumber);
                 return;
             }
             status = OK as VarNumber;
@@ -531,7 +530,7 @@ pub unsafe fn f_mkdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         // SAFETY: `dir` is NUL-terminated; the callee reports its own error.
         status = VarNumber::from(unsafe { vim_mkdir_emsg(dir, prot) }.is_ok());
     }
-    result.vval.v_number = status;
+    result.write_number(status);
 
     // The "D" and "R" flags: deferred deletion of the created directory.
     if status == OK as VarNumber && created.is_null() && (defer || defer_recurse) {
@@ -578,7 +577,7 @@ pub unsafe fn f_rename(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     if secure() {
-        result.vval.v_number = -1 as VarNumber;
+        result.write_number(-1 as VarNumber);
         return;
     }
     let mut buf = NumBuf::new();
@@ -587,7 +586,7 @@ pub unsafe fn f_rename(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         path_arg(args, 1, &mut buf).as_ptr(),
     );
     // SAFETY: both are NUL-terminated.
-    result.vval.v_number = unsafe { vim_rename(from, to) } as VarNumber;
+    result.write_number(unsafe { vim_rename(from, to) } as VarNumber);
 }
 
 /// `tempname()`: a fresh name in the session's own temporary directory.
@@ -596,5 +595,5 @@ pub unsafe fn f_rename(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// As [`f_chdir`], arity 0.
 pub unsafe fn f_tempname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_, result) = frame!(args, result);
-    ret_string(result, vim_tempname());
+    result.write_string(vim_tempname());
 }

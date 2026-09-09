@@ -40,7 +40,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    RegMatch, Timestamp, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, size_t,
+    RegMatch, Timestamp, TypVal, VAR_NUMBER, VAR_UNKNOWN, VarNumber, size_t,
 };
 use crate::ui::state::Columns;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -334,7 +334,7 @@ unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
 /// owns and will clear.
 pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
-    unsafe { (*result).vval.v_number = 0 };
+    unsafe { (*result).write_number(0) };
     // SAFETY: reads the 'secure'/sandbox globals.
     if check_secure() {
         return;
@@ -357,7 +357,7 @@ pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     };
     if added {
         // SAFETY: eval-function contract.
-        unsafe { (*result).vval.v_number = 1 };
+        unsafe { (*result).write_number(1) };
     }
 }
 
@@ -393,7 +393,7 @@ pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         }
     };
     // SAFETY: eval-function contract.
-    unsafe { (*result).vval.v_number = VarNumber::from(n) };
+    unsafe { (*result).write_number(VarNumber::from(n)) };
 }
 
 /// "histget()" function
@@ -429,8 +429,7 @@ pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     };
     // SAFETY: eval-function contract.
     unsafe {
-        (*result).vval.v_string = text;
-        (*result).v_type = VAR_STRING;
+        (*result).write_string(text);
     }
 }
 
@@ -450,7 +449,7 @@ pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         get_history_idx(histype)
     };
     // SAFETY: eval-function contract.
-    unsafe { (*result).vval.v_number = VarNumber::from(n) };
+    unsafe { (*result).write_number(VarNumber::from(n)) };
 }
 
 /// ":history" command: list history entries, optionally filtered by

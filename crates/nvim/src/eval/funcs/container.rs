@@ -114,7 +114,7 @@ pub unsafe fn f_empty(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         }
         _ => true,
     };
-    result.vval.v_number = empty as VarNumber;
+    result.write_number(empty as VarNumber);
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
@@ -169,14 +169,13 @@ fn flatten_common(args: Args<'_>, result: &mut TypVal, make_copy: bool) {
     };
 
     let mut list = args.get(0).list_or_null();
-    result.v_type = VAR_LIST;
-    result.vval.v_list = list;
+    result.write_list(list);
     if list.is_null() {
         return;
     }
     if make_copy {
         list = unsafe { tv_list_copy(ptr::null(), list, false, get_copy_id()) };
-        result.vval.v_list = list;
+        result.write_list(list);
         if list.is_null() {
             return;
         }
@@ -248,10 +247,10 @@ fn get_from_blob(args: Args<'_>, result: &mut TypVal) -> *mut TypVal {
     }
     if idx < 0 || idx >= unsafe { tv_blob_len(blob) } {
         // Out of range is -1 rather than the default argument.
-        result.vval.v_number = -1;
+        result.write_number(-1);
         return ptr::null_mut();
     }
-    result.vval.v_number = unsafe { tv_blob_get(blob, idx) } as VarNumber;
+    result.write_number(unsafe { tv_blob_get(blob, idx) } as VarNumber);
     // The value is already in place; copying it onto itself is a no-op
     // and is what upstream does.
     result
@@ -317,13 +316,9 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
         b"func" | b"name" => {
             let mut name: *const c_char = unsafe { partial_name(pt) };
             // "func" hands back a Funcref, "name" a plain String.
-            result.v_type = if unsafe { *what } == b'f' as c_char {
-                VAR_FUNC
-            } else {
-                VAR_STRING
-            };
+            let as_funcref = unsafe { *what } == b'f' as c_char;
             debug_assert!(!name.is_null());
-            if result.v_type == VAR_FUNC {
+            if as_funcref {
                 unsafe { func_ref(name as *mut c_char) };
             }
             // A lambda has no name of its own; "name" shows the
@@ -334,7 +329,12 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
             {
                 name = unsafe { printable_func_name((*pt).pt_func) };
             }
-            result.vval.v_string = unsafe { xstrdup(name) };
+            let owned = unsafe { xstrdup(name) };
+            if as_funcref {
+                result.write_func_name(owned);
+            } else {
+                result.write_string(owned);
+            }
         }
         b"dict" => {
             if !unsafe { (*pt).pt_dict }.is_null() {
@@ -402,7 +402,7 @@ unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
 /// dispatchers keep.
 pub unsafe fn f_index(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY throughout: the arguments are live typvals.
     match args.ty(0) {
         VAR_BLOB => index_blob(args, result),
@@ -434,13 +434,12 @@ fn index_blob(args: Args<'_>, result: &mut TypVal) {
     }
     for idx in start..unsafe { tv_blob_len(b) } {
         let mut tv = NIL;
-        tv.v_type = VAR_NUMBER;
-        tv.vval.v_number = unsafe { tv_blob_get(b, idx) } as VarNumber;
+        tv.write_number(unsafe { tv_blob_get(b, idx) } as VarNumber);
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
         if unsafe { tv_equal(&raw mut tv, args.ptr(1), false) } {
-            result.vval.v_number = idx as VarNumber;
+            result.write_number(idx as VarNumber);
             return;
         }
     }
@@ -474,7 +473,7 @@ fn index_list(args: Args<'_>, result: &mut TypVal) {
     }
     while !item.is_null() {
         if unsafe { tv_equal(&raw mut (*item).li_tv, args.ptr(1), ic) } {
-            result.vval.v_number = idx as VarNumber;
+            result.write_number(idx as VarNumber);
             return;
         }
         item = unsafe { (*item).li_next };
@@ -492,7 +491,7 @@ fn index_list(args: Args<'_>, result: &mut TypVal) {
 /// dispatchers keep.
 pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY throughout: the arguments are live typvals; the two `v:` variables are
     // saved and put back around the search whatever it does.
     if check_arg(args, 0, tv_check_for_list_or_blob_arg).is_err()
@@ -526,11 +525,11 @@ pub unsafe fn f_indexof(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     unsafe { prepare_vimvar(Vv::Key, &raw mut save_key) };
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
-    result.vval.v_number = if args.ty(0) == VAR_BLOB {
+    result.write_number(if args.ty(0) == VAR_BLOB {
         unsafe { indexof_blob(args.get(0).blob_or_null(), startidx, args.ptr(1)) }
     } else {
         unsafe { indexof_list(args.get(0).list_or_null(), startidx, args.ptr(1)) }
-    };
+    });
     unsafe { restore_vimvar(Vv::Key, &raw mut save_key) };
     unsafe { restore_vimvar(Vv::Val, &raw mut save_val) };
     // As `printf()`: an error raised before this call survives, one
@@ -644,7 +643,7 @@ pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
     let tv = args.get(0);
     // SAFETY throughout: every union read is guarded by the type tag above it, and a
     // Number is measured through its String spelling.
-    result.vval.v_number = match tv.v_type {
+    result.write_number(match tv.v_type {
         VAR_STRING | VAR_NUMBER => {
             let s = arg_string(&mut numbuf, args.get(0));
             unsafe { cstr::bytes_at(s).len() as VarNumber }
@@ -658,7 +657,7 @@ pub unsafe fn f_len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
             emsg(gettext(c"E701: Invalid type for len()"));
             return;
         }
-    };
+    });
 }
 
 /// `type({expr})` — the `v:t_*` number for the value's type.
@@ -687,5 +686,5 @@ pub unsafe fn f_type(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         }
         _ => -1,
     };
-    result.vval.v_number = n as VarNumber;
+    result.write_number(n as VarNumber);
 }

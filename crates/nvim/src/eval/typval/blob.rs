@@ -108,8 +108,7 @@ pub(crate) unsafe fn tv_blob_slice(
 
     if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
         unsafe { tv_clear(result) };
-        unsafe { (*result).v_type = VAR_BLOB };
-        unsafe { (*result).vval.v_blob = ::core::ptr::null_mut() };
+        unsafe { (*result).write_blob(::core::ptr::null_mut()) };
     } else {
         let new_blob = tv_blob_alloc();
         let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
@@ -155,8 +154,7 @@ pub(crate) unsafe fn tv_blob_index(
 
     let v = unsafe { tv_blob_get((*result).blob_or_null(), idx as ::core::ffi::c_int) };
     unsafe { tv_clear(result) };
-    unsafe { (*result).v_type = VAR_NUMBER };
-    unsafe { (*result).vval.v_number = VarNumber::from(v) };
+    unsafe { (*result).write_number(VarNumber::from(v)) };
     Ok(())
 }
 
@@ -305,7 +303,7 @@ pub unsafe fn tv_blob_remove(
     if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
-        unsafe { (*result).vval.v_number = VarNumber::from(*p.offset(idx as isize)) };
+        unsafe { (*result).write_number(VarNumber::from(*p.offset(idx as isize))) };
         let at = unsafe { p.offset(idx as isize) };
         let after = unsafe { at.add(1) };
         let into = at.cast::<u8>();
@@ -428,7 +426,7 @@ pub unsafe fn tv_blob_copy(from: *mut Blob, to: *mut TypVal) {
     dst.v_type = VAR_BLOB;
     dst.v_lock = VarLock::Unlocked;
     if from.is_null() {
-        unsafe { (*to).vval.v_blob = ::core::ptr::null_mut() };
+        unsafe { (*to).write_blob(::core::ptr::null_mut()) };
         return;
     }
 

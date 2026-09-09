@@ -23,8 +23,8 @@ use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::semsg;
 use crate::types::{
-    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, kListLenMayKnow, mpack_parser_t, typval_vval_union,
+    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock,
+    kListLenMayKnow, mpack_parser_t, typval_vval_union,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;
@@ -80,8 +80,7 @@ pub unsafe fn f_json_decode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         // SAFETY: `s` is the caller's string and `len` its length.
         let s = unsafe { c_str_len(s, len) };
         semsg!("E474: Failed to parse {s}");
-        result.v_type = VAR_NUMBER;
-        result.vval.v_number = 0;
+        result.write_number(0);
     }
     debug_assert!(result.v_type != VAR_UNKNOWN);
     unsafe { xfree(tofree as *mut c_void) };
@@ -96,10 +95,9 @@ pub unsafe fn f_json_decode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// dispatchers keep.
 pub unsafe fn f_json_encode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
     // SAFETY: the encoder reads the argument and returns an owned string,
     // which the return value takes over.
-    result.vval.v_string = unsafe { encode_tv2json(args.ptr(0), ptr::null_mut::<usize>()) };
+    result.write_string(unsafe { encode_tv2json(args.ptr(0), ptr::null_mut::<usize>()) });
 }
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List

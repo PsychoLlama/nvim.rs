@@ -29,7 +29,7 @@ use crate::semsg;
 use crate::strings::vim_snprintf;
 use crate::types::{
     BoolVarValue, ColNr, Dict, EvalFuncData, Failed, List, ListItem, MotionType, NUL, TypVal,
-    VAR_DICT, VAR_LIST, VAR_STRING, Vv, kBoolVarFalse, kBoolVarTrue,
+    VAR_DICT, VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -95,11 +95,10 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         if l.is_null() {
             l = tv_list_alloc(0);
         }
-        result.vval.v_list = l;
+        result.write_list(l);
         unsafe { tv_list_ref(l) };
     } else {
-        result.v_type = VAR_STRING;
-        result.vval.v_string = unsafe { get_reg_contents(regname, flags) } as *mut c_char;
+        result.write_string(unsafe { get_reg_contents(regname, flags) } as *mut c_char);
     }
 }
 
@@ -112,8 +111,7 @@ pub unsafe fn f_getreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// dispatchers keep.
 pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the arguments are live typvals and `buf` outlives the call
     // that fills it.
     let Some(regname) = (unsafe { regname(args) }) else {
@@ -123,7 +121,7 @@ pub unsafe fn f_getregtype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let mut buf: TypeBuf = [0; 67];
     let reg_type = unsafe { get_reg_type(regname, &raw mut reglen) };
     unsafe { format_reg_type(reg_type, reglen, buf.as_mut_ptr(), buf.len()) };
-    result.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
+    result.write_string(unsafe { xstrdup(buf.as_ptr()) });
 }
 
 /// `getreginfo([{regname}])`.
@@ -190,9 +188,8 @@ pub unsafe fn f_getreginfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// `result` is the dispatcher's cleared return value.
 unsafe fn return_register(regname: c_int, result: &mut TypVal) {
     let buf: [c_char; 2] = [regname as c_char, 0];
-    result.v_type = VAR_STRING;
     // SAFETY: `buf` is NUL-terminated and outlives the copy.
-    result.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
+    result.write_string(unsafe { xstrdup(buf.as_ptr()) });
 }
 
 /// `reg_executing()` — the register a macro is being played from.
@@ -281,7 +278,7 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // read below is NUL-terminated and outlives its use.
     // Non-zero means "did not set anything", which is what every early
     // return leaves behind.
-    result.vval.v_number = 1;
+    result.write_number(1);
     let strregname = arg_string_chk(&mut numbuf, args.get(0));
     if strregname.is_null() {
         return;
@@ -381,7 +378,7 @@ pub unsafe fn f_setreg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     if pointreg != 0 {
         unsafe { get_yank_register(pointreg as c_int, YREG_YANK as c_int) };
     }
-    result.vval.v_number = 0;
+    result.write_number(0);
     if set_unnamed {
         unsafe { op_reg_set_previous(regname) };
     }

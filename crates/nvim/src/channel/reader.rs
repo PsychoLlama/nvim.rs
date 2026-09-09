@@ -31,8 +31,8 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
 use crate::types::{
-    CallbackReader, Channel, List, RStream, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, kListLenMayKnow, size_t, typval_vval_union,
+    CallbackReader, Channel, List, RStream, TypVal, VAR_UNKNOWN, VarLock, VarNumber,
+    kListLenMayKnow, size_t, typval_vval_union,
 };
 
 use super::{channel_decref, channel_incref};
@@ -260,24 +260,20 @@ unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
 /// `chan` is live; `reader` is null or one of its readers.
 unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
     let mut argv: [TypVal; 4] = [unknown_tv(); 4];
-    argv[0].v_type = VAR_NUMBER as _;
-    argv[2].v_type = VAR_STRING as _;
     let mut rettv = unknown_tv();
 
     // SAFETY: the caller's live channel and reader. The list built for a
     // reader is owned by `argv[1]` until it is unreferenced below.
-    argv[0].vval.v_number = unsafe { (*chan).id }.cast_signed();
+    argv[0].write_number(unsafe { (*chan).id }.cast_signed());
     let cb = if reader.is_null() {
-        argv[1].v_type = VAR_NUMBER as _;
-        argv[1].vval.v_number = VarNumber::from(unsafe { (*chan).exit_status });
-        argv[2].vval.v_string = c"exit".as_ptr() as *mut c_char;
+        argv[1].write_number(VarNumber::from(unsafe { (*chan).exit_status }));
+        argv[2].write_string(c"exit".as_ptr() as *mut c_char);
         unsafe { &raw mut (*chan).on_exit }
     } else {
-        argv[1].v_type = VAR_LIST as _;
-        argv[1].vval.v_list = unsafe { reader_lines(reader) };
+        argv[1].write_list(unsafe { reader_lines(reader) });
         unsafe { tv_list_ref(argv[1].vval.v_list) };
         unsafe { (*reader).buffer.clear() };
-        argv[2].vval.v_string = unsafe { (*reader).type_0 } as *mut c_char;
+        argv[2].write_string(unsafe { (*reader).type_0 } as *mut c_char);
         unsafe { &raw mut (*reader).cb }
     };
 

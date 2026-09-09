@@ -40,8 +40,8 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    List, TypVal, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue,
-    kListLenMayKnow, kSpecialVarNull, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t,
+    List, TypVal, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
+    kSpecialVarNull, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::abort;
@@ -246,8 +246,7 @@ unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bo
                 let d = unsafe { tv_dict_hi2di(hi) };
                 // SAFETY: an item of the dictionary being unwound.
                 let mut item = unsafe { Di::new(d) };
-                item.di_tv.v_type = VAR_SPECIAL;
-                item.di_tv.vval.v_special = kSpecialVarNull;
+                item.di_tv.write_special(kSpecialVarNull);
             }
             unsafe { tv_clear(result) };
             unsafe { xfree(di.cast()) };

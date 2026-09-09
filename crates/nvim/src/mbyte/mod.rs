@@ -104,9 +104,9 @@ use crate::pos::MAXCOL;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, Expand, GraphemeState, IOSIZE,
-    List, MB_MAXCHAR, NUL, ScreenChar, StrCharInfo, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, VimConv, Window, iconv_t, int8_t, int32_t, ptrdiff_t, size_t, ssize_t, uint8_t,
-    uint64_t, uintptr_t, utf8proc_int32_t,
+    List, MB_MAXCHAR, NUL, ScreenChar, StrCharInfo, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
+    VimConv, Window, iconv_t, int8_t, int32_t, ptrdiff_t, size_t, ssize_t, uint8_t, uint64_t,
+    uintptr_t, utf8proc_int32_t,
 };
 use crate::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,

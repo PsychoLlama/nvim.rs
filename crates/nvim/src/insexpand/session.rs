@@ -309,8 +309,8 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     args[0].v_type = VAR_NUMBER;
     args[1].v_type = VAR_STRING;
     args[2].v_type = VAR_UNKNOWN;
-    args[0].vval.v_number = 1;
-    args[1].vval.v_string = c"".as_ptr().cast_mut();
+    args[0].write_number(1);
+    args[1].write_string(c"".as_ptr().cast_mut());
 
     let pos = Win::current().w_cursor;
     let locked = Lock::text();

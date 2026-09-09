@@ -426,7 +426,7 @@ unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
 /// The evaluator's calling convention: `args` and `result` must be valid.
 pub unsafe fn f_virtcol2col(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
     // SAFETY: the evaluator's calling convention: three arguments.
     let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(args, n).is_ok()) };
     if !typed {
@@ -450,5 +450,5 @@ pub unsafe fn f_virtcol2col(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // SAFETY: a live window and a line of its buffer.
     let col = unsafe { virtcol2col(win, lnum, screencol) };
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*result).vval.v_number = col as VarNumber };
+    unsafe { (*result).write_number(col as VarNumber) };
 }

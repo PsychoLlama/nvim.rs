@@ -69,7 +69,7 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // Seeded at the far end so the first item always wins. An empty
     // container returns the 0 written above instead.
     let mut n: VarNumber = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
@@ -120,7 +120,7 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
             return;
         }
     }
-    result.vval.v_number = n;
+    result.write_number(n);
 }
 
 /// `max({expr})`.

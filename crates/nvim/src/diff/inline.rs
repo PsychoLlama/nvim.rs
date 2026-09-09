@@ -430,5 +430,5 @@ pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     }
     let id = hlID.get() as VarNumber;
     // SAFETY: the caller's result cell.
-    unsafe { (*result).vval.v_number = id };
+    unsafe { (*result).write_number(id) };
 }

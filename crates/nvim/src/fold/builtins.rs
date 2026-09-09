@@ -29,7 +29,7 @@ use core::ptr;
 
 use super::text::*;
 use super::*;
-use crate::types::{VAR_STRING, Vv};
+use crate::types::Vv;
 
 /// "foldclosed()" and "foldclosedend()" functions
 ///
@@ -44,11 +44,11 @@ pub(super) unsafe fn foldclosed_both(args: *mut TypVal, result: *mut TypVal, end
         let win = Win::current();
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
-            rv.vval.v_number = (if end { last } else { first }) as VarNumber;
+            rv.write_number((if end { last } else { first }) as VarNumber);
             return;
         }
     }
-    rv.vval.v_number = -1 as VarNumber;
+    rv.write_number(-1 as VarNumber);
 }
 
 /// "foldclosed()" function
@@ -77,7 +77,7 @@ pub unsafe fn f_foldlevel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
-        rv.vval.v_number = fold_level(lnum) as VarNumber;
+        rv.write_number(fold_level(lnum) as VarNumber);
     }
 }
 
@@ -88,8 +88,7 @@ pub unsafe fn f_foldlevel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
-    rv.v_type = VAR_STRING;
-    rv.vval.v_string = ptr::null_mut();
+    rv.write_string(ptr::null_mut());
     // SAFETY: reading three `v:` variables the fold drawing has just set.
     let (start, end, dash) = (Vv::Foldstart, Vv::Foldend, Vv::Folddashes);
     let (foldstart, foldend, dashes) = (
@@ -148,7 +147,7 @@ pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     len = unsafe { cstr::bytes_at(r) }.len();
     unsafe { strcat(r, s) };
     unsafe { foldtext_cleanup(r.add(len)) };
-    rv.vval.v_string = r;
+    rv.write_string(r);
 }
 
 /// "foldtextresult(lnum)" function
@@ -161,8 +160,7 @@ pub unsafe fn f_foldtextresult(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
     static entered: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
-    rv.v_type = VAR_STRING;
-    rv.vval.v_string = ptr::null_mut();
+    rv.write_string(ptr::null_mut());
     if entered.get() {
         return;
     }
@@ -196,7 +194,7 @@ pub unsafe fn f_foldtextresult(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
         }
         // SAFETY: `vt` is this frame's virtual text.
         unsafe { clear_virttext(&raw mut vt) };
-        rv.vval.v_string = text;
+        rv.write_string(text);
     }
     entered.set(false);
 }

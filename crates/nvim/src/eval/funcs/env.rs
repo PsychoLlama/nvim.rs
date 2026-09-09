@@ -38,8 +38,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
     CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, List, NUL, OK, OptInt, TypVal,
-    VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse,
-    kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
+    VAR_DICT, VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
+    kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -100,11 +100,9 @@ pub unsafe fn f_getenv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // SAFETY: `vim_getenv` returns an owned string or null.
     let p = unsafe { vim_getenv(arg_string(&mut numbuf, args.get(0))) };
     if p.is_null() {
-        result.v_type = VAR_SPECIAL;
-        result.vval.v_special = kSpecialVarNull;
+        result.write_special(kSpecialVarNull);
     } else {
-        result.vval.v_string = p;
-        result.v_type = VAR_STRING;
+        result.write_string(p);
     }
 }
 
@@ -153,7 +151,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
             }
             unsafe { xfree(expanded as *mut c_void) };
         } else {
-            result.vval.v_string = expanded;
+            result.write_string(expanded);
         }
         return;
     }
@@ -161,7 +159,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         options |= WildOpts::KEEP_ALL;
     }
     if error {
-        result.vval.v_string = ptr::null_mut();
+        result.write_string(ptr::null_mut());
         return;
     }
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
@@ -175,7 +173,7 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         let nul = ptr::null_mut();
         // SAFETY: `xpc` is a local the `expand_cleanup` below tidies, and
         // `s` is the NUL-terminated argument.
-        result.vval.v_string = unsafe { expand_one(expand, pat, nul, options, WildMode::All) };
+        result.write_string(unsafe { expand_one(expand, pat, nul, options, WildMode::All) });
     } else {
         let (expand, pat) = (&raw mut xpc, s as *mut c_char);
         let nul = ptr::null_mut();
@@ -230,7 +228,7 @@ pub unsafe fn f_expandcmd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     {
         emsg(msg);
     }
-    result.vval.v_string = cmdstr;
+    result.write_string(cmdstr);
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
@@ -269,7 +267,7 @@ pub unsafe fn f_setenv(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: both strings are coerced from the frame and NUL-terminated;
     // the nine bytes read below are covered by the length check.
     let fname = arg_string_chk(&mut numbuf, args.get(0));
@@ -293,7 +291,7 @@ pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             mode |= 1 << (8 - i);
         }
     }
-    result.vval.v_number = (unsafe { os_setperm(cstr::at(fname), mode) } == OK) as VarNumber;
+    result.write_number((unsafe { os_setperm(cstr::at(fname), mode) } == OK) as VarNumber);
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
@@ -301,8 +299,7 @@ pub unsafe fn f_setfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     let appname = get_appname(false);
     let list = tv_list_alloc(kListLenShouldKnow as isize);
-    result.v_type = VAR_LIST;
-    result.vval.v_list = list;
+    result.write_list(list);
     unsafe { tv_list_ref(list) };
     let dirs = stdpaths_get_xdg_var(xdg);
     if dirs.is_null() {
@@ -339,15 +336,14 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
 pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY throughout: `p` is coerced from the frame and NUL-terminated once the
     // null check has passed.
     let p = arg_string_chk(&mut numbuf, args.get(0));
     if p.is_null() {
         return;
     }
-    result.vval.v_string = match unsafe { CStr::from_ptr(p) }.to_bytes() {
+    result.write_string(match unsafe { CStr::from_ptr(p) }.to_bytes() {
         b"config" => get_xdg_home(kXDGConfigHome),
         b"data" => get_xdg_home(kXDGDataHome),
         b"cache" => get_xdg_home(kXDGCacheHome),
@@ -365,7 +361,7 @@ pub unsafe fn f_stdpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
             semsg!("E6100: \"{p}\" is not a valid stdpath");
             return;
         }
-    };
+    });
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
@@ -417,5 +413,5 @@ pub unsafe fn f_swapname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let name = memfile
         .map(|mfp| unsafe { mf_fname(mfp) })
         .filter(|name| !name.is_null());
-    result.vval.v_string = name.map_or(ptr::null_mut(), |name| unsafe { xstrdup(name) });
+    result.write_string(name.map_or(ptr::null_mut(), |name| unsafe { xstrdup(name) }));
 }

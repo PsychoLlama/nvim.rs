@@ -74,7 +74,7 @@ unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     if b1.is_null() {
         // Appending to an unallocated blob shares the right-hand one
         // rather than copying it.
-        lhs.vval.v_blob = b2;
+        lhs.write_blob(b2);
         // SAFETY: `b2` is the live Blob the right-hand typval holds.
         unsafe { (*b2).bv_refcount.retain() };
         return Ok(());
@@ -118,7 +118,7 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     if l1.is_null() {
         // Appending to an unallocated list shares the right-hand one
         // rather than copying it.
-        lhs.vval.v_list = l2;
+        lhs.write_list(l2);
         // SAFETY: `l2` is the live List the right-hand typval holds.
         unsafe { (*l2).lv_refcount.retain() };
     } else {
@@ -152,8 +152,7 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
         let f = float_op(n as Float, op, rhs.float_or_zero());
         // SAFETY: `tv1` is the caller's initialised typval.
         unsafe { tv_clear(tv1) };
-        lhs.v_type = VAR_FLOAT;
-        lhs.vval.v_float = f;
+        lhs.write_float(f);
     } else {
         // Only the arm that is taken reads the right operand, because
         // `tv_get_number` reports on a value it cannot convert.
@@ -168,8 +167,7 @@ unsafe fn tv_op_number(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(
         };
         // SAFETY: `tv1` is the caller's initialised typval.
         unsafe { tv_clear(tv1) };
-        lhs.v_type = VAR_NUMBER;
-        lhs.vval.v_number = n;
+        lhs.write_number(n);
     }
     Ok(())
 }
@@ -204,8 +202,7 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     let s = unsafe { concat_str(numbuf1.string(tv1), s2) };
     // SAFETY: both operands have been copied out of `tv1` by now.
     unsafe { tv_clear(tv1) };
-    lhs.v_type = VAR_STRING;
-    lhs.vval.v_string = s;
+    lhs.write_string(s);
     Ok(())
 }
 
@@ -233,7 +230,8 @@ unsafe fn tv_op_float(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<()
         // SAFETY: `tv2` is initialised.
         unsafe { tv_get_number(tv2) as Float }
     };
-    lhs.vval.v_float = float_op(lhs.float_or_zero(), op, f);
+    let result = float_op(lhs.float_or_zero(), op, f);
+    lhs.write_float(result);
     Ok(())
 }
 

@@ -26,9 +26,8 @@ use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, pr
 use crate::semsg;
 use crate::startup::main_loop;
 use crate::types::{
-    Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, TypVal, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, int32_t, kListLenUnknown, time_t,
-    typval_vval_union,
+    Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, TypVal, VAR_LIST, VAR_NUMBER,
+    VAR_UNKNOWN, VarLock, VarNumber, int32_t, kListLenUnknown, time_t, typval_vval_union,
 };
 use crate::ui::ui_flush;
 use ::libc::time;
@@ -77,8 +76,7 @@ unsafe fn dummy_timer_close_cb(tw: *mut TimeWatcher, _data: *mut c_void) {
 /// dispatchers keep.
 pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY throughout: the watcher is owned here and handed to libuv's close
     // callback; every typval below is either from the frame or a local.
     if args.ty(0) != VAR_NUMBER {
@@ -125,13 +123,13 @@ pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     };
     unsafe { process_events_until(loop_, events, timeout as i64, done) };
     if called_emsg.get() > called_emsg_before || error {
-        result.vval.v_number = -3;
+        result.write_number(-3);
     } else if got_int.get() {
         got_int.set(false);
         vgetc();
-        result.vval.v_number = -2;
+        result.write_number(-2);
     } else if unsafe { tv_get_number_chk(&raw mut exprval, &raw mut error) } != 0 {
-        result.vval.v_number = 0;
+        result.write_number(0);
     }
     unsafe { time_watcher_stop(tw) };
     unsafe { time_watcher_close(tw, Some(dummy_timer_close_cb)) };
@@ -147,7 +145,7 @@ pub unsafe fn f_wait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 pub unsafe fn f_localtime(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
     // SAFETY: `time(NULL)` writes nothing.
-    result.vval.v_number = unsafe { time(ptr::null_mut::<time_t>()) } as VarNumber;
+    result.write_number(unsafe { time(ptr::null_mut::<time_t>()) } as VarNumber);
 }
 
 /// A `ProfTime` split into the pair of 32-bit halves `reltime()` reports.
@@ -235,12 +233,11 @@ pub unsafe fn f_reltime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_reltimestr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: `profile_msg` returns a pointer to its own static buffer,
     // which `xstrdup` copies before anything else can reuse it.
     if let Some(tm) = unsafe { list2proftime(args.ptr(0)) } {
-        result.vval.v_string = unsafe { xstrdup(profile_msg(tm).as_ptr()) };
+        result.write_string(unsafe { xstrdup(profile_msg(tm).as_ptr()) });
     }
 }
 
@@ -253,11 +250,10 @@ pub unsafe fn f_reltimestr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// dispatchers keep.
 pub unsafe fn f_reltimefloat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_FLOAT;
-    result.vval.v_float = 0.0;
+    result.write_float(0.0);
     // SAFETY: reads the argument through the frame.
     if let Some(tm) = unsafe { list2proftime(args.ptr(0)) } {
-        result.vval.v_float = (profile_signed(tm) as f64 / 1_000_000_000.0) as Float;
+        result.write_float((profile_signed(tm) as f64 / 1_000_000_000.0) as Float);
     }
 }
 
@@ -333,7 +329,7 @@ pub unsafe fn f_timer_pause(args: *mut TypVal, _unused: *mut TypVal, _fptr: Eval
 /// dispatchers keep.
 pub unsafe fn f_timer_start(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY throughout: the options dict and the callback typval are the frame's;
     // `timer_start` takes the callback over.
     if check_secure() {
@@ -357,8 +353,9 @@ pub unsafe fn f_timer_start(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     if !unsafe { callback_from_typval(&raw mut callback, args.ptr(1)) } {
         return;
     }
-    result.vval.v_number =
-        unsafe { timer_start(arg_number(args.get(0)), repeat, &raw mut callback) } as VarNumber;
+    result.write_number(
+        unsafe { timer_start(arg_number(args.get(0)), repeat, &raw mut callback) } as VarNumber,
+    );
 }
 
 /// `timer_stop({id})`.

@@ -233,12 +233,12 @@ pub unsafe fn f_win_getid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals, and `curwin`/`curtab` are set.
     if !args.has(0) {
-        result.vval.v_number = VarNumber::from(Win::current().handle);
+        result.write_number(VarNumber::from(Win::current().handle));
         return;
     }
     let winnr = number_as_int(arg_number(args, 0));
     if winnr <= 0 {
-        result.vval.v_number = 0;
+        result.write_number(0);
         return;
     }
     // A second argument names the tab page; without one, the current one.
@@ -252,15 +252,15 @@ pub unsafe fn f_win_getid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
             None => {
                 // Unlike every other failure here, a bad tab page
                 // answers -1.
-                result.vval.v_number = -1;
+                result.write_number(-1);
                 return;
             }
         }
     };
-    result.vval.v_number = match nth_numbered_win(tp, winnr) {
+    result.write_number(match nth_numbered_win(tp, winnr) {
         Some(wp) => VarNumber::from(wp.handle),
         None => 0,
-    };
+    });
 }
 
 /// The `winnr`th window of `tabpage` that [`Win::has_winnr`] gives a number to.
@@ -306,16 +306,16 @@ pub unsafe fn f_win_id2win(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     for wp in windows_in_tab(tp) {
         if wp.handle == id {
             // A window the numbering skips (a hidden float) answers 0.
-            result.vval.v_number = if wp.has_winnr(tp) {
+            result.write_number(if wp.has_winnr(tp) {
                 VarNumber::from(nr + 1)
             } else {
                 0
-            };
+            });
             return;
         }
         nr += c_int::from(wp.has_winnr(tp));
     }
-    result.vval.v_number = 0;
+    result.write_number(0);
 }
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
@@ -349,7 +349,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let id = unsafe { number_as_int(tv_get_number(args.ptr(0))) };
     // SAFETY: `curwin` is set from startup to exit.
     if Win::current().handle == id {
-        result.vval.v_number = 1;
+        result.write_number(1);
         return;
     }
     if text_or_buf_locked() {
@@ -363,7 +363,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         end_visual_mode();
     }
     goto_tabpage_win(tp, wp);
-    result.vval.v_number = 1;
+    result.write_number(1);
 }
 
 /// `winnr([{arg}])` — a window number in the current tab page.
@@ -377,7 +377,7 @@ pub unsafe fn f_winnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals and `curtab` is set.
     let nr = unsafe { get_winnr(TabPage::current(), args.ptr(0)) };
-    result.vval.v_number = VarNumber::from(nr);
+    result.write_number(VarNumber::from(nr));
 }
 
 /// `tabpagenr([{arg}])` — a tab page number.
@@ -413,7 +413,7 @@ pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
             }
         }
     };
-    result.vval.v_number = VarNumber::from(nr);
+    result.write_number(VarNumber::from(nr));
 }
 
 /// `tabpagewinnr({tabnr} [, {arg}])` — a window number in another tab page.
@@ -432,7 +432,7 @@ pub unsafe fn f_tabpagewinnr(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
         Some(tp) => unsafe { get_winnr(tp, args.ptr(1)) },
         None => 0,
     };
-    result.vval.v_number = VarNumber::from(nr);
+    result.write_number(VarNumber::from(nr));
 }
 
 /// `winbufnr({nr})` — the buffer number of the window `nr` names, -1 for none.
@@ -446,8 +446,8 @@ pub unsafe fn f_winbufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    result.vval.v_number = match wp {
+    result.write_number(match wp {
         Some(wp) => VarNumber::from(wp.buffer().handle),
         None => -1,
-    };
+    });
 }

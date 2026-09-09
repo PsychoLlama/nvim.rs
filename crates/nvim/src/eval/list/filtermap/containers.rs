@@ -38,8 +38,7 @@ use crate::memory::handoff::owned_cstr;
 use crate::message::state::did_emsg;
 use crate::message::{e_invalblob, e_string_required};
 use crate::types::{
-    TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
-    typval_vval_union,
+    TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv, typval_vval_union,
 };
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a Dict.
@@ -56,8 +55,7 @@ pub(crate) fn filter_map_dict(
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.v_type = VAR_DICT;
-        result.vval.v_dict = ptr::null_mut();
+        result.write_dict(ptr::null_mut());
     }
     if d.is_null() || (filtermap == FilterMap::Filter && check_lock(d.lock(), arg_errmsg)) {
         return;
@@ -126,8 +124,7 @@ pub(crate) fn filter_map_blob(
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.v_type = VAR_BLOB;
-        result.vval.v_blob = ptr::null_mut();
+        result.write_blob(ptr::null_mut());
     }
     let b = blob_arg;
     if b.is_null() || (filtermap == FilterMap::Filter && check_lock(b.lock(), arg_errmsg)) {
@@ -202,8 +199,7 @@ pub(crate) fn filter_map_string(
     expr: &mut TypVal,
     result: &mut TypVal,
 ) {
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
 
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);
@@ -246,7 +242,7 @@ pub(crate) fn filter_map_string(
         idx += 1;
         at += len;
     }
-    result.vval.v_string = owned_cstr(out);
+    result.write_string(owned_cstr(out));
 }
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a List.
@@ -265,8 +261,7 @@ pub(crate) fn filter_map_list(
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.v_type = VAR_LIST;
-        result.vval.v_list = ptr::null_mut();
+        result.write_list(ptr::null_mut());
     }
     if l.is_null() || (filtermap == FilterMap::Filter && check_lock(l.locked(), arg_errmsg)) {
         return;

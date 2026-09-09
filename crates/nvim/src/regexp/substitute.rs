@@ -47,8 +47,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    FuncExe, LineNr, NUL, Partial, RegMMatch, RegMatch, StaticList10, TypVal, VAR_FUNC, VAR_LIST,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    FuncExe, LineNr, NUL, Partial, RegMMatch, RegMatch, StaticList10, TypVal, VAR_FUNC,
+    VAR_PARTIAL, VAR_UNKNOWN, VarLock,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -557,12 +557,10 @@ unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     let mut match_list: StaticList10 = unsafe { core::mem::zeroed() };
     match_list.sl_list.lv_lock = VarLock::Fixed;
     let mut argv: [TypVal; 2] = unsafe { core::mem::zeroed() };
-    argv[0].v_type = VAR_LIST;
-    argv[0].vval.v_list = &raw mut match_list.sl_list;
+    argv[0].write_list(&raw mut match_list.sl_list);
 
     let mut rettv: TypVal = unsafe { core::mem::zeroed() };
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = core::ptr::null_mut();
+    rettv.write_string(core::ptr::null_mut());
 
     let mut funcexe = FUNCEXE_INIT;
     funcexe.fe_argv_func = Some(fill_submatch_list);

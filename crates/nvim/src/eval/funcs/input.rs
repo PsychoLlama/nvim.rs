@@ -35,9 +35,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{
-    EvalFuncData, FAIL, ListItem, NUL, TypVal, TypeaheadSave, VAR_LIST, VAR_STRING, VarNumber,
-};
+use crate::types::{EvalFuncData, FAIL, ListItem, NUL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -108,9 +106,9 @@ pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         buttons = gettext(c"&Ok").as_ptr();
     }
     if !error {
-        result.vval.v_number =
-            unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) }
-                as VarNumber;
+        let chosen =
+            unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) };
+        result.write_number(chosen as VarNumber);
     }
 }
 
@@ -124,7 +122,7 @@ pub unsafe fn f_confirm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_debugbreak(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = FAIL as VarNumber;
+    result.write_number(FAIL as VarNumber);
     // SAFETY throughout: the frame is live.
     let pid = arg_number(args.get(0)) as c_int;
     if pid == 0 {
@@ -251,7 +249,7 @@ pub unsafe fn f_inputlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     if mouse_used {
         selected = unsafe { tv_list_len(list) } - (cmdline_row.get() - mouse_row.get());
     }
-    result.vval.v_number = selected as VarNumber;
+    result.write_number(selected as VarNumber);
 }
 
 /// The typeahead states `inputsave()` has stacked up.
@@ -294,7 +292,7 @@ pub unsafe fn f_inputrestore(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
         // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
         unsafe { verb_msg(gettext(msg).as_ptr()) };
-        unsafe { (*result).vval.v_number = 1 };
+        unsafe { (*result).write_number(1) };
     }
 }
 
@@ -331,11 +329,10 @@ unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
 /// dispatchers keep.
 pub unsafe fn f_prompt_getprompt(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `result` owns the duplicate.
     if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
-        result.vval.v_string = unsafe { xstrdup(buf_prompt_text(buf)) };
+        result.write_string(unsafe { xstrdup(buf_prompt_text(buf)) });
     }
 }
 
@@ -348,11 +345,10 @@ pub unsafe fn f_prompt_getprompt(args: *mut TypVal, result: *mut TypVal, _fptr: 
 /// dispatchers keep.
 pub unsafe fn f_prompt_getinput(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `result` then owns.
     if let Some(buf) = unsafe { prompt_buffer(args.ptr(0)) } {
-        result.vval.v_string = unsafe { prompt_get_input(Some(buf)) };
+        result.write_string(unsafe { prompt_get_input(Some(buf)) });
     }
 }

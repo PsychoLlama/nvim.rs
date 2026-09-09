@@ -445,7 +445,7 @@ pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: Eva
     } else {
         0.0
     };
-    unsafe { (*result).vval.v_float = value };
+    unsafe { (*result).write_float(value) };
 }
 
 /// The body every builtin that is really an API function shares. The

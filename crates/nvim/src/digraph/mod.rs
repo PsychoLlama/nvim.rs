@@ -41,8 +41,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, int16_t,
+    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_LIST,
+    VAR_UNKNOWN, VarNumber, int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -527,13 +527,12 @@ unsafe fn digraph_set_common(argchars: *const TypVal, argdigraph: *const TypVal)
 /// `result` must be a valid return-value slot.
 unsafe fn set_bool_ret(result: *mut TypVal, value: bool) {
     // SAFETY: caller contract.
-    unsafe { (*result).v_type = VAR_BOOL };
     unsafe {
-        (*result).vval.v_bool = if value {
+        (*result).write_boolean(if value {
             K_BOOL_VAR_TRUE
         } else {
             K_BOOL_VAR_FALSE
-        }
+        })
     };
 }
 
@@ -546,8 +545,7 @@ pub unsafe fn f_digraph_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
-        (*result).v_type = VAR_STRING;
-        (*result).vval.v_string = core::ptr::null_mut();
+        (*result).write_string(core::ptr::null_mut());
         numbuf.string_chk(args)
     };
     if digraphs.is_null() {
@@ -569,9 +567,7 @@ pub unsafe fn f_digraph_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
     // `xmemdupz` copies exactly the `len` it wrote.
     let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
-    unsafe {
-        (*result).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char
-    };
+    unsafe { (*result).write_string(xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char) };
 }
 
 /// `digraph_getlist()`.

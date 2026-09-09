@@ -66,8 +66,7 @@ pub unsafe fn call_user_func(
     if depth.get() as OptInt >= p_mfd.get() {
         let deep = c"E132: Function call depth is higher than 'maxfuncdepth'";
         emsg(gettext(deep));
-        rv.v_type = VAR_NUMBER;
-        rv.vval.v_number = -1;
+        rv.write_number(-1);
         return;
     }
     let call_depth = Depth::of(&depth);
@@ -125,7 +124,7 @@ pub unsafe fn call_user_func(
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab }, c"self");
         unsafe { (*v).di_tv.v_type = VAR_DICT };
         unsafe { (*v).di_tv.v_lock = VarLock::Unlocked };
-        unsafe { (*v).di_tv.vval.v_dict = selfdict };
+        unsafe { (*v).di_tv.write_dict(selfdict) };
         unsafe { (*selfdict).dv_refcount.retain() };
     }
 
@@ -148,7 +147,7 @@ pub unsafe fn call_user_func(
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_avars.dv_hashtab }, c"000");
         unsafe { (*v).di_tv.v_type = VAR_LIST };
         unsafe { (*v).di_tv.v_lock = VarLock::Fixed };
-        unsafe { (*v).di_tv.vval.v_list = &raw mut (*fc).fc_l_varlist };
+        unsafe { (*v).di_tv.write_list(&raw mut (*fc).fc_l_varlist) };
     }
     unsafe { tv_list_init_static(&raw mut (*fc).fc_l_varlist) };
     unsafe { tv_list_set_lock(&raw mut (*fc).fc_l_varlist, VarLock::Fixed) };
@@ -194,8 +193,7 @@ pub unsafe fn call_user_func(
             // argument was given for it.
             isdefault = ai + f.uf_def_args.ga_len >= 0 && i >= argcount;
             if isdefault {
-                def_rettv.v_type = VAR_NUMBER;
-                def_rettv.vval.v_number = -1;
+                def_rettv.write_number(-1);
                 let mut default_expr = defaults[(ai + defaults.len() as c_int) as usize];
                 if unsafe { eval1(&raw mut default_expr, &raw mut def_rettv, &raw mut evalarg) }
                     .is_err()
@@ -364,8 +362,7 @@ pub unsafe fn call_user_func(
     // When the function was aborted because of an error, return -1.
     if (did_emsg.get() != 0 && f.uf_flags.has(FuncFlags::ABORT)) || rv.v_type == VAR_UNKNOWN {
         unsafe { tv_clear(result) };
-        rv.v_type = VAR_NUMBER;
-        rv.vval.v_number = -1;
+        rv.write_number(-1);
     }
 
     if func_or_func_caller_profiling {
@@ -556,8 +553,8 @@ pub unsafe fn call_simple_luafunc(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `result` is the return value.
     let mut rv = unsafe { Tv::new(result) };
-    rv.v_type = VAR_NUMBER; // the default is number zero
-    rv.vval.v_number = 0;
+    // the default is number zero
+    rv.write_number(0);
 
     let mut argvars = [TV_INITIAL_VALUE; 1];
     argvars[0].v_type = VAR_UNKNOWN;
@@ -579,8 +576,8 @@ pub unsafe fn call_simple_func(
     // SAFETY: the caller's promise -- `result` is the return value.
     let mut rv = unsafe { Tv::new(result) };
     let mut ret = Err(Failed);
-    rv.v_type = VAR_NUMBER; // the default is number zero
-    rv.vval.v_number = 0;
+    // the default is number zero
+    rv.write_number(0);
 
     let name = unsafe { xstrnsave(funcname, len) };
     let mut error = FCERR_NONE;

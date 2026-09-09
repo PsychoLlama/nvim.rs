@@ -14,7 +14,7 @@ use crate::eval::typval::NumBuf;
 use crate::kvec::InitVec;
 use crate::memory::handoff::owned_cstr;
 use crate::types::builders::static_cstring;
-use crate::types::{NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown};
+use crate::types::{NUL, VAR_DICT, VAR_UNKNOWN, VarLock, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -83,7 +83,7 @@ pub unsafe fn f_hasmapto(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // writable answer slot.
     unsafe {
         let found = map_to_exists(name, mode, abbr);
-        (*result).vval.v_number = VarNumber::from(found);
+        (*result).write_number(VarNumber::from(found));
     }
 }
 
@@ -235,8 +235,7 @@ unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };
     // Return an empty string on failure.
-    ret.v_type = VAR_STRING;
-    ret.vval.v_string = ptr::null_mut();
+    ret.write_string(ptr::null_mut());
 
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector whose first entry is the keys, NUL-terminated.
@@ -305,7 +304,7 @@ unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
         // Return a string.
         if let Some((mp, _)) = found {
             let rhs = &mp.m_rhs;
-            ret.vval.v_string = if rhs.luaref() != LUA_NOREF {
+            ret.write_string(if rhs.luaref() != LUA_NOREF {
                 // SAFETY: `mp` is the matching mapping, still linked.
                 unsafe { nlua_funcref_str(rhs.luaref(), ptr::null_mut()) }
             } else if rhs.str.is_empty() {
@@ -313,7 +312,7 @@ unsafe fn get_maparg(args: *mut TypVal, result: *mut TypVal, exact: bool) {
             } else {
                 // SAFETY: the matching mapping's NUL-terminated RHS.
                 unsafe { str2special_save(rhs.str.as_ptr(), false, false) }
-            };
+            });
         }
     } else if let Some((mp, local)) = found {
         // Return a dictionary.

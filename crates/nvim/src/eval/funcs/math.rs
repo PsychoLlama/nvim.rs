@@ -31,13 +31,12 @@ use core::ptr;
 pub unsafe fn f_abs(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     if args.ty(0) == VAR_FLOAT {
-        result.v_type = VAR_FLOAT;
-        result.vval.v_float = args.get(0).float_or_zero().abs();
+        result.write_float(args.get(0).float_or_zero().abs());
         return;
     }
     let mut error = false;
     let n = arg_number_chk(args.get(0), Some(&mut error));
-    result.vval.v_number = if error {
+    result.write_number(if error {
         -1
     } else if n > 0 {
         n
@@ -45,7 +44,7 @@ pub unsafe fn f_abs(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
         // Not `-n`: `wrapping_neg` keeps the C's two's-complement answer for
         // the one value whose negation does not fit.
         n.wrapping_neg()
-    };
+    });
 }
 
 /// The bitwise operators. Each coerces both arguments with a null error
@@ -59,7 +58,7 @@ pub unsafe fn f_abs(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 /// dispatchers keep.
 pub unsafe fn f_and(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = number(args, 0) & number(args, 1);
+    result.write_number(number(args, 0) & number(args, 1));
 }
 
 /// # Safety
@@ -69,7 +68,7 @@ pub unsafe fn f_and(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 /// dispatchers keep.
 pub unsafe fn f_or(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = number(args, 0) | number(args, 1);
+    result.write_number(number(args, 0) | number(args, 1));
 }
 
 /// # Safety
@@ -79,7 +78,7 @@ pub unsafe fn f_or(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
 /// dispatchers keep.
 pub unsafe fn f_xor(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = number(args, 0) ^ number(args, 1);
+    result.write_number(number(args, 0) ^ number(args, 1));
 }
 
 /// # Safety
@@ -89,7 +88,7 @@ pub unsafe fn f_xor(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 /// dispatchers keep.
 pub unsafe fn f_invert(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = !number(args, 0);
+    result.write_number(!number(args, 0));
 }
 
 /// Argument `i` as a Number, reporting its own error and reading as 0 when
@@ -136,11 +135,10 @@ pub unsafe fn f_pow(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
 /// Apply `op` to the first two arguments coerced to Float, or return 0.0
 /// having reported E808.
 fn float2(args: Args<'_>, result: &mut TypVal, op: impl FnOnce(c_double, c_double) -> c_double) {
-    result.v_type = VAR_FLOAT;
-    result.vval.v_float = match (float_arg(args, 0), float_arg(args, 1)) {
+    result.write_float(match (float_arg(args, 0), float_arg(args, 1)) {
         (Some(x), Some(y)) => op(x, y),
         _ => 0.0,
-    };
+    });
 }
 
 // -- The one-argument float builtins ---------------------------------------
@@ -230,13 +228,13 @@ pub unsafe fn f_float2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     };
     // The epsilon nudge is upstream's: it keeps a value that rounds to the
     // limit on the saturating side of the cast.
-    result.vval.v_number = if f <= -(VARNUMBER_MAX as c_double) + c_double::EPSILON {
+    result.write_number(if f <= -(VARNUMBER_MAX as c_double) + c_double::EPSILON {
         -(VARNUMBER_MAX as VarNumber)
     } else if f >= VARNUMBER_MAX as c_double - c_double::EPSILON {
         VARNUMBER_MAX as VarNumber
     } else {
         f as VarNumber
-    };
+    });
 }
 
 /// `isinf({expr})` — 1, -1, or (for anything that is not an infinite Float)
@@ -252,7 +250,7 @@ pub unsafe fn f_isinf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     if let Some(f) = args.get(0).as_float()
         && f.is_infinite()
     {
-        result.vval.v_number = if f > 0.0 { 1 } else { -1 };
+        result.write_number(if f > 0.0 { 1 } else { -1 });
     }
 }
 
@@ -265,7 +263,7 @@ pub unsafe fn f_isinf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 /// dispatchers keep.
 pub unsafe fn f_isnan(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = args.get(0).as_float().is_some_and(c_double::is_nan) as VarNumber;
+    result.write_number(args.get(0).as_float().is_some_and(c_double::is_nan) as VarNumber);
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the
@@ -345,8 +343,7 @@ pub unsafe fn f_rand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
             semsg!("E475: Invalid argument: {what}");
-            result.v_type = VAR_NUMBER;
-            result.vval.v_number = -1;
+            result.write_number(-1);
             return;
         };
         // SAFETY throughout: `seed_list` proved all four items are live Numbers.
@@ -358,12 +355,11 @@ pub unsafe fn f_rand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         ];
         let draw = xoshiro128starstar(&mut state);
         for (item, word) in seed.iter().zip(state) {
-            unsafe { (**item).vval.v_number = word as VarNumber };
+            unsafe { (**item).write_number(word as VarNumber) };
         }
         draw
     };
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = value as VarNumber;
+    result.write_number(value as VarNumber);
 }
 
 /// The four state words of a seed list, or `None` if the value is not a
@@ -515,6 +511,6 @@ pub unsafe fn f_str2float(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     result.v_type = VAR_FLOAT;
     unsafe { string2float(p, &raw mut result.vval.v_float) };
     if negate {
-        result.vval.v_float = -result.float_or_zero();
+        result.write_float(-result.float_or_zero());
     }
 }

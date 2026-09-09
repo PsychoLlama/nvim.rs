@@ -377,9 +377,7 @@ pub unsafe fn f_complete(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFun
 /// owns and will clear. `_fptr` must be an initialized `EvalFuncData` whose
 /// pointer fields point at live data for the call.
 pub unsafe fn f_complete_add(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).vval.v_number = ins_compl_add_tv(args, kDirectionNotSet, false) as VarNumber
-    };
+    unsafe { (*result).write_number(ins_compl_add_tv(args, kDirectionNotSet, false) as VarNumber) };
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
@@ -393,7 +391,7 @@ pub unsafe fn f_complete_add(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 pub unsafe fn f_complete_check(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     ins_compl_check_keys(0, true);
-    unsafe { (*result).vval.v_number = ins_compl_interrupted() as VarNumber };
+    unsafe { (*result).write_number(ins_compl_interrupted() as VarNumber) };
 }
 
 /// Fill `di` with one match, as `complete_info()` reports it.

@@ -100,8 +100,7 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise about `result`.
     let result = unsafe { &mut *result };
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
 
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
@@ -194,8 +193,7 @@ pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `result`.
     let ret = unsafe { &mut *result };
-    ret.v_type = VAR_NUMBER;
-    ret.vval.v_number = 0;
+    ret.write_number(0);
 
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
@@ -221,7 +219,7 @@ pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncDa
         let mut error: *const c_char = core::ptr::null();
         // SAFETY: `error` is written whenever the close fails.
         let closed = unsafe { channel_close(id, kChannelPartRpc, &raw mut error) };
-        ret.vval.v_number = closed as VarNumber;
+        ret.write_number(closed as VarNumber);
         if !closed {
             // SAFETY: the failed close named its reason.
             unsafe { emsg_ptr(error) };
@@ -242,7 +240,7 @@ pub unsafe fn f_last_buffer_nr(_args: *mut TypVal, result: *mut TypVal, _fptr: E
         n = n.max(buf.handle());
     }
     // SAFETY: the caller's promise about `result`.
-    unsafe { (*result).vval.v_number = n as VarNumber };
+    unsafe { (*result).write_number(n as VarNumber) };
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.
@@ -261,9 +259,8 @@ pub unsafe fn f_termopen(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncD
     // and free it again on the way out.
     let must_free = argv[1].v_type == VAR_UNKNOWN;
     if must_free {
-        argv[1].v_type = VAR_DICT;
         // SAFETY: `tv_dict_alloc` never answers NULL.
-        argv[1].vval.v_dict = unsafe { tv_dict_alloc() };
+        argv[1].write_dict(unsafe { tv_dict_alloc() });
     }
 
     if argv[1].v_type != VAR_DICT {

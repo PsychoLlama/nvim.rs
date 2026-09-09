@@ -253,87 +253,75 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
     gettext(msg).as_ptr()
 }
 
-/// The unlocked scalars and container handles, spelled once.
+/// The tag-and-payload writers for `TypVal`'s union, generated over its ten
+/// tag/member pairs.
 ///
-/// c2rust wrote the designated initialiser out in full at every site — three
-/// fields, one of them a union literal, over six to nine lines. Every one of
-/// them is the same shape: a `v_type` tag, `VarLock::Unlocked`, and the one
-/// union member that tag selects. Writing a union field is safe, so these are
-/// safe `const fn`s, and the sites that used to spell them inside an `unsafe`
-/// region no longer put the literal there.
+/// The `TypVal::x(v)` form **makes** a value: c2rust wrote the designated
+/// initialiser out in full at every site — three fields, one of them a union
+/// literal, over six to nine lines — and every one of them was a `v_type`
+/// tag, `VarLock::Unlocked`, and the one union member that tag selects.
 ///
-/// Deliberately not a constructor for `VAR_UNKNOWN`: that one is
-/// [`TV_INITIAL_VALUE`], because it is a value rather than a conversion.
-impl TypVal {
-    /// A `VAR_NUMBER`.
-    #[inline(always)]
-    pub(crate) const fn number(v_number: VarNumber) -> Self {
-        Self {
-            v_type: VAR_NUMBER,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_number },
-        }
-    }
+/// The `tv.write_x(v)` form **overwrites a slot**: it sets the tag and the
+/// payload and leaves `v_lock` alone, because the lock belongs to the slot
+/// (a list item, a dictionary item, a variable) and not to the value sitting
+/// in it. It is deliberately not called `set`: it does **not** release what
+/// the slot held, so a caller replacing a value rather than filling a fresh
+/// one still clears it first. When the union becomes an enum that release is
+/// `Drop`'s job and this comment goes away.
+///
+/// Writing a union field is safe — it is only *reading* one that needs a tag
+/// to be meaningful (see [`union_readers`]) — so both forms are safe, and
+/// the sites that used to spell a tag and an arm inside an `unsafe` region no
+/// longer put either there.
+///
+/// A row carries a constructor only where something builds a value of that
+/// kind; the rest fill a slot and have the writer alone. `VAR_UNKNOWN` has
+/// neither: that one is [`TV_INITIAL_VALUE`], a value rather than a
+/// conversion.
+macro_rules! union_writers {
+    ($(
+        $tag:ident, $member:ident, $ty:ty, $write_fn:ident, $what:expr $(, $new_fn:ident)?;
+    )*) => {
+        impl TypVal {
+            $(
+                $(
+                    #[doc = concat!("A `", stringify!($tag), "` over ", $what, ".")]
+                    #[doc = ""]
+                    #[doc = "Unlocked, and taking no reference: see [`union_writers`]."]
+                    #[inline(always)]
+                    pub(crate) const fn $new_fn($member: $ty) -> Self {
+                        Self {
+                            v_type: $tag,
+                            v_lock: VarLock::Unlocked,
+                            vval: typval_vval_union { $member },
+                        }
+                    }
+                )?
 
-    /// A `VAR_BOOL`.
-    #[inline(always)]
-    pub(crate) const fn boolean(v_bool: BoolVarValue) -> Self {
-        Self {
-            v_type: VAR_BOOL,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_bool },
+                #[doc = concat!("Overwrite this slot with a `", stringify!($tag), "` over ", $what, ".")]
+                #[doc = ""]
+                #[doc = "Keeps the slot's `v_lock` and releases nothing: see [`union_writers`]."]
+                #[inline(always)]
+                pub(crate) fn $write_fn(&mut self, $member: $ty) {
+                    self.v_type = $tag;
+                    self.vval = typval_vval_union { $member };
+                }
+            )*
         }
-    }
+    };
+}
 
-    /// A `VAR_SPECIAL`.
-    #[inline(always)]
-    pub(crate) const fn special(v_special: SpecialVarValue) -> Self {
-        Self {
-            v_type: VAR_SPECIAL,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_special },
-        }
-    }
-
-    /// A `VAR_FLOAT`.
-    #[inline(always)]
-    pub(crate) const fn float(v_float: Float) -> Self {
-        Self {
-            v_type: VAR_FLOAT,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_float },
-        }
-    }
-
-    /// A `VAR_STRING` owning `v_string`.
-    #[inline(always)]
-    pub(crate) const fn string(v_string: *mut ::core::ffi::c_char) -> Self {
-        Self {
-            v_type: VAR_STRING,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_string },
-        }
-    }
-
-    /// A `VAR_LIST`.  Takes no reference; the caller still owes `tv_list_ref`.
-    #[inline(always)]
-    pub(crate) const fn list(v_list: *mut List) -> Self {
-        Self {
-            v_type: VAR_LIST,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_list },
-        }
-    }
-
-    /// A `VAR_DICT`.  Takes no reference; the caller still owes a `retain`.
-    #[inline(always)]
-    pub(crate) const fn dict(v_dict: *mut Dict) -> Self {
-        Self {
-            v_type: VAR_DICT,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_dict },
-        }
-    }
+union_writers! {
+    VAR_NUMBER,  v_number,  VarNumber,                write_number,    "an integer",              number;
+    VAR_BOOL,    v_bool,    BoolVarValue,             write_boolean,   "`v:true`/`v:false`",      boolean;
+    VAR_SPECIAL, v_special, SpecialVarValue,          write_special,   "`v:null`",                special;
+    VAR_FLOAT,   v_float,   Float,                    write_float,     "a float",                 float;
+    VAR_STRING,  v_string,  *mut ::core::ffi::c_char, write_string,    "an owned string",         string;
+    VAR_FUNC,    v_string,  *mut ::core::ffi::c_char, write_func_name, "an owned function name",  func_name;
+    VAR_LIST,    v_list,    *mut List,                write_list,      "a list",                  list;
+    VAR_DICT,    v_dict,    *mut Dict,                write_dict,      "a dictionary",            dict;
+    VAR_PARTIAL, v_partial, *mut Partial,             write_partial,   "a partial";
+    VAR_BLOB,    v_blob,    *mut Blob,                write_blob,      "a blob";
 }
 
 /// True when an intrusive queue head has no entries.
@@ -404,8 +392,7 @@ pub unsafe fn tv_list_ref(l: *mut List) {
 pub unsafe fn tv_list_set_ret(tv: *mut TypVal, l: *mut List) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
-    val.v_type = VAR_LIST;
-    val.vval.v_list = l;
+    val.write_list(l);
     unsafe { tv_list_ref(l) };
 }
 
@@ -541,8 +528,7 @@ pub(crate) fn tv_list_iter(l: Option<&List>) -> ListIter {
 pub unsafe fn tv_dict_set_ret(tv: *mut TypVal, d: *mut Dict) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
-    val.v_type = VAR_DICT;
-    val.vval.v_dict = d;
+    val.write_dict(d);
     if let Some(d) = unsafe { d.as_mut() } {
         d.dv_refcount.retain();
     }
@@ -690,8 +676,7 @@ pub(crate) unsafe fn tv_ht_iter(ht: *const HashTab) -> DictIter {
 pub unsafe fn tv_blob_set_ret(tv: *mut TypVal, b: *mut Blob) {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
-    val.v_type = VAR_BLOB;
-    val.vval.v_blob = b;
+    val.write_blob(b);
     if let Some(b) = unsafe { b.as_mut() } {
         b.bv_refcount.retain();
     }
@@ -813,11 +798,7 @@ mod tests {
         assert_eq!(string.as_func_name(), None);
         assert_eq!(string.string_or_func_name(), text);
 
-        let func = TypVal {
-            v_type: VAR_FUNC,
-            v_lock: VarLock::Unlocked,
-            vval: typval_vval_union { v_string: text },
-        };
+        let func = TypVal::func_name(text);
         assert_eq!(func.as_string(), None);
         assert_eq!(func.as_func_name(), Some(text));
         assert_eq!(func.string_or_func_name(), text);

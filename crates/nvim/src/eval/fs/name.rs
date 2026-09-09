@@ -30,7 +30,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, ret_string, str_arg_chk};
+use super::{Owned, VALID_HEAD, VALID_PATH, at, frame, from, is_sep, str_arg_chk};
 use crate::eval::do_string_sub;
 use crate::eval::typval::NumBuf;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
@@ -631,7 +631,7 @@ pub unsafe fn f_fnamemodify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         str_arg_chk(args, 1, &mut buf),
     );
     let (Some(fname), Some(mods)) = (fname, mods) else {
-        ret_string(result, ptr::null_mut());
+        result.write_string(ptr::null_mut());
         return;
     };
 
@@ -648,13 +648,10 @@ pub unsafe fn f_fnamemodify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         // own length, and the three out-parameters are this call's locals.
         unsafe { modify_fname(m, false, u, n, b, l) };
     }
-    ret_string(
-        result,
-        if name.is_null() {
-            ptr::null_mut()
-        } else {
-            // SAFETY: `name` has `len` readable bytes.
-            unsafe { Owned::dupz(name, len) }.into_raw()
-        },
-    );
+    result.write_string(if name.is_null() {
+        ptr::null_mut()
+    } else {
+        // SAFETY: `name` has `len` readable bytes.
+        unsafe { Owned::dupz(name, len) }.into_raw()
+    });
 }

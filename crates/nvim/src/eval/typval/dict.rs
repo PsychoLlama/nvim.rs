@@ -429,12 +429,7 @@ pub unsafe fn tv_dict_add_func(
     let func = unsafe { Live::<UserFunc>::new(func) };
     let namelen = func.uf_namelen;
     let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
-    unsafe {
-        (*item).di_tv = TypVal {
-            v_type: VAR_FUNC,
-            ..TypVal::string(owned)
-        }
-    };
+    unsafe { (*item).di_tv = TypVal::func_name(owned) };
     if unsafe { tv_dict_add(d, item) }.is_err() {
         unsafe { tv_dict_item_free(item) };
         return Err(Failed);

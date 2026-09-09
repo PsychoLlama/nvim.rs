@@ -407,7 +407,7 @@ impl Flags {
 /// a cleared result.
 pub unsafe fn f_writefile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1 as VarNumber;
+    result.write_number(-1 as VarNumber);
     if secure() || !writable(args) {
         return;
     }
@@ -450,7 +450,7 @@ pub unsafe fn f_writefile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
         _ => write_list(&mut out, list_of(args.get(0)), flags.binary),
     };
     if write_ok {
-        result.vval.v_number = 0 as VarNumber;
+        result.write_number(0 as VarNumber);
     }
     let error = out.close(flags.do_fsync);
     if error != 0 {

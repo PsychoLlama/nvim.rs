@@ -105,8 +105,7 @@ pub(crate) unsafe fn eval_func(
     // While skipping, a name that was never resolved still has to look
     // like a Funcref so the subscript handling can go on.
     if rv.v_type == VAR_UNKNOWN && !evaluate && cur.byte() == b'(' {
-        rv.vval.v_string = tv_empty_string.get() as *mut c_char;
-        rv.v_type = VAR_FUNC;
+        rv.write_func_name(tv_empty_string.get() as *mut c_char);
     }
     if evaluate && aborting() {
         if ret.is_ok() {
@@ -335,7 +334,7 @@ pub(crate) unsafe fn eval_method(
                 // Take the name over from the typval so `tv_clear`
                 // below does not free what is about to be called.
                 name = callee.func_name_or_null();
-                callee.vval.v_string = null_mut();
+                callee.write_func_name(null_mut());
                 tofree = name;
                 len = unsafe { cstr::bytes_at(name) }.len() as c_int;
             } else if callee.v_type == VAR_PARTIAL && !callee.partial_or_null().is_null() {
@@ -388,7 +387,7 @@ pub(crate) unsafe fn eval_method(
                 if evaluate {
                     rv.v_type = VAR_PARTIAL;
                     let pt = get_vim_var_partial(Vv::Lua);
-                    rv.vval.v_partial = pt;
+                    rv.write_partial(pt);
                     unsafe { (*pt).pt_refcount.retain() };
                 }
                 let lua = lua_funcname;

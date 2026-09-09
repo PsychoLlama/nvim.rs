@@ -37,7 +37,7 @@ use crate::search::state::magic_overruled;
 use crate::state::mode::State;
 use crate::types::{
     BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
-    ShmFlag, TypVal, VAR_STRING, int64_t, size_t, uint8_t,
+    ShmFlag, TypVal, int64_t, size_t, uint8_t,
 };
 
 use super::{
@@ -194,8 +194,7 @@ pub(crate) unsafe fn option_set_callback_func(
         tv
     } else {
         let tv = unsafe { xcalloc(1, size_of::<TypVal>()) }.cast::<TypVal>();
-        unsafe { (*tv).v_type = VAR_STRING };
-        unsafe { (*tv).vval.v_string = xstrdup(optval) };
+        unsafe { (*tv).write_string(xstrdup(optval)) };
         tv
     };
     let mut cb = Callback::None;

@@ -486,8 +486,7 @@ pub unsafe fn do_return(
             }
             if reanimate {
                 // The return value is not available yet.
-                unsafe { (*(*current_funccal.get()).fc_rettv).v_type = VAR_NUMBER };
-                unsafe { (*(*current_funccal.get()).fc_rettv).vval.v_number = 0 };
+                unsafe { (*(*current_funccal.get()).fc_rettv).write_number(0) };
             }
         }
         unsafe { report_make_pending(CSTP_RETURN, result) };

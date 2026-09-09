@@ -387,7 +387,7 @@ pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr
         return;
     }
 
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: the argument slots the frame named.
     let name = unsafe { numbuf.string_chk(args.ptr(0)) }.cast_mut();
     // SAFETY: as above.
@@ -397,7 +397,7 @@ pub(crate) unsafe fn f_sign_define(args: *mut TypVal, result: *mut TypVal, _fptr
     // SAFETY: the tag says the dictionary arm is live.
     let d = unsafe { dict_arg(args, 1) };
     // SAFETY: the name and dictionary just read out of the frame.
-    result.vval.v_number = VarNumber::from(unsafe { sign_define_from_dict(name, d) });
+    result.write_number(VarNumber::from(unsafe { sign_define_from_dict(name, d) }));
 }
 
 /// `sign_getdefined()`.
@@ -489,7 +489,7 @@ pub(crate) unsafe fn f_sign_getplaced(args: *mut TypVal, result: *mut TypVal, _f
 pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
 
     let mut notanum = false;
     // SAFETY: the frame's argument slots.
@@ -513,8 +513,8 @@ pub(crate) unsafe fn f_sign_jump(args: *mut TypVal, result: *mut TypVal, _fptr: 
     }
 
     // SAFETY: a live buffer and a group name the argument owns.
-    result.vval.v_number =
-        VarNumber::from(unsafe { sign_jump(id, group, buf.expect("a live handle")) });
+    let jumped = unsafe { sign_jump(id, group, buf.expect("a live handle")) };
+    result.write_number(VarNumber::from(jumped));
 }
 
 /// The named key's value, or the positional typval when there is one.
@@ -630,7 +630,7 @@ unsafe fn sign_place_from_dict(
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_place(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     let mut dict = null();
     if args.has(4) {
         // SAFETY: the frame's argument slots.
@@ -643,7 +643,7 @@ pub(crate) unsafe fn f_sign_place(args: *mut TypVal, result: *mut TypVal, _fptr:
     // SAFETY: the frame's argument slots and the dictionary just read.
     let id =
         unsafe { sign_place_from_dict(args.ptr(0), args.ptr(1), args.ptr(2), args.ptr(3), dict) };
-    result.vval.v_number = VarNumber::from(id);
+    result.write_number(VarNumber::from(id));
 }
 
 /// `sign_placelist()`.
@@ -681,17 +681,17 @@ pub(crate) unsafe fn f_sign_undefine(args: *mut TypVal, result: *mut TypVal, _fp
         return;
     }
 
-    result.vval.v_number = -1;
+    result.write_number(-1);
     if !args.has(0) {
         free_signs();
-        result.vval.v_number = 0;
+        result.write_number(0);
         return;
     }
     // SAFETY: the frame's argument slot.
     let name = unsafe { numbuf2.string_chk(args.ptr(0)) };
     // SAFETY: a name the argument owns, NUL-terminated.
     if !name.is_null() && unsafe { sign_undefine_by_name(name) }.is_ok() {
-        result.vval.v_number = 0;
+        result.write_number(0);
     }
 }
 
@@ -742,7 +742,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::co
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_unplace(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: the frame's argument slots.
     if unsafe { tv_check_for_string_arg(args.ptr(0), 0) }.is_err()
         || unsafe { tv_check_for_opt_dict_arg(args.ptr(0), 1) }.is_err()
@@ -752,7 +752,8 @@ pub(crate) unsafe fn f_sign_unplace(args: *mut TypVal, result: *mut TypVal, _fpt
     // SAFETY: the check above says the dictionary arm is live if it is set.
     let dict = unsafe { dict_arg(args, 1) };
     // SAFETY: the frame's first argument and the dictionary just read.
-    result.vval.v_number = VarNumber::from(unsafe { sign_unplace_from_dict(args.ptr(0), dict) });
+    let unplaced = unsafe { sign_unplace_from_dict(args.ptr(0), dict) };
+    result.write_number(VarNumber::from(unplaced));
 }
 
 /// `sign_unplacelist()`.

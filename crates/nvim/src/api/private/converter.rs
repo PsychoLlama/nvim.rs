@@ -43,8 +43,7 @@ use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
     ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair, List,
-    LuaRef, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN, VarLock, int64_t, kBoolVarFalse, kBoolVarTrue,
+    LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, VarLock, int64_t, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, size_t, typval_vval_union,
 };
 use crate::winlayer::Live;
@@ -440,12 +439,10 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
     let value = *obj;
     match value {
         Object::Nil => {
-            tv.v_type = VAR_SPECIAL;
-            tv.vval.v_special = kSpecialVarNull;
+            tv.write_special(kSpecialVarNull);
         }
         Object::Boolean(on) => {
-            tv.v_type = VAR_BOOL;
-            tv.vval.v_bool = if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
+            tv.write_boolean(if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue);
         }
         // A handle is an integer with a wire type of its own; Vimscript has
         // no separate notion of one.
@@ -453,12 +450,10 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
         | Object::Window(number)
         | Object::Tabpage(number)
         | Object::Integer(number) => {
-            tv.v_type = VAR_NUMBER;
-            tv.vval.v_number = number;
+            tv.write_number(number);
         }
         Object::Float(float) => {
-            tv.v_type = VAR_FLOAT;
-            tv.vval.v_float = float as Float;
+            tv.write_float(float as Float);
         }
         Object::String(str) => {
             // SAFETY: the string names `len` readable bytes.
@@ -481,8 +476,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
             }
             // SAFETY: `list` is the list just built.
             unsafe { tv_list_ref(list) };
-            tv.v_type = VAR_LIST;
-            tv.vval.v_list = list;
+            tv.write_list(list);
         }
         Object::Dict(pairs) => {
             // SAFETY: the dictionary is this call's until it is handed over.
@@ -501,8 +495,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
             // SAFETY: `dict` is the dictionary just built; the reference the
             // typval is about to hold is what this counts.
             unsafe { (*dict).dv_refcount.retain() };
-            tv.v_type = VAR_DICT;
-            tv.vval.v_dict = dict;
+            tv.write_dict(dict);
         }
         Object::LuaRef(mut ref_0) => {
             if take_luaref {
@@ -515,9 +508,8 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut TypVal, take_
             // SAFETY: as above; `register_luafunc` answers a NUL-terminated
             // name owned by the registry.
             let name = unsafe { register_luafunc(ref_0) };
-            tv.v_type = VAR_FUNC;
             // SAFETY: `name` is that name.
-            tv.vval.v_string = unsafe { xstrdup(name) };
+            tv.write_func_name(unsafe { xstrdup(name) });
         }
     }
 }

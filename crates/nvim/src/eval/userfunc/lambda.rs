@@ -233,8 +233,7 @@ pub unsafe fn get_lambda_tv(
 
             part.pt_func = fp;
             part.pt_refcount = Refcount::ONE;
-            rv.vval.v_partial = pt;
-            rv.v_type = VAR_PARTIAL;
+            rv.write_partial(pt);
         }
         true
     };
@@ -284,8 +283,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
         if fname.is_null() {
             // There is no point binding a dict to a NULL function, just
             // create a function reference.
-            rv.v_type = VAR_FUNC;
-            rv.vval.v_string = ptr::null_mut();
+            rv.write_func_name(ptr::null_mut());
         } else {
             // Translate "s:func" to the stored function name.
             let mut tofree: *mut c_char = ptr::null_mut();
@@ -335,8 +333,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
         }
         unsafe { partial_unref(ret_pt.raw()) };
     }
-    rv.v_type = VAR_PARTIAL;
-    rv.vval.v_partial = pt;
+    rv.write_partial(pt);
 }
 
 /// Wrap a Lua reference in a `UserFunc`, so that Vimscript can call it by

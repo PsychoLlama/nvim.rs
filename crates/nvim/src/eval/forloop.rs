@@ -30,8 +30,8 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, size_t, typval_vval_union,
+    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -180,10 +180,9 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
             return false;
         }
         let mut tv = UNSET_TV;
-        tv.v_type = VAR_NUMBER;
         tv.v_lock = VarLock::Fixed;
         // SAFETY: as above; `fi_bi` is inside the Blob.
-        tv.vval.v_number = unsafe { tv_blob_get(fi.fi_blob, fi.fi_bi) } as VarNumber;
+        tv.write_number(unsafe { tv_blob_get(fi.fi_blob, fi.fi_bi) } as VarNumber);
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_bi += 1 };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
@@ -200,10 +199,9 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
             return false;
         }
         let mut tv = UNSET_TV;
-        tv.v_type = VAR_STRING;
         tv.v_lock = VarLock::Fixed;
         // SAFETY: `len` bytes from `at` are the character just measured.
-        tv.vval.v_string = unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char };
+        tv.write_string(unsafe { xmemdupz(at as *const c_void, len as size_t) as *mut c_char });
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_byte_idx += len };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.

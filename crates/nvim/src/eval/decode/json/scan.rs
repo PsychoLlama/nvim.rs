@@ -339,7 +339,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
             let shown = unsafe { c_str_len(text, want) };
             emsg_text(tr_c!(E685_INTEGER, want as c_int, shown, got, want));
         }
-        tv.vval.v_number = nr;
+        tv.write_number(nr);
     }
 
     let value = dec.value(tv, false);

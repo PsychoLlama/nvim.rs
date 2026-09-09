@@ -611,12 +611,12 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     args[0].v_type = VAR_NUMBER;
     args[1].v_type = VAR_STRING;
     args[2].v_type = VAR_UNKNOWN;
-    args[0].vval.v_number = 0;
-    args[1].vval.v_string = if base.is_null() {
+    args[0].write_number(0);
+    args[1].write_string(if base.is_null() {
         c"".as_ptr().cast_mut()
     } else {
         base
-    };
+    });
 
     let mut matchlist: *mut List = ptr::null_mut();
     let mut matchdict: *mut Dict = ptr::null_mut();

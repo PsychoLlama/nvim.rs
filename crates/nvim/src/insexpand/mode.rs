@@ -699,7 +699,7 @@ pub unsafe fn f_preinserted(_args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // `result` is the live return value the caller allocated.
     unsafe {
         if ins_compl_preinsert_effect() {
-            (*result).vval.v_number = 1;
+            (*result).write_number(1);
         }
     }
 }

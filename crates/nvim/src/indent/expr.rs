@@ -449,11 +449,11 @@ pub unsafe fn f_indent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     // SAFETY: the caller's typvals, and there is a current buffer.
     let lnum = unsafe { tv_get_lnum(args) };
     unsafe {
-        (*result).vval.v_number = if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
             get_indent_lnum(lnum) as VarNumber
         } else {
             -1
-        };
+        });
     }
 }
 /// `lispindent(lnum)`.
@@ -467,14 +467,14 @@ pub unsafe fn f_lispindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let pos = win.w_cursor;
     let lnum = unsafe { tv_get_lnum(args) };
     unsafe {
-        (*result).vval.v_number = if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
             win.w_cursor.lnum = lnum;
             let amount = get_lisp_indent() as VarNumber;
             win.w_cursor = pos;
             amount
         } else {
             -1
-        }
+        })
     };
 }
 

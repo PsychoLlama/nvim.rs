@@ -122,7 +122,7 @@ pub unsafe fn f_dictwatcherdel(args: *mut TypVal, _result: *mut TypVal, _fptr: E
 pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
     // read below comes back from it; `clear_lval` runs on every path.
     let mut lv = unsafe { core::mem::zeroed() };
@@ -147,7 +147,7 @@ pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             if !di.is_null() {
                 let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
                     || unsafe { tv_islocked(&raw mut (*di).di_tv) };
-                result.vval.v_number = locked as VarNumber;
+                result.write_number(locked as VarNumber);
             }
         } else if lv.ll_range {
             semsg!("E786: Range not allowed");
@@ -156,9 +156,9 @@ pub unsafe fn f_islocked(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             let ll_newkey = unsafe { c_str(lv.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
-            result.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber;
+            result.write_number(unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber);
         } else {
-            result.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber;
+            result.write_number(unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber);
         }
     }
     unsafe { clear_lval(&raw mut lv) };
@@ -184,8 +184,7 @@ pub unsafe fn f_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) 
     let nul = ptr::null_mut();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
-    result.v_type = VAR_STRING;
-    result.vval.v_string = unsafe { xmalloc(len as usize + 1) } as *mut c_char;
+    result.write_string(unsafe { xmalloc(len as usize + 1) } as *mut c_char);
     let out = result.string_or_null();
     let cap = len as usize + 1;
     let ap = unsafe { (*dummy_ap.ptr()).clone() };

@@ -29,7 +29,7 @@
 
 use super::{
     Args, FINDFILE_DIR, FINDFILE_FILE, RetList, XP_PREFIX_NONE, frame, kDirectionNotSet, nr_arg,
-    ret_string, str_arg, str_arg_chk,
+    str_arg, str_arg_chk,
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one, globpath};
 use crate::eval::eval_expr_typval;
@@ -231,7 +231,7 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
     let mut count = 1;
     let mut error = false;
 
-    ret_string(result, ptr::null_mut());
+    result.write_string(ptr::null_mut());
     let fname = str_arg(args, 0, &mut numbuf);
 
     let mut pathbuf = NumBuf::new();
@@ -301,7 +301,7 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
     // The List answer appended a copy of each match and only leaves the
     // loop on a NULL, so there is nothing left to hand back there.
     if result.v_type == VAR_STRING {
-        result.vval.v_string = fresult;
+        result.write_string(fresult);
     }
 }
 
@@ -354,7 +354,7 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
         }
     }
     if error {
-        result.vval.v_string = ptr::null_mut();
+        result.write_string(ptr::null_mut());
         return;
     }
 
@@ -364,7 +364,7 @@ pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     }
     let pat = str_arg(args, 0, &mut numbuf);
     if result.v_type == VAR_STRING {
-        result.vval.v_string = xpc.one(pat, options, WildMode::All);
+        result.write_string(xpc.one(pat, options, WildMode::All));
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
@@ -405,7 +405,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut buf1 = NumBuf::new();
     let file = str_arg_chk(args, 1, &mut buf1);
     let (Some(file), false) = (file, error) else {
-        result.vval.v_string = ptr::null_mut();
+        result.write_string(ptr::null_mut());
         return;
     };
 
@@ -416,7 +416,7 @@ pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
 
     if result.v_type == VAR_STRING {
-        result.vval.v_string = found.joined(c"\n");
+        result.write_string(found.joined(c"\n"));
         return;
     }
     let list = RetList::alloc(result, found.len() as ptrdiff_t);
@@ -447,10 +447,9 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
     set_val(name);
 
     let mut argv = [TV_INITIAL_VALUE; 2];
-    argv[0].v_type = VAR_STRING;
     // The callee only reads it; `argv` is never cleared, which is why the
     // name is not copied.
-    argv[0].vval.v_string = name.cast_mut();
+    argv[0].write_string(name.cast_mut());
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;

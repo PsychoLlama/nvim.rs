@@ -251,12 +251,12 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
         if unsafe { *colored_ccline.at(colored_ccline.len()) } as ::core::ffi::c_int != NUL {
             arg_allocated = true;
-            arg.vval.v_string = unsafe {
+            arg.write_string(unsafe {
                 xmemdupz(
                     colored_ccline.text() as *const ::core::ffi::c_void,
                     colored_ccline.len() as size_t,
                 )
-            } as *mut ::core::ffi::c_char;
+            } as *mut ::core::ffi::c_char);
         }
         // msg_start(), called by e.g. :echo, may shift the command line to
         // the first column even under msg_silent. Two ways round it

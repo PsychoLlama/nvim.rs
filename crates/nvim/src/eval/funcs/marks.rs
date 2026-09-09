@@ -36,7 +36,7 @@ use core::ptr;
 /// dispatchers keep.
 pub unsafe fn f_changenr(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = Buf::current().b_u_seq_cur as VarNumber };
+    unsafe { (*result).write_number(Buf::current().b_u_seq_cur as VarNumber) };
 }
 
 /// Add one `{lnum, col, coladd}` entry to `l`, skipping a cleared mark.
@@ -195,7 +195,7 @@ pub unsafe fn f_gettagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn f_settagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: the arguments are live typvals; after the check argument 1's
     // union holds a Dict pointer, which may still be null.
     let found = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
@@ -228,7 +228,7 @@ pub unsafe fn f_settagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
         }
     }
     if unsafe { set_tagstack(wp, d, action as c_int) }.is_ok() {
-        result.vval.v_number = 0;
+        result.write_number(0);
     }
 }
 
@@ -264,7 +264,7 @@ pub unsafe fn f_taglist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // NUL-terminated and outlive the search.
     let pattern = arg_string(&mut numbuf, args.get(0));
     // An empty pattern answers 0 — a Number, not an empty List.
-    result.vval.v_number = 0;
+    result.write_number(0);
     if unsafe { *pattern } == NUL as c_char {
         return;
     }

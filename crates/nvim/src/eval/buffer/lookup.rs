@@ -64,7 +64,7 @@ pub unsafe fn f_bufadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     } else {
         name
     };
-    result.vval.v_number = VarNumber::from(unsafe { buflist_add(name, 0) });
+    result.write_number(VarNumber::from(unsafe { buflist_add(name, 0) }));
 }
 
 /// `bufexists({buf})`.
@@ -78,7 +78,7 @@ pub unsafe fn f_bufexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let buf = unsafe { find_buffer(args.ptr(0)) };
-    result.vval.v_number = VarNumber::from(buf.is_some());
+    result.write_number(VarNumber::from(buf.is_some()));
 }
 
 /// `buflisted({buf})`.
@@ -93,7 +93,7 @@ pub unsafe fn f_buflisted(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let listed = unsafe { find_buffer(args.ptr(0)) }.is_some_and(|b| b.b_p_bl != 0);
-    result.vval.v_number = VarNumber::from(listed);
+    result.write_number(VarNumber::from(listed));
 }
 
 /// `bufload({buf})` — read the file in if the buffer is not loaded yet.
@@ -131,7 +131,7 @@ pub unsafe fn f_bufloaded(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let loaded = unsafe { find_buffer(args.ptr(0)) }.is_some_and(|b| !b.b_ml.ml_mfp.is_null());
-    result.vval.v_number = VarNumber::from(loaded);
+    result.write_number(VarNumber::from(loaded));
 }
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
@@ -143,8 +143,7 @@ pub unsafe fn f_bufloaded(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// dispatchers keep.
 pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     // SAFETY: the arguments are live typvals; `curbuf` is set and the resolver
     // answers a live buffer or NULL.
     let buf = if args.has(0) {
@@ -155,7 +154,7 @@ pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if let Some(buf) = buf
         && !buf.b_fname.is_null()
     {
-        result.vval.v_string = unsafe { xstrdup(buf.b_fname) };
+        result.write_string(unsafe { xstrdup(buf.b_fname) });
     }
 }
 
@@ -170,7 +169,7 @@ pub unsafe fn f_bufname(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: the arguments are live typvals and `curbuf` is set.
     let mut buf: *mut Buffer = if !args.has(0) {
         Buf::current_raw()
@@ -198,7 +197,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
         }
     }
     if let Some(buf) = unsafe { Buf::from_raw(buf) } {
-        result.vval.v_number = VarNumber::from(buf.handle);
+        result.write_number(VarNumber::from(buf.handle));
     }
 }
 
@@ -207,7 +206,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
 fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
     let buf = arg_buf_chk(args, 0);
     if buf.is_none() {
-        result.vval.v_number = -1;
+        result.write_number(-1);
         return;
     }
     let tp = TabPage::current();
@@ -218,10 +217,10 @@ fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
         winnr += c_int::from(wp.has_winnr(tp));
         Some(wp.buffer()) == buf && (!get_nr || wp.has_winnr(tp))
     });
-    result.vval.v_number = match found {
+    result.write_number(match found {
         Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle }),
         None => -1,
-    };
+    });
 }
 
 /// `bufwinid({buf})`.

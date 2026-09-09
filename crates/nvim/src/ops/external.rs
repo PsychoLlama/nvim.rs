@@ -172,8 +172,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }; 2];
-    argv[0].v_type = VAR_STRING;
-    argv[0].vval.v_string = kind.as_ptr() as *mut c_char;
+    argv[0].write_string(kind.as_ptr() as *mut c_char);
 
     // Reset virtual_op so that 'virtualedit' can be changed in the
     // function, and finish_op so that mode() returns the right value.

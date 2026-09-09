@@ -83,7 +83,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut TypVal) {
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is writable.
     unsafe { *save_tv = *tv };
-    tv.vval.v_string = ptr::null_mut();
+    tv.write_string(ptr::null_mut());
     if tv.v_type == VAR_UNKNOWN {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
@@ -185,23 +185,21 @@ pub fn set_vim_var_type(idx: Vv, type_0: VarType) {
 pub fn set_vim_var_nr(idx: Vv, val: VarNumber) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.vval.v_number = val;
+    tv.write_number(val);
 }
 
 /// Set `v:` variable `idx` to `v:true` or `v:false`.
 pub fn set_vim_var_bool(idx: Vv, val: BoolVarValue) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.v_type = VAR_BOOL;
-    tv.vval.v_bool = val;
+    tv.write_boolean(val);
 }
 
 /// Set `v:` variable `idx` to `v:null`.
 pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.v_type = VAR_SPECIAL;
-    tv.vval.v_special = val;
+    tv.write_special(val);
 }
 
 /// Set `v:char` to the character `c`.
@@ -226,8 +224,7 @@ pub unsafe fn set_vim_var_char(c: c_int) {
 pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.v_type = VAR_STRING;
-    tv.vval.v_string = if val.is_null() {
+    tv.write_string(if val.is_null() {
         ptr::null_mut()
     } else if len == -1 {
         // SAFETY: the caller's obligation -- NUL-terminated.
@@ -235,7 +232,7 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     } else {
         // SAFETY: the caller's obligation -- readable for `len`.
         unsafe { xstrndup(val, len as size_t) }
-    };
+    });
 }
 
 /// Set `v:` variable `idx` to `val`, taking a reference to it.
@@ -245,8 +242,7 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 pub unsafe fn set_vim_var_list(idx: Vv, val: *mut List) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.v_type = VAR_LIST;
-    tv.vval.v_list = val;
+    tv.write_list(val);
     if !val.is_null() {
         // SAFETY: the caller's obligation -- a live list.
         unsafe { tv_list_ref(val) };
@@ -261,8 +257,7 @@ pub unsafe fn set_vim_var_list(idx: Vv, val: *mut List) {
 pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut Dict) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
-    tv.v_type = VAR_DICT;
-    tv.vval.v_dict = val;
+    tv.write_dict(val);
     if val.is_null() {
         return;
     }
@@ -282,7 +277,7 @@ pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut Dict) {
 /// hands over.
 pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
     let mut tv = vimvar_val(idx);
-    tv.vval.v_partial = val;
+    tv.write_partial(val);
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.
@@ -320,7 +315,7 @@ pub unsafe fn v_exception(oldval: *mut c_char) -> *mut c_char {
         // SAFETY: `v:exception` is declared a String.
         return tv.string_or_null();
     }
-    tv.vval.v_string = oldval;
+    tv.write_string(oldval);
     ptr::null_mut()
 }
 
@@ -334,7 +329,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
         // SAFETY: `v:throwpoint` is declared a String.
         return tv.string_or_null();
     }
-    tv.vval.v_string = oldval;
+    tv.write_string(oldval);
     ptr::null_mut()
 }
 
@@ -447,14 +442,14 @@ pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
         }
         debug_assert!(xlen <= newval_len);
 
-        tv.vval.v_string = newval;
+        tv.write_string(newval);
         return oldval;
     }
 
     // SAFETY: the caller's obligation -- `oldval` is this variable's own
     // string, which nothing else holds.
     unsafe { xfree(oldval.cast()) };
-    tv.vval.v_string = oldarg;
+    tv.write_string(oldarg);
     ptr::null_mut()
 }
 
@@ -464,11 +459,11 @@ pub fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
     if set_prevcount {
         let old = vimvar_val(Vv::Count).number_or_zero();
         let mut prev = vimvar_val(Vv::Prevcount);
-        prev.vval.v_number = old;
+        prev.write_number(old);
     }
     let (mut count_tv, mut count1_tv) = (vimvar_val(Vv::Count), vimvar_val(Vv::Count1));
-    count_tv.vval.v_number = count as VarNumber;
-    count1_tv.vval.v_number = count1 as VarNumber;
+    count_tv.write_number(count as VarNumber);
+    count1_tv.write_number(count1 as VarNumber);
 }
 
 /// The type enforcement a write to a `v:` variable passes.
@@ -511,7 +506,7 @@ pub unsafe fn before_set_vvar(
         // SAFETY: the type tag says the union holds the string arm, which
         // this item owns.
         unsafe { xfree(stored.string_or_null().cast()) };
-        stored.vval.v_string = ptr::null_mut();
+        stored.write_string(ptr::null_mut());
 
         if copy || tv.v_type != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
@@ -521,12 +516,12 @@ pub unsafe fn before_set_vvar(
             // store when it is still empty.
             // SAFETY: the string arm, as above.
             if stored.string_or_null().is_null() {
-                stored.vval.v_string = unsafe { xstrdup(val) };
+                stored.write_string(unsafe { xstrdup(val) });
             }
         } else {
             // Take the string over, rather than copy and free.
-            stored.vval.v_string = tv.string_or_null();
-            tv.vval.v_string = ptr::null_mut();
+            stored.write_string(tv.string_or_null());
+            tv.write_string(ptr::null_mut());
         }
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
@@ -542,7 +537,7 @@ pub unsafe fn before_set_vvar(
         }
         // SAFETY: a live value; the Number arm is what the tag declares.
         let n = unsafe { tv_get_number(tv.raw()) };
-        stored.vval.v_number = n;
+        stored.write_number(n);
         // SAFETY: the caller's obligation -- `varname` is NUL-terminated.
         if unsafe { cstr::eq_bytes(varname, b"searchforward") } {
             set_search_direction(if n != 0 { b'/' as c_int } else { b'?' as c_int });

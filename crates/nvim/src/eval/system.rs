@@ -190,8 +190,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     let profiling = do_profiling.get() == PROF_YES;
     // SAFETY: the caller's promise -- `result` outlives the call.
     let mut ret = unsafe { Tv::new(result) };
-    ret.v_type = VAR_STRING;
-    ret.vval.v_string = null_mut();
+    ret.write_string(null_mut());
     if check_secure() {
         return;
     }
@@ -261,7 +260,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
             unsafe { tv_list_alloc_ret(result, 0 as ptrdiff_t) };
         } else {
             // SAFETY: the literal is NUL-terminated.
-            ret.vval.v_string = unsafe { xstrdup(c"".as_ptr()) };
+            ret.write_string(unsafe { xstrdup(c"".as_ptr()) });
         }
         return;
     }
@@ -280,7 +279,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         }
         // SAFETY: `res` holds `nread` readable bytes.
         let list = unsafe { string_to_list(res, nread, keepempty != 0) };
-        ret.vval.v_list = list;
+        ret.write_list(list);
         // SAFETY: the List was just built.
         unsafe { tv_list_ref(list) };
         ret.v_type = VAR_LIST;
@@ -290,7 +289,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // Undo the swap in place; the buffer is handed over as it is.
         // SAFETY: `res` holds `nread` writable bytes.
         unsafe { memchrsub(res as *mut c_void, NUL as c_char, 1 as c_char, nread) };
-        ret.vval.v_string = res;
+        ret.write_string(res);
     }
 }
 

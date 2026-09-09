@@ -478,11 +478,8 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                                 // Overwrite the existing dict entry.
                                 unsafe { tv_clear(&raw mut (*fudi.fd_di).di_tv) };
                             }
-                            unsafe { (*fudi.fd_di).di_tv.v_type = VAR_FUNC };
-                            unsafe {
-                                (*fudi.fd_di).di_tv.vval.v_string =
-                                    xmemdupz(name as *const c_void, namelen) as *mut c_char
-                            };
+                            let owned = unsafe { xmemdupz(name as *const c_void, namelen) };
+                            unsafe { (*fudi.fd_di).di_tv.write_func_name(owned as *mut c_char) };
 
                             // Behave as though "dict" had been used.
                             flags |= FuncFlags::DICT;

@@ -44,8 +44,8 @@ use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
     DictItem, EvalArg, ExArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, kBoolVarFalse,
-    kBoolVarTrue, size_t, typval_vval_union,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, kBoolVarFalse, kBoolVarTrue,
+    size_t, typval_vval_union,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -468,8 +468,7 @@ unsafe fn eval_logical(
             }
         }
         if evaluate {
-            rv.v_type = VAR_NUMBER;
-            rv.vval.v_number = VarNumber::from(truthy);
+            rv.write_number(VarNumber::from(truthy));
         }
     }
 
@@ -732,7 +731,7 @@ pub(crate) unsafe fn eval7(
                 let name = cur.byte() as c_char as c_int;
                 // SAFETY: `get_reg_contents` reads only the register name.
                 let text = unsafe { get_reg_contents(name, kGRegExprSrc as c_int) };
-                rv.vval.v_string = text as *mut c_char;
+                rv.write_string(text as *mut c_char);
             }
             // `@` at the very end of the line names no register.
             if cur.byte() != NUL as u8 {
@@ -787,7 +786,7 @@ pub(crate) unsafe fn eval7(
                 if rv.v_type == VAR_UNKNOWN && lua {
                     rv.v_type = VAR_PARTIAL;
                     let partial = get_vim_var_partial(Vv::Lua);
-                    rv.vval.v_partial = partial;
+                    rv.write_partial(partial);
                     // SAFETY: `get_vim_var_partial` answers a live partial.
                     unsafe { (*partial).pt_refcount.retain() };
                 }
@@ -887,10 +886,9 @@ pub(crate) unsafe fn eval7_leader(
         let float = rv.v_type == VAR_FLOAT;
         unsafe { tv_clear(result) };
         if float {
-            rv.vval.v_float = f;
+            rv.write_float(f);
         } else {
-            rv.v_type = VAR_NUMBER;
-            rv.vval.v_number = val;
+            rv.write_number(val);
         }
     }
 

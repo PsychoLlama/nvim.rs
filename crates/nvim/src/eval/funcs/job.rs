@@ -81,8 +81,7 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 /// dispatchers keep.
 pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
@@ -95,7 +94,7 @@ pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     if data.is_null() {
         return;
     }
-    result.vval.v_number = unsafe { (*channel_proc(data)).pid } as VarNumber;
+    result.write_number(unsafe { (*channel_proc(data)).pid } as VarNumber);
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
@@ -107,8 +106,7 @@ pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 /// dispatchers keep.
 pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
@@ -134,7 +132,7 @@ pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let height = args.get(2).number_or_zero() as uint16_t;
     let pty = unsafe { channel_pty(data) };
     unsafe { pty_proc_resize(pty, width, height) };
-    result.vval.v_number = 1;
+    result.write_number(1);
 }
 
 /// `jobstop({job})`
@@ -146,8 +144,7 @@ pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// dispatchers keep.
 pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null, and `error` is a borrowed static message.
     if check_secure() {
@@ -167,7 +164,7 @@ pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     }
     unsafe { proc_stop(channel_proc(data)) };
     // Reported as a success even when closing the RPC half complained.
-    result.vval.v_number = 1;
+    result.write_number(1);
     if !error.is_null() {
         unsafe { emsg_ptr(error) };
     }
@@ -182,8 +179,7 @@ pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
     // its whole length, and every channel in it holds a reference.
     if check_secure() {
@@ -290,8 +286,7 @@ pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         ui_busy_stop();
     }
     unsafe { tv_list_ref(rv) };
-    result.v_type = VAR_LIST;
-    result.vval.v_list = rv;
+    result.write_list(rv);
 }
 
 /// Variables a pty job must not inherit: they describe *our* terminal, and
@@ -413,8 +408,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = 0;
+    result.write_number(0);
     // SAFETY throughout: the frame is live; `argv` is released on every path that does
     // not hand it to `channel_job_start`, which adopts it.
     if check_secure() {
@@ -427,7 +421,7 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     if argv.is_null() {
         // A malformed command answers 0; a command that is simply not
         // executable answers -1.
-        result.vval.v_number = if executable { 0 } else { -1 };
+        result.write_number(if executable { 0 } else { -1 });
         return;
     }
     // From here on every early exit must release `argv`.

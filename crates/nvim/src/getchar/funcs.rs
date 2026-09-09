@@ -241,8 +241,7 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
         debug_assert!(i < temp.len());
         temp[i] = 0;
 
-        unsafe { (*result).v_type = VAR_STRING };
-        unsafe { (*result).vval.v_string = xmemdupz(temp.as_ptr().cast(), i).cast() };
+        unsafe { (*result).write_string(xmemdupz(temp.as_ptr().cast(), i).cast()) };
 
         if is_mouse_key(n as c_int) {
             set_mouse_vars();
@@ -250,7 +249,7 @@ pub(crate) unsafe fn getchar_common(args: *mut TypVal, result: *mut TypVal, allo
     } else if !opts.allow_number {
         unsafe { (*result).v_type = VAR_STRING };
     } else {
-        unsafe { (*result).vval.v_number = n };
+        unsafe { (*result).write_number(n) };
     }
 }
 
@@ -281,5 +280,5 @@ pub unsafe fn f_getcharstr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// `result` must be a valid return slot.
 pub unsafe fn f_getcharmod(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    unsafe { (*result).vval.v_number = VarNumber::from(mod_mask.get().bits()) };
+    unsafe { (*result).write_number(VarNumber::from(mod_mask.get().bits())) };
 }

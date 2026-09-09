@@ -170,8 +170,7 @@ pub unsafe fn f_eval(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
             semsg!("E15: Invalid expression: \"{expr_start}\"");
         }
         need_clr_eos.set(false);
-        result.v_type = VAR_NUMBER;
-        result.vval.v_number = 0;
+        result.write_number(0);
     } else if unsafe { *s } as c_int != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let s = unsafe { c_str(s) };
@@ -309,8 +308,7 @@ pub unsafe fn execute_common(args: *mut TypVal, result: *mut TypVal, arg_off: c_
     // nested `execute()` restores the pointer, and it is the current
     // one that holds this run's output.
     unsafe { ga_append(capture_ga.get(), NUL as uint8_t) };
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = (*capture_ga.get()).ga_data as *mut c_char };
+    unsafe { (*result).write_string((*capture_ga.get()).ga_data as *mut c_char) };
     capture_ga.set(save_capture_ga);
 }
 
@@ -373,7 +371,7 @@ pub unsafe fn f_exists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         b'#' => unsafe { au_exists(p.add(1)) as c_int },
         _ => unsafe { var_exists(p) as c_int },
     };
-    result.vval.v_number = found as VarNumber;
+    result.write_number(found as VarNumber);
 }
 
 /// `function()` and `funcref()`.
@@ -503,8 +501,7 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
-        result.v_type = VAR_FUNC;
-        result.vval.v_string = name;
+        result.write_func_name(name);
         unsafe { func_ref(name) };
         return;
     }
@@ -566,8 +563,7 @@ fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
         unsafe { (*pt).pt_name = name };
         unsafe { func_ref(name) };
     }
-    result.v_type = VAR_PARTIAL;
-    result.vval.v_partial = pt;
+    result.write_partial(pt);
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
@@ -614,7 +610,7 @@ pub unsafe fn f_garbagecollect(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
     result.v_type = out_type;
     if out_type != VAR_NUMBER {
-        result.vval.v_string = ptr::null_mut();
+        result.write_string(ptr::null_mut());
     }
     // SAFETY throughout: the frame is live; the two names and the string argument are
     // owned by arguments and outlive the call.
@@ -657,9 +653,9 @@ fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
             semsg!("E364: Library call failed for \"{funcname}()\"");
         }
         Some(LibcallResult::Str(s)) => {
-            result.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
+            result.write_string(s.map_or(ptr::null_mut(), CString::into_raw));
         }
-        Some(LibcallResult::Int(n)) => result.vval.v_number = n as VarNumber,
+        Some(LibcallResult::Int(n)) => result.write_number(n as VarNumber),
     }
 }
 

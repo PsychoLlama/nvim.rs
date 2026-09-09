@@ -13,7 +13,6 @@
 
 use super::*;
 use crate::memory::handoff::owned_cstr;
-use crate::types::VAR_STRING;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
@@ -41,7 +40,7 @@ pub unsafe fn f_getwinpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// dispatchers keep.
 pub unsafe fn f_getwinposx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 }
 
 /// `getwinposy()` — always -1; there is no GUI window.
@@ -53,7 +52,7 @@ pub unsafe fn f_getwinposx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// dispatchers keep.
 pub unsafe fn f_getwinposy(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = -1 };
+    unsafe { (*result).write_number(-1) };
 }
 
 /// The window and the offset a `win_move_*()` call names, once the window has
@@ -81,12 +80,12 @@ fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
 /// dispatchers keep.
 pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = 0;
+    result.write_number(0);
     let Some((wp, offset)) = drag_target(args) else {
         return;
     };
     win_drag_vsep_line(wp, offset);
-    result.vval.v_number = 1;
+    result.write_number(1);
 }
 
 /// `win_move_statusline({nr}, {offset})` — drag a status line.
@@ -98,12 +97,12 @@ pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr
 /// dispatchers keep.
 pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = 0;
+    result.write_number(0);
     let Some((wp, offset)) = drag_target(args) else {
         return;
     };
     win_drag_status_line(wp, offset);
-    result.vval.v_number = 1;
+    result.write_number(1);
 }
 
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
@@ -162,7 +161,7 @@ unsafe fn splitmove_options(opts: *mut TypVal) -> (c_int, c_int) {
 /// dispatchers keep.
 pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.vval.v_number = -1;
+    result.write_number(-1);
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
     // autocommand may close one under it.
@@ -194,7 +193,7 @@ pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     }
     if targetwin.is_current() && win_valid(wp.id()) {
         if win_splitmove(wp, size, flags).is_ok() {
-            result.vval.v_number = 0;
+            result.write_number(0);
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
@@ -215,7 +214,7 @@ pub unsafe fn f_wincol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
-    unsafe { (*result).vval.v_number = VarNumber::from(win.w_wcol + 1) };
+    unsafe { (*result).write_number(VarNumber::from(win.w_wcol + 1)) };
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
@@ -229,7 +228,7 @@ pub unsafe fn f_winline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = Win::current();
     validate_cursor(win);
-    unsafe { (*result).vval.v_number = VarNumber::from(win.w_wrow + 1) };
+    unsafe { (*result).write_number(VarNumber::from(win.w_wrow + 1)) };
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
@@ -243,7 +242,7 @@ pub unsafe fn f_winheight(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height));
+    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height)));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
@@ -257,7 +256,7 @@ pub unsafe fn f_winwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width));
+    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width)));
 }
 
 /// `winrestcmd()` — the `:resize` commands that rebuild the current tab page's
@@ -288,8 +287,7 @@ pub unsafe fn f_winrestcmd(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
             }
         }
     }
-    unsafe { (*result).vval.v_string = owned_cstr(cmds) };
-    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).write_string(owned_cstr(cmds)) };
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.

@@ -13,7 +13,7 @@
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::keycodes::KE_WILD;
-use crate::types::{ExpandContext, NUL, VAR_STRING, VAR_UNKNOWN};
+use crate::types::{ExpandContext, NUL, VAR_UNKNOWN};
 
 /// Whether a command line is being edited at all: C's
 /// `get_cmdline_info()->cmdbuff != NULL`, which nothing outside `ex_getln/`
@@ -109,12 +109,11 @@ fn cmdline_completion_state() -> Option<(*mut Expand, ExpandContext)> {
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdcomplpat(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
+    unsafe { (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>()) };
     if let Some((xpc, _)) = cmdline_completion_state() {
         let compl_pat = unsafe { (*xpc).xp_pattern };
         if !compl_pat.is_null() {
-            unsafe { (*result).vval.v_string = xstrdup(compl_pat) };
+            unsafe { (*result).write_string(xstrdup(compl_pat)) };
         }
     }
 }
@@ -126,12 +125,11 @@ pub unsafe fn f_getcmdcomplpat(_args: *mut TypVal, result: *mut TypVal, _fptr: E
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdcompltype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
     unsafe {
-        (*result).vval.v_string = match cmdline_completion_state() {
+        (*result).write_string(match cmdline_completion_state() {
             Some((xpc, xp_context)) => cmdcomplete_type_to_str(xp_context, (*xpc).xp_arg),
             None => ::core::ptr::null_mut::<::core::ffi::c_char>(),
-        }
+        })
     };
 }
 
@@ -142,8 +140,7 @@ pub unsafe fn f_getcmdcompltype(_args: *mut TypVal, result: *mut TypVal, _fptr: 
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = get_cmdline_str() };
+    unsafe { (*result).write_string(get_cmdline_str()) };
 }
 
 /// `getcmdpos()` function.
@@ -153,9 +150,7 @@ pub unsafe fn f_getcmdline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as VarNumber)
-    };
+    unsafe { (*result).write_number(get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as VarNumber)) };
 }
 
 /// `getcmdprompt()` function.
@@ -165,11 +160,12 @@ pub unsafe fn f_getcmdpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdprompt(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
     unsafe {
-        (*result).vval.v_string = get_ccline_ptr()
-            .filter(|p| !p.cmdprompt.is_null())
-            .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt))
+        (*result).write_string(
+            get_ccline_ptr()
+                .filter(|p| !p.cmdprompt.is_null())
+                .map_or(::core::ptr::null_mut(), |p| xstrdup(p.cmdprompt)),
+        )
     };
 }
 
@@ -180,9 +176,7 @@ pub unsafe fn f_getcmdprompt(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdscreenpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as VarNumber)
-    };
+    unsafe { (*result).write_number(get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as VarNumber)) };
 }
 
 /// `getcmdtype()` function.
@@ -192,9 +186,8 @@ pub unsafe fn f_getcmdscreenpos(_args: *mut TypVal, result: *mut TypVal, _fptr: 
 /// `result` must point at the caller's return slot: an initialized typval it
 /// owns and will clear.
 pub unsafe fn f_getcmdtype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
     // One character plus the terminator `xmallocz` appends.
-    unsafe { (*result).vval.v_string = xmallocz(1) as *mut ::core::ffi::c_char };
+    unsafe { (*result).write_string(xmallocz(1) as *mut ::core::ffi::c_char) };
     unsafe { *(*result).vval.v_string.offset(0) = get_cmdline_type() as ::core::ffi::c_char };
 }
 
@@ -280,7 +273,7 @@ pub unsafe fn f_setcmdline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 
     // tv_get_string() so that a NULL string reads as an empty one.
     unsafe {
-        (*result).vval.v_number = set_cmdline_str(numbuf.string(args.offset(0)), pos) as VarNumber
+        (*result).write_number(set_cmdline_str(numbuf.string(args.offset(0)), pos) as VarNumber)
     };
 }
 
@@ -294,7 +287,7 @@ pub unsafe fn f_setcmdline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 pub unsafe fn f_setcmdpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let pos = unsafe { tv_get_number(args.offset(0)) } as ::core::ffi::c_int - 1;
     if pos >= 0 {
-        unsafe { (*result).vval.v_number = set_cmdline_pos(pos) as VarNumber };
+        unsafe { (*result).write_number(set_cmdline_pos(pos) as VarNumber) };
     }
 }
 

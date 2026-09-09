@@ -192,8 +192,7 @@ pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// pointer fields point at live data for the call.
 pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).write_string(ptr::null_mut()) };
 
     if unsafe { tv_check_for_string_arg(args, 0) }.is_err() {
         return;
@@ -213,7 +212,7 @@ pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr:
             false,
         )
     };
-    unsafe { (*result).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg) };
+    unsafe { (*result).write_string(cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg)) };
 
     unsafe { expand_cleanup(&raw mut xpc) };
 }

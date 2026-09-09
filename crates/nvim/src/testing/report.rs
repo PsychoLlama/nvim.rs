@@ -211,8 +211,8 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_
     let (exp_d, got_d) = unsafe { ((*exp_tv).vval.v_dict, (*got_tv).vval.v_dict) };
     // The pruned copies that replace them, which the caller then owns.
     let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
-    unsafe { (*exp_tv).vval.v_dict = exp };
-    unsafe { (*got_tv).vval.v_dict = got };
+    unsafe { (*exp_tv).write_dict(exp) };
+    unsafe { (*got_tv).write_dict(got) };
 
     let mut omitted = 0;
     for hi in unsafe { tv_dict_iter(exp_d) } {

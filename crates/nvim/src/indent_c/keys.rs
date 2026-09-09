@@ -400,5 +400,5 @@ pub unsafe fn f_cindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         -1
     };
     // SAFETY: the caller's promise -- `result` is a number typval to fill in.
-    unsafe { (*result).vval.v_number = amount };
+    unsafe { (*result).write_number(amount) };
 }

@@ -153,7 +153,7 @@ unsafe fn extend_item(li: *mut ListItem, line: &[u8]) {
     let old_len = unsafe { item_strlen(li) };
     let grown = unsafe { xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1) }
         .cast::<c_char>();
-    unsafe { (*li).li_tv.vval.v_string = grown };
+    unsafe { (*li).li_tv.write_string(grown) };
     let tail =
         unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
     tail[..line.len()].copy_from_slice(line);

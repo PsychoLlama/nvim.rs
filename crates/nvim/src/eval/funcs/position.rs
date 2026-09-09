@@ -66,11 +66,11 @@ pub unsafe fn f_byte2line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer; `boff` is a live local the callee reads and writes.
     let mut boff = arg_number(args.get(0)) as c_int - 1;
-    result.vval.v_number = if boff < 0 {
+    result.write_number(if boff < 0 {
         -1
     } else {
         unsafe { ml_find_line_or_offset(Buf::current(), 0, &raw mut boff, false) as VarNumber }
-    };
+    });
 }
 
 /// `line2byte({lnum})` — the byte offset a line starts at, one-based, or -1
@@ -86,11 +86,12 @@ pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer.
     let lnum = arg_lnum(args.get(0));
-    result.vval.v_number = if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count + 1 {
+    let offset = if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
         unsafe { ml_find_line_or_offset(Buf::current(), lnum, ptr::null_mut(), false) as VarNumber }
     };
+    result.write_number(offset);
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
     if result.number_or_zero() >= 0 {
@@ -167,7 +168,7 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
             col += unsafe { virtualedit_tail(wp, bp, &raw mut fp) };
         }
     }
-    result.vval.v_number = col as VarNumber;
+    result.write_number(col as VarNumber);
 }
 
 /// With 'virtualedit' on, a cursor sitting past the last character of the
@@ -260,7 +261,7 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
         unsafe { tv_list_append_number(l, vcol_start as VarNumber) };
         unsafe { tv_list_append_number(l, vcol_end as VarNumber) };
     } else {
-        result.vval.v_number = vcol_end as VarNumber;
+        result.write_number(vcol_end as VarNumber);
     }
 }
 
@@ -299,7 +300,7 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
             }
         }
     };
-    result.vval.v_number = fp.map_or(0, |fp| fp.lnum as VarNumber);
+    result.write_number(fp.map_or(0, |fp| fp.lnum as VarNumber));
 }
 
 /// `getpos({expr})`.
@@ -465,7 +466,7 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `pos` and `curswant` are live
     // locals the List parser fills.
-    result.vval.v_number = -1;
+    result.write_number(-1);
     let mut set_curswant = true;
     let (lnum, mut col, coladd) = if args.ty(0) == VAR_LIST {
         let mut pos = NOWHERE;
@@ -528,7 +529,7 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     check_cursor(Win::current());
     unsafe { mb_adjust_cursor() };
     Win::current().w_set_curswant = set_curswant;
-    result.vval.v_number = 0;
+    result.write_number(0);
 }
 
 /// `setpos({expr}, {list})`.
@@ -559,7 +560,7 @@ fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `pos`, `fnum` and `curswant` are
     // live locals the List parser fills, and `name` is NUL-terminated.
-    result.vval.v_number = -1;
+    result.write_number(-1);
     let name = arg_string_chk(&mut numbuf, args.get(0));
     if name.is_null() {
         return;
@@ -583,12 +584,12 @@ fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
                 Win::current().w_set_curswant = false;
             }
             check_cursor(Win::current());
-            result.vval.v_number = 0;
+            result.write_number(0);
         }
         // A mark name is exactly one byte after the quote.
         [b'\'', c] => {
             if unsafe { setmark_pos(*c as c_int, &raw mut pos, fnum, ptr::null_mut()) }.is_ok() {
-                result.vval.v_number = 0;
+                result.write_number(0);
             }
         }
         _ => {

@@ -601,8 +601,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     if !unsafe { (*pt).pt_dict }.is_null() {
         // A borrowed view, not an owner: `dtv` is never cleared.
         let mut dtv = UNSET_TV;
-        dtv.v_type = VAR_DICT;
-        dtv.vval.v_dict = unsafe { (*pt).pt_dict };
+        dtv.write_dict(unsafe { (*pt).pt_dict });
         abort = abort || unsafe { set_ref_in_item(&raw mut dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
@@ -686,56 +685,52 @@ pub unsafe fn var_item_copy(
                 // SAFETY: both typvals are the caller's.
                 unsafe { tv_copy(from, to) };
             } else {
-                dst.v_type = VAR_STRING;
                 dst.v_lock = VarLock::Unlocked;
                 let (cv, s) = (conv as *mut VimConv, src.string_or_null());
                 // SAFETY: `s` is the source string and `cv` the conversion.
-                dst.vval.v_string = unsafe { string_convert(cv, s, null_mut::<size_t>()) };
+                dst.write_string(unsafe { string_convert(cv, s, null_mut::<size_t>()) });
                 // A conversion that failed keeps the original bytes.
-                // SAFETY: `v_string` is the member just written.
                 if dst.string_or_null().is_null() {
                     // SAFETY: `s` is the source's NUL-terminated string.
-                    dst.vval.v_string = unsafe { xstrdup(s) };
+                    dst.write_string(unsafe { xstrdup(s) });
                 }
             }
         }
         VAR_LIST => {
-            dst.v_type = VAR_LIST;
             dst.v_lock = VarLock::Unlocked;
             let l = src.list_or_null();
             if l.is_null() {
-                dst.vval.v_list = null_mut::<List>();
+                dst.write_list(null_mut::<List>());
             // SAFETY: `l` is the source's live List.
             } else if copy_id != 0 && unsafe { tv_list_copyid(l) } == copy_id {
                 // Already copied under this id: share that copy.
                 // SAFETY: as above -- the copy it was given under this id.
-                dst.vval.v_list = unsafe { tv_list_latest_copy(l) };
+                dst.write_list(unsafe { tv_list_latest_copy(l) });
                 // SAFETY: the shared copy gains this reference.
                 unsafe { tv_list_ref(dst.list_or_null()) };
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
-                dst.vval.v_list = unsafe { tv_list_copy(conv, l, deep, copy_id) };
+                dst.write_list(unsafe { tv_list_copy(conv, l, deep, copy_id) });
             }
             if dst.list_or_null().is_null() && !l.is_null() {
                 ret = Err(Failed);
             }
         }
         VAR_DICT => {
-            dst.v_type = VAR_DICT;
             dst.v_lock = VarLock::Unlocked;
             let d = src.dict_or_null();
             if d.is_null() {
-                dst.vval.v_dict = null_mut::<Dict>();
+                dst.write_dict(null_mut::<Dict>());
             // SAFETY: `d` is the source's live Dict.
             } else if copy_id != 0 && unsafe { (*d).dv_copy_id } == copy_id {
                 // SAFETY: as above -- the copy it was given under this id,
                 // which gains this reference.
-                dst.vval.v_dict = unsafe { (*d).dv_copydict };
+                dst.write_dict(unsafe { (*d).dv_copydict });
                 // SAFETY: as above -- the shared copy gains this reference.
                 unsafe { (*dst.dict_or_null()).dv_refcount.retain() };
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
-                dst.vval.v_dict = unsafe { tv_dict_copy(conv, d, deep, copy_id) };
+                dst.write_dict(unsafe { tv_dict_copy(conv, d, deep, copy_id) });
             }
             if dst.dict_or_null().is_null() && !d.is_null() {
                 ret = Err(Failed);

@@ -24,7 +24,7 @@
 //! with every other `f_*` family; what the fs family adds on top is the
 //! handful of coercions its builtins do to the arguments -- a path as a
 //! [`CStr`], an optional flag as a Number -- and the two shapes of answer
-//! they give back, an owned string ([`ret_string`]) or a List of them
+//! they give back, an owned string or a List of them
 //! ([`RetList`]).  Each carries exactly one `unsafe` line, so the builtins
 //! above them are ordinary safe Rust.
 //!
@@ -53,8 +53,8 @@ use crate::os::fs::{
 use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, FileInfo, List, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
-    XpPrefix, int32_t, ptrdiff_t, size_t, ssize_t, uint64_t, uv_stat_t, uv_timespec_t,
+    Direction, EvalFuncData, FAIL, FileInfo, List, TypVal, VAR_STRING, VarNumber, XpPrefix,
+    int32_t, ptrdiff_t, size_t, ssize_t, uint64_t, uv_stat_t, uv_timespec_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -124,13 +124,6 @@ pub(crate) fn nr_arg(args: Args<'_>, i: usize, error: &mut bool) -> VarNumber {
     // SAFETY: a live typval; the callee reports through `error` rather than
     // by returning a failure.
     unsafe { tv_get_number_chk(args.ptr(i), error) }
-}
-
-/// Answer the owned string `s`, or `v:_null_string` when it is NULL.
-pub(crate) fn ret_string(result: &mut TypVal, s: *mut c_char) {
-    result.v_type = VAR_STRING;
-    // A union *write* needs no `unsafe`; the tag above is what names the arm.
-    result.vval.v_string = s;
 }
 
 /// Report `msg`, translated.
@@ -376,7 +369,7 @@ pub unsafe fn f_executable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     if !is_string_arg(args, 0) {
         return;
     }
-    result.vval.v_number = can_exe(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    result.write_number(can_exe(str_arg(args, 0, &mut numbuf)) as VarNumber);
 }
 
 /// `exepath({expr})`: the full path of the executable, or the empty string.
@@ -389,7 +382,7 @@ pub unsafe fn f_exepath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if !is_nonempty_string_arg(args, 0) {
         return;
     }
-    ret_string(result, exe_path(str_arg(args, 0, &mut numbuf)));
+    result.write_string(exe_path(str_arg(args, 0, &mut numbuf)));
 }
 
 /// `filereadable({file})`: whether the file exists and can be read.
@@ -401,7 +394,7 @@ pub unsafe fn f_filereadable(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let (args, result) = frame!(args, result);
     let p = str_arg(args, 0, &mut numbuf);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && os_file_is_readable(p);
-    result.vval.v_number = readable as VarNumber;
+    result.write_number(readable as VarNumber);
 }
 
 /// `filewritable({file})`: 0 for not writable, 1 for a writable file, 2 for
@@ -412,7 +405,7 @@ pub unsafe fn f_filereadable(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
 pub unsafe fn f_filewritable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = os_file_is_writable(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    result.write_number(os_file_is_writable(str_arg(args, 0, &mut numbuf)) as VarNumber);
 }
 
 /// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string
@@ -434,7 +427,7 @@ pub unsafe fn f_getfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         }
         perm = spelled.into_raw();
     }
-    ret_string(result, perm);
+    result.write_string(perm);
 }
 
 /// `getfsize({fname})`: the size in bytes, 0 for a directory, -1 when the
@@ -446,8 +439,7 @@ pub unsafe fn f_getfsize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     let fname = str_arg(args, 0, &mut numbuf);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = match stat(fname) {
+    result.write_number(match stat(fname) {
         None => -1 as VarNumber,
         Some(info) => {
             let filesize = size(&info);
@@ -461,7 +453,7 @@ pub unsafe fn f_getfsize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
                 -2 as VarNumber
             }
         }
-    };
+    });
 }
 
 /// `getftime({fname})`: the modification time, or -1.
@@ -472,7 +464,7 @@ pub unsafe fn f_getftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     let mtime = stat(str_arg(args, 0, &mut numbuf)).map(|info| info.stat.st_mtim.tv_sec);
-    result.vval.v_number = mtime.map_or(-1 as VarNumber, |t| t as VarNumber);
+    result.write_number(mtime.map_or(-1 as VarNumber, |t| t as VarNumber));
 }
 
 /// `getftype({fname})`: what kind of thing the name refers to -- of the
@@ -498,7 +490,7 @@ pub unsafe fn f_getftype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         }
     });
     let answer = named.map_or(ptr::null_mut(), |t| Owned::dup(t).into_raw());
-    result.vval.v_string = answer;
+    result.write_string(answer);
 }
 
 /// `isdirectory({directory})`: whether the name is a directory.
@@ -508,7 +500,7 @@ pub unsafe fn f_getftype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 pub unsafe fn f_isdirectory(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.vval.v_number = is_dir(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    result.write_number(is_dir(str_arg(args, 0, &mut numbuf)) as VarNumber);
 }
 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no
@@ -518,7 +510,7 @@ pub unsafe fn f_isdirectory(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// As [`f_executable`], arity 4.
 pub unsafe fn f_browse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_, result) = frame!(args, result);
-    ret_string(result, ptr::null_mut());
+    result.write_string(ptr::null_mut());
 }
 
 /// `browsedir({title}, {initdir})`: the same stub.

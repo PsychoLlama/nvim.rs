@@ -37,7 +37,7 @@ pub unsafe fn f_add(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData)
     // SAFETY: the caller's contract.
     let (mut args, result) = frame!(args, result);
     // Default: failed.
-    result.vval.v_number = 1;
+    result.write_number(1);
     match Container::of(args.get_mut(0)) {
         Container::List(l) => {
             if !check_lock(l.locked(), c"add() argument") {
@@ -183,5 +183,5 @@ pub unsafe fn f_count(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
             _ => err_not_countable(c"count()"),
         }
     }
-    result.vval.v_number = n;
+    result.write_number(n);
 }

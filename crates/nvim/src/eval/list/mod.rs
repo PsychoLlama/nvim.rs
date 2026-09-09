@@ -957,14 +957,13 @@ pub unsafe fn f_reverse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
             b.set_ret(result);
         }
         Container::Str(s) => {
-            result.v_type = VAR_STRING;
-            result.vval.v_string = if s.is_null() {
+            result.write_string(if s.is_null() {
                 core::ptr::null_mut()
             } else {
                 // SAFETY: a live NUL-terminated string; `reverse_text`
                 // allocates the answer.
                 unsafe { reverse_text(s as *mut c_char) }
-            };
+            });
         }
         Container::List(l) => {
             if !check_lock(l.locked(), c"reverse() argument") {

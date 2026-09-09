@@ -304,7 +304,7 @@ pub unsafe fn f_charclass(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     {
         return;
     }
-    unsafe { (*result).vval.v_number = mb_get_class((*args).vval.v_string) as VarNumber };
+    unsafe { (*result).write_number(mb_get_class((*args).vval.v_string) as VarNumber) };
 }
 
 #[cfg(test)]

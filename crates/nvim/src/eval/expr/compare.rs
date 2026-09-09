@@ -327,7 +327,6 @@ pub(crate) unsafe fn typval_compare(
     // SAFETY: the caller's promise -- `typ1` is a valid typval.
     let mut one = unsafe { Tv::new(typ1) };
     unsafe { tv_clear(typ1) };
-    one.v_type = VAR_NUMBER;
-    one.vval.v_number = answer;
+    one.write_number(answer);
     Ok(())
 }

@@ -197,6 +197,5 @@ pub unsafe fn f_ctxset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_ctxsize(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, result) = frame!(_args, result);
-    result.v_type = VAR_NUMBER;
-    result.vval.v_number = ctx_size() as VarNumber;
+    result.write_number(ctx_size() as VarNumber);
 }

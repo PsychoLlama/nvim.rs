@@ -428,7 +428,7 @@ pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 
     unsafe { (*result).v_type = VAR_STRING };
     if sep.is_null() {
-        unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };
+        unsafe { (*result).write_string(::core::ptr::null_mut()) };
         return;
     }
 
@@ -437,7 +437,7 @@ pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
     let _ = unsafe { tv_list_join(&raw mut ga, (*args).list_or_null(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*result).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
+    unsafe { (*result).write_string(ga.ga_data as *mut ::core::ffi::c_char) };
 }
 
 /// `list2str()`: a list of codepoints as a string.
@@ -448,8 +448,7 @@ pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
 /// `result` its live return value: the contract the two builtin
 /// dispatchers keep.
 pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };
+    unsafe { (*result).write_string(::core::ptr::null_mut()) };
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(args) };
     if args.v_type != VAR_LIST {
@@ -471,5 +470,5 @@ pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };
     }
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*result).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
+    unsafe { (*result).write_string(ga.ga_data as *mut ::core::ffi::c_char) };
 }

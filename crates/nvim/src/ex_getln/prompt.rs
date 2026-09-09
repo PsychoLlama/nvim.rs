@@ -12,7 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::memory::handoff::owned_cstr;
-use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_STRING, VAR_UNKNOWN, VarLock};
+use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT, VAR_UNKNOWN, VarLock};
 
 /// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
 /// and friends format a non-string value into.
@@ -98,8 +98,7 @@ pub unsafe fn get_user_input(
     inputdialog: bool,
     secret: bool,
 ) {
-    unsafe { (*result).v_type = VAR_STRING };
-    unsafe { (*result).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
+    unsafe { (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>()) };
 
     if cmdpreview.get() {
         return;
@@ -202,8 +201,7 @@ pub unsafe fn get_user_input(
                     return;
                 }
                 if inputdialog {
-                    cancelreturn_strarg2.v_type = VAR_STRING;
-                    cancelreturn_strarg2.vval.v_string = strarg2 as *mut ::core::ffi::c_char;
+                    cancelreturn_strarg2.write_string(strarg2 as *mut ::core::ffi::c_char);
                     cancelreturn = &raw mut cancelreturn_strarg2;
                 } else {
                     xp_name = strarg2;
@@ -249,7 +247,7 @@ pub unsafe fn get_user_input(
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
     unsafe {
-        (*result).vval.v_string = getcmdline_prompt(
+        (*result).write_string(getcmdline_prompt(
             if secret {
                 NUL
             } else {
@@ -265,7 +263,7 @@ pub unsafe fn get_user_input(
             input_callback.clone(),
             false,
             ::core::ptr::null_mut::<bool>(),
-        )
+        ))
     };
     ex_normal_busy.set(save_ex_normal_busy);
     unsafe { callback_free(&raw mut input_callback) };

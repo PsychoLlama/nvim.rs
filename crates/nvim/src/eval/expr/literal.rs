@@ -39,8 +39,8 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_FLOAT, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t, typval_vval_union, uint8_t,
+    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, size_t, typval_vval_union, uint8_t,
 };
 use ::libc::{strtod, toupper};
 
@@ -265,8 +265,7 @@ pub(crate) unsafe fn eval_number(
         let used = unsafe { string2float(cur.get(), &raw mut f) };
         cur.bump(used as usize);
         if evaluate {
-            rv.v_type = VAR_FLOAT;
-            rv.vval.v_float = f;
+            rv.write_float(f);
         }
     } else if cur.byte() == b'0' && matches!(cur.at(1), b'z' | b'Z') {
         let blob: *mut Blob = if evaluate {
@@ -324,8 +323,7 @@ pub(crate) unsafe fn eval_number(
         }
         cur.bump(len as usize);
         if evaluate {
-            rv.v_type = VAR_NUMBER;
-            rv.vval.v_number = n;
+            rv.write_number(n);
         }
     }
     Ok(())
@@ -417,7 +415,7 @@ pub(crate) unsafe fn eval_string(
     rv.v_type = VAR_STRING;
     let len = (unsafe { p.since(cur.get()) } + extra) as c_int;
     let buffer = unsafe { xmalloc(len as size_t) } as *mut c_char;
-    rv.vval.v_string = buffer;
+    rv.write_string(buffer);
     let mut end = unsafe { Walk::new(buffer) };
 
     p = unsafe { Walk::new(cur.get().add(off)) };
@@ -622,8 +620,7 @@ pub(crate) unsafe fn eval_lit_string(
 
     let size = (unsafe { p.since(cur.get()) } - reduce as isize) as size_t;
     let buffer = unsafe { xmalloc(size) } as *mut c_char;
-    rv.v_type = VAR_STRING;
-    rv.vval.v_string = buffer;
+    rv.write_string(buffer);
     let mut str = unsafe { Walk::new(buffer) };
     p = unsafe { Walk::new(cur.get().add(off)) };
     while p.byte() != NUL as u8 {
@@ -707,17 +704,16 @@ pub(crate) unsafe fn eval_interp_string(
         cur.set(p);
     }
 
-    rv.v_type = VAR_STRING;
     // The garray answered its `ga_data`, which was null exactly while
     // nothing had been appended -- a skipped run, or an error before the
     // first piece. What it did *not* do was terminate the error path's
     // buffer; that one leaned on `ga_grow`'s zeroed tail, and now carries
     // its own NUL like every other answer.
-    rv.vval.v_string = if !text.is_empty() || (ret.is_ok() && evaluate) {
+    rv.write_string(if !text.is_empty() || (ret.is_ok() && evaluate) {
         owned_cstr(text)
     } else {
         null_mut()
-    };
+    });
     Ok(())
 }
 
@@ -790,8 +786,7 @@ pub(crate) unsafe fn eval_env_var(
     }
     unsafe { *end = cc };
 
-    rv.v_type = VAR_STRING;
-    rv.vval.v_string = string;
+    rv.write_string(string);
     rv.v_lock = VarLock::Unlocked;
     Ok(())
 }

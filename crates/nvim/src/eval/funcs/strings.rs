@@ -87,8 +87,7 @@ pub unsafe fn f_char2nr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if args.has(1) && !unsafe { tv_check_num(args.ptr(1)) } {
         return;
     }
-    result.vval.v_number =
-        unsafe { utf_ptr2char(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
+    result.write_number(unsafe { utf_ptr2char(arg_string(&mut numbuf, args.get(0))) } as VarNumber);
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
@@ -106,8 +105,7 @@ pub unsafe fn f_escape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let chars = arg_string(&mut buf, args.get(1));
     // SAFETY: both are NUL-terminated and outlive the call, `chars` because
     // `buf` does.
-    result.vval.v_string = unsafe { vim_strsave_escaped(str, chars) };
-    result.v_type = VAR_STRING;
+    result.write_string(unsafe { vim_strsave_escaped(str, chars) });
 }
 
 /// `fnameescape({string})`.
@@ -121,9 +119,8 @@ pub unsafe fn f_fnameescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval.
-    result.vval.v_string =
-        unsafe { vim_strsave_fnameescape(arg_string(&mut numbuf, args.get(0)), VSE_NONE as c_int) };
-    result.v_type = VAR_STRING;
+    let name = arg_string(&mut numbuf, args.get(0));
+    result.write_string(unsafe { vim_strsave_fnameescape(name, VSE_NONE as c_int) });
 }
 
 /// `gettext({string})` — a no-op while no message catalogs ship, but it
@@ -140,10 +137,9 @@ pub unsafe fn f_gettext(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     if check_arg(args, 0, tv_check_for_nonempty_string_arg).is_err() {
         return;
     }
-    result.v_type = VAR_STRING;
     // SAFETY: the check above proved argument 0 is a non-empty String, so
     // the union holds a live NUL-terminated pointer.
-    result.vval.v_string = unsafe { xstrdup(gettext_ptr(args.get(0).string_or_null()).as_ptr()) };
+    result.write_string(unsafe { xstrdup(gettext_ptr(args.get(0).string_or_null()).as_ptr()) });
 }
 
 /// `keytrans({string})` — the readable spelling of a key sequence.
@@ -164,7 +160,7 @@ pub unsafe fn f_keytrans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         return;
     }
     let escaped = unsafe { vim_strsave_escape_ks(args.get(0).string_or_null()) };
-    result.vval.v_string = unsafe { str2special_save(escaped, true, true) };
+    result.write_string(unsafe { str2special_save(escaped, true, true) });
     unsafe { xfree(escaped.cast::<c_void>()) };
 }
 
@@ -204,8 +200,7 @@ pub unsafe fn f_nr2char(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // `utf_char2bytes` writes, and the returned length is what it wrote.
     let len = unsafe { utf_char2bytes(num as c_int, buf.as_mut_ptr()) };
     let src = buf.as_ptr().cast::<c_void>();
-    result.vval.v_string = unsafe { xmemdupz(src, len as usize) }.cast::<c_char>();
-    result.v_type = VAR_STRING;
+    result.write_string(unsafe { xmemdupz(src, len as usize) }.cast::<c_char>());
 }
 
 /// `printf({fmt}, ...)` — measure, then format into an exact allocation.
@@ -222,8 +217,7 @@ pub unsafe fn f_nr2char(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// dispatchers keep.
 pub unsafe fn f_printf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
 
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
@@ -237,7 +231,7 @@ pub unsafe fn f_printf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let len = unsafe { vim_vsnprintf_typval(ptr::null_mut(), 0, fmt, dummy_ap(), args.ptr(1)) };
     if did_emsg.get() == 0 {
         let s = unsafe { xmalloc(len as usize + 1) }.cast::<c_char>();
-        result.vval.v_string = s;
+        result.write_string(s);
         unsafe { vim_vsnprintf_typval(s, len as usize + 1, fmt, dummy_ap(), args.ptr(1)) };
     }
     did_emsg.set(did_emsg.get() | saved_did_emsg);
@@ -313,8 +307,7 @@ unsafe fn repeat_blob(args: Args<'_>, result: &mut TypVal, n: VarNumber) {
 /// Argument 0 is a live typval and `result` is the cleared return value.
 unsafe fn repeat_string(args: Args<'_>, result: &mut TypVal, n: VarNumber) {
     let mut numbuf = NumBuf::new();
-    result.v_type = VAR_STRING;
-    result.vval.v_string = ptr::null_mut();
+    result.write_string(ptr::null_mut());
     if n <= 0 {
         return;
     }
@@ -337,7 +330,7 @@ unsafe fn repeat_string(args: Args<'_>, result: &mut TypVal, n: VarNumber) {
     for i in 0..n as usize {
         unsafe { (r.add(i * slen)).cast::<u8>().copy_from(p.cast(), slen) };
     }
-    result.vval.v_string = r;
+    result.write_string(r);
 }
 
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they
@@ -373,8 +366,8 @@ pub unsafe fn f_sha256(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         hex_digest(bytes)
     };
     // SAFETY throughout: `hash` is a live buffer of `hash.len()` bytes.
-    result.vval.v_string =
-        unsafe { xmemdupz(hash.as_ptr().cast::<c_void>(), hash.len()).cast::<c_char>() };
+    let owned = unsafe { xmemdupz(hash.as_ptr().cast::<c_void>(), hash.len()) };
+    result.write_string(owned.cast::<c_char>());
 }
 
 /// `shellescape({string} [, {special}])`.
@@ -390,8 +383,7 @@ pub unsafe fn f_shellescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // SAFETY: the arguments are live typvals.
     let do_special = unsafe { non_zero_arg(args.ptr(1)) };
     let str = arg_string(&mut numbuf, args.get(0));
-    result.vval.v_string = unsafe { vim_strsave_shellescape(str, do_special, do_special) };
-    result.v_type = VAR_STRING;
+    result.write_string(unsafe { vim_strsave_shellescape(str, do_special, do_special) });
 }
 
 /// `soundfold({word})`.
@@ -404,9 +396,8 @@ pub unsafe fn f_shellescape(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 pub unsafe fn f_soundfold(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, result) = frame!(args, result);
-    result.v_type = VAR_STRING;
     // SAFETY: `args.ptr(0)` is a live typval.
-    result.vval.v_string = unsafe { eval_soundfold(arg_string(&mut numbuf, args.get(0))) };
+    result.write_string(unsafe { eval_soundfold(arg_string(&mut numbuf, args.get(0))) });
 }
 
 /// Turn 'spell' on for the duration of `body`, loading the spell languages
@@ -666,7 +657,7 @@ pub unsafe fn f_strftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     };
     let mut curtime: tm = tm_zeroed();
     if !os_localtime_r(seconds, &mut curtime) {
-        result.vval.v_string = unsafe { xstrdup(gettext(c"(Invalid)").as_ptr()) };
+        result.write_string(unsafe { xstrdup(gettext(c"(Invalid)").as_ptr()) });
         return;
     }
     let mut conv: VimConv = CONV_NONE_INIT;
@@ -685,11 +676,11 @@ pub unsafe fn f_strftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // The reverse conversion reuses `conv`, so it must be set up again
     // in the other direction before the result is converted back.
     let _ = unsafe { convert_setup(&raw mut conv, enc, p_enc.get()) };
-    result.vval.v_string = if conv.vc_type != CONV_NONE {
+    result.write_string(if conv.vc_type != CONV_NONE {
         unsafe { string_convert(&raw mut conv, out.as_mut_ptr(), ptr::null_mut()) }
     } else {
         unsafe { xstrdup(out.as_mut_ptr()) }
-    };
+    });
     let _ = unsafe { convert_setup(&raw mut conv, ptr::null_mut(), ptr::null_mut()) };
     unsafe { xfree(enc.cast::<c_void>()) };
 }
@@ -730,12 +721,12 @@ pub unsafe fn f_strptime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             &mut tmval,
         )
         .is_null();
-    result.vval.v_number = match parsed {
+    result.write_number(match parsed {
         true => unsafe { mktime(&raw mut tmval) as VarNumber },
         false => -1,
-    };
+    });
     if result.number_or_zero() == -1 {
-        result.vval.v_number = 0;
+        result.write_number(0);
     }
     if conv.vc_type != CONV_NONE {
         unsafe { xfree(fmt.cast::<c_void>()) };
@@ -773,11 +764,9 @@ pub unsafe fn f_submatch(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         false
     };
     if as_list {
-        result.v_type = VAR_LIST;
-        result.vval.v_list = reg_submatch_list(no);
+        result.write_list(reg_submatch_list(no));
     } else {
-        result.v_type = VAR_STRING;
-        result.vval.v_string = reg_submatch(no);
+        result.write_string(reg_submatch(no));
     }
 }
 
@@ -809,7 +798,7 @@ pub unsafe fn f_substitute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     } else {
         sub = arg_string_chk(&mut subbuf, args.get(2));
     }
-    result.vval.v_string =
+    result.write_string(
         if str.is_null() || pat.is_null() || (sub.is_null() && expr.is_null()) || flg.is_null() {
             ptr::null_mut()
         } else {
@@ -822,5 +811,6 @@ pub unsafe fn f_substitute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
             // and `expr` is null or argument 2.
             let len = unsafe { cstr::bytes_at(str) }.len();
             unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
-        };
+        },
+    );
 }

@@ -44,9 +44,9 @@ use crate::message::emsg;
 use crate::narrow::float_as_i64;
 use crate::os::cshim::gettext;
 use crate::types::{
-    LuaRef, TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VarLock, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, size_t, typval_vval_union,
+    LuaRef, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VarLock, kBoolVarFalse, kBoolVarTrue,
+    kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull,
+    lua_Number, lua_State, size_t, typval_vval_union,
 };
 use ::libc::abort;
 
@@ -103,8 +103,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
     unsafe {
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
         let new_dict = |tv: *mut TypVal, ref_: LuaRef| {
-            (*tv).v_type = VAR_DICT;
-            (*tv).vval.v_dict = tv_dict_alloc();
+            (*tv).write_dict(tv_dict_alloc());
             (*(*tv).vval.v_dict).dv_refcount.retain();
             (*(*tv).vval.v_dict).lua_table_ref = ref_;
         };
@@ -187,16 +186,14 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
             'converted: {
                 match lua_type(lstate, -1) {
                     LUA_TNIL => {
-                        (*cur.tv).v_type = VAR_SPECIAL;
-                        (*cur.tv).vval.v_special = kSpecialVarNull;
+                        (*cur.tv).write_special(kSpecialVarNull);
                     }
                     LUA_TBOOLEAN => {
-                        (*cur.tv).v_type = VAR_BOOL;
-                        (*cur.tv).vval.v_bool = if lua_toboolean(lstate, -1) != 0 {
+                        (*cur.tv).write_boolean(if lua_toboolean(lstate, -1) != 0 {
                             kBoolVarTrue
                         } else {
                             kBoolVarFalse
-                        };
+                        });
                     }
                     LUA_TSTRING => {
                         let mut len: size_t = 0;
@@ -209,11 +206,9 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                             || n < VARNUMBER_MIN as lua_Number
                             || float_as_i64(n) as lua_Number != n
                         {
-                            (*cur.tv).v_type = VAR_FLOAT;
-                            (*cur.tv).vval.v_float = n;
+                            (*cur.tv).write_float(n);
                         } else {
-                            (*cur.tv).v_type = VAR_NUMBER;
-                            (*cur.tv).vval.v_number = float_as_i64(n);
+                            (*cur.tv).write_number(float_as_i64(n));
                         }
                     }
                     LUA_TTABLE => {
@@ -239,9 +234,8 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
 
                         match table_props.type_0 {
                             kObjectTypeArray => {
-                                (*cur.tv).v_type = VAR_LIST;
-                                (*cur.tv).vval.v_list =
-                                    tv_list_alloc(table_props.maxidx.cast_signed());
+                                (*cur.tv)
+                                    .write_list(tv_list_alloc(table_props.maxidx.cast_signed()));
                                 (*(*cur.tv).vval.v_list).lua_table_ref = table_ref;
                                 tv_list_ref((*cur.tv).vval.v_list);
                                 cur.list_len = table_props.maxidx;
@@ -287,8 +281,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                                 }
                             }
                             kObjectTypeFloat => {
-                                (*cur.tv).v_type = VAR_FLOAT;
-                                (*cur.tv).vval.v_float = table_props.val;
+                                (*cur.tv).write_float(table_props.val);
                             }
                             kObjectTypeNil => {
                                 emsg(gettext(E5100_MIXED_KEYS));
@@ -300,8 +293,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                     LUA_TFUNCTION => {
                         let func = nlua_ref_global(lstate, -1);
                         let name = register_luafunc(func);
-                        (*cur.tv).v_type = VAR_FUNC;
-                        (*cur.tv).vval.v_string = xstrdup(name);
+                        (*cur.tv).write_func_name(xstrdup(name));
                     }
                     LUA_TUSERDATA => {
                         // TODO(bfredl): check mt.__call and convert to a
@@ -310,8 +302,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bo
                         let is_nil = lua_rawequal(lstate, -2, -1) != 0;
                         lua_pop(lstate, 1);
                         if is_nil {
-                            (*cur.tv).v_type = VAR_SPECIAL;
-                            (*cur.tv).vval.v_special = kSpecialVarNull;
+                            (*cur.tv).write_special(kSpecialVarNull);
                         } else {
                             emsg(gettext(E5101_BAD_TYPE));
                             ret = false;

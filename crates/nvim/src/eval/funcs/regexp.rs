@@ -128,7 +128,7 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
     // into an argument (which outlives the call), into `patbuf`, or into
     // the string `tofree` owns.
     let _cpo = EmptyCpo::new();
-    result.vval.v_number = -1;
+    result.write_number(-1);
     match kind {
         kSomeMatchList => {
             list_alloc_ret(result, kListLenMayKnow as isize);
@@ -143,8 +143,7 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
             unsafe { tv_list_append_number(result.list_or_null(), -1) };
         }
         kSomeMatchStr => {
-            result.v_type = VAR_STRING;
-            result.vval.v_string = ptr::null_mut();
+            result.write_string(ptr::null_mut());
         }
         _ => {}
     }
@@ -282,13 +281,13 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
                 unsafe { xfree((*li1).li_tv.string_or_null() as *mut c_void) };
                 let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
                 let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
-                unsafe { (*li1).li_tv.vval.v_string = text as *mut c_char };
+                unsafe { (*li1).li_tv.write_string(text as *mut c_char) };
                 let start = unsafe { regmatch.startp[0].offset_from(expr) };
-                unsafe { (*li3).li_tv.vval.v_number = start as VarNumber };
+                unsafe { (*li3).li_tv.write_number(start as VarNumber) };
                 let end = unsafe { regmatch.endp[0].offset_from(expr) };
-                unsafe { (*li4).li_tv.vval.v_number = end as VarNumber };
+                unsafe { (*li4).li_tv.write_number(end as VarNumber) };
                 if !l.is_null() {
-                    unsafe { (*li2).li_tv.vval.v_number = idx as VarNumber };
+                    unsafe { (*li2).li_tv.write_number(idx as VarNumber) };
                 }
             }
             kSomeMatchList => {
@@ -310,13 +309,14 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
                     unsafe { tv_copy(&raw mut (*li).li_tv, result) };
                 } else {
                     let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
-                    result.vval.v_string =
-                        unsafe { xmemdupz(regmatch.startp[0] as *const c_void, rd) } as *mut c_char;
+                    result
+                        .write_string(unsafe { xmemdupz(regmatch.startp[0] as *const c_void, rd) }
+                            as *mut c_char);
                 }
             }
             _ => {
                 if !l.is_null() {
-                    result.vval.v_number = idx as VarNumber;
+                    result.write_number(idx as VarNumber);
                 } else {
                     let edge = if kind == kSomeMatch {
                         regmatch.startp[0]
@@ -325,9 +325,10 @@ unsafe fn find_some_match(args: Args<'_>, result: &mut TypVal, kind: SomeMatchTy
                     };
                     // Two offsets, because a `{start}` without a
                     // `{count}` moved `str` forward.
-                    result.vval.v_number = (unsafe { edge.offset_from(str) }
-                        + unsafe { str.offset_from(expr) })
-                        as VarNumber;
+                    result.write_number(
+                        (unsafe { edge.offset_from(str) } + unsafe { str.offset_from(expr) })
+                            as VarNumber,
+                    );
                 }
             }
         }
@@ -413,7 +414,7 @@ pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
-    result.vval.v_number = -1;
+    result.write_number(-1);
     list_alloc_ret(result, kListLenUnknown as isize);
     let retlist = result.list_or_null();
     if check_arg(args, 0, tv_check_for_buffer_arg).is_err()
@@ -580,7 +581,7 @@ pub unsafe fn f_matchstrpos(args: *mut TypVal, result: *mut TypVal, _f: EvalFunc
 pub unsafe fn f_matchstrlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the List and its items outlive the call.
-    result.vval.v_number = -1;
+    result.write_number(-1);
     list_alloc_ret(result, kListLenUnknown as isize);
     let retlist = result.list_or_null();
     if check_arg(args, 0, tv_check_for_list_arg).is_err()

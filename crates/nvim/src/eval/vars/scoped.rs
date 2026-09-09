@@ -56,8 +56,7 @@ unsafe fn get_var_from(
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
     let mut ret = unsafe { Tv::new(result) };
-    ret.v_type = VAR_STRING;
-    ret.vval.v_string = ptr::null_mut();
+    ret.write_string(ptr::null_mut());
 
     if let (false, Some(mut tp), Some(mut w)) = (varname.is_null(), tabpage, win)
         && (htname != b'b' as c_int || buffer.is_some())
@@ -256,22 +255,18 @@ pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
     match value {
         OptVal::Boolean(word) => {
             if numbool {
-                rettv.v_type = VAR_NUMBER;
-                rettv.vval.v_number = word as VarNumber;
+                rettv.write_number(word as VarNumber);
             } else if let Some(boolean) = value.as_boolean() {
                 // An unset global-local boolean has no Vimscript
                 // spelling and stays the `v:null` this started as.
-                rettv.v_type = VAR_BOOL;
-                rettv.vval.v_bool = c_int::from(boolean) as BoolVarValue;
+                rettv.write_boolean(c_int::from(boolean) as BoolVarValue);
             }
         }
         OptVal::Number(number) => {
-            rettv.v_type = VAR_NUMBER;
-            rettv.vval.v_number = number as VarNumber;
+            rettv.write_number(number as VarNumber);
         }
         OptVal::String(string) => {
-            rettv.v_type = VAR_STRING;
-            rettv.vval.v_string = string.data();
+            rettv.write_string(string.data());
         }
         OptVal::Nil => {}
     }

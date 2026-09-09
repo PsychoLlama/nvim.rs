@@ -21,7 +21,7 @@ use crate::eval::typval::{
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, UserFunc, VAR_STRING};
+use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, UserFunc};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -140,8 +140,7 @@ pub(crate) unsafe fn fill_submatch_list(
         } else {
             unsafe { xstrnsave(start, match_.endp[i].offset_from(start) as usize) }
         };
-        unsafe { (*li).li_tv.v_type = VAR_STRING };
-        unsafe { (*li).li_tv.vval.v_string = text };
+        unsafe { (*li).li_tv.write_string(text) };
         li = unsafe { (*li).li_next };
     }
     argskip + 1
