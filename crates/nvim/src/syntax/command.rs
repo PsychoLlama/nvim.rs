@@ -359,8 +359,8 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     let mut numbuf = NumBuf::new();
     if Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
         Win::current().w_s = Box::into_raw(empty_synblock());
-        unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab)) };
-        unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab_ic)) };
+        unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab)) };
+        unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.
         Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
         // Make sure option values are "empty_string_option" instead of NULL.

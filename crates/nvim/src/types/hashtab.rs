@@ -10,16 +10,18 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+pub use crate::hashtab::SlotEntry;
 
 pub type HashValue = size_t;
+
 /// One slot of a [`HashTab`].
 ///
-/// `Copy`: `hi_key` points into the `DictItem` (or equivalent) that the
-/// table indexes, which the table does not own.
+/// `Copy`: the entry names something the table does not own -- a key string,
+/// or a dictionary item -- and copying the slot copies only that name.
 #[derive(Copy, Clone)]
-pub struct HashItem {
+pub struct HashItem<E: SlotEntry = *mut ::core::ffi::c_char> {
     pub hi_hash: HashValue,
-    pub hi_key: *mut ::core::ffi::c_char,
+    pub hi_key: E,
 }
 
 /// Where a table's slots live.
@@ -34,22 +36,20 @@ pub struct HashItem {
 /// exactly [`crate::hashtab::HT_INIT_SIZE`] slots returns to the run -- the
 /// same two transitions the C made, which is why the resize's "is the array
 /// still the small one" test still reads `oldsize == HT_INIT_SIZE`.
-#[expect(
-    clippy::large_enum_variant,
-    reason = "the size difference is the point: the small run is stored, not \
-              pointed at, which is what costs a dictionary no allocation"
-)]
-enum Slots {
+// `clippy::large_enum_variant` has nothing to say about a generic enum, but
+// the size difference is deliberate either way: the small run is stored, not
+// pointed at, which is what costs a dictionary no allocation.
+enum Slots<E: SlotEntry> {
     /// No array at all: a [`HashTab::new`], or a table
     /// [`crate::hashtab::hash_clear`] emptied.
     None,
     /// The small run, in the table itself.
-    Inline([HashItem; crate::hashtab::HT_INIT_SIZE]),
+    Inline([HashItem<E>; crate::hashtab::HT_INIT_SIZE]),
     /// A grown table's array.
-    Heap(Vec<HashItem>),
+    Heap(Vec<HashItem<E>>),
 }
 
-impl Slots {
+impl<E: SlotEntry> Slots<E> {
     /// `size` empty slots, inline when that is the small run's size.
     fn with_size(size: usize) -> Self {
         if size == crate::hashtab::HT_INIT_SIZE {
@@ -59,7 +59,7 @@ impl Slots {
         }
     }
 
-    fn as_slice(&self) -> &[HashItem] {
+    fn as_slice(&self) -> &[HashItem<E>] {
         match self {
             Slots::None => &[],
             Slots::Inline(run) => run,
@@ -67,7 +67,7 @@ impl Slots {
         }
     }
 
-    fn as_mut_slice(&mut self) -> &mut [HashItem] {
+    fn as_mut_slice(&mut self) -> &mut [HashItem<E>] {
         match self {
             Slots::None => &mut [],
             Slots::Inline(run) => run,
@@ -103,7 +103,7 @@ impl Slots {
 /// held, and every write goes back through the table. An index survives a
 /// mutation; what it does not survive is a *resize*, which is what
 /// [`crate::hashtab::hash_lock`] exists to prevent.
-pub struct HashTab {
+pub struct HashTab<E: SlotEntry = *mut ::core::ffi::c_char> {
     /// Live entries.
     pub ht_used: size_t,
     /// Entries plus tombstones: what the load factor is measured against.
@@ -115,30 +115,30 @@ pub struct HashTab {
     /// [`crate::hashtab::hash_lock`].
     pub ht_locked: ::core::ffi::c_int,
     /// The slots themselves.
-    slots: Slots,
+    slots: Slots<E>,
 }
 
-impl Default for HashItem {
+impl<E: SlotEntry> Default for HashItem<E> {
     fn default() -> Self {
         Self::EMPTY
     }
 }
 
-impl HashItem {
+impl<E: SlotEntry> HashItem<E> {
     /// A slot that never held a key.
     pub const EMPTY: Self = Self {
         hi_hash: 0,
-        hi_key: ::core::ptr::null_mut(),
+        hi_key: E::EMPTY,
     };
 }
 
-impl Default for HashTab {
+impl<E: SlotEntry> Default for HashTab<E> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl HashTab {
+impl<E: SlotEntry> HashTab<E> {
     /// A table with no slots at all: the state a `HashTab` field has
     /// before [`crate::hashtab::hash_init`] gives it its first array, and
     /// the one it is left in by [`crate::hashtab::hash_clear`].
@@ -180,12 +180,12 @@ impl HashTab {
 
     /// Every slot, in index order -- empty ones and tombstones included.
     /// The live entries alone are [`HashTab::items`].
-    pub fn slots(&self) -> &[HashItem] {
+    pub fn slots(&self) -> &[HashItem<E>] {
         self.slots.as_slice()
     }
 
     /// Every slot, writable.
-    pub fn slots_mut(&mut self) -> &mut [HashItem] {
+    pub fn slots_mut(&mut self) -> &mut [HashItem<E>] {
         self.slots.as_mut_slice()
     }
 
@@ -194,7 +194,7 @@ impl HashTab {
     pub(crate) fn resize_slots(
         &mut self,
         size: usize,
-        rehash: impl FnOnce(&[HashItem], &mut [HashItem]),
+        rehash: impl FnOnce(&[HashItem<E>], &mut [HashItem<E>]),
     ) {
         let old = ::core::mem::replace(&mut self.slots, Slots::with_size(size));
         rehash(old.as_slice(), self.slots.as_mut_slice());
