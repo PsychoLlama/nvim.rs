@@ -1564,4 +1564,44 @@ func Test_deep_nested_listdict_compare()
   call CheckLegacyAndVim9Success(lines)
 endfunc
 
+" Slot order is user-visible: keys(), values() and items() all hand out the
+" hash table's slot order, and Vim scripts have always been able to see it.
+" The table starts at 16 slots and quadruples, so these sizes straddle both
+" of the first two rehashes; the last row is the tombstone case, where a
+" removed key is added back and lands where the probe now takes it.
+func Test_dict_slot_order_is_stable()
+  let expected = {
+        \ 5: 'k0 k1 k2 k3 k4',
+        \ 15: 'k0 k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14',
+        \ 16: 'k0 k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15',
+        \ 17: 'k0 k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16',
+        \ 40: 'k18 k19 k30 k31 k32 k33 k34 k35 k36 k37 k38 k39 k20 k21 k22 k23 k24 k25 k26 k27 k28 k29 k0 k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17',
+        \ 64: 'k30 k31 k32 k33 k34 k35 k36 k37 k38 k39 k60 k61 k62 k63 k10 k11 k12 k13 k14 k15 k16 k17 k18 k19 k49 k40 k1 k2 k3 k0 k5 k6 k7 k8 k9 k41 k44 k42 k43 k4 k45 k46 k47 k48 k20 k21 k22 k23 k24 k25 k26 k27 k28 k29 k50 k51 k52 k53 k54 k55 k56 k57 k58 k59',
+        \ 65: 'k30 k31 k32 k33 k34 k35 k36 k37 k38 k39 k60 k61 k62 k63 k64 k10 k11 k12 k13 k14 k15 k16 k17 k18 k19 k49 k40 k1 k2 k3 k0 k5 k6 k7 k8 k9 k41 k44 k42 k43 k4 k45 k46 k47 k48 k20 k21 k22 k23 k24 k25 k26 k27 k28 k29 k50 k51 k52 k53 k54 k55 k56 k57 k58 k59',
+        \ }
+  for [n, order] in items(expected)
+    let d = {}
+    for i in range(str2nr(n))
+      let d['k' .. i] = i
+    endfor
+    call assert_equal(order, join(keys(d), ' '), 'keys() of ' .. n)
+    call assert_equal(order, join(map(items(d), 'v:val[0]'), ' '), 'items() of ' .. n)
+    call assert_equal(map(split(order), 'str2nr(v:val[1:])'), values(d), 'values() of ' .. n)
+  endfor
+
+  " Removing leaves a tombstone an insertion may reuse.
+  let d = {}
+  for i in range(20)
+    let d['k' .. i] = i
+  endfor
+  for i in range(0, 19, 3)
+    call remove(d, 'k' .. i)
+  endfor
+  for i in range(0, 19, 3)
+    let d['k' .. i] = i
+  endfor
+  call assert_equal('k18 k19 k0 k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17',
+        \ join(keys(d), ' '))
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab
