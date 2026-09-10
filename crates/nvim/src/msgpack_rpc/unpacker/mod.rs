@@ -25,7 +25,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 
-use crate::api::private::dispatch::msgpack_rpc_get_handler_for;
+use crate::api::private::dispatch::{NO_HANDLER, msgpack_rpc_get_handler_for};
 use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free};
 use crate::mpack::conv::{
     mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
@@ -35,8 +35,9 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, Arena, Array, Error, Integer, KeyValuePair, MessageType, Object, String_0, Unpacker,
-    mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, size_t,
+    ApiDict, ApiDispatchFn, Arena, Array, Error, Integer, KeyValuePair, MessageType, Object,
+    String_0, Unpacker, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb,
+    size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -523,16 +524,24 @@ unsafe fn unpacker_parse_header(p: *mut Unpacker) -> bool {
                 break 'error MPACK_EOF;
             }
             // An unknown method leaves `handler.fn` null, which the dispatch
-            // layer reports once the arguments have been read.
-            // SAFETY: the chunk is `tok.length` readable bytes of the input
-            // buffer, and the error slot is the unpacker's own.
+            // layer reports once the arguments have been read; why it did not
+            // resolve waits in the unpacker's own error slot.
             let name = if tok.length != 0 {
+                // SAFETY: the chunk is `tok.length` readable bytes of the
+                // input buffer, which the check above bounds.
                 unsafe { tok.data.chunk_ptr }
             } else {
                 c"".as_ptr()
             };
             let len = tok.length as size_t;
-            u.handler = unsafe { msgpack_rpc_get_handler_for(name, len, &mut u.unpack_error) };
+            // SAFETY: as above.
+            u.handler = match unsafe { msgpack_rpc_get_handler_for(name, len) } {
+                Ok(handler) => handler,
+                Err(e) => {
+                    u.unpack_error = e;
+                    NO_HANDLER
+                }
+            };
         }
 
         u.read_ptr = data;
@@ -575,12 +584,8 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
         }
         // SAFETY: as above. `handle_ui_client_redraw` is the handler the
         // dispatch table hands back for the `redraw` method.
-        let is_redraw = unsafe { (*p).handler.fn_0 }.is_some_and(|f| {
-            core::ptr::fn_addr_eq(
-                f,
-                handle_ui_client_redraw as unsafe fn(u64, Array, *mut Arena, &mut Error) -> Object,
-            )
-        });
+        let is_redraw = unsafe { (*p).handler.fn_0 }
+            .is_some_and(|f| core::ptr::fn_addr_eq(f, handle_ui_client_redraw as ApiDispatchFn));
         if unsafe { (*p).type_0 } == kMessageTypeNotification && is_redraw {
             unsafe { (*p).type_0 = kMessageTypeRedrawEvent };
             unsafe { (*p).state = protocol::REDRAW_EVENTS };

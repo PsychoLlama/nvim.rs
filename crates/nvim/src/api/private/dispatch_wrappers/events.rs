@@ -10,9 +10,9 @@ use super::*;
 
 /// The msgpack-RPC dispatch wrapper for `nvim_error_event`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -23,8 +23,7 @@ pub unsafe fn handle_nvim_error_event(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -35,28 +34,25 @@ pub unsafe fn handle_nvim_error_event(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_integer(args[0]) else {
-        wrong_type(error, 1, c"nvim_error_event", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_error_event", c"Integer"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_error_event", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_error_event", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
     unsafe { nvim_error_event(channel_id, arg_1, arg_2) };
-    Object::Nil
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_ui_term_event`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -67,8 +63,7 @@ pub unsafe fn handle_nvim_ui_term_event(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -79,18 +74,14 @@ pub unsafe fn handle_nvim_ui_term_event(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_string(args[0]) else {
-        wrong_type(error, 1, c"nvim_ui_term_event", c"String");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_ui_term_event", c"String"));
     };
     let arg_2 = args[1];
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_ui_term_event(channel_id, arg_1, arg_2) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_ui_term_event(channel_id, arg_1, arg_2) }?;
+    Ok(Object::Nil)
 }

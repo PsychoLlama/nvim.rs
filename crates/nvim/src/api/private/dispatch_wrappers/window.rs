@@ -10,9 +10,9 @@ use super::*;
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_close`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -23,8 +23,7 @@ pub unsafe fn handle_nvim_win_close(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -35,32 +34,26 @@ pub unsafe fn handle_nvim_win_close(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_close", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_close", c"Window"));
     };
     let Some(arg_2) = as_boolean(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_close", c"Boolean");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_close", c"Boolean"));
     };
     if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
+        return Err(expr_map_locked_error());
     }
-    if let Err(e) = nvim_win_close(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_close(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_del_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -71,8 +64,7 @@ pub unsafe fn handle_nvim_win_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -83,30 +75,25 @@ pub unsafe fn handle_nvim_win_del_var(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_del_var", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_del_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_del_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_win_del_var(arg_1, arg_2) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_win_del_var(arg_1, arg_2) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_buf`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -117,8 +104,7 @@ pub unsafe fn handle_nvim_win_get_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -129,25 +115,20 @@ pub unsafe fn handle_nvim_win_get_buf(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_buf", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_buf", c"Window"));
     };
-    let rv = match nvim_win_get_buf(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Buffer(rv as Integer)
+    let rv = nvim_win_get_buf(arg_1)?;
+    Ok(Object::Buffer(rv as Integer))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_cursor`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -158,8 +139,7 @@ pub unsafe fn handle_nvim_win_get_cursor(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -170,27 +150,22 @@ pub unsafe fn handle_nvim_win_get_cursor(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_cursor", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_cursor", c"Window"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_win_get_cursor(arg_1, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Array(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_win_get_cursor(arg_1, arena) }?;
+    Ok(Object::Array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_height`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -201,8 +176,7 @@ pub unsafe fn handle_nvim_win_get_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -213,25 +187,20 @@ pub unsafe fn handle_nvim_win_get_height(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_height", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_height", c"Window"));
     };
-    let rv = match nvim_win_get_height(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    let rv = nvim_win_get_height(arg_1)?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_number`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -242,8 +211,7 @@ pub unsafe fn handle_nvim_win_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -254,25 +222,20 @@ pub unsafe fn handle_nvim_win_get_number(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_number", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_number", c"Window"));
     };
-    let rv = match nvim_win_get_number(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    let rv = nvim_win_get_number(arg_1)?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_position`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -283,8 +246,7 @@ pub unsafe fn handle_nvim_win_get_position(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -295,27 +257,22 @@ pub unsafe fn handle_nvim_win_get_position(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_position", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_position", c"Window"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_win_get_position(arg_1, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Array(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_win_get_position(arg_1, arena) }?;
+    Ok(Object::Array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_tabpage`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -326,8 +283,7 @@ pub unsafe fn handle_nvim_win_get_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -338,25 +294,20 @@ pub unsafe fn handle_nvim_win_get_tabpage(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_tabpage", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_tabpage", c"Window"));
     };
-    let rv = match nvim_win_get_tabpage(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Tabpage(rv as Integer)
+    let rv = nvim_win_get_tabpage(arg_1)?;
+    Ok(Object::Tabpage(rv as Integer))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -367,8 +318,7 @@ pub unsafe fn handle_nvim_win_get_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -379,30 +329,24 @@ pub unsafe fn handle_nvim_win_get_var(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_var", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_get_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_get_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    match unsafe { nvim_win_get_var(arg_1, arg_2, arena) } {
-        Ok(rv) => rv,
-        Err(e) => failure(error, e),
-    }
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_win_get_var(arg_1, arg_2, arena) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_width`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -413,8 +357,7 @@ pub unsafe fn handle_nvim_win_get_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -425,25 +368,20 @@ pub unsafe fn handle_nvim_win_get_width(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_get_width", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_get_width", c"Window"));
     };
-    let rv = match nvim_win_get_width(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    let rv = nvim_win_get_width(arg_1)?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_hide`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -454,8 +392,7 @@ pub unsafe fn handle_nvim_win_hide(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -466,28 +403,23 @@ pub unsafe fn handle_nvim_win_hide(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_hide", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_hide", c"Window"));
     };
     if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
+        return Err(expr_map_locked_error());
     }
-    if let Err(e) = nvim_win_hide(arg_1) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_hide(arg_1)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_is_valid`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -498,8 +430,7 @@ pub unsafe fn handle_nvim_win_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -510,22 +441,20 @@ pub unsafe fn handle_nvim_win_is_valid(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_is_valid", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_is_valid", c"Window"));
     };
     let rv = nvim_win_is_valid(arg_1);
-    Object::Boolean(rv)
+    Ok(Object::Boolean(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_buf`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -536,8 +465,7 @@ pub unsafe fn handle_nvim_win_set_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -548,32 +476,26 @@ pub unsafe fn handle_nvim_win_set_buf(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_buf", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_buf", c"Window"));
     };
     let Some(arg_2) = as_handle(args[1], kObjectTypeBuffer) else {
-        wrong_type(error, 2, c"nvim_win_set_buf", c"Buffer");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_set_buf", c"Buffer"));
     };
     if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
+        return Err(expr_map_locked_error());
     }
-    if let Err(e) = nvim_win_set_buf(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_set_buf(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_cursor`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -584,8 +506,7 @@ pub unsafe fn handle_nvim_win_set_cursor(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -596,30 +517,29 @@ pub unsafe fn handle_nvim_win_set_cursor(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_cursor", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_cursor", c"Window"));
     };
     let Some(arg_2) = as_array(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_set_cursor", c"ArrayOf(Integer, 2)");
-        return Object::Nil;
+        return Err(wrong_type(
+            2,
+            c"nvim_win_set_cursor",
+            c"ArrayOf(Integer, 2)",
+        ));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_win_set_cursor(arg_1, arg_2) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_win_set_cursor(arg_1, arg_2) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_height`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -630,8 +550,7 @@ pub unsafe fn handle_nvim_win_set_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -642,28 +561,23 @@ pub unsafe fn handle_nvim_win_set_height(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_height", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_height", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_set_height", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_set_height", c"Integer"));
     };
-    if let Err(e) = nvim_win_set_height(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_set_height(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_hl_ns`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -674,8 +588,7 @@ pub unsafe fn handle_nvim_win_set_hl_ns(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -686,28 +599,23 @@ pub unsafe fn handle_nvim_win_set_hl_ns(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_hl_ns", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_hl_ns", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_set_hl_ns", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_set_hl_ns", c"Integer"));
     };
-    if let Err(e) = nvim_win_set_hl_ns(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_set_hl_ns(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -718,8 +626,7 @@ pub unsafe fn handle_nvim_win_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -730,31 +637,26 @@ pub unsafe fn handle_nvim_win_set_var(
         channel_id,
     );
     if args.len() != 3 {
-        wrong_arity(error, 3, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(3, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_var", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_var", c"Window"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_set_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_set_var", c"String"));
     };
     let arg_3 = args[2];
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_width`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -765,8 +667,7 @@ pub unsafe fn handle_nvim_win_set_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -777,28 +678,23 @@ pub unsafe fn handle_nvim_win_set_width(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_set_width", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_set_width", c"Window"));
     };
     let Some(arg_2) = as_integer(args[1]) else {
-        wrong_type(error, 2, c"nvim_win_set_width", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_win_set_width", c"Integer"));
     };
-    if let Err(e) = nvim_win_set_width(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_win_set_width(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_text_height`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -809,8 +705,7 @@ pub unsafe fn handle_nvim_win_text_height(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -821,32 +716,25 @@ pub unsafe fn handle_nvim_win_text_height(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
-        wrong_type(error, 1, c"nvim_win_text_height", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_win_text_height", c"Window"));
     };
     let mut arg_2: KeyDict_win_text_height =
-        match read_keydict(Some(key_dict_win_text_height_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_win_text_height_get_field), args[1]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(
-                    error,
+                return Err(wrong_type(
                     2,
                     c"nvim_win_text_height",
                     c"Dict(win_text_height) *",
-                );
-                return Object::Nil;
+                ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_win_text_height(arg_1, &raw mut arg_2, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Dict(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_win_text_height(arg_1, &raw mut arg_2, arena) }?;
+    Ok(Object::Dict(rv))
 }

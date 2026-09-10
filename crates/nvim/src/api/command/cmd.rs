@@ -81,9 +81,14 @@ fn sub_keyset<K>(dict: ApiDict, get_field: FieldHashfn, err: &mut Error) -> Opti
     // SAFETY: every keydict is a plain C aggregate whose all-zero state is
     // "no key set" -- which is what the decoder expects to start from -- and
     // `get_field` is `K`'s own lookup, per the contract above.
-    unsafe {
-        let mut out: K = ::core::mem::zeroed();
-        api_dict_to_keydict((&raw mut out).cast(), get_field, dict, err).then_some(out)
+    let mut out: K = unsafe { ::core::mem::zeroed() };
+    // SAFETY: as above.
+    match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
+        Ok(()) => Some(out),
+        Err(e) => {
+            *err = e;
+            None
+        }
     }
 }
 

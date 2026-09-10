@@ -10,9 +10,9 @@ use super::*;
 
 /// The msgpack-RPC dispatch wrapper for `nvim_open_tabpage`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -23,8 +23,7 @@ pub unsafe fn handle_nvim_open_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -35,44 +34,40 @@ pub unsafe fn handle_nvim_open_tabpage(
         channel_id,
     );
     if args.len() != 3 {
-        wrong_arity(error, 3, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(3, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_open_tabpage", c"Buffer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_open_tabpage", c"Buffer"));
     };
     let Some(arg_2) = as_boolean(args[1]) else {
-        wrong_type(error, 2, c"nvim_open_tabpage", c"Boolean");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_open_tabpage", c"Boolean"));
     };
     let mut arg_3: KeyDict_tabpage_config =
-        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2], error) {
+        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 3, c"nvim_open_tabpage", c"Dict(tabpage_config) *");
-                return Object::Nil;
+                return Err(wrong_type(
+                    3,
+                    c"nvim_open_tabpage",
+                    c"Dict(tabpage_config) *",
+                ));
             }
         };
     if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
+        return Err(expr_map_locked_error());
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Tabpage(rv as Integer)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_open_tabpage(arg_1, arg_2, &raw mut arg_3) }?;
+    Ok(Object::Tabpage(rv as Integer))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_del_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -83,8 +78,7 @@ pub unsafe fn handle_nvim_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -95,30 +89,25 @@ pub unsafe fn handle_nvim_tabpage_del_var(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_del_var", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_del_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_tabpage_del_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_tabpage_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_tabpage_del_var(arg_1, arg_2) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_tabpage_del_var(arg_1, arg_2) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_number`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -129,8 +118,7 @@ pub unsafe fn handle_nvim_tabpage_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -141,25 +129,20 @@ pub unsafe fn handle_nvim_tabpage_get_number(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_get_number", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_get_number", c"Tabpage"));
     };
-    let rv = match nvim_tabpage_get_number(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    let rv = nvim_tabpage_get_number(arg_1)?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -170,8 +153,7 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -182,30 +164,24 @@ pub unsafe fn handle_nvim_tabpage_get_var(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_get_var", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_get_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_tabpage_get_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_tabpage_get_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    match unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) } {
-        Ok(rv) => rv,
-        Err(e) => failure(error, e),
-    }
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_win`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -216,8 +192,7 @@ pub unsafe fn handle_nvim_tabpage_get_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -228,25 +203,20 @@ pub unsafe fn handle_nvim_tabpage_get_win(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_get_win", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_get_win", c"Tabpage"));
     };
-    let rv = match nvim_tabpage_get_win(arg_1) {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Window(rv as Integer)
+    let rv = nvim_tabpage_get_win(arg_1)?;
+    Ok(Object::Window(rv as Integer))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_is_valid`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -257,8 +227,7 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -269,22 +238,20 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_is_valid", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_is_valid", c"Tabpage"));
     };
     let rv = nvim_tabpage_is_valid(arg_1);
-    Object::Boolean(rv)
+    Ok(Object::Boolean(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_list_wins`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -295,8 +262,7 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -307,27 +273,22 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_list_wins", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_list_wins", c"Tabpage"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_tabpage_list_wins(arg_1, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Array(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_tabpage_list_wins(arg_1, arena) }?;
+    Ok(Object::Array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -338,8 +299,7 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -350,31 +310,26 @@ pub unsafe fn handle_nvim_tabpage_set_var(
         channel_id,
     );
     if args.len() != 3 {
-        wrong_arity(error, 3, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(3, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_set_var", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_set_var", c"Tabpage"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_tabpage_set_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_tabpage_set_var", c"String"));
     };
     let arg_3 = args[2];
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_win`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -385,8 +340,7 @@ pub unsafe fn handle_nvim_tabpage_set_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -397,19 +351,14 @@ pub unsafe fn handle_nvim_tabpage_set_win(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
-        wrong_type(error, 1, c"nvim_tabpage_set_win", c"Tabpage");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_tabpage_set_win", c"Tabpage"));
     };
     let Some(arg_2) = as_handle(args[1], kObjectTypeWindow) else {
-        wrong_type(error, 2, c"nvim_tabpage_set_win", c"Window");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_tabpage_set_win", c"Window"));
     };
-    if let Err(e) = nvim_tabpage_set_win(arg_1, arg_2) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_tabpage_set_win(arg_1, arg_2)?;
+    Ok(Object::Nil)
 }

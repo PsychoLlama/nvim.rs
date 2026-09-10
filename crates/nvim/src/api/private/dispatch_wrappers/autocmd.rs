@@ -10,9 +10,9 @@ use super::*;
 
 /// The msgpack-RPC dispatch wrapper for `nvim_clear_autocmds`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -23,8 +23,7 @@ pub unsafe fn handle_nvim_clear_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -35,31 +34,31 @@ pub unsafe fn handle_nvim_clear_autocmds(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let mut arg_1: KeyDict_clear_autocmds =
-        match read_keydict(Some(key_dict_clear_autocmds_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_clear_autocmds_get_field), args[0]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 1, c"nvim_clear_autocmds", c"Dict(clear_autocmds) *");
-                return Object::Nil;
+                return Err(wrong_type(
+                    1,
+                    c"nvim_clear_autocmds",
+                    c"Dict(clear_autocmds) *",
+                ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_clear_autocmds(&raw mut arg_1, arena) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_clear_autocmds(&raw mut arg_1, arena) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_augroup`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -70,8 +69,7 @@ pub unsafe fn handle_nvim_create_augroup(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -82,36 +80,34 @@ pub unsafe fn handle_nvim_create_augroup(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_string(args[0]) else {
-        wrong_type(error, 1, c"nvim_create_augroup", c"String");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_create_augroup", c"String"));
     };
     let mut arg_2: KeyDict_create_augroup =
-        match read_keydict(Some(key_dict_create_augroup_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_create_augroup_get_field), args[1]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 2, c"nvim_create_augroup", c"Dict(create_augroup) *");
-                return Object::Nil;
+                return Err(wrong_type(
+                    2,
+                    c"nvim_create_augroup",
+                    c"Dict(create_augroup) *",
+                ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_create_augroup(channel_id, arg_1, &raw mut arg_2) }?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_create_autocmd`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -122,8 +118,7 @@ pub unsafe fn handle_nvim_create_autocmd(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -134,33 +129,32 @@ pub unsafe fn handle_nvim_create_autocmd(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_create_autocmd =
-        match read_keydict(Some(key_dict_create_autocmd_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_create_autocmd_get_field), args[1]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 2, c"nvim_create_autocmd", c"Dict(create_autocmd) *");
-                return Object::Nil;
+                return Err(wrong_type(
+                    2,
+                    c"nvim_create_autocmd",
+                    c"Dict(create_autocmd) *",
+                ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Integer(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_create_autocmd(channel_id, arg_1, &raw mut arg_2, arena) }?;
+    Ok(Object::Integer(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_id`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -171,8 +165,7 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -183,24 +176,20 @@ pub unsafe fn handle_nvim_del_augroup_by_id(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_integer(args[0]) else {
-        wrong_type(error, 1, c"nvim_del_augroup_by_id", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_del_augroup_by_id", c"Integer"));
     };
-    if let Err(e) = nvim_del_augroup_by_id(arg_1) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_del_augroup_by_id(arg_1)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_augroup_by_name`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -211,8 +200,7 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -223,26 +211,22 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_string(args[0]) else {
-        wrong_type(error, 1, c"nvim_del_augroup_by_name", c"String");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_del_augroup_by_name", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_del_augroup_by_name(arg_1) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_del_augroup_by_name(arg_1) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_del_autocmd`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -253,8 +237,7 @@ pub unsafe fn handle_nvim_del_autocmd(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -265,24 +248,20 @@ pub unsafe fn handle_nvim_del_autocmd(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let Some(arg_1) = as_integer(args[0]) else {
-        wrong_type(error, 1, c"nvim_del_autocmd", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_del_autocmd", c"Integer"));
     };
-    if let Err(e) = nvim_del_autocmd(arg_1) {
-        return failure(error, e);
-    }
-    Object::Nil
+    nvim_del_autocmd(arg_1)?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_exec_autocmds`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -293,8 +272,7 @@ pub unsafe fn handle_nvim_exec_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -305,32 +283,32 @@ pub unsafe fn handle_nvim_exec_autocmds(
         channel_id,
     );
     if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(2, args.len()));
     }
     let arg_1 = args[0];
     let mut arg_2: KeyDict_exec_autocmds =
-        match read_keydict(Some(key_dict_exec_autocmds_get_field), args[1], error) {
+        match read_keydict(Some(key_dict_exec_autocmds_get_field), args[1]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 2, c"nvim_exec_autocmds", c"Dict(exec_autocmds) *");
-                return Object::Nil;
+                return Err(wrong_type(
+                    2,
+                    c"nvim_exec_autocmds",
+                    c"Dict(exec_autocmds) *",
+                ));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_exec_autocmds(arg_1, &raw mut arg_2, arena) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_autocmds`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -341,8 +319,7 @@ pub unsafe fn handle_nvim_get_autocmds(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -353,23 +330,18 @@ pub unsafe fn handle_nvim_get_autocmds(
         channel_id,
     );
     if args.len() != 1 {
-        wrong_arity(error, 1, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(1, args.len()));
     }
     let mut arg_1: KeyDict_get_autocmds =
-        match read_keydict(Some(key_dict_get_autocmds_get_field), args[0], error) {
+        match read_keydict(Some(key_dict_get_autocmds_get_field), args[0]) {
             KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
+            KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
-                wrong_type(error, 1, c"nvim_get_autocmds", c"Dict(get_autocmds) *");
-                return Object::Nil;
+                return Err(wrong_type(1, c"nvim_get_autocmds", c"Dict(get_autocmds) *"));
             }
         };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_get_autocmds(&raw mut arg_1, arena) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Array(rv)
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1, arena) }?;
+    Ok(Object::Array(rv))
 }

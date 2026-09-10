@@ -151,44 +151,48 @@ pub unsafe fn nvim_buf_set_extmark(
                     's_293: {
                         if let Object::Array(arr) = opts.hl_group {
                             if arr.size >= 1 as size_t {
-                                hl.hl_id = unsafe {
+                                hl.hl_id = match unsafe {
                                     object_to_hl_id(
                                         *arr.items.offset(0 as ::core::ffi::c_int as isize),
                                         c"hl_group item".as_ptr(),
-                                        &mut error,
                                     )
+                                } {
+                                    Ok(id) => id,
+                                    Err(e) => {
+                                        error = e;
+                                        break '_error;
+                                    }
                                 };
-                                if error.is_set() {
-                                    break '_error;
-                                }
                             }
                             let mut i: size_t = 1 as size_t;
                             loop {
                                 if i >= arr.size {
                                     break 's_293;
                                 }
-                                let hl_id: ::core::ffi::c_int = unsafe {
-                                    object_to_hl_id(
-                                        *arr.items.add(i),
-                                        c"hl_group item".as_ptr(),
-                                        &mut error,
-                                    )
+                                let hl_id: ::core::ffi::c_int = match unsafe {
+                                    object_to_hl_id(*arr.items.add(i), c"hl_group item".as_ptr())
+                                } {
+                                    Ok(id) => id,
+                                    Err(e) => {
+                                        error = e;
+                                        break '_error;
+                                    }
                                 };
-                                if error.is_set() {
-                                    break '_error;
-                                }
                                 if hl_id != 0 {
                                     has_hl_multiple = true;
                                 }
                                 i = i.wrapping_add(1);
                             }
                         } else {
-                            hl.hl_id = unsafe {
-                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr(), &mut error)
+                            hl.hl_id = match unsafe {
+                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr())
+                            } {
+                                Ok(id) => id,
+                                Err(e) => {
+                                    error = e;
+                                    break '_error;
+                                }
                             };
-                            if error.is_set() {
-                                break '_error;
-                            }
                         }
                     }
                     has_hl = hl.hl_id > 0 as ::core::ffi::c_int;
@@ -625,13 +629,16 @@ pub unsafe fn nvim_buf_set_extmark(
                                 };
                                 let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
                                 while i_0 > 0 as size_t {
+                                    // The same objects resolved above, so a
+                                    // refusal here is impossible; zero is the
+                                    // id an unresolvable name would have got.
                                     let hl_id_0: ::core::ffi::c_int = unsafe {
                                         object_to_hl_id(
                                             *arr_0.items.add(i_0),
                                             c"hl_group item".as_ptr(),
-                                            &mut error,
                                         )
-                                    };
+                                    }
+                                    .unwrap_or(0);
                                     if hl_id_0 > 0 as ::core::ffi::c_int {
                                         let mut sh_0: DecorSignHighlight =
                                             DECOR_SIGN_HIGHLIGHT_INIT;

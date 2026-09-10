@@ -20,6 +20,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_expected, err_out_of_range, err_required};
 use crate::api_error;
 use crate::guard::Suppress;
+use crate::message::EMPTY_HL_MESSAGE;
 use crate::message_fmt::c_str;
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char};
@@ -46,12 +47,12 @@ pub unsafe fn nvim_echo(
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { EchoOpts::new(opts) };
     let mut id = Object::integer(-1);
-    // SAFETY: the caller's chunk array, and `error` is this frame's own slot.
-    let hl_msg: HlMessage = unsafe { parse_hl_msg(chunks, opts.err, &mut error) };
-    if error.is_set() {
+    let mut hl_msg = EMPTY_HL_MESSAGE;
+    // SAFETY: the caller's chunk array, and `hl_msg` is this frame's own.
+    if let Err(e) = unsafe { parse_hl_msg(&mut hl_msg, chunks, opts.err) } {
         // SAFETY: the message this frame just built and nothing else owns.
         unsafe { hl_msg_free(hl_msg) };
-        return id.reported(error);
+        return Err(e);
     }
 
     let mut kind: *mut c_char = opts.kind.data();

@@ -38,9 +38,9 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiDict, BufferHandle, ColNr, Error, ExceptType, FileMarkView, HlMessage, Integer, LineNr,
-    MsgList, NUL, Pos, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t,
-    kErrorTypeException, uint64_t,
+    ApiDict, BufferHandle, ColNr, Error, ExceptType, FileMarkView, Integer, LineNr, MsgList, NUL,
+    Pos, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException,
+    uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -85,11 +85,6 @@ const EMPTY_DICT: ApiDict = ApiDict {
     items: ptr::null_mut(),
 };
 
-const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
 use crate::api::private::validate::{Bad, err_bad_number, err_invalid};
 use crate::api_error;
 use crate::message_fmt::{c_str, msg_bytes};

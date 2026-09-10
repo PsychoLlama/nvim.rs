@@ -201,14 +201,14 @@ unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, 
         if arr.size < 2 {
             return Some((string, 0));
         }
-        // SAFETY: a two-item array has an item at index 1, and the caller's
-        // error slot.
-        let hl_id =
-            unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr(), err) };
-        if err.kind() != kErrorTypeNone {
-            return None;
+        // SAFETY: a two-item array has an item at index 1.
+        match unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr()) } {
+            Ok(hl_id) => return Some((string, hl_id)),
+            Err(e) => {
+                *err = e;
+                return None;
+            }
         }
-        return Some((string, hl_id));
     }
     if let Object::String(string) = item {
         return Some((string, 0));

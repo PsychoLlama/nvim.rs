@@ -8,185 +8,11 @@
 
 use super::*;
 
-/// The msgpack-RPC dispatch wrapper for `nvim_buf_set_lines`.
-///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
-pub unsafe fn handle_nvim_buf_set_lines(
-    channel_id: uint64_t,
-    args: Array,
-    arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
-    log_invoke(
-        c"handle_nvim_buf_set_lines",
-        c"nvim_buf_set_lines",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 5 {
-        wrong_arity(error, 5, args.len());
-        return Object::Nil;
-    }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_buf_set_lines", c"Buffer");
-        return Object::Nil;
-    };
-    let Some(arg_2) = as_integer(args[1]) else {
-        wrong_type(error, 2, c"nvim_buf_set_lines", c"Integer");
-        return Object::Nil;
-    };
-    let Some(arg_3) = as_integer(args[2]) else {
-        wrong_type(error, 3, c"nvim_buf_set_lines", c"Integer");
-        return Object::Nil;
-    };
-    let Some(arg_4) = as_boolean(args[3]) else {
-        wrong_type(error, 4, c"nvim_buf_set_lines", c"Boolean");
-        return Object::Nil;
-    };
-    let Some(arg_5) = as_array(args[4]) else {
-        wrong_type(error, 5, c"nvim_buf_set_lines", c"ArrayOf(String)");
-        return Object::Nil;
-    };
-    if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
-    }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) =
-        unsafe { nvim_buf_set_lines(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arena) }
-    {
-        return failure(error, e);
-    }
-    Object::Nil
-}
-
-/// The msgpack-RPC dispatch wrapper for `nvim_buf_set_mark`.
-///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
-pub unsafe fn handle_nvim_buf_set_mark(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
-    log_invoke(
-        c"handle_nvim_buf_set_mark",
-        c"nvim_buf_set_mark",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 5 {
-        wrong_arity(error, 5, args.len());
-        return Object::Nil;
-    }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_buf_set_mark", c"Buffer");
-        return Object::Nil;
-    };
-    let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_buf_set_mark", c"String");
-        return Object::Nil;
-    };
-    let Some(arg_3) = as_integer(args[2]) else {
-        wrong_type(error, 3, c"nvim_buf_set_mark", c"Integer");
-        return Object::Nil;
-    };
-    let Some(arg_4) = as_integer(args[3]) else {
-        wrong_type(error, 4, c"nvim_buf_set_mark", c"Integer");
-        return Object::Nil;
-    };
-    let mut arg_5: KeyDict_empty =
-        match read_keydict(Some(key_dict_empty_get_field), args[4], error) {
-            KeySetArg::Read(v) => v,
-            KeySetArg::Refused => return Object::Nil,
-            KeySetArg::WrongType => {
-                wrong_type(error, 5, c"nvim_buf_set_mark", c"Dict(empty) *");
-                return Object::Nil;
-            }
-        };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    let rv = match unsafe { nvim_buf_set_mark(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) } {
-        Ok(rv) => rv,
-        Err(e) => return failure(error, e),
-    };
-    Object::Boolean(rv)
-}
-
-/// The msgpack-RPC dispatch wrapper for `nvim_buf_set_name`.
-///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
-pub unsafe fn handle_nvim_buf_set_name(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
-    log_invoke(
-        c"handle_nvim_buf_set_name",
-        c"nvim_buf_set_name",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 2 {
-        wrong_arity(error, 2, args.len());
-        return Object::Nil;
-    }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_buf_set_name", c"Buffer");
-        return Object::Nil;
-    };
-    let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_buf_set_name", c"String");
-        return Object::Nil;
-    };
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_buf_set_name(arg_1, arg_2) } {
-        return failure(error, e);
-    }
-    Object::Nil
-}
-
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_text`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -197,8 +23,7 @@ pub unsafe fn handle_nvim_buf_set_text(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -209,52 +34,40 @@ pub unsafe fn handle_nvim_buf_set_text(
         channel_id,
     );
     if args.len() != 6 {
-        wrong_arity(error, 6, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(6, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_buf_set_text", c"Buffer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_buf_set_text", c"Buffer"));
     };
     let Some(arg_2) = as_integer(args[1]) else {
-        wrong_type(error, 2, c"nvim_buf_set_text", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_buf_set_text", c"Integer"));
     };
     let Some(arg_3) = as_integer(args[2]) else {
-        wrong_type(error, 3, c"nvim_buf_set_text", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(3, c"nvim_buf_set_text", c"Integer"));
     };
     let Some(arg_4) = as_integer(args[3]) else {
-        wrong_type(error, 4, c"nvim_buf_set_text", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(4, c"nvim_buf_set_text", c"Integer"));
     };
     let Some(arg_5) = as_integer(args[4]) else {
-        wrong_type(error, 5, c"nvim_buf_set_text", c"Integer");
-        return Object::Nil;
+        return Err(wrong_type(5, c"nvim_buf_set_text", c"Integer"));
     };
     let Some(arg_6) = as_array(args[5]) else {
-        wrong_type(error, 6, c"nvim_buf_set_text", c"ArrayOf(String)");
-        return Object::Nil;
+        return Err(wrong_type(6, c"nvim_buf_set_text", c"ArrayOf(String)"));
     };
     if textlock.get() != 0 || expr_map_locked() {
-        expr_map_locked_error(error);
-        return Object::Nil;
+        return Err(expr_map_locked_error());
     }
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) =
-        unsafe { nvim_buf_set_text(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena) }
-    {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_buf_set_text(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arena) }?;
+    Ok(Object::Nil)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_set_var`.
 ///
-/// Decodes the argument array against the signature, refuses the call
-/// through `error` if the arity or a type is wrong, and encodes the
-/// answer as an `Object`.
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
@@ -265,8 +78,7 @@ pub unsafe fn handle_nvim_buf_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the dispatcher hands over an argument array of `size`
     // initialized objects that outlives the call.
     let args = unsafe { args_slice(&args) };
@@ -277,22 +89,17 @@ pub unsafe fn handle_nvim_buf_set_var(
         channel_id,
     );
     if args.len() != 3 {
-        wrong_arity(error, 3, args.len());
-        return Object::Nil;
+        return Err(wrong_arity(3, args.len()));
     }
     let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
-        wrong_type(error, 1, c"nvim_buf_set_var", c"Buffer");
-        return Object::Nil;
+        return Err(wrong_type(1, c"nvim_buf_set_var", c"Buffer"));
     };
     let Some(arg_2) = as_string(args[1]) else {
-        wrong_type(error, 2, c"nvim_buf_set_var", c"String");
-        return Object::Nil;
+        return Err(wrong_type(2, c"nvim_buf_set_var", c"String"));
     };
     let arg_3 = args[2];
-    // SAFETY: each argument was checked against the type the signature declares;
-    // `arena` and `error` are the dispatcher's own.
-    if let Err(e) = unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3) } {
-        return failure(error, e);
-    }
-    Object::Nil
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3) }?;
+    Ok(Object::Nil)
 }

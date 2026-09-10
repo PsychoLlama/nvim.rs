@@ -252,7 +252,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             let mut dict = KeyDict_highlight::default();
             let field: FieldHashfn = Some(key_dict_highlight_get_field);
             let target = (&raw mut dict).cast();
-            if unsafe { api_dict_to_keydict(target, field, answer, &mut err) } {
+            if unsafe { api_dict_to_keydict(target, field, answer) }.is_ok() {
                 let link_id = &mut item.link_id;
                 attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &mut err) };
                 let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;

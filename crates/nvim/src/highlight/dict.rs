@@ -508,7 +508,8 @@ pub unsafe fn dict2hlattrs(
         let mut cterm = KeyDict_highlight_cterm::default();
         let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
         let target = (&raw mut cterm).cast();
-        if !unsafe { api_dict_to_keydict(target, field, dict.cterm, err) } {
+        if let Err(e) = unsafe { api_dict_to_keydict(target, field, dict.cterm) } {
+            *err = e;
             return HLATTRS_INIT;
         }
         cterm_mask_provided = true;

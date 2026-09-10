@@ -31,10 +31,10 @@ use crate::message_fmt::c_str_len;
 use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
-    Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeNone, kErrorTypeValidation,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
-    kObjectTypeWindow, key_value_pair, size_t,
+    Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeValidation, kObjectTypeArray,
+    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
+    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
+    key_value_pair, size_t,
 };
 use ::libc::abort;
 use core::ffi::{c_char, c_int, c_void};
@@ -110,8 +110,8 @@ unsafe fn keyset_fields(table: *const KeySetLink) -> impl Iterator<Item = &'stat
 }
 
 /// Fill the keydict `retval` from `dict`, type-checking each value against
-/// what the field it names holds. False, with `err` set, on the first
-/// unknown key or wrong type.
+/// what the field it names holds. Refuses at the first unknown key or wrong
+/// type.
 ///
 /// `retval` is untyped because there is one such struct per API function;
 /// `hashy` is that struct's generated perfect-hash lookup and the
@@ -126,8 +126,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
     retval: *mut c_void,
     hashy: FieldHashfn,
     dict: ApiDict,
-    err: &mut Error,
-) -> bool {
+) -> Result<(), Error> {
     for i in 0..dict.size {
         // SAFETY: `i` is below `size`, so the pair is inside `items`.
         let (key, given) = unsafe {
@@ -140,8 +139,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
         if field.is_null() {
             // SAFETY: `key` names its own bytes.
             let key = unsafe { c_str_len(key.data(), key.len()) }.null_as_empty();
-            *err = api_error!(kErrorTypeValidation, "Invalid key: '{key}'");
-            return false;
+            return Err(api_error!(kErrorTypeValidation, "Invalid key: '{key}'"));
         }
         // SAFETY: the lookup answered a row of the generated table, which is
         // a `static` in the binary.
@@ -161,11 +159,11 @@ pub(crate) unsafe fn api_dict_to_keydict(
         let expected: ObjectType = field.type_0.cast_unsigned();
         // A mismatch reports the field's name, not the key's: they are
         // the same string.
-        let mut wrong_type = |want: ObjectType| {
+        let wrong_type = |want: ObjectType| {
             let (want, got) = (api_typename(want), api_typename(given.kind()));
             // SAFETY: a keyset field's name is a static NUL-terminated string.
             let name = unsafe { cstr::at(field.str) };
-            *err = err_expected(name, want, Some(got));
+            err_expected(name, want, Some(got))
         };
 
         match expected {
@@ -175,19 +173,15 @@ pub(crate) unsafe fn api_dict_to_keydict(
             kObjectTypeInteger if field.is_hlgroup => {
                 let mut hl_id = 0;
                 if !given.is_nil() {
-                    // SAFETY: `given` is live and `err` the caller's slot.
-                    hl_id = unsafe { object_to_hl_id(given, key.data(), err) };
-                    if err.kind() != kErrorTypeNone {
-                        return false;
-                    }
+                    // SAFETY: `given` is live.
+                    hl_id = unsafe { object_to_hl_id(given, key.data()) }?;
                 }
                 // SAFETY: the row says an `Integer` lives at `mem`.
                 unsafe { *mem.cast::<Integer>() = Integer::from(hl_id) };
             }
             kObjectTypeInteger => {
                 let Some(number) = given.as_integer() else {
-                    wrong_type(kObjectTypeInteger);
-                    return false;
+                    return Err(wrong_type(kObjectTypeInteger));
                 };
                 // SAFETY: the row says an `Integer` lives at `mem`.
                 unsafe { *mem.cast::<Integer>() = number };
@@ -196,34 +190,27 @@ pub(crate) unsafe fn api_dict_to_keydict(
             kObjectTypeFloat => {
                 let widened = given.as_integer().map(|n| n as Float);
                 let Some(float) = given.as_float().or(widened) else {
-                    wrong_type(kObjectTypeFloat);
-                    return false;
+                    return Err(wrong_type(kObjectTypeFloat));
                 };
                 // SAFETY: the row says a `Float` lives at `mem`.
                 unsafe { *mem.cast::<Float>() = float };
             }
             kObjectTypeBoolean => {
-                // SAFETY: `given` is live, and `field.str`/`err` are the
-                // table's name and the caller's slot.
-                let on = unsafe { api_object_to_bool(given, field.str, false, err) };
+                // SAFETY: `given` is live and `field.str` is the table's name.
+                let on = unsafe { api_object_to_bool(given, field.str, false) }?;
                 // SAFETY: the row says a `Boolean` lives at `mem`.
                 unsafe { *mem.cast::<Boolean>() = on };
-                if err.kind() != kErrorTypeNone {
-                    return false;
-                }
             }
             kObjectTypeString => {
                 let Some(str) = given.as_string() else {
-                    wrong_type(kObjectTypeString);
-                    return false;
+                    return Err(wrong_type(kObjectTypeString));
                 };
                 // SAFETY: the row says a `String` lives at `mem`.
                 unsafe { *mem.cast::<String_0>() = str };
             }
             kObjectTypeArray => {
                 let Some(array) = given.as_array() else {
-                    wrong_type(kObjectTypeArray);
-                    return false;
+                    return Err(wrong_type(kObjectTypeArray));
                 };
                 // SAFETY: the row says an `Array` lives at `mem`.
                 unsafe { *mem.cast::<Array>() = array };
@@ -237,8 +224,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     given.as_dict()
                 };
                 let Some(pairs) = pairs else {
-                    wrong_type(kObjectTypeDict);
-                    return false;
+                    return Err(wrong_type(kObjectTypeDict));
                 };
                 // SAFETY: the row says an `ApiDict` lives at `mem`.
                 unsafe { *mem.cast::<ApiDict>() = pairs };
@@ -249,10 +235,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 let handle = match given {
                     Object::Integer(n) => n,
                     _ if given.kind() == expected => given.as_handle().unwrap_or(0),
-                    _ => {
-                        wrong_type(expected);
-                        return false;
-                    }
+                    _ => return Err(wrong_type(expected)),
                 };
                 // SAFETY: the row says a handle lives at `mem`.
                 unsafe { *mem.cast::<Handle>() = number_as_int(handle) };
@@ -260,18 +243,16 @@ pub(crate) unsafe fn api_dict_to_keydict(
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
                 let key = unsafe { c_str_len(key.data(), key.len()) }.null_as_empty();
-                let e = api_error!(
+                return Err(api_error!(
                     kErrorTypeValidation,
                     "Invalid key: '{key}' is only allowed from Lua"
-                );
-                *err = e;
-                return false;
+                ));
             }
             // SAFETY: the generated tables name no other type.
             _ => unsafe { abort() },
         }
     }
-    true
+    Ok(())
 }
 
 /// The reverse of [`api_dict_to_keydict`]: the keydict `value` as a plain

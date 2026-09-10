@@ -121,20 +121,25 @@ pub unsafe fn nvim_call_atomic(
 
             // A call that *fails*, on the other hand, stops the batch and is
             // reported alongside the results that did come back.
-            // SAFETY: `name` names its own bytes and `nested_error` is this
-            // frame's slot.
+            // SAFETY: `name` names its own bytes.
             let handler: MsgpackRpcRequestHandler =
-                unsafe { msgpack_rpc_get_handler_for(name.data(), name.len(), &mut nested_error) };
-            if nested_error.is_set() {
-                break;
-            }
+                match unsafe { msgpack_rpc_get_handler_for(name.data(), name.len()) } {
+                    Ok(handler) => handler,
+                    Err(e) => {
+                        nested_error = e;
+                        break;
+                    }
+                };
             let dispatch = handler.fn_0.expect("non-null function pointer");
             // SAFETY: the handler is the generated wrapper for `name`, which
-            // reads `args` and reports through the slot it is given.
-            let result = unsafe { dispatch(channel_id, args, arena, &mut nested_error) };
-            if nested_error.is_set() {
-                break;
-            }
+            // reads `args`.
+            let result = match unsafe { dispatch(channel_id, args, arena) } {
+                Ok(rv) => rv,
+                Err(e) => {
+                    nested_error = e;
+                    break;
+                }
+            };
             // SAFETY: `results` was sized for one item per call, and the
             // copy is the arena's rather than the handler's.
             unsafe { array_add(&mut results, copy_object(result, arena)) };

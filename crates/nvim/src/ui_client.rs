@@ -384,7 +384,6 @@ pub(crate) unsafe fn ui_client_set_size(width: c_int, height: c_int) {
 pub(crate) unsafe fn ui_client_get_redraw_handler(
     name: *const c_char,
     name_len: usize,
-    _error: &mut Error,
 ) -> UIClientHandler {
     let name = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), name_len) };
     EVENT_HANDLERS
@@ -415,10 +414,8 @@ pub(crate) unsafe fn handle_ui_client_redraw(
     _channel_id: u64,
     _args: Array,
     _arena: *mut Arena,
-    error: &mut Error,
-) -> Object {
-    *error = Error::validation(c"'redraw' cannot be sent as a request");
-    Object::Nil
+) -> Result<Object, Error> {
+    Err(Error::validation(c"'redraw' cannot be sent as a request"))
 }
 
 /// One event's name and the wrapper that decodes it.
@@ -752,14 +749,15 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
     // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
     // whose null is their empty value.
     let mut dict: KeyDict_highlight = unsafe { core::mem::zeroed() };
-    if !unsafe {
+    if unsafe {
         api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
             Some(key_dict_highlight_get_field),
             d,
-            &mut err,
         )
-    } {
+    }
+    .is_err()
+    {
         return HLATTRS_INIT;
     }
     let mut attrs = unsafe { dict2hlattrs(&dict, rgb, None, None, &mut err) };

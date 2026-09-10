@@ -191,13 +191,14 @@ pub unsafe fn parse_virt_text(
                             // SAFETY: `j` is below `arr.size`.
                             let item = unsafe { *arr.items.add(j) };
                             let what = c"virt_text highlight".as_ptr();
-                            // SAFETY: `err` is the caller's error slot.
-                            hl_id = unsafe { object_to_hl_id(item, what, err) };
-                            if err.kind() as ::core::ffi::c_int
-                                != kErrorTypeNone as ::core::ffi::c_int
-                            {
-                                break '_free_exit;
-                            }
+                            // SAFETY: `item` is the array's own object.
+                            hl_id = match unsafe { object_to_hl_id(item, what) } {
+                                Ok(id) => id,
+                                Err(e) => {
+                                    *err = e;
+                                    break '_free_exit;
+                                }
+                            };
                             if j < arr.size.wrapping_sub(1 as size_t) {
                                 // `kv_push`, whose growth step c2rust expanded inline.
                                 let mut vt = Kvec::new(
@@ -213,12 +214,14 @@ pub unsafe fn parse_virt_text(
                         }
                     } else {
                         let what = c"virt_text highlight".as_ptr();
-                        // SAFETY: `err` is the caller's error slot.
-                        hl_id = unsafe { object_to_hl_id(hl, what, err) };
-                        if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break '_free_exit;
-                        }
+                        // SAFETY: `hl` is the caller's object.
+                        hl_id = match unsafe { object_to_hl_id(hl, what) } {
+                            Ok(id) => id,
+                            Err(e) => {
+                                *err = e;
+                                break '_free_exit;
+                            }
+                        };
                     }
                 }
             }

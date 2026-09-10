@@ -27,9 +27,9 @@ use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
     FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, OptionalKeys, String_0,
     SwitchWin, Tabpage, TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle,
-    WindowHandle, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kFloatAnchorEast,
-    kFloatAnchorSouth, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeTabline, kFloatRelativeWindow, size_t,
+    WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
+    kFloatRelativeTabline, kFloatRelativeWindow, size_t,
 };
 use crate::ui::ui_has;
 use crate::ui_compositor::ui_comp_remove_grid;

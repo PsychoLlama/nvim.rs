@@ -18,7 +18,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{EMPTY_HL_MESSAGE, cstr_as_string};
+use super::cstr_as_string;
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
@@ -29,7 +29,6 @@ use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::memory::{
     ARENA_EMPTY, arena_alloc, arena_finish, arena_memdupz, xfree, xrealloc, xstrdup,
 };
-use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
 use crate::types::builders::static_cstring;
@@ -409,7 +408,7 @@ pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
 }
 
 /// `obj` as a boolean. An integer is true when nonzero and nil takes
-/// `nil_value`; anything else is an error naming `what`.
+/// `nil_value`; anything else refuses, naming `what`.
 ///
 /// # Safety
 ///
@@ -419,20 +418,18 @@ pub(crate) unsafe fn api_object_to_bool(
     obj: Object,
     what: *const c_char,
     nil_value: bool,
-    err: &mut Error,
-) -> bool {
+) -> Result<bool, Error> {
     if let Some(on) = obj.as_boolean() {
-        return on;
+        return Ok(on);
     }
     if let Some(number) = obj.as_integer() {
-        return number != 0;
+        return Ok(number != 0);
     }
     if obj.is_nil() {
-        return nil_value;
+        return Ok(nil_value);
     }
     // SAFETY: the names and values are NUL-terminated strings.
-    *err = err_expected(unsafe { cstr::at(what) }, c"boolean", None);
-    false
+    Err(err_expected(unsafe { cstr::at(what) }, c"boolean", None))
 }
 
 /// `obj` as a highlight group id, defining the group if it was named and does
@@ -442,22 +439,21 @@ pub(crate) unsafe fn api_object_to_bool(
 ///
 /// `obj` must be a well-formed API object the caller owns for the call.
 /// `what` must point at a NUL-terminated string.
-pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char, err: &mut Error) -> c_int {
+pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char) -> Result<c_int, Error> {
     if let Some(str) = obj.as_string() {
         if str.is_empty() {
-            return 0;
+            return Ok(0);
         }
         // SAFETY: `str` names its own bytes, per this function's contract.
-        return unsafe { syn_check_group(str.data(), str.len()) };
+        return Ok(unsafe { syn_check_group(str.data(), str.len()) });
     }
     if let Some(number) = obj.as_integer() {
         let known = highlight_num_groups();
         let id = number_as_int(number);
-        return if (1..=known).contains(&id) { id } else { 0 };
+        return Ok(if (1..=known).contains(&id) { id } else { 0 });
     }
     // SAFETY: the names and values are NUL-terminated strings.
-    *err = err_bad_value(c"hl_group", unsafe { cstr::at(what) });
-    0
+    Err(err_bad_value(c"hl_group", unsafe { cstr::at(what) }))
 }
 
 /// `kv_push` for a plain kvec, which starts empty and doubles from 8.
@@ -478,47 +474,46 @@ fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
     msg.size += 1;
 }
 
-/// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into a
-/// highlighted message. Empty, with `err` set, on the first bad chunk.
+/// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into
+/// `hl_msg`, refusing at the first bad chunk. What it managed to push before
+/// refusing stays in `hl_msg`, which the caller owns and frees either way.
 ///
 /// # Safety
 ///
 /// `chunks` must be a well-formed API array, its `size` elements initialized.
-pub(crate) unsafe fn parse_hl_msg(chunks: Array, is_err: bool, err: &mut Error) -> HlMessage {
-    let mut hl_msg = EMPTY_HL_MESSAGE;
+pub(crate) unsafe fn parse_hl_msg(
+    hl_msg: &mut HlMessage,
+    chunks: Array,
+    is_err: bool,
+) -> Result<(), Error> {
     for i in 0..chunks.size {
         // SAFETY: `i` is below `size`, so the item is inside `items`.
         let item = unsafe { *chunks.items.add(i) };
         let Some(chunk) = item.as_array() else {
             let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
-            // SAFETY: the names and values are NUL-terminated strings.
-            *err = err_expected(c"chunk", want, Some(got));
-            // SAFETY: `hl_msg` is this frame's, and owns its chunks.
-            unsafe { hl_msg_free(hl_msg) };
-            return EMPTY_HL_MESSAGE;
+            return Err(err_expected(c"chunk", want, Some(got)));
         };
         // SAFETY: a non-empty array has a first item.
         let head = (1..=2)
             .contains(&chunk.size)
             .then(|| unsafe { *chunk.items });
         let Some(text) = head.and_then(Object::as_string) else {
-            *err = Error::validation(c"Invalid chunk: expected Array with 1 or 2 Strings");
-            // SAFETY: as above.
-            unsafe { hl_msg_free(hl_msg) };
-            return EMPTY_HL_MESSAGE;
+            return Err(Error::validation(
+                c"Invalid chunk: expected Array with 1 or 2 Strings",
+            ));
         };
         // Heap-allocated: the message outlives the caller's arena.
         // SAFETY: `text` names its own bytes.
         let text = unsafe { copy_string(text, ptr::null_mut()) };
         let hl_id = if chunk.size == 2 {
-            // SAFETY: the array has two items, and `err` is the caller's.
-            unsafe { object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr(), err) }
+            // SAFETY: a two-item chunk has an item at index 1.
+            unsafe { object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr()) }?
         } else if is_err {
             HLF_E
         } else {
             0
         };
-        push_chunk(&mut hl_msg, HlMessageChunk { text, hl_id });
+        push_chunk(hl_msg, HlMessageChunk { text, hl_id });
     }
-    hl_msg
+    Ok(())
 }

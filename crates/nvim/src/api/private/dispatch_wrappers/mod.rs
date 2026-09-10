@@ -32,7 +32,6 @@ mod ui;
 mod vim;
 mod vim_2;
 mod vim_3;
-mod vim_4;
 mod vimscript;
 mod win_config;
 mod window;
@@ -51,7 +50,6 @@ pub use self::ui::*;
 pub use self::vim::*;
 pub use self::vim_2::*;
 pub use self::vim_3::*;
-pub use self::vim_4::*;
 pub use self::vimscript::*;
 pub use self::win_config::*;
 pub use self::window::*;
@@ -206,21 +204,21 @@ fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: ui
 }
 
 /// Refuses a call that arrived with the wrong number of arguments.
-fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
-    *error = api_error!(
+fn wrong_arity(expected: usize, got: usize) -> Error {
+    api_error!(
         kErrorTypeException,
         "Wrong number of arguments: expecting {expected} but got {got}"
-    );
+    )
 }
 
 /// Refuses a call whose argument in `slot` carried a tag the parameter does
 /// not accept.
-fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
+fn wrong_type(slot: usize, func: &CStr, expected: &CStr) -> Error {
     let (func, expected) = (msg_cstr(func), msg_cstr(expected));
-    *error = api_error!(
+    api_error!(
         kErrorTypeException,
         "Wrong type for argument {slot} when calling {func}, expecting {expected}"
-    );
+    )
 }
 
 /// A nonnegative integer is accepted as a boolean, truncated to C `int`
@@ -283,10 +281,10 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
 
 /// What reading a keyset argument produced.
 enum KeySetArg<K> {
-    /// Decoded, with `error` untouched.
+    /// Decoded.
     Read(K),
-    /// The decoder rejected a key; `error` says which and why.
-    Refused,
+    /// The decoder rejected a key, and says which and why.
+    Refused(Error),
     /// The argument was neither a Dict nor the empty list that stands in for
     /// an empty one.
     WrongType,
@@ -297,7 +295,7 @@ enum KeySetArg<K> {
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
+fn read_keydict<K>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
     let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
@@ -311,11 +309,9 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
     let mut out: K = unsafe { core::mem::zeroed() };
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
     // offsets it hands back are inside `out`.
-    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict, error) };
-    if read {
-        KeySetArg::Read(out)
-    } else {
-        KeySetArg::Refused
+    match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
+        Ok(()) => KeySetArg::Read(out),
+        Err(e) => KeySetArg::Refused(e),
     }
 }
 
@@ -324,20 +320,12 @@ fn is_empty_array(o: Object) -> bool {
 }
 
 /// Refuses a call made while the text is locked.
-fn text_locked_error(error: &mut Error) {
-    *error = Error::from_message(kErrorTypeException, get_text_locked_msg());
+fn text_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, get_text_locked_msg())
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
-fn expr_map_locked_error(error: &mut Error) {
-    *error = Error::from_message(kErrorTypeException, e_textlock);
-}
-
-/// Hands the error an API function answered with to the dispatcher, which
-/// reads it out of the slot it lent the wrapper. The wrapper's own result is
-/// nil, as it is for every other way of refusing.
-fn failure(error: &mut Error, e: Error) -> Object {
-    *error = e;
-    Object::Nil
+fn expr_map_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, e_textlock)
 }

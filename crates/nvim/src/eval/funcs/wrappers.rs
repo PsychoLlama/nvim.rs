@@ -37,7 +37,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
+    Arena, Array, Blob, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
     VarNumber, WrongArity, kBoolVarTrue, ptrdiff_t,
 };
@@ -415,17 +415,20 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         array.size += 1;
     }
 
-    let mut err = Error::none();
     let call = handler.fn_0.expect("non-null function pointer");
     let mem = &raw mut arena;
     // SAFETY: `array` is the Array built above and both are locals.
-    let mut answer = unsafe { call(VIML_INTERNAL_CALL, array, mem, &mut err) };
-    if err.is_set() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
-        semsg_multiline!(c"emsg", "E5555: API call: {msg}");
-    } else {
-        unsafe { object_to_vim_take_luaref(&raw mut answer, result, true) };
+    let mut answer = Object::Nil;
+    match unsafe { call(VIML_INTERNAL_CALL, array, mem) } {
+        Ok(rv) => {
+            answer = rv;
+            unsafe { object_to_vim_take_luaref(&raw mut answer, result, true) };
+        }
+        Err(err) => {
+            // SAFETY: a message the error holds as a NUL-terminated string.
+            let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
+            semsg_multiline!(c"emsg", "E5555: API call: {msg}");
+        }
     }
     // Only some handlers allocate their result; the row's handler says
     // which.
@@ -433,7 +436,6 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         unsafe { api_free_object(answer) };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    err.clear();
 }
 
 /// The buffer a typval names: a buffer number, or a name matched as a

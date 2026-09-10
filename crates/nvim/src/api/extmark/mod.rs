@@ -34,7 +34,7 @@ use crate::types::{
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, OptionalKeys, ScreenChar, String_0,
     UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,
-    kErrorTypeNone, kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t, virt_line,
+    kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t, virt_line,
 };
 
 // The carve of the transpiled module; see each child's docs.

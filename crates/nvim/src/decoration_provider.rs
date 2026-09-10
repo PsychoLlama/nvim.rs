@@ -158,9 +158,11 @@ unsafe fn decor_provider_invoke(
             return true;
         }
         let what = c"provider %s retval".as_ptr();
-        // SAFETY: the callback's return value, and this frame's own `err`.
-        if unsafe { api_object_to_bool(ret, what, default_true, &mut err) } {
-            return true;
+        // SAFETY: the callback's return value.
+        match unsafe { api_object_to_bool(ret, what, default_true) } {
+            Ok(true) => return true,
+            Ok(false) => {}
+            Err(e) => err = e,
         }
     }
 

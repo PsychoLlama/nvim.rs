@@ -27,8 +27,8 @@ use crate::msgpack_rpc::packer::{
     mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
 };
 use crate::types::{
-    Arena, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
-    PackerBuffer, kErrorTypeNone, uint32_t, uint64_t,
+    ApiDispatchFn, Array, Channel, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object,
+    PackerBuffer, kErrorTypeNone, uint32_t,
 };
 
 use super::known::*;
@@ -124,12 +124,9 @@ unsafe fn report_failed_notification(
     handler: MsgpackRpcRequestHandler,
     err: &mut Error,
 ) {
-    let is_paste = handler.fn_0.is_some_and(|f| {
-        ptr::fn_addr_eq(
-            f,
-            handle_nvim_paste as unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
-        )
-    });
+    let is_paste = handler
+        .fn_0
+        .is_some_and(|f| ptr::fn_addr_eq(f, handle_nvim_paste as ApiDispatchFn));
     if is_paste {
         let msg = err.message_or_empty().to_string_lossy();
         crate::semsg!("paste: {msg}");

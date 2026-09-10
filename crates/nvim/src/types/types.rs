@@ -53,7 +53,7 @@ pub type MTNode = mtnode_s;
 #[derive(Copy, Clone)]
 pub struct MsgpackRpcRequestHandler {
     pub name: *const ::core::ffi::c_char,
-    pub fn_0: ApiDispatchWrapper,
+    pub fn_0: Option<ApiDispatchFn>,
     pub fast: bool,
     pub ret_alloc: bool,
 }

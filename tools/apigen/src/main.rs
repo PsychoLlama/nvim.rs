@@ -82,8 +82,6 @@ enum Param {
     ChannelId,
     /// The request arena. Supplied by the dispatcher.
     Arena,
-    /// The out-parameter the API function reports failure through.
-    Error,
     /// A Lua state. Only the Lua binding has one; the RPC wrapper passes null.
     LuaState,
     /// A value the client sends, at 0-based position `index` of the argument
@@ -194,8 +192,8 @@ struct ApiFn {
     /// What a successful call answers with. `Result<T, Error>` records `T`,
     /// so a conversion to the `Result` shape leaves the metadata untouched.
     ret: RetType,
-    /// The function reports failure by returning `Err`, rather than through
-    /// an `*mut Error` out-parameter. Mutually exclusive with [`Param::Error`].
+    /// The function reports failure by returning `Err`. Every API function
+    /// that can fail does; [`classify`] rejects an `Error` out-parameter.
     fallible: bool,
     /// The function is `unsafe` to call, so the wrappers wrap the call. A
     /// converted function whose arguments are all values need not be.
@@ -461,7 +459,14 @@ fn classify(sig: &syn::Signature) -> Result<Vec<Param>, String> {
         };
         let param = match pointee_name(&arg.ty).as_deref() {
             Some("Arena") => Param::Arena,
-            Some("Error") => Param::Error,
+            // An API function reports failure by answering `Err`. The
+            // out-parameter is gone, and a signature that grows one back
+            // would silently lose its failures here.
+            Some("Error") => {
+                return Err(format!(
+                    "parameter `{name}` is an `Error` out-parameter; answer `Result` instead"
+                ));
+            }
             Some("lua_State") => Param::LuaState,
             // Some channel-id parameters are unused by their function and
             // carry the leading underscore that says so.
@@ -568,15 +573,6 @@ fn collect_api_fns(root: &Path, specs: &[Spec]) -> Result<BTreeMap<String, ApiFn
             let Ok(params) = classify(&f.sig) else {
                 continue;
             };
-            // A `Result` is the whole story: a function that also took the
-            // out-parameter would have two places to say the same thing, and
-            // the wrappers would have to check both.
-            if fallible && params.contains(&Param::Error) {
-                return Err(format!(
-                    "{name} answers with a Result and takes an `*mut Error` out-parameter; \
-                     one or the other"
-                ));
-            }
             // Two files may hold a same-named private helper, but a name the
             // spec can reach must resolve to exactly one function.
             if let Some(prev) = out.insert(
@@ -1051,7 +1047,6 @@ fn emit_fn(
         .collect();
     let arity = values.len();
     let takes_arena = f.params.contains(&Param::Arena);
-    let can_fail = f.fallible || f.params.contains(&Param::Error);
 
     for n in spec.declared.keys() {
         if *n > arity {
@@ -1069,9 +1064,9 @@ fn emit_fn(
     writeln!(out, "///").unwrap();
     writeln!(
         out,
-        "/// Decodes the argument array against the signature, refuses the call\n\
-         /// through `error` if the arity or a type is wrong, and encodes the\n\
-         /// answer as an `Object`."
+        "/// Decodes the argument array against the signature, answers `Err` if\n\
+         /// the arity or a type is wrong, and encodes the answer as an\n\
+         /// `Object`."
     )
     .unwrap();
     writeln!(out, "///").unwrap();
@@ -1094,8 +1089,7 @@ fn emit_fn(
         if takes_arena { "" } else { "_" }
     )
     .unwrap();
-    writeln!(out, "    error: &mut Error,").unwrap();
-    writeln!(out, ") -> Object {{").unwrap();
+    writeln!(out, ") -> Result<Object, Error> {{").unwrap();
     writeln!(
         out,
         "    // SAFETY: the dispatcher hands over an argument array of `size`\n\
@@ -1115,8 +1109,7 @@ fn emit_fn(
         _ => format!("args.len() != {arity}"),
     };
     writeln!(out, "    if {arity_test} {{").unwrap();
-    writeln!(out, "        wrong_arity(error, {arity}, args.len());").unwrap();
-    writeln!(out, "        return Object::Nil;").unwrap();
+    writeln!(out, "        return Err(wrong_arity({arity}, args.len()));").unwrap();
     writeln!(out, "    }}").unwrap();
 
     for (index, ty) in &values {
@@ -1127,7 +1120,7 @@ fn emit_fn(
             .cloned()
             .unwrap_or_else(|| ty.declared());
         let bad = format!(
-            "wrong_type(error, {slot}, c\"{name}\", c\"{}\");",
+            "return Err(wrong_type({slot}, c\"{name}\", c\"{}\"));",
             declared.replace('"', "\\\"")
         );
         match ty {
@@ -1140,14 +1133,13 @@ fn emit_fn(
                 writeln!(out, "    let mut arg_{slot}: KeyDict_{keyset} =").unwrap();
                 writeln!(
                     out,
-                    "        match read_keydict(Some({get_field}), args[{index}], error) {{"
+                    "        match read_keydict(Some({get_field}), args[{index}]) {{"
                 )
                 .unwrap();
                 writeln!(out, "            KeySetArg::Read(v) => v,").unwrap();
-                writeln!(out, "            KeySetArg::Refused => return Object::Nil,").unwrap();
+                writeln!(out, "            KeySetArg::Refused(e) => return Err(e),").unwrap();
                 writeln!(out, "            KeySetArg::WrongType => {{").unwrap();
                 writeln!(out, "                {bad}").unwrap();
-                writeln!(out, "                return Object::Nil;").unwrap();
                 writeln!(out, "            }}").unwrap();
                 writeln!(out, "        }};").unwrap();
             }
@@ -1159,7 +1151,6 @@ fn emit_fn(
                 )
                 .unwrap();
                 writeln!(out, "        {bad}").unwrap();
-                writeln!(out, "        return Object::Nil;").unwrap();
                 writeln!(out, "    }};").unwrap();
             }
         }
@@ -1170,13 +1161,11 @@ fn emit_fn(
     if spec.textlock {
         writeln!(out, "    // SAFETY: a wrapper runs on the main loop.").unwrap();
         writeln!(out, "    if text_locked() {{").unwrap();
-        writeln!(out, "        text_locked_error(error);").unwrap();
-        writeln!(out, "        return Object::Nil;").unwrap();
+        writeln!(out, "        return Err(text_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
         writeln!(out, "    if textlock.get() != 0 || expr_map_locked() {{").unwrap();
-        writeln!(out, "        expr_map_locked_error(error);").unwrap();
-        writeln!(out, "        return Object::Nil;").unwrap();
+        writeln!(out, "        return Err(expr_map_locked_error());").unwrap();
         writeln!(out, "    }}").unwrap();
     }
 
@@ -1188,7 +1177,6 @@ fn emit_fn(
         .map(|p| match p {
             Param::ChannelId => "channel_id".into(),
             Param::Arena => "arena".into(),
-            Param::Error => "error".into(),
             Param::LuaState => "core::ptr::null_mut()".into(),
             Param::Value {
                 index,
@@ -1208,27 +1196,21 @@ fn emit_fn(
     if f.is_unsafe {
         writeln!(
             out,
-            "    // SAFETY: each argument was checked against the type the signature declares;\n\
-             \x20   // `arena` and `error` are the dispatcher's own."
+            "    // SAFETY: each argument was checked against the type the signature declares,\n\
+             \x20   // and `arena` is the dispatcher's own."
         )
         .unwrap();
     }
     // An `Object` result needs no boxing, so when nothing follows the call it
-    // is the wrapper's tail expression rather than a binding.
-    if f.ret == RetType::Object && !can_fail {
-        writeln!(out, "    {call}").unwrap();
-        writeln!(out, "}}").unwrap();
-        return Ok(());
-    }
-    // Same for a fallible one: the `match` that unwraps the `Result` is itself
-    // the tail, so binding it to `rv` only to name `rv` on the next line is
-    // `clippy::let_and_return`. `failure` returns the `Object` the dispatcher
-    // hands back, so the error arm needs no `return` in tail position either.
-    if f.ret == RetType::Object && f.fallible {
-        writeln!(out, "    match {call} {{").unwrap();
-        writeln!(out, "        Ok(rv) => rv,").unwrap();
-        writeln!(out, "        Err(e) => failure(error, e),").unwrap();
-        writeln!(out, "    }}").unwrap();
+    // is the wrapper's tail expression rather than a binding -- and a fallible
+    // one already *is* the wrapper's own `Result`, so it passes straight
+    // through.
+    if f.ret == RetType::Object {
+        let tail = match f.fallible {
+            true => call,
+            false => format!("Ok({call})"),
+        };
+        writeln!(out, "    {tail}").unwrap();
         writeln!(out, "}}").unwrap();
         return Ok(());
     }
@@ -1237,33 +1219,14 @@ fn emit_fn(
         RetType::KeyDict(_) => "mut rv",
         _ => "rv",
     };
-    if f.fallible {
-        // The failure travels back in the result, so it is over as soon as it
-        // is matched: `failure` moves it into the dispatcher's slot.
-        match &f.ret {
-            RetType::Void => {
-                writeln!(out, "    if let Err(e) = {call} {{").unwrap();
-                writeln!(out, "        return failure(error, e);").unwrap();
-                writeln!(out, "    }}").unwrap();
-            }
-            _ => {
-                writeln!(out, "    let {bind} = match {call} {{").unwrap();
-                writeln!(out, "        Ok(rv) => rv,").unwrap();
-                writeln!(out, "        Err(e) => return failure(error, e),").unwrap();
-                writeln!(out, "    }};").unwrap();
-            }
-        }
-    } else {
-        let bind = match &f.ret {
-            RetType::Void => String::new(),
-            _ => format!("let {bind} = "),
-        };
-        writeln!(out, "    {bind}{call};").unwrap();
-        if can_fail {
-            writeln!(out, "    if error.is_set() {{").unwrap();
-            writeln!(out, "        return Object::Nil;").unwrap();
-            writeln!(out, "    }}").unwrap();
-        }
+    // `?` on a fallible call: the failure is this wrapper's own `Err`.
+    let query = match f.fallible {
+        true => "?",
+        false => "",
+    };
+    match &f.ret {
+        RetType::Void => writeln!(out, "    {call}{query};").unwrap(),
+        _ => writeln!(out, "    let {bind} = {call}{query};").unwrap(),
     }
 
     let boxed = match &f.ret {
@@ -1298,7 +1261,7 @@ fn emit_fn(
             "Object::Dict(dict)".into()
         }
     };
-    writeln!(out, "    {boxed}").unwrap();
+    writeln!(out, "    Ok({boxed})").unwrap();
     writeln!(out, "}}").unwrap();
     Ok(())
 }
@@ -1383,21 +1346,21 @@ fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: ui
 }
 
 /// Refuses a call that arrived with the wrong number of arguments.
-fn wrong_arity(error: &mut Error, expected: usize, got: usize) {
-    *error = api_error!(
+fn wrong_arity(expected: usize, got: usize) -> Error {
+    api_error!(
         kErrorTypeException,
         "Wrong number of arguments: expecting {expected} but got {got}"
-    );
+    )
 }
 
 /// Refuses a call whose argument in `slot` carried a tag the parameter does
 /// not accept.
-fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
+fn wrong_type(slot: usize, func: &CStr, expected: &CStr) -> Error {
     let (func, expected) = (msg_cstr(func), msg_cstr(expected));
-    *error = api_error!(
+    api_error!(
         kErrorTypeException,
         "Wrong type for argument {slot} when calling {func}, expecting {expected}"
-    );
+    )
 }
 "#;
 
@@ -1519,10 +1482,10 @@ fn is_empty_array(o: Object) -> bool {
         r#"
 /// What reading a keyset argument produced.
 enum KeySetArg<K> {
-    /// Decoded, with `error` untouched.
+    /// Decoded.
     Read(K),
-    /// The decoder rejected a key; `error` says which and why.
-    Refused,
+    /// The decoder rejected a key, and says which and why.
+    Refused(Error),
     /// The argument was neither a Dict nor the empty list that stands in for
     /// an empty one.
     WrongType,
@@ -1533,7 +1496,7 @@ enum KeySetArg<K> {
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> KeySetArg<K> {
+fn read_keydict<K>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
     let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
@@ -1547,11 +1510,9 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
     let mut out: K = unsafe { core::mem::zeroed() };
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
     // offsets it hands back are inside `out`.
-    let read = unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict, error) };
-    if read {
-        KeySetArg::Read(out)
-    } else {
-        KeySetArg::Refused
+    match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
+        Ok(()) => KeySetArg::Read(out),
+        Err(e) => KeySetArg::Refused(e),
     }
 }
 "#,
@@ -1560,8 +1521,8 @@ fn read_keydict<K>(get_field: FieldHashfn, item: Object, error: &mut Error) -> K
         "text_locked_error",
         r#"
 /// Refuses a call made while the text is locked.
-fn text_locked_error(error: &mut Error) {
-    *error = Error::from_message(kErrorTypeException, get_text_locked_msg());
+fn text_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, get_text_locked_msg())
 }
 "#,
     ),
@@ -1570,20 +1531,8 @@ fn text_locked_error(error: &mut Error) {
         r#"
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
-fn expr_map_locked_error(error: &mut Error) {
-    *error = Error::from_message(kErrorTypeException, e_textlock);
-}
-"#,
-    ),
-    (
-        "failure",
-        r#"
-/// Hands the error an API function answered with to the dispatcher, which
-/// reads it out of the slot it lent the wrapper. The wrapper's own result is
-/// nil, as it is for every other way of refusing.
-fn failure(error: &mut Error, e: Error) -> Object {
-    *error = e;
-    Object::Nil
+fn expr_map_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, e_textlock)
 }
 "#,
     ),
@@ -2007,7 +1956,7 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// arena.
 const fn handler(
     name: &'static CStr,
-    f: unsafe fn(uint64_t, Array, *mut Arena, &mut Error) -> Object,
+    f: unsafe fn(uint64_t, Array, *mut Arena) -> Result<Object, Error>,
     fast: bool,
     ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
@@ -2019,9 +1968,9 @@ const fn handler(
     }
 }
 
-/// What [`msgpack_rpc_get_handler_for`] returns when it refused; the caller
-/// looks at `*error`.
-const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
+/// The row a caller holds when no method has been resolved yet, or when the
+/// lookup refused: a null name and no wrapper.
+pub(crate) const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
     name: ptr::null(),
     fn_0: None,
     fast: false,
@@ -2035,11 +1984,10 @@ const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler {
 pub unsafe fn msgpack_rpc_get_handler_for(
     name: *const c_char,
     name_len: size_t,
-    error: &mut Error,
-) -> MsgpackRpcRequestHandler {
+) -> Result<MsgpackRpcRequestHandler, Error> {
     // SAFETY: the caller passes a method name of `name_len` bytes.
     if let Some(index) = handler_index(unsafe { key_bytes(name, name_len) }) {
-        return method_handlers[index];
+        return Ok(method_handlers[index]);
     }
     // The name is not NUL-terminated, so its length goes along. The stand-in
     // for an empty one is, and upstream measured it with `sizeof`, terminator
@@ -2052,8 +2000,7 @@ pub unsafe fn msgpack_rpc_get_handler_for(
     };
     // SAFETY: the caller vouches for `name_len` bytes at `name`.
     let text = unsafe { c_str_len(text, len) };
-    *error = api_error!(kErrorTypeException, "Invalid method: {text}");
-    NO_HANDLER
+    Err(api_error!(kErrorTypeException, "Invalid method: {text}"))
 }
 "#;
 
@@ -2844,7 +2791,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // Whether the API function has a Lua implementation of its own, which it
     // needs the state for.
     let has_lua_imp = f.params.contains(&Param::LuaState);
-    let can_fail = f.fallible || f.params.contains(&Param::Error);
+    let can_fail = f.fallible;
 
     for (index, ty, _) in &values {
         if matches!(ty, ApiType::Dict)
@@ -3038,7 +2985,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .map(|p| match p {
             Param::ChannelId => "LUA_INTERNAL_CALL".into(),
             Param::Arena => "arena".into(),
-            Param::Error => "err".into(),
             Param::LuaState => "lstate".into(),
             Param::Value { index, ty, .. } => value(*index, ty),
         })
