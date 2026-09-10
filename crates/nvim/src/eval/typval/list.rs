@@ -229,7 +229,7 @@ pub(crate) fn index_of(n: usize) -> ::core::ffi::c_int {
 /// somewhere else at the same time.
 ///
 /// The two constructors are the two things a raw pointer can mean.  A handle
-/// is not null: `v:_null_list` is `TypVal::List(None)`, and every reader that
+/// is not null: `v:_null_list` is `TypVal::list(None)`, and every reader that
 /// wants the old spelling asks [`TypVal::list_or_null`].
 #[repr(transparent)]
 pub struct ListRef(NonNull<List>);
@@ -329,16 +329,27 @@ impl TypVal {
     #[inline(always)]
     pub(crate) fn list_or_null(&self) -> *mut List {
         match self {
-            TypVal::List(Some(list)) => list.as_ptr(),
+            TypVal::List(list) => list
+                .as_ref()
+                .map_or(::core::ptr::null_mut(), ListRef::as_ptr),
             _ => ::core::ptr::null_mut(),
         }
+    }
+
+    /// A list value over `list`, which the value takes over.
+    ///
+    /// The one place the [`ManuallyDrop`](::core::mem::ManuallyDrop) the
+    /// variant carries is spelled: see [`TypVal`] for why it is there.
+    #[inline(always)]
+    pub(crate) const fn list(list: Option<ListRef>) -> TypVal {
+        TypVal::List(::core::mem::ManuallyDrop::new(list))
     }
 
     /// Overwrite this slot with `list`, **releasing nothing**: see
     /// [`union_writers`].  The slot takes over whatever the handle owns.
     #[inline(always)]
     pub(crate) fn write_list(&mut self, list: Option<ListRef>) {
-        self.overwrite(TypVal::List(list));
+        self.overwrite(TypVal::list(list));
     }
 
     /// Move the list out of this slot, leaving `v:_null_list` behind.

@@ -286,7 +286,7 @@ unsafe fn call_qftf_func(
     // `dict_held` is what frees it, once the call is over.
     // SAFETY: the dictionary allocated above, live for the call.
     let named = unsafe { DictRef::owning(dict) };
-    let args = CallFrame::naming([TypVal::Dict(named)]);
+    let args = CallFrame::naming([TypVal::dict(named)]);
     let mut rettv = TV_INITIAL_VALUE;
     let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();

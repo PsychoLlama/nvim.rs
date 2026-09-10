@@ -166,7 +166,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     let args = CallFrame::naming([
         TypVal::String(pat),
         TypVal::String(flag_string.as_mut_ptr()),
-        TypVal::Dict(named),
+        TypVal::dict(named),
     ]);
 
     let mut rettv = TV_INITIAL_VALUE;

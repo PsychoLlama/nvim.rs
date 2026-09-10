@@ -333,7 +333,7 @@ unsafe fn stacktrace_push_item(
     // `tv_list_append_tv` copies it into a fresh item and a copy is unlocked.
     // The value holds the one reference the allocator handed out, and the
     // append takes a second; both are given back when this frame ends.
-    let tv = TypVal::Dict(Some(d_held));
+    let tv = TypVal::dict(Some(d_held));
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }

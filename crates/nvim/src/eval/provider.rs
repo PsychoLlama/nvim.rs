@@ -254,7 +254,7 @@ pub unsafe fn eval_call_provider(
     // SAFETY: the caller's promise -- `method` is NUL-terminated.
     let argvars = [
         TypVal::String(unsafe { xstrdup(method) }),
-        TypVal::List(arguments),
+        TypVal::list(arguments),
     ];
     let mut rettv = UNSET_TV;
 

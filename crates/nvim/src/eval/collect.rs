@@ -599,7 +599,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     if !unsafe { (*pt).pt_dict }.is_null() {
         // A borrowed view, not an owner: the partial keeps the reference,
         // so `dtv` releases nothing.
-        let mut dtv = ManuallyDrop::new(TypVal::Dict(unsafe { DictRef::owning((*pt).pt_dict) }));
+        let mut dtv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning((*pt).pt_dict) }));
         abort = abort || unsafe { set_ref_in_item(&mut dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound

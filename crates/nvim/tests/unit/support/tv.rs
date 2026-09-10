@@ -138,8 +138,8 @@ impl Tv {
             Tv::Float(f) => TypVal::Float(*f),
             Tv::Str(s) => TypVal::String(unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast()),
             Tv::NullStr => TypVal::String(ptr::null_mut()),
-            Tv::NullList => TypVal::List(None),
-            Tv::NullDict => TypVal::Dict(None),
+            Tv::NullList => list_tv(None),
+            Tv::NullDict => dict_tv(None),
             Tv::NullBlob => TypVal::Blob(ptr::null_mut()),
             Tv::Blob(bytes) => {
                 let b = tv_blob_alloc();
@@ -158,7 +158,7 @@ impl Tv {
                     unsafe { tv_list_append_owned_tv(l, item_tv) };
                 }
                 path.pop();
-                TypVal::List(Some(list))
+                list_tv(Some(list))
             }
             Tv::Dict(entries) => {
                 let dict = tv_dict_alloc();
@@ -172,7 +172,7 @@ impl Tv {
                     let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();
-                TypVal::Dict(Some(dict))
+                dict_tv(Some(dict))
             }
             Tv::Func(name) => {
                 TypVal::Func(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
@@ -183,8 +183,8 @@ impl Tv {
                 match path[*up] {
                     // SAFETY: the container is already live, and this is
                     // a second reference to it.
-                    Container::List(l) => TypVal::List(unsafe { ListRef::retained(l) }),
-                    Container::Dict(d) => TypVal::Dict(unsafe { DictRef::retained(d) }),
+                    Container::List(l) => list_tv(unsafe { ListRef::retained(l) }),
+                    Container::Dict(d) => dict_tv(unsafe { DictRef::retained(d) }),
                 }
             }
             Tv::Copied(from) => {
@@ -626,6 +626,21 @@ pub(crate) unsafe fn dict_watchers(d: *const Dict) -> Vec<Watcher> {
 }
 
 /// The spec's `ga_alloc`: a `GArray` on the caller's stack, initialised.
+/// A list value over `handle`, which the value takes over.
+///
+/// The crate's own `TypVal::list`, which is `pub(crate)`. The variant holds
+/// its handle in a `ManuallyDrop` so that nothing but `TypVal`'s own `Drop`
+/// ever releases a payload (see the type's documentation); every place the
+/// harness builds one goes through here rather than spelling the wrapper.
+pub(crate) fn list_tv(handle: Option<ListRef>) -> TypVal {
+    TypVal::List(ManuallyDrop::new(handle))
+}
+
+/// The dictionary half of [`list_tv`].
+pub(crate) fn dict_tv(handle: Option<DictRef>) -> TypVal {
+    TypVal::Dict(ManuallyDrop::new(handle))
+}
+
 pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::GArray {
     let mut ga = neovim::types::GArray {
         ga_len: 0,

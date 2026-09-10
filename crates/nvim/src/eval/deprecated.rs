@@ -240,7 +240,7 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
                 .as_ref()
                 .expect("no options means a fresh one")
                 .as_ptr();
-            frame.push_naming(TypVal::Dict(unsafe { DictRef::owning(at) }));
+            frame.push_naming(TypVal::dict(unsafe { DictRef::owning(at) }));
         }
     }
 

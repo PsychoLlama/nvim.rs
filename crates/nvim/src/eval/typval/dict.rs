@@ -242,7 +242,7 @@ pub unsafe fn tv_dict_item_remove(dict: *mut Dict, item: *mut DictItem) {
 /// count: [`Clone`] takes one, [`Drop`] gives one back and the last one
 /// frees the dictionary. See [`ListRef`] for the whole of it -- the
 /// refcount-zero idiom it retires, why `v:_null_dict` is
-/// `TypVal::Dict(None)` rather than a null handle, and why [`Deref`] is
+/// `TypVal::dict(None)` rather than a null handle, and why [`Deref`] is
 /// [`Live`](crate::winlayer::Live)'s rather than a borrow held across a
 /// call.
 ///

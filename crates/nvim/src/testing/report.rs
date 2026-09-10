@@ -233,8 +233,8 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
         }
     }
     (
-        TypVal::Dict(Some(exp_held)),
-        TypVal::Dict(Some(got_held)),
+        TypVal::dict(Some(exp_held)),
+        TypVal::dict(Some(got_held)),
         omitted,
     )
 }

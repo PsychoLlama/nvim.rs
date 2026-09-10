@@ -71,7 +71,7 @@ unsafe fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
     }
     let list = tv_list_alloc(4);
     let into = list.as_ptr();
-    unsafe { create_special_dict(result, kMPInteger, TypVal::List(Some(list))) };
+    unsafe { create_special_dict(result, kMPInteger, TypVal::list(Some(list))) };
     unsafe { tv_list_append_number(into, 1) };
     unsafe { tv_list_append_number(into, ((val >> 62) & 0x3) as VarNumber) };
     unsafe { tv_list_append_number(into, ((val >> 31) & 0x7fff_ffff) as VarNumber) };
@@ -169,7 +169,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         MPACK_TOKEN_ARRAY => {
             let list = tv_list_alloc(len as ptrdiff_t);
             let into = list.as_ptr();
-            unsafe { ptr::write(result, TypVal::List(Some(list))) };
+            unsafe { ptr::write(result, TypVal::list(Some(list))) };
             unsafe { (*node).data[1].p = into.cast() };
         }
         // Whether this can be a Dict is not knowable yet, so the pairs
@@ -232,7 +232,7 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
 
     let dict_held = tv_dict_alloc();
     let dict = dict_held.as_ptr();
-    unsafe { ptr::write(result, TypVal::Dict(Some(dict_held))) };
+    unsafe { ptr::write(result, TypVal::dict(Some(dict_held))) };
 
     for i in 0..len {
         let key = pairs[i * 2].string_or_null();
@@ -297,7 +297,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
             let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
             let ext_into = ext_val_list.as_ptr();
             unsafe { tv_list_append_list(into, Some(ext_val_list)) };
-            unsafe { create_special_dict(&mut *result, kMPExt, TypVal::List(Some(list))) };
+            unsafe { create_special_dict(&mut *result, kMPExt, TypVal::list(Some(list))) };
             let bytes = unsafe { (*node).data[1].p }.cast();
             unsafe { encode_list_write(ext_into.cast(), bytes, len) };
             unsafe { xfree((*node).data[1].p) };

@@ -648,7 +648,7 @@ unsafe fn item_string(
             // SAFETY: the value's own dictionary; the argument holds a
             // reference of its own for the length of the call.
             let held = unsafe { DictRef::retained((*tv).dict_or_null()) };
-            let argv = [TypVal::Dict(held)];
+            let argv = [TypVal::dict(held)];
             // SAFETY: `result` is the caller's return value.
             let rv = &mut *result;
             let called = unsafe { callback_call(cb, &argv, rv) };

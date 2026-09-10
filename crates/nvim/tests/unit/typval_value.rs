@@ -52,10 +52,10 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         VAR_FUNC => TypVal::Func(p.cast()),
         // SAFETY: a made-up address the case never follows; the value is
         // a `ManuallyDrop`, so the handle is never released.
-        VAR_LIST => TypVal::List(unsafe { ListRef::owning(p.cast()) }),
+        VAR_LIST => tv::list_tv(unsafe { ListRef::owning(p.cast()) }),
         // SAFETY: as the list arm -- a made-up address in a
         // `ManuallyDrop`, never released.
-        VAR_DICT => TypVal::Dict(unsafe { DictRef::owning(p.cast()) }),
+        VAR_DICT => tv::dict_tv(unsafe { DictRef::owning(p.cast()) }),
         VAR_PARTIAL => TypVal::Partial(p.cast()),
         VAR_BLOB => TypVal::Blob(p.cast()),
         VAR_BOOL => TypVal::Bool(kBoolVarTrue),
@@ -1190,9 +1190,9 @@ fn number_rows(number: &CString) -> Vec<Row> {
             TypVal::Func(ptr::null_mut()),
             Some("E703: Using a Funcref as a Number"),
         ),
-        row(TypVal::List(None), Some("E745: Using a List as a Number")),
+        row(tv::list_tv(None), Some("E745: Using a List as a Number")),
         row(
-            TypVal::Dict(None),
+            tv::dict_tv(None),
             Some("E728: Using a Dictionary as a Number"),
         ),
         row(TypVal::Special(kSpecialVarNull), None),
@@ -1321,12 +1321,12 @@ fn getting_a_float_accepts_only_numbers() {
                 0.0,
             ),
             (
-                ManuallyDrop::new(TypVal::List(None)),
+                ManuallyDrop::new(tv::list_tv(None)),
                 Some("E893: Using a List as a Float"),
                 0.0,
             ),
             (
-                ManuallyDrop::new(TypVal::Dict(None)),
+                ManuallyDrop::new(tv::dict_tv(None)),
                 Some("E894: Using a Dictionary as a Float"),
                 0.0,
             ),
@@ -1396,12 +1396,12 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::List(None)),
+                ManuallyDrop::new(tv::list_tv(None)),
                 Some("E730: Using a List as a String"),
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::Dict(None)),
+                ManuallyDrop::new(tv::dict_tv(None)),
                 Some("E731: Using a Dictionary as a String"),
                 None,
             ),

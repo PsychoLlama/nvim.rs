@@ -267,7 +267,7 @@ pub unsafe fn json_decode_string(
                         }
                     }
                     b'[' => {
-                        let tv = TypVal::List(Some(tv_list_alloc(kListLenMayKnow as ptrdiff_t)));
+                        let tv = TypVal::list(Some(tv_list_alloc(kListLenMayKnow as ptrdiff_t)));
                         dec.open(tv, ::core::ptr::null_mut(), p);
                     }
                     b'{' => {
@@ -278,7 +278,7 @@ pub unsafe fn json_decode_string(
                             let len = kListLenMayKnow as ptrdiff_t;
                             special_val = unsafe { decode_create_map_special_dict(&mut tv, len) };
                         } else {
-                            tv = TypVal::Dict(Some(tv_dict_alloc()));
+                            tv = TypVal::dict(Some(tv_dict_alloc()));
                         }
                         dec.open(tv, special_val, p);
                     }

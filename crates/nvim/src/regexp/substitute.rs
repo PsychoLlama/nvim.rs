@@ -564,7 +564,7 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     // says.
     // SAFETY: this frame's own list, which outlives the call.
     let names_it = unsafe { ListRef::owning(&raw mut match_list) };
-    let argv = CallFrame::naming([TypVal::List(names_it)]);
+    let argv = CallFrame::naming([TypVal::list(names_it)]);
 
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_string(core::ptr::null_mut());

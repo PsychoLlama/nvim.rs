@@ -145,9 +145,9 @@ impl Clone for TypVal {
             }
             // The handle's own `Clone` is the reference: one more owner of
             // the same list, and `v:_null_list` counts nothing.
-            TypVal::List(ref list) => TypVal::List(list.clone()),
+            TypVal::List(ref list) => TypVal::list((**list).clone()),
             // As `List`: the handle's own `Clone` is the reference.
-            TypVal::Dict(ref dict) => TypVal::Dict(dict.clone()),
+            TypVal::Dict(ref dict) => TypVal::dict((**dict).clone()),
             TypVal::Unknown => {
                 let arg0 = "tv_copy(UNKNOWN)";
                 semsg!("E685: Internal error: {arg0}");
@@ -172,21 +172,18 @@ impl Drop for TypVal {
         // The fast path is *here* rather than only inside `tv_clear`: an
         // implicit drop is the commonest operation the interpreter has, and
         // most of them are of a scalar or of a slot something already took
-        // the value out of. Testing before the call is what keeps the
-        // compiler's drop glue small enough to inline at the call site.
+        // the value out of. Testing before the call is what keeps this the
+        // whole of the glue -- a jump table, a compare and a tail call --
+        // and small enough that most of the sites that drop a value inline
+        // it instead of calling it (796 out-of-line calls became 255).
         if !self.is_empty() {
             // SAFETY: `self` is a live typval by construction, and the walk
             // leaves it holding nothing.
             unsafe { tv_clear(&mut *self) };
         }
-        // The clear left the empty value of the kind, which owns nothing --
-        // so the field drop glue the compiler appends after this is dead
-        // code. Saying so *here* is what lets it fold the glue away: the
-        // discriminant is a constant at the end of this body, and a dropped
-        // value may not be read, so overwriting the kind is invisible.
-        // Without it every implicit drop pays an out-of-line
-        // `drop_glue::<TypVal>` (60 M instructions of `spellbench`).
-        self.overwrite(TypVal::Unknown);
+        // And nothing after it: the container payloads are held in a
+        // `ManuallyDrop`, so the compiler appends no field glue to this and
+        // the clear above is the only release path. See [`TypVal`].
     }
 }
 

@@ -95,7 +95,7 @@ pub unsafe fn tv_list_append_owned_tv(l: *mut List, tv: TypVal) -> *mut TypVal {
 /// # Safety
 /// `l` must point at a live list.
 pub unsafe fn tv_list_append_list(l: *mut List, itemlist: Option<ListRef>) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::List(itemlist)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::list(itemlist)) };
 }
 
 /// Append `dict` to `l`, which takes the handle over.
@@ -103,7 +103,7 @@ pub unsafe fn tv_list_append_list(l: *mut List, itemlist: Option<ListRef>) {
 /// # Safety
 /// `l` must point at a live list.
 pub unsafe fn tv_list_append_dict(l: *mut List, dict: Option<DictRef>) {
-    unsafe { tv_list_append_owned_tv(l, TypVal::Dict(dict)) };
+    unsafe { tv_list_append_owned_tv(l, TypVal::dict(dict)) };
 }
 
 /// Append a copy of `str`'s first `len` bytes to `l`.

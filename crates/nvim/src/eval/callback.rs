@@ -245,7 +245,7 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
     if !self_dict.is_null() {
         // As above: the reader keeps the reference.
         // SAFETY: the reader's own dictionary, which it keeps.
-        let mut tv = ManuallyDrop::new(TypVal::Dict(unsafe { DictRef::owning(self_dict) }));
+        let mut tv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning(self_dict) }));
         // SAFETY: `tv` is this frame's, and the stacks are the caller's.
         return unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) };
     }

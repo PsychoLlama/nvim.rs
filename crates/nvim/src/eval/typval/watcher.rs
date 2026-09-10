@@ -314,9 +314,9 @@ pub unsafe fn tv_dict_watcher_notify(
     // SAFETY: the caller's dictionary, live for the call. The slot *names*
     // it: the reference the callbacks run under is the retain below, and
     // `tv_dict_unref` at the bottom is what gives it back.
-    argv.push_naming(TypVal::Dict(unsafe { DictRef::owning(dict) }));
+    argv.push_naming(TypVal::dict(unsafe { DictRef::owning(dict) }));
     argv.push_owned(TypVal::String(unsafe { xstrdup(key) }));
-    argv.push_owned(TypVal::Dict(Some(tv_dict_alloc())));
+    argv.push_owned(TypVal::dict(Some(tv_dict_alloc())));
     let event = argv.args()[2].dict_or_null();
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends

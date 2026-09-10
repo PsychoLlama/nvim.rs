@@ -601,6 +601,18 @@ impl Default for ScriptCtx {
 ///
 /// The pointer payloads are still raw, and the value still owns what they
 /// point at: `Drop` is `tv_clear` and `Clone` is `tv_copy`.
+///
+/// **Every payload is released by [`TypVal`]'s own `Drop`, never by field
+/// glue.** The container handles are held in a [`ManuallyDrop`] to say so:
+/// `tv_clear` walks a value *iteratively* and takes each handle out of its
+/// slot itself, so a field destructor after it would be dead code -- and the
+/// compiler cannot know that, so it emits the switch anyway and every
+/// implicit drop of a value pays for it (0.5 % of a non-eval bench, measured).
+/// The invariant a new payload has to keep is the whole of it: whatever owns
+/// something is released by the clear, and the wrapper keeps the compiler
+/// from doing it a second time.
+///
+/// [`ManuallyDrop`]: ::core::mem::ManuallyDrop
 #[repr(C, u32)]
 pub enum TypVal {
     /// No value: what a fresh slot holds, and what one is left as after being
@@ -613,9 +625,9 @@ pub enum TypVal {
     /// A funcref: an owned function name, plus a reference to the function.
     Func(*mut ::core::ffi::c_char) = VAR_FUNC,
     /// A list, owned as one reference; `None` is `v:_null_list`.
-    List(Option<ListRef>) = VAR_LIST,
+    List(::core::mem::ManuallyDrop<Option<ListRef>>) = VAR_LIST,
     /// A dictionary, owned as one reference; `None` is `v:_null_dict`.
-    Dict(Option<DictRef>) = VAR_DICT,
+    Dict(::core::mem::ManuallyDrop<Option<DictRef>>) = VAR_DICT,
     /// A float.
     Float(Float) = VAR_FLOAT,
     /// `v:true` or `v:false`.

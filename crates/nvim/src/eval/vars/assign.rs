@@ -276,7 +276,7 @@ pub unsafe fn ex_let_vars(
                 unsafe { tv_list_append_tv(into, &*tv) };
                 at += 1;
             }
-            let mut ltv = TypVal::List(Some(rest_list));
+            let mut ltv = TypVal::list(Some(rest_list));
 
             // SAFETY: `arg` is inside the caller's string and `ltv` a live
             // local.

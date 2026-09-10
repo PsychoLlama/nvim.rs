@@ -213,16 +213,28 @@ impl TypVal {
     #[inline(always)]
     pub(crate) fn dict_or_null(&self) -> *mut Dict {
         match self {
-            TypVal::Dict(Some(dict)) => dict.as_ptr(),
+            TypVal::Dict(dict) => dict
+                .as_ref()
+                .map_or(::core::ptr::null_mut(), DictRef::as_ptr),
             _ => ::core::ptr::null_mut(),
         }
+    }
+
+    /// A dictionary value over `dict`, which the value takes over.
+    ///
+    /// The dictionary half of [`TypVal::list`]: the one place the
+    /// [`ManuallyDrop`](::core::mem::ManuallyDrop) the variant carries is
+    /// spelled.
+    #[inline(always)]
+    pub(crate) const fn dict(dict: Option<DictRef>) -> TypVal {
+        TypVal::Dict(::core::mem::ManuallyDrop::new(dict))
     }
 
     /// Overwrite this slot with `dict`, **releasing nothing**: see
     /// [`union_writers`].  The slot takes over whatever the handle owns.
     #[inline(always)]
     pub(crate) fn write_dict(&mut self, dict: Option<DictRef>) {
-        self.overwrite(TypVal::Dict(dict));
+        self.overwrite(TypVal::dict(dict));
     }
 
     /// Move the dictionary out of this slot, leaving `v:_null_dict` behind.
@@ -271,8 +283,8 @@ impl TypVal {
             VAR_NUMBER => TypVal::Number(0),
             VAR_STRING => TypVal::String(::core::ptr::null_mut()),
             VAR_FUNC => TypVal::Func(::core::ptr::null_mut()),
-            VAR_LIST => TypVal::List(None),
-            VAR_DICT => TypVal::Dict(None),
+            VAR_LIST => TypVal::list(None),
+            VAR_DICT => TypVal::dict(None),
             VAR_FLOAT => TypVal::Float(0.0),
             VAR_BOOL => TypVal::Bool(crate::types::kBoolVarFalse),
             VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
@@ -971,9 +983,9 @@ mod tests {
             VAR_NUMBER => TypVal::Number(VarNumber::try_from(bits).expect("a small address")),
             // SAFETY: a made-up address, wrapped in a `ManuallyDrop` by
             // `tagged` so that nothing ever releases it.
-            VAR_LIST => TypVal::List(unsafe { ListRef::owning(p.cast()) }),
+            VAR_LIST => TypVal::list(unsafe { ListRef::owning(p.cast()) }),
             // SAFETY: as the list arm above.
-            VAR_DICT => TypVal::Dict(unsafe { DictRef::owning(p.cast()) }),
+            VAR_DICT => TypVal::dict(unsafe { DictRef::owning(p.cast()) }),
             VAR_BLOB => TypVal::Blob(p.cast()),
             VAR_PARTIAL => TypVal::Partial(p.cast()),
             VAR_STRING => TypVal::String(p.cast()),
@@ -1051,8 +1063,8 @@ mod tests {
             TypVal::Number(1),
             TypVal::String(::core::ptr::null_mut()),
             TypVal::Func(::core::ptr::null_mut()),
-            TypVal::List(None),
-            TypVal::Dict(None),
+            TypVal::list(None),
+            TypVal::dict(None),
             TypVal::Float(1.0),
             TypVal::Bool(kBoolVarTrue),
             TypVal::Special(kSpecialVarNull),

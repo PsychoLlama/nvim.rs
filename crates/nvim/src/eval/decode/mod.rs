@@ -70,7 +70,7 @@ pub(crate) unsafe fn create_special_dict(result: &mut TypVal, type_: MessagePack
     unsafe { di_tv(val_di).write(val) };
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
-    unsafe { ::core::ptr::write(result, TypVal::Dict(Some(dict_held))) };
+    unsafe { ::core::ptr::write(result, TypVal::dict(Some(dict_held))) };
 }
 
 /// The special dictionary a map that cannot be a `Dict` decodes to.
@@ -86,7 +86,7 @@ pub unsafe fn decode_create_map_special_dict(ret_tv: &mut TypVal, len: ptrdiff_t
     let list = tv_list_alloc(len);
     // A borrow of the list the special dictionary owns from here on.
     let into = list.as_ptr();
-    unsafe { create_special_dict(ret_tv, kMPMap, TypVal::List(Some(list))) };
+    unsafe { create_special_dict(ret_tv, kMPMap, TypVal::list(Some(list))) };
     into
 }
 

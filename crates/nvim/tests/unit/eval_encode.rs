@@ -116,7 +116,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                     "after writing {chunk:?}"
                 );
             }
-            let mut tv = TypVal::List(Some(list));
+            let mut tv = tv::list_tv(Some(list));
             tv_clear(&mut tv);
         }
     }
@@ -150,7 +150,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             // what pays for the extra holder.
             tv_list_append_owned_tv(outer, tv::bit_copy(&inner_tv));
         }
-        TypVal::List(Some(list))
+        tv::list_tv(Some(list))
     }
 }
 
