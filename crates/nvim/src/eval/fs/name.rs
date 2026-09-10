@@ -296,16 +296,11 @@ fn string_sub(
 ) -> (*mut c_char, usize) {
     let flags = if global { c"g" } else { c"" };
     let mut out_len: size_t = 0;
-    let (n, expr, fl, ret) = (
-        len as size_t,
-        ptr::null_mut::<TypVal>(),
-        flags.as_ptr(),
-        &raw mut out_len,
-    );
+    let (n, fl, ret) = (len as size_t, flags.as_ptr(), &raw mut out_len);
     // SAFETY: `text` has `len` readable bytes -- it was copied from exactly
     // that many -- and the rest are NUL-terminated strings; a NULL `expr` is
     // what asks for a plain replacement rather than a `\=` one.
-    let out = unsafe { do_string_sub(text.0, n, pat.0, sub.0, &*expr, fl, ret) };
+    let out = unsafe { do_string_sub(text.0, n, pat.0, sub.0, None, fl, ret) };
     (out, out_len as usize)
 }
 

@@ -353,7 +353,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 pub(crate) unsafe fn vim_regsub(
     rmp: *mut RegMatch,
     source: *mut c_char,
-    expr: &TypVal,
+    expr: Option<&TypVal>,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
@@ -369,7 +369,7 @@ pub(crate) unsafe fn vim_regsub(
         // A string replacement has no lines to cross, so a `\n` in it
         // is a literal newline rather than a line break.
         rex.set_reg_line_lbr(true);
-        unsafe { vim_regsub_both(rex, source, Some(expr), dest, destlen, flags) }
+        unsafe { vim_regsub_both(rex, source, expr, dest, destlen, flags) }
     })
 }
 

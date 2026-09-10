@@ -105,7 +105,7 @@ pub unsafe fn do_string_sub(
     len: size_t,
     pat: *mut c_char,
     sub: *mut c_char,
-    expr: &TypVal,
+    expr: Option<&TypVal>,
     flags: *const c_char,
     ret_len: *mut size_t,
 ) -> *mut c_char {

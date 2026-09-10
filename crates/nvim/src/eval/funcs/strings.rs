@@ -663,14 +663,14 @@ pub fn f_substitute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pat = arg_string_chk(&mut patbuf, &args[1]);
     let flg = arg_string_chk(&mut flagsbuf, &args[3]);
     let mut sub: *const c_char = ptr::null();
-    let mut expr: *const TypVal = ptr::null();
+    let mut expr: Option<&TypVal> = None;
     if args[2].is_func() {
-        expr = &args[2];
+        expr = Some(&args[2]);
     } else {
         sub = arg_string_chk(&mut subbuf, &args[2]);
     }
     result.write_string(
-        if str.is_null() || pat.is_null() || (sub.is_null() && expr.is_null()) || flg.is_null() {
+        if str.is_null() || pat.is_null() || (sub.is_null() && expr.is_none()) || flg.is_null() {
             ptr::null_mut()
         } else {
             let str = str as *mut c_char;
@@ -681,7 +681,7 @@ pub fn f_substitute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // SAFETY: every string is NUL-terminated and outlives the call,
             // and `expr` is null or argument 2.
             let len = unsafe { cstr::bytes_at(str) }.len();
-            unsafe { do_string_sub(str, len, pat, sub, &*expr, flg, out) }
+            unsafe { do_string_sub(str, len, pat, sub, expr, flg, out) }
         },
     );
 }
