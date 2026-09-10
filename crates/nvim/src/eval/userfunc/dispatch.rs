@@ -158,8 +158,16 @@ type Argv = CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>;
 
 /// The argument list as it stands: the frame, once something has been put in
 /// front of the caller's values; the caller's own slice until then.
-fn spliced_args<'a>(spliced: bool, argv: &'a Argv, args: &'a [TypVal], n: usize) -> &'a [TypVal] {
-    if spliced { argv.args() } else { &args[..n] }
+///
+/// The frame is an `Option` so that the ordinary call -- nothing in front of
+/// the caller's values -- never builds one: a `CallFrame` has a destructor,
+/// so a local of one cannot have its initialisation sunk into the branch
+/// that needs it, and 21 slots is `MAX_FUNC_ARGS + 1`.
+fn spliced_args<'a>(argv: &'a Option<Argv>, args: &'a [TypVal], n: usize) -> &'a [TypVal] {
+    match argv {
+        Some(argv) => argv.args(),
+        None => &args[..n],
+    }
 }
 
 /// Put a partial's bound arguments in front of the caller's own.
@@ -191,16 +199,12 @@ unsafe fn splice_bound(
 /// moving the caller's own values into the frame when nothing has yet.
 ///
 /// Answers `Err` when there is no room for it.
-fn splice_base(
-    argv: &mut Argv,
-    spliced: &mut bool,
-    args: &[TypVal],
-    base: &TypVal,
-) -> Result<(), ()> {
-    if !*spliced {
-        argv.extend_borrowed(args);
-        *spliced = true;
-    }
+fn splice_base(argv: &mut Option<Argv>, args: &[TypVal], base: &TypVal) -> Result<(), ()> {
+    let argv = argv.get_or_insert_with(|| {
+        let mut frame = Argv::new();
+        frame.extend_borrowed(args);
+        frame
+    });
     if argv.is_full() {
         return Err(());
     }
@@ -232,11 +236,9 @@ pub unsafe fn call_func(
     // How much of `args_in` is still the argument list, once an
     // `fe_argv_func` has had its say.
     let mut nargs = args_in.len();
-    // Used when a partial or `fe_basetv` puts arguments in front; while
-    // `spliced` is false the caller's own array is the argument list and
-    // this is empty.
-    let mut argv = Argv::new();
-    let mut spliced = false;
+    // Built only when a partial or `fe_basetv` puts arguments in front;
+    // until then the caller's own slice *is* the argument list.
+    let mut argv: Option<Argv> = None;
     let partial = unsafe { (*funcexe).fe_partial };
 
     // Initialise rettv so that the caller may `tv_clear` it even when
@@ -273,12 +275,13 @@ pub unsafe fn call_func(
                 selfdict = unsafe { (*partial).pt_dict };
             }
             if error == FCERR_NONE && unsafe { (*partial).pt_argc } > 0 {
+                let mut frame = Argv::new();
                 // SAFETY: `funcexe`'s partial is live.
-                if unsafe { splice_bound(&mut argv, partial, args_in) }.is_err() {
+                if unsafe { splice_bound(&mut frame, partial, args_in) }.is_err() {
                     error = FCERR_TOOMANY;
                     break 'theend;
                 }
-                spliced = true;
+                argv = Some(frame);
             }
         }
 
@@ -302,13 +305,13 @@ pub unsafe fn call_func(
                     error = FCERR_NONE;
                     // SAFETY: `funcexe`'s base is null or a live typval.
                     if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
-                        && splice_base(&mut argv, &mut spliced, &args_in[..nargs], base).is_err()
+                        && splice_base(&mut argv, &args_in[..nargs], base).is_err()
                     {
                         error = FCERR_TOOMANY;
                         break 'theend;
                     }
                     let len = len as size_t;
-                    let args = spliced_args(spliced, &argv, args_in, nargs);
+                    let args = spliced_args(&argv, args_in, nargs);
                     unsafe { nlua_typval_call(funcname, len, args, result) };
                 } else {
                     // v:lua was called directly; show its name in the
@@ -347,30 +350,30 @@ pub unsafe fn call_func(
                 } else if !fp.is_null() {
                     if let Some(argv_func) = unsafe { (*funcexe).fe_argv_func } {
                         // Postponed filling in the arguments; do it now.
-                        let skip = argv.len().saturating_sub(args_in.len());
+                        let filled = argv.as_ref().map_or(0, Argv::len);
+                        let skip = filled.saturating_sub(args_in.len());
                         // SAFETY: `fp` is the live function being called.
-                        let args = spliced_args(spliced, &argv, args_in, nargs);
+                        let args = spliced_args(&argv, args_in, nargs);
                         let n = unsafe { argv_func(args, skip, fp) };
-                        if spliced {
-                            argv.truncate(n);
-                        } else {
-                            nargs = n;
+                        match &mut argv {
+                            Some(argv) => argv.truncate(n),
+                            None => nargs = n,
                         }
                     }
                     // SAFETY: as the `v:lua` branch above.
                     if let Some(base) = unsafe { (*funcexe).fe_basetv.as_ref() }
-                        && splice_base(&mut argv, &mut spliced, &args_in[..nargs], base).is_err()
+                        && splice_base(&mut argv, &args_in[..nargs], base).is_err()
                     {
                         error = FCERR_TOOMANY;
                         break 'theend;
                     }
-                    let args = spliced_args(spliced, &argv, args_in, nargs);
+                    let args = spliced_args(&argv, args_in, nargs);
                     error = unsafe { call_user_func_check(fp, args, result, funcexe, selfdict) };
                 }
             } else {
                 // SAFETY: as the two calls above.
                 let base = unsafe { (*funcexe).fe_basetv };
-                let args = spliced_args(spliced, &argv, args_in, nargs);
+                let args = spliced_args(&argv, args_in, nargs);
                 error = if base.is_null() {
                     unsafe { call_internal_func(fname, args, result) }
                 } else {
