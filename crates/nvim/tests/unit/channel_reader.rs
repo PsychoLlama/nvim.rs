@@ -30,12 +30,13 @@
 //! but what happens to it afterwards. `channel_callback_call` references the
 //! list around the callback and drops that reference again, so a callback
 //! that stored nothing leaves nothing behind — which is only observable as
-//! the garbage collector's chain head coming back to where it was.
+//! the garbage collector's registry of live lists coming back to what it
+//! was.
 
 #![cfg(not(miri))]
 
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
-use neovim::eval::gc::gc_first_list;
+use neovim::eval::gc::rooted_lists;
 use neovim::eval::typval::{tv_list_alloc, tv_list_free, tv_list_ref, tv_list_unref};
 use neovim::types::{CallbackReader, kListLenUnknown};
 
@@ -206,7 +207,7 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
 /// most recently allocated one *after* them, which says every list built for
 /// a callback in between was freed again.
 ///
-/// The chain is the only place a leaked list is visible. It is not
+/// The registry is the only place a leaked list is visible. It is not
 /// reachable from any root once the callback returns, so `garbagecollect()`
 /// would collect it and no Vimscript, Lua or API call can see it — which is
 /// why the spec reached past the API in the first place, and why the
@@ -220,11 +221,13 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     // SAFETY: as `delivered`. The sentinel is this case's own: it is never
     // referenced, so nothing but the final `tv_list_free` can free it.
     unsafe {
+        let before = rooted_lists();
         let sentinel = tv_list_alloc(kListLenUnknown as isize);
-        assert_eq!(
-            gc_first_list.get(),
-            sentinel,
-            "a fresh list heads the chain"
+        let with_sentinel = rooted_lists();
+        assert_eq!(with_sentinel.len(), before.len() + 1);
+        assert!(
+            with_sentinel.contains(&sentinel),
+            "a fresh list is registered"
         );
 
         callback_reader_start(at, stdout.as_ptr());
@@ -238,25 +241,24 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
             tv_list_unref(list);
             (*at).buffer.clear();
             assert_eq!(
-                gc_first_list.get(),
-                sentinel,
+                rooted_lists(),
+                with_sentinel,
                 "the delivered list outlived its callback",
             );
         }
         callback_reader_free(at);
 
         tv_list_free(sentinel);
-        assert_ne!(
-            gc_first_list.get(),
-            sentinel,
-            "freeing a list leaves it linked",
+        assert!(
+            !rooted_lists().contains(&sentinel),
+            "freeing a list leaves it registered",
         );
     }
 }
 
 /// The teeth of the case above: a callback that *does* store the list keeps
-/// it alive, and the chain head says so. Without this, a `reader_lines` that
-/// forgot to link its list onto the chain at all would pass the first case.
+/// it alive, and the registry says so. Without this, a `reader_lines` that
+/// forgot to register its list at all would pass the first case.
 #[test]
 fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
     let _sandbox = Sandbox::globals();
@@ -267,7 +269,8 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
     // freed, so this case owns everything it allocates.
     unsafe {
         let sentinel = tv_list_alloc(kListLenUnknown as isize);
-        assert_eq!(gc_first_list.get(), sentinel);
+        let with_sentinel = rooted_lists();
+        assert!(with_sentinel.contains(&sentinel));
 
         callback_reader_start(at, stdout.as_ptr());
         (*at).buffer.extend_from_slice(b"one\n");
@@ -280,11 +283,14 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
         (*at).buffer.clear();
         callback_reader_free(at);
 
-        assert_eq!(gc_first_list.get(), list, "a stored list was freed anyway");
+        assert!(
+            rooted_lists().contains(&list),
+            "a stored list was freed anyway"
+        );
         assert_eq!(tv::read_list(list), Tv::List(vec![line("one"), opened()]));
 
         tv_list_unref(list);
-        assert_eq!(gc_first_list.get(), sentinel);
+        assert_eq!(rooted_lists(), with_sentinel);
         tv_list_free(sentinel);
     }
 }

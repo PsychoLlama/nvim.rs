@@ -237,23 +237,16 @@ pub unsafe fn tv_dict_item_remove(dict: *mut Dict, item: *mut DictItem) {
 /// Allocate an empty dictionary.  The caller owns the reference count.
 ///
 /// # Safety
-/// The caller must own the garbage collector's dictionary chain — the
-/// editor's main thread — because the new dictionary is linked onto
-/// `gc_first_dict`.
+/// The caller must own the garbage collector's registry — the editor's
+/// main thread — because the new dictionary is registered in it.
 ///
 /// The result has a reference count of zero: the caller either raises it
 /// or hands the dictionary somewhere that does.
 pub unsafe fn tv_dict_alloc() -> *mut Dict {
     let d = unsafe { xcalloc(1, ::core::mem::size_of::<Dict>()) } as *mut Dict;
 
-    // Prepend the dictionary to the list of dictionaries for garbage
-    // collection.
-    if let Some(first) = unsafe { gc_first_dict.get().as_mut() } {
-        first.dv_used_prev = d;
-    }
-    unsafe { (*d).dv_used_next = gc_first_dict.get() };
-    unsafe { (*d).dv_used_prev = ::core::ptr::null_mut() };
-    gc_first_dict.set(d);
+    // The collector reaches every live dictionary through its registry.
+    let root = root_dict(::core::ptr::NonNull::new(d).expect("xcalloc never answers null"));
 
     unsafe { hash_init(&raw mut (*d).dv_hashtab) };
     // SAFETY: freshly allocated just above.
@@ -262,6 +255,7 @@ pub unsafe fn tv_dict_alloc() -> *mut Dict {
     dict.dv_scope = VAR_NO_SCOPE;
     dict.dv_refcount = Refcount::ZERO;
     dict.dv_copy_id = 0;
+    dict.dv_root = root;
     unsafe { queue_init(&raw mut (*d).watchers) };
     dict.lua_table_ref = LUA_NOREF as LuaRef;
     d
@@ -304,21 +298,16 @@ pub unsafe fn tv_dict_free_contents(d: *mut Dict) {
 ///
 /// # Safety
 /// `d` must point at a live dictionary whose contents have already been
-/// freed ([`tv_dict_free_contents`]), and the caller must own
-/// `gc_first_dict`, which this unlinks it from. `d` is dangling
+/// freed ([`tv_dict_free_contents`]), and the caller must own the
+/// collector's registry, which this takes it out of. `d` is dangling
 /// afterwards.
 pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
-    // Remove the dictionary from the list of dictionaries for garbage
-    // collection.
+    // Out of the collector's registry. A scope dictionary initialised in
+    // place was never in it, and carries `RootId::NONE`.
     // SAFETY: the caller's promise: a live dictionary.
     let mut dict = unsafe { Dt::new(d) };
-    match unsafe { (*d).dv_used_prev.as_mut() } {
-        Some(prev) => prev.dv_used_next = dict.dv_used_next,
-        None => gc_first_dict.set(dict.dv_used_next),
-    }
-    if let Some(next) = unsafe { (*d).dv_used_next.as_mut() } {
-        next.dv_used_prev = dict.dv_used_prev;
-    }
+    unroot_dict(dict.dv_root);
+    dict.dv_root = RootId::NONE;
 
     // NLUA_CLEAR_REF
     if dict.lua_table_ref != LUA_NOREF {
@@ -794,7 +783,7 @@ pub unsafe fn tv_dict_set_keys_readonly(dict: *mut Dict) {
 /// Allocate an empty dictionary with the given lock status.
 ///
 /// # Safety
-/// As [`tv_dict_alloc`]: the caller owns `gc_first_dict`, and the result
+/// As [`tv_dict_alloc`]: the caller owns the collector's registry, and the result
 /// arrives with a reference count of zero.
 pub unsafe fn tv_dict_alloc_lock(lock: VarLock) -> *mut Dict {
     let d = unsafe { tv_dict_alloc() };

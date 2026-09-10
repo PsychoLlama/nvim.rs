@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::eval::gc::RootId;
 pub use crate::eval::typval::{DictTab, ItemSlot};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
@@ -366,8 +367,10 @@ pub struct Dict {
     pub dv_copy_id: ::core::ffi::c_int,
     pub dv_hashtab: DictTab,
     pub dv_copydict: *mut Dict,
-    pub dv_used_next: *mut Dict,
-    pub dv_used_prev: *mut Dict,
+    /// Where the collector's registry holds this dictionary, or
+    /// `RootId::NONE` for one the allocator never handed out -- every scope
+    /// dictionary initialised in place.
+    pub dv_root: RootId,
     pub watchers: QUEUE,
     pub lua_table_ref: LuaRef,
 }
@@ -456,8 +459,9 @@ pub struct List {
     pub lv_items: Vec<ListItem>,
     pub lv_watch: *mut ListWatch,
     pub lv_copylist: *mut List,
-    pub lv_used_next: *mut List,
-    pub lv_used_prev: *mut List,
+    /// Where the collector's registry holds this list, or `RootId::NONE`
+    /// for one the allocator never handed out.
+    pub lv_root: RootId,
     pub lv_refcount: Refcount,
     pub lv_copy_id: ::core::ffi::c_int,
     pub lv_lock: VarLock,
@@ -478,8 +482,7 @@ impl List {
             lv_items: Vec::new(),
             lv_watch: ::core::ptr::null_mut(),
             lv_copylist: ::core::ptr::null_mut(),
-            lv_used_next: ::core::ptr::null_mut(),
-            lv_used_prev: ::core::ptr::null_mut(),
+            lv_root: RootId::NONE,
             lv_refcount: Refcount::ZERO,
             lv_copy_id: 0,
             lv_lock: VarLock::Unlocked,

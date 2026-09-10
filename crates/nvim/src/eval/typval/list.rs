@@ -225,12 +225,10 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> *mut List {
         unsafe { items_of(list) }.reserve_exact(len);
     }
 
-    // Prepend the list to the list of lists for garbage collection.
-    if let Some(first) = unsafe { gc_first_list.get().as_mut() } {
-        first.lv_used_prev = list;
-    }
-    unsafe { (*list).lv_used_next = gc_first_list.get() };
-    gc_first_list.set(list);
+    // The collector reaches every live list through its registry.
+    let root = root_list(::core::ptr::NonNull::new(list).expect("xcalloc never answers null"));
+    // SAFETY: the allocation just made and written.
+    unsafe { Ls::new(list) }.lv_root = root;
     list
 }
 
@@ -272,7 +270,7 @@ pub unsafe fn tv_list_free_contents(l: *mut List) {
     drop(items);
 }
 
-/// Unlink `l` from the garbage collector's chain and free the `List` itself.
+/// Take `l` out of the garbage collector's registry and free the `List`.
 ///
 /// Upstream freed the header and left whatever was still linked off it --
 /// a leak the collector's two passes made unreachable.  The items are the
@@ -283,16 +281,13 @@ pub unsafe fn tv_list_free_contents(l: *mut List) {
 /// `l` must point at a live list, unaliased for the call.  Anything still
 /// in it is **released**, so no caller may hold a reference to an item.
 pub unsafe fn tv_list_free_list(l: *mut List) {
-    // Remove the list from the list of lists for garbage collection.
+    // Out of the collector's registry. A list the allocator never handed
+    // out -- `a:000`, a submatch list -- carries `RootId::NONE` and is not
+    // in it; the removal is a no-op for those.
     // SAFETY: the caller's promise: a live list.
     let mut list = unsafe { Ls::new(l) };
-    match unsafe { (*l).lv_used_prev.as_mut() } {
-        Some(prev) => prev.lv_used_next = list.lv_used_next,
-        None => gc_first_list.set(list.lv_used_next),
-    }
-    if let Some(next) = unsafe { (*l).lv_used_next.as_mut() } {
-        next.lv_used_prev = list.lv_used_prev;
-    }
+    unroot_list(list.lv_root);
+    list.lv_root = RootId::NONE;
 
     // NLUA_CLEAR_REF
     if list.lua_table_ref != LUA_NOREF {

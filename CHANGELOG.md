@@ -31,8 +31,12 @@ and this project adheres to [CalVer](https://calver.org/).
   argument that was not given is absent rather than empty. `:lockvar` now
   locks the slot a value sits in, which is what it always meant. A List holds
   its items in one array rather than in a chain of separately allocated
-  cells, so indexing it is immediate rather than a walk. Behaviour is
-  unchanged; several values the interpreter used to leak are released.
+  cells, so indexing it is immediate rather than a walk. A Dictionary entry
+  owns its key instead of being allocated around it, and the garbage
+  collector keeps its own register of live containers rather than a chain
+  threaded through every one of them. Behaviour is unchanged -- the order
+  `keys()`, `values()` and `items()` hand out included; several values the
+  interpreter used to leak are released.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,

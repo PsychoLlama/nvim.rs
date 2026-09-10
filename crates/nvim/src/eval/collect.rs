@@ -31,12 +31,12 @@
 use crate::guard::Depth;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{ManuallyDrop, offset_of, size_of};
-use core::ptr::{null, null_mut};
+use core::ptr::{NonNull, null, null_mut};
 
 use crate::autocmd::aucmd_wins;
 use crate::channel::channels;
+use crate::eval::gc::{dict_at, dict_slots, list_at, list_slots};
 use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
-use crate::eval::gc::{gc_first_dict, gc_first_list};
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
@@ -385,42 +385,50 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
     tv_in_free_unref_items.set(true);
 
     // Pass 1: empty the unreachable dictionaries…
-    let mut dd = gc_first_dict.get();
-    while !dd.is_null() {
+    //
+    // Both passes walk the registry by slot index rather than borrowing it:
+    // `tv_in_free_unref_items` holds off every free for the duration, so no
+    // slot is vacated under the walk, but emptying a container runs
+    // arbitrary teardown and the registry must not be borrowed across that.
+    for idx in 0..dict_slots() {
+        let Some(dd) = dict_at(idx).map(NonNull::as_ptr) else {
+            continue;
+        };
         if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
             unsafe { tv_dict_free_contents(dd) };
             did_free = true;
         }
-        dd = unsafe { (*dd).dv_used_next };
     }
     // …and the unreachable lists. A list with a watcher is left alone:
     // the watcher is a borrow the collector cannot see.
-    let mut ll = gc_first_list.get();
-    while !ll.is_null() {
+    for idx in 0..list_slots() {
+        let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
+            continue;
+        };
         if stale(unsafe { tv_list_copyid(ll) }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
             unsafe { tv_list_free_contents(ll) };
             did_free = true;
         }
-        ll = unsafe { (*ll).lv_used_next };
     }
 
-    // Pass 2: unlink and free the structures themselves. The `next`
-    // pointer is read before the free.
-    let mut dd = gc_first_dict.get();
-    while !dd.is_null() {
-        let next = unsafe { (*dd).dv_used_next };
+    // Pass 2: take the structures themselves out of the registry and free
+    // them. The walk reads each slot afresh, so a slot this pass vacates is
+    // simply skipped when the index reaches it.
+    for idx in 0..dict_slots() {
+        let Some(dd) = dict_at(idx).map(NonNull::as_ptr) else {
+            continue;
+        };
         if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
             unsafe { tv_dict_free_dict(dd) };
         }
-        dd = next;
     }
-    let mut ll = gc_first_list.get();
-    while !ll.is_null() {
-        let next = unsafe { (*ll).lv_used_next };
+    for idx in 0..list_slots() {
+        let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
+            continue;
+        };
         if stale(unsafe { (*ll).lv_copy_id }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
             unsafe { tv_list_free_list(ll) };
         }
-        ll = next;
     }
 
     tv_in_free_unref_items.set(false);

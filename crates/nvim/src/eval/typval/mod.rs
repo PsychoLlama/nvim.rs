@@ -7,7 +7,7 @@ use crate::eval::encode::{
     encode_bool_var_names, encode_special_var_names, encode_tv2echo, encode_tv2string,
 };
 use crate::eval::executor::eexe_mod_op;
-use crate::eval::gc::{gc_first_dict, gc_first_list};
+use crate::eval::gc::{RootId, root_dict, root_list, unroot_dict, unroot_list};
 use crate::eval::userfunc::{call_func, func_ref, func_unref, get_funccal_local_ht};
 use crate::eval::vars::{
     get_globvar_dict, valid_varname, var_check_fixed, var_check_ro, var_wrong_func_name,

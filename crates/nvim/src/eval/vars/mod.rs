@@ -9,6 +9,8 @@ use crate::types::kOptValTypeString;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::ManuallyDrop;
 
+use crate::eval::gc::RootId;
+
 use crate::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
@@ -269,8 +271,7 @@ const EMPTY_SCOPE_DICT: Dict = Dict {
     dv_copy_id: 0,
     dv_hashtab: EMPTY_HASHTAB,
     dv_copydict: ::core::ptr::null_mut(),
-    dv_used_next: ::core::ptr::null_mut(),
-    dv_used_prev: ::core::ptr::null_mut(),
+    dv_root: RootId::NONE,
     watchers: QUEUE {
         next: ::core::ptr::null_mut(),
         prev: ::core::ptr::null_mut(),
