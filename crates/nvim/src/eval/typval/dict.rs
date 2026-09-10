@@ -487,12 +487,11 @@ pub unsafe fn tv_dict_add(d: *mut Dict, item: *mut DictItem) -> Result<(), Faile
     unsafe { hash_add(&raw mut (*d).dv_hashtab, DictEntry::new(item)) }
 }
 
-/// Add `list` to `d` under `key`, taking a reference to it.
+/// Add `list` to `d` under `key`, which takes the handle over.
 ///
 /// # Safety
 /// `d` points at a live dictionary and `key` is readable for `key_len`
-/// bytes. The dictionary takes the handle over, and a failure releases it
-/// with the item.
+/// bytes. A failure releases the handle with the item.
 pub unsafe fn tv_dict_add_list(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,
@@ -521,12 +520,11 @@ pub unsafe fn tv_dict_add_tv(
     unsafe { add_or_free(d, item) }
 }
 
-/// Add `dict` to `d` under `key`, taking a reference to it.
+/// Add `dict` to `d` under `key`, which takes the handle over.
 ///
 /// # Safety
-/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
-/// and `dict` points at a live dictionary (not null: the reference count is
-/// raised unconditionally).
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes. A failure releases the handle with the item.
 pub unsafe fn tv_dict_add_dict(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,

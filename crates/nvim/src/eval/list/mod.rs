@@ -239,7 +239,7 @@ impl ListArg {
         unsafe { tv_list_reverse(self.0) };
     }
 
-    /// Store the list in `result`, taking a reference to it.
+    /// Store the list in `result`, which takes a reference of its own.
     #[inline(always)]
     pub(crate) fn set_ret(self, result: &mut TypVal) {
         // SAFETY: live or NULL; the answer takes a reference of its own.

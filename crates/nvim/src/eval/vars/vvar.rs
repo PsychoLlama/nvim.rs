@@ -248,21 +248,21 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
     });
 }
 
-/// Set `v:` variable `idx` to `val`, taking a reference to it.
+/// Set `v:` variable `idx` to `val`, which takes the handle over.
 ///
 /// # Safety
-/// As [`get_vim_var_tv`]; `val` is NULL or a live list.
+/// As [`get_vim_var_tv`].
 pub unsafe fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.write_list(val);
 }
 
-/// Set `v:` variable `idx` to `val`, taking a reference to it and making its
-/// keys read-only.
+/// Set `v:` variable `idx` to `val`, which takes the handle over, and make
+/// its keys read-only.
 ///
 /// # Safety
-/// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
+/// As [`get_vim_var_tv`].
 pub unsafe fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
