@@ -648,13 +648,14 @@ fn detach_window() {
         external: true,
         ..WIN_CONFIG_INIT
     };
-    let mut error = Error::none();
-    let made = win_new_float(Win::current_or_none(), false, config, &mut error);
-    if made.is_none() {
-        err_raw(error.message_or_empty().as_ptr());
-        // SAFETY: an error the call above filled in, which owns its message.
-        error.clear();
-        beep();
+    match win_new_float(Win::current_or_none(), false, config) {
+        Ok(Some(_)) => {}
+        Ok(None) => beep(),
+        Err(e) => {
+            // SAFETY: the refusal owns its message.
+            err_raw(e.message_or_empty().as_ptr());
+            beep();
+        }
     }
 }
 

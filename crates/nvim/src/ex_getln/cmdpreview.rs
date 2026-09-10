@@ -100,7 +100,7 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
         cmdpreview_buf.handle,
         0,
     );
-    unsafe { try_leave(&raw mut tstate, &mut err) };
+    err.absorb(unsafe { try_leave(&raw mut tstate) });
 
     if err.is_set() || result.is_err() {
         err.clear();
@@ -442,7 +442,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         let mut tstate: TryState = TRY_STATE_INIT;
         unsafe { try_enter(&raw mut tstate) };
         cmdpreview_type = unsafe { execute_cmd(&raw mut ea, &raw mut cmdinfo, true) };
-        unsafe { try_leave(&raw mut tstate, &mut err) };
+        err.absorb(unsafe { try_leave(&raw mut tstate) });
         if err.is_set() {
             err.clear();
             cmdpreview_type = 0;

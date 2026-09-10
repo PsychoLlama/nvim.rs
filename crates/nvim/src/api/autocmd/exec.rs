@@ -101,10 +101,7 @@ pub unsafe fn nvim_exec_autocmds(
             error = err_conflict(c"pattern", c"buf");
             return ().reported(error);
         }
-        buffer = find_buffer_by_handle(buf, &mut error);
-        if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return ().reported(error);
-        }
+        buffer = find_buffer_by_handle(buf)?;
     }
     let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(

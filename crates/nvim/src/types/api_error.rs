@@ -8,11 +8,11 @@
 //!
 //! **The layout is free.** Nothing in `metrics/abi-ledger.jsonl` names
 //! `Error`, no unit spec constructs or reads one, and the RPC codec
-//! serialises the *message text*, never the struct. The one place the type
-//! crosses a language boundary is the `Error *` parameter of
-//! [`ApiDispatchWrapper`](super::ApiDispatchWrapper), which is a pointer the
-//! other side only ever passes back. So there is no `#[repr(C)]` here and
-//! `tools/ffigen` emits the name as an opaque forward declaration.
+//! serialises the *message text*, never the struct. Nothing crosses a
+//! language boundary carrying one: the msgpack-RPC wrapper
+//! ([`ApiDispatchFn`](super::ApiDispatchFn)) answers a `Result`, which is
+//! why `tools/ffigen` leaves that whole signature opaque. So there is no
+//! `#[repr(C)]` here either.
 //!
 //! # The message's bytes
 //!
@@ -126,6 +126,16 @@ impl Error {
     /// has to free anything.
     pub(crate) fn clear(&mut self) {
         *self = Self::none();
+    }
+
+    /// Replace whatever this slot holds with `r`'s failure, if it failed.
+    ///
+    /// What a caller that still lends a slot around does with a `Result` it
+    /// cannot return: exactly the overwrite an out-parameter used to be.
+    pub(crate) fn absorb(&mut self, r: Result<(), Self>) {
+        if let Err(e) = r {
+            *self = e;
+        }
     }
 
     /// Move the failure out of a slot, leaving it unset. `None` when the slot

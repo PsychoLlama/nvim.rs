@@ -146,7 +146,13 @@ unsafe fn decor_provider_invoke(
     let no_arena = ptr::null_mut();
     // SAFETY: the caller's callback and name; `nlua_call_ref` owns `args`
     // from here, and `err` is this frame's own.
-    let ret = unsafe { nlua_call_ref(callback, name, args, mode, no_arena, &mut err) };
+    let ret = match unsafe { nlua_call_ref(callback, name, args, mode, no_arena) } {
+        Ok(value) => value,
+        Err(e) => {
+            err = e;
+            Object::Nil
+        }
+    };
     drop(locked);
 
     if !err.is_set() {

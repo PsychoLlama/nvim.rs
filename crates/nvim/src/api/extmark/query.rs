@@ -139,8 +139,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = Error::none();
     let rv: Array = ARRAY_DICT_INIT;
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(rv);
     };
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
@@ -181,8 +181,8 @@ pub unsafe fn nvim_buf_get_extmarks(
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(rv);
     };
     if !(ns_id == -1 as Integer || ns_initialized(ns_id as uint32_t) as ::core::ffi::c_int != 0) {
         error = err_bad_number(c"ns_id", ns_id);
@@ -377,9 +377,8 @@ pub fn nvim__buf_debug_extmarks(
     keys: Boolean,
     dot: Boolean,
 ) -> Result<String_0, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return String_0::NULL.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(String_0::NULL);
     };
-    unsafe { mt_inspect(&mut (*b.raw()).b_marktree, keys, dot) }.reported(error)
+    Ok(unsafe { mt_inspect(&mut (*b.raw()).b_marktree, keys, dot) })
 }

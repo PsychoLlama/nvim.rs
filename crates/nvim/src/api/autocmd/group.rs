@@ -63,7 +63,6 @@ pub unsafe fn nvim_create_augroup(
 }
 
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
-    let mut error = Error::none();
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
         private_msg_list: ::core::ptr::null_mut::<MsgList>(),
@@ -80,8 +79,8 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
         augroup_name(number_as_int(id))
     };
     unsafe { augroup_del(name, false) };
-    unsafe { try_leave(&raw mut tstate, &mut error) };
-    ().reported(error)
+    unsafe { try_leave(&raw mut tstate) }?;
+    Ok(())
 }
 
 /// # Safety
@@ -89,7 +88,6 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
         private_msg_list: ::core::ptr::null_mut::<MsgList>(),
@@ -101,8 +99,8 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     };
     unsafe { try_enter(&raw mut tstate) };
     unsafe { augroup_del(name.data(), false) };
-    unsafe { try_leave(&raw mut tstate, &mut error) };
-    ().reported(error)
+    unsafe { try_leave(&raw mut tstate) }?;
+    Ok(())
 }
 
 /// # Safety

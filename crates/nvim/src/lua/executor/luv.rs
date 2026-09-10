@@ -40,7 +40,7 @@ use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
 use crate::runtime::runtime_get_named_thread;
 use crate::startup::{main_loop, preserve_exit};
-use crate::types::{Arena, Array, Error, Event, lua_CFunction, lua_State, size_t};
+use crate::types::{Arena, Array, Event, lua_CFunction, lua_State, size_t};
 use ::libc::{fprintf, pthread_exit};
 
 /// `lua_pcall`'s "out of memory" status, the one failure that is not a
@@ -224,15 +224,15 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
         let all = lua_toboolean(lstate, -1) != 0;
         lua_pop(lstate, 1);
 
-        let mut err = Error::none();
-        let pat: Array = nlua_pop_array(lstate, ptr::null_mut::<Arena>(), &mut err);
-        if err.is_set() {
-            luaL_where(lstate, 1);
-            lua_pushstring(lstate, err.message_or_empty().as_ptr());
-            err.clear();
-            lua_concat(lstate, 2);
-            return lua_error(lstate);
-        }
+        let pat: Array = match nlua_pop_array(lstate, ptr::null_mut::<Arena>()) {
+            Ok(pat) => pat,
+            Err(e) => {
+                luaL_where(lstate, 1);
+                lua_pushstring(lstate, e.message_or_empty().as_ptr());
+                lua_concat(lstate, 2);
+                return lua_error(lstate);
+            }
+        };
 
         let ret = runtime_get_named_thread(is_lua, pat, all);
         nlua_push_array(lstate, ret, kNluaPushSpecial as c_int);

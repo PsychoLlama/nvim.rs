@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    Reported, api_try, array_add, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
+    api_try, array_add, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
@@ -45,12 +45,11 @@ pub fn nvim_get_current_buf() -> BufferHandle {
 
 /// Make `buf` the current buffer, as `:buffer` does.
 pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut err) else {
-        return ().reported(err);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     let handle = b.handle;
-    api_try(&mut err, |_| {
+    api_try(|| {
         let _ = do_buffer(
             DOBUF_GOTO as ::core::ffi::c_int,
             DOBUF_FIRST as ::core::ffi::c_int,
@@ -58,8 +57,8 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
             handle,
             0 as ::core::ffi::c_int,
         );
-    });
-    ().reported(err)
+    })?;
+    Ok(())
 }
 
 /// Every window of the current tab page, in layout order.
@@ -83,29 +82,27 @@ pub fn nvim_get_current_win() -> WindowHandle {
 
 /// Make `win` the current window, entering its tab page if need be.
 pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
-    api_try(&mut err, |_| {
+    api_try(|| {
         if w.w_buffer != Buf::current_raw() {
             reset_visual_and_resel();
         }
         let tab = win_find_tabpage(w.id()).expect("a live window is on a tab page");
         goto_tabpage_win(tab, w);
-    });
-    ().reported(err)
+    })?;
+    Ok(())
 }
 
 /// A new empty buffer: `listed` for one `:ls` shows, `scratch` for one with
 /// `'buftype'` `nofile`, `'bufhidden'` `hide` and no swap file.
 pub fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle, Error> {
-    let mut err = Error::none();
-    let ret = api_try(&mut err, |_| create_buf(listed, scratch));
-    if ret == 0 && !err.is_set() {
-        err = Error::exception(c"Failed to create buffer");
+    let ret = api_try(|| create_buf(listed, scratch))?;
+    if ret == 0 {
+        return Err(Error::exception(c"Failed to create buffer"));
     }
-    ret.reported(err)
+    Ok(ret)
 }
 
 /// [`nvim_create_buf`]'s body, inside the try/catch bracket.
@@ -196,12 +193,11 @@ pub fn nvim_get_current_tabpage() -> TabpageHandle {
 
 /// Make `tabpage` the current one, as `:tabnext` does.
 pub fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(tp) = find_tab_by_handle(tabpage, &mut err) else {
-        return ().reported(err);
+    let Some(tp) = find_tab_by_handle(tabpage)? else {
+        return Ok(());
     };
-    api_try(&mut err, |_| {
+    api_try(|| {
         goto_tabpage_tp(tp, true, true);
-    });
-    ().reported(err)
+    })?;
+    Ok(())
 }

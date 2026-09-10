@@ -67,7 +67,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
     let mut rv = Object::Nil;
     let _nesting = enter_recursive(&recursive);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    let ok = api_try(&mut error, |_| {
+    let ok = api_try(|| {
         let no_eap = ptr::null_mut::<ExArg>();
         let ea = &raw mut evalarg;
         // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
@@ -145,7 +145,7 @@ unsafe fn call_function_with(
         let _ = unsafe { call_func(name, name_len, &mut rettv, argv, fe) };
         // SAFETY: `tstate` is what the `try_enter` above filled in, and
         // `err` is the caller's slot.
-        unsafe { try_leave(&raw mut tstate, err) };
+        err.absorb(unsafe { try_leave(&raw mut tstate) });
         if err.kind() == kErrorTypeNone {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
             rv = unsafe { vim_to_object(&*ret, arena, false) };
@@ -204,7 +204,7 @@ pub unsafe fn nvim_call_dict_function(
         // SAFETY: `evalarg` is this frame's.
         unsafe { clear_evalarg(ea, no_eap) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.
-        unsafe { try_leave(&raw mut tstate, &mut error) };
+        error.absorb(unsafe { try_leave(&raw mut tstate) });
         if error.is_set() {
             return Object::Nil.reported(error);
         }

@@ -261,15 +261,14 @@ pub unsafe fn typval_exec_lua_callable(
 /// Run a chunk with api values as its arguments and its answer as one.
 ///
 /// # Safety
-/// `str` must be a live api string and `err` the caller's error slot.
+/// `str` must be a live api string.
 pub unsafe fn nlua_exec(
     str: String_0,
     chunkname: *const c_char,
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     unsafe {
         let lstate = get_global_lstate();
         let top = lua_gettop(lstate);
@@ -279,30 +278,28 @@ pub unsafe fn nlua_exec(
             c"<nvim>".as_ptr()
         };
         if luaL_loadbuffer(lstate, str.data(), str.len(), name) != 0 {
-            set_lua_error(err, kErrorTypeValidation, lstate);
-            return Object::Nil;
+            return Err(lua_error_of(kErrorTypeValidation, lstate));
         }
         for i in 0..args.size {
             nlua_push_object(lstate, args.items.add(i), 0);
         }
         if nlua_pcall(lstate, args.size as c_int, 1) != 0 {
-            set_lua_error(err, kErrorTypeException, lstate);
-            return Object::Nil;
+            return Err(lua_error_of(kErrorTypeException, lstate));
         }
-        nlua_call_pop_retval(lstate, mode, arena, top, Some(err))
+        nlua_call_pop_retval(lstate, mode, arena, top)
     }
 }
 
-/// Report the Lua error on top of the stack through `err`.
+/// The Lua error on top of the stack.
 ///
 /// # Safety
 /// the error value be on top of the stack.
-unsafe fn set_lua_error(err: &mut Error, type_0: ErrorType, lstate: *mut lua_State) {
+unsafe fn lua_error_of(type_0: ErrorType, lstate: *mut lua_State) -> Error {
     unsafe {
         let mut len: size_t = 0;
         let errstr = lua_tolstring(lstate, -1, &raw mut len);
         let text = c_str_len(errstr, len);
-        *err = Error::new(type_0, format_args!("Lua: {text}"));
+        Error::new(type_0, format_args!("Lua: {text}"))
     }
 }
 
@@ -316,9 +313,8 @@ pub unsafe fn nlua_call_ref(
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, Some(err)) }
+) -> Result<Object, Error> {
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, true) }
 }
 
 /// [`nlua_call_ref`] for a caller with nowhere to report to: a failing
@@ -333,7 +329,9 @@ pub unsafe fn nlua_call_ref_quiet(
     mode: LuaRetMode,
     arena: *mut Arena,
 ) -> Object {
-    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, None) }
+    // SAFETY: the caller's.
+    unsafe { nlua_call_ref_ctx(false, ref_0, name, args, mode, arena, false) }
+        .unwrap_or(Object::Nil)
 }
 
 /// How many results `mode` wants off the call.
@@ -357,8 +355,8 @@ pub unsafe fn nlua_call_ref_ctx(
     args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
-    err: Option<&mut Error>,
-) -> Object {
+    reports: bool,
+) -> Result<Object, Error> {
     unsafe {
         let lstate = get_global_lstate();
         let top = lua_gettop(lstate);
@@ -372,23 +370,22 @@ pub unsafe fn nlua_call_ref_ctx(
             nlua_push_object(lstate, args.items.add(i), 0);
         }
 
-        let mut err = err;
         if fast {
             if nlua_fast_cfpcall(lstate, nargs, mode_ret(mode), -1) < 0 {
-                if let Some(err) = err.as_deref_mut() {
-                    *err = Error::exception(c"fast context failure");
+                if !reports {
+                    return Ok(Object::Nil);
                 }
-                return Object::Nil;
+                return Err(Error::exception(c"fast context failure"));
             }
         } else if nlua_pcall(lstate, nargs, mode_ret(mode)) != 0 {
-            match err.as_deref_mut() {
+            if !reports {
                 // Nobody to report to: show it instead.
-                None => nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr()),
-                Some(err) => set_lua_error(err, kErrorTypeException, lstate),
+                nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
+                return Ok(Object::Nil);
             }
-            return Object::Nil;
+            return Err(lua_error_of(kErrorTypeException, lstate));
         }
-        nlua_call_pop_retval(lstate, mode, arena, top, err)
+        nlua_call_pop_retval(lstate, mode, arena, top)
     }
 }
 
@@ -404,27 +401,24 @@ unsafe fn nlua_call_pop_retval(
     mode: LuaRetMode,
     arena: *mut Arena,
     pretop: c_int,
-    err: Option<&mut Error>,
-) -> Object {
+) -> Result<Object, Error> {
     unsafe {
         if mode != kRetMulti && lua_type(lstate, -1) == LUA_TNIL {
             lua_pop(lstate, 1);
-            return Object::Nil;
+            return Ok(Object::Nil);
         }
-        let mut dummy = Error::none();
-        let perr: &mut Error = err.unwrap_or(&mut dummy);
         match mode {
             kRetNilBool => {
                 let bool_value = lua_toboolean(lstate, -1) != 0;
                 lua_pop(lstate, 1);
-                Object::boolean(bool_value)
+                Ok(Object::boolean(bool_value))
             }
             kRetLuaref => {
                 let ref_0 = nlua_ref_global(lstate, -1);
                 lua_pop(lstate, 1);
-                Object::luaref(ref_0)
+                Ok(Object::luaref(ref_0))
             }
-            kRetObject => nlua_pop_object(lstate, false, arena, perr),
+            kRetObject => nlua_pop_object(lstate, false, arena),
             kRetMulti => {
                 // The results come off the stack top-down, so they are stored
                 // back-to-front.
@@ -432,13 +426,10 @@ unsafe fn nlua_call_pop_retval(
                 let mut res: Array = arena_array(arena, nres as size_t);
                 for i in 0..nres {
                     *res.items.offset((nres - i - 1) as isize) =
-                        nlua_pop_object(lstate, false, arena, perr);
-                    if (*perr).is_set() {
-                        return Object::Nil;
-                    }
+                        nlua_pop_object(lstate, false, arena)?;
                 }
                 res.size = nres as size_t;
-                Object::array(res)
+                Ok(Object::array(res))
             }
             _ => unreachable!(),
         }

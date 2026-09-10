@@ -36,7 +36,7 @@ use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag};
+use crate::types::{Arena, Array, ExArg, OptInt, ShmFlag};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
@@ -309,7 +309,6 @@ pub(crate) unsafe fn list_lua_version() {
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
     // `String_0`; `nlua_exec` only reads it.
-    let mut err = Error::none();
     let no_args = Array {
         size: 0,
         capacity: 0,
@@ -317,8 +316,8 @@ pub(crate) unsafe fn list_lua_version() {
     };
     let (chunk, name) = (static_cstring(CODE), ptr::null());
     let arena = ptr::null_mut::<Arena>();
-    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena, &mut err) };
-    debug_assert!(!err.is_set(), "a literal chunk cannot fail");
+    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena) }
+        .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(unsafe { cstr::at(version.data()) });
     unsafe { api_free_object(ret) };

@@ -86,17 +86,16 @@ pub unsafe fn nvim_set_hl(
 /// `opts` must point at the `KeyDict_get_ns` the dispatcher filled in, live
 /// for the call.
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
-    let mut error = Error::none();
     if has_key(
         unsafe { (*opts).is_set__get_ns_ },
         KEYSET_OPTIDX_get_ns__winid,
     ) {
-        let Some(win) = find_window_by_handle(unsafe { (*opts).winid }, &mut error) else {
-            return (0 as Integer).reported(error);
+        let Some(win) = find_window_by_handle(unsafe { (*opts).winid })? else {
+            return Ok(0 as Integer);
         };
-        (win.w_ns_hl as Integer).reported(error)
+        Ok(win.w_ns_hl as Integer)
     } else {
-        (ns_hl_global.get() as Integer).reported(error)
+        Ok(ns_hl_global.get() as Integer)
     }
 }
 

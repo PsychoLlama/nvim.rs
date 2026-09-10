@@ -169,7 +169,13 @@ pub(crate) unsafe fn remote_request(
     let script =
         String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
     let no_arena = ptr::null_mut::<Arena>();
-    let reply = unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena, &mut err) };
+    let reply = match unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena) } {
+        Ok(value) => value,
+        Err(e) => {
+            err = e;
+            Object::Nil
+        }
+    };
 
     unsafe { xfree(args.items as *mut c_void) };
 

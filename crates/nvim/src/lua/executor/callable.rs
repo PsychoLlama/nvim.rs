@@ -38,7 +38,6 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 use crate::strings::{arena_printf, vim_snprintf};
-use crate::types::Error;
 use crate::types::builders::static_cstring;
 use crate::types::{Arena, Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
 
@@ -229,17 +228,14 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
             items: args_items.as_mut_ptr(),
         };
 
-        let mut err = Error::none();
         let result = nlua_exec(
             static_cstring(c"return type(loadstring(...)()) == 'function'"),
             ptr::null::<c_char>(),
             args,
             kRetNilBool,
             ptr::null_mut::<Arena>(),
-            &mut err,
         );
         xfree(str.cast::<c_void>());
-        err.clear();
-        result.as_boolean() == Some(true)
+        result.is_ok_and(|value| value.as_boolean() == Some(true))
     }
 }

@@ -41,9 +41,7 @@ use crate::options::kOptFiletype;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
-use crate::types::{
-    Array, Error, ExArg, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, size_t,
-};
+use crate::types::{Array, ExArg, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
 
@@ -247,7 +245,6 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
 pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut env = env_buf();
-    let mut err = Error::none();
     let mut items: [Object; 2] = unsafe { core::mem::zeroed() };
     let mut argv = Array {
         size: 0,
@@ -280,19 +277,18 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     }
     argv.size = 2;
 
-    unsafe {
+    let ran = unsafe {
         nlua_exec(
             lua_chunk(c"vim.health._check(...)"),
             ptr::null(),
             argv,
             kRetNilBool,
             ptr::null_mut(),
-            &mut err,
         )
     };
-    if !err.is_set() {
+    let Err(err) = ran else {
         return;
-    }
+    };
 
     // The check failed to load at all, which almost always means the
     // runtime files are not where the editor thinks.
@@ -309,10 +305,9 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     } else {
         emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
     }
-    // SAFETY: the API error's own NUL-terminated message.
+    // SAFETY: the refusal's own NUL-terminated message.
     let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
     semsg_multiline!(c"emsg", "{msg}");
-    err.clear();
 }
 
 /// A `'static` Lua source string as the API's counted string.

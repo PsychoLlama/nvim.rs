@@ -53,29 +53,25 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
         let handle: Handle = number_as_int(luaL_checkinteger(lstate, 2) as i64);
-        let mut err = Error::none();
-        let dict = match scope.to_bytes() {
+        // A handle that names nothing answers a null dictionary, which is
+        // what the caller reports on; why it did not resolve is not read.
+        match scope.to_bytes() {
             b"g" => get_globvar_dict(),
             b"v" => get_vimvar_dict(),
-            b"b" => find_buffer_by_handle(handle as BufferHandle, &mut err)
+            b"b" => find_buffer_by_handle(handle as BufferHandle)
+                .unwrap_or_default()
                 .map_or(ptr::null_mut(), |buf| buf.b_vars),
-            b"w" => find_window_by_handle(handle as WindowHandle, &mut err)
+            b"w" => find_window_by_handle(handle as WindowHandle)
+                .unwrap_or_default()
                 .map_or(ptr::null_mut(), |win| win.w_vars),
-            b"t" => find_tab_by_handle(handle as TabpageHandle, &mut err)
+            b"t" => find_tab_by_handle(handle as TabpageHandle)
+                .unwrap_or_default()
                 .map_or(ptr::null_mut(), |tabpage| tabpage.tp_vars),
             _ => {
                 luaL_error(lstate, c"invalid scope".as_ptr());
-                return ptr::null_mut();
+                ptr::null_mut()
             }
-        };
-        if err.is_set() {
-            let why = err.message_or_empty().as_ptr();
-            nlua_push_errstr(lstate, c"scoped variable: %s".as_ptr(), why);
-            err.clear();
-            lua_error(lstate);
-            return ptr::null_mut();
         }
-        dict
     }
 }
 

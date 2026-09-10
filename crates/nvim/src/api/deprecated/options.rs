@@ -48,10 +48,8 @@ pub unsafe fn nvim_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     // SAFETY: the global scope names no object, so `NULL` is what it takes.
-    unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value, &mut error) };
-    ().reported(error)
+    unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value) }
 }
 
 /// # Safety
@@ -59,9 +57,8 @@ pub unsafe fn nvim_set_option(
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
-    let mut error = Error::none();
     // SAFETY: as `nvim_set_option`.
-    unsafe { get_option_from(NULL, kOptScopeGlobal, name, &mut error) }.reported(error)
+    unsafe { get_option_from(NULL, kOptScopeGlobal, name) }
 }
 
 /// # Safety
@@ -69,14 +66,13 @@ pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
-    let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(Object::Nil);
     };
     let from = buf.raw().cast::<c_void>();
     // SAFETY: `from` is that live buffer, which is what `kOptScopeBuf` says
-    // it is; `error` is this frame's slot.
-    unsafe { get_option_from(from, kOptScopeBuf, name, &mut error) }.reported(error)
+    // it is.
+    unsafe { get_option_from(from, kOptScopeBuf, name) }
 }
 
 /// # Safety
@@ -90,14 +86,12 @@ pub unsafe fn nvim_buf_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return ().reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(());
     };
     let to = buf.raw().cast::<c_void>();
     // SAFETY: as `nvim_buf_get_option`.
-    unsafe { set_option_to(channel_id, to, kOptScopeBuf, name, value, &mut error) };
-    ().reported(error)
+    unsafe { set_option_to(channel_id, to, kOptScopeBuf, name, value) }
 }
 
 /// # Safety
@@ -105,14 +99,13 @@ pub unsafe fn nvim_buf_set_option(
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
-    let mut error = Error::none();
-    let Some(win) = find_window_by_handle(window, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(win) = find_window_by_handle(window)? else {
+        return Ok(Object::Nil);
     };
     let from = win.raw().cast::<c_void>();
     // SAFETY: `from` is that live window, which is what `kOptScopeWin` says
-    // it is; `error` is this frame's slot.
-    unsafe { get_option_from(from, kOptScopeWin, name, &mut error) }.reported(error)
+    // it is.
+    unsafe { get_option_from(from, kOptScopeWin, name) }
 }
 
 /// # Safety
@@ -126,37 +119,33 @@ pub unsafe fn nvim_win_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let Some(win) = find_window_by_handle(window, &mut error) else {
-        return ().reported(error);
+    let Some(win) = find_window_by_handle(window)? else {
+        return Ok(());
     };
     let to = win.raw().cast::<c_void>();
     // SAFETY: as `nvim_win_get_option`.
-    unsafe { set_option_to(channel_id, to, kOptScopeWin, name, value, &mut error) };
-    ().reported(error)
+    unsafe { set_option_to(channel_id, to, kOptScopeWin, name, value) }
 }
 
 /// The option `name` names, as its C string and its index, or `None` after
-/// reporting through `err` why it is not the name of one.
+/// answering why it is not the name of one.
 ///
 /// # Safety
 /// `name` must name its own bytes.
-unsafe fn resolve_option(name: String_0, err: &mut Error) -> Option<(*const c_char, OptIndex)> {
+unsafe fn resolve_option(name: String_0) -> Result<(*const c_char, OptIndex), Error> {
     if name.is_empty() {
         let empty = c"<empty>".as_ptr();
         // SAFETY: the names and values are NUL-terminated strings.
-        *err = err_bad_value(c"option name", unsafe { cstr::at(empty) });
-        return None;
+        return Err(err_bad_value(c"option name", unsafe { cstr::at(empty) }));
     }
     let opt_name = name.data();
     // SAFETY: an API string is NUL-terminated.
     let opt_idx: OptIndex = find_option(unsafe { CStr::from_ptr(opt_name) });
     if opt_idx == kOptInvalid as OptIndex {
         // SAFETY: the names and values are NUL-terminated strings.
-        *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
-        return None;
+        return Err(err_bad_value(c"option name", unsafe { cstr::at(opt_name) }));
     }
-    Some((opt_name, opt_idx))
+    Ok((opt_name, opt_idx))
 }
 
 /// The value of `name` in `scope`, read out of `from`.
@@ -167,12 +156,9 @@ unsafe fn get_option_from(
     from: *mut c_void,
     scope: OptScope,
     name: String_0,
-    err: &mut Error,
-) -> Object {
-    // SAFETY: the caller's promise about `err`.
-    let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {
-        return Object::Nil;
-    };
+) -> Result<Object, Error> {
+    // SAFETY: `name` names its own bytes.
+    let (opt_name, opt_idx) = unsafe { resolve_option(name) }?;
     let mut value: OptVal = OptVal::Nil;
     if option_has_scope(opt_idx, scope) {
         let flags = if scope == kOptScopeGlobal {
@@ -180,20 +166,16 @@ unsafe fn get_option_from(
         } else {
             OptionSetFlags::LOCAL
         };
-        // SAFETY: the caller's promise about `from` and `err`.
-        value = unsafe { get_option_value_for(opt_idx, flags, scope, from, err) };
-        if err.kind() != kErrorTypeNone {
-            return Object::Nil;
-        }
+        // SAFETY: the caller's promise about `from`.
+        value = unsafe { get_option_value_for(opt_idx, flags, scope, from) }?;
     }
     // An option the scope does not have reads as the unset value, which is
     // the same answer as a name that is not an option's at all.
     if value.is_nil() {
         // SAFETY: the names and values are NUL-terminated strings.
-        *err = err_bad_value(c"option name", unsafe { cstr::at(opt_name) });
-        return Object::Nil;
+        return Err(err_bad_value(c"option name", unsafe { cstr::at(opt_name) }));
     }
-    optval_as_object(value)
+    Ok(optval_as_object(value))
 }
 
 /// Set `name` in `scope` to `value`, on `to`.
@@ -206,17 +188,13 @@ unsafe fn set_option_to(
     scope: OptScope,
     name: String_0,
     value: Object,
-    err: &mut Error,
-) {
-    // SAFETY: the caller's promise about `err`.
-    let Some((opt_name, opt_idx)) = (unsafe { resolve_option(name, err) }) else {
-        return;
-    };
+) -> Result<(), Error> {
+    // SAFETY: `name` names its own bytes.
+    let (opt_name, opt_idx) = unsafe { resolve_option(name) }?;
     let Some(optval) = object_as_optval(value) else {
         let want = c"valid option type";
         let got = api_typename(value.kind());
-        *err = err_expected(c"value", want, Some(got));
-        return;
+        return Err(err_expected(c"value", want, Some(got)));
     };
     // A window-local option with no global half is set locally without the
     // "and globally" that `LOCAL` would otherwise imply.
@@ -229,6 +207,6 @@ unsafe fn set_option_to(
             OptionSetFlags::LOCAL
         };
     let _sctx = api_set_sctx(channel_id);
-    // SAFETY: the caller's promise about `to` and `err`.
-    unsafe { set_option_value_for(opt_name, opt_idx, optval, opt_flags, scope, to, err) };
+    // SAFETY: the caller's promise about `to`.
+    unsafe { set_option_value_for(opt_name, opt_idx, optval, opt_flags, scope, to) }
 }

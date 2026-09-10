@@ -17,11 +17,10 @@ use crate::marktree::key::MtFlags;
 use crate::winlayer::Buf;
 
 pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
-    let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return (0 as Integer).reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(0 as Integer);
     };
-    (buf.handle as Integer).reported(error)
+    Ok(buf.handle as Integer)
 }
 
 /// The namespace `src_id` names, allocating one for the 0 every pre-namespace
@@ -97,8 +96,8 @@ pub unsafe fn nvim_buf_add_highlight(
     mut col_end: Integer,
 ) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return (0 as Integer).reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(0 as Integer);
     };
     let out_of_range = c"out of range".as_ptr();
     if line < 0 as Integer || line >= MAXLNUM as Integer {
@@ -162,8 +161,8 @@ pub unsafe fn nvim_buf_set_virtual_text(
     _opts: *mut KeyDict_empty,
 ) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return (0 as Integer).reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(0 as Integer);
     };
     if line < 0 as Integer || line >= MAXLNUM as Integer {
         error = Error::validation(c"Line number outside range");

@@ -163,8 +163,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
             // refuses it -- the transpile read its bytes as an integer.
             let item = unsafe { *(*opts).wins.items.add(i) };
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let Some(wp) = find_window_by_handle(win as WindowHandle, &mut error) else {
-                return ().reported(error);
+            let Some(wp) = find_window_by_handle(win as WindowHandle)? else {
+                return Ok(());
             };
             windows.insert(wp.raw());
             i = i.wrapping_add(1);

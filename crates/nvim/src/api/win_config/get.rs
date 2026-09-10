@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, find_window_by_handle, set_key};
+use crate::api::private::helpers::{array_add, find_window_by_handle, set_key};
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -137,10 +137,9 @@ pub unsafe fn nvim_win_get_config(
     win: WindowHandle,
     arena: *mut Arena,
 ) -> Result<KeyDict_win_config, Error> {
-    let mut error = Error::none();
     let mut rv: KeyDict_win_config = KEYDICT_INIT;
-    let Some(wp) = find_window_by_handle(win, &mut error) else {
-        return rv.reported(error);
+    let Some(wp) = find_window_by_handle(win)? else {
+        return Ok(rv);
     };
     // SAFETY: `wp` names a live window, so its own config field is live with
     // it. The address comes off the raw pointer rather than off a `Deref`,
@@ -225,5 +224,5 @@ pub unsafe fn nvim_win_get_config(
         set(&mut rv, KEYSET_OPTIDX_win_config___cmdline_offset);
         rv._cmdline_offset = Integer::from(config._cmdline_offset);
     }
-    rv.reported(error)
+    Ok(rv)
 }

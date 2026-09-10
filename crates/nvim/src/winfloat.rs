@@ -81,7 +81,6 @@ const NO_VIRT_TEXT: VirtText = VirtText {
     capacity: 0,
     items: ptr::null_mut(),
 };
-const NO_ERROR: Error = Error::none();
 
 /// `WIN_CONFIG_INIT`, the config a float starts from before the caller sets
 /// the fields it cares about. (`popupmenu/draw.rs` keeps its own copy of the
@@ -276,21 +275,18 @@ fn close_window(win: Win) -> c_int {
 fn enter_window(win: Win) {
     win_enter(win, false);
 }
-fn set_window_buf(win: Win, buffer: Buf, err: &mut Error) {
-    win_set_buf(win, buffer, err);
+fn set_window_buf(win: Win, buffer: Buf) -> Result<(), Error> {
+    win_set_buf(win, buffer)
 }
-fn set_error(err: &mut Error, msg: &'static CStr) {
-    *err = Error::from_message(kErrorTypeException, msg);
+fn make_error(msg: &'static CStr) -> Error {
+    Error::from_message(kErrorTypeException, msg)
 }
 
-/// Set `err` from a message that is not a literal, as upstream's `"%s"` does.
-fn set_error_str(err: &mut Error, s: *const c_char) {
+/// An error from a message that is not a literal, as upstream's `"%s"` does.
+fn make_error_str(s: *const c_char) -> Error {
     // SAFETY: the message the caller handed over, live for this call.
     let s = unsafe { cstr::at(s) };
-    *err = Error::from_message(kErrorTypeException, s);
-}
-fn clear_error(err: &mut Error) {
-    err.clear();
+    Error::from_message(kErrorTypeException, s)
 }
 fn report_error(err: &Error) {
     // SAFETY: a set error's message is a string the API allocated.
@@ -318,14 +314,8 @@ fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     unsafe { textpos2screenpos(win, pos, r, s, c, e, true) };
     (row, scol)
 }
-fn create_scratch_buffer(err: &mut Error) -> BufferHandle {
-    match nvim_create_buf(false, true) {
-        Ok(buf) => buf,
-        Err(e) => {
-            *err = e;
-            0
-        }
-    }
+fn create_scratch_buffer() -> Result<BufferHandle, Error> {
+    nvim_create_buf(false, true)
 }
 fn set_bufhidden_wipe(buffer: Buf) {
     let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
@@ -342,13 +332,16 @@ fn set_bufhidden_wipe(buffer: Buf) {
 /// `win` is `None` to allocate a new window. `last` makes it the last window
 /// in the list, which only the autocommand window asks for. `fconfig` must
 /// already have been validated.
-fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig, err: &mut Error) -> Option<Win> {
+fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig) -> Result<Option<Win>, Error> {
     let mut win = match win {
-        None => alloc_new_float(last, &fconfig, err)?,
+        None => match alloc_new_float(last, &fconfig)? {
+            Some(win) => win,
+            None => return Ok(None),
+        },
         Some(win) => {
             debug_assert!(!last, "!last");
             debug_assert!(!win.w_floating, "!wp->w_floating");
-            unfloat_to_float(win, err)?
+            unfloat_to_float(win)?
         }
     };
     win.w_floating = true;
@@ -363,12 +356,12 @@ fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig, err: &mut Error) 
 
     win_config_float(win, fconfig);
     win.redraw_later(UPD_VALID);
-    Some(win)
+    Ok(Some(win))
 }
 
 /// The `wp == NULL` arm of `win_new_float`: allocate a window at the end of
 /// the right tab page's list and make it float-shaped.
-fn alloc_new_float(last: bool, fconfig: &WinConfig, err: &mut Error) -> Option<Win> {
+fn alloc_new_float(last: bool, fconfig: &WinConfig) -> Result<Option<Win>, Error> {
     let mut tp_last = if last {
         last_window().expect("the editor always has a window")
     } else {
@@ -376,8 +369,13 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig, err: &mut Error) -> Option<W
     };
     if fconfig.window != 0 {
         debug_assert!(!last, "!last");
-        let parent = find_window_by_handle(fconfig.window, err)?;
-        tp_last = last_nofloat(tabpage_of(parent)?.into_other());
+        let Some(parent) = find_window_by_handle(fconfig.window)? else {
+            return Ok(None);
+        };
+        let Some(parent_tp) = tabpage_of(parent) else {
+            return Ok(None);
+        };
+        tp_last = last_nofloat(parent_tp.into_other());
     }
     let mut win = alloc_window(tp_last);
     init_window(win);
@@ -391,22 +389,21 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig, err: &mut Error) -> Option<W
     if !win.w_onebuf_opt.wo_stl.is_null() {
         clear_opt(&mut win.w_onebuf_opt.wo_stl);
     }
-    Some(win)
+    Ok(Some(win))
 }
 
 /// The `wp != NULL` arm of `win_new_float`: take an existing window out of
 /// the frame tree and re-append it as a float.
-fn unfloat_to_float(win: Win, err: &mut Error) -> Option<Win> {
+fn unfloat_to_float(win: Win) -> Result<Win, Error> {
     let win_tp = tabpage_of(win);
     debug_assert!(win_tp.is_some(), "win_tp");
-    let win_tp = win_tp?;
+    let win_tp = win_tp.expect("a window is always in a tab page");
     let first_in_tab = match win_tp.is_current() {
         true => first_window(),
         false => win_tp.tp_firstwin.and_then(WinId::get),
     };
     if first_in_tab == Some(win) && last_nofloat(win_tp.into_other()) == win {
-        set_error(err, c"Cannot change last window into float");
-        return None;
+        return Err(make_error(c"Cannot change last window into float"));
     } else if cmdwin_win.get().is_some() && !cmdwin_is_float() {
         // The command-line window can't become the only non-float. Check for
         // others.
@@ -421,8 +418,7 @@ fn unfloat_to_float(win: Win, err: &mut Error) -> Option<Win> {
             }
         }
         if !other_nonfloat {
-            set_error_str(err, e_cmdwin.as_ptr());
-            return None;
+            return Err(make_error_str(e_cmdwin.as_ptr()));
         }
     }
     let tp = win_tp.into_other();
@@ -435,7 +431,7 @@ fn unfloat_to_float(win: Win, err: &mut Error) -> Option<Win> {
         recompute_positions(); // recompute window positions
     }
     append_window(last_nofloat(tp), win, tp);
-    Some(win)
+    Ok(win)
 }
 
 /// Whether the command-line window is itself a float.
@@ -452,9 +448,8 @@ pub(crate) fn win_new_float(
     window: Option<Win>,
     last: bool,
     fconfig: WinConfig,
-    err: &mut Error,
-) -> Option<Win> {
-    new_float(window, last, fconfig, err)
+) -> Result<Option<Win>, Error> {
+    new_float(window, last, fconfig)
 }
 
 // ---------------------------------------------------------------------------
@@ -619,13 +614,13 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 
 /// Where a `relative='win'` float's config puts it on its parent's grid, with
 /// `bufpos` resolved to a screen position when it is set. A parent that has
-/// gone away leaves the config's own row and column, which is why the error
-/// the lookup sets is thrown away.
+/// gone away leaves the config's own row and column, which is why the
+/// lookup's refusal is thrown away.
 fn anchored_position(win: Win) -> (c_int, c_int) {
     let mut row = win.w_config.row as c_int;
     let mut col = win.w_config.col as c_int;
-    let mut dummy = NO_ERROR;
-    if let Some(parent) = find_window_by_handle(win.w_config.window, &mut dummy) {
+    let parent = find_window_by_handle(win.w_config.window).unwrap_or_default();
+    if let Some(parent) = parent {
         let mut parent = parent;
         row += parent.w_winrow;
         col += parent.w_wincol;
@@ -645,7 +640,6 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
             col += tcol - 1;
         }
     }
-    clear_error(&mut dummy);
     (row, col)
 }
 
@@ -777,12 +771,11 @@ pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Optio
 // ---------------------------------------------------------------------------
 // The preview float
 
-/// Report and clear `err`, release a half-built float and let autocommands run
-/// again: `win_float_create_preview`'s one failure path.
-fn handle_error_and_cleanup(win: Option<Win>, err: &mut Error) -> Option<Win> {
-    if err.is_set() {
-        report_error(err);
-        clear_error(err);
+/// Report `err`, release a half-built float and let autocommands run again:
+/// `win_float_create_preview`'s one failure path.
+fn handle_error_and_cleanup(win: Option<Win>, err: Option<Error>) -> Option<Win> {
+    if let Some(err) = err {
+        report_error(&err);
     }
     if let Some(win) = win {
         remove_window(win, None);
@@ -806,26 +799,29 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
     config.noautocmd = true;
     config.hide = true;
     config.style = kWinStyleMinimal;
-    let mut err = NO_ERROR;
-
     suppress_autocmds();
-    let Some(mut win) = new_float(None, false, config, &mut err) else {
-        return handle_error_and_cleanup(None, &mut err);
+    let mut win = match new_float(None, false, config) {
+        Ok(Some(win)) => win,
+        Ok(None) => return handle_error_and_cleanup(None, None),
+        Err(e) => return handle_error_and_cleanup(None, Some(e)),
     };
 
     if new_buf {
-        let b = create_scratch_buffer(&mut err);
-        if b == 0 {
-            return handle_error_and_cleanup(Some(win), &mut err);
-        }
-        let Some(mut buf) = find_buffer_by_handle(b, &mut err) else {
-            return handle_error_and_cleanup(Some(win), &mut err);
+        let b = match create_scratch_buffer() {
+            Ok(b) => b,
+            Err(e) => return handle_error_and_cleanup(Some(win), Some(e)),
+        };
+        let buf = match find_buffer_by_handle(b) {
+            Ok(buf) => buf,
+            Err(e) => return handle_error_and_cleanup(Some(win), Some(e)),
+        };
+        let Some(mut buf) = buf else {
+            return handle_error_and_cleanup(Some(win), None);
         };
         buf.b_p_bl = 0; // unlist
         set_bufhidden_wipe(buf);
-        set_window_buf(win, buf, &mut err);
-        if err.is_set() {
-            return handle_error_and_cleanup(Some(win), &mut err);
+        if let Err(e) = set_window_buf(win, buf) {
+            return handle_error_and_cleanup(Some(win), Some(e));
         }
     }
     resume_autocmds();

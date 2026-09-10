@@ -79,7 +79,7 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut url: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut has_hl: bool = false;
     let mut has_hl_multiple: bool = false;
-    let b = find_buffer_by_handle(buf, &mut error);
+    let b = find_buffer_by_handle(buf)?;
     '_error: {
         if let Some(b) = b {
             if !ns_initialized(ns_id as uint32_t) {

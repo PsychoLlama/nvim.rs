@@ -70,8 +70,8 @@ pub unsafe fn nvim_buf_create_user_command(
     opts: *mut KeyDict_user_command,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(target_buf) = find_buffer_by_handle(buf, &mut error) else {
-        return ().reported(error);
+    let Some(target_buf) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     // The command is added to whichever buffer is current, so the lookup's
     // answer stands in for the caller's for the length of the call.
@@ -92,8 +92,8 @@ pub unsafe fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Re
     let table = if buf == -1 {
         Table::Global
     } else {
-        let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-            return ().reported(error);
+        let Some(b) = find_buffer_by_handle(buf)? else {
+            return Ok(());
         };
         Table::Buffer(b)
     };
@@ -423,9 +423,9 @@ pub unsafe fn nvim_buf_get_commands(
         // SAFETY: `arena` is the caller's.
         return unsafe { commands_array(None, arena) }.reported(error);
     }
-    let b = find_buffer_by_handle(buf, &mut error);
+    let b = find_buffer_by_handle(buf)?;
     let (false, Some(b)) = (builtin, b) else {
-        return ApiDict::EMPTY.reported(error);
+        return Ok(ApiDict::EMPTY);
     };
     // SAFETY: `arena` is the caller's.
     unsafe { commands_array(Some(b), arena) }.reported(error)

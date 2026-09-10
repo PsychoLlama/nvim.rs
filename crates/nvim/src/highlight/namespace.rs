@@ -237,7 +237,13 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         let name = c"hl_def".as_ptr();
         let (args, arena) = (args.array(), ::core::ptr::null_mut());
         // SAFETY: the namespace's own callback reference.
-        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena, &mut err) };
+        let ret = match unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena) } {
+            Ok(value) => value,
+            Err(e) => {
+                err = e;
+                Object::Nil
+            }
+        };
         drop(recursing);
 
         // Anything but a dict means the callback declined; fall back.

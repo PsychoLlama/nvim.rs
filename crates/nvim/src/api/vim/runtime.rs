@@ -27,11 +27,10 @@ pub unsafe fn nvim_exec_lua(
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let name = ::core::ptr::null::<::core::ffi::c_char>();
-    // SAFETY: `code` and `args` are the caller's, `arena` is the caller's
-    // own and `error` is this frame's slot.
-    unsafe { nlua_exec(code, name, args, kRetObject, arena, &mut error) }.reported(error)
+    // SAFETY: `code` and `args` are the caller's, and `arena` is the
+    // caller's own.
+    unsafe { nlua_exec(code, name, args, kRetObject, arena) }
 }
 
 /// # Safety
@@ -91,7 +90,6 @@ pub unsafe fn nvim_get_runtime_file(
     all: Boolean,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
     let mut cookie: RuntimeCookie = RuntimeCookie {
         rv: ArrayBuilder {
             size: 0 as size_t,
@@ -124,14 +122,16 @@ pub unsafe fn nvim_get_runtime_file(
                 *mut ::core::ffi::c_void,
             ) -> bool,
     );
-    api_try(&mut error, |_| {
+    api_try(|| {
         let cookie = (&raw mut cookie).cast::<::core::ffi::c_void>();
         // SAFETY: `pat` is NUL-terminated and `cookie` is this frame's own,
         // live for the whole walk.
         let _ = unsafe { do_in_runtimepath(pat, flags, found, cookie) };
-    });
-    // SAFETY: `arena` is the caller's and `cookie.rv` this frame's own.
-    unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) }.reported(error)
+    })?;
+    Ok(
+        // SAFETY: `arena` is the caller's and `cookie.rv` this frame's own.
+        unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) },
+    )
 }
 
 /// # Safety
@@ -240,10 +240,10 @@ pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
             .copy_from_nonoverlapping(dir.data().cast(), dir.len())
     };
     string[dir.len()] = NUL as ::core::ffi::c_char;
-    api_try(&mut error, |_| {
+    api_try(|| {
         let dir = (&raw mut string).cast::<::core::ffi::c_char>();
         // SAFETY: `dir` is this frame's own NUL-terminated copy.
         unsafe { changedir_func(dir, kCdScopeGlobal) };
-    });
+    })?;
     ().reported(error)
 }

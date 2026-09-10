@@ -232,7 +232,7 @@ unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char 
 ///
 /// `args` must be a well-formed API array, its `size` elements initialized.
 unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, args: Array) {
-    let mut err = Error::none();
+    // A failed lookup caches nil, as it did when the error was dropped.
     let res = unsafe {
         nlua_exec(
             static_cstring(script),
@@ -240,10 +240,9 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
             args,
             kRetObject,
             ptr::null_mut::<Arena>(),
-            &mut err,
         )
-    };
-    err.clear();
+    }
+    .unwrap_or(Object::Nil);
     // `replace` rather than a `get`/`set` pair: the old answer must not
     // be reachable through the cell while it is being freed.
     unsafe { api_free_object(names.replace(res)) };

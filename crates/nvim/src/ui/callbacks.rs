@@ -36,7 +36,7 @@ use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
-use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode};
+use crate::types::{Arena, Array, LuaRef, LuaRetMode};
 use crate::ui::state::ui_event_ns_id;
 use core::ffi::{CStr, c_char};
 
@@ -195,26 +195,28 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         }) else {
             continue;
         };
-        let mut err = Error::none();
         ui_event_ns_id.set(ns_id);
         // SAFETY: `args` is the event's own array, per this call's contract.
         let fast = unsafe { is_fast(name, args) };
         let event = name.as_ptr().cast_mut();
         let no_arena = core::ptr::null_mut::<Arena>();
-        // SAFETY: `name` is a static protocol name, `args` is handed over to
-        // the callee, and `err` is this frame's own.
-        let slot = Some(&mut err);
+        // SAFETY: `name` is a static protocol name and `args` is handed over
+        // to the callee.
         let res =
-            unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, slot) };
+            unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, true) };
         ui_event_ns_id.set(0);
-        if res.as_boolean() == Some(true) {
-            handled = true;
+        match res {
+            Ok(res) => {
+                if res.as_boolean() == Some(true) {
+                    handled = true;
+                }
+            }
+            Err(e) => {
+                // SAFETY: the refusal owns its message.
+                unsafe { report_error(ns_id, name.as_ptr(), e.message_or_empty().as_ptr()) };
+                ui_remove_cb(ns_id, true);
+            }
         }
-        if err.is_set() {
-            unsafe { report_error(ns_id, name.as_ptr(), err.message_or_empty().as_ptr()) };
-            ui_remove_cb(ns_id, true);
-        }
-        err.clear();
     }
 
     handled

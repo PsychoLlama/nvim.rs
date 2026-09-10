@@ -164,14 +164,17 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             };
         }
     } else if has_buf {
-        let b = find_buffer_by_handle(buffer, err);
-        if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-            return Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
-        }
+        let b = match find_buffer_by_handle(buffer) {
+            Ok(b) => b,
+            Err(e) => {
+                *err = e;
+                return Array {
+                    size: 0 as size_t,
+                    capacity: 0 as size_t,
+                    items: ::core::ptr::null_mut::<Object>(),
+                };
+            }
+        };
         // `kv_push`, whose growth step c2rust expanded inline.
         InitVec::new(
             &mut patterns.size,

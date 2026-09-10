@@ -92,8 +92,7 @@ unsafe fn win_config_split(
             parent = Some(Win::current());
             parent_tp = Some(TabPage::current());
         } else if config.win > 0 {
-            // SAFETY: `err` names the caller's error slot.
-            let Some(found) = find_window_by_handle(fconfig.window, slot_mut(err)) else {
+            let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
                 return false;
             };
             parent = Some(found);
@@ -109,14 +108,14 @@ unsafe fn win_config_split(
                 err_msg(err, kErrorTypeException, c"Cannot split a floating window");
                 return false;
             }
-            // SAFETY: `err` is the caller's slot.
+            // SAFETY: the caller's window.
             if win_tp != parent_tp
-                && !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) }
+                && stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none()
             {
                 return false;
             }
         }
-        if !check_split_disallowed_err(win, slot_mut(err)) {
+        if stored(err, check_split_disallowed_err(win)).is_none() {
             return false;
         }
         let to_split_ok;
@@ -245,9 +244,8 @@ unsafe fn win_config_split(
                 // SAFETY: the matching restore of the switch above.
                 unsafe { restore_win(&raw mut switchwin, true) };
             }
-            // SAFETY: `tstate` is what the `try_enter` above filled in, and
-            // `err` is the caller's slot.
-            unsafe { try_leave(&raw mut tstate, slot_mut(err)) };
+            // SAFETY: `tstate` is what the `try_enter` above filled in.
+            stored(err, unsafe { try_leave(&raw mut tstate) });
             if to_split_ok {
                 let mut tp = expect_tab(win_tp);
                 if win_tp != parent_tp && tp.tp_curwin == Some(win_id) {
@@ -307,8 +305,7 @@ unsafe fn win_config_float_tp(
     let mut parent_id = win.id();
     let mut parent_tp = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
-        // SAFETY: `err` names the caller's error slot.
-        let Some(found) = find_window_by_handle(fconfig.window, slot_mut(err)) else {
+        let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
             return false;
         };
         parent_id = found.id();
@@ -318,8 +315,8 @@ unsafe fn win_config_float_tp(
     let mut altwin: Option<Win> = None;
     '_restore_curwin: {
         if win_tp != parent_tp {
-            // SAFETY: the caller's window and error slot.
-            if !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) } {
+            // SAFETY: the caller's window.
+            if stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none() {
                 return false;
             }
             altwin = win_find_altwin(win, expect_tab(win_tp));
@@ -344,7 +341,7 @@ unsafe fn win_config_float_tp(
                 }
                 // SAFETY: as above.
                 if win_tp != parent_tp
-                    && !unsafe { win_can_move_tp(win, expect_tab(win_tp), slot_mut(err)) }
+                    && stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none()
                 {
                     break '_restore_curwin;
                 }
@@ -354,7 +351,10 @@ unsafe fn win_config_float_tp(
         }
         if !win.w_floating {
             let config = (*fconfig).clone();
-            if win_new_float(Some(win), false, config, slot_mut(err)).is_none() {
+            if stored(err, win_new_float(Some(win), false, config))
+                .flatten()
+                .is_none()
+            {
                 break '_restore_curwin;
             }
             // SAFETY: as above.
@@ -402,8 +402,8 @@ pub unsafe fn nvim_win_set_config(
     let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
     // SAFETY: `error` is this frame's slot; the lookup answers a live window or
     // a null.
-    let Some(w) = find_window_by_handle(win, &mut error) else {
-        return ().reported(error);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     // SAFETY: `w` is the live window the lookup answered.
     let live = w;

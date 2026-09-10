@@ -19,7 +19,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::guard::Suppress;
 use crate::kvec::Kvec;
 use crate::message::{emsg_ptr, msg_ptr};
@@ -174,7 +173,6 @@ pub unsafe fn nvim_notify(
     opts: ApiDict,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let mut args = ArrayBuf::<3>::new();
     args.push(Object::string(msg_0));
     args.push(Object::integer(log_level));
@@ -184,5 +182,5 @@ pub unsafe fn nvim_notify(
     // SAFETY: `code` borrows a static, `args` borrows this frame's buffer
     // for the length of the call, and `arena`/`error` are the caller's and
     // this frame's slot.
-    unsafe { nlua_exec(code, no_name, args, kRetObject, arena, &mut error) }.reported(error)
+    unsafe { nlua_exec(code, no_name, args, kRetObject, arena) }
 }

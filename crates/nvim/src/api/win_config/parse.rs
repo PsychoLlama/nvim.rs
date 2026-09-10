@@ -69,6 +69,19 @@ pub(crate) fn store(err: ErrSlot, e: Error) {
     unsafe { *err.raw() = e };
 }
 
+/// A helper's `Result` as a value, storing its refusal in the caller's slot.
+/// The bridge between this module's slot-passing shape and the `Result` every
+/// helper outside it answers with.
+pub(crate) fn stored<T>(err: ErrSlot, r: Result<T, Error>) -> Option<T> {
+    match r {
+        Ok(v) => Some(v),
+        Err(e) => {
+            store(err, e);
+            None
+        }
+    }
+}
+
 /// "Invalid `name`: '`val`'", naming the keyset string that was wrong.
 ///
 /// # Safety
@@ -536,10 +549,7 @@ pub(crate) unsafe fn parse_win_config(
             && window.as_ref().is_some_and(floating)
             && fconfig.relative == kFloatRelativeWindow;
         if relative_is_win || win_is_target {
-            // SAFETY: `err` names a live error slot, and the lookup answers a
-            // live window or null.
-            let target = find_window_by_handle(config.win, slot_mut(err));
-            let Some(target) = target else {
+            let Some(target) = stored(err, find_window_by_handle(config.win)).flatten() else {
                 break '_fail;
             };
             if Some(target) == window {

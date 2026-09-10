@@ -400,7 +400,13 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let code = PEERS.as_ptr() as *mut c_char;
         let code = String_0::from_raw_parts(code, PEERS.len());
         let mem = &raw mut arena;
-        let rv = unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem, &mut err) };
+        let rv = match unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem) } {
+            Ok(value) => value,
+            Err(e) => {
+                err = e;
+                Object::Nil
+            }
+        };
         if err.is_set() {
             // A missing or broken helper is logged, not reported: the
             // local addresses above are still a useful answer.

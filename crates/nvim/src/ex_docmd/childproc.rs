@@ -21,7 +21,7 @@ use crate::os::cshim::{gettext, snprintf};
 
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 
-use crate::types::{Array, Error, ExArg, NUL, Object, String_0, size_t};
+use crate::types::{Array, ExArg, NUL, Object, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::Ea;
 
@@ -141,7 +141,6 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
 /// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
     let eap = unsafe { Ea::new(args) };
-    let mut err = Error::none();
     let mut items: [Object; 1] = [Object::String(unsafe { cstr_as_string(eap.arg) })];
     let args = Array {
         size: 1,
@@ -149,7 +148,7 @@ pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
         items: &raw mut items as *mut Object,
     };
     const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
-    unsafe {
+    let ran = unsafe {
         nlua_exec(
             String_0::from_raw_parts(
                 CHUNK.as_ptr() as *mut c_char,
@@ -159,14 +158,13 @@ pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
             args,
             kRetNilBool,
             ptr::null_mut(),
-            &mut err,
         )
     };
-    if err.is_set() {
-        let why = err.message_or_empty().as_ptr();
+    if let Err(e) = ran {
+        // SAFETY: the refusal owns its message.
+        let why = e.message_or_empty().as_ptr();
         unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
     }
-    err.clear();
 }
 
 /// `vim_strsave_escaped()` as checked code.

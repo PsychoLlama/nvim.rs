@@ -19,14 +19,13 @@ use crate::winlayer::{Buf, tab_windows};
 use ::libc::memchr;
 
 pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return (0 as Integer).reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(0 as Integer);
     };
     if b.b_ml.ml_mfp.is_null() {
-        return (0 as Integer).reported(error);
+        return Ok(0 as Integer);
     }
-    (b.line_count() as Integer).reported(error)
+    Ok(b.line_count() as Integer)
 }
 
 /// # Safety
@@ -49,8 +48,8 @@ pub unsafe fn nvim_buf_get_lines(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(rv);
     };
     // SAFETY: non-null, so the handle named a live buffer.
     if b.b_ml.ml_mfp.is_null() {
@@ -92,8 +91,8 @@ pub unsafe fn nvim_buf_set_lines(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(buffer) = api_buf_ensure_loaded(buf, &mut error) else {
-        return ().reported(error);
+    let Some(buffer) = api_buf_ensure_loaded(buf)? else {
+        return Ok(());
     };
     let mut oob: bool = false;
     start = unsafe { normalize_index(buffer, start as int64_t, true, &raw mut oob) } as Integer;
@@ -284,7 +283,9 @@ pub unsafe fn nvim_buf_set_lines(
             }
         }
     }
-    unsafe { try_leave(&raw mut tstate, &mut error) };
+    // The bracket outranks whatever the body wrote into `error`, which is
+    // the order the two had when both went through one slot.
+    unsafe { try_leave(&raw mut tstate) }?;
     ().reported(error)
 }
 
@@ -312,8 +313,8 @@ pub unsafe fn nvim_buf_get_text(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(rv);
     };
     // SAFETY: non-null, so the handle named a live buffer.
     if b.b_ml.ml_mfp.is_null() {
@@ -379,8 +380,8 @@ pub unsafe fn nvim_buf_get_text(
 
 pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return (0 as Integer).reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(0 as Integer);
     };
     if b.b_ml.ml_mfp.is_null() {
         return (-1 as Integer).reported(error);

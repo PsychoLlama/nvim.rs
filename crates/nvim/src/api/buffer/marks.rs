@@ -28,8 +28,8 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
     let mut res: bool = false;
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return (res as Boolean).reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
@@ -71,8 +71,8 @@ pub unsafe fn nvim_buf_set_mark(
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let mut res: bool = false;
-    let Some(b) = api_buf_ensure_loaded(buf, &mut error) else {
-        return (res as Boolean).reported(error);
+    let Some(b) = api_buf_ensure_loaded(buf)? else {
+        return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
@@ -103,8 +103,8 @@ pub unsafe fn nvim_buf_get_mark(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(rv);
     };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.

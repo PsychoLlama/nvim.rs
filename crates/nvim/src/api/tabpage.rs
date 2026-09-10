@@ -31,7 +31,6 @@ use crate::window::{
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
 use crate::winlayer::{Win, windows_in_tab};
 use ::libc::abort;
-use core::ffi::CStr;
 use core::ptr;
 
 /// The windows of `tabpage`, oldest first.
@@ -42,10 +41,9 @@ pub unsafe fn nvim_tabpage_list_wins(
     tabpage: TabpageHandle,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut err = Error::none();
     let mut rv = Array::EMPTY;
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|&t| valid_tabpage(t.id())) else {
-        return rv.reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
+        return Ok(rv);
     };
     // Counted first, because the arena block has to be sized before it is
     // filled and `array_add` asserts against its capacity.
@@ -69,8 +67,8 @@ pub unsafe fn nvim_tabpage_get_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err) else {
-        return Object::Nil.reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(Object::Nil);
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
     // `name` and `arena` are the caller's, per this function's contract.
@@ -88,8 +86,8 @@ pub unsafe fn nvim_tabpage_set_var(
     value: Object,
 ) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err) else {
-        return ().reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(());
     };
     // SAFETY: as `nvim_tabpage_get_var`; `value` is the caller's and the
     // store takes it over.
@@ -105,8 +103,8 @@ pub unsafe fn nvim_tabpage_set_var(
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err) else {
-        return ().reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(());
     };
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let no_arena = ptr::null_mut::<Arena>();
@@ -117,9 +115,8 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Re
 
 /// The window `tabpage` is showing.
 pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Error> {
-    let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err).filter(|&t| valid_tabpage(t.id())) else {
-        return (0 as WindowHandle).reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
+        return Ok(0 as WindowHandle);
     };
     if tab.is_current() {
         return Ok(nvim_get_current_win());
@@ -138,12 +135,11 @@ pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Erro
 
 /// Make `win` the window `tp` shows.
 pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(tp) = find_tab_by_handle(tabpage, &mut err) else {
-        return ().reported(err);
+    let Some(tp) = find_tab_by_handle(tabpage)? else {
+        return Ok(());
     };
-    let Some(wp) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(wp) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     // SAFETY: both handles named a live object, which is all these ask.
     if !tabpage_win_valid(tp, wp.id()) {
@@ -154,32 +150,27 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
         ));
     }
     if tp.is_current() {
-        api_try(&mut err, |_| win_goto(wp));
+        api_try(|| win_goto(wp))?;
     } else if tp.tp_curwin != Some(wp.id()) {
         let mut tp = tp;
         tp.tp_prevwin = tp.tp_curwin;
         tp.tp_curwin = Some(wp.id());
     }
-    ().reported(err)
+    Ok(())
 }
 
 /// `tabpage`'s 1-based position in the tab line.
 pub fn nvim_tabpage_get_number(tabpage: TabpageHandle) -> Result<Integer, Error> {
-    let mut err = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut err) else {
-        return (0 as Integer).reported(err);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(0 as Integer);
     };
     Ok(Integer::from(tab_index(tab)))
 }
 
 /// Whether `tabpage` still names a tab page.
 pub fn nvim_tabpage_is_valid(tabpage: TabpageHandle) -> Boolean {
-    let mut stub: Error = Error::none();
-    let ret = find_tab_by_handle(tabpage, &mut stub).is_some();
-    // The message the lookup may have left behind is dropped rather than
-    // reported.
-    stub.clear();
-    ret
+    // A handle that names nothing is not an error here, only a `false`.
+    find_tab_by_handle(tabpage).unwrap_or_default().is_some()
 }
 
 /// Open a new tab page showing `buf`.
@@ -196,9 +187,8 @@ pub unsafe fn nvim_open_tabpage(
     // module-level constants into.
     const OPTIDX_AFTER: ::core::ffi::c_int = 1;
 
-    let mut err = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut err) else {
-        return (0 as TabpageHandle).reported(err);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(0 as TabpageHandle);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(b.id()) {
         return Err(Error::exception(e_cmdwin));
@@ -214,21 +204,18 @@ pub unsafe fn nvim_open_tabpage(
 
     let mut wp: Option<Win> = None;
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
-    let tp = api_try(&mut err, |_| {
+    let tp = api_try(|| {
         let filename = ptr::null_mut::<::core::ffi::c_char>();
         // SAFETY: `wp` is this frame's own out-parameter.
         unsafe { win_new_tabpage(after + 1, filename, enter, Some(&mut wp)) }
-    });
+    })?;
     let Some(tp) = tp else {
-        if !err.is_set() {
-            set_msg(&mut err, c"Failed to create new tabpage");
-        }
-        return Err(err);
+        return Err(Error::exception(c"Failed to create new tabpage"));
     };
     // `win_new_tabpage` fires `TabNew`, which can close what it just opened,
     // so the tab page is looked up again by the identity it was born with.
     let Some(tp) = valid_tab(tp.id()) else {
-        return Err(tabpage_closed(err));
+        return Err(tabpage_closed());
     };
 
     let new_win = wp
@@ -238,26 +225,19 @@ pub unsafe fn nvim_open_tabpage(
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.
         let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
-        win_set_buf(w, b, &mut err);
+        let set = win_set_buf(w, b);
         drop(quiet);
         if !valid_tabpage(tp.id()) {
-            return Err(tabpage_closed(err));
+            return Err(tabpage_closed());
         }
+        set?;
     }
-    (tp.handle as TabpageHandle).reported(err)
+    Ok(tp.handle as TabpageHandle)
 }
 
-/// Replace whatever `err` was carrying with "the tab page went away", which
-/// `nvim_open_tabpage` reports at both points a `BufEnter` autocommand could
-/// have closed what it just opened.
-fn tabpage_closed(mut err: Error) -> Error {
-    // SAFETY: `err` is the caller's, moved in.
-    err.clear();
-    set_msg(&mut err, c"Tabpage was closed immediately");
-    err
-}
-
-/// An exception whose whole message is `msg`.
-fn set_msg(err: &mut Error, msg: &CStr) {
-    *err = Error::exception(msg);
+/// "The tab page went away", which `nvim_open_tabpage` reports at both points
+/// a `BufEnter` autocommand could have closed what it just opened -- in
+/// preference to whatever else went wrong there.
+fn tabpage_closed() -> Error {
+    Error::exception(c"Tabpage was closed immediately")
 }

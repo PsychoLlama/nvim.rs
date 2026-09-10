@@ -85,10 +85,8 @@ pub unsafe fn nvim_eval_statusline(
         text: [0; 2],
         hl_id: 0,
     }; SIGN_SHOW_MAX as usize];
-    // SAFETY: the caller's error slot and the editor's own window list.
-    let Some(ctx) = (unsafe { Context::of(opts, &mut error, &mut statuscol, &mut sattrs) }) else {
-        return empty.reported(error);
-    };
+    // SAFETY: the editor's own window list.
+    let ctx = unsafe { Context::of(opts, &mut statuscol, &mut sattrs) }?;
 
     // SAFETY: an arena the caller owns, whose allocations outlive the reply.
     let (mut result, buf) = unsafe {
@@ -148,16 +146,15 @@ pub unsafe fn nvim_eval_statusline(
 
 impl Context {
     /// Validate the options and settle the window, the fill character and
-    /// the width. Answers `None` with `err` set when something is wrong.
+    /// the width.
     ///
     /// # Safety
     /// `statuscol`/`sattrs` must outlive the expansion.
     unsafe fn of(
         opts: &KeyDict_eval_statusline,
-        err: &mut Error,
         statuscol: &mut StatusCol,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
-    ) -> Option<Context> {
+    ) -> Result<Context, Error> {
         let mut fillchar = 0 as ScreenChar;
         if has_key(
             opts.is_set__eval_statusline_,
@@ -170,8 +167,7 @@ impl Context {
                     && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
             };
             if !single {
-                *err = err_expected(c"fillchar", c"single character", None);
-                return None;
+                return Err(err_expected(c"fillchar", c"single character", None));
             }
             let mut c = 0;
             // SAFETY: as above. TODO(bfredl): actually check c is single width.
@@ -182,14 +178,13 @@ impl Context {
         let win = if opts.use_tabline {
             Win::current_or_none()
         } else {
-            find_window_by_handle(opts.winid, err)
+            // The lookup's own refusal is thrown away: upstream overwrites
+            // it with the message below.
+            find_window_by_handle(opts.winid).unwrap_or_default()
         };
         let Some(win) = win else {
-            // The lookup may already have set an error, which upstream
-            // overwrites with this.
             let winid = opts.winid;
-            *err = api_error!(kErrorTypeException, "unknown winid {winid}");
-            return None;
+            return Err(api_error!(kErrorTypeException, "unknown winid {winid}"));
         };
 
         let mut statuscol_lnum = 0;
@@ -204,16 +199,14 @@ impl Context {
                 // SAFETY: the names and values are NUL-terminated strings.
                 // SAFETY: both are the caller's NUL-terminated strings.
                 let (key, why) = unsafe { (cstr::at(key), cstr::at(why)) };
-                *err = err_invalid(key, Bad::Bare(why));
-                return None;
+                return Err(err_invalid(key, Bad::Bare(why)));
             }
             use_bools += 1;
         }
         if use_bools > 1 {
             const E: &CStr =
                 c"Can only use one of 'use_winbar', 'use_tabline' and 'use_statuscol_lnum'";
-            *err = Error::validation(E);
-            return None;
+            return Err(Error::validation(E));
         }
 
         let (mut stc_hl_id, mut scl_hl_id) = (0, 0);
@@ -242,7 +235,7 @@ impl Context {
             win.w_width
         };
 
-        Some(Context {
+        Ok(Context {
             win,
             fillchar,
             maxwidth,

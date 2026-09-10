@@ -85,7 +85,13 @@ pub unsafe fn nvim_paste(
         let name = ::core::ptr::null::<::core::ffi::c_char>();
         // SAFETY: `args` is this frame's own and `arena`/`error` the caller's
         // and this frame's; the handler re-enters the editor through Lua.
-        let rv = unsafe { nlua_exec(handler, name, args, kRetNilBool, arena, &mut error) };
+        let rv = match unsafe { nlua_exec(handler, name, args, kRetNilBool, arena) } {
+            Ok(value) => value,
+            Err(e) => {
+                error = e;
+                Object::Nil
+            }
+        };
         let refused = rv.as_boolean() == Some(false);
         if error.is_set() || refused {
             cancelled.set(true);
@@ -187,7 +193,7 @@ pub unsafe fn nvim_put(
     } else {
         0 as ::core::ffi::c_int
     };
-    api_try(&mut error, |_| {
+    api_try(|| {
         // `do_put` can leave Visual mode; the caller's is put back.
         let visual_was_active = visual_active();
         let silenced = Suppress::messages();
@@ -195,6 +201,6 @@ pub unsafe fn nvim_put(
         unsafe { do_put(0 as ::core::ffi::c_int, &raw mut reg, dir, 1, flags) };
         drop(silenced);
         set_visual_active(visual_was_active);
-    });
+    })?;
     ().reported(error)
 }

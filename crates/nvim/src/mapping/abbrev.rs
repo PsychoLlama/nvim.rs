@@ -247,8 +247,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
 
     let answer = if luaref != LUA_NOREF {
         let mut err = Error::none();
-        // SAFETY: `luaref` is the mapping's own reference, and `err` is a
-        // live, initialised slot for the call's error.
+        // SAFETY: `luaref` is the mapping's own reference.
         let ret = unsafe {
             nlua_call_ref(
                 luaref,
@@ -256,9 +255,12 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
                 ARRAY_DICT_INIT,
                 kRetObject,
                 ptr::null_mut(),
-                &mut err,
             )
-        };
+        }
+        .unwrap_or_else(|e| {
+            err = e;
+            Object::Nil
+        });
         // SAFETY: the string the call handed back, then the object it came
         // out of, which is ours to release.
         let answer = unsafe {

@@ -90,19 +90,18 @@ pub unsafe fn nlua_pop_keydict(
     hashy: FieldHashfn,
     err_opt: *mut *mut c_char,
     arena: *mut Arena,
-    err: &mut Error,
-) {
+) -> Result<(), Error> {
     unsafe {
         if lua_type(lstate, -1) != LUA_TTABLE {
-            *err = Error::validation(c"Expected Lua table");
             // Upstream writes `lua_pop(L, -1)` here, which expands to
             // `lua_settop(L, 0)` -- it clears the *whole* stack rather than
             // popping the one value. Kept verbatim; see the divergence
             // docket.
             lua_settop(lstate, 0);
-            return;
+            return Err(Error::validation(c"Expected Lua table"));
         }
 
+        let mut failed = None;
         lua_pushnil(lstate);
         while lua_next(lstate, -2) != 0 {
             let mut len: size_t = 0;
@@ -110,9 +109,8 @@ pub unsafe fn nlua_pop_keydict(
             let field: *const KeySetLink = hashy.expect("non-null function pointer")(s, len);
             if field.is_null() {
                 let key = c_str_len(s, len).null_as_empty();
-                *err = api_error!(kErrorTypeValidation, "invalid key: {key}");
                 lua_pop(lstate, 3);
-                return;
+                return Err(api_error!(kErrorTypeValidation, "invalid key: {key}"));
             }
             if (*field).opt_index >= 0 {
                 let ks = retval.cast::<OptKeySet>();
@@ -120,42 +118,52 @@ pub unsafe fn nlua_pop_keydict(
             }
 
             let mem = retval.cast::<c_char>().add((*field).ptr_off);
-            match (*field).type_0 as ObjectTypeInt {
-                T_ANY => *mem.cast::<Object>() = nlua_pop_object(lstate, true, arena, err),
-                T_INTEGER => {
-                    // A highlight-group field takes the group's *name* as
-                    // well as its id.
-                    if (*field).is_hlgroup && lua_type(lstate, -1) == LUA_TSTRING {
-                        let mut name_len: size_t = 0;
-                        let name = lua_tolstring(lstate, -1, &raw mut name_len);
-                        lua_pop(lstate, 1);
-                        *mem.cast::<Integer>() = if name_len > 0 {
-                            syn_check_group(name, name_len) as Integer
+            // Each arm stores what it popped and answers whether it could;
+            // the field's own name is what a refusal is reported against.
+            let popped: Result<(), Error> = (|| {
+                match (*field).type_0 as ObjectTypeInt {
+                    T_ANY => *mem.cast::<Object>() = nlua_pop_object(lstate, true, arena)?,
+                    T_INTEGER => {
+                        // A highlight-group field takes the group's *name* as
+                        // well as its id.
+                        if (*field).is_hlgroup && lua_type(lstate, -1) == LUA_TSTRING {
+                            let mut name_len: size_t = 0;
+                            let name = lua_tolstring(lstate, -1, &raw mut name_len);
+                            lua_pop(lstate, 1);
+                            *mem.cast::<Integer>() = if name_len > 0 {
+                                syn_check_group(name, name_len) as Integer
+                            } else {
+                                0
+                            };
                         } else {
-                            0
-                        };
-                    } else {
-                        *mem.cast::<Integer>() = nlua_pop_integer(lstate, arena, err);
+                            *mem.cast::<Integer>() = nlua_pop_integer(lstate, arena)?;
+                        }
                     }
+                    T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_boolean_strict(lstate)?,
+                    T_STRING => *mem.cast::<String_0>() = nlua_pop_string(lstate, arena)?,
+                    T_FLOAT => *mem.cast::<Float>() = nlua_pop_float(lstate, arena)?,
+                    T_BUFFER | T_WINDOW | T_TABPAGE => {
+                        *mem.cast::<Handle>() = nlua_pop_handle(lstate, arena)?;
+                    }
+                    T_ARRAY => *mem.cast::<Array>() = nlua_pop_array(lstate, arena)?,
+                    T_DICT => *mem.cast::<ApiDict>() = nlua_pop_dict(lstate, false, arena)?,
+                    T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_luaref(lstate, arena)?,
+                    _ => abort(),
                 }
-                T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_boolean_strict(lstate, err),
-                T_STRING => *mem.cast::<String_0>() = nlua_pop_string(lstate, arena, err),
-                T_FLOAT => *mem.cast::<Float>() = nlua_pop_float(lstate, arena, err),
-                T_BUFFER | T_WINDOW | T_TABPAGE => {
-                    *mem.cast::<Handle>() = nlua_pop_handle(lstate, arena, err);
-                }
-                T_ARRAY => *mem.cast::<Array>() = nlua_pop_array(lstate, arena, err),
-                T_DICT => *mem.cast::<ApiDict>() = nlua_pop_dict(lstate, false, arena, err),
-                T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_luaref(lstate, arena, err),
-                _ => abort(),
-            }
+                Ok(())
+            })();
 
-            if err.is_set() {
+            if let Err(e) = popped {
                 *err_opt = (*field).str;
+                failed = Some(e);
                 break;
             }
         }
         lua_pop(lstate, 1);
+        match failed {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
     }
 }
 

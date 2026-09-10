@@ -328,7 +328,7 @@ pub(crate) fn command_line_enter(
             unsafe { try_enter(&raw mut tstate) };
             cmdline_autocmd(AutoEvent::CmdlineEnter, firstcbuf.as_mut_ptr());
             unsafe { restore_v_event(dict, &raw mut save_v_event) };
-            unsafe { try_leave(&raw mut tstate, &mut err) };
+            err.absorb(unsafe { try_leave(&raw mut tstate) });
 
             if err.is_set() {
                 if !ui_has(kUIMessages) {
@@ -417,7 +417,7 @@ pub(crate) fn command_line_enter(
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
             cmdline_autocmd(AutoEvent::CmdlineLeave, firstcbuf.as_mut_ptr());
-            unsafe { try_leave(&raw mut tstate, &mut err) };
+            err.absorb(unsafe { try_leave(&raw mut tstate) });
 
             if unsafe { tv_dict_get_number(dict, c"abort".as_ptr()) } != 0 {
                 s.gotesc = true;

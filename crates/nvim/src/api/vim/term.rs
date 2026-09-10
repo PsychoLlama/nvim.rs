@@ -26,8 +26,8 @@ pub unsafe fn nvim_open_term(
     opts: *mut KeyDict_open_term,
 ) -> Result<Integer, Error> {
     let mut slot = Error::none();
-    let Some(buffer) = api_buf_ensure_loaded(buf, &mut slot) else {
-        return (0 as Integer).reported(slot);
+    let Some(buffer) = api_buf_ensure_loaded(buf)? else {
+        return Ok(0 as Integer);
     };
     if cmdwin_buf.get() == Some(buffer.id()) {
         let msg = e_cmdwin.as_ptr();

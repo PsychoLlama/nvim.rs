@@ -32,8 +32,8 @@ pub unsafe fn buffer_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(Object::Nil);
     };
     let vars = buf.b_vars;
     // SAFETY: `vars` is that buffer's own dictionary, `arena` the caller's
@@ -52,8 +52,8 @@ pub unsafe fn buffer_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(buf) = find_buffer_by_handle(buffer, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(Object::Nil);
     };
     let vars = buf.b_vars;
     // SAFETY: as `buffer_set_var`.
@@ -73,8 +73,8 @@ pub unsafe fn window_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(win) = find_window_by_handle(window, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(win) = find_window_by_handle(window)? else {
+        return Ok(Object::Nil);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`, for that window's dictionary.
@@ -92,8 +92,8 @@ pub unsafe fn window_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(win) = find_window_by_handle(window, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(win) = find_window_by_handle(window)? else {
+        return Ok(Object::Nil);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`.
@@ -113,8 +113,8 @@ pub unsafe fn tabpage_set_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(Object::Nil);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`, for that tab page's dictionary.
@@ -132,8 +132,8 @@ pub unsafe fn tabpage_del_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(tab) = find_tab_by_handle(tabpage, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(tab) = find_tab_by_handle(tabpage)? else {
+        return Ok(Object::Nil);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`.

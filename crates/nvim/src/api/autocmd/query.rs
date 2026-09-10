@@ -200,10 +200,13 @@ pub unsafe fn nvim_get_autocmds(
             }
             's_659: {
                 if let Object::Integer(handle) | Object::Buffer(handle) = buf {
-                    let b = find_buffer_by_handle(handle as BufferHandle, &mut error);
-                    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-                        break '_cleanup;
-                    }
+                    let b = match find_buffer_by_handle(handle as BufferHandle) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            error = e;
+                            break '_cleanup;
+                        }
+                    };
                     let pat: String_0 = unsafe {
                         arena_printf(arena, c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
                     };
@@ -229,12 +232,13 @@ pub unsafe fn nvim_get_autocmds(
                             error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
                         };
-                        let b_0 = find_buffer_by_handle(handle as BufferHandle, &mut error);
-                        if error.kind() as ::core::ffi::c_int
-                            != kErrorTypeNone as ::core::ffi::c_int
-                        {
-                            break '_cleanup;
-                        }
+                        let b_0 = match find_buffer_by_handle(handle as BufferHandle) {
+                            Ok(b) => b,
+                            Err(e) => {
+                                error = e;
+                                break '_cleanup;
+                            }
+                        };
                         // SAFETY: a live pointer the code around it already holds.
                         let put_value = unsafe {
                             Object::string(arena_printf(

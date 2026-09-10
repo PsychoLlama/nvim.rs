@@ -220,32 +220,32 @@ pub fn window_layout_locked(cmd: CmdIdx) -> bool {
 /// Whether an autocommand has forbidden this change to the window layout,
 /// reporting the reason itself.
 fn layout_locked(cmd: CmdIdx) -> bool {
-    let mut e = Error::none();
-    let locked = locked_err(cmd, &mut e);
-    if e.is_set() {
-        err(e.message_or_empty().as_ptr());
-        // SAFETY: an error this call filled in, which owns its message.
-        e.clear();
+    match locked_err(cmd) {
+        Ok(()) => false,
+        Err(e) => {
+            // SAFETY: the refusal owns its message.
+            err(e.message_or_empty().as_ptr());
+            true
+        }
     }
-    locked
 }
 
-pub fn window_layout_locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
-    locked_err(cmd, &mut *err)
+pub fn window_layout_locked_err(cmd: CmdIdx) -> Result<(), Error> {
+    locked_err(cmd)
 }
 
-/// [`layout_locked`], reporting through `err` instead of the message area.
-fn locked_err(cmd: CmdIdx, err: &mut Error) -> bool {
+/// [`layout_locked`], answering the reason instead of putting it in the
+/// message area.
+fn locked_err(cmd: CmdIdx) -> Result<(), Error> {
     if split_disallowed.get() <= 0 && close_disallowed.get() <= 0 {
-        return false;
+        return Ok(());
     }
     let msg = if close_disallowed.get() == 0 && cmd == CmdIdx::tabnew {
         e_cannot_split_window_when_closing_buffer.as_ptr()
     } else {
         e_not_allowed_to_change_window_layout_in_this_autocmd.as_ptr()
     };
-    set_err(err, msg);
-    true
+    Err(make_err(msg))
 }
 
 pub fn check_can_set_curbuf_disabled() -> bool {
@@ -421,9 +421,9 @@ fn first_tab() -> TabPage {
 }
 
 /// An exception whose whole message is the string at `msg`.
-fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
+pub(crate) fn make_err(msg: *const ::core::ffi::c_char) -> Error {
     // SAFETY: the message the caller handed over, live for this call.
-    *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
+    Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) })
 }
 
 /// `apply_autocmds(event, NULL, NULL, false, buf)`.

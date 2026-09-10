@@ -21,8 +21,8 @@ pub fn nvim_buf_del_extmark(
     id: Integer,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return false.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(false);
     };
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
@@ -38,8 +38,8 @@ pub fn nvim_buf_clear_namespace(
     mut line_end: Integer,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return ().reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     if !(line_start >= 0 as Integer && line_start < MAXLNUM as Integer) {
         error = err_out_of_range(c"line number");

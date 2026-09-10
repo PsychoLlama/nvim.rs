@@ -80,20 +80,20 @@ pub unsafe fn nlua_pop_object(
     lstate: *mut lua_State,
     ref_0: bool,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     let mut ret = Object::Nil;
+    let mut failed: Option<Error> = None;
     let mut stack = ObjPopStack::new();
     stack.push(ObjPopStackItem::leaf(&raw mut ret));
     // SAFETY: the caller's promise -- a live state with a value on top.
     unsafe {
         let initial_size = lua_gettop(lstate);
-        while !err.is_set() && !stack.is_empty() {
+        while failed.is_none() && !stack.is_empty() {
             let mut cur = stack.last();
             stack.pop();
             if cur.container {
                 if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
-                    *err = Error::exception(c"Lua failed to grow stack");
+                    failed = Some(Error::exception(c"Lua failed to grow stack"));
                     break;
                 }
                 match &mut *cur.obj {
@@ -198,7 +198,7 @@ pub unsafe fn nlua_pop_object(
                                 *cur.obj = Object::float(table_props.val);
                             }
                             kObjectTypeNil => {
-                                *err = Error::validation(c"Cannot convert given Lua table");
+                                failed = Some(Error::validation(c"Cannot convert given Lua table"));
                             }
                             _ => abort(),
                         }
@@ -217,19 +217,19 @@ pub unsafe fn nlua_pop_object(
                         if is_nil {
                             *cur.obj = Object::Nil;
                         } else {
-                            *err = Error::validation(c"Cannot convert userdata");
+                            failed = Some(Error::validation(c"Cannot convert userdata"));
                         }
                         break 'converted;
                     }
                     _ => {}
                 }
-                *err = Error::validation(CANNOT_CONVERT);
+                failed = Some(Error::validation(CANNOT_CONVERT));
             }
             if !cur.container {
                 lua_pop(lstate, 1);
             }
         }
-        if err.is_set() {
+        if failed.is_some() {
             if arena.is_null() {
                 api_free_object(ret);
             }
@@ -238,5 +238,8 @@ pub unsafe fn nlua_pop_object(
         }
         debug_assert!(lua_gettop(lstate) == initial_size - 1);
     }
-    ret
+    match failed {
+        Some(failed) => Err(failed),
+        None => Ok(ret),
+    }
 }

@@ -231,7 +231,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
                     &raw mut color_cb,
                 )
             };
-            unsafe { try_leave(&raw mut tstate, &mut err) };
+            err.absorb(unsafe { try_leave(&raw mut tstate) });
             can_free_cb = true;
         } else if colored_ccline.cmdfirstc == '=' as ::core::ffi::c_int {
             unsafe { color_expr_cmdline(colored_ccline, ccline_colors) };
@@ -275,7 +275,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
         if got_int.get() {
             getln_interrupted_highlight.set(true);
         }
-        unsafe { try_leave(&raw mut tstate, &mut err) };
+        err.absorb(unsafe { try_leave(&raw mut tstate) });
 
         if err.is_set() || !cbcall_ret {
             break 'body Label::Error;

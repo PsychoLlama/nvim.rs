@@ -93,47 +93,46 @@ use crate::message_fmt::{c_str, msg_bytes};
 // The handle off the wire is an integer, so nothing about the lookup is
 // unsafe: the registry only hands back what is live, and the answer is a
 // `winlayer` wrapper whose construction discharged the liveness promise
-// once. `err` is `&mut` rather than a pointer for the same reason — a safe
-// signature that does not trip `clippy::not_unsafe_ptr_arg_deref`.
+// once.
+//
+// `Ok(None)` is not a failure. Handle 0 means "the current one", and when
+// there is none -- during startup, and after the last window of a tab page
+// has gone -- upstream answered null without setting the error, and the
+// caller answered a default rather than refusing. Only a *named* handle that
+// resolves to nothing is an `Err`.
 
-/// The buffer `buffer` names, or the current one for 0. `None` — with `err`
-/// set — when it names nothing.
-pub(crate) fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> Option<Buf> {
+/// The buffer `buffer` names, or the current one for 0. `Ok(None)` when 0
+/// names nothing; `Err` when a named handle does.
+pub(crate) fn find_buffer_by_handle(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
     if buffer == 0 {
-        return Buf::current_or_none();
+        return Ok(Buf::current_or_none());
     }
-    let rv = winlayer::buffer(buffer);
-    if rv.is_none() {
-        let id = buffer as int64_t;
-        *err = err_bad_number(c"buffer id", id);
+    match winlayer::buffer(buffer) {
+        Some(buf) => Ok(Some(buf)),
+        None => Err(err_bad_number(c"buffer id", buffer as int64_t)),
     }
-    rv
 }
 
 /// [`find_buffer_by_handle`] for a window.
-pub(crate) fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> Option<Win> {
+pub(crate) fn find_window_by_handle(window: WindowHandle) -> Result<Option<Win>, Error> {
     if window == 0 {
-        return Win::current_or_none();
+        return Ok(Win::current_or_none());
     }
-    let rv = winlayer::window(window);
-    if rv.is_none() {
-        let id = window as int64_t;
-        *err = err_bad_number(c"window id", id);
+    match winlayer::window(window) {
+        Some(win) => Ok(Some(win)),
+        None => Err(err_bad_number(c"window id", window as int64_t)),
     }
-    rv
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
-pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> Option<TabPage> {
+pub(crate) fn find_tab_by_handle(tabpage: TabpageHandle) -> Result<Option<TabPage>, Error> {
     if tabpage == 0 {
-        return TabPage::current_or_none();
+        return Ok(TabPage::current_or_none());
     }
-    let rv = winlayer::tabpage(tabpage);
-    if rv.is_none() {
-        let id = tabpage as int64_t;
-        *err = err_bad_number(c"tabpage id", id);
+    match winlayer::tabpage(tabpage) {
+        Some(tp) => Ok(Some(tp)),
+        None => Err(err_bad_number(c"tabpage id", tabpage as int64_t)),
     }
-    rv
 }
 
 // -- Errors and the try/catch bracket --------------------------------------
@@ -169,13 +168,13 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
     trylevel.set(trylevel.get() + 1);
 }
 
-/// Stop catching, report whatever was caught through `err`, and restore what
+/// Stop catching, answer whatever was caught, and restore what
 /// [`try_enter`] saved into `tstate`.
 ///
 /// # Safety
 ///
 /// `tstate` must point at the caller's `TryState`.
-pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
+pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
     debug_assert!(trylevel.get() > 0);
     trylevel.set(trylevel.get() - 1);
     did_emsg.set(0);
@@ -185,13 +184,14 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
     // SAFETY: `msg_list` names a live slot or is null.
     let pending = !list.is_null() && !unsafe { *list }.is_null();
 
+    let mut caught = None;
     if got_int.get() {
         // An interrupt outranks anything that was thrown along the way.
         if did_throw.get() {
             // SAFETY: `did_throw` says there is a current exception.
             unsafe { discard_current_exception() };
         }
-        *err = Error::exception(c"Keyboard interrupt");
+        caught = Some(Error::exception(c"Keyboard interrupt"));
         got_int.set(false);
     } else if pending {
         let mut should_free = false;
@@ -202,8 +202,9 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
             get_exception_string(head, ET_ERROR, ptr::null_mut(), &raw mut should_free)
         };
         // SAFETY: the message is a NUL-terminated string.
-        *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(msg) });
-        // SAFETY: the list has been rendered into `err`.
+        let text = unsafe { cstr::at(msg) };
+        caught = Some(Error::from_message(kErrorTypeException, text));
+        // SAFETY: the list has been rendered into the answer.
         unsafe { free_global_msglist() };
         if should_free {
             // SAFETY: `msg` is the allocation `get_exception_string` made.
@@ -218,17 +219,18 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
         let named = unsafe { *name } != NUL as c_char;
         if !named {
             // SAFETY: the message is a NUL-terminated string.
-            *err = Error::from_message(kErrorTypeException, unsafe { cstr::at(value) });
+            let text = unsafe { cstr::at(value) };
+            caught = Some(Error::from_message(kErrorTypeException, text));
         } else {
             // SAFETY: both are the exception's own NUL-terminated strings.
             let (name, value) = unsafe { (c_str(name), c_str(value)) };
-            *err = if lnum != 0 {
+            caught = Some(if lnum != 0 {
                 api_error!(kErrorTypeException, "{name}, line {lnum}: {value}")
             } else {
                 api_error!(kErrorTypeException, "{name}: {value}")
-            };
+            });
         }
-        // SAFETY: the exception has been rendered into `err`.
+        // SAFETY: the exception has been rendered into the answer.
         unsafe { discard_current_exception() };
     }
 
@@ -240,6 +242,11 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
     did_throw.set(saved.did_throw);
     need_rethrow.set(saved.need_rethrow != 0);
     did_emsg.set(saved.did_emsg);
+
+    match caught {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
 }
 
 /// Run `body` with whatever it throws caught, and report that through `err`:
@@ -253,19 +260,17 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
 /// is never read.
 ///
 /// `body` runs between the two, exactly as the statements between a
-/// hand-written pair did. It is handed the same slot so that a callee which
-/// reports through one of its own can still be given it -- `try_leave` writes
-/// over whatever the body left there, which is what a hand-written pair did
-/// too.
-pub(crate) fn api_try<T>(err: &mut Error, body: impl FnOnce(&mut Error) -> T) -> T {
+/// hand-written pair did. What it *answers* is discarded when something was
+/// thrown: an exception outranks whatever the body got as far as computing,
+/// which is what a hand-written pair did too by overwriting the slot.
+pub(crate) fn api_try<T>(body: impl FnOnce() -> T) -> Result<T, Error> {
     let mut tstate = TryState::default();
     // SAFETY: `tstate` is this frame's local, live until `try_leave` below.
     unsafe { try_enter(&raw mut tstate) };
-    let value = body(err);
-    // SAFETY: `tstate` is what the `try_enter` above filled in, and `err` is
-    // the caller's own slot.
-    unsafe { try_leave(&raw const tstate, err) };
-    value
+    let value = body();
+    // SAFETY: `tstate` is what the `try_enter` above filled in.
+    unsafe { try_leave(&raw const tstate) }?;
+    Ok(value)
 }
 
 /// Answering with what a helper that still reports through an error

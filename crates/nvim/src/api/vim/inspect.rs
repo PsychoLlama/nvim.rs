@@ -135,7 +135,13 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
             let name = ::core::ptr::null::<::core::ffi::c_char>();
             // SAFETY: `a` is the one-slot block above, `arena` is the
             // caller's and `error` this frame's own slot.
-            let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
+            let o = match unsafe { nlua_exec(code, name, a, kRetObject, arena) } {
+                Ok(value) => value,
+                Err(e) => {
+                    error = e;
+                    Object::Nil
+                }
+            };
             if let Object::Array(array) = o {
                 rvobj = array;
             } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
@@ -195,7 +201,13 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
     // `error` this frame's own slot.
-    let o = unsafe { nlua_exec(code, name, a, kRetObject, arena, &mut error) };
+    let o = match unsafe { nlua_exec(code, name, a, kRetObject, arena) } {
+        Ok(value) => value,
+        Err(e) => {
+            error = e;
+            Object::Nil
+        }
+    };
     if o.as_array().is_some_and(|array| array.size == 0 as size_t) {
         return Object::Nil.reported(error);
     } else if matches!(o, Object::Dict(_)) {

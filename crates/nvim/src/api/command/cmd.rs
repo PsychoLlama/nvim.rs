@@ -815,7 +815,7 @@ unsafe fn run_cmd(
         msg_col.set(save_msg_col);
     }
     // SAFETY: paired with the `try_enter` above.
-    unsafe { try_leave(&raw mut tstate, err) };
+    err.absorb(unsafe { try_leave(&raw mut tstate) });
 
     let mut retv = String_0::NULL;
     let failed = err.is_set();

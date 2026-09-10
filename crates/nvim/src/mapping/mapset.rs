@@ -255,9 +255,13 @@ pub unsafe fn modify_keymap(
     if global {
         buffer = 0;
     }
-    // SAFETY: the caller's promise -- `err` is a live, writable error slot.
-    let Some(target_buf) = find_buffer_by_handle(buffer, err) else {
-        return;
+    let target_buf = match find_buffer_by_handle(buffer) {
+        Ok(Some(buf)) => buf,
+        Ok(None) => return,
+        Err(e) => {
+            *err = e;
+            return;
+        }
     };
 
     // The guard restores the previous script context when it is dropped

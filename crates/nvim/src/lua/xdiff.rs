@@ -346,8 +346,8 @@ unsafe fn get_string_arg(lstate: *mut lua_State, idx: c_int) -> mmfile_t {
 }
 
 /// Read the options table at index 3 into `cfg`/`params`/`linematch`, and
-/// answer which shape the caller asked for. A bad option sets `err` and
-/// stops the read where it was.
+/// answer which shape the caller asked for, plus why a bad option stopped
+/// the read where it was.
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a table at index 3.
@@ -356,25 +356,25 @@ unsafe fn process_xdl_diff_opts(
     cfg: &mut xdemitconf_t,
     params: &mut xpparam_t,
     linematch: &mut int64_t,
-    err: &mut Error,
-) -> Mode {
+) -> (Mode, Option<Error>) {
     let mut opts: KeyDict_xdl_diff = KEYDICT_INIT;
     let mut err_param: *mut c_char = ptr::null_mut::<c_char>();
     // SAFETY: the caller's state and table; `opts` is a live keydict and
     // owns whatever the pop puts in it, which is freed at the end.
-    unsafe {
+    let popped = unsafe {
         nlua_pop_keydict(
             lstate,
             (&raw mut opts).cast::<c_void>(),
             Some(key_dict_xdl_diff_get_field),
             &raw mut err_param,
             ptr::null_mut::<Arena>(),
-            err,
-        );
-    }
+        )
+    };
 
     // SAFETY: the keydict's two string fields are NUL-terminated or null.
-    let mode = unsafe { apply_opts(lstate, &opts, cfg, params, linematch, err) };
+    // A bad option outranks a failed pop, which is the order the two had
+    // when both wrote through one slot.
+    let (mode, why) = unsafe { apply_opts(lstate, &opts, cfg, params, linematch) };
 
     // SAFETY: the keydict owns these; `opts` is not read again.
     unsafe {
@@ -382,7 +382,7 @@ unsafe fn process_xdl_diff_opts(
         api_free_string(opts.algorithm);
         api_free_luaref(opts.on_hunk);
     }
-    mode
+    (mode, why.or(popped.err()))
 }
 
 /// Whether the optional key at bit `optidx` was given.
@@ -404,8 +404,7 @@ unsafe fn apply_opts(
     cfg: &mut xdemitconf_t,
     params: &mut xpparam_t,
     linematch: &mut int64_t,
-    err: &mut Error,
-) -> Mode {
+) -> (Mode, Option<Error>) {
     // The bit index of each optional key in `is_set__xdl_diff_`, as apigen
     // names them. Function-local so they stay out of the FFI golden.
     const KEYSET_OPTIDX_xdl_diff__ctxlen: c_int = 1;
@@ -424,8 +423,8 @@ unsafe fn apply_opts(
         if unsafe { strequal(c"indices".as_ptr(), opts.result_type.data()) } {
             had_result_type_indices = true;
         } else {
-            *err = Error::validation(c"not a valid result_type");
-            return Mode::Unified;
+            let why = Error::validation(c"not a valid result_type");
+            return (Mode::Unified, Some(why));
         }
     }
 
@@ -446,8 +445,8 @@ unsafe fn apply_opts(
         match algorithm {
             Some((_, flag)) => params.flags |= flag,
             None => {
-                *err = Error::validation(c"not a valid algorithm");
-                return Mode::Unified;
+                let why = Error::validation(c"not a valid algorithm");
+                return (Mode::Unified, Some(why));
             }
         }
     }
@@ -463,8 +462,8 @@ unsafe fn apply_opts(
             Object::Boolean(on) => *linematch = if on { int64_t::MAX } else { 0 },
             Object::Integer(n) => *linematch = n,
             _ => {
-                *err = Error::validation(c"linematch must be a boolean or integer");
-                return Mode::Unified;
+                let why = Error::validation(c"linematch must be a boolean or integer");
+                return (Mode::Unified, Some(why));
             }
         }
     }
@@ -492,15 +491,13 @@ unsafe fn apply_opts(
             nlua_pushref(lstate, opts.on_hunk);
             lua_type(lstate, -1) == LUA_TFUNCTION
         };
-        if !is_function {
-            *err = Error::validation(c"on_hunk is not a function");
-        }
-        return Mode::OnHunk;
+        let why = (!is_function).then(|| Error::validation(c"on_hunk is not a function"));
+        return (Mode::OnHunk, why);
     }
     if had_result_type_indices {
-        return Mode::Locations;
+        return (Mode::Locations, None);
     }
-    Mode::Unified
+    (Mode::Unified, None)
 }
 
 /// `vim.diff(a, b[, opts])`.
@@ -541,9 +538,12 @@ pub unsafe extern "C-unwind" fn nlua_xdl_diff(lstate: *mut lua_State) -> c_int {
             return unsafe { luaL_argerror(lstate, 3, c"expected table".as_ptr()) };
         }
         // SAFETY: as above, with a table at index 3.
-        mode = unsafe {
-            process_xdl_diff_opts(lstate, &mut cfg, &mut params, &mut linematch, &mut err)
-        };
+        let why;
+        (mode, why) =
+            unsafe { process_xdl_diff_opts(lstate, &mut cfg, &mut params, &mut linematch) };
+        if let Some(why) = why {
+            err = why;
+        }
     }
 
     // Both of these are addressed by the callbacks through `ecb`, so they

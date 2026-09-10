@@ -63,13 +63,13 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub fn win_set_buf(win: Win, buffer: Buf, err: &mut Error) {
-    set_buf(win, buffer, &mut *err);
+pub fn win_set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
+    set_buf(win, buffer)
 }
 
 /// Show `buffer` in `win`: switch to the window, switch its buffer with the
 /// autocommands that implies, and switch back.
-fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
+fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     let tab = win_find_tabpage(win.id());
     let _redraw_off = Suppress::redraw();
 
@@ -100,15 +100,19 @@ fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
             p_acd.set(save_acd);
         }
     }
-    // SAFETY: `tstate` is the state `try_enter` saved, and `err` is live.
-    unsafe { try_leave(&raw mut tstate, err) };
-    if win_result.is_err() && !err.is_set() {
+    // SAFETY: `tstate` is the state `try_enter` saved.
+    let mut caught = unsafe { try_leave(&raw mut tstate) };
+    if win_result.is_err() && caught.is_ok() {
         let handle = win.id().handle();
-        *err = api_error!(kErrorTypeException, "Failed to switch to window {handle}");
+        caught = Err(api_error!(
+            kErrorTypeException,
+            "Failed to switch to window {handle}"
+        ));
     }
     Win::current().validate_cursor();
     // SAFETY: the state `switch_win_noblock` saved.
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
+    caught
 }
 
 pub fn win_fdccol_count(window: Win) -> c_int {
@@ -318,10 +322,8 @@ fn ext_win_position(window: Win, validate: bool) {
 
 /// The window a `relative='win'` float is anchored to, if it is still there.
 fn parent_window(handle: WindowHandle) -> Option<Win> {
-    let mut dummy = Error::none();
-    let win = find_window_by_handle(handle, &mut dummy);
-    dummy.clear();
-    win
+    // A parent that has gone away is not an error here, only a `None`.
+    find_window_by_handle(handle).unwrap_or_default()
 }
 
 /// Move `row`/`col` from the parent window's grid onto the screen, resolving
@@ -480,24 +482,24 @@ fn text_height(
 // May the layout change at all?
 
 pub fn check_split_disallowed(window: Win) -> c_int {
-    let mut err = Error::none();
-    let ok = check_split_disallowed_err(window, &mut err);
-    if err.is_set() {
-        // SAFETY: the message the check just wrote, owned by `err`.
-        unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
-        err.clear();
+    match check_split_disallowed_err(window) {
+        Ok(()) => OK,
+        Err(e) => {
+            // SAFETY: the message the check just wrote, owned by `e`.
+            unsafe { emsg(gettext_ptr(e.message_or_empty().as_ptr())) };
+            FAIL
+        }
     }
-    if ok { OK } else { FAIL }
 }
 
-pub fn check_split_disallowed_err(window: Win, err: &mut Error) -> bool {
+pub fn check_split_disallowed_err(window: Win) -> Result<(), Error> {
     if split_disallowed.get() > 0 {
-        *err = Error::exception(c"E242: Can't split a window while closing another");
-        return false;
+        return Err(Error::exception(
+            c"E242: Can't split a window while closing another",
+        ));
     }
     if window.buffer().b_locked_split != 0 {
-        *err = Error::exception(e_cannot_split_window_when_closing_buffer);
-        return false;
+        return Err(Error::exception(e_cannot_split_window_when_closing_buffer));
     }
-    true
+    Ok(())
 }

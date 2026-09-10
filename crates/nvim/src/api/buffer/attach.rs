@@ -10,17 +10,18 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, dict_put, has_key};
+use crate::api::private::helpers::{dict_put, has_key};
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
-pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> Option<Buf> {
-    let b = find_buffer_by_handle(buffer, err)?;
+pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>, Error> {
+    let Some(b) = find_buffer_by_handle(buffer)? else {
+        return Ok(None);
+    };
     if b.b_ml.ml_mfp.is_null() && !buf_ensure_loaded(b) {
-        *err = Error::exception(c"Failed to load buffer");
-        return None;
+        return Err(Error::exception(c"Failed to load buffer"));
     }
-    Some(b)
+    Ok(Some(b))
 }
 
 /// # Safety
@@ -35,9 +36,8 @@ pub unsafe fn nvim_buf_attach(
 ) -> Result<Boolean, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Live::<KeyDict_buf_attach>::new(opts) };
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return false.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(false);
     };
     let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
     if channel_id == LUA_INTERNAL_CALL {
@@ -73,22 +73,20 @@ pub unsafe fn nvim_buf_attach(
         cb.utf_sizes = opts.utf_sizes;
         cb.preview = opts.preview;
     }
-    buf_updates_register(b, channel_id, cb, send_buffer).reported(error)
+    Ok(buf_updates_register(b, channel_id, cb, send_buffer))
 }
 
 pub fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return false.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(false);
     };
     buf_updates_unregister(b, channel_id);
-    true.reported(error)
+    Ok(true)
 }
 
 pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(Object::Nil);
     };
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
@@ -107,19 +105,20 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let res: Object = unsafe {
+    let res = unsafe {
         nlua_call_ref(
             fun,
             ::core::ptr::null::<::core::ffi::c_char>(),
             args,
             kRetLuaref,
             ::core::ptr::null_mut::<Arena>(),
-            &mut error,
         )
     };
     unsafe { aucmd_restbuf(&raw mut aco) };
-    unsafe { try_leave(&raw mut tstate, &mut error) };
-    res.reported(error)
+    // The bracket outranks the call's own failure, as it did when both went
+    // through one slot.
+    unsafe { try_leave(&raw mut tstate) }?;
+    res
 }
 
 /// # Safety
@@ -129,14 +128,12 @@ pub fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
 // `nvim__buf_stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return ApiDict {
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(ApiDict {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<KeyValuePair>(),
-        }
-        .reported(error);
+        });
     };
     let buffer = b;
     let mut rv: ApiDict = arena_dict(arena, 7 as size_t);
@@ -173,5 +170,5 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<Ap
         // SAFETY: the collection is this call's own.
         unsafe { dict_put(&mut rv, c"uhp_extmark_size", d_uhp_extmark_size) };
     }
-    rv.reported(error)
+    Ok(rv)
 }

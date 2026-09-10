@@ -44,20 +44,18 @@ use core::ptr;
 
 /// The buffer `win` is showing.
 pub fn nvim_win_get_buf(win: WindowHandle) -> Result<BufferHandle, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return (0 as BufferHandle).reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(0 as BufferHandle);
     };
-    (w.buffer().handle as BufferHandle).reported(err)
+    Ok(w.buffer().handle as BufferHandle)
 }
 
 /// Show `buf` in `win`.
 pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let w = find_window_by_handle(win, &mut err);
-    let b = find_buffer_by_handle(buf, &mut err);
+    let w = find_window_by_handle(win)?;
+    let b = find_buffer_by_handle(buf)?;
     let (Some(w), Some(b)) = (w, b) else {
-        return ().reported(err);
+        return Ok(());
     };
     if cmdwin_win.get() == Some(w.id())
         || cmdwin_old_curwin.get() == Some(w.id())
@@ -65,8 +63,7 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
     {
         return Err(Error::exception(e_cmdwin));
     }
-    win_set_buf(w, b, &mut err);
-    ().reported(err)
+    win_set_buf(w, b)
 }
 
 /// `win`'s cursor, as a `[line, column]` pair.
@@ -74,9 +71,8 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_cursor(win: WindowHandle, arena: *mut Arena) -> Result<Array, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return Array::EMPTY.reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(Array::EMPTY);
     };
     let mut rv = arena_array(arena, 2 as size_t);
     let (lnum, col) = (
@@ -88,7 +84,7 @@ pub unsafe fn nvim_win_get_cursor(win: WindowHandle, arena: *mut Arena) -> Resul
         array_add(&mut rv, Object::integer(lnum));
         array_add(&mut rv, Object::integer(col));
     }
-    rv.reported(err)
+    Ok(rv)
 }
 
 /// Move `win`'s cursor to the `[line, column]` `pos` names.
@@ -97,8 +93,8 @@ pub unsafe fn nvim_win_get_cursor(win: WindowHandle, arena: *mut Arena) -> Resul
 /// `pos` must point at its own elements.
 pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(mut w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(mut w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     // SAFETY: `pos` is the caller's array, per this function's contract.
     let items = unsafe { (pos.size == 2).then(|| (*pos.items, *pos.items.add(1))) };
@@ -135,41 +131,37 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
 
 /// `win`'s height in text lines.
 pub fn nvim_win_get_height(win: WindowHandle) -> Result<Integer, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return (0 as Integer).reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(0 as Integer);
     };
-    Integer::from(w.w_height).reported(err)
+    Ok(Integer::from(w.w_height))
 }
 
 /// Resize `win` to `height` text lines, taking from or giving to its
 /// neighbours.
 pub fn nvim_win_set_height(win: WindowHandle, height: Integer) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
-    api_try(&mut err, |_| win_setheight_win(number_as_int(height), w));
-    ().reported(err)
+    api_try(|| win_setheight_win(number_as_int(height), w))?;
+    Ok(())
 }
 
 /// `win`'s width in screen columns.
 pub fn nvim_win_get_width(win: WindowHandle) -> Result<Integer, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return (0 as Integer).reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(0 as Integer);
     };
-    Integer::from(w.w_width).reported(err)
+    Ok(Integer::from(w.w_width))
 }
 
 /// Resize `win` to `width` screen columns. See [`nvim_win_set_height`].
 pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
-    api_try(&mut err, |_| win_setwidth_win(number_as_int(width), w));
-    ().reported(err)
+    api_try(|| win_setwidth_win(number_as_int(width), w))?;
+    Ok(())
 }
 
 /// The window-scoped variable `name`.
@@ -182,8 +174,8 @@ pub unsafe fn nvim_win_get_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return Object::Nil.reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(Object::Nil);
     };
     // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
     // `arena` are the caller's, per this function's contract.
@@ -201,8 +193,8 @@ pub unsafe fn nvim_win_set_var(
     value: Object,
 ) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_get_var`; the store takes `value` over.
@@ -216,8 +208,8 @@ pub unsafe fn nvim_win_set_var(
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
@@ -230,9 +222,8 @@ pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), 
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_position(win: WindowHandle, arena: *mut Arena) -> Result<Array, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return Array::EMPTY.reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(Array::EMPTY);
     };
     let mut rv = arena_array(arena, 2 as size_t);
     let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
@@ -241,7 +232,7 @@ pub unsafe fn nvim_win_get_position(win: WindowHandle, arena: *mut Arena) -> Res
         array_add(&mut rv, Object::integer(row));
         array_add(&mut rv, Object::integer(col));
     }
-    rv.reported(err)
+    Ok(rv)
 }
 
 /// The tab page a window the API just looked up is on. Every live window is
@@ -252,50 +243,44 @@ fn tab_of(win: Win) -> TabPage {
 
 /// The tab page `win` is on.
 pub fn nvim_win_get_tabpage(win: WindowHandle) -> Result<TabpageHandle, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return (0 as TabpageHandle).reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(0 as TabpageHandle);
     };
     let handle = tab_of(w).handle;
-    (handle as TabpageHandle).reported(err)
+    Ok(handle as TabpageHandle)
 }
 
 /// `win`'s 1-based position within its tab page, as `CTRL-W w` counts.
 pub fn nvim_win_get_number(win: WindowHandle) -> Result<Integer, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return (0 as Integer).reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(0 as Integer);
     };
     let mut tabnr: ::core::ffi::c_int = 0;
     let mut winnr: ::core::ffi::c_int = 0;
     // SAFETY: both counters are this frame's own out-parameters.
     unsafe { win_get_tabwin(w.handle, &raw mut tabnr, &raw mut winnr) };
-    Integer::from(winnr).reported(err)
+    Ok(Integer::from(winnr))
 }
 
 /// Whether `win` still names a window.
 pub fn nvim_win_is_valid(win: WindowHandle) -> Boolean {
-    let mut stub: Error = Error::none();
-    let ret = find_window_by_handle(win, &mut stub).is_some();
-    // The message the lookup may have left behind is dropped rather than
-    // reported.
-    stub.clear();
-    ret
+    // A handle that names nothing is not an error here, only a `false`.
+    find_window_by_handle(win).unwrap_or_default().is_some()
 }
 
 /// Close `win`, keeping its buffer loaded -- `:hide`.
 pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(w) =
-        find_window_by_handle(win, &mut err).filter(|w| can_close_in_cmdwin(*w, &mut err))
-    else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
+    if !can_close_in_cmdwin(w)? {
+        return Ok(());
+    }
     let tabpage = tab_of(w);
     let refused = e_autocmd_close.as_ptr();
     let is_aucmd = is_aucmd_win(w);
     let same_tab = tabpage.is_current();
-    api_try(&mut err, |_| {
+    api_try(|| {
         if is_aucmd {
             // SAFETY: `e_autocmd_close` is a static message.
             unsafe { emsg(gettext_ptr(refused)) };
@@ -304,38 +289,37 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
         } else {
             win_close_othertab(w, 0, tabpage, false);
         }
-    });
-    ().reported(err)
+    })
 }
 
 /// Close `win`, unloading its buffer when it was the last window on it.
 pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
-    let mut err = Error::none();
-    let Some(w) =
-        find_window_by_handle(win, &mut err).filter(|w| can_close_in_cmdwin(*w, &mut err))
-    else {
-        return ().reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
+    if !can_close_in_cmdwin(w)? {
+        return Ok(());
+    }
     let tabpage = tab_of(w);
     // `ex_win_close` reads an absent tab page as "the current one", which is
     // the only case where it may close the window the user is in.
     let other_tab = (!tabpage.is_current()).then_some(tabpage);
-    api_try(&mut err, |_| {
+    api_try(|| {
         ex_win_close(::core::ffi::c_int::from(force), w, other_tab);
-    });
-    ().reported(err)
+    })
 }
 
 /// Call the Lua function `fun` with `win` as the current window.
 pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
-    let mut err = Error::none();
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return Object::Nil.reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(Object::Nil);
     };
     let tabpage = tab_of(w);
-    let res = api_try(&mut err, |err| {
+    // The inner `Result` is the call's own; the outer one is whatever the
+    // bracket caught, which outranks it.
+    api_try(|| {
         let mut switch_args = WinExecute::default();
-        let mut res = Object::Nil;
+        let mut res = Ok(Object::Nil);
         // SAFETY: `switch_args` is this frame's own and nothing the call runs
         // can reach it.
         let switched = unsafe { win_execute_before(&raw mut switch_args, w, tabpage) };
@@ -343,20 +327,19 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
             let no_arena = ptr::null_mut::<Arena>();
             let name = ptr::null::<::core::ffi::c_char>();
             // SAFETY: the call runs Lua, which `api_try` catches.
-            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref, no_arena, err) };
+            res = unsafe { nlua_call_ref(fun, name, Array::EMPTY, kRetLuaref, no_arena) };
         }
         // SAFETY: the matching restore of the switch above.
         unsafe { win_execute_after(&raw mut switch_args) };
         res
-    });
-    res.reported(err)
+    })?
 }
 
 /// Point `win` at highlight namespace `ns_id`, or at the global one for -1.
 pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error> {
     let mut err = Error::none();
-    let Some(mut w) = find_window_by_handle(win, &mut err) else {
-        return ().reported(err);
+    let Some(mut w) = find_window_by_handle(win)? else {
+        return Ok(());
     };
     if ns_id < -1 {
         err = err_invalid(c"namespace", Bad::Unsaid);
@@ -388,13 +371,12 @@ pub unsafe fn nvim_win_text_height(
     const OPTIDX_MAX_HEIGHT: ::core::ffi::c_int = 4;
     const OPTIDX_START_VCOL: ::core::ffi::c_int = 5;
 
-    let mut err = Error::none();
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
     let mut rv: ApiDict = arena_dict(arena, 4 as size_t);
-    let Some(w) = find_window_by_handle(win, &mut err) else {
-        return rv.reported(err);
+    let Some(w) = find_window_by_handle(win)? else {
+        return Ok(rv);
     };
     let buf = w.buffer();
     let line_count: LineNr = w.buffer().line_count();
@@ -480,5 +462,5 @@ pub unsafe fn nvim_win_text_height(
     let end_row = Object::integer(Integer::from(end_lnum - 1));
     unsafe { dict_put(&mut rv, c"end_row", end_row) };
     unsafe { dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol)) };
-    rv.reported(err)
+    Ok(rv)
 }

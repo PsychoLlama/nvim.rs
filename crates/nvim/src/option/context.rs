@@ -24,8 +24,7 @@ use core::ffi::{c_char, c_void};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::types::{
-    AcoSave, Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
-    Window, kErrorTypeNone,
+    AcoSave, Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin, Window,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::graph::{switch_buffer, switch_to};
@@ -100,42 +99,37 @@ impl OptionContext {
         }
     }
 
-    /// Make `from` current, reporting whether anything was switched — which
-    /// is also whether [`OptionContext::leave`] has to be called. A window
-    /// that could not be entered sets `err`.
+    /// Make `from` current, answering whether anything was switched — which
+    /// is also whether [`OptionContext::leave`] has to be called.
     ///
     /// # Safety
     ///
-    /// `from` must be the live window or buffer this context's scope names,
-    /// and `err` a valid error slot.
-    pub(crate) unsafe fn enter(&mut self, from: *mut c_void, err: &mut Error) -> bool {
-        // SAFETY: the caller's `from` matches the scope, and `err` is valid.
+    /// `from` must be the live window or buffer this context's scope names.
+    pub(crate) unsafe fn enter(&mut self, from: *mut c_void) -> Result<bool, Error> {
+        // SAFETY: the caller's `from` matches the scope.
         match self {
-            OptionContext::Global => false,
+            OptionContext::Global => Ok(false),
             OptionContext::Win(switchwin) => {
                 let win = from.cast::<Window>();
                 if win == Win::current_raw() {
-                    return false;
+                    return Ok(false);
                 }
                 // SAFETY: `win` is the window this context named, still live.
                 let win = unsafe { Win::new(win) };
                 let tab = win_find_tabpage(win.id());
                 if unsafe { switch_win_noblock(switchwin, win, tab, true) }.is_err() {
                     unsafe { restore_win_noblock(switchwin, true) };
-                    if !err.is_set() {
-                        *err = Error::exception(c"Problem while switching windows");
-                    }
-                    return false;
+                    return Err(Error::exception(c"Problem while switching windows"));
                 }
-                true
+                Ok(true)
             }
             OptionContext::Buf(aco) => {
                 let buf = from.cast::<Buffer>();
                 if buf == Buf::current_raw() {
-                    return false;
+                    return Ok(false);
                 }
                 unsafe { aucmd_prepbuf(aco, Buf::new(buf)) };
-                true
+                Ok(true)
             }
         }
     }
@@ -160,31 +154,25 @@ impl OptionContext {
 ///
 /// # Safety
 ///
-/// `from` must be the live window or buffer `scope` names, and `err` a valid
-/// error slot.
+/// `from` must be the live window or buffer `scope` names.
 pub(crate) unsafe fn get_option_value_for(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
-    err: &mut Error,
-) -> OptVal {
+) -> Result<OptVal, Error> {
     let mut ctx = OptionContext::new(scope);
-    // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
-    let switched = unsafe { ctx.enter(from, err) };
-    if err.kind() != kErrorTypeNone {
-        return OptVal::Nil;
-    }
+    // SAFETY: the caller's `from` matches `scope`.
+    let switched = unsafe { ctx.enter(from) }?;
     let value = get_option_value(opt_idx, opt_flags);
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.
         unsafe { ctx.leave() };
     }
-    value
+    Ok(value)
 }
 
-/// [`set_option_value_handle_tty`] on another window or buffer, reporting a
-/// rejection through `err`.
+/// [`set_option_value_handle_tty`] on another window or buffer.
 ///
 /// # Safety
 ///
@@ -197,21 +185,18 @@ pub(crate) unsafe fn set_option_value_for(
     opt_flags: OptionSetFlags,
     scope: OptScope,
     from: *mut c_void,
-    err: &mut Error,
-) {
+) -> Result<(), Error> {
     let mut ctx = OptionContext::new(scope);
-    // SAFETY: the caller's `from` matches `scope`, and `err` is valid.
-    let switched = unsafe { ctx.enter(from, err) };
-    if err.kind() != kErrorTypeNone {
-        return;
-    }
+    // SAFETY: the caller's `from` matches `scope`.
+    let switched = unsafe { ctx.enter(from) }?;
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
-    if let Some(errmsg) = errmsg {
-        *err = Error::exception(&errmsg);
-    }
     if switched {
         // SAFETY: `enter` reported a switch and nothing has moved since.
         unsafe { ctx.leave() };
+    }
+    match errmsg {
+        Some(errmsg) => Err(Error::exception(&errmsg)),
+        None => Ok(()),
     }
 }

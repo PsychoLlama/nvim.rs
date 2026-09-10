@@ -606,7 +606,13 @@ unsafe fn range_is_lua(args: *const ExArg) -> bool {
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither.
     let nil = ptr::null_mut();
-    let result = unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil, &mut err) };
+    let result = match unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil) } {
+        Ok(value) => value,
+        Err(e) => {
+            err = e;
+            Object::Nil
+        }
+    };
     let is_lua = !err.is_set() && result.as_boolean() == Some(true);
     err.clear();
     is_lua

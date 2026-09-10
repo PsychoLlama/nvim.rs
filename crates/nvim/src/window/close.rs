@@ -246,24 +246,23 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
     true
 }
 
-pub fn can_close_in_cmdwin(win: Win, err: &mut Error) -> bool {
-    cmdwin_allows(win, &mut *err)
+pub fn can_close_in_cmdwin(win: Win) -> Result<bool, Error> {
+    cmdwin_allows(win)
 }
 
-/// Whether, the cmdline window considered, `win` is safe to close. When it is
-/// not and `win` *is* the cmdline window, that window is closed; otherwise
-/// `err` is set.
-fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
+/// Whether, the cmdline window considered, `win` is safe to close. `Ok(false)`
+/// is the case where `win` *is* the cmdline window: that window is closed and
+/// there is nothing to report.
+fn cmdwin_allows(win: Win) -> Result<bool, Error> {
     if cmdwin_type.get() != 0 {
         if cmdwin_win.get() == Some(win.id()) {
             cmdwin_result.set(Ctrl_C);
-            return false;
+            return Ok(false);
         } else if cmdwin_old_curwin.get() == Some(win.id()) {
-            set_err(err, e_cmdwin.as_ptr());
-            return false;
+            return Err(make_err(e_cmdwin.as_ptr()));
         }
     }
-    true
+    Ok(true)
 }
 
 /// Close the possibly last window of a tab page, `prev_curtab` being the tab

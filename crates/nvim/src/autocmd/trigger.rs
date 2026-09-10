@@ -272,7 +272,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     // The buffer may well have gone since the event was queued, which is
     // why the *handle* was stored and is resolved here.
     // SAFETY: `e` is the caller's event record.
-    let buf = find_buffer_by_handle(unsafe { (*e).buf }, &mut err);
+    let buf = find_buffer_by_handle(unsafe { (*e).buf }).unwrap_or_default();
     if let Some(buf) = buf {
         let mut save_v_event = SaveVEvent::default();
         // SAFETY: `save_v_event` is this frame's own storage, and the

@@ -40,8 +40,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo,
-    WinOpt, Window,
+    Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, WinOpt,
+    Window,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
@@ -126,7 +126,6 @@ pub fn win_alloc_first() {
 }
 
 pub fn win_alloc_aucmd_win(idx: c_int) {
-    let mut err = Error::none();
     let fconfig = WinConfig {
         width: Columns.get(),
         height: 5,
@@ -135,7 +134,10 @@ pub fn win_alloc_aucmd_win(idx: c_int) {
         ..WIN_CONFIG_INIT
     };
     // A hidden float over a fresh scratch buffer; it always answers a window.
-    let mut win = win_new_float(None, true, fconfig, &mut err).expect("the autocommand window");
+    let mut win = win_new_float(None, true, fconfig)
+        .ok()
+        .flatten()
+        .expect("the autocommand window");
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
     unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win.raw() };
     win.buffer().b_nwindows -= 1;

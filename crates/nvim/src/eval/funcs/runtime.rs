@@ -250,8 +250,13 @@ fn has_wsl() -> bool {
             items: ptr::null_mut(),
         };
         let arena = ptr::null_mut::<Arena>();
-        let o: Object =
-            unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena, &mut err) };
+        let o: Object = match unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena) } {
+            Ok(value) => value,
+            Err(e) => {
+                err = e;
+                Object::Nil
+            }
+        };
         debug_assert!(!err.is_set());
         let yes = o.as_boolean() == Some(true);
         ANSWER.set(Some(yes));

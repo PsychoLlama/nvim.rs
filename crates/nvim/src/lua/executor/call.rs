@@ -119,7 +119,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
                 args,
                 &raw mut funcexe,
             );
-            try_leave(&raw mut tstate, &mut err);
+            err.absorb(try_leave(&raw mut tstate));
             drop(sctx);
 
             if !err.is_set() {
@@ -193,12 +193,14 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     )
                     .cast::<Object>();
                 }
-                *args.items.add(args.size) =
-                    nlua_pop_object(lstate, false, &raw mut arena, &mut err);
-                args.size = args.size.wrapping_add(1);
-                if err.is_set() {
-                    break 'check_err;
+                match nlua_pop_object(lstate, false, &raw mut arena) {
+                    Ok(value) => *args.items.add(args.size) = value,
+                    Err(e) => {
+                        err = e;
+                        break 'check_err;
+                    }
                 }
+                args.size = args.size.wrapping_add(1);
             }
 
             if request {

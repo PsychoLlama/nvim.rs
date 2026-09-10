@@ -49,8 +49,8 @@ pub unsafe fn nvim_buf_set_text(
         unsafe { array_add(&mut scratch, put_value) };
         replacement = scratch;
     }
-    let Some(b) = api_buf_ensure_loaded(buf, &mut error) else {
-        return ().reported(error);
+    let Some(b) = api_buf_ensure_loaded(buf)? else {
+        return Ok(());
     };
     let buffer = b;
     let mut oob: bool = false;
@@ -368,7 +368,9 @@ pub unsafe fn nvim_buf_set_text(
             }
         }
     }
-    unsafe { try_leave(&raw mut tstate, &mut error) };
+    // The bracket outranks whatever the body wrote into `error`, which is
+    // the order the two had when both went through one slot.
+    unsafe { try_leave(&raw mut tstate) }?;
     ().reported(error)
 }
 

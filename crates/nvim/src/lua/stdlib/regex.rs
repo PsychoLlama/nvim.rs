@@ -211,7 +211,7 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         let mut tstate = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
         let prog = vim_regcomp(text, RE_AUTO | RE_MAGIC | RE_STRICT);
-        try_leave(&raw mut tstate, &mut err);
+        err.absorb(try_leave(&raw mut tstate));
 
         if err.is_set() {
             let why = err.message_or_empty().as_ptr();

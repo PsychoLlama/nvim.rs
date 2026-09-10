@@ -33,18 +33,17 @@ pub unsafe fn nvim_buf_get_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return Object::Nil.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(Object::Nil);
     };
     unsafe { dict_get_value(b.b_vars, name, arena, &mut error) }.reported(error)
 }
 
 pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return (-1 as Integer).reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(-1 as Integer);
     };
-    buf_get_changedtick(b).reported(error)
+    Ok(buf_get_changedtick(b))
 }
 
 /// # Safety
@@ -57,16 +56,14 @@ pub unsafe fn nvim_buf_get_keymap(
     mode: String_0,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return Array {
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(Array {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<Object>(),
-        }
-        .reported(error);
+        });
     };
-    unsafe { keymap_array(mode, Some(b), arena) }.reported(error)
+    Ok(unsafe { keymap_array(mode, Some(b), arena) })
 }
 
 /// # Safety
@@ -121,8 +118,8 @@ pub unsafe fn nvim_buf_set_var(
     value: Object,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return ().reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     let vars = b.b_vars;
     let no_arena = ::core::ptr::null_mut::<Arena>();
@@ -137,8 +134,8 @@ pub unsafe fn nvim_buf_set_var(
 /// at `data[size]`.
 pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return ().reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     let vars = b.b_vars;
     let no_arena = ::core::ptr::null_mut::<Arena>();
@@ -148,13 +145,12 @@ pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), 
 }
 
 pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
-    let mut error = Error::none();
     let rv: String_0 =
         String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
-    let Some(b) = find_buffer_by_handle(buf, &mut error).filter(|b| !b.b_ffname.is_null()) else {
-        return rv.reported(error);
+    let Some(b) = find_buffer_by_handle(buf)?.filter(|b| !b.b_ffname.is_null()) else {
+        return Ok(rv);
     };
-    unsafe { cstr_as_string(b.b_ffname) }.reported(error)
+    Ok(unsafe { cstr_as_string(b.b_ffname) })
 }
 
 /// # Safety
@@ -163,8 +159,8 @@ pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
 /// at `data[size]`.
 pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let Some(b) = find_buffer_by_handle(buf, &mut error) else {
-        return ().reported(error);
+    let Some(b) = find_buffer_by_handle(buf)? else {
+        return Ok(());
     };
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
@@ -190,7 +186,7 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
     if !is_curbuf {
         p_acd.set(save_acd);
     }
-    unsafe { try_leave(&raw mut tstate, &mut error) };
+    error.absorb(unsafe { try_leave(&raw mut tstate) });
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
@@ -202,9 +198,8 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
 }
 
 pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
-    let mut stub: Error = Error::none();
-    let b = find_buffer_by_handle(buf, &mut stub);
-    stub.clear();
+    // A handle that names nothing is not an error here, only a `false`.
+    let b = find_buffer_by_handle(buf).unwrap_or_default();
     b.is_some_and(|b| !b.b_ml.ml_mfp.is_null())
 }
 
@@ -217,11 +212,7 @@ pub unsafe fn nvim_buf_delete(
     opts: *mut KeyDict_buf_delete,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b = find_buffer_by_handle(buf, &mut error);
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
-    let b = b.expect("an unset error means the handle named a live buffer");
+    let b = find_buffer_by_handle(buf)?.expect("a resolved handle names a live buffer");
     let force: bool = unsafe { (*opts).force };
     let unload: bool = unsafe { (*opts).unload };
     let result: Result<(), Failed> = do_buffer(
@@ -244,8 +235,6 @@ pub unsafe fn nvim_buf_delete(
 }
 
 pub fn nvim_buf_is_valid(buf: BufferHandle) -> Boolean {
-    let mut stub: Error = Error::none();
-    let ret: Boolean = find_buffer_by_handle(buf, &mut stub).is_some();
-    stub.clear();
-    ret
+    // A handle that names nothing is not an error here, only a `false`.
+    find_buffer_by_handle(buf).unwrap_or_default().is_some()
 }

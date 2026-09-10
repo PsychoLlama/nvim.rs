@@ -103,7 +103,7 @@ pub unsafe fn exec_impl(
     drop(sctx);
     // SAFETY: `tstate` is what the `try_enter` above filled in, and `err`
     // is the caller's slot.
-    unsafe { try_leave(&raw mut tstate, err) };
+    err.absorb(unsafe { try_leave(&raw mut tstate) });
 
     let caught = err.kind() != kErrorTypeNone;
     // The capture always starts with the newline that separated the first
@@ -140,10 +140,9 @@ pub unsafe fn exec_impl(
 /// `cmd` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
-    api_try(&mut error, |_| {
+    api_try(|| {
         // SAFETY: `cmd` is the caller's NUL-terminated command line.
         let _ = unsafe { do_cmdline_cmd(cmd.data()) };
-    });
-    ().reported(error)
+    })?;
+    Ok(())
 }

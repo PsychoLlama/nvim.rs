@@ -36,7 +36,6 @@
 
 mod autocmd;
 mod buffer;
-mod buffer_2;
 mod command;
 mod deprecated;
 mod extmark;
@@ -53,7 +52,6 @@ mod window;
 
 pub use self::autocmd::*;
 pub use self::buffer::*;
-pub use self::buffer_2::*;
 pub use self::command::*;
 pub use self::deprecated::*;
 pub use self::extmark::*;
@@ -221,8 +219,6 @@ struct Call {
     /// every argument has been, since the values the releases walk live in
     /// it.
     arena: Arena,
-    /// Why the call failed, if it did.
-    err: Error,
     /// The parameter a failed conversion blamed, named in the message.
     err_param: *mut c_char,
 }
@@ -231,7 +227,6 @@ impl Call {
     const fn new() -> Self {
         Call {
             arena: ARENA_EMPTY,
-            err: Error::none(),
             err_param: ptr::null_mut(),
         }
     }
@@ -242,7 +237,7 @@ impl Call {
 /// conversion — releases exactly the arguments that were converted, in
 /// declaration order, because each one's release is a guard dropped on the
 /// way out.
-type Convert = unsafe fn(*mut lua_State, &mut Call);
+type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
@@ -293,15 +288,14 @@ impl<K: KeySet> Drop for KeyDictArg<K> {
 /// `*err_param` names the key that failed.
 ///
 /// # Safety
-/// `lstate` is the running Lua state with the argument on top; `arena`,
-/// `err` and `err_param` are the binding's own.
+/// `lstate` is the running Lua state with the argument on top; `arena` and
+/// `err_param` are the binding's own.
 unsafe fn pop_keydict<K: KeySet>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
     arena: &mut Arena,
-    err: &mut Error,
     err_param: &mut *mut c_char,
-) {
+) -> Result<(), Error> {
     // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
     // `KeySet`'s contract, which is what the decoder needs of it.
     unsafe {
@@ -311,9 +305,8 @@ unsafe fn pop_keydict<K: KeySet>(
             K::GET_FIELD,
             err_param,
             arena,
-            err,
         )
-    };
+    }
 }
 
 /// Hand a keyset result back as a Lua table.
@@ -375,12 +368,12 @@ impl Drop for LuaRefArg {
 
 /// Refuses a call that arrived with a different number of arguments than the
 /// API function declares.
-fn wrong_arity(err: &mut Error, argc: c_int) {
-    *err = if argc == 1 {
+fn wrong_arity(argc: c_int) -> Error {
+    if argc == 1 {
         api_error!(kErrorTypeValidation, "Expected {argc} argument")
     } else {
         api_error!(kErrorTypeValidation, "Expected {argc} arguments")
-    };
+    }
 }
 
 // -- the shared half of every binding --------------------------------------
@@ -411,8 +404,8 @@ unsafe fn run(
 ) -> c_int {
     let mut call = Call::new();
     // SAFETY: the caller's stack.
-    if unsafe { lua_gettop(lstate) } != argc {
-        wrong_arity(&mut call.err, argc);
+    let outcome = if unsafe { lua_gettop(lstate) } != argc {
+        Err(wrong_arity(argc))
     } else {
         let refused = deferred.filter(|_| !nlua_is_deferred_safe());
         if let Some(name) = refused {
@@ -422,16 +415,16 @@ unsafe fn run(
             return unsafe { luaL_error(lstate, fmt, name) };
         }
         // SAFETY: as above; `call` is this frame's own.
-        unsafe { convert(lstate, &mut call) };
-    }
+        unsafe { convert(lstate, &mut call) }
+    };
     // SAFETY: the arena is this frame's own, and every argument that borrowed
     // from it has been released.
     unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
-    if !call.err.is_set() {
+    let Err(err) = outcome else {
         return nret;
-    }
-    // SAFETY: as above; `call.err` carries a message.
-    unsafe { stage_error(lstate, &mut call) };
+    };
+    // SAFETY: as above; `err` carries a message.
+    unsafe { stage_error(lstate, &call, &err) };
     // SAFETY: the message is on the stack, and `lua_error` does not return.
     unsafe { lua_error(lstate) }
 }
@@ -471,13 +464,13 @@ unsafe fn dispatch_fast(
 /// itself, ready for `lua_error` to raise.
 ///
 /// # Safety
-/// `lstate` is the running Lua state and `call` is the binding's own, with
-/// an error set.
-unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
-    let message = call.err.message_or_empty().as_ptr();
+/// `lstate` is the running Lua state, `call` is the binding's own and `err`
+/// the failure it answered with.
+unsafe fn stage_error(lstate: *mut lua_State, call: &Call, err: &Error) {
+    let message = err.message_or_empty().as_ptr();
     // SAFETY: the caller's stack; `message` is the binding's own error text,
-    // live until the `clear` below, and `err_param`, when set, points at a
-    // static NUL-terminated name.
+    // live for this call, and `err_param`, when set, points at a static
+    // NUL-terminated name.
     unsafe {
         luaL_where(lstate, 1);
         if !call.err_param.is_null() {
@@ -491,7 +484,6 @@ unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
             lua_concat(lstate, 2);
         }
     }
-    call.err.clear();
 }
 
 /// One entry of the `vim.api` table.
@@ -510,14 +502,14 @@ unsafe fn bind(
 }
 
 /// Refuses a call made while the text is locked.
-fn text_locked_error(err: &mut Error) {
-    *err = Error::from_message(kErrorTypeException, get_text_locked_msg());
+fn text_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, get_text_locked_msg())
 }
 
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
-fn expr_map_locked_error(err: &mut Error) {
-    *err = Error::from_message(kErrorTypeException, e_textlock);
+fn expr_map_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, e_textlock)
 }
 
 // The keysets the bindings name, each tied to its own generated table

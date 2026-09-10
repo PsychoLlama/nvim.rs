@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, has_key};
+use crate::api::private::helpers::has_key;
 use crate::guard::Allow;
 use crate::types::NUL;
 use crate::winlayer::Buf;
@@ -67,7 +67,6 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
 // `nvim__redraw` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
-    let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let mut opts = unsafe { Redraw::new(opts) };
     let keys = opts.is_set__redraw_;
@@ -75,26 +74,18 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut win: Option<Win> = None;
     let mut buf: Option<Buf> = None;
     if set(KEYSET_OPTIDX_redraw__win) {
-        win = find_window_by_handle(opts.win, &mut error);
-        if error.is_set() {
-            return ().reported(error);
-        }
+        win = find_window_by_handle(opts.win)?;
     }
     if set(KEYSET_OPTIDX_redraw__buf) {
         if win.is_some() {
-            report(&mut error, c"cannot use both 'buf' and 'win'");
-            return ().reported(error);
+            return Err(report(c"cannot use both 'buf' and 'win'"));
         }
-        buf = find_buffer_by_handle(opts.buf, &mut error);
-        if error.is_set() {
-            return ().reported(error);
-        }
+        buf = find_buffer_by_handle(opts.buf)?;
     }
     // `win` and `buf` say *where*; at least one other key has to say *what*.
     let named = u32::from(win.is_some()) + u32::from(buf.is_some());
     if keys.count_ones() <= named {
-        report(&mut error, c"at least one action required");
-        return ().reported(error);
+        return Err(report(c"at least one action required"));
     }
     if set(KEYSET_OPTIDX_redraw__valid) {
         let type_0 = if opts.valid { UPD_VALID } else { UPD_NOT_VALID };
@@ -116,8 +107,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             .and_then(|(begin, end)| begin.as_integer().zip(end.as_integer()))
             .filter(|&(begin, end)| begin >= 0 && end >= -1);
         let Some((begin_raw, end_raw)) = range else {
-            report(&mut error, c"Invalid 'range': Expected 2-tuple of Integers");
-            return ().reported(error);
+            return Err(report(c"Invalid 'range': Expected 2-tuple of Integers"));
         };
         let rbuf = win.map(Win::buffer).or(buf).unwrap_or_else(Buf::current);
         let line_count = int64_t::from(rbuf.b_ml.ml_line_count);
@@ -190,12 +180,10 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     }
     drop(redraw);
     p_lz.set(::core::ffi::c_int::from(save_lz));
-    ().reported(error)
+    Ok(())
 }
 
 /// One of this file's three validation messages.
-fn report(err: &mut Error, msg: &CStr) {
-    // SAFETY: `err` is the caller's own slot, and the format takes the one C
-    // string it is given.
-    *err = Error::validation(msg);
+fn report(msg: &CStr) -> Error {
+    Error::validation(msg)
 }

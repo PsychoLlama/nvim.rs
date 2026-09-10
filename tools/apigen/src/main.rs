@@ -2427,8 +2427,6 @@ struct Call {
     /// every argument has been, since the values the releases walk live in
     /// it.
     arena: Arena,
-    /// Why the call failed, if it did.
-    err: Error,
     /// The parameter a failed conversion blamed, named in the message.
     err_param: *mut c_char,
 }
@@ -2437,7 +2435,6 @@ impl Call {
     const fn new() -> Self {
         Call {
             arena: ARENA_EMPTY,
-            err: Error::none(),
             err_param: ptr::null_mut(),
         }
     }
@@ -2448,7 +2445,7 @@ impl Call {
 /// conversion — releases exactly the arguments that were converted, in
 /// declaration order, because each one's release is a guard dropped on the
 /// way out.
-type Convert = unsafe fn(*mut lua_State, &mut Call);
+type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
 
 // -- keysets ---------------------------------------------------------------
 
@@ -2499,15 +2496,14 @@ impl<K: KeySet> Drop for KeyDictArg<K> {
 /// `*err_param` names the key that failed.
 ///
 /// # Safety
-/// `lstate` is the running Lua state with the argument on top; `arena`,
-/// `err` and `err_param` are the binding's own.
+/// `lstate` is the running Lua state with the argument on top; `arena` and
+/// `err_param` are the binding's own.
 unsafe fn pop_keydict<K: KeySet>(
     lstate: *mut lua_State,
     arg: &mut KeyDictArg<K>,
     arena: &mut Arena,
-    err: &mut Error,
     err_param: &mut *mut c_char,
-) {
+) -> Result<(), Error> {
     // SAFETY: the caller's stack, and `K::GET_FIELD` is `K`'s own lookup per
     // `KeySet`'s contract, which is what the decoder needs of it.
     unsafe {
@@ -2517,9 +2513,8 @@ unsafe fn pop_keydict<K: KeySet>(
             K::GET_FIELD,
             err_param,
             arena,
-            err,
         )
-    };
+    }
 }
 
 /// Hand a keyset result back as a Lua table.
@@ -2581,12 +2576,12 @@ impl Drop for LuaRefArg {
 
 /// Refuses a call that arrived with a different number of arguments than the
 /// API function declares.
-fn wrong_arity(err: &mut Error, argc: c_int) {
-    *err = if argc == 1 {
+fn wrong_arity(argc: c_int) -> Error {
+    if argc == 1 {
         api_error!(kErrorTypeValidation, "Expected {argc} argument")
     } else {
         api_error!(kErrorTypeValidation, "Expected {argc} arguments")
-    };
+    }
 }
 
 // -- the shared half of every binding --------------------------------------
@@ -2617,8 +2612,8 @@ unsafe fn run(
 ) -> c_int {
     let mut call = Call::new();
     // SAFETY: the caller's stack.
-    if unsafe { lua_gettop(lstate) } != argc {
-        wrong_arity(&mut call.err, argc);
+    let outcome = if unsafe { lua_gettop(lstate) } != argc {
+        Err(wrong_arity(argc))
     } else {
         let refused = deferred.filter(|_| !nlua_is_deferred_safe());
         if let Some(name) = refused {
@@ -2628,16 +2623,16 @@ unsafe fn run(
             return unsafe { luaL_error(lstate, fmt, name) };
         }
         // SAFETY: as above; `call` is this frame's own.
-        unsafe { convert(lstate, &mut call) };
-    }
+        unsafe { convert(lstate, &mut call) }
+    };
     // SAFETY: the arena is this frame's own, and every argument that borrowed
     // from it has been released.
     unsafe { arena_mem_free(arena_finish(&raw mut call.arena)) };
-    if !call.err.is_set() {
+    let Err(err) = outcome else {
         return nret;
-    }
-    // SAFETY: as above; `call.err` carries a message.
-    unsafe { stage_error(lstate, &mut call) };
+    };
+    // SAFETY: as above; `err` carries a message.
+    unsafe { stage_error(lstate, &call, &err) };
     // SAFETY: the message is on the stack, and `lua_error` does not return.
     unsafe { lua_error(lstate) }
 }
@@ -2677,13 +2672,13 @@ unsafe fn dispatch_fast(
 /// itself, ready for `lua_error` to raise.
 ///
 /// # Safety
-/// `lstate` is the running Lua state and `call` is the binding's own, with
-/// an error set.
-unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
-    let message = call.err.message_or_empty().as_ptr();
+/// `lstate` is the running Lua state, `call` is the binding's own and `err`
+/// the failure it answered with.
+unsafe fn stage_error(lstate: *mut lua_State, call: &Call, err: &Error) {
+    let message = err.message_or_empty().as_ptr();
     // SAFETY: the caller's stack; `message` is the binding's own error text,
-    // live until the `clear` below, and `err_param`, when set, points at a
-    // static NUL-terminated name.
+    // live for this call, and `err_param`, when set, points at a static
+    // NUL-terminated name.
     unsafe {
         luaL_where(lstate, 1);
         if !call.err_param.is_null() {
@@ -2697,7 +2692,6 @@ unsafe fn stage_error(lstate: *mut lua_State, call: &mut Call) {
             lua_concat(lstate, 2);
         }
     }
-    call.err.clear();
 }
 
 /// One entry of the `vim.api` table.
@@ -2724,8 +2718,8 @@ const LUA_READERS: &[(&str, &str)] = &[
         "text_locked_error",
         r#"
 /// Refuses a call made while the text is locked.
-fn text_locked_error(err: &mut Error) {
-    *err = Error::from_message(kErrorTypeException, get_text_locked_msg());
+fn text_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, get_text_locked_msg())
 }
 "#,
     ),
@@ -2734,8 +2728,8 @@ fn text_locked_error(err: &mut Error) {
         r#"
 /// Refuses a call made from an expression mapping, which the cmdline window
 /// alone would have allowed.
-fn expr_map_locked_error(err: &mut Error) {
-    *err = Error::from_message(kErrorTypeException, e_textlock);
+fn expr_map_locked_error() -> Error {
+    Error::from_message(kErrorTypeException, e_textlock)
 }
 "#,
     ),
@@ -2791,7 +2785,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // Whether the API function has a Lua implementation of its own, which it
     // needs the state for.
     let has_lua_imp = f.params.contains(&Param::LuaState);
-    let can_fail = f.fallible;
 
     for (index, ty, _) in &values {
         if matches!(ty, ApiType::Dict)
@@ -2825,19 +2818,13 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         }
     };
 
-    // Which of `Call`'s fields the body reads. Every conversion needs all
-    // three; with no arguments to convert only the call itself is left.
-    let locked = spec.textlock || spec.textlock_allow_cmdwin;
+    // Which of `Call`'s fields the body reads. A conversion needs both; with
+    // no arguments to convert only the call itself is left.
     let uses_arena = argc > 0 || f.params.contains(&Param::Arena);
-    let uses_err = argc > 0 || locked || can_fail;
-    let fields: Vec<&str> = [
-        ("arena", uses_arena),
-        ("err", uses_err),
-        ("err_param", argc > 0),
-    ]
-    .into_iter()
-    .filter_map(|(name, used)| used.then_some(name))
-    .collect();
+    let fields: Vec<&str> = [("arena", uses_arena), ("err_param", argc > 0)]
+        .into_iter()
+        .filter_map(|(name, used)| used.then_some(name))
+        .collect();
 
     // As with the dispatch wrappers: one contract, 182 bindings, and it can
     // only live in the generator.
@@ -2892,12 +2879,12 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     writeln!(out, "    /// on top, and `call` is the binding's own.").unwrap();
     writeln!(
         out,
-        "    unsafe fn convert(lstate: *mut lua_State, {}: &mut Call) {{",
+        "    unsafe fn convert(lstate: *mut lua_State, {}: &mut Call) -> Result<(), Error> {{",
         if fields.is_empty() { "_call" } else { "call" }
     )
     .unwrap();
     if !fields.is_empty() {
-        let rest = if fields.len() == 3 { "" } else { ", .." };
+        let rest = if fields.len() == 2 { "" } else { ", .." };
         writeln!(
             out,
             "        let Call {{ {}{rest} }} = call;",
@@ -2909,8 +2896,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     if spec.textlock {
         writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(out, "        if text_locked() {{").unwrap();
-        writeln!(out, "            text_locked_error(err);").unwrap();
-        writeln!(out, "            return;").unwrap();
+        writeln!(out, "            return Err(text_locked_error());").unwrap();
         writeln!(out, "        }}").unwrap();
     } else if spec.textlock_allow_cmdwin {
         writeln!(
@@ -2918,8 +2904,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
             "        if textlock.get() != 0 || expr_map_locked() {{"
         )
         .unwrap();
-        writeln!(out, "            expr_map_locked_error(err);").unwrap();
-        writeln!(out, "            return;").unwrap();
+        writeln!(out, "            return Err(expr_map_locked_error());").unwrap();
         writeln!(out, "        }}").unwrap();
     }
 
@@ -2938,32 +2923,24 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
             )
             .unwrap();
             writeln!(out, "        // SAFETY: as above.").unwrap();
+            // The keyset pop names the offending key itself.
             writeln!(
                 out,
-                "        unsafe {{ pop_keydict(lstate, &mut arg_{slot}, arena, err, err_param) }};"
+                "        unsafe {{ pop_keydict(lstate, &mut arg_{slot}, arena, err_param) }}?;"
             )
             .unwrap();
-            // The keyset pop names the offending key itself.
-            writeln!(out, "        if err.is_set() {{").unwrap();
-            writeln!(out, "            return;").unwrap();
-            writeln!(out, "        }}").unwrap();
             continue;
         }
         let (pop, extra) = popper(ty);
         writeln!(out, "        // SAFETY: as above.").unwrap();
+        // `inspect_err` names the parameter a failed conversion blamed, for
+        // the message `run` stages; the failure itself passes through.
         writeln!(
             out,
-            "        let arg_{slot} = unsafe {{ {pop}(lstate, {extra}arena, err) }};"
+            "        let arg_{slot} = unsafe {{ {pop}(lstate, {extra}arena) }}\n\
+             \x20           .inspect_err(|_| *err_param = c\"{param}\".as_ptr().cast_mut())?;"
         )
         .unwrap();
-        writeln!(out, "        if err.is_set() {{").unwrap();
-        writeln!(
-            out,
-            "            *err_param = c\"{param}\".as_ptr().cast_mut();"
-        )
-        .unwrap();
-        writeln!(out, "            return;").unwrap();
-        writeln!(out, "        }}").unwrap();
         if let Some(guard) = guard(ty) {
             writeln!(
                 out,
@@ -3011,42 +2988,13 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .unwrap();
     }
     let bind = if by_pointer { "mut ret" } else { "ret" };
-    if f.fallible {
-        // A failed call has no result to hand back and nothing left to
-        // release, so it leaves the error for `run` to raise; the guard
-        // above puts the Lua state back.
-        match f.ret {
-            RetType::Void => writeln!(out, "        if let Err(e) = {call} {{").unwrap(),
-            _ => {
-                writeln!(out, "        let {bind} = match {call} {{").unwrap();
-                writeln!(out, "            Ok(ret) => ret,").unwrap();
-                writeln!(out, "            Err(e) => {{").unwrap();
-            }
-        }
-        let indent = if f.ret == RetType::Void {
-            "    "
-        } else {
-            "        "
-        };
-        writeln!(out, "        {indent}*err = e;").unwrap();
-        // A void binding has nothing after the block, so the `return` that
-        // used to jump past the restore would now be the body's last
-        // statement -- which clippy calls needless, and is.
-        if f.ret != RetType::Void {
-            writeln!(out, "        {indent}return;").unwrap();
-        }
-        match f.ret {
-            RetType::Void => writeln!(out, "        }}").unwrap(),
-            _ => {
-                writeln!(out, "            }}").unwrap();
-                writeln!(out, "        }};").unwrap();
-            }
-        }
-    } else {
-        match f.ret {
-            RetType::Void => writeln!(out, "        {call};").unwrap(),
-            _ => writeln!(out, "        let {bind} = {call};").unwrap(),
-        }
+    // A failed call has no result to hand back and nothing left to release,
+    // so its failure travels out for `run` to raise; the guard above puts
+    // the Lua state back on the way.
+    let query = if f.fallible { "?" } else { "" };
+    match f.ret {
+        RetType::Void => writeln!(out, "        {call}{query};").unwrap(),
+        _ => writeln!(out, "        let {bind} = {call}{query};").unwrap(),
     }
     // A function with a Lua implementation converts its own result, so this
     // is only the fallback path, and upstream left it on the old conversion
@@ -3092,6 +3040,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         .unwrap();
         writeln!(out, "        unsafe {{ {free}(ret) }};").unwrap();
     }
+    writeln!(out, "        Ok(())").unwrap();
     writeln!(out, "    }}").unwrap();
 
     let nret = if f.ret == RetType::Void { 0 } else { 1 };
