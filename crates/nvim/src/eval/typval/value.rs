@@ -172,6 +172,14 @@ impl Drop for TypVal {
         // SAFETY: `self` is a live typval by construction, and the walk
         // leaves it holding nothing.
         unsafe { tv_clear(&mut *self) };
+        // The clear left the empty value of the kind, which owns nothing --
+        // so the field drop glue the compiler appends after this is dead
+        // code. Saying so *here* is what lets it fold the glue away: the
+        // discriminant is a constant at the end of this body, and a dropped
+        // value may not be read, so overwriting the kind is invisible.
+        // Without it every implicit drop pays an out-of-line
+        // `drop_glue::<TypVal>` (60 M instructions of `spellbench`).
+        self.overwrite(TypVal::Unknown);
     }
 }
 
