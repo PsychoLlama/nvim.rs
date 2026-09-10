@@ -106,7 +106,6 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
     let list = held.as_ptr();
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
-        // SAFETY: a fresh dictionary.
         let dict_held = tv_dict_alloc();
         let dict = dict_held.as_ptr();
         dict_add_nr(dict, c"seq", VarNumber::from(uh.uh_seq));

@@ -439,7 +439,6 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: &mut TypVal, take_
             tv.write_list(Some(list));
         }
         Object::Dict(pairs) => {
-            // SAFETY: the dictionary is this call's until it is handed over.
             let dict_held = tv_dict_alloc();
             let dict = dict_held.as_ptr();
             for i in 0..pairs.size {

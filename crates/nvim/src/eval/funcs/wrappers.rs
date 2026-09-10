@@ -117,7 +117,6 @@ pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
 /// Make `result` a fresh List of `len` items, or of unknown length for one of
 /// the `kListLen*` hints. The list the builtin then fills in.
 pub(crate) fn list_alloc_ret(result: &mut TypVal, len: ptrdiff_t) -> *mut List {
-    // SAFETY: `result` is the caller's cleared return value.
     tv_list_alloc_ret(result, len)
 }
 
@@ -131,7 +130,6 @@ pub(crate) fn list_set_ret(result: &mut TypVal, l: *mut List) {
 
 /// Make `result` a fresh, empty Dictionary.
 pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
-    // SAFETY: `result` is the caller's cleared return value.
     tv_dict_alloc_ret(result)
 }
 

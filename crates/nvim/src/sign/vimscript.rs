@@ -245,9 +245,9 @@ unsafe fn sign_get_placed_in_buf(
 ) {
     // SAFETY: the caller's buffer.
     let cbuf = buffer;
-    // SAFETY: the caller's list, and the buffer handle it reports.
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
+    // SAFETY: the caller's list, and the buffer handle it reports.
     let l = unsafe {
         tv_list_append_dict(retlist, Some(d_held));
         put_nr(d, "bufnr", VarNumber::from(cbuf.handle));

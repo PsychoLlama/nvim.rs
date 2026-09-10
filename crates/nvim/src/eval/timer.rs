@@ -68,7 +68,6 @@ pub fn find_timer_by_nr(id: VarNumber) -> *mut Timer {
 pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
     let (rettv, timer) = unsafe { (Tv::new(result), Tm::new(timer)) };
-    // SAFETY: `tv_dict_alloc` never answers NULL.
     let dict_held = tv_dict_alloc();
     let dict = dict_held.as_ptr();
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is

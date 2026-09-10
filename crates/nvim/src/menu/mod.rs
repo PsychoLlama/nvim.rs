@@ -528,7 +528,6 @@ pub(crate) fn free_str(s: *mut c_char) {
 // and the values are copied or taken over by the callee.
 
 pub(crate) fn dict_alloc() -> DictRef {
-    // SAFETY: allocates a fresh Dict and never answers null.
     tv_dict_alloc()
 }
 

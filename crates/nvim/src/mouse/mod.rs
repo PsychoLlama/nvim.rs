@@ -601,7 +601,6 @@ pub(crate) fn setmouse() {
 /// `getmousepos()` -- where the pointer last was, in every coordinate system
 /// the editor knows.
 pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's promise.
     tv_dict_alloc_ret(result);
     let d = result.dict_or_null();
     let add = |key: &CStr, value: VarNumber| {
