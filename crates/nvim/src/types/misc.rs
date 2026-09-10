@@ -217,19 +217,28 @@ impl DictKey {
         self.len() == 0
     }
 
-    /// The key as a C string: what the hash table probes on, and what every
-    /// caller that prints or compares a key reads.
+    /// The key's first byte, NUL-terminated: upstream's `di_key`.
+    ///
+    /// This is what every hash-table probe reads, so it is a match and a
+    /// field address and nothing else.  Going through
+    /// [`as_c_str`](Self::as_c_str) instead cost `evalbench` two and a half
+    /// per cent: `CStr::from_bytes_with_nul` *validates*, which is a scan of
+    /// the key on every lookup.
+    pub fn as_ptr(&self) -> *const ::core::ffi::c_char {
+        match self {
+            DictKey::Inline { bytes, .. } => bytes.as_ptr().cast(),
+            DictKey::Heap(boxed) => boxed.as_ptr().cast(),
+        }
+    }
+
+    /// The key as a C string, for a caller that wants one rather than a
+    /// pointer.  Validating, and therefore linear: not for a probe.
     pub fn as_c_str(&self) -> &::core::ffi::CStr {
         let with_nul = match self {
             DictKey::Inline { len, bytes } => &bytes[..usize::from(*len) + 1],
             DictKey::Heap(boxed) => boxed,
         };
         ::core::ffi::CStr::from_bytes_with_nul(with_nul).expect("a key is NUL-terminated once")
-    }
-
-    /// The key's first byte, NUL-terminated: upstream's `di_key`.
-    pub fn as_ptr(&self) -> *const ::core::ffi::c_char {
-        self.as_c_str().as_ptr()
     }
 }
 
