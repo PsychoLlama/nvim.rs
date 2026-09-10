@@ -169,9 +169,16 @@ impl Drop for TypVal {
     /// one reference to the list, and the last one frees it. What it is not
     /// is a *deep* free by recursion -- see [`tv_clear`].
     fn drop(&mut self) {
-        // SAFETY: `self` is a live typval by construction, and the walk
-        // leaves it holding nothing.
-        unsafe { tv_clear(&mut *self) };
+        // The fast path is *here* rather than only inside `tv_clear`: an
+        // implicit drop is the commonest operation the interpreter has, and
+        // most of them are of a scalar or of a slot something already took
+        // the value out of. Testing before the call is what keeps the
+        // compiler's drop glue small enough to inline at the call site.
+        if !self.is_empty() {
+            // SAFETY: `self` is a live typval by construction, and the walk
+            // leaves it holding nothing.
+            unsafe { tv_clear(&mut *self) };
+        }
         // The clear left the empty value of the kind, which owns nothing --
         // so the field drop glue the compiler appends after this is dead
         // code. Saying so *here* is what lets it fold the glue away: the
