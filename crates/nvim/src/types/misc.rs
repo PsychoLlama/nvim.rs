@@ -40,19 +40,42 @@ pub struct ParserHighlight {
     pub items: *mut ParserHighlightChunk,
     pub init_array: [ParserHighlightChunk; 16],
 }
-/// A [`DictItem`] whose key is the one-letter scope name; see [`DictItem`].
+/// The [`DictItem`] a scope dictionary is reached through, whose key is the
+/// empty string and whose value is the scope dictionary itself.
 ///
-/// The value is the scope dictionary itself, and it is
-/// `unref_var_dict` that gives up the reference -- a buffer, a window and a
-/// tab page each embed one of these and are ordinary Rust values, so without
-/// [`ManuallyDrop`](core::mem::ManuallyDrop) freeing one would release the
-/// scope twice.
-#[repr(C)]
-pub struct ScopeDictDictItem {
-    pub di_tv: ManuallyDrop<TypVal>,
-    pub di_lock: VarLock,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 1],
+/// It is `unref_var_dict` that gives up the reference -- a buffer, a window
+/// and a tab page each embed one of these and are ordinary Rust values, so
+/// without [`ManuallyDrop`](core::mem::ManuallyDrop) freeing one would
+/// release the scope twice.  The item is wrapped rather than duplicated: its
+/// key is the empty string, which is inline, so nothing is leaked by not
+/// dropping it.
+///
+/// `#[repr(transparent)]`: the scopes hand their own entry around as a bare
+/// `*mut DictItem`, and the collector names its value by adding
+/// `offset_of!(DictItem, di_tv)` to the field's offset in a buffer, a window
+/// or a tab page.  Both are casts through this wrapper.
+#[repr(transparent)]
+pub struct ScopeDictItem(pub ManuallyDrop<DictItem>);
+
+impl ScopeDictItem {
+    /// The item itself, which is what a hashtab slot names.
+    pub fn item(&mut self) -> *mut DictItem {
+        &raw mut *self.0
+    }
+}
+
+impl ::core::ops::Deref for ScopeDictItem {
+    type Target = DictItem;
+
+    fn deref(&self) -> &DictItem {
+        &self.0
+    }
+}
+
+impl ::core::ops::DerefMut for ScopeDictItem {
+    fn deref_mut(&mut self) -> &mut DictItem {
+        &mut self.0
+    }
 }
 #[derive(Clone)]
 #[repr(C)]
@@ -109,19 +132,139 @@ pub struct caller_scope {
     pub autocmd_bufnr: ::core::ffi::c_int,
     pub funccalp: *mut ::core::ffi::c_void,
 }
-/// One entry of a [`Dict`](crate::types::Dict), allocated around its own key.
+/// A dictionary item's key: its own bytes, NUL-terminated.
+///
+/// Short keys -- which in practice is nearly all of them, and *every* key of
+/// the four kinds of item that are embedded in something bigger rather than
+/// allocated by the dictionary -- live in the item.  Upstream got that by
+/// over-allocating the item and letting the hash table's slot point into the
+/// tail, so the item could be recovered by subtracting an offset from the
+/// slot's key pointer; the slot names the item directly now
+/// ([`SlotEntry`](crate::hashtab::SlotEntry)), and the key is the item's own.
+///
+/// The bytes are always NUL-terminated, whichever arm holds them, because
+/// the probe compares NUL-terminated keys and always has.
+///
+/// `#[repr(u8)]` for one reason: it puts a real tag byte in the value and
+/// fixes `Inline`'s discriminant at zero, so **all-zero storage is a valid
+/// empty key** -- and dropping one is a no-op.  That is what lets a
+/// `DictItem` sit in `xcalloc`'d memory and be filled in field by field: a
+/// funccall's twelve fixed variables, a buffer's `b:changedtick`, a scope's
+/// own entry.  It costs nothing: the tag lands in the tail padding either
+/// way (asserted below).
+#[repr(u8)]
+pub enum DictKey {
+    /// Up to [`DictKey::INLINE_MAX`] bytes plus the NUL, in the item itself.
+    ///
+    /// First, and with a zero length, so that all-zero storage is a valid
+    /// empty key: a `FuncCall`'s twelve fixed variables arrive `xcalloc`'d.
+    Inline {
+        len: uint8_t,
+        bytes: [uint8_t; DictKey::INLINE_CAP],
+    },
+    /// A longer key, NUL included.
+    Heap(Box<[uint8_t]>),
+}
+
+impl DictKey {
+    /// How many bytes the inline arm holds, NUL included.  Sized so that the
+    /// enum is no larger than the boxed arm forces it to be, and so that
+    /// every embedded item's key fits: the longest is a funccall's
+    /// twenty-character short name.
+    pub const INLINE_CAP: usize = 22;
+    /// The longest key that stays in the item.
+    pub const INLINE_MAX: usize = Self::INLINE_CAP - 1;
+
+    /// The empty key, which is what an uninitialised item carries.
+    pub const EMPTY: Self = DictKey::Inline {
+        len: 0,
+        bytes: [0; Self::INLINE_CAP],
+    };
+
+    /// A key holding a copy of `bytes`, NUL-terminated.
+    pub fn new(bytes: &[uint8_t]) -> Self {
+        if bytes.len() <= Self::INLINE_MAX {
+            let mut inline = [0; Self::INLINE_CAP];
+            inline[..bytes.len()].copy_from_slice(bytes);
+            DictKey::Inline {
+                len: uint8_t::try_from(bytes.len()).expect("an inline key is at most 21 bytes"),
+                bytes: inline,
+            }
+        } else {
+            let mut heap = Vec::with_capacity(bytes.len() + 1);
+            heap.extend_from_slice(bytes);
+            heap.push(0);
+            DictKey::Heap(heap.into_boxed_slice())
+        }
+    }
+
+    /// The key's bytes, without the terminating NUL.
+    pub fn bytes(&self) -> &[uint8_t] {
+        match self {
+            DictKey::Inline { len, bytes } => &bytes[..usize::from(*len)],
+            DictKey::Heap(boxed) => &boxed[..boxed.len() - 1],
+        }
+    }
+
+    /// How many bytes the key is, without the NUL.
+    pub fn len(&self) -> usize {
+        self.bytes().len()
+    }
+
+    /// Whether the key is the empty string, which is a key like any other:
+    /// `{'': 1}` is a dictionary of one entry.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The key as a C string: what the hash table probes on, and what every
+    /// caller that prints or compares a key reads.
+    pub fn as_c_str(&self) -> &::core::ffi::CStr {
+        let with_nul = match self {
+            DictKey::Inline { len, bytes } => &bytes[..usize::from(*len) + 1],
+            DictKey::Heap(boxed) => boxed,
+        };
+        ::core::ffi::CStr::from_bytes_with_nul(with_nul).expect("a key is NUL-terminated once")
+    }
+
+    /// The key's first byte, NUL-terminated: upstream's `di_key`.
+    pub fn as_ptr(&self) -> *const ::core::ffi::c_char {
+        self.as_c_str().as_ptr()
+    }
+}
+
+const _: () = {
+    assert!(::core::mem::size_of::<DictKey>() == 24);
+    assert!(::core::mem::size_of::<DictItem>() == 48);
+};
+
+impl DictItem {
+    /// The item's key as a C string.
+    pub fn key(&self) -> &::core::ffi::CStr {
+        self.di_key.as_c_str()
+    }
+
+    /// The item's key, without the terminating NUL.
+    pub fn key_bytes(&self) -> &[uint8_t] {
+        self.di_key.bytes()
+    }
+}
+
+/// One entry of a [`Dict`](crate::types::Dict), owning its key.
 ///
 /// `di_lock` is the *slot's* lock: `:lockvar` on a variable locks the item it
-/// lives in, not the value it currently holds.  Every layout-compatible
-/// prefix of this struct -- [`ScopeDictDictItem`],
-/// [`ChangedtickDictItem`](crate::types::ChangedtickDictItem) and
-/// `funccall_S_fc_fixvar` -- carries the field at the same offset.
-#[repr(C)]
+/// lives in, not the value it currently holds.
+///
+/// This is the only item shape there is.  The four kinds that are embedded
+/// in something bigger -- a funccall's fixed variables, a scope dictionary's
+/// own entry ([`ScopeDictItem`]), `b:changedtick` and a `v:` row -- were
+/// separate structs only because each spelled the flexible key member out at
+/// a different length; an owned key makes them all this.
 pub struct DictItem {
     pub di_tv: TypVal,
     pub di_lock: VarLock,
     pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 0],
+    pub di_key: DictKey,
 }
 pub struct ModEntry {
     pub flag: ::core::ffi::c_int,

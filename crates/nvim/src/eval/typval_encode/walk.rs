@@ -638,7 +638,7 @@ unsafe fn walk<S: TypvalSink>(
                 while !d.dv_hashtab.slot(slot).is_kept() {
                     slot += 1;
                 }
-                let di = unsafe { tv_dict_hi2di(d.dv_hashtab.slot(slot)) };
+                let di = tv_dict_hi2di(d.dv_hashtab.slot(slot));
                 todo -= 1;
                 slot += 1;
                 if let Frame::Dict {
@@ -650,8 +650,10 @@ unsafe fn walk<S: TypvalSink>(
                     *slot_field = slot;
                     *todo_slot = todo;
                 }
-                let key = tv_dict_item_key(di);
-                walk_hook!(unsafe { sink.conv_str_string(None, key, cstr::bytes_at(key).len()) });
+                let key = unsafe { tv_dict_item_key(di) };
+                walk_hook!(unsafe {
+                    sink.conv_str_string(None, key.cast_mut(), cstr::bytes_at(key).len())
+                });
                 unsafe { sink.conv_dict_after_key(Some(dictp)) };
                 tv = di_tv(di);
             }

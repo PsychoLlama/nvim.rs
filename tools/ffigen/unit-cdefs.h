@@ -48,8 +48,6 @@ typedef struct ApiDict ApiDict;
 typedef struct Array Array;
 typedef struct BufState BufState;
 typedef struct Callback Callback;
-typedef struct TypVal TypVal;
-typedef struct ChangedtickDictItem ChangedtickDictItem;
 typedef struct InternalState InternalState;
 typedef struct uv__queue uv__queue;
 typedef union uv_idle_s_u uv_idle_s_u;
@@ -81,7 +79,7 @@ typedef union DecorInlineData DecorInlineData;
 typedef struct DecorRange DecorRange;
 typedef struct DecorRange_data_ui DecorRange_data_ui;
 typedef struct DecorSignHighlight DecorSignHighlight;
-typedef struct DictItem DictItem;
+typedef struct DictKey DictKey;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
@@ -139,7 +137,6 @@ typedef struct mtnode_s mtnode_s;
 typedef struct MapHash MapHash;
 typedef struct Pos Pos;
 typedef struct RegProg RegProg;
-typedef struct ScopeDictDictItem ScopeDictDictItem;
 typedef struct VTermColor_indexed VTermColor_indexed;
 typedef struct VTermColor_rgb VTermColor_rgb;
 typedef union VTermColor VTermColor;
@@ -161,6 +158,7 @@ typedef union uv_timer_s_node uv_timer_s_node;
 typedef union uv_timer_s_u uv_timer_s_u;
 typedef struct uv_timer_s uv_timer_s;
 typedef struct time_watcher time_watcher;
+typedef struct TypVal TypVal;
 typedef struct UserFunc UserFunc;
 typedef struct VTerm_mode VTerm_mode;
 typedef struct VTerm_parser_v_csi VTerm_parser_v_csi;
@@ -199,7 +197,6 @@ typedef union VTermValue VTermValue;
 typedef struct WordCount WordCount;
 typedef struct addrinfo addrinfo;
 typedef struct extmark_undo_vec_t extmark_undo_vec_t;
-typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
 typedef struct luaL_Buffer luaL_Buffer;
 typedef struct luaL_Reg luaL_Reg;
 typedef union mpack_data_t mpack_data_t;
@@ -389,6 +386,7 @@ typedef void (*RegFree)(RegProg *);
 typedef int RemapValues;
 typedef int32_t RgbValue;
 typedef int SalFirst;
+typedef struct ScopeDictItem ScopeDictItem;
 typedef unsigned int ScopeType;
 typedef int32_t ScreenAttr;
 typedef uint32_t ScreenChar;
@@ -579,27 +577,6 @@ struct Callback {
     Partial *partial_;
     LuaRef lua_;
   } payload;
-};
-struct TypVal {
-  unsigned int tag;
-  union {
-    VarNumber number_;
-    char *string_;
-    char *func_;
-    List *list_;
-    Dict *dict_;
-    Float float_;
-    BoolVarValue bool_;
-    SpecialVarValue special_;
-    Partial *partial_;
-    Blob *blob_;
-  } payload;
-};
-struct ChangedtickDictItem {
-  TypVal di_tv;
-  VarLock di_lock;
-  uint8_t di_flags;
-  char di_key[12];
 };
 struct InternalState {
   LuaRef cb;
@@ -856,12 +833,6 @@ struct DecorSignHighlight {
   int cursorline_hl_id;
   uint32_t next;
   const char *url;
-};
-struct DictItem {
-  TypVal di_tv;
-  VarLock di_lock;
-  uint8_t di_flags;
-  char di_key[0];
 };
 struct ExtmarkMove {
   int start_row;
@@ -1529,6 +1500,21 @@ struct time_watcher {
   MultiQueue *events;
   bool blockable;
 };
+struct TypVal {
+  unsigned int tag;
+  union {
+    VarNumber number_;
+    char *string_;
+    char *func_;
+    List *list_;
+    Dict *dict_;
+    Float float_;
+    BoolVarValue bool_;
+    SpecialVarValue special_;
+    Partial *partial_;
+    Blob *blob_;
+  } payload;
+};
 struct UserFunc {
   int uf_varargs;
   FuncFlags uf_flags;
@@ -1884,12 +1870,6 @@ struct extmark_undo_vec_t {
   size_t size;
   size_t capacity;
   ExtmarkUndoObject *items;
-};
-struct funccall_S_fc_fixvar {
-  TypVal di_tv;
-  VarLock di_lock;
-  uint8_t di_flags;
-  char di_key[21];
 };
 struct luaL_Buffer {
   char *p;

@@ -13,7 +13,7 @@ the migration's debt, counted by the ratchet as
 number is the one to drive to zero.
 
 Today: **13,090** unchecked lines inside the perimeter (137 files),
-**44,178** outside it (864 files, of 1,350 measured). It was 138,877 when
+**44,167** outside it (864 files, of 1,350 measured). It was 138,877 when
 this file was written, at the end of phase 23's slice 15.
 
 ## What qualifies

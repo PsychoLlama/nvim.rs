@@ -4,11 +4,13 @@
 //! `test/unit`'s LuaJIT harness rebinds the four `mem_*` function pointers to
 //! Lua callbacks and asserts, case by case, the exact sequence of
 //! `malloc`/`calloc`/`realloc`/`free` calls a typval operation makes — the
-//! sizes as much as the order, because a size derived from
-//! `offsetof(DictItem, di_key) + len + 1` is the only evidence that the
-//! over-allocation happened at all. That assertion is the sole remaining
-//! reason the `mem_*` seam exists. This is its Rust twin, so the cases can
-//! move into the crate and the seam can go.
+//! sizes as much as the order. That assertion is the sole remaining reason
+//! the `mem_*` seam exists. This is its Rust twin, so the cases can move
+//! into the crate and the seam can go.
+//!
+//! What it does *not* see is Rust's own allocator, which is where a list's
+//! items and a dictionary's items now live. A case about a container's
+//! contents is written about the contents, not about a malloc sequence.
 //!
 //! # Why not a `#[global_allocator]`
 //!

@@ -269,14 +269,7 @@ fn finding_reads_exactly_the_key_length_asked_for() {
 
         let find = |key: &str, len: isize| -> Option<(Tv, Vec<u8>)> {
             let di = tv_dict_find(d, cstr(key).as_ptr(), len);
-            (!di.is_null()).then(|| {
-                (
-                    tv::read(&raw const (*di).di_tv),
-                    CStr::from_ptr((&raw const (*di).di_key).cast())
-                        .to_bytes()
-                        .to_vec(),
-                )
-            })
+            (!di.is_null()).then(|| (tv::read(&raw const (*di).di_tv), (*di).key_bytes().to_vec()))
         };
 
         assert_eq!(find("", 0), Some((f(0.0), b"".to_vec())));
@@ -730,14 +723,11 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
     // SAFETY: the item is handed to the dict, which frees it.
     unsafe {
         let di = tv_dict_item_alloc_len(cstr("t-est").as_ptr(), 5);
-        log.check(&[alloc::di(di, "t-est".len())]);
+        log.check(&[]);
         (*di).di_tv = Tv::Int(42).build();
 
         let d = tv::new_dict(&[("test", f(10.0))]);
-        log.check(&[
-            alloc::dict(d),
-            alloc::di(tv::di_of(d, "test"), "test".len()),
-        ]);
+        log.check(&[alloc::dict(d)]);
         assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
         log.clear();
 
@@ -834,13 +824,10 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             assert_eq!(add(d, 0), Ok(()), "{name}");
             let di = tv::di_of(d, "tes");
             if copies {
-                // `add_str` duplicates the value before the item.
-                log.check(&[
-                    alloc::string((*di).di_tv.string(), "TEST".len()),
-                    alloc::di(di, "tes".len()),
-                ]);
+                // `add_str` duplicates the value.
+                log.check(&[alloc::string((*di).di_tv.string(), "TEST".len())]);
             } else {
-                log.check(&[alloc::di(di, "tes".len())]);
+                log.check(&[]);
             }
             assert_eq!(
                 tv::read_dict(d),
@@ -906,14 +893,11 @@ fn clearing_a_dict_frees_its_items() {
         let _ = tv_dict_add_str(d, cstr("TEST").as_ptr(), 3, cstr("tEsT").as_ptr());
         let di = tv::di_of(d, "TES");
         let value = (*di).di_tv.string();
-        log.check(&[
-            alloc::string(value, "tEsT".len()),
-            alloc::di(di, "TES".len()),
-        ]);
+        log.check(&[alloc::string(value, "tEsT".len())]);
         assert_eq!(tv::read_dict(d), Tv::dict([("TES", Tv::s("tEsT"))]));
 
         tv_dict_clear(d);
-        log.check(&[alloc::freed(value), alloc::freed(di)]);
+        log.check(&[alloc::freed(value)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         tv_dict_free(d);
@@ -951,25 +935,11 @@ fn extending_a_dict_keeps_forces_or_reports() {
         let d1 = tv::new_dict(&[("a", Tv::s("TEST"))]);
         let a1 = tv::di_of(d1, "a");
         let a1_s = (*a1).di_tv.string();
-        log.check_net(
-            false,
-            &[
-                alloc::dict(d1),
-                alloc::di(a1, "a".len()),
-                alloc::string(a1_s, "TEST".len()),
-            ],
-        );
+        log.check_net(false, &[alloc::dict(d1), alloc::string(a1_s, "TEST".len())]);
         let d2 = tv::new_dict(&[("a", Tv::s("TSET"))]);
         let a2 = tv::di_of(d2, "a");
         let a2_s = (*a2).di_tv.string();
-        log.check_net(
-            false,
-            &[
-                alloc::dict(d2),
-                alloc::di(a2, "a".len()),
-                alloc::string(a2_s, "TSET".len()),
-            ],
-        );
+        log.check_net(false, &[alloc::dict(d2), alloc::string(a2_s, "TSET".len())]);
 
         extend(d1, d2, "error", Some("E737: Key already exists: a"));
         assert_eq!(tv::read_dict(d1), Tv::dict([("a", Tv::s("TEST"))]));
@@ -1097,7 +1067,6 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
                 false,
                 &[
                     alloc::dict(d),
-                    alloc::di(di, key.len()),
                     alloc::string((*di).di_tv.string(), value.len()),
                 ],
             );
@@ -1337,7 +1306,7 @@ fn making_keys_read_only_sets_both_flags_on_every_item() {
     unsafe {
         let d = tv::new_dict(&[("a", Tv::Bool(true))]);
         let di = tv::di_of(d, "a");
-        log.check(&[alloc::dict(d), alloc::di(di, "a".len())]);
+        log.check(&[alloc::dict(d)]);
         let ro = u8::try_from(DI_FLAGS_RO).unwrap();
         let fix = u8::try_from(DI_FLAGS_FIX).unwrap();
         assert_eq!((*di).di_flags & ro, 0);

@@ -21,7 +21,6 @@ use crate::siemsg;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::offset_of;
 
 use crate::cmdhist::{HIST_DEBUG, HIST_EXPR, HIST_INPUT};
 
@@ -263,7 +262,8 @@ pub(crate) unsafe fn var_shada_iter(
     // table, so a pointer would not survive a mutation of it.
     let wanted = |idx: usize| {
         let hi = unsafe { (*globvarht).slot(idx) };
-        hi.is_kept() && unsafe { var_flavour(hi.hi_key) } & flavour != 0
+        hi.is_kept()
+            && unsafe { var_flavour((*hi.hi_key.item()).di_key.as_ptr().cast_mut()) } & flavour != 0
     };
 
     unsafe { *name = core::ptr::null() };
@@ -272,9 +272,8 @@ pub(crate) unsafe fn var_shada_iter(
         None => (0..count).find(|&idx| wanted(idx))?,
     };
 
-    let key = unsafe { (*globvarht).slot(idx) }.hi_key;
-    let di = unsafe { key.sub(offset_of!(DictItem, di_key)) } as *mut DictItem;
-    unsafe { *name = &raw mut (*di).di_key as *mut c_char };
+    let di = unsafe { (*globvarht).slot(idx) }.hi_key.item();
+    unsafe { *name = (*di).di_key.as_ptr() };
     unsafe { tv_copy(&(*di).di_tv, result) };
 
     // Answer where the *next* one is, so the caller knows to stop.

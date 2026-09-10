@@ -320,27 +320,28 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// )]);
 /// ```
 ///
-/// The spec's `a.li(...)` has no twin: a `List` owns its items in a
-/// `Vec<ListItem>`, whose growth goes through Rust's global allocator,
-/// which this log does not record. An expectation over a list is the
-/// list's own `xcalloc` plus the allocations of the *values* its items
-/// hold.
+/// The spec's `a.li(...)` and `a.di(...)` have no twin: a `List` owns its
+/// items in a `Vec<ListItem>` and a `Dict` owns each of its items in a
+/// `Box<DictItem>` -- the key included -- and both go through Rust's global
+/// allocator, which this log does not record. An expectation over a
+/// container is the container's own `xcalloc` plus the allocations of the
+/// *values* its items hold; that an item and its key are released is Miri's
+/// and ASan's to say.
 ///
 /// The one property to preserve when porting a case: **every size is
 /// derived from the layout**, never written as a literal. The Lua
 /// expectations spell them `ffi.sizeof('list_T')` and
-/// `ffi.offsetof('dictitem_T', 'di_key') + n + 1` (the C names the LuaJIT
-/// harness knew); here they are `size_of::<List>()` and
-/// `offset_of!(DictItem, di_key) + n + 1`. That
-/// is what makes an expectation a statement about the allocation rather than
-/// about this machine, and it is why the cases port at all.
+/// `ffi.sizeof('dict_T')`; here they are `size_of::<List>()` and
+/// `size_of::<Dict>()`. That is what makes an expectation a statement about
+/// the allocation rather than about this machine, and it is why the cases
+/// port at all.
 #[cfg(not(miri))]
 pub(crate) mod alloc {
     use std::ffi::{c_char, c_void};
-    use std::mem::{offset_of, size_of};
+    use std::mem::size_of;
 
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{Dict, DictItem, DictWatcher, List, Partial, TypVal};
+    use neovim::types::{Dict, DictWatcher, List, Partial, TypVal};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -412,18 +413,6 @@ pub(crate) mod alloc {
             count: 1,
             size: size_of::<Dict>(),
             ret: d as *mut c_void,
-        }
-    }
-
-    /// `tv_dict_item_alloc_len`'s allocation: `a.di(di, key_len)`.
-    ///
-    /// The size is the whole point of the case — a `DictItem` is
-    /// over-allocated so the NUL-terminated key fits in its flexible `di_key`
-    /// member, but never below the struct's own size.
-    pub(crate) fn di(di: *const DictItem, key_len: usize) -> AllocEvent {
-        AllocEvent::Malloc {
-            size: size_of::<DictItem>().max(offset_of!(DictItem, di_key) + key_len + 1),
-            ret: di as *mut c_void,
         }
     }
 

@@ -20,6 +20,7 @@ use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::DictEntry;
 use crate::eval::typval::NumBuf;
 use crate::types::NUL;
 
@@ -33,10 +34,14 @@ pub(crate) fn vimvar_row(i: usize) -> Vvr {
     unsafe { Vvr::new(vimvar_table().add(i)) }
 }
 
-/// The key of a `v:` table row: its own `di_key`, which is the item the `v:`
-/// dictionary holds, rather than a copy of the name.
-pub(crate) fn vimvar_row_key(row: Vvr) -> *mut c_char {
-    row.field_ptr(offset_of!(VimVar, vv_di.di_key))
+/// The item a `v:` table row *is*: what the `v:` dictionary holds, rather
+/// than a copy of it.
+///
+/// A raw pointer taken from the row's address, never through a borrow of
+/// the row: the `v:` hashtab keeps this pointer, and a `&mut VimVar` taken
+/// afterwards would invalidate it.
+pub(crate) fn vimvar_row_item(row: Vvr) -> *mut DictItem {
+    row.field_ptr(offset_of!(VimVar, vv_di))
 }
 
 /// The `v:` table row `idx` names.
@@ -62,9 +67,9 @@ fn clear_vimvar(idx: Vv) {
     unsafe { tv_clear(&mut *vimvar_val(idx).raw()) };
 }
 
-/// The key of `v:` variable `idx`, as the hashtab spells it.
-fn vimvar_key(idx: Vv) -> *mut c_char {
-    vimvar_row_key(vimvar(idx))
+/// The item of `v:` variable `idx`, as the hashtab holds it.
+fn vimvar_item(idx: Vv) -> *mut DictItem {
+    vimvar_row_item(vimvar(idx))
 }
 
 /// Save `v:` variable `idx` into `save_tv` and blank it, adding it to the
@@ -90,7 +95,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
         // `v:val` and `v:key` have no type until something sets one, and
         // are absent from the dictionary until then.
         // SAFETY: the `v:` hashtab, and a key that is the row's own.
-        let _ = unsafe { hash_add(get_vimvar_ht(), vimvar_key(idx)) };
+        let _ = unsafe { hash_add(get_vimvar_ht(), DictEntry::new(vimvar_item(idx))) };
     }
 }
 
@@ -109,7 +114,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
     }
     // SAFETY: the `v:` hashtab and the row's own key; `hash_find` answers an
     // item of the table it was given.
-    let hi = unsafe { hash_find(get_vimvar_ht(), vimvar_key(idx)) };
+    let hi = unsafe { hash_find(get_vimvar_ht(), (*vimvar_item(idx)).di_key.as_ptr()) };
     if hi.is_kept() {
         unsafe { hash_remove(get_vimvar_ht(), hi) };
     } else {
@@ -601,7 +606,7 @@ pub(crate) unsafe fn set_vvar_item(
     // `cur` survives the store.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
-    let varname = tv_dict_item_key(di);
+    let varname = unsafe { tv_dict_item_key(di) };
     let watched = unsafe { tv_dict_is_watched(get_vimvar_dict()) };
 
     // `+=` and friends act on the current value, so evaluate them into a

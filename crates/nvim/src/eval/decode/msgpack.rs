@@ -26,7 +26,7 @@ use super::{
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
     Di, TV_INITIAL_VALUE, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_hi2di,
-    tv_dict_item_alloc_len, tv_dict_iter, tv_list_alloc, tv_list_append_list,
+    tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_iter, tv_list_alloc, tv_list_append_list,
     tv_list_append_number, tv_list_append_owned_tv, tv_list_ref,
 };
 use crate::memory::{xfree, xmallocz};
@@ -243,13 +243,13 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.
             for hi in unsafe { tv_dict_iter(dict) } {
-                let d = unsafe { tv_dict_hi2di(hi) };
+                let d = tv_dict_hi2di(hi);
                 // SAFETY: an item of the dictionary being unwound.
                 let mut item = unsafe { Di::new(d) };
                 item.di_tv.write_special(kSpecialVarNull);
             }
             unsafe { tv_clear(result) };
-            unsafe { xfree(di.cast()) };
+            unsafe { tv_dict_item_free(di) };
             return false;
         }
         // The value moves out of the pair array, which is freed

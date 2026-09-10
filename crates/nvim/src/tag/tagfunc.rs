@@ -340,16 +340,14 @@ impl Field {
 unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
     let mut fields = Vec::new();
     // SAFETY: the caller's promise; every live item's key and value are
-    // part of the dictionary.
-    let ht = unsafe { &(*d).dv_hashtab };
-    for hi in ht.items() {
-        let di = unsafe { hi.hi_key.byte_sub(core::mem::offset_of!(DictItem, di_key)) }
-            .cast::<DictItem>();
-        let tv = unsafe { &raw mut (*di).di_tv };
-        if unsafe { (*tv).v_type() } == VAR_STRING && !unsafe { (*tv).string_or_null().is_null() } {
+    // part of the dictionary, which outlives the borrows taken here.
+    let d = unsafe { &*d };
+    for item in d.items() {
+        let value = item.di_tv.string_or_null();
+        if item.di_tv.v_type() == VAR_STRING && !value.is_null() {
             fields.push(Field {
-                key: (unsafe { &raw const (*di).di_key }).cast(),
-                value: unsafe { (*tv).string_or_null() },
+                key: item.di_key.as_ptr(),
+                value,
             });
         }
     }

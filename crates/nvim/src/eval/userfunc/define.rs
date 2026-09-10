@@ -21,6 +21,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{DictTab, tv_dict_item_free};
 use crate::types::{FAIL, Failed, NUL, OK, Refcount};
 
 /// Whether the function table changed under a listing, which means the
@@ -348,7 +349,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
 
                     let mut namelen: size_t = 0;
                     if fudi.fd_dict.is_null() {
-                        let mut ht: *mut HashTab = ptr::null_mut();
+                        let mut ht: *mut DictTab = ptr::null_mut();
                         let name_len = unsafe { cstr::bytes_at(name) }.len();
                         let v = unsafe { find_var(name, name_len, &raw mut ht, false) };
                         if !v.is_null() && unsafe { (*v).di_tv.v_type() } == VAR_FUNC {
@@ -467,7 +468,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
                                 // Add a new dict entry.
                                 fudi.fd_di = unsafe { tv_dict_item_alloc(fudi.fd_newkey) };
                                 if unsafe { tv_dict_add(fudi.fd_dict, fudi.fd_di) }.is_err() {
-                                    unsafe { xfree(fudi.fd_di as *mut c_void) };
+                                    unsafe { tv_dict_item_free(fudi.fd_di) };
                                     unsafe { xfree(fp as *mut c_void) };
                                     fp = ptr::null_mut();
                                     break 'erret;

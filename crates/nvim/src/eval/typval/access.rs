@@ -24,6 +24,7 @@
 )]
 
 use super::*;
+use crate::types::{HashTab, SlotEntry};
 use crate::winlayer::Live;
 
 /// The `Copy` handles over the four objects this module manipulates through
@@ -93,7 +94,7 @@ pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
 
 /// The address of a dictionary's hash table; see [`field_of`].
 #[inline(always)]
-pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut HashTab {
+pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut DictTab {
     field_of(d, ::core::mem::offset_of!(Dict, dv_hashtab))
 }
 
@@ -731,68 +732,48 @@ pub unsafe fn tv_dict_is_watched(d: *const Dict) -> bool {
 
 /// The key of `di`, which upstream reads as the plain `di->di_key`.
 ///
-/// `di_key` is a flexible array member: `tv_dict_item_alloc_len` over-allocates
-/// the `DictItem` so the NUL-terminated key sits in the tail.  The field
-/// itself covers zero bytes, so the pointer has to be formed with `&raw`, not
-/// by autoreffing the array.
-///
-/// Safe: this is arithmetic, not a read.  The key's address is the item's
-/// plus a constant, and [`field_of`] computes it with `wrapping_byte_add`,
-/// which is defined for every pointer.  *Reading* what comes back still needs
-/// an item allocated by
-/// [`tv_dict_item_alloc_len`](super::tv_dict_item_alloc_len) or embedded in a
-/// fixed-variable array — the key lives in the allocation's tail, so an item
-/// that was not over-allocated for its key has none — but that obligation
-/// belongs to the dereference, which is where it is now paid.
-#[inline(always)]
-pub(crate) fn tv_dict_item_key(di: *const DictItem) -> *mut ::core::ffi::c_char {
-    field_of(di.cast_mut(), ::core::mem::offset_of!(DictItem, di_key))
-}
-
-/// The `DictItem` a hashtab item's key points into: upstream's
-/// `TV_DICT_HI2DI`.
-///
-/// A dictionary's hashtab does not store a pointer to its item; `hi_key` points
-/// *at* the item's own `di_key`, so the item is that many bytes back.
+/// An item owns its key now, so this is a read rather than the pointer
+/// arithmetic it used to be; the answer is still the NUL-terminated bytes
+/// the hash table probes on.
 ///
 /// # Safety
-/// `hi` must be an *occupied* slot of a dictionary's hashtab. The item is
-/// found by subtracting an offset from `hi_key`, so an empty or removed
-/// slot yields a wild pointer rather than null.
+/// `di` points at a live item. The key borrows it.
 #[inline(always)]
-pub(crate) unsafe fn tv_dict_hi2di(hi: Slot) -> *mut DictItem {
-    di_of_key(hi.hi_key)
+pub(crate) unsafe fn tv_dict_item_key(di: *const DictItem) -> *const ::core::ffi::c_char {
+    // SAFETY: the caller's live item.
+    unsafe { (*di).di_key.as_ptr() }
 }
 
-/// [`tv_dict_hi2di`] from the key pointer alone, for the walks that hold a
-/// `&HashItem` rather than a [`Slot`].
+/// The `DictItem` a dictionary hashtab slot names: upstream's
+/// `TV_DICT_HI2DI`.
 ///
-/// Safe, and the only spelling of this arithmetic: an offset written out by
-/// hand goes stale the moment a field is added to `DictItem`, and the wrong
-/// answer is a wild pointer rather than a compile error.  The obligation that
-/// `key` really is a `DictItem`'s own `di_key` belongs to whoever
-/// dereferences the result.
+/// Safe, where it used to subtract an offset from the slot's key pointer
+/// and hand back a wild pointer for an empty slot: the slot names the item.
+/// An empty or removed slot answers null or the table's own tombstone
+/// sentinel, neither of which may be dereferenced -- ask `hi.is_kept()`
+/// first, exactly as before.
 #[inline(always)]
-pub(crate) fn di_of_key(key: *const ::core::ffi::c_char) -> *mut DictItem {
-    key.cast_mut()
-        .wrapping_byte_sub(::core::mem::offset_of!(DictItem, di_key))
-        .cast::<DictItem>()
+pub(crate) fn tv_dict_hi2di(hi: Slot<DictEntry>) -> *mut DictItem {
+    hi.hi_key.item()
 }
 
 /// A walk over the occupied slots of a dictionary's hashtab.
 ///
 /// See [`tv_dict_iter`].
-pub(crate) struct DictIter {
-    ht: *const HashTab,
+pub(crate) struct TableIter<E: SlotEntry> {
+    ht: *const HashTab<E>,
     idx: usize,
     todo: size_t,
 }
 
-impl Iterator for DictIter {
-    type Item = Slot;
+/// A walk over the occupied slots of a dictionary's hashtab.
+pub(crate) type DictIter = TableIter<DictEntry>;
+
+impl<E: SlotEntry> Iterator for TableIter<E> {
+    type Item = Slot<E>;
 
     #[inline]
-    fn next(&mut self) -> Option<Slot> {
+    fn next(&mut self) -> Option<Slot<E>> {
         while self.todo != 0 {
             // The cursor is an index, and the slot is read out of the table
             // afresh each step: a body may take `&mut` to the table (every
@@ -842,8 +823,8 @@ pub(crate) unsafe fn tv_dict_iter(d: *const Dict) -> DictIter {
 /// # Safety
 /// As [`tv_dict_iter`], for the table rather than the dictionary.
 #[inline]
-pub(crate) unsafe fn tv_ht_iter(ht: *const HashTab) -> DictIter {
-    DictIter {
+pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIter<E> {
+    TableIter {
         ht,
         idx: 0,
         // SAFETY: the caller's live table.

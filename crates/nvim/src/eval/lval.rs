@@ -37,12 +37,13 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::executor::eexe_mod_op;
+use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     NumBuf, di_lock, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
     tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy,
     tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
-    tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk,
-    tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
+    tv_dict_item_free, tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number,
+    tv_get_number_chk, tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
     tv_list_check_range_index_two, tv_list_items_mut, value_check_lock,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
@@ -64,9 +65,8 @@ use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::state::emsg_severe;
 use crate::message::{e_cannot_mod, e_listreq};
 use crate::types::{
-    Dict, DictItem, FAIL, Failed, HashTab, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE,
-    VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
-    uint8_t,
+    Dict, DictItem, FAIL, Failed, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT,
+    VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, kListLenUnknown, ptrdiff_t, size_t, uint8_t,
 };
 
 /// A freshly declared typval.
@@ -375,7 +375,7 @@ pub(crate) unsafe fn get_lval_subscript(
     mut p: *mut c_char,
     name: *mut c_char,
     mut result: Option<&mut TypVal>,
-    _ht: *mut HashTab,
+    _ht: *mut DictTab,
     _v: *mut DictItem,
     unlet: bool,
     flags: c_int,
@@ -651,7 +651,7 @@ pub unsafe fn get_lval(
         return p;
     }
 
-    let mut ht: *mut HashTab = null_mut();
+    let mut ht: *mut DictTab = null_mut();
     let htp = if flags & GLV_READ_ONLY as c_int != 0 {
         null_mut()
     } else {
@@ -813,7 +813,7 @@ pub unsafe fn set_var_lval(
             }
             let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
             if unsafe { tv_dict_add(target, di) }.is_err() {
-                unsafe { xfree(di as *mut c_void) };
+                unsafe { tv_dict_item_free(di) };
                 return;
             }
             // SAFETY: `di` belongs to the Dict; its typval is the target.
@@ -859,9 +859,9 @@ pub unsafe fn set_var_lval(
         unsafe { tv_dict_watcher_notify(dict, lval.ll_newkey, Some(&*lval.ll_tv), None) };
     } else {
         let di = lval.ll_di;
-        // SAFETY: the key is inline, so naming its address reads nothing.
-        let key = unsafe { &raw mut (*di).di_key } as *mut c_char;
-        debug_assert!(!key.is_null());
+        // SAFETY: an item of the dictionary being written to, which owns its
+        // key for as long as it is in the table.
+        let key = unsafe { (*di).di_key.as_ptr() }.cast_mut();
         // SAFETY: the watched Dict, its key, the new value and the old copy.
         let new = unsafe { &*lval.ll_tv };
         unsafe { tv_dict_watcher_notify(dict, key, Some(new), Some(&oldtv)) };

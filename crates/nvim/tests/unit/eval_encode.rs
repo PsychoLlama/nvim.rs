@@ -195,14 +195,9 @@ fn clearing_releases_a_shared_container_exactly_once() {
         let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
         let outer = tv.list();
         let inner = (*tv_list_first(outer)).li_tv.dict();
-        let di = tv::first_di(inner);
-        log.check(&[
-            alloc::list(outer),
-            alloc::dict(inner),
-            alloc::di(di, "a".len()),
-        ]);
+        log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);
-        log.check(&[alloc::freed(di), alloc::freed(inner), alloc::freed(outer)]);
+        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
     }
 }

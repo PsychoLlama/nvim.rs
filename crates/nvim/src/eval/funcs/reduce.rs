@@ -8,9 +8,9 @@ use super::{
 };
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, di_of_key, di_tv, tv_blob_get, tv_blob_len, tv_check_for_number_arg,
-    tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_items, tv_list_iter,
-    tv_list_len, tv_list_locked, tv_list_set_lock,
+    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_copy,
+    tv_dict_len, tv_get_number_chk, tv_list_items, tv_list_iter, tv_list_len, tv_list_locked,
+    tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -72,12 +72,11 @@ unsafe fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
             if unsafe { tv_dict_len(tv.dict_or_null()) } == 0 {
                 return;
             }
-            let ht = unsafe { &(*tv.dict_or_null()).dv_hashtab };
-            for hi in ht.items() {
-                let di = di_of_key(hi.hi_key);
-                // SAFETY: an occupied slot of the dictionary's own table, so
-                // the item its key points into is live.
-                let i = unsafe { tv_get_number_chk(&*di_tv(di), &raw mut error) };
+            // SAFETY: the argument's own dictionary, live for the walk.
+            let d = unsafe { &*tv.dict_or_null() };
+            for item in d.items() {
+                // SAFETY: an item of the argument's own dictionary.
+                let i = unsafe { tv_get_number_chk(&item.di_tv, &raw mut error) };
                 if error {
                     return;
                 }

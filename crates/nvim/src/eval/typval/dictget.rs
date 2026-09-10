@@ -120,7 +120,7 @@ pub unsafe fn tv_dict_find(
     if !hi.is_kept() {
         return ::core::ptr::null_mut();
     }
-    unsafe { tv_dict_hi2di(hi) }
+    tv_dict_hi2di(hi)
 }
 
 /// Whether `d` has `key`.
@@ -215,8 +215,8 @@ pub unsafe fn tv_dict_to_env(denv: *mut Dict) -> *mut *mut ::core::ffi::c_char {
             as *mut *mut ::core::ffi::c_char;
 
     for (i, hi) in unsafe { tv_dict_iter(denv) }.enumerate() {
-        let var = unsafe { tv_dict_hi2di(hi) };
-        let key = tv_dict_item_key(var);
+        let var = tv_dict_hi2di(hi);
+        let key = unsafe { tv_dict_item_key(var) };
         let str = unsafe { numbuf.string(&(*var).di_tv) };
         debug_assert!(!str.is_null());
         let len = unsafe { cstr::bytes_at(key) }.len()
@@ -370,8 +370,8 @@ pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: Di
     }
 
     for hi in unsafe { tv_dict_iter(d) } {
-        let di = unsafe { tv_dict_hi2di(hi) };
-        let di_key = tv_dict_item_key(di);
+        let di = tv_dict_hi2di(hi);
+        let di_key = unsafe { tv_dict_item_key(di) };
         let mut tv_item = TV_INITIAL_VALUE;
 
         match what {

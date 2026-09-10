@@ -11,14 +11,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::eval::typval::{
-    tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_dict_hi2di, tv_dict_iter, tv_equal,
-};
+use crate::eval::typval::{tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_equal};
 use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
@@ -213,28 +210,25 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
 
     let mut omitted = 0;
-    for hi in unsafe { tv_dict_iter(exp_d) } {
-        let key = hi.hi_key;
-        let expected = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
+    for item in unsafe { &mut *exp_d }.items_mut() {
+        let (key, key_len) = (item.di_key.as_ptr(), item.di_key.len());
         let item2 = unsafe { tv_dict_find(got_d, key, -1) };
-        if !item2.is_null() && unsafe { tv_equal(&*expected, &(*item2).di_tv, false) } {
+        if !item2.is_null() && unsafe { tv_equal(&item.di_tv, &(*item2).di_tv, false) } {
             omitted += 1;
             continue;
         }
         // Absent from the actual value, or present with a different one.
-        let key_len = unsafe { cstr::bytes_at(key) }.len();
-        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, &mut *expected) };
+        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, &mut item.di_tv) };
         if !item2.is_null() {
             let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut (*item2).di_tv) };
         }
     }
 
     // Entries only the actual value has.
-    for hi in unsafe { tv_dict_iter(got_d) } {
-        let key = hi.hi_key;
+    for item in unsafe { &mut *got_d }.items_mut() {
+        let (key, key_len) = (item.di_key.as_ptr(), item.di_key.len());
         if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
-            let tv = unsafe { &raw mut (*tv_dict_hi2di(hi)).di_tv };
-            let _ = unsafe { tv_dict_add_tv(got, key, cstr::bytes_at(key).len(), &mut *tv) };
+            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut item.di_tv) };
         }
     }
     (TypVal::Dict(exp), TypVal::Dict(got), omitted)

@@ -33,7 +33,7 @@ use super::{
 };
 use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
-use crate::eval::typval::{NumBuf, di_of_key, tv_dict_item_key};
+use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
 use crate::memory::xfree;
@@ -578,21 +578,21 @@ unsafe fn ses_do_frame(fr: FrameRef) -> bool {
 /// # Safety
 /// Main thread; the global variable dict is live.
 unsafe fn store_session_globals(out: SessionFile) -> bool {
-    // SAFETY: caller contract. The hashtab walk is upstream's: skip the
-    // empty and the tombstone slots, and step back from the key to the item
-    // it is embedded in.
-    let ht = unsafe { &(*get_globvar_dict()).dv_hashtab };
-    for hi in ht.items() {
-        let item = di_of_key(hi.hi_key);
-        let key = tv_dict_item_key(item);
-        let kind = unsafe { (*item).di_tv.v_type() };
-        let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
+    // SAFETY: caller contract -- the global variable dictionary is live, so
+    // the walk of it is ordinary code.
+    let globals = unsafe { &mut *get_globvar_dict() };
+    for item in globals.items_mut() {
+        let key = item.di_key.as_ptr();
+        let kind = item.di_tv.v_type();
+        // SAFETY: the key is the item's own, NUL-terminated.
+        let sessionable = unsafe { var_flavour(key.cast_mut()) } == VAR_FLAVOUR_SESSION;
         if (kind == VAR_NUMBER || kind == VAR_STRING) && sessionable {
-            if !unsafe { put_session_global(out, key, kind, &mut (*item).di_tv) } {
+            // SAFETY: the session file, and the item's own key and value.
+            if !unsafe { put_session_global(out, key, kind, &mut item.di_tv) } {
                 return false;
             }
         } else if kind == VAR_FLOAT && sessionable {
-            let f = unsafe { (*item).di_tv.float_or_zero() };
+            let f = item.di_tv.float_or_zero();
             let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
             if unsafe {
                 fprintf(

@@ -113,31 +113,32 @@ unsafe fn strings(l: *mut neovim::types::List) -> Vec<Option<&'static str>> {
 /// `describe('dict') describe('item') describe('alloc()/free()')
 /// itp('works')`, spec line 1682.
 ///
-/// A `DictItem` is over-allocated so the NUL-terminated key fits in its
-/// flexible `di_key` member — but never below the struct's own size. The
-/// expectation is the *arithmetic*, so it is written as
-/// `offset_of!(DictItem, di_key) + len + 1` exactly as the Lua spelled it
-/// `ffi.offsetof(...)`, and it would not survive being written as a number.
+/// The spec's subject was the *arithmetic*: a `DictItem` was over-allocated
+/// so the NUL-terminated key fitted in its flexible `di_key` member, and the
+/// case asserted `offsetof(DictItem, di_key) + len + 1` as the malloc size.
+/// There is no such allocation any more -- an item owns its key, short ones
+/// in the item and long ones in their own box, and neither goes through the
+/// `xmalloc` family the log records. What is left to state is what the
+/// arithmetic was there to protect: the item carries back exactly the bytes
+/// it was given, terminated, at every length either arm can hold.
 #[test]
-fn tv_dict_item_is_allocated_around_its_key() {
+fn a_dict_item_owns_exactly_the_key_it_was_given() {
     let log = AllocLog::start();
-    // The last two rows are not in the spec, and they are the only ones
-    // that can see the arithmetic at all: `size_of::<DictItem>()`
-    // dominates the `max` for every key shorter than seven bytes, so a
-    // mutation of the `+ 1` — the room the terminator needs — changes no
-    // answer on the spec's five rows. Measured: `+ 1` → `+ 2` is NOT CAUGHT
-    // without them and CAUGHT with.
+    let long = "a_key_long_enough_to_need_its_own_allocation_and_then_some";
     for (key, len) in [
         ("", None),
         ("t", None),
         ("TEST", None),
         ("", Some(0)),
         ("TEST", Some(2)),
-        ("a_key_long_enough_to_grow_the_item", None),
-        ("a_key_long_enough_to_grow_the_item", Some(9)),
+        // Either side of the boundary between the two arms.
+        ("a_key_of_21_chars_xxx", None),
+        ("a_key_of_22_characters", None),
+        (long, None),
+        (long, Some(9)),
     ] {
         // SAFETY: the item is this iteration's own and is freed below; the
-        // key outlives the allocation that copies it.
+        // key outlives the copy.
         unsafe {
             let c_key = cstr(key);
             let di = match len {
@@ -145,19 +146,17 @@ fn tv_dict_item_is_allocated_around_its_key() {
                 Some(len) => tv_dict_item_alloc_len(c_key.as_ptr(), len),
             };
             let len = len.unwrap_or(key.len());
-            assert_eq!(
-                CStr::from_ptr((&raw const (*di).di_key).cast()).to_bytes(),
-                &key.as_bytes()[..len],
-            );
-            log.check(&[alloc::di(di, len)]);
-
+            assert_eq!((*di).key_bytes(), &key.as_bytes()[..len], "{key:?}/{len}");
+            assert_eq!((*di).key().to_bytes(), &key.as_bytes()[..len]);
             assert_eq!(
                 (*di).di_tv.v_type(),
                 VAR_UNKNOWN,
                 "a fresh item holds nothing"
             );
             tv_dict_item_free(di);
-            log.check(&[alloc::freed(di)]);
+            // Neither the item nor its key is an `xmalloc`: the log is
+            // silent, and a leak would be Miri's or ASan's to report.
+            log.check(&[]);
         }
     }
 }
@@ -174,11 +173,11 @@ fn freeing_a_dict_item_frees_its_value_first() {
         log.check(&[alloc::string(value, 4)]);
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
-        log.check(&[alloc::di(di, 0)]);
+        log.check(&[]);
         (*di).di_tv = TypVal::String(value);
 
         tv_dict_item_free(di);
-        log.check(&[alloc::freed(value), alloc::freed(di)]);
+        log.check(&[alloc::freed(value)]);
     }
 }
 
@@ -200,7 +199,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         let di = tv_dict_item_alloc(cstr("").as_ptr());
         let value = xstrdup(cstr("test").as_ptr());
         (*di).di_tv = TypVal::String(value);
-        log.check(&[alloc::di(di, 0), alloc::string(value, 4)]);
+        log.check(&[alloc::string(value, 4)]);
 
         assert_eq!(tv_dict_add(d, di), Ok(()));
         log.check(&[]);
@@ -216,7 +215,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         log.clear();
 
         tv_dict_item_remove(d, di);
-        log.check(&[alloc::freed(value), alloc::freed(di)]);
+        log.check(&[alloc::freed(value)]);
 
         // Freeing the now-empty dict releases the dict and nothing else —
         // an empty hashtab still lives in its own static array. Said through

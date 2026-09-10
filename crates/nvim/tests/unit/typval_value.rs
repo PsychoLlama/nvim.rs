@@ -142,7 +142,7 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
         let d = tv.dict();
-        log.check(&[alloc::dict(d), alloc::di(tv::first_di(d), "dd".len())]);
+        log.check(&[alloc::dict(d)]);
         tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!((*d).dv_refcount.get(), 1);
@@ -1013,7 +1013,6 @@ fn comparing_dict_values_folds_values_but_never_keys() {
                 false,
                 &[
                     alloc::dict(d),
-                    alloc::di(di, key.len()),
                     alloc::string((*di).di_tv.string(), value.len()),
                 ],
             );

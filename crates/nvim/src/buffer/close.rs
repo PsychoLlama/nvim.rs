@@ -33,6 +33,7 @@ use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::updating_screen;
+use crate::eval::typval::DictTab;
 use crate::eval::typval::{callback_free, tv_dict_add, tv_dict_item_copy};
 use crate::eval::vars::{unref_var_dict, vars_clear};
 use crate::extmark::extmark_free_all;
@@ -50,8 +51,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, FileMark, FileMarkView, GArray, Handle, HashTab, LineNr, MemFile,
-    Pos, Refcount, SynBlock, Timestamp, WinInfo,
+    Callback, ColNr, FileMark, FileMarkView, GArray, Handle, LineNr, MemFile, Pos, Refcount,
+    SynBlock, Timestamp, WinInfo,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -213,7 +214,7 @@ fn free_entry(entry: *mut WinInfo) {
 }
 
 /// `buffer.b_vars->dv_hashtab`.
-fn buf_vars(mut buffer: Buf) -> *mut HashTab {
+fn buf_vars(mut buffer: Buf) -> *mut DictTab {
     // SAFETY: a live buffer's variable dictionary is live.
     unsafe { &raw mut (*buffer.b_vars).dv_hashtab }
 }
@@ -238,10 +239,7 @@ fn clear_buf_vars(buffer: Buf) {
 /// Hand `b:changedtick` to the dictionary before the buffer goes away, for the
 /// script that is still holding a reference to it.
 fn rescue_changedtick(mut buffer: Buf) {
-    let (vars, di) = (
-        buffer.b_vars,
-        &raw mut buffer.changedtick_di as *mut DictItem,
-    );
+    let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
 }

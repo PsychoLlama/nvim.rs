@@ -509,9 +509,8 @@ pub(crate) unsafe fn dict_items(d: *const Dict) -> Vec<(Vec<u8>, *mut DictItem)>
     let ht = unsafe { &(*d).dv_hashtab };
     let mut out = Vec::new();
     for hi in ht.items() {
-        let key = hi.hi_key;
-        let di: *mut DictItem = unsafe { key.byte_sub(offset_of!(DictItem, di_key)) }.cast();
-        out.push((unsafe { CStr::from_ptr(key) }.to_bytes().to_vec(), di));
+        let di = hi.hi_key.item();
+        out.push((unsafe { (*di).key_bytes() }.to_vec(), di));
     }
     out
 }

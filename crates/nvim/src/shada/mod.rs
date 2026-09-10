@@ -61,13 +61,13 @@ use crate::search::{
     set_search_pattern, set_substitute_pattern,
 };
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, DictItem,
-    FileDescriptor, FileInfo, FileMark, FileMarkView, HistoryType, Integer,
-    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet, MotionType, OptionalKeys,
-    PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray, SubReplacementString,
-    Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t, size_t, ssize_t, uid_t,
-    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, FileDescriptor,
+    FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
+    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr,
+    List, MarkGet, MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern,
+    String_0, StringArray, SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg,
+    int64_t, ptrdiff_t, size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t,
+    uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};

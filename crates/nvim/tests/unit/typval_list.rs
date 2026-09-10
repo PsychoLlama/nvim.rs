@@ -1043,7 +1043,6 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
         log.check(&[
             alloc::list(deep),
             alloc::dict(copied_dict),
-            alloc::di(di, "«".len()),
             alloc::string((*di).di_tv.string(), "»".len()),
             alloc::list(copied_list),
             alloc::string((*tv_list_first(copied_list)).li_tv.string(), "„".len()),
@@ -1110,7 +1109,6 @@ fn a_converting_copy_rewrites_every_string() {
             &[
                 alloc::list(deep),
                 alloc::dict(copied_dict),
-                alloc::di(di, 1),
                 alloc::string((*di).di_tv.string(), "»".len()),
                 alloc::list(copied_list),
                 alloc::string((*tv_list_first(copied_list)).li_tv.string(), "„".len()),

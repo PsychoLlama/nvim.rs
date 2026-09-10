@@ -17,6 +17,8 @@ use core::ptr;
 
 use super::*;
 use crate::eval::Walk;
+use crate::eval::typval::DictEntry;
+use crate::types::DictKey;
 use crate::types::{Failed, NUL};
 
 /// Read one argument name at `arg` and append a copy of it to `newargs`.
@@ -303,11 +305,11 @@ pub unsafe fn get_func_arity(
 pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_char, nr: VarNumber) {
     // SAFETY: the caller's promise -- `v` is a `DictItem` with room for
     // `name` in its inline key, and `dp` is the dictionary it joins.
-    let key = unsafe { (&raw mut (*v).di_key) as *mut c_char };
-    unsafe { strcpy(key, name) };
+    // SAFETY: the caller's NUL-terminated name.
+    unsafe { (*v).di_key = DictKey::new(cstr::bytes_at(name)) };
     let mut item = unsafe { Live::new(v) };
     item.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-    let _ = unsafe { hash_add(&raw mut (*dp).dv_hashtab, key) };
+    let _ = unsafe { hash_add(&raw mut (*dp).dv_hashtab, DictEntry::new(v)) };
     item.di_lock = VarLock::Fixed;
     item.di_tv.write_number(nr);
 }

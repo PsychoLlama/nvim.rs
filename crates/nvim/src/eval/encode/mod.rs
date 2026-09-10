@@ -269,9 +269,11 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `idx` is a slot
                 // of its hash table, or one past the last.
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                // The key is the item's own inline storage, so the value
-                // that names it must not release it.
-                let key_tv = ManuallyDrop::new(TypVal::String(hi.hi_key));
+                // The key belongs to the item, so the value that names it
+                // must not release it.
+                // SAFETY: a kept slot of the frame's live dictionary.
+                let key_ptr = unsafe { (*hi.hi_key.item()).di_key.as_ptr() };
+                let key_tv = ManuallyDrop::new(TypVal::String(key_ptr.cast_mut()));
                 let key = unsafe { encode_tv2string(&key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.

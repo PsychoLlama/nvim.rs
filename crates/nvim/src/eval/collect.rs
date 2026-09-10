@@ -37,6 +37,8 @@ use crate::autocmd::aucmd_wins;
 use crate::channel::channels;
 use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::eval::gc::{gc_first_dict, gc_first_list};
+use crate::eval::typval::DictEntry;
+use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
     tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
@@ -71,10 +73,10 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem,
-    DictWatcher, Failed, FileMark, FileMarkView, HashItem, HashTab, HtStack, List, ListStack, NUL,
-    OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VimConv, Window, XFileMark, YankReg, size_t,
+    DictWatcher, Failed, FileMark, FileMarkView, HashItem, HtStack, List, ListStack, NUL, OptInt,
+    Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VimConv, Window, XFileMark, YankReg, size_t,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -94,13 +96,10 @@ pub fn get_copy_id() -> c_int {
     CURRENT_COPY_ID.get()
 }
 
-/// The `DictItem` a hashtab entry's inline key belongs to; the C spells
-/// it `TV_DICT_HI2DI`.
-///
-/// # Safety
-/// `hi` must be a live entry of a dictionary's hashtab.
-unsafe fn hi2di(hi: &HashItem) -> *mut DictItem {
-    unsafe { hi.hi_key.sub(offset_of!(DictItem, di_key)) as *mut DictItem }
+/// The `DictItem` a hashtab slot names; the C spells it `TV_DICT_HI2DI`.
+/// Meaningless for a slot that holds no live entry.
+fn hi2di(hi: &HashItem<DictEntry>) -> *mut DictItem {
+    hi.hi_key.item()
 }
 
 /// Mark one root's variable, with neither stack: the collector recurses
@@ -164,7 +163,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         // SAFETY: `buffers()` walks the editor's own list of live buffers.
         let buf = unsafe { Live::<Buffer>::new(buf.raw()) };
         // buffer-local variables
-        let bufvar = buf.field_ptr::<TypVal>(offset_of!(Buffer, b_bufvar.di_tv));
+        let bufvar =
+            buf.field_ptr::<TypVal>(offset_of!(Buffer, b_bufvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `bufvar` is the buffer's own variable dictionary.
         abort = abort || unsafe { mark_root(&mut *bufvar, copy_id) };
         // buffer callback functions
@@ -200,7 +200,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     for wp in tab_windows() {
         // SAFETY: the walk answers the editor's own live windows.
         let wp = unsafe { Live::<Window>::new(wp.raw()) };
-        let winvar = wp.field_ptr::<TypVal>(offset_of!(Window, w_winvar.di_tv));
+        let winvar =
+            wp.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `winvar` is the window's own variable dictionary.
         abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
     }
@@ -213,7 +214,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         if !win.is_null() {
             // SAFETY: as above.
             let win = unsafe { Live::<Window>::new(win) };
-            let winvar = win.field_ptr::<TypVal>(offset_of!(Window, w_winvar.di_tv));
+            let winvar =
+                win.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
             // SAFETY: `winvar` is that window's own variable dictionary.
             abort = abort || unsafe { mark_root(&mut *winvar, copy_id) };
         }
@@ -225,7 +227,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     for tp in tabs() {
         // SAFETY: the walk answers the editor's own live tab pages.
         let tp = unsafe { Live::<Tabpage>::new(tp.raw()) };
-        let tpvar = tp.field_ptr::<TypVal>(offset_of!(Tabpage, tp_winvar.di_tv));
+        let tpvar =
+            tp.field_ptr::<TypVal>(offset_of!(Tabpage, tp_winvar) + offset_of!(DictItem, di_tv));
         // SAFETY: `tpvar` is the tab page's own variable dictionary.
         abort = abort || unsafe { mark_root(&mut *tpvar, copy_id) };
     }
@@ -430,7 +433,7 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
 /// # Safety
 /// `ht` must be valid; `list_stack` null or valid.
 pub unsafe fn set_ref_in_ht(
-    ht: *mut HashTab,
+    ht: *mut DictTab,
     copy_id: c_int,
     list_stack: *mut *mut ListStack,
 ) -> bool {

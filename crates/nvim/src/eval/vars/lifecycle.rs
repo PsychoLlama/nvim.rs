@@ -13,8 +13,9 @@ use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{DictEntry, DictTab, tv_dict_item_free};
 use crate::types::MessagePackType;
-use crate::types::{NUL, Refcount};
+use crate::types::{DictKey, Refcount};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
@@ -39,27 +40,27 @@ pub unsafe fn evalvars_init() {
         };
         let (name, declared) = (row.vv_name, row.vv_di.di_tv.v_type());
 
-        // The key's address is taken *after* the last field access, and
-        // nothing touches the row again: `di_key` is a member of `VimVar`,
+        // The item's address is taken *after* the last field access, and
+        // nothing touches the row again: `vv_di` is a member of `VimVar`,
         // so a borrow of the whole row -- which `Live`'s `Deref` hands out
         // -- would invalidate the pointer the hashtab is about to keep.
-        let key = vimvar_row_key(row);
-        // The key member is `VIMVAR_KEY_LEN + 1` bytes, which every name
-        // in the table fits in.
-        // SAFETY: the row's name is a NUL-terminated literal, and its key
-        // member is the 17 bytes the assertion just measured against.
-        debug_assert!(unsafe { cstr::bytes_at(name) }.len() <= 16);
-        unsafe { strcpy(key, name) };
+        let item = vimvar_row_item(row);
+        // Every `v:` name is short enough to live in the item.
+        // SAFETY: the row's name is a NUL-terminated literal, and the item
+        // is the row's own.
+        let name_bytes = unsafe { cstr::bytes_at(name) };
+        debug_assert!(name_bytes.len() <= DictKey::INLINE_MAX);
+        unsafe { (*item).di_key = DictKey::new(name_bytes) };
 
         // Into the `v:` scope dictionary -- unless the value is not
         // always available, which is what a `VAR_UNKNOWN` row means.
-        // SAFETY: the two scope hashtabs, and the row's own key.
+        // SAFETY: the two scope hashtabs, and the row's own item.
         if declared != VAR_UNKNOWN {
-            let _ = unsafe { hash_add(get_vimvar_ht(), key) };
+            let _ = unsafe { hash_add(get_vimvar_ht(), DictEntry::new(item)) };
         }
         if flags.has(VimVarFlags::COMPAT) {
             // ... and into the scope that has no prefix at all.
-            let _ = unsafe { hash_add(get_compat_ht(), key) };
+            let _ = unsafe { hash_add(get_compat_ht(), DictEntry::new(item)) };
         }
     }
 
@@ -190,7 +191,7 @@ pub unsafe fn del_menutrans_vars() {
     // against the rehash that would otherwise move the slot array.
     unsafe { hash_lock(ht) };
     for hi in unsafe { tv_ht_iter(ht) } {
-        if unsafe { cstr::starts_with(hi.hi_key, b"menutrans_") } {
+        if unsafe { cstr::starts_with((*hi.hi_key.item()).di_key.as_ptr(), b"menutrans_") } {
             unsafe { delete_var(ht, hi) };
         }
     }
@@ -203,7 +204,7 @@ pub fn get_globvar_dict() -> *mut Dict {
 }
 
 /// The `g:` scope, as a hashtab.
-pub fn get_globvar_ht() -> *mut HashTab {
+pub fn get_globvar_ht() -> *mut DictTab {
     // SAFETY: a field of the dictionary above, never dereferenced here.
     unsafe { &raw mut (*get_globvar_dict()).dv_hashtab }
 }
@@ -214,7 +215,7 @@ pub fn get_vimvar_dict() -> *mut Dict {
 }
 
 /// The `v:` scope, as a hashtab.
-pub(crate) fn get_vimvar_ht() -> *mut HashTab {
+pub(crate) fn get_vimvar_ht() -> *mut DictTab {
     // SAFETY: a field of the dictionary above, never dereferenced here.
     unsafe { &raw mut (*get_vimvar_dict()).dv_hashtab }
 }
@@ -226,17 +227,17 @@ pub(crate) fn vimvar_table() -> *mut VimVar {
 
 /// The scope that has no prefix at all: the names that mean `v:version`
 /// wherever they are written. Upstream's `compat_hashtab`.
-pub(crate) fn get_compat_ht() -> *mut HashTab {
+pub(crate) fn get_compat_ht() -> *mut DictTab {
     compat_hashtab.ptr()
 }
 
 /// The `DictItem` a bare `g:` resolves to.
-pub(crate) fn globvar_scope_item() -> *mut ScopeDictDictItem {
+pub(crate) fn globvar_scope_item() -> *mut ScopeDictItem {
     globvars_var.ptr()
 }
 
 /// The `DictItem` a bare `v:` resolves to.
-pub(crate) fn vimvar_scope_item() -> *mut ScopeDictDictItem {
+pub(crate) fn vimvar_scope_item() -> *mut ScopeDictItem {
     vimvars_var.ptr()
 }
 
@@ -264,7 +265,7 @@ pub unsafe fn new_script_vars(id: ScriptId) {
 ///
 /// # Safety
 /// `dict` and `dict_var` are writable and not yet initialised.
-pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictDictItem, scope: ScopeType) {
+pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictItem, scope: ScopeType) {
     // SAFETY: the caller's obligation -- both are writable and outlive the
     // call; the hashtab and the watcher queue are fields of the dictionary
     // itself, so initialising them in place is what the C does.
@@ -276,7 +277,7 @@ pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictDictItem, s
     var.di_tv.write_dict(dict);
     var.di_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-    var.di_key[0] = NUL as c_char;
+    var.di_key = DictKey::EMPTY;
     // The watcher queue's head points at its own node, so `queue_init` goes
     // last: a borrow of the whole `Dict` afterwards would invalidate the
     // pointer it has just stored. The hash table has no such constraint any
@@ -303,7 +304,7 @@ pub unsafe fn unref_var_dict(dict: *mut Dict) {
 ///
 /// # Safety
 /// `ht` is a live variable hashtab.
-pub unsafe fn vars_clear(ht: *mut HashTab) {
+pub unsafe fn vars_clear(ht: *mut DictTab) {
     unsafe { vars_clear_ext(ht, true) }
 }
 
@@ -312,7 +313,7 @@ pub unsafe fn vars_clear(ht: *mut HashTab) {
 ///
 /// # Safety
 /// As [`vars_clear`].
-pub unsafe fn vars_clear_ext(ht: *mut HashTab, free_val: bool) {
+pub unsafe fn vars_clear_ext(ht: *mut DictTab, free_val: bool) {
     // SAFETY: the caller's obligation -- a live variable hashtab, whose items
     // are the `DictItem`s the walk frees.
     unsafe { hash_lock(ht) };
@@ -320,11 +321,17 @@ pub unsafe fn vars_clear_ext(ht: *mut HashTab, free_val: bool) {
         // Free the variable, unless it is one of the fixed ones embedded
         // in a `FuncCall` or a scope dictionary.
         let v = unsafe { Di::new(tv_dict_hi2di(hi)) };
+        let tv = v.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
         if free_val {
-            unsafe { tv_clear(&mut *v.field_ptr::<TypVal>(offset_of!(DictItem, di_tv))) };
+            unsafe { tv_clear(&mut *tv) };
+        } else {
+            // The values have moved elsewhere -- an `a:` item names the
+            // caller's argument -- so the item must not take them with it.
+            unsafe { (*tv).disown() };
         }
         if v.di_flags & DI_FLAGS_ALLOC != 0 {
-            unsafe { xfree(v.raw().cast()) };
+            // The item owns its key, so the whole item goes at once.
+            drop(unsafe { Box::from_raw(v.raw()) });
         }
     }
     // SAFETY: the caller's table, whose items have all been freed.
@@ -335,11 +342,10 @@ pub unsafe fn vars_clear_ext(ht: *mut HashTab, free_val: bool) {
 ///
 /// # Safety
 /// `hi` is a live item of `ht`.
-pub(crate) unsafe fn delete_var(ht: *mut HashTab, hi: Slot) {
+pub(crate) unsafe fn delete_var(ht: *mut DictTab, hi: Slot<DictEntry>) {
     // SAFETY: the caller's obligation -- a live item of `ht`, which this
     // takes out of the table and then frees.
-    let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
+    let di = tv_dict_hi2di(hi);
     unsafe { hash_remove(ht, hi) };
-    unsafe { tv_clear(&mut *di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv))) };
-    unsafe { xfree(di.raw().cast()) };
+    unsafe { tv_dict_item_free(di) };
 }

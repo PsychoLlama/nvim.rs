@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+pub use crate::eval::typval::{DictTab, ItemSlot};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
@@ -363,7 +364,7 @@ pub struct Dict {
     pub dv_scope: ScopeType,
     pub dv_refcount: Refcount,
     pub dv_copy_id: ::core::ffi::c_int,
-    pub dv_hashtab: HashTab,
+    pub dv_hashtab: DictTab,
     pub dv_copydict: *mut Dict,
     pub dv_used_next: *mut Dict,
     pub dv_used_prev: *mut Dict,
@@ -376,11 +377,11 @@ pub struct FuncCall {
     pub fc_func: *mut UserFunc,
     pub fc_linenr: ::core::ffi::c_int,
     pub fc_returned: ::core::ffi::c_int,
-    pub fc_fixvar: [funccall_S_fc_fixvar; 12],
+    pub fc_fixvar: [DictItem; 12],
     pub fc_l_vars: Dict,
-    pub fc_l_vars_var: ScopeDictDictItem,
+    pub fc_l_vars_var: ScopeDictItem,
     pub fc_l_avars: Dict,
-    pub fc_l_avars_var: ScopeDictDictItem,
+    pub fc_l_avars_var: ScopeDictItem,
     pub fc_l_varlist: List,
     pub fc_rettv: *mut TypVal,
     pub fc_breakpoint: LineNr,
@@ -393,38 +394,26 @@ pub struct FuncCall {
     pub fc_copy_id: ::core::ffi::c_int,
     pub fc_ufuncs: GArray,
 }
-/// One of a funccall's twelve embedded short-named variables, laid out as a
-/// [`DictItem`](crate::types::DictItem) prefix so the scope's hash table can
-/// point into it.
-#[repr(C)]
-pub struct funccall_S_fc_fixvar {
-    pub di_tv: TypVal,
-    pub di_lock: VarLock,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 21],
-}
-
-/// Every `DictItem`-prefixed struct is handed out as a bare `*mut DictItem`,
-/// and a hashtab slot finds its item by subtracting
-/// `offset_of!(DictItem, di_key)` from the key pointer it stores.  So they
-/// have to agree on where all four fields sit -- a mismatch is a wild
-/// pointer, not a compile error, which is why this is checked here.
+/// A funccall's twelve fixed variables, `b:changedtick` and a `v:` row are
+/// each an ordinary [`DictItem`](crate::types::DictItem) now: the four
+/// look-alike structs existed only to spell the flexible key member out at
+/// their own length, and an item owns its key.  The one still wrapped is the
+/// scope dictionary's own entry, which must not drop the reference it names
+/// ([`ScopeDictItem`](crate::types::ScopeDictItem)).
+///
+/// A funccall arrives `xcalloc`'d, so what a fixed variable's storage holds
+/// before it is used has to be a *valid* item: an all-zero `DictItem` is
+/// `VAR_UNKNOWN`, unlocked, unflagged, with the empty inline key.
 const _: () = {
-    use crate::types::{ChangedtickDictItem, DictItem, ScopeDictDictItem};
-    use ::core::mem::offset_of;
-
-    macro_rules! same_prefix {
-        ($($t:ty),* $(,)?) => {$(
-            assert!(offset_of!($t, di_tv) == offset_of!(DictItem, di_tv));
-            assert!(offset_of!($t, di_lock) == offset_of!(DictItem, di_lock));
-            assert!(offset_of!($t, di_flags) == offset_of!(DictItem, di_flags));
-            assert!(offset_of!($t, di_key) == offset_of!(DictItem, di_key));
-        )*};
-    }
-    same_prefix!(ScopeDictDictItem, ChangedtickDictItem, funccall_S_fc_fixvar);
+    use crate::types::{DictItem, DictKey};
+    assert!(
+        DictKey::INLINE_MAX >= 20,
+        "a funccall's short names fit inline"
+    );
+    assert!(::core::mem::size_of::<DictItem>() <= 48);
 };
 pub struct HtStack {
-    pub ht: *mut HashTab,
+    pub ht: *mut DictTab,
     pub prev: *mut HtStack,
 }
 pub struct ListStack {

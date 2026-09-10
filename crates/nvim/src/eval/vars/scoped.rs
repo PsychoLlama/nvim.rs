@@ -96,12 +96,12 @@ unsafe fn get_var_from(
             } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
                 let scope = buffer.map(|b| b.raw());
-                let v: *const ScopeDictDictItem = match htname as u8 {
+                let v: *const ScopeDictItem = match htname as u8 {
                     b'b' => &raw mut unsafe { Buf::new(scope.expect("a `b:` scope")) }.b_bufvar,
                     b'w' => &raw mut w.w_winvar,
                     _ => &raw mut tp.tp_winvar,
                 };
-                let value: *const TypVal = unsafe { (&raw const (*v).di_tv).cast() };
+                let value: *const TypVal = unsafe { &raw const (*v.cast::<DictItem>()).di_tv };
                 unsafe { tv_copy(&*value, result) };
                 done = true;
             } else {

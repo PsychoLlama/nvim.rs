@@ -1,4 +1,20 @@
-//! Allocating, freeing and filling a `Dict`.
+//! A `Dict`, its hash table, and the items it owns.
+//!
+//! The table's slots name the items ([`DictEntry`]), where upstream's named
+//! the item's *key* -- an item was over-allocated so its key sat in a
+//! flexible tail, and the item was the key pointer minus a constant. That is
+//! why an item could not own its key. Reading the key out of the entry costs
+//! the probe nothing -- [`DictEntry::key`] answers the same NUL-terminated
+//! bytes the slot used to hold -- and so leaves the hash, the probe
+//! sequence, the resize thresholds and the slot every key lands in exactly
+//! as they were. That matters: slot order is what `keys()`, `values()` and
+//! `items()` show.
+//!
+//! The table does not free its items. Which of them it owns is
+//! `DI_FLAGS_ALLOC`, and [`tv_dict_free_contents`] is what acts on it --
+//! four kinds of item are embedded in something bigger (a funccall's fixed
+//! variables, a scope's own entry, `b:changedtick`, a `v:` row) and outlive
+//! every table they are in.
 //!
 //! [`tv_dict_alloc`] and [`tv_dict_unref`] are the reference-counted pair;
 //! [`tv_dict_clear`] empties one without freeing it.  The `tv_dict_add_*`
@@ -12,9 +28,109 @@
 
 use super::*;
 use crate::cstr;
+use crate::hashtab::removed_sentinel;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{CONV_NONE, Failed, NUL, Refcount};
+use crate::types::{CONV_NONE, DictKey, Failed, HashTab, Refcount, SlotEntry};
+
+/// What a dictionary's hash table holds in an occupied slot: the item.
+///
+/// `Copy`, and a raw pointer, for the same reason the slots of every other
+/// table are: the table names its items, and which of them it is responsible
+/// for freeing is the item's own `DI_FLAGS_ALLOC`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct DictEntry(*mut DictItem);
+
+impl DictEntry {
+    /// The entry for `item`.
+    pub fn new(item: *mut DictItem) -> Self {
+        DictEntry(item)
+    }
+
+    /// The item this entry names. Meaningless for an empty or removed slot.
+    pub fn item(self) -> *mut DictItem {
+        self.0
+    }
+}
+
+// SAFETY: `EMPTY` is the null pointer and `is_empty` is the null test; the
+// tombstone is the hash table's own private sentinel address, which no item
+// can be allocated at and which is never dereferenced; `key` reads the key
+// of an item the caller has promised is live, and a `DictItem` owns its key
+// for as long as it is alive.
+unsafe impl SlotEntry for DictEntry {
+    const EMPTY: Self = DictEntry(::core::ptr::null_mut());
+
+    fn is_empty(self) -> bool {
+        self.0.is_null()
+    }
+
+    fn is_removed(self) -> bool {
+        self.0 == removed_sentinel().cast::<DictItem>()
+    }
+
+    fn removed() -> Self {
+        DictEntry(removed_sentinel().cast::<DictItem>())
+    }
+
+    /// # Safety
+    ///
+    /// As the trait's: a live entry, whose item is still alive.
+    unsafe fn key(self) -> *const ::core::ffi::c_char {
+        // SAFETY: the caller's promise -- a live item, which owns its key.
+        unsafe { (*self.0).di_key.as_ptr() }
+    }
+}
+
+/// A dictionary's hash table.
+pub type DictTab = HashTab<DictEntry>;
+
+/// One slot of a dictionary's hash table.
+pub type ItemSlot = Slot<DictEntry>;
+
+impl Dict {
+    /// How many entries the dictionary holds.
+    pub fn len(&self) -> usize {
+        self.dv_hashtab.ht_used
+    }
+
+    /// Whether the dictionary holds no entries.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Every entry, in slot order -- which is the order Vim shows.
+    ///
+    /// The walk borrows the dictionary, so nothing can add to or remove from
+    /// it while the walk is live. A body that edits the table wants
+    /// [`tv_dict_iter`](super::tv_dict_iter), which is a slot index.
+    pub fn items(&self) -> impl Iterator<Item = &DictItem> {
+        // SAFETY: a kept slot of a live dictionary names a live item, and
+        // the borrow of the dictionary keeps it alive for the walk.
+        self.dv_hashtab
+            .items()
+            .map(|hi| unsafe { &*hi.hi_key.item() })
+    }
+
+    /// Every entry, writable, in slot order.
+    ///
+    /// The items are not in the table's storage, so handing out `&mut` to
+    /// each of them in turn does not alias the table itself; what the
+    /// exclusive borrow of the dictionary rules out is a body that adds or
+    /// removes entries, which is the same rule the table has always had.
+    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut DictItem> {
+        self.dv_hashtab
+            .slots()
+            .iter()
+            .filter(|hi| hi.is_kept())
+            .map(|hi| hi.hi_key.item())
+            .collect::<Vec<_>>()
+            .into_iter()
+            // SAFETY: a kept slot names a live item, no two slots name the
+            // same one, and the exclusive borrow keeps the set fixed.
+            .map(|di| unsafe { &mut *di })
+    }
+}
 
 /// The dictionary already has an entry under that key — or, in a scope
 /// dictionary, the key would shadow a builtin function — so nothing was
@@ -33,15 +149,17 @@ impl From<Failed> for KeyTaken {
     }
 }
 
-/// Allocate a `DictItem` sized for a `key_len`-byte key, and copy the key in.
+/// Allocate a `DictItem` holding a copy of `key`'s first `key_len` bytes.
 ///
-/// The item is over-allocated so the NUL-terminated key fits in the `di_key`
-/// flexible array member — but never below `size_of::<DictItem>()`, which is
-/// what upstream's `MAX` guards.
+/// The item owns its key: a short one -- which is nearly every key -- lives
+/// in the item, a long one in its own allocation.  Upstream over-allocated
+/// the item so the key sat in a flexible tail, because its hash table's slot
+/// pointed at the key and found the item by subtracting an offset; the slot
+/// names the item now.
 ///
 /// # Safety
 /// `key` must be readable for `key_len` bytes; it need not be
-/// NUL-terminated, since the copy terminates itself.
+/// NUL-terminated, since the key terminates itself.
 ///
 /// The item comes back owned by the caller, holding `VAR_UNKNOWN`. It has
 /// to reach either [`tv_dict_add`] (which takes it on `OK` and leaves it on
@@ -50,19 +168,14 @@ pub unsafe fn tv_dict_item_alloc_len(
     key: *const ::core::ffi::c_char,
     key_len: size_t,
 ) -> *mut DictItem {
-    let key_offset = ::core::mem::offset_of!(DictItem, di_key);
-    let size = ::core::mem::size_of::<DictItem>().max(key_offset + key_len + 1);
-    let di = unsafe { xmalloc(size) } as *mut DictItem;
-    let di_key = tv_dict_item_key(di);
-    let into = di_key.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(key.cast(), key_len) };
-    unsafe { *di_key.add(key_len) = NUL as ::core::ffi::c_char };
-    // SAFETY: freshly allocated just above.
-    let mut item = unsafe { Di::new(di) };
-    item.di_flags = DI_FLAGS_ALLOC as uint8_t;
-    item.di_lock = VarLock::Unlocked;
-    item.di_tv.write_empty(VAR_UNKNOWN);
-    di
+    // SAFETY: the caller's promise -- `key_len` readable bytes.
+    let bytes = unsafe { ::core::slice::from_raw_parts(key.cast::<u8>(), key_len) };
+    Box::into_raw(Box::new(DictItem {
+        di_tv: TypVal::Unknown,
+        di_lock: VarLock::Unlocked,
+        di_flags: DI_FLAGS_ALLOC as uint8_t,
+        di_key: DictKey::new(bytes),
+    }))
 }
 
 /// [`tv_dict_item_alloc_len`] for a NUL-terminated key.
@@ -75,18 +188,22 @@ pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut DictIt
     unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) }
 }
 
-/// Clear `item`'s value and free it, if it was allocated (rather than embedded
-/// in a `FuncCall`'s fixed-variable array or a scope dictionary).
+/// Clear `item`'s value and free it, if it was allocated (rather than
+/// embedded in a `FuncCall`'s fixed-variable array, a scope dictionary, a
+/// buffer's `b:changedtick` or a `v:` row).
 ///
 /// # Safety
-/// `item` must be a live item that is **not** in any hashtab — remove it
+/// `item` must be a live item that is **not** in any hashtab -- remove it
 /// first, or the hashtab is left pointing at freed memory. An item with
-/// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `FuncCall`
-/// or a scope dictionary is merely emptied.
+/// `DI_FLAGS_ALLOC` is dangling afterwards; an embedded one is merely
+/// emptied, keeping its key: the storage is not this call's to release.
 pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
-    unsafe { tv_clear(&mut (*item).di_tv) };
     if unsafe { (*item).di_flags } as ::core::ffi::c_uint & DI_FLAGS_ALLOC != 0 {
-        unsafe { xfree(item.cast()) };
+        // The value and the key go with the item.
+        // SAFETY: the caller's live item, which this allocated.
+        drop(unsafe { Box::from_raw(item) });
+    } else {
+        unsafe { tv_clear(&mut (*item).di_tv) };
     }
 }
 
@@ -167,7 +284,7 @@ pub unsafe fn tv_dict_free_contents(d: *mut Dict) {
     for hi in unsafe { tv_dict_iter(d) } {
         // Remove the item before freeing it, so that a callback that
         // reaches this dictionary does not see a freed value.
-        let di = unsafe { tv_dict_hi2di(hi) };
+        let di = tv_dict_hi2di(hi);
         unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
         unsafe { tv_dict_item_free(di) };
     }
@@ -246,11 +363,11 @@ pub unsafe fn tv_dict_unref(d: *mut Dict) {
 /// in no hashtab. On `Ok` the dictionary owns `item`; on `Err` it is
 /// still the caller's to free.
 pub unsafe fn tv_dict_add(d: *mut Dict, item: *mut DictItem) -> Result<(), Failed> {
-    let key = tv_dict_item_key(item);
+    let key = unsafe { tv_dict_item_key(item) };
     if unsafe { tv_dict_wrong_func_name(d, &mut (*item).di_tv, key) } != 0 {
         return Err(Failed);
     }
-    unsafe { hash_add(&raw mut (*d).dv_hashtab, key) }
+    unsafe { hash_add(&raw mut (*d).dv_hashtab, DictEntry::new(item)) }
 }
 
 /// Add `list` to `d` under `key`, taking a reference to it.
@@ -492,8 +609,8 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
     }
 
     for hi2 in unsafe { tv_dict_iter(d2) } {
-        let di2 = unsafe { tv_dict_hi2di(hi2) };
-        let di2_key = tv_dict_item_key(di2);
+        let di2 = tv_dict_hi2di(hi2);
+        let di2_key = unsafe { tv_dict_item_key(di2) };
         let di1 = unsafe { tv_dict_find(d1, di2_key, -1) };
         // Check the key to be valid when adding to any scope.
         if unsafe { (*d1).dv_scope } != VAR_NO_SCOPE && !unsafe { valid_varname(di2_key) } {
@@ -515,7 +632,7 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
                 if unsafe { tv_dict_add(d1, new_di) }.is_err() {
                     unsafe { tv_dict_item_free(new_di) };
                 } else if watched {
-                    let key = tv_dict_item_key(new_di);
+                    let key = unsafe { tv_dict_item_key(new_di) };
                     // SAFETY: the item just added to `d1`.
                     unsafe { tv_dict_watcher_notify(d1, key, Some(&*di_tv(new_di)), None) };
                 }
@@ -546,7 +663,7 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
             unsafe { tv_copy(&(*di2).di_tv, &mut (*di1).di_tv) };
 
             if watched {
-                let key = tv_dict_item_key(di1);
+                let key = unsafe { tv_dict_item_key(di1) };
                 // SAFETY: the item just overwritten in `d1`.
                 let new = Some(unsafe { &*di_tv(di1) });
                 unsafe { tv_dict_watcher_notify(d1, key, new, Some(&oldtv)) };
@@ -582,7 +699,7 @@ pub unsafe fn tv_dict_equal(d1: *mut Dict, d2: *mut Dict, ic: bool) -> bool {
     }
 
     for hi in unsafe { tv_dict_iter(d1) } {
-        let di1 = unsafe { tv_dict_hi2di(hi) };
+        let di1 = tv_dict_hi2di(hi);
         let di2 = unsafe { tv_dict_find(d2, tv_dict_item_key(di1), -1) };
         if di2.is_null() || !unsafe { tv_equal(&(*di1).di_tv, &(*di2).di_tv, ic) } {
             return false;
@@ -619,16 +736,16 @@ pub unsafe fn tv_dict_copy(
         from.dv_copydict = copy;
     }
     for hi in unsafe { tv_dict_iter(orig) } {
-        let di = unsafe { tv_dict_hi2di(hi) };
+        let di = tv_dict_hi2di(hi);
         if got_int.get() {
             break;
         }
         let new_di = if conv.is_null() || unsafe { (*conv).vc_type } == CONV_NONE {
             unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) }
         } else {
-            let di_key = tv_dict_item_key(di);
+            let di_key = unsafe { tv_dict_item_key(di) };
             let mut len = unsafe { cstr::bytes_at(di_key) }.len();
-            let key = unsafe { string_convert(conv, di_key, &raw mut len) };
+            let key = unsafe { string_convert(conv, di_key.cast_mut(), &raw mut len) };
             if key.is_null() {
                 // The conversion failed: keep the original key, but at the
                 // length `string_convert` left behind.
@@ -669,7 +786,7 @@ pub unsafe fn tv_dict_copy(
 /// `dict` must point at a live dictionary.
 pub unsafe fn tv_dict_set_keys_readonly(dict: *mut Dict) {
     for hi in unsafe { tv_dict_iter(dict) } {
-        let di = unsafe { tv_dict_hi2di(hi) };
+        let di = tv_dict_hi2di(hi);
         unsafe { (*di).di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t };
     }
 }

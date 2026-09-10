@@ -52,8 +52,8 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ChangedtickDictItem, CmdModFlags, ColNr, DictItem, Failed, LineNr, NUL, OptInt, ShmFlag,
-    Terminal, TypVal, VarLock, time_t, uint8_t, uint64_t,
+    CmdModFlags, ColNr, DictItem, DictKey, Failed, LineNr, NUL, OptInt, ShmFlag, Terminal, TypVal,
+    VarLock, time_t, uint8_t, uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::get_last_winid;
@@ -189,10 +189,7 @@ fn now() -> time_t {
 
 /// Add `b:changedtick` to the buffer's variable dictionary.
 fn add_changedtick(mut buffer: Buf) {
-    let (vars, di) = (
-        buffer.b_vars,
-        &raw mut buffer.changedtick_di as *mut DictItem,
-    );
+    let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, di) };
 }
@@ -488,28 +485,14 @@ fn err_static(msg: &'static CStr) {
 // ---------------------------------------------------------------------------
 // b:changedtick
 
-/// `"changedtick"`, in the fixed-size key `DictItem` carries. The static
-/// assertion upstream writes (`sizeof("changedtick") <= sizeof(di_key)`) is
-/// the array length below.
-const CHANGEDTICK_KEY: [c_char; 12] = {
-    let mut key = [0 as c_char; 12];
-    let name = b"changedtick";
-    let mut i = 0;
-    while i < name.len() {
-        key[i] = name[i] as c_char;
-        i += 1;
-    }
-    key
-};
-
 /// Initialise `b:changedtick` and its `changedtick_val` attribute.
 pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
-    buffer.changedtick_di = ChangedtickDictItem {
+    buffer.changedtick_di = DictItem {
         di_tv: TypVal::Number(buf_get_changedtick(buffer)),
         di_lock: VarLock::Fixed,
         // Must not include DI_FLAGS_ALLOC.
         di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
-        di_key: CHANGEDTICK_KEY,
+        di_key: DictKey::new(b"changedtick"),
     };
     add_changedtick(buffer);
 }

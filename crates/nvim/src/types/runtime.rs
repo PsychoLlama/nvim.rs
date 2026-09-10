@@ -132,6 +132,6 @@ impl Default for ScriptItem {
 /// Not `Clone`: it holds a script's `s:` scope by value, and a dictionary
 /// owns the items its hash table indexes.
 pub struct ScriptVar {
-    pub sv_var: ScopeDictDictItem,
+    pub sv_var: ScopeDictItem,
     pub sv_dict: Dict,
 }

@@ -262,7 +262,7 @@ pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     if unsafe { tv_dict_is_watched(b.b_vars) } {
         b.b_locked += 1;
         let vars = b.b_vars;
-        let key = (&raw mut b.changedtick_di.di_key).cast::<c_char>();
+        let key = b.changedtick_di.di_key.as_ptr().cast_mut();
         let new = &raw mut b.changedtick_di.di_tv;
         // SAFETY: the buffer's own dictionary and its `changedtick` entry,
         // plus a local holding the value it had.

@@ -41,7 +41,6 @@ use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
-use core::mem::offset_of;
 use core::slice;
 
 use crate::cstr;
@@ -440,14 +439,9 @@ impl DictRef {
                 // items remain, so `idx` is one of its slots.
                 let hi = unsafe { (*ht).slot(idx) };
                 idx += 1;
-                let key = hi.is_kept().then_some(hi.hi_key);
-                if let Some(key) = key {
+                if hi.is_kept() {
                     todo -= 1;
-                    // SAFETY-free: a live slot's key is a `DictItem`'s
-                    // `di_key`, and stepping a pointer back is not a read.
-                    return Some(DictItemRef(
-                        key.wrapping_byte_sub(offset_of!(DictItem, di_key)).cast(),
-                    ));
+                    return Some(DictItemRef(hi.hi_key.item()));
                 }
             }
             None
@@ -509,11 +503,10 @@ impl DictItemRef {
         unsafe { &mut *self.0 }
     }
 
-    /// The key, NUL-terminated.  `di_key` is a flexible array member, so its
-    /// bytes live past the end of the struct.
+    /// The key, NUL-terminated: the item's own.
     #[inline(always)]
     pub(crate) fn key(self) -> *mut c_char {
-        (&raw mut self.get().di_key).cast()
+        self.get().di_key.as_ptr().cast_mut()
     }
 
     /// The value; see [`Item::tv`] for why it is not a borrow.

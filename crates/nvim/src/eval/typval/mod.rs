@@ -37,13 +37,12 @@ use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
-    Float, FuncExe, GArray, HashTab, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE,
+    Float, FuncExe, GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE,
     SpecialVarValue, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
     VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
     VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
     ssize_t, uint8_t,
 };
-use core::mem::ManuallyDrop;
 
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
@@ -184,21 +183,6 @@ pub const GARRAY_EMPTY: GArray = GArray {
 /// array (`[TV_INITIAL_VALUE; 21]`, every argument frame in the interpreter)
 /// needs a constant on its left, the element type not being `Copy`.
 pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
-
-/// One slot of an argument frame, holding nothing yet.
-///
-/// **An argument frame borrows.**  `argv[i]` names the same string, the same
-/// list, the same dictionary as the expression that produced it, for exactly
-/// the length of the call, and it is the caller that releases it; a frame
-/// that *does* own a slot -- a partial's bound arguments, `reduce()`'s
-/// accumulator -- clears that one itself, by hand, at the point it chooses.
-/// Some slots are not even the heap's: a static message, a stack buffer.
-/// [`ManuallyDrop`] is what says so, and without it every one of these frames
-/// would free its caller's values on the way out of scope.
-///
-/// The whole shape retires when builtins take a `&[TypVal]` and the `a:`
-/// items are real copies.
-pub(crate) const UNSET_ARG: ManuallyDrop<TypVal> = ManuallyDrop::new(TV_INITIAL_VALUE);
 
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;

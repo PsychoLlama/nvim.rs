@@ -47,15 +47,6 @@ pub struct ArrayBuilder {
 }
 pub type Boolean = bool;
 pub type BufferHandle = Handle;
-/// A [`DictItem`](crate::types::DictItem) holding `b:changedtick`; see
-/// [`DictItem`](crate::types::DictItem).
-#[repr(C)]
-pub struct ChangedtickDictItem {
-    pub di_tv: TypVal,
-    pub di_lock: VarLock,
-    pub di_flags: uint8_t,
-    pub di_key: [::core::ffi::c_char; 12],
-}
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ApiDict {

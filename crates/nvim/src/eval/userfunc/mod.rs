@@ -23,9 +23,9 @@ use crate::eval::funcs::{
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     GARRAY_EMPTY, TV_INITIAL_VALUE, tv_clear, tv_copy, tv_dict_add, tv_dict_hi2di,
-    tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_key, tv_dict_item_remove,
-    tv_dict_iter, tv_dict_unref, tv_get_number_chk, tv_list_disown_items, tv_list_init_static,
-    tv_list_iter, tv_list_iter_mut, tv_list_own_items, tv_list_set_lock, value_check_lock,
+    tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_iter, tv_dict_unref,
+    tv_get_number_chk, tv_list_disown_items, tv_list_init_static, tv_list_iter, tv_list_iter_mut,
+    tv_list_own_items, tv_list_set_lock, value_check_lock,
 };
 use crate::eval::vars::{
     LVAL_INITIAL_VALUE, find_var, find_var_ht, find_var_in_ht, get_vim_var_nr, init_var_dict,
@@ -97,7 +97,7 @@ use crate::types::{
     FuncCallEntry, FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt,
     Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, funccall_S_fc_fixvar, size_t,
+    VarNumber, Vv, size_t,
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;

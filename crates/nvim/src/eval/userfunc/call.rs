@@ -25,7 +25,8 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::di_tv;
-use crate::types::{Failed, Refcount};
+use crate::eval::typval::{DictEntry, DictTab};
+use crate::types::{DictKey, Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
 /// and terminated with a newline.
@@ -101,18 +102,18 @@ pub unsafe fn call_user_func(
     // a slot is what goes into the hashtab, which is why the array lives
     // in the FuncCall and cannot be a `Vec`.
     let mut fixvar_idx = 0;
-    let fixvar_base = unsafe { &raw mut (*fc).fc_fixvar } as *mut funccall_S_fc_fixvar;
+    let fixvar_base: *mut DictItem = unsafe { &raw mut (*fc).fc_fixvar }.cast();
     let take_fixvar = |idx: &mut c_int| -> *mut DictItem {
-        let v = unsafe { fixvar_base.offset(*idx as isize) } as *mut DictItem;
+        let v = unsafe { fixvar_base.offset(*idx as isize) };
         *idx += 1;
         v
     };
     // A fixvar holding one of the two scope-level names, `l:self` and
     // `a:000`; the value is filled in by the caller.
-    let add_fix_var = |v: *mut DictItem, ht: *mut HashTab, key: &CStr| {
-        unsafe { strcpy(tv_dict_item_key(v), key.as_ptr()) };
+    let add_fix_var = |v: *mut DictItem, ht: *mut DictTab, key: &CStr| {
+        unsafe { (*v).di_key = DictKey::new(key.to_bytes()) };
         unsafe { (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
-        let _ = unsafe { hash_add(ht, tv_dict_item_key(v)) };
+        let _ = unsafe { hash_add(ht, DictEntry::new(v)) };
     };
 
     // Init the l: variables.
@@ -216,7 +217,10 @@ pub unsafe fn call_user_func(
         let v = if fixvar_idx < FIXVAR_CNT && namelen <= VAR_SHORT_LEN as size_t {
             let v = take_fixvar(&mut fixvar_idx);
             unsafe { (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
-            unsafe { strcpy(tv_dict_item_key(v), name) };
+            // SAFETY: `namelen` readable bytes, checked against the short
+            // name limit just above.
+            let key = unsafe { ::core::slice::from_raw_parts(name.cast::<u8>(), namelen) };
+            unsafe { (*v).di_key = DictKey::new(key) };
             v
         } else {
             let v = unsafe { tv_dict_item_alloc_len(name, namelen) };
@@ -246,9 +250,9 @@ pub unsafe fn call_user_func(
             // A lambda sees its arguments as l: variables too, so the
             // value has to be reference-counted twice.
             unsafe { tv_copy(&(*v).di_tv, &mut (*v).di_tv) };
-            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, tv_dict_item_key(v)) };
+            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_vars.dv_hashtab, DictEntry::new(v)) };
         } else {
-            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, tv_dict_item_key(v)) };
+            let _ = unsafe { hash_add(&raw mut (*fc).fc_l_avars.dv_hashtab, DictEntry::new(v)) };
         }
 
         if (0..MAX_FUNC_ARGS).contains(&ai) {

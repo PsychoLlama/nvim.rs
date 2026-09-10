@@ -24,6 +24,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
+use crate::eval::typval::{DictEntry, tv_dict_item_free};
 use crate::message::emsg_ptr;
 use crate::message_fmt::{c_str, c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
@@ -175,15 +176,13 @@ pub unsafe fn set_var_const(
         // other item in the tree comes from; `valid_varname` has just
         // walked `varname` to its NUL, so the two agree on the length.
         di = unsafe { tv_dict_item_alloc_len(varname, varname_len) };
-        if unsafe { hash_add(ht, tv_dict_item_key(di)) }.is_err() {
-            unsafe { xfree(di.cast()) };
+        if unsafe { hash_add(ht, DictEntry::new(di)) }.is_err() {
+            unsafe { tv_dict_item_free(di) };
             return;
         }
-        // SAFETY: the item just allocated.
-        let mut item = unsafe { Di::new(di) };
-        item.di_flags = DI_FLAGS_ALLOC as uint8_t;
+        // SAFETY: the item just allocated, which arrives `DI_FLAGS_ALLOC`.
         if is_const {
-            item.di_flags |= DI_FLAGS_LOCK as uint8_t;
+            unsafe { Di::new(di) }.di_flags |= DI_FLAGS_LOCK as uint8_t;
         }
     }
 
@@ -207,7 +206,7 @@ pub unsafe fn set_var_const(
     unsafe { *di_lock(di) = VarLock::Unlocked };
 
     if watched {
-        let key = tv_dict_item_key(di);
+        let key = unsafe { tv_dict_item_key(di) };
         unsafe { tv_dict_watcher_notify(dict, key, Some(&*cur), Some(&oldtv)) };
         clear_local(&mut oldtv);
     }

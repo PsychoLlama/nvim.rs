@@ -20,7 +20,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use super::*;
-use crate::types::{Failed, NUL, Refcount};
+use crate::types::{DictTab, Failed, ItemSlot, NUL, Refcount};
 
 /// A handle on the global user-function table.
 ///
@@ -210,7 +210,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
         // Make a copy of the a: variables, since that was not done above.
         // SAFETY: as above -- the `a:` dictionary is this funccall's own.
         for hi in unsafe { tv_dict_iter(&raw const (*fc).fc_l_avars) } {
-            let di = unsafe { tv_dict_hi2di(hi) };
+            let di = tv_dict_hi2di(hi);
             unsafe { tv_copy(&(*di).di_tv, &mut (*di).di_tv) };
         }
     }
@@ -655,7 +655,7 @@ pub fn get_funccal_local_dict() -> *mut Dict {
 }
 
 /// The `l:` scope hashtab, or null when there is no call.
-pub fn get_funccal_local_ht() -> *mut HashTab {
+pub fn get_funccal_local_ht() -> *mut DictTab {
     let d = get_funccal_local_dict();
     if d.is_null() {
         ptr::null_mut()
@@ -681,7 +681,7 @@ pub fn get_funccal_args_dict() -> *mut Dict {
 }
 
 /// The `a:` scope hashtab, or null when there is no call.
-pub fn get_funccal_args_ht() -> *mut HashTab {
+pub fn get_funccal_args_ht() -> *mut DictTab {
     let d = get_funccal_args_dict();
     if d.is_null() {
         ptr::null_mut()
@@ -720,7 +720,7 @@ pub unsafe fn list_func_vars(first: *mut c_int) {
 ///
 /// # Safety
 /// `ht` is a live hashtab.
-pub unsafe fn get_current_funccal_dict(ht: *mut HashTab) -> *mut Dict {
+pub unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
     let fc = current_funccal.get();
     if fc.is_null() {
         return ptr::null_mut();
@@ -767,8 +767,8 @@ unsafe fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Optio
 /// Find a hashitem in a parent scope, i.e. one a lambda captured.
 ///
 /// # Safety
-/// `name` is NUL-terminated and `pht` is writable.
-pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, pht: *mut *mut HashTab) -> Option<Slot> {
+/// `name` is NUL-terminated and `ht` is writable.
+pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, ht: *mut *mut DictTab) -> Option<ItemSlot> {
     // SAFETY: `current_funccal` is null or the live call in progress, whose
     // `fc_func` is live too; `name` is the caller's NUL-terminated string.
     if current_funccal.get().is_null()
@@ -777,21 +777,21 @@ pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, pht: *mut *mut HashTab) 
         return None;
     }
     let namelen = unsafe { cstr::bytes_at(name) }.len();
-    // Upstream answers the *last* hashitem it looked at, not only a
-    // found one, so a miss still hands back the slot it stopped on.
-    let mut last: Option<Slot> = None;
+    // Upstream answers the *last* hashitem it looked at, not only a found
+    // one, so a miss still hands back the slot it stopped on.
+    let mut last: Option<ItemSlot> = None;
     // SAFETY: as above; `varname` is a tail of `name`, so the subtraction
     // leaves the length of what is left of it. That holds for every
     // dereference in the probe.
     let probe = || {
         let mut varname: *const c_char = ptr::null();
-        let ht = unsafe { find_var_ht(name, namelen, &raw mut varname) };
-        if !ht.is_null() && unsafe { *varname } != NUL as c_char {
+        let found = unsafe { find_var_ht(name, namelen, &raw mut varname) };
+        if !found.is_null() && unsafe { *varname } != NUL as c_char {
             let past = unsafe { varname.offset_from(name) } as size_t;
-            let hi = unsafe { hash_find_len(ht, varname, namelen.wrapping_sub(past)) };
+            let hi = unsafe { hash_find_len(found, varname, namelen.wrapping_sub(past)) };
             last = Some(hi);
             if hi.is_kept() {
-                unsafe { *pht = ht };
+                unsafe { *ht = found };
                 return Some(hi);
             }
         }
@@ -862,7 +862,7 @@ pub fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn scopes_of(fc: *mut FuncCall) -> (*mut HashTab, *mut HashTab, *mut crate::types::List) {
+unsafe fn scopes_of(fc: *mut FuncCall) -> (*mut DictTab, *mut DictTab, *mut crate::types::List) {
     // SAFETY: the caller's promise; a field's address is the object's plus a
     // constant, so none of the three reads it.
     unsafe {
