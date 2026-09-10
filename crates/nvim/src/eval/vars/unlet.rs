@@ -233,14 +233,18 @@ unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: boo
     // SAFETY: the caller's promise: a live list.
     let len = unsafe { tv_list_items(l) }.len();
     // The run ends at `n2` when there is one, and at the last item either
-    // way.
+    // way.  An empty list has no run at all; `get_lval` refuses the index
+    // that would name one, so this only guards the arithmetic.
+    let Some(end) = len.checked_sub(1) else {
+        return;
+    };
     let last = if has_n2 {
-        first + (n2 - n1).max(0) as usize
+        first + usize::try_from(n2 - n1).unwrap_or(0)
     } else {
-        len - 1
+        end
     };
     // SAFETY: as above; `first..=last` is a run of the list's items.
-    unsafe { tv_list_remove_range(l, first, last.min(len - 1)) };
+    unsafe { tv_list_remove_range(l, first, last.min(end)) };
 }
 
 /// Delete the variable `name[0..name_len]`, reporting E108 if it does not

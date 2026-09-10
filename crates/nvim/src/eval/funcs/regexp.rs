@@ -704,10 +704,10 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                 // Upstream reads the string at the first *character*
                 // position as if it were a byte offset. Preserved: it is
                 // only a tie-break between two equally scored items.
-                let at = matches[0] as usize;
+                let first = matches[0] as usize;
                 let exact = itemstr
                     .to_bytes()
-                    .get(at..)
+                    .get(first..)
                     .is_some_and(|tail| tail.starts_with(pattern.to_bytes()));
                 let positions = request.retmatchpos.then(|| {
                     let positions = tv_list_alloc(kListLenMayKnow as isize);

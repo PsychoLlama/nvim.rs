@@ -133,12 +133,22 @@ pub unsafe fn tv_list_assign_range(
     // SAFETY: a live list.
     while i < srclen && at < unsafe { tv_list_items(dest) }.len() {
         // Both slots are re-derived on every step: `eexe_mod_op` runs the
-        // evaluator, and `src` may be `dest`.
+        // evaluator and may have moved either array.  When `dest` *is*
+        // `src` -- `:let l[0:1] += l[0:1]`, p30-7's documented aliasing --
+        // both come from the *one* derivation of it, because two would pop
+        // each other.
+        // SAFETY: two live lists.
+        let dbase = unsafe { tv_list_items_mut(dest) }.as_mut_ptr();
+        let sbase = if ::core::ptr::eq(dest, src) {
+            dbase
+        } else {
+            unsafe { tv_list_items_mut(src) }.as_mut_ptr()
+        };
         // SAFETY: `at` is an index of `dest` and `i` one of `src`.
         let (to, from) = unsafe {
             (
-                &raw mut tv_list_items_mut(dest)[at].li_tv,
-                &raw mut tv_list_items_mut(src)[i].li_tv,
+                &raw mut (*dbase.add(at)).li_tv,
+                &raw mut (*sbase.add(i)).li_tv,
             )
         };
         if !op.is_null() && unsafe { *op } as ::core::ffi::c_int != '=' as ::core::ffi::c_int {
