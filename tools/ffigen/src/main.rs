@@ -947,8 +947,16 @@ impl<'w> Emitter<'w> {
                 {
                     return Some(CTy::Named { name, konst: false });
                 }
-                if name == "Option" || name == "GlobalCell" || name == "SharedCell" {
-                    // Option<extern "C" fn ...> / GlobalCell<T>: unwrap.
+                if name == "Option"
+                    || name == "GlobalCell"
+                    || name == "SharedCell"
+                    || name == "ManuallyDrop"
+                {
+                    // Option<extern "C" fn ...> / GlobalCell<T> /
+                    // ManuallyDrop<T>: unwrap. All three are
+                    // `repr(transparent)` over the thing the C sees, and
+                    // the last of them is how a typval says the compiler
+                    // must not drop its payload.
                     if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                         if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
                             let t = t.clone();
