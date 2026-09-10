@@ -271,7 +271,7 @@ pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let id: Handle = number_as_int(arg_number(args, 0));
     let (mut winnr, mut tabnr) = (1, 1);
     unsafe { win_get_tabwin(id, &raw mut tabnr, &raw mut winnr) };
-    let list = unsafe { tv_list_alloc_ret(result, 2) };
+    let list = tv_list_alloc_ret(result, 2);
     unsafe { tv_list_append_number(list, VarNumber::from(tabnr)) };
     unsafe { tv_list_append_number(list, VarNumber::from(winnr)) };
 }
@@ -300,7 +300,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals, and the list stays
     // alive for the appends because `result` owns it.
-    let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == bufnr) {
         unsafe { tv_list_append_number(list, VarNumber::from(wp.handle)) };

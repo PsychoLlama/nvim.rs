@@ -13,8 +13,8 @@ use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
-    NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
-    tv_list_items, tv_list_iter, tv_list_len, tv_list_ref, tv_list_unref,
+    ListRef, NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
+    tv_list_items, tv_list_iter, tv_list_len,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -273,7 +273,8 @@ pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_in
         let list = args[cmd_idx].list_or_null();
         // The List is held across the run: a command may drop the
         // variable holding it.
-        unsafe { tv_list_ref(list) };
+        // SAFETY: the argument's live list.
+        let held = unsafe { ListRef::retained(list) };
         let mut cookie = ListLines { list, at: 0 };
         type GetLine = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
         let getline = Some(get_list_line as GetLine);
@@ -282,7 +283,7 @@ pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_in
         // SAFETY: `cookie` is the walk state this frame owns and outlives
         // the call, which is what `get_list_line` asks for.
         let _ = unsafe { do_cmdline(ptr::null_mut(), getline, cookie, opts) };
-        unsafe { tv_list_unref(list) };
+        drop(held);
     }
 
     emsg_silent.set(save_emsg_silent);

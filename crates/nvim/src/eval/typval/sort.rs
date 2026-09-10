@@ -532,7 +532,9 @@ pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bo
     };
     let l = first.list_or_null();
     if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
-        unsafe { tv_list_set_ret(result, l) };
+        // SAFETY: the argument's own list, whose reference the answer
+        // takes a second one of.
+        result.write_list(unsafe { ListRef::retained(l) });
         if unsafe { tv_list_len(l) } > 1
             && unsafe { parse_sort_uniq_args(args, &raw mut info, &mut how) }.is_ok()
         {

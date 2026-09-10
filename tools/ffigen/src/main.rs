@@ -957,6 +957,20 @@ impl<'w> Emitter<'w> {
                     }
                     return None;
                 }
+                if name == "NonNull" {
+                    // `NonNull<T>` is a `T *` on the wire; the niche is what
+                    // makes `Option<NonNull<T>>` the same eight bytes, which
+                    // is why the owning container handles are spelled this
+                    // way and still render as the pointer C had.
+                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
+                            let t = t.clone();
+                            let inner = self.cty(file, &t)?;
+                            return Some(CTy::Ptr(Box::new(inner), false));
+                        }
+                    }
+                    return None;
+                }
                 if !matches!(seg.arguments, syn::PathArguments::None) {
                     return None; // other generics: not C
                 }

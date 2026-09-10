@@ -79,7 +79,7 @@ pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: &mut TypVal) {
     // SAFETY: caller contract; every entry has a name that outlives the copy
     // `tv_list_append_string` takes.
-    unsafe { tv_list_alloc_ret(result, count as ptrdiff_t) };
+    tv_list_alloc_ret(result, count as ptrdiff_t);
     if entries.is_null() {
         return;
     }

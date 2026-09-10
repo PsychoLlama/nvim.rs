@@ -36,8 +36,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::{
-    DictSlot, Ls, Pt, VAR_PARTIAL, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
-    tv_empty_string, tv_list_unref,
+    DictSlot, Pt, VAR_PARTIAL, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
+    tv_empty_string,
 };
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
@@ -213,10 +213,9 @@ impl TypvalSink for NothingSink {
     }
 
     fn conv_empty_list(&mut self, tv: Option<&mut TypVal>) {
-        let tv = slot(tv);
-        // SAFETY: the typval's own list.
-        unsafe { tv_list_unref(tv.list_or_null()) };
-        tv.write_list(ptr::null_mut());
+        // The handle leaves the slot and is released; the slot is left
+        // holding `v:_null_list`.
+        drop(slot(tv).take_list());
     }
 
     /// # Safety
@@ -247,12 +246,10 @@ impl TypvalSink for NothingSink {
         frame: &mut ConvFrame,
     ) -> Flow {
         let tv = slot(tv);
-        let list = tv.list_or_null();
-        // SAFETY: the typval's own list.
-        let mut ls = unsafe { Ls::new(list) };
-        if ls.lv_refcount.is_shared() {
-            ls.lv_refcount.release();
-            tv.write_list(ptr::null_mut());
+        if tv.list_ref().is_some_and(|l| l.lv_refcount.is_shared()) {
+            // Not the last reference, so releasing this one frees nothing
+            // and the items stay somebody else's.
+            drop(tv.take_list());
             // Always a `List`: the walk calls this straight after pushing
             // one for this very value.
             if let Frame::List { at, .. } = &mut frame.frame {
@@ -269,9 +266,7 @@ impl TypvalSink for NothingSink {
         // `None` is a partial's argument list, which has no `TypVal` of its
         // own; `conv_func_end` releases the partial that owns it.
         let Some(tv) = tv else { return };
-        // SAFETY: the typval's own list.
-        unsafe { tv_list_unref(tv.list_or_null()) };
-        tv.write_list(ptr::null_mut());
+        drop(tv.take_list());
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].

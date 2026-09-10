@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::types::{VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
+use crate::types::{ListRef, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -46,7 +46,7 @@ unsafe fn add_str(dict: *mut Dict, key: &str, value: *const c_char) -> Result<()
 /// # Safety
 ///
 /// `dict` and `list` must be live.
-unsafe fn add_list(dict: *mut Dict, key: &str, list: *mut List) -> Result<(), KeyTaken> {
+unsafe fn add_list(dict: *mut Dict, key: &str, list: Option<ListRef>) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and list.
     Ok(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) }?)
 }
@@ -234,12 +234,12 @@ unsafe fn qf_get_list_from_lines(
     if parsed {
         // Whether the throwaway list had entries is not this answer:
         // parsing nothing out of the lines is still a successful read.
-        let _ = unsafe { get_errorlist(qi, None, 0, 0, l) };
+        let _ = unsafe { get_errorlist(qi, None, 0, 0, l.as_ptr()) };
         unsafe { qf_free(qf_get_list(qi, 0)) };
     }
     unsafe { qf_free_lists(qi) };
 
-    unsafe { add_list(retdict, "items", l) }?;
+    unsafe { add_list(retdict, "items", Some(l)) }?;
     Ok(())
 }
 
@@ -386,7 +386,7 @@ unsafe fn qf_getprop_defaults(
     }
     if wanted(GetListProps::ITEMS) {
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        unsafe { add_list(retdict, "items", l) }?;
+        unsafe { add_list(retdict, "items", Some(l)) }?;
     }
     if wanted(GetListProps::NR) {
         unsafe { add_nr(retdict, "nr", 0) }?;
@@ -450,8 +450,8 @@ unsafe fn qf_getprop_filewinid(
 /// `qi` must be a live stack and `retdict` live.
 unsafe fn qf_getprop_items(qi: *mut QfInfo, qf_idx: c_int, eidx: c_int, retdict: *mut Dict) {
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-    let _ = unsafe { get_errorlist(qi, None, qf_idx, eidx, l) };
-    let _ = unsafe { add_list(retdict, "items", l) };
+    let _ = unsafe { get_errorlist(qi, None, qf_idx, eidx, l.as_ptr()) };
+    let _ = unsafe { add_list(retdict, "items", Some(l)) };
 }
 
 /// The arbitrary value `setqflist()` attached to the list, or the empty

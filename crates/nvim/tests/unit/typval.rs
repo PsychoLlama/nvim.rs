@@ -51,7 +51,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
     // SAFETY: the list is this case's own, freed at the end; the strings
     // outlive every call that reads them.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as isize);
+        let l = tv_list_alloc(kListLenUnknown as isize).into_raw();
         log.check(&[alloc::list(l)]);
 
         let test = cstr("test");
@@ -240,7 +240,7 @@ fn removing_a_run_shortens_the_list() {
     let _editor = editor_lock();
     // SAFETY: the list is this case's own, freed below.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
         for n in 1..=4 {
             tv_list_append_number(l, n);
         }
@@ -268,7 +268,7 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
     let _editor = editor_lock();
     // SAFETY: as above; `lw` outlives its registration.
     unsafe {
-        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t);
+        let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
         for n in 1..=3 {
             tv_list_append_number(l, n);
         }

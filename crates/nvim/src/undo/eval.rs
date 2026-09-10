@@ -35,7 +35,7 @@ fn dict_add_nr(dict: *mut Dict, key: &CStr, val: VarNumber) {
 }
 
 /// [`dict_add_nr`] for a list value, which the dictionary takes over.
-fn dict_add_list(dict: *mut Dict, key: &CStr, val: *mut List) {
+fn dict_add_list(dict: *mut Dict, key: &CStr, val: Option<ListRef>) {
     // SAFETY: as [`dict_add_nr`], plus a list this module just built.
     let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), val) };
 }
@@ -101,8 +101,9 @@ pub unsafe fn ex_undolist(_args: *mut ExArg) {
 
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,
 /// newest change first, each carrying its own alternate branch under `alt`.
-fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
-    let list: *mut List = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
+    let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let list = held.as_ptr();
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
         // SAFETY: a fresh dictionary.
@@ -119,13 +120,13 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
             dict_add_nr(dict, c"save", VarNumber::from(uh.uh_save_nr));
         }
         if uh.uh_alt_next.is_some() {
-            dict_add_list(dict, c"alt", eval_tree(buffer, uh.uh_alt_next));
+            dict_add_list(dict, c"alt", Some(eval_tree(buffer, uh.uh_alt_next)));
         }
         // SAFETY: a list and a dictionary this function owns.
         unsafe { tv_list_append_dict(list, dict) };
         link = uh.uh_prev;
     }
-    list
+    held
 }
 
 /// `undofile({name})` — where the undo file for `{name}` would be written.
@@ -172,7 +173,7 @@ pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     dict_add_nr(dict, c"seq_cur", VarNumber::from(buf.b_u_seq_cur));
     dict_add_nr(dict, c"time_cur", buf.b_u_time_cur);
     dict_add_nr(dict, c"save_cur", VarNumber::from(buf.b_u_save_nr_cur));
-    dict_add_list(dict, c"entries", eval_tree(buf, buf.b_u_oldhead));
+    dict_add_list(dict, c"entries", Some(eval_tree(buf, buf.b_u_oldhead)));
 }
 
 /// The header a change to `buffer` would be recorded against, making one if the

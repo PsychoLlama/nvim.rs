@@ -223,9 +223,10 @@ impl<'a> Decoder<'a> {
                 unsafe { (*obj_di).di_tv = obj.val };
             } else {
                 let kv_pair = tv_list_alloc(2);
-                unsafe { tv_list_append_list(last.special_val, kv_pair) };
-                unsafe { tv_list_append_owned_tv(kv_pair, key.val) };
-                unsafe { tv_list_append_owned_tv(kv_pair, obj.val) };
+                let into = kv_pair.as_ptr();
+                unsafe { tv_list_append_list(last.special_val, Some(kv_pair)) };
+                unsafe { tv_list_append_owned_tv(into, key.val) };
+                unsafe { tv_list_append_owned_tv(into, obj.val) };
             }
             return true;
         }

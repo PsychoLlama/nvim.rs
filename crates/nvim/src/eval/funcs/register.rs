@@ -13,8 +13,9 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find, tv_dict_get_number,
-    tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_iter, tv_list_len, tv_list_ref,
+    ListRef, NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find,
+    tv_dict_get_number, tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_iter,
+    tv_list_len,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -83,12 +84,12 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if return_list {
         flags |= kGRegList as c_int;
         result.write_empty(VAR_LIST);
-        let mut l = unsafe { get_reg_contents(regname, flags) } as *mut List;
-        if l.is_null() {
-            l = tv_list_alloc(0);
-        }
-        result.write_list(l);
-        unsafe { tv_list_ref(l) };
+        let l = unsafe { get_reg_contents(regname, flags) } as *mut List;
+        // `get_reg_contents` hands back a list at one reference, which the
+        // answer takes over; an unset register gets a fresh empty one.
+        // SAFETY: the register's list, whose reference this takes over.
+        let held = unsafe { ListRef::owning(l) }.unwrap_or_else(|| tv_list_alloc(0));
+        result.write_list(Some(held));
     } else {
         result.write_string(unsafe { get_reg_contents(regname, flags) } as *mut c_char);
     }
@@ -127,7 +128,8 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if list.is_null() {
         return;
     }
-    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list) };
+    // SAFETY: the register's list, whose reference the dictionary takes over.
+    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, ListRef::owning(list)) };
 
     let mut buf: TypeBuf = [0; 67];
     let mut reglen: ColNr = 0;

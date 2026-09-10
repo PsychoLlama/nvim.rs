@@ -31,7 +31,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
         // SAFETY: a live dictionary, and two NUL-terminated strings.
         let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
     };
-    let list = |key: &CStr, value: *mut List| {
+    let list = |key: &CStr, value: Option<ListRef>| {
         // SAFETY: a live dictionary and a live list, which the dictionary
         // takes over.
         let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
@@ -76,19 +76,20 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
     // The windows displaying this buffer.
     let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let into = windows.as_ptr();
     let append = |handle: Handle| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
+        unsafe { tv_list_append_number(into, VarNumber::from(handle)) };
     };
     for wp in tab_windows().filter(|wp| wp.w_buffer == buffer.raw()) {
         append(wp.handle);
     }
-    list(c"windows", windows);
+    list(c"windows", Some(windows));
 
     // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
     // dictionary takes over.
     if buf_has_signs(buffer) {
-        list(c"signs", unsafe { get_buffer_signs(buffer) });
+        list(c"signs", Some(unsafe { get_buffer_signs(buffer) }));
     }
     nr(c"lastused", buffer.b_last_used);
     dict
@@ -100,7 +101,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.
-    let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let mut argbuf: *mut Buffer = ptr::null_mut();
     let mut filter = Filter::default();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {

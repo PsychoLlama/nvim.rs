@@ -142,7 +142,7 @@ impl RetList {
     /// `kListLenUnknown` when the count is not known yet.
     pub(crate) fn alloc(result: &mut TypVal, len: ptrdiff_t) -> Self {
         // SAFETY: `result` is the builtin's own cleared result slot.
-        Self(unsafe { tv_list_alloc_ret(result, len) })
+        Self(tv_list_alloc_ret(result, len))
     }
 
     /// The List `result` already holds.

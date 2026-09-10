@@ -16,10 +16,10 @@ use core::ffi::{c_char, c_int};
 use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
-use crate::eval::typval::{SL_SIZE, tv_list_alloc, tv_list_append_string, tv_list_ref};
+use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc, tv_list_append_string};
 use crate::memory::{xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, List, ListItem, NUL, TypVal, UserFunc, VarLock};
+use crate::types::{ColNr, LineNr, ListItem, NUL, TypVal, UserFunc, VarLock};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -250,9 +250,9 @@ pub(crate) fn reg_submatch(no: c_int) -> *mut c_char {
 /// [`reg_submatch`] as one list item per line, which is what
 /// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
 /// text apart from the line breaks, because each line is its own item.
-pub(crate) fn reg_submatch_list(no: c_int) -> *mut List {
+pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
     if !can_f_submatch.get() || no < 0 {
-        return core::ptr::null_mut();
+        return None;
     }
     let no = no as usize;
     // SAFETY: as [`reg_submatch`].
@@ -265,12 +265,13 @@ pub(crate) fn reg_submatch_list(no: c_int) -> *mut List {
         let match_ = unsafe { Live::new(snapshot.match_()) };
         let start = match_.startp[no];
         if start.is_null() || match_.endp[no].is_null() {
-            return core::ptr::null_mut();
+            return None;
         }
         let list = tv_list_alloc(1);
-        unsafe { tv_list_append_string(list, start, match_.endp[no].offset_from(start)) };
-        unsafe { tv_list_ref(list) };
-        return list;
+        unsafe {
+            tv_list_append_string(list.as_ptr(), start, match_.endp[no].offset_from(start));
+        };
+        return Some(list);
     }
 
     // SAFETY: the snapshot names the buffer match that is running.
@@ -278,23 +279,23 @@ pub(crate) fn reg_submatch_list(no: c_int) -> *mut List {
     let slnum = mmatch.startpos[no].lnum;
     let elnum = mmatch.endpos[no].lnum;
     if slnum < 0 || elnum < 0 {
-        return core::ptr::null_mut();
+        return None;
     }
     let scol = mmatch.startpos[no].col;
     let ecol = mmatch.endpos[no].col;
 
     let list = tv_list_alloc((elnum - slnum + 1) as isize);
+    let into = list.as_ptr();
     let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
     if slnum == elnum {
-        unsafe { tv_list_append_string(list, s, (ecol - scol) as isize) };
+        unsafe { tv_list_append_string(into, s, (ecol - scol) as isize) };
     } else {
         // A negative length means "to the end of the line".
-        unsafe { tv_list_append_string(list, s, -1) };
+        unsafe { tv_list_append_string(into, s, -1) };
         for lnum in slnum + 1..elnum {
-            unsafe { tv_list_append_string(list, reg_getline_submatch(rex, lnum), -1) };
+            unsafe { tv_list_append_string(into, reg_getline_submatch(rex, lnum), -1) };
         }
-        unsafe { tv_list_append_string(list, reg_getline_submatch(rex, elnum), ecol as isize) };
+        unsafe { tv_list_append_string(into, reg_getline_submatch(rex, elnum), ecol as isize) };
     }
-    unsafe { tv_list_ref(list) };
-    list
+    Some(list)
 }

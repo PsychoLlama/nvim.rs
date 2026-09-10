@@ -20,7 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::{NumBuf, tv_clear, tv_get_number, tv_list_extend};
+use crate::eval::typval::{ListRef, NumBuf, tv_clear, tv_get_number, tv_list_extend};
 use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::strings::concat_str;
@@ -118,9 +118,9 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     if l1.is_null() {
         // Appending to an unallocated list shares the right-hand one
         // rather than copying it.
-        lhs.write_list(l2);
-        // SAFETY: `l2` is the live List the right-hand typval holds.
-        unsafe { (*l2).lv_refcount.retain() };
+        // SAFETY: `l2` is the live List the right-hand typval holds, and
+        // the left-hand one takes a reference of its own.
+        lhs.write_list(unsafe { ListRef::retained(l2) });
     } else {
         // SAFETY: both Lists are live.
         unsafe { tv_list_extend(l1, l2, None) };

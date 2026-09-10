@@ -49,10 +49,10 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL,
-    Object, OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t,
-    size_t, ssize_t, uint8_t,
+    Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, NUL, Object,
+    OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t,
+    ssize_t, uint8_t,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -765,7 +765,8 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
 /// # Safety
 /// `argv` must hold `argc` NUL-terminated strings.
 pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
-    let l: *mut List = tv_list_alloc(argc as ptrdiff_t);
+    let list = tv_list_alloc(argc as ptrdiff_t);
+    let l = list.as_ptr();
     // SAFETY: `l` is that List.
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
     for i in 0..argc {
@@ -778,7 +779,7 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
         unsafe { (*tv_list_last(l)).li_lock = VarLock::Fixed };
     }
     // SAFETY: `v:argv` takes the List over.
-    unsafe { set_vim_var_list(Vv::Argv, l) };
+    unsafe { set_vim_var_list(Vv::Argv, Some(list)) };
 }
 
 /// Render a typval for display, as `:echo` would. A null typval is the

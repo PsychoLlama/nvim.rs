@@ -41,7 +41,7 @@ use crate::autocmd::apply_autocmds;
 use crate::charset::skipwhite;
 use crate::cstr;
 use crate::eval::typval::{
-    tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
+    ListRef, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
     tv_list_append_dict, tv_list_append_string,
 };
@@ -563,8 +563,8 @@ pub(crate) fn dict_add_bool(dict: *mut Dict, key: &CStr, value: bool) {
     let _ = unsafe { tv_dict_add_bool(dict, key.as_ptr(), key.count_bytes(), value.into()) };
 }
 
-pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: *mut List) {
-    // SAFETY: see the section note; the Dict takes a reference to the list.
+pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: Option<ListRef>) {
+    // SAFETY: see the section note; the Dict takes the list over.
     let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
@@ -576,7 +576,7 @@ pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: *mut Dict) {
     let _ = unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
 }
 
-pub(crate) fn list_alloc() -> *mut List {
+pub(crate) fn list_alloc() -> ListRef {
     tv_list_alloc(kListLenMayKnow as ptrdiff_t)
 }
 

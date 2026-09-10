@@ -32,6 +32,8 @@
     clippy::ptr_as_ptr
 )]
 
+use ::core::ptr::NonNull;
+
 use super::*;
 use crate::types::Refcount;
 
@@ -207,12 +209,144 @@ pub(crate) fn index_of(n: usize) -> ::core::ffi::c_int {
     ::core::ffi::c_int::try_from(n).unwrap_or(::core::ffi::c_int::MAX)
 }
 
-/// Allocate an empty list.  The caller owns the reference count.
+/// An owning reference to a heap-allocated [`List`].
+///
+/// This is the reference count, as a type: [`Clone`] takes a reference and
+/// [`Drop`] gives one back, freeing the list when the last one goes.  What
+/// it replaces is upstream's `tv_list_ref`/`tv_list_unref` pair, which every
+/// call site had to remember to write, in the right order, on every path.
+///
+/// **A fresh handle owns one reference.**  [`tv_list_alloc`] answers a
+/// `ListRef` at a count of one, where upstream handed back a list at *zero*
+/// and left the first storer to raise it -- an idiom whose whole purpose was
+/// to let an error path free a list nobody had claimed, which is what a
+/// destructor does by itself.  The count is now exactly the number of live
+/// holders, and there is no state in which a list is alive with none.
+///
+/// [`Deref`] is [`Live`](crate::winlayer::Live)'s: the borrow lasts as long
+/// as the field access that asked for it and never spans a call, because the
+/// evaluator re-enters and the same list is reachable through a `*mut List`
+/// somewhere else at the same time.
+///
+/// The two constructors are the two things a raw pointer can mean.  A handle
+/// is not null: `v:_null_list` is `TypVal::List(None)`, and every reader that
+/// wants the old spelling asks [`TypVal::list_or_null`].
+#[repr(transparent)]
+pub struct ListRef(NonNull<List>);
+
+impl ListRef {
+    /// Take over a reference the caller already holds and will not release.
+    ///
+    /// # Safety
+    ///
+    /// `l` must point at a live list, and the caller must hold a reference
+    /// to it -- one this handle now owns and eventually gives back.
+    #[inline(always)]
+    pub unsafe fn from_owned(at: NonNull<List>) -> ListRef {
+        ListRef(at)
+    }
+
+    /// Take over the caller's reference to `l`, or answer `None` for a NULL
+    /// list.  See [`ListRef::from_owned`].
+    ///
+    /// # Safety
+    ///
+    /// As [`ListRef::from_owned`], for a pointer that may be null.
+    #[inline(always)]
+    pub unsafe fn owning(l: *mut List) -> Option<ListRef> {
+        NonNull::new(l).map(ListRef)
+    }
+
+    /// Take *another* reference to `l`: the caller keeps its own.
+    ///
+    /// This is `tv_list_ref`, with the handle that owes the matching release
+    /// as its answer.  `None` for a NULL list, which is `v:_null_list` and
+    /// counts nothing.
+    ///
+    /// # Safety
+    ///
+    /// `l` is null or points at a live list.
+    #[inline(always)]
+    pub unsafe fn retained(l: *mut List) -> Option<ListRef> {
+        let at = NonNull::new(l)?;
+        // SAFETY: the caller's promise: a live list.
+        unsafe { Ls::new(l) }.lv_refcount.retain();
+        Some(ListRef(at))
+    }
+
+    /// The list, as the pointer most of the family still takes.
+    ///
+    /// A **borrow**: it is live only while the handle is, and an edit to the
+    /// list invalidates nothing about it, but a release does.
+    #[inline(always)]
+    pub fn as_ptr(&self) -> *mut List {
+        self.0.as_ptr()
+    }
+
+    /// Give the reference up without releasing it: something else owns it
+    /// now.
+    ///
+    /// The counterpart of [`ListRef::from_owned`], for the handful of places
+    /// that hand a list on by pointer.
+    #[inline(always)]
+    pub fn into_raw(self) -> *mut List {
+        let at = self.0;
+        ::core::mem::forget(self);
+        at.as_ptr()
+    }
+}
+
+impl Clone for ListRef {
+    /// One more owner of the same list.
+    #[inline(always)]
+    fn clone(&self) -> ListRef {
+        // SAFETY: this handle names a live list, since it holds a reference
+        // to it.
+        unsafe { Ls::new(self.as_ptr()) }.lv_refcount.retain();
+        ListRef(self.0)
+    }
+}
+
+impl Drop for ListRef {
+    /// Give the reference back, freeing the list with the last one.
+    #[inline(always)]
+    fn drop(&mut self) {
+        // SAFETY: this handle names a live list, and is giving up the
+        // reference that kept it so.
+        unsafe { tv_list_unref(self.as_ptr()) };
+    }
+}
+
+impl ::core::ops::Deref for ListRef {
+    type Target = List;
+
+    #[inline(always)]
+    fn deref(&self) -> &List {
+        // SAFETY: the handle holds a reference, so the list is live; the
+        // borrow lasts only as long as the field access that asked for it.
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl ::core::ops::DerefMut for ListRef {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut List {
+        // SAFETY: as [`ListRef::deref`].
+        unsafe { self.0.as_mut() }
+    }
+}
+
+/// Allocate an empty list, **owned by the handle it answers**.
 ///
 /// `len` is a capacity hint: a caller that knows how many items are coming
 /// reserves them here rather than growing the array on the way.  A negative
 /// one (`kListLenUnknown`) reserves nothing.
-pub fn tv_list_alloc(len: ptrdiff_t) -> *mut List {
+///
+/// The list arrives at a reference count of **one**, held by the
+/// [`ListRef`].  Upstream handed one back at zero and relied on the first
+/// storer to raise it; a caller that stored it nowhere had to notice and
+/// free it by hand.  Dropping the handle is that free.
+pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     // Still the `xmalloc` family rather than a `Box`, because the allocation
     // log the unit cases assert against sees only that family -- and because
     // the tree hands `*mut List` around and frees it in `tv_list_free_list`.
@@ -225,11 +359,15 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> *mut List {
         unsafe { items_of(list) }.reserve_exact(len);
     }
 
+    let at = NonNull::new(list).expect("xcalloc never answers null");
     // The collector reaches every live list through its registry.
-    let root = root_list(::core::ptr::NonNull::new(list).expect("xcalloc never answers null"));
+    let root = root_list(at);
     // SAFETY: the allocation just made and written.
-    unsafe { Ls::new(list) }.lv_root = root;
-    list
+    let mut live = unsafe { Ls::new(list) };
+    live.lv_root = root;
+    live.lv_refcount = Refcount::ONE;
+    // SAFETY: the reference just seeded is the one this handle owns.
+    unsafe { ListRef::from_owned(at) }
 }
 
 /// Initialise a `List` embedded in the caller's own storage: empty, locked
@@ -396,14 +534,13 @@ pub(crate) fn tv_list_own_items(l: &mut List) {
 
 /// Allocate an empty list and store it in `ret_tv` as the return value.
 ///
-/// # Safety
-///
-/// `ret_tv` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut List {
-    let l = tv_list_alloc(len);
-    unsafe { tv_list_set_ret(ret_tv, l) };
-    l
+/// The answer is a **borrow** of the list `ret_tv` now owns, for the caller
+/// to fill in; it is live as long as the return slot holds the list.
+pub fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut List {
+    let list = tv_list_alloc(len);
+    let at = list.as_ptr();
+    ret_tv.write_list(Some(list));
+    at
 }
 
 #[cfg(test)]
@@ -425,15 +562,19 @@ mod tests {
         }
 
         /// `[0, 1, ..., len - 1]`, the list every case below edits.
+        ///
+        /// The case owns the one reference the allocator handed out, and
+        /// gives it back through [`done`].
         pub(super) fn counted(len: usize) -> *mut List {
-            let l = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
+            let list = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
+            let l = list.as_ptr();
             for n in 0..len {
                 // SAFETY: the list just allocated.
                 unsafe {
                     tv_list_append_number(l, VarNumber::try_from(n).expect("a small number"))
                 };
             }
-            l
+            list.into_raw()
         }
 
         /// The numbers `l` holds, so a case can say which items survived

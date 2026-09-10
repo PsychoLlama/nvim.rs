@@ -12,7 +12,7 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str, tv_dict_add_dict,
+    ListRef, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str, tv_dict_add_dict,
     tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
     tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find, tv_dict_free,
     tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc, tv_dict_get_string_buf,
@@ -778,7 +778,9 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         let adds: Vec<(&str, Add, Tv, bool)> = vec![
             (
                 "list",
-                Box::new(move |d, _| tv_dict_add_list(d, cstr("testt").as_ptr(), 3, l)),
+                Box::new(move |d, _| {
+                    tv_dict_add_list(d, cstr("testt").as_ptr(), 3, ListRef::retained(l))
+                }),
                 Tv::List(vec![f(1.0), f(2.0), f(3.0)]),
                 false,
             ),

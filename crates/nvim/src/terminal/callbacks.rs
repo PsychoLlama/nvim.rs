@@ -30,7 +30,7 @@ use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Error, Event, List, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
+    Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
     VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, ptrdiff_t,
     ssize_t,
 };
@@ -258,12 +258,13 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     } else {
         b'+' as c_char
     };
-    let lines: *mut List = tv_list_alloc(1 as ptrdiff_t);
+    let lines = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: as above.
-    unsafe { tv_list_append_allocated_string(lines, data) };
-    let args: *mut List = tv_list_alloc(3 as ptrdiff_t);
+    unsafe { tv_list_append_allocated_string(lines.as_ptr(), data) };
+    let held = tv_list_alloc(3 as ptrdiff_t);
+    let args = held.as_ptr();
     // SAFETY: as above.
-    unsafe { tv_list_append_list(args, lines) };
+    unsafe { tv_list_append_list(args, Some(lines)) };
     let regtype = b'v' as c_char;
     // SAFETY: as above, over one byte of this frame each, which the list
     // copies.
@@ -273,7 +274,7 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
     // SAFETY: two names of this crate's own, and the arguments built above.
     // The provider is Vimscript, which is why this runs on the main loop.
-    unsafe { eval_call_provider(provider, method, args, true) };
+    unsafe { eval_call_provider(provider, method, Some(held), true) };
 }
 
 /// Accumulate an OSC 52 clipboard write, queueing it once complete.

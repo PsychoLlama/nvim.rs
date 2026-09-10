@@ -169,7 +169,7 @@ unsafe fn get_buffer_lines(
     ret.write_string(ptr::null_mut());
     if buffer.is_none_or(|b| b.b_ml.ml_mfp.is_null()) || start < 0 || end < start {
         if retlist {
-            unsafe { tv_list_alloc_ret(result, 0) };
+            tv_list_alloc_ret(result, 0);
         }
         return;
     }
@@ -183,7 +183,7 @@ unsafe fn get_buffer_lines(
     }
     start = start.max(1);
     end = end.min(buffer.line_count());
-    let list = unsafe { tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t) };
+    let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start..=end {
         let (text, len) = unsafe { (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t) };
         unsafe { tv_list_append_string(list, text, len) };

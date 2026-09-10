@@ -31,7 +31,7 @@ use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
 use neovim::eval::typval::{
-    NumBuf, tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
+    ListRef, NumBuf, tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
     tv_list_append_list, tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string,
     tv_list_append_tv, tv_list_concat, tv_list_copy, tv_list_equal, tv_list_extend, tv_list_find,
     tv_list_find_nr, tv_list_find_str, tv_list_first, tv_list_free, tv_list_free_contents,
@@ -47,6 +47,18 @@ use neovim::types::{List, ListWatch, Refcount, TypVal, VAR_LIST, VarLock, VimCon
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload, Tv};
 use crate::support::{check_emsg, cstr};
+
+/// [`tv_list_copy`] answering the pointer these cases are written against.
+///
+/// The copy comes back as an owning handle; the case takes the reference
+/// over and gives it back with `tv_list_free`/`tv_list_unref`, which is what
+/// upstream's `tv_list_copy` + `tv_list_ref` pair left it holding.
+///
+/// # Safety
+/// As [`tv_list_copy`].
+unsafe fn copied(conv: *const VimConv, orig: *mut List, deep: bool, copy_id: c_int) -> *mut List {
+    unsafe { tv_list_copy(conv, orig, deep, copy_id) }.map_or(ptr::null_mut(), ListRef::into_raw)
+}
 
 /// The spec's bare Lua numbers, which `lua2typvalt` made floats.
 fn f(n: f64) -> Tv {
@@ -700,12 +712,12 @@ fn appending_a_list_takes_a_reference() {
         let inner = tv::new_list(&[f(1.0)]);
         log.clear();
         assert_eq!((*inner).lv_refcount.get(), 1);
-        tv_list_append_list(l, inner);
+        tv_list_append_list(l, ListRef::retained(inner));
         assert_eq!((*inner).lv_refcount.get(), 2);
         assert_eq!((*tv_list_first(l)).li_tv.list(), inner);
         log.check(&[]);
 
-        tv_list_append_list(l, ptr::null_mut());
+        tv_list_append_list(l, None);
         log.check(&[]);
 
         assert_eq!(
@@ -963,7 +975,7 @@ fn copying_a_null_list_answers_null() {
         for deep in [true, false] {
             for copy_id in [0, 1] {
                 assert!(
-                    tv_list_copy(ptr::null_mut(), ptr::null_mut(), deep, copy_id).is_null(),
+                    copied(ptr::null_mut(), ptr::null_mut(), deep, copy_id).is_null(),
                     "deep {deep} copyID {copy_id}"
                 );
             }
@@ -1006,7 +1018,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
 
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
-        let shallow = tv_list_copy(ptr::null_mut(), l, false, 0);
+        let shallow = copied(ptr::null_mut(), l, false, 0);
         assert_eq!((*inner_dict).dv_refcount.get(), 2);
         assert_eq!((*inner_list).lv_refcount.get(), 2);
         let copies = tv::list_items(shallow);
@@ -1024,7 +1036,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
 
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
-        let deep = tv_list_copy(ptr::null_mut(), l, true, 0);
+        let deep = copied(ptr::null_mut(), l, true, 0);
         assert!(!deep.is_null());
         assert_eq!(
             (*inner_dict).dv_refcount.get(),
@@ -1081,7 +1093,7 @@ fn a_converting_copy_rewrites_every_string() {
         let inner_list = (*lis[1]).li_tv.list();
         log.clear();
 
-        let deep = tv_list_copy(&raw mut vc, l, true, 0);
+        let deep = copied(&raw mut vc, l, true, 0);
         assert!(!deep.is_null());
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
@@ -1143,7 +1155,7 @@ fn a_copy_id_preserves_sharing() {
             (*tv_list_last(l)).li_tv.list()
         );
 
-        let without = tv_list_copy(ptr::null_mut(), l, true, 0);
+        let without = copied(ptr::null_mut(), l, true, 0);
         assert_ne!(
             (*tv_list_first(without)).li_tv.list(),
             (*tv_list_last(without)).li_tv.list()
@@ -1153,7 +1165,7 @@ fn a_copy_id_preserves_sharing() {
             Tv::List(vec![Tv::List(vec![]), Tv::List(vec![])])
         );
 
-        let with = tv_list_copy(ptr::null_mut(), l, true, 2);
+        let with = copied(ptr::null_mut(), l, true, 2);
         assert_eq!(
             (*tv_list_first(with)).li_tv.list(),
             (*tv_list_last(with)).li_tv.list()
@@ -1182,10 +1194,10 @@ fn a_self_referencing_list_copies_into_a_self_referencing_copy() {
         let mut l_tv = Tv::List(vec![]).build();
         let l = l_tv.list();
         assert_eq!((*l).lv_refcount.get(), 1);
-        tv_list_append_list(l, l);
+        tv_list_append_list(l, ListRef::retained(l));
         assert_eq!((*l).lv_refcount.get(), 2);
 
-        let copy = tv_list_copy(ptr::null_mut(), l, true, 2);
+        let copy = copied(ptr::null_mut(), l, true, 2);
         assert_eq!((*copy).lv_refcount.get(), 2, "the copy holds itself");
         assert_eq!(tv::read_list(copy), Tv::List(vec![Tv::Cycle(0)]));
 
@@ -1887,20 +1899,28 @@ fn an_items_identity_is_its_index_into_one_list() {
 /// reservation goes through Rust's global allocator, which this log does
 /// not see, so the assertion is that it does *not* show up — one `xcalloc`
 /// however many items were asked for.
+/// A fresh list is empty and owned by **one** reference: the handle
+/// [`tv_list_alloc`] answers.
+///
+/// Upstream handed one back at a count of zero and left the first storer to
+/// raise it, which is what made an unstored list something a caller had to
+/// remember to free. The count is now exactly the number of live holders.
 #[test]
-fn a_fresh_list_is_empty_and_unreferenced() {
+fn a_fresh_list_is_empty_and_owned_by_its_handle() {
     let log = AllocLog::start();
-    // SAFETY: the lists are this case's own.
+    // SAFETY: the lists are this case's own, and each is released by the
+    // handle going out of scope.
     unsafe {
         for len in [0, 10, -1] {
-            let l = tv_list_alloc(len);
+            let list = tv_list_alloc(len);
+            let l = list.as_ptr();
             log.check(&[alloc::list(l)]);
             assert_eq!(tv_list_len(l), 0, "len {len}");
             assert!(tv_list_first(l).is_null());
             assert!(tv_list_last(l).is_null());
-            assert_eq!((*l).lv_refcount.get(), 0);
+            assert_eq!((*l).lv_refcount.get(), 1);
             assert_eq!((*l).lv_lock, VarLock::Unlocked);
-            tv_list_free(l);
+            drop(list);
             log.check(&[alloc::freed(l)]);
         }
     }

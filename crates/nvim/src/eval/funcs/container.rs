@@ -9,11 +9,11 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
-    tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
-    tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy, tv_list_find,
-    tv_list_flatten, tv_list_items, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx,
+    ListRef, NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg,
+    tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
+    tv_clear, tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def,
+    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy,
+    tv_list_find, tv_list_flatten, tv_list_items, tv_list_len, tv_list_locked, tv_list_uidx,
     value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
@@ -129,13 +129,19 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     };
 
     let mut list = args[0].list_or_null();
-    result.write_list(list);
+    // The answer takes a reference of its own straight away, so that the
+    // paths that give up below still leave `result` owning what it names.
+    // SAFETY: the argument's list, live for the call.
+    result.write_list(unsafe { ListRef::retained(list) });
     if list.is_null() {
         return;
     }
     if make_copy {
-        list = unsafe { tv_list_copy(ptr::null(), list, false, get_copy_id()) };
-        result.write_list(list);
+        let copy = unsafe { tv_list_copy(ptr::null(), list, false, get_copy_id()) };
+        list = copy.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr);
+        // The reference taken above goes back: the answer is the copy.
+        drop(result.take_list());
+        result.write_list(copy);
         if list.is_null() {
             return;
         }
@@ -146,7 +152,6 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         if unsafe { value_check_lock(lock, what, TV_TRANSLATE as usize) } {
             return;
         }
-        unsafe { tv_list_ref(list) };
     }
     // SAFETY: `list` is the live List argument 0 named.
     let len = unsafe { tv_list_len(list) } as i64;

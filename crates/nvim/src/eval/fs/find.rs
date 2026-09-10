@@ -35,7 +35,7 @@ use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_o
 use crate::eval::eval_expr_typval;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk, tv_list_set_ret};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_number_chk};
 use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
@@ -183,15 +183,14 @@ impl StrArray {
 /// form of both is a NULL payload.
 fn empty_answer(result: &mut TypVal) {
     if result.v_type() == VAR_LIST {
-        result.write_list(ptr::null_mut());
+        result.write_list(None);
     } else {
         result.write_string(ptr::null_mut());
     }
 }
 
 fn ret_list(result: &mut TypVal) {
-    // SAFETY: `result` is the builtin's own cleared result slot.
-    unsafe { tv_list_set_ret(result, ptr::null_mut()) };
+    result.write_list(None);
 }
 
 fn free(p: *mut c_char) {

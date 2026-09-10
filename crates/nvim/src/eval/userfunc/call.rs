@@ -25,7 +25,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::di_tv;
-use crate::eval::typval::{DictEntry, DictTab};
+use crate::eval::typval::{DictEntry, DictTab, ListRef};
 use crate::types::{DictKey, Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
@@ -148,7 +148,13 @@ pub unsafe fn call_user_func(
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_avars.dv_hashtab }, c"000");
         unsafe { (*v).di_tv.write_empty(VAR_LIST) };
         unsafe { (*v).di_lock = VarLock::Fixed };
-        unsafe { (*v).di_tv.write_list(&raw mut (*fc).fc_l_varlist) };
+        // `a:000` **names** the funccall's own list without taking a
+        // reference: the storage owns it, `DO_NOT_FREE_CNT` is what keeps
+        // anything from freeing it, and `cleanup_function_call` compares the
+        // count against that sentinel to find out whether the list escaped.
+        // SAFETY: the funccall's own list, live for as long as the item is.
+        let a000 = unsafe { ListRef::owning(&raw mut (*fc).fc_l_varlist) };
+        unsafe { (*v).di_tv.write_list(a000) };
     }
     unsafe { tv_list_init_static(&raw mut (*fc).fc_l_varlist) };
     unsafe { tv_list_set_lock(&raw mut (*fc).fc_l_varlist, VarLock::Fixed) };

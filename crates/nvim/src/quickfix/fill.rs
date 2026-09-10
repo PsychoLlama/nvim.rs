@@ -15,7 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, tv_list_items};
+use crate::eval::typval::{CallFrame, ListRef, tv_list_items};
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
@@ -289,8 +289,10 @@ unsafe fn call_qftf_func(
     let locked = Lock::text();
     if unsafe { callback_call(cb, args.args(), &mut rettv) } {
         if rettv.v_type() == VAR_LIST {
-            answer = rettv.list_or_null();
-            unsafe { tv_list_ref(answer) };
+            // SAFETY: the callback's answer, whose reference this takes a
+            // second one of before the value is cleared.
+            answer = unsafe { ListRef::retained(rettv.list_or_null()) }
+                .map_or(ptr::null_mut(), ListRef::into_raw);
         }
         unsafe { tv_clear(&mut rettv) };
     }

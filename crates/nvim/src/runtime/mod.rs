@@ -41,7 +41,7 @@ use crate::eval::typval::{
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_alloc_lock,
     tv_dict_copy, tv_dict_find, tv_dict_get_string_alloc, tv_get_number_chk, tv_ht_iter,
     tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_string,
-    tv_list_append_tv, tv_list_set_ret,
+    tv_list_append_tv,
 };
 use crate::eval::userfunc::{func_tbl_get, restore_funccal, save_funccal};
 use crate::eval::vars::new_script_vars;

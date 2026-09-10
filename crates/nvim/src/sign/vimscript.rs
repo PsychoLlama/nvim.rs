@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::eval::typval::{NumBuf, tv_list_items};
+use crate::eval::typval::{ListRef, NumBuf, tv_list_items};
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 use core::ptr;
@@ -154,7 +154,7 @@ unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut
 /// `args` and `result` are the frame's.
 unsafe fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(*mut Dict) -> c_int) {
     // SAFETY: the frame's return slot.
-    let retlist = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
         emsg(gettext(e_listreq));
         return;
@@ -217,11 +217,11 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
 ///
 /// # Safety
 /// `buffer` must be live.
-pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> *mut List {
+pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> ListRef {
     let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     for mark in signs {
-        unsafe { tv_list_append_dict(l, sign_get_placed_info_dict(mark)) };
+        unsafe { tv_list_append_dict(l.as_ptr(), sign_get_placed_info_dict(mark)) };
     }
     l
 }
@@ -249,8 +249,10 @@ unsafe fn sign_get_placed_in_buf(
         tv_list_append_dict(retlist, d);
         put_nr(d, "bufnr", VarNumber::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-        let _ = tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), l);
-        l
+        // A borrow of the list the dictionary owns from here on.
+        let into = l.as_ptr();
+        let _ = tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), Some(l));
+        into
     };
 
     // SAFETY: the caller's buffer and group name.

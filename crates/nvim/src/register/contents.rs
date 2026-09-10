@@ -79,8 +79,9 @@ unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
     }
     let list = tv_list_alloc(1);
     // SAFETY: as above.
-    unsafe { tv_list_append_allocated_string(list, s) };
-    list as *mut c_void
+    unsafe { tv_list_append_allocated_string(list.as_ptr(), s) };
+    // The caller takes the reference over.
+    list.into_raw() as *mut c_void
 }
 
 /// The contents of register `regname`, as an allocated string or -- with
@@ -148,9 +149,10 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
             let list = tv_list_alloc(y_size as ptrdiff_t);
             for i in 0..y_size {
                 let line = *y_array.add(i);
-                tv_list_append_string(list, line.data(), line.len() as c_int as ssize_t);
+                tv_list_append_string(list.as_ptr(), line.data(), line.len() as c_int as ssize_t);
             }
-            list as *mut c_void
+            // The caller takes the reference over.
+            list.into_raw() as *mut c_void
         };
     }
 

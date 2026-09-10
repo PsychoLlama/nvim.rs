@@ -26,7 +26,7 @@ use crate::eval::typval::{
     index_of, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
     tv_dict_get_number, tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
-    tv_list_items, tv_list_iter, tv_list_len, tv_list_ref, tv_list_unref,
+    tv_list_items, tv_list_iter, tv_list_len,
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};

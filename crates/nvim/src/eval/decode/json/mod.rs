@@ -19,9 +19,7 @@
 use core::ffi::{CStr, c_char};
 
 use super::decode_create_map_special_dict;
-use crate::eval::typval::{
-    TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_list_alloc, tv_list_len, tv_list_ref,
-};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_list_alloc, tv_list_len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
@@ -269,9 +267,7 @@ pub unsafe fn json_decode_string(
                         }
                     }
                     b'[' => {
-                        let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-                        unsafe { tv_list_ref(list) };
-                        let tv = TypVal::List(list);
+                        let tv = TypVal::List(Some(tv_list_alloc(kListLenMayKnow as ptrdiff_t)));
                         dec.open(tv, ::core::ptr::null_mut(), p);
                     }
                     b'{' => {

@@ -165,7 +165,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     };
 
     unsafe { expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep) };
-    unsafe { tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t) };
+    tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t);
 
     // SAFETY: the frame's return slot, holding the list just allocated.
     let retlist = result.list_or_null();
@@ -228,11 +228,14 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         ret = add_nr("selected", unsafe { (*xpc).xp_selected } as VarNumber);
     }
     if ret.is_ok() {
-        let li = unsafe { tv_list_alloc((*xpc).xp_numfiles as ptrdiff_t) };
-        ret = add_list("matches", li);
+        let li = tv_list_alloc(unsafe { (*xpc).xp_numfiles } as ptrdiff_t);
+        // A borrow of the list the dictionary is about to own: the matches
+        // go in after it is in place, as upstream's did.
+        let into = li.as_ptr();
+        ret = add_list("matches", Some(li));
         let mut idx = 0;
         while ret.is_ok() && idx < unsafe { (*xpc).xp_numfiles } {
-            unsafe { tv_list_append_string(li, *(*xpc).xp_files.offset(idx as isize), -1) };
+            unsafe { tv_list_append_string(into, *(*xpc).xp_files.offset(idx as isize), -1) };
             idx += 1;
         }
     }

@@ -20,7 +20,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value, and the list it is given
     // stays alive for the two appends.
-    let list = unsafe { tv_list_alloc_ret(result, 2) };
+    let list = tv_list_alloc_ret(result, 2);
     unsafe { tv_list_append_number(list, -1) };
     unsafe { tv_list_append_number(list, -1) };
 }
@@ -78,7 +78,7 @@ pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
 pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list stays
     // alive for the two appends because `result` owns it.
-    let list = unsafe { tv_list_alloc_ret(result, 2) };
+    let list = tv_list_alloc_ret(result, 2);
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
     unsafe { tv_list_append_number(list, VarNumber::from(row)) };

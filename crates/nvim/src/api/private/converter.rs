@@ -33,7 +33,6 @@ use crate::api::private::helpers::{arena_array, arena_dict, arena_string};
 use crate::eval::decode::decode_string;
 use crate::eval::typval::{
     tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv,
-    tv_list_ref,
 };
 use crate::eval::typval_encode::{
     ConvPath, ConvType, Flow, InlineStack, TypvalSink, encode_typval_read,
@@ -43,7 +42,7 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair, List,
+    ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair,
     LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, int64_t, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, size_t,
 };
@@ -426,19 +425,18 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: &mut TypVal, take_
             *tv = unsafe { decode_string(str.data(), str.len(), false, false) };
         }
         Object::Array(array) => {
-            let list: *mut List = tv_list_alloc(array.size.cast_signed());
+            let list = tv_list_alloc(array.size.cast_signed());
+            let into = list.as_ptr();
             for i in 0..array.size {
                 let mut li_tv: TypVal = TV_INITIAL_VALUE;
                 // SAFETY: `i` is below `size`, so the slot is inside
                 // `items`, and `li_tv` is this frame's.
                 unsafe {
                     object_to_vim_take_luaref(array.items.add(i), &mut li_tv, take_luaref);
-                    tv_list_append_owned_tv(list, li_tv);
+                    tv_list_append_owned_tv(into, li_tv);
                 }
             }
-            // SAFETY: `list` is the list just built.
-            unsafe { tv_list_ref(list) };
-            tv.write_list(list);
+            tv.write_list(Some(list));
         }
         Object::Dict(pairs) => {
             // SAFETY: the dictionary is this call's until it is handed over.

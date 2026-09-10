@@ -20,8 +20,8 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::eval::typval::{
-    Bl, Di, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
-    tv_dict_item_alloc_len, tv_list_alloc, tv_list_ref,
+    Bl, Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
+    tv_dict_item_alloc_len, tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
@@ -60,8 +60,8 @@ pub(crate) unsafe fn create_special_dict(result: &mut TypVal, type_: MessagePack
     let mut type_item = unsafe { Di::new(type_di) };
     type_item.di_tv.write_empty(VAR_LIST);
     type_item.di_lock = VarLock::Unlocked;
-    unsafe { (*type_di).di_tv.write_list(msgpack_type_list(type_)) };
-    unsafe { tv_list_ref((*type_di).di_tv.list_or_null()) };
+    let type_list = unsafe { ListRef::retained(msgpack_type_list(type_)) };
+    type_item.di_tv.write_list(type_list);
     let _ = unsafe { tv_dict_add(dict, type_di) };
 
     let val_di: *mut DictItem =
@@ -84,10 +84,10 @@ pub(crate) unsafe fn create_special_dict(result: &mut TypVal, type_: MessagePack
 /// `ret_tv` is writable and holds no value that needs clearing.
 pub unsafe fn decode_create_map_special_dict(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut List {
     let list = tv_list_alloc(len);
-    unsafe { tv_list_ref(list) };
-    let val_tv = TypVal::List(list);
-    unsafe { create_special_dict(ret_tv, kMPMap, val_tv) };
-    list
+    // A borrow of the list the special dictionary owns from here on.
+    let into = list.as_ptr();
+    unsafe { create_special_dict(ret_tv, kMPMap, TypVal::List(Some(list))) };
+    into
 }
 
 /// `len` bytes at `s` as a `TypVal`: a `VAR_STRING`, or a `VAR_BLOB` when

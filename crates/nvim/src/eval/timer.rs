@@ -109,7 +109,7 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
 pub unsafe fn add_timer_info_all(result: &mut TypVal) {
     let live = timer_snapshot();
     // SAFETY: the caller's promise about `result`.
-    unsafe { tv_list_alloc_ret(result, live.len() as ptrdiff_t) };
+    tv_list_alloc_ret(result, live.len() as ptrdiff_t);
     for timer in live {
         // SAFETY: the snapshot holds registered timers, and nothing has run
         // between taking it and reading it.

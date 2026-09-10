@@ -13,7 +13,7 @@ use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::{DictEntry, DictTab, tv_dict_item_free};
+use crate::eval::typval::{DictEntry, DictTab, ListRef, tv_dict_item_free};
 use crate::types::MessagePackType;
 use crate::types::{DictKey, Refcount};
 
@@ -75,14 +75,18 @@ pub unsafe fn evalvars_init() {
     let mut type_lists = eval_msgpack_type_lists.get();
     for (i, name) in msgpack_type_names.iter().enumerate() {
         let type_list = tv_list_alloc(0);
-        unsafe { tv_list_set_lock(type_list, VarLock::Fixed) };
-        unsafe { tv_list_ref(type_list) };
+        let at = type_list.as_ptr();
+        unsafe { tv_list_set_lock(at, VarLock::Fixed) };
         let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };
         // SAFETY: the item just allocated.
         let mut item = unsafe { Di::new(di) };
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
-        item.di_tv.write_list(type_list);
-        type_lists[i] = type_list;
+        item.di_tv.write_list(Some(type_list));
+        // The encoder and decoder compare these by *identity*, so the table
+        // keeps a pointer of its own -- and a reference that is never given
+        // back, since `v:msgpack_types` lives as long as the process.
+        let kept = unsafe { ListRef::retained(at) };
+        type_lists[i] = kept.expect("the list just allocated").into_raw();
         if unsafe { tv_dict_add(msgpack_types_dict, di) }.is_err() {
             // The names are distinct by construction.
             unsafe { abort() };
@@ -96,7 +100,8 @@ pub unsafe fn evalvars_init() {
     // container this hands its reference to.
     unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
     unsafe { set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VarLock::Fixed)) };
-    unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(kListLenUnknown as ptrdiff_t)) };
+    let errors = Some(tv_list_alloc(kListLenUnknown as ptrdiff_t));
+    unsafe { set_vim_var_list(Vv::Errors, errors) };
 
     // The `v:` variables that start out at a constant Number, the `v:t_*`
     // type codes `type()` answers with among them. Nothing here reads

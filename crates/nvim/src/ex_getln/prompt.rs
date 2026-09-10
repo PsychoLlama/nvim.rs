@@ -53,10 +53,10 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
     }
     cmd = unsafe { cmd.offset(2) };
 
-    let l = unsafe { heredoc_get(args, cmd, true) };
-    if l.is_null() {
+    let Some(held) = (unsafe { heredoc_get(args, cmd, true) }) else {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
-    }
+    };
+    let l = held.as_ptr();
 
     let skip = unsafe { (*args).skip } != 0;
     let mut text = Vec::<u8>::new();
@@ -72,7 +72,7 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 
     // The length is the text without the terminator `owned_cstr` adds.
     unsafe { *lenp = text.len() as size_t };
-    unsafe { tv_list_free(l) };
+    drop(held);
     // A skipped here-document answered a garray that was never opened, and
     // so a null pointer.
     if skip {

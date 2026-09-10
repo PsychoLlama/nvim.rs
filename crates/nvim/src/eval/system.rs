@@ -20,8 +20,8 @@ use core::ptr::{null, null_mut};
 use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_iter,
-    tv_list_len, tv_list_ref,
+    ListRef, NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_iter,
+    tv_list_len,
 };
 use crate::eval::vars::emsg_static;
 use crate::eval::vars::set_vim_var_nr;
@@ -160,7 +160,7 @@ pub(crate) unsafe fn string_to_list(
     str: *const c_char,
     mut len: size_t,
     keepempty: bool,
-) -> *mut List {
+) -> ListRef {
     // A trailing newline does not start an empty last line unless the
     // caller asked to keep one.
     // SAFETY: the caller's promise -- `len` bytes are readable, so the
@@ -170,7 +170,7 @@ pub(crate) unsafe fn string_to_list(
     }
     let list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     // SAFETY: as above; `str` has `len` readable bytes.
-    unsafe { encode_list_write(list as *mut c_void, str, len) };
+    unsafe { encode_list_write(list.as_ptr() as *mut c_void, str, len) };
     list
 }
 
@@ -257,7 +257,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     if res.is_null() {
         if retlist {
             // SAFETY: `result` is the caller's.
-            unsafe { tv_list_alloc_ret(result, 0 as ptrdiff_t) };
+            tv_list_alloc_ret(result, 0 as ptrdiff_t);
         } else {
             // SAFETY: the literal is NUL-terminated.
             ret.write_string(unsafe { xstrdup(c"".as_ptr()) });
@@ -274,10 +274,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
             keepempty = unsafe { tv_get_number(&args[2]) } as c_int;
         }
         // SAFETY: `res` holds `nread` readable bytes.
-        let list = unsafe { string_to_list(res, nread, keepempty != 0) };
-        ret.write_list(list);
-        // SAFETY: the List was just built.
-        unsafe { tv_list_ref(list) };
+        ret.write_list(Some(unsafe { string_to_list(res, nread, keepempty != 0) }));
         // SAFETY: the encoder copied what it needed.
         unsafe { xfree(res as *mut c_void) };
     } else {

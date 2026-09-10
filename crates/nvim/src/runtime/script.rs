@@ -25,7 +25,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, MAXPATHL, NUL};
+use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL, NUL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -276,11 +276,12 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 /// # Safety
 ///
 /// The global function table must be walkable, which it is outside a rehash.
-unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut List {
+unsafe fn get_script_local_funcs(sid: ScriptId) -> ListRef {
     let functbl = func_tbl_get();
     // SAFETY: the process-wide function table, which outlives this walk, and
     // a fresh list with at most one entry per function.
-    let l = unsafe { tv_list_alloc((*functbl).ht_used as ptrdiff_t) };
+    let list = unsafe { tv_list_alloc((*functbl).ht_used as ptrdiff_t) };
+    let l = list.as_ptr();
 
     for hi in unsafe { tv_ht_iter(functbl) } {
         // SAFETY: an occupied slot's key is a `UserFunc`'s inline name buffer,
@@ -297,7 +298,7 @@ unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut List {
         // SAFETY: `name` is NUL-terminated, which the -1 length asks for.
         unsafe { tv_list_append_string(l, name, -1) };
     }
-    l
+    list
 }
 
 /// Which scripts `getscriptinfo()` was asked about.
@@ -315,7 +316,7 @@ enum ScriptQuery {
 /// `"getscriptinfo()"` function
 pub fn f_getscriptinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the caller's return slot, `args` its arguments.
-    unsafe { tv_list_alloc_ret(result, script_count() as ptrdiff_t) };
+    tv_list_alloc_ret(result, script_count() as ptrdiff_t);
     if tv_check_for_opt_dict_arg(args, 0).is_err() {
         return;
     }
@@ -437,7 +438,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
             let _ = unsafe { tv_dict_add_dict(d, key, klen, vars) };
             let funcs = unsafe { get_script_local_funcs(sid as ScriptId) };
             let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
-            let _ = unsafe { tv_dict_add_list(d, key, klen, funcs) };
+            let _ = unsafe { tv_dict_add_list(d, key, klen, Some(funcs)) };
         }
     }
 }

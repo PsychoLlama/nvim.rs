@@ -155,7 +155,7 @@ unsafe fn get_qf_loc_list(
 ) {
     // SAFETY: forwarded from the caller.
     let Some(what_arg) = what_arg else {
-        unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+        tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
         if is_qf || window.is_some() {
             // No list, or an empty one, is an empty answer, not an error.
             let _ =

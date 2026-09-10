@@ -26,13 +26,13 @@ use core::{mem, ptr, slice};
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc, tv_list_append_string,
-    tv_list_ref,
+    ListRef, callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
+    tv_list_append_string,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
-use crate::types::{CallbackReader, Channel, List, RStream, VarNumber, kListLenMayKnow, size_t};
+use crate::types::{CallbackReader, Channel, RStream, VarNumber, kListLenMayKnow, size_t};
 
 use super::{channel_decref, channel_incref};
 
@@ -218,7 +218,7 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
     } else if unsafe { tv_dict_find((*reader).self_0, (*reader).type_0, -1) }.is_null() {
         let data = unsafe { reader_lines(reader) };
         let n_len = unsafe { cstr::bytes_at((*reader).type_0) }.len();
-        let _ = unsafe { tv_dict_add_list((*reader).self_0, (*reader).type_0, n_len, data) };
+        let _ = unsafe { tv_dict_add_list((*reader).self_0, (*reader).type_0, n_len, Some(data)) };
     } else {
         // SAFETY: the reader's own stream name and the channel's id.
         let (kind, id) = unsafe { (c_str((*reader).type_0), (*chan).id) };
@@ -261,8 +261,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
         argv[2].write_string(unsafe { xstrdup(c"exit".as_ptr()) });
         unsafe { &raw mut (*chan).on_exit }
     } else {
-        argv[1].write_list(unsafe { reader_lines(reader) });
-        unsafe { tv_list_ref(argv[1].list_or_null()) };
+        argv[1].write_list(Some(unsafe { reader_lines(reader) }));
         unsafe { (*reader).buffer.clear() };
         argv[2].write_string(unsafe { xstrdup((*reader).type_0) });
         unsafe { &raw mut (*reader).cb }
@@ -280,14 +279,15 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 ///
 /// # Safety
 /// `reader` is live.
-pub unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut List {
+pub unsafe fn reader_lines(reader: *mut CallbackReader) -> ListRef {
     let l = tv_list_alloc(kListLenMayKnow as isize);
+    let into = l.as_ptr();
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.
-    unsafe { tv_list_append_string(l, c"".as_ptr(), 0) };
+    unsafe { tv_list_append_string(into, c"".as_ptr(), 0) };
     let buffer = unsafe { &(*reader).buffer };
     if !buffer.is_empty() {
-        unsafe { encode_list_write(l.cast(), buffer.as_ptr().cast(), buffer.len()) };
+        unsafe { encode_list_write(into.cast(), buffer.as_ptr().cast(), buffer.len()) };
     }
     l
 }

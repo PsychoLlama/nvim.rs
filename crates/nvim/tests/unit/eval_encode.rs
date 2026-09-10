@@ -9,7 +9,7 @@ use std::mem::ManuallyDrop;
 
 use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append_owned_tv, tv_list_first};
-use neovim::types::{List, Refcount, TypVal};
+use neovim::types::{List, TypVal};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Payload, Tv};
@@ -106,8 +106,8 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
         ];
 
         for row in rows {
-            let l = tv_list_alloc(0);
-            (*l).lv_refcount = Refcount::ONE;
+            let list = tv_list_alloc(0);
+            let l = list.as_ptr();
             for (chunk, expected) in row {
                 write(l, chunk);
                 assert_eq!(
@@ -116,7 +116,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                     "after writing {chunk:?}"
                 );
             }
-            let mut tv = TypVal::List(l);
+            let mut tv = TypVal::List(Some(list));
             tv_clear(&mut tv);
         }
     }
@@ -134,8 +134,8 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
 unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
     // SAFETY: the caller's.
     unsafe {
-        let outer = tv_list_alloc(n as isize);
-        (*outer).lv_refcount = Refcount::ONE;
+        let list = tv_list_alloc(n as isize);
+        let outer = list.as_ptr();
         // The items share this reference -- item 0 *is* it -- so the value
         // that built it must not release it on the way out.
         let inner_tv = ManuallyDrop::new(inner.build());
@@ -150,7 +150,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             // what pays for the extra holder.
             tv_list_append_owned_tv(outer, tv::bit_copy(&inner_tv));
         }
-        TypVal::List(outer)
+        TypVal::List(Some(list))
     }
 }
 

@@ -263,10 +263,10 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut Dict {
             for child in children.siblings() {
                 let entry = menu_get_recursive(child, modes);
                 if dict_len(entry) > 0 {
-                    list_append_dict(list, entry);
+                    list_append_dict(list.as_ptr(), entry);
                 }
             }
-            dict_add_list(dict, c"submenus", list);
+            dict_add_list(dict, c"submenus", Some(list));
         }
     }
     dict

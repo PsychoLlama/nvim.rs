@@ -247,13 +247,14 @@ pub unsafe fn tv_list_flatten(list: *mut List, first: usize, maxitems: int64_t, 
 /// # Safety
 ///
 /// `ol` must point at a live list, unaliased for the call.
-pub(crate) unsafe fn tv_list_slice(ol: *mut List, n1: VarNumber, n2: VarNumber) -> *mut List {
+pub(crate) unsafe fn tv_list_slice(ol: *mut List, n1: VarNumber, n2: VarNumber) -> ListRef {
     let l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
+    let into = l.as_ptr();
     for at in n1..=n2 {
         // SAFETY: the caller's promise: a live list, and the caller has
         // already clamped the range to it.
         let from = &unsafe { tv_list_items(ol) }[at as usize].li_tv;
-        unsafe { tv_list_append_tv(l, from) };
+        unsafe { tv_list_append_tv(into, from) };
     }
     l
 }
@@ -310,7 +311,7 @@ pub unsafe fn tv_list_slice_or_index(
         }
         let l = unsafe { tv_list_slice((*result).list_or_null(), n1, n2) };
         unsafe { tv_clear(result) };
-        unsafe { tv_list_set_ret(result, l) };
+        result.write_list(Some(l));
     } else {
         // copy the item to "var1" to avoid that freeing the list makes it
         // invalid.

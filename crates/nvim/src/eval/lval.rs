@@ -431,7 +431,7 @@ pub(crate) unsafe fn get_lval_subscript(
             // SAFETY: `ll_tv` is the live container being subscripted.
             let target = unsafe { &mut *lval.ll_tv };
             if container.v_type() == VAR_LIST && container.list_or_null().is_null() {
-                unsafe { tv_list_alloc_ret(target, kListLenUnknown as ptrdiff_t) };
+                tv_list_alloc_ret(target, kListLenUnknown as ptrdiff_t);
             } else if container.v_type() == VAR_BLOB && container.blob_or_null().is_null() {
                 unsafe { tv_blob_alloc_ret(target) };
             }

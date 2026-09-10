@@ -40,9 +40,9 @@ use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
+    ListRef, tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
     tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
-    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut, tv_list_ref,
+    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -696,14 +696,13 @@ pub unsafe fn var_item_copy(
         VAR_LIST => {
             let l = src.list_or_null();
             if l.is_null() {
-                dst.write_list(null_mut::<List>());
+                dst.write_list(None);
             // SAFETY: `l` is the source's live List.
             } else if copy_id != 0 && unsafe { tv_list_copyid(l) } == copy_id {
-                // Already copied under this id: share that copy.
+                // Already copied under this id: share that copy, which gains
+                // this reference.
                 // SAFETY: as above -- the copy it was given under this id.
-                dst.write_list(unsafe { tv_list_latest_copy(l) });
-                // SAFETY: the shared copy gains this reference.
-                unsafe { tv_list_ref(dst.list_or_null()) };
+                dst.write_list(unsafe { ListRef::retained(tv_list_latest_copy(l)) });
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
                 dst.write_list(unsafe { tv_list_copy(conv, l, deep, copy_id) });

@@ -18,9 +18,8 @@ use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
-    CallFrame, NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
+    CallFrame, ListRef, NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
     tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
-    tv_list_set_ret,
 };
 use crate::eval::userfunc::get_user_func_name;
 use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
@@ -119,14 +118,15 @@ pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
 /// the `kListLen*` hints. The list the builtin then fills in.
 pub(crate) fn list_alloc_ret(result: &mut TypVal, len: ptrdiff_t) -> *mut List {
     // SAFETY: `result` is the caller's cleared return value.
-    unsafe { tv_list_alloc_ret(result, len) }
+    tv_list_alloc_ret(result, len)
 }
 
 /// Make `result` the List `l`, which may be null for an empty one.
+///
+/// The answer takes a reference of its own; the caller keeps the one it had.
 pub(crate) fn list_set_ret(result: &mut TypVal, l: *mut List) {
-    // SAFETY: `result` is the caller's cleared return value; `l` is null or a
-    // list the caller owns a reference to.
-    unsafe { tv_list_set_ret(result, l) }
+    // SAFETY: `l` is null or a list the caller holds a reference to.
+    result.write_list(unsafe { ListRef::retained(l) });
 }
 
 /// Make `result` a fresh, empty Dictionary.

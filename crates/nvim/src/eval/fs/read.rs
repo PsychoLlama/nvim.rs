@@ -149,7 +149,7 @@ impl Lines {
     fn alloc(result: &mut TypVal) -> Self {
         let unknown = kListLenUnknown as c_int as ptrdiff_t;
         // SAFETY: `result` is the builtin's own cleared result slot.
-        Self(unsafe { tv_list_alloc_ret(result, unknown) })
+        Self(tv_list_alloc_ret(result, unknown))
     }
 
     fn len(self) -> int64_t {

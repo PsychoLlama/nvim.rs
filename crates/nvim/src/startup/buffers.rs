@@ -55,8 +55,8 @@ use crate::startup::{
 };
 use crate::strings::vim_snprintf;
 use crate::types::{
-    ExArg, Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags,
-    VarLock, Vv, kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
+    ExArg, Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
+    kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -88,7 +88,8 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
-    let list: *mut List = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
+    let held = tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t);
+    let list = held.as_ptr();
     let alist = global_arglist();
     for i in 0..unsafe { (*alist).al_ga.len() as c_int } {
         let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };
@@ -98,7 +99,7 @@ pub(crate) fn set_argf_var() {
         }
     }
     unsafe { tv_list_set_lock(list, VarLock::Fixed) };
-    unsafe { set_vim_var_list(Vv::Argf, list) };
+    unsafe { set_vim_var_list(Vv::Argf, Some(held)) };
 }
 
 /// The first file argument, which is what decides whether `-r` lists the swap

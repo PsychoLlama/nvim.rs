@@ -13,14 +13,14 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_free, tv_dict_item_alloc,
+    ListRef, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_free, tv_dict_item_alloc,
     tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
-    tv_list_append_owned_tv, tv_list_free, tv_list_set_ret,
+    tv_list_append_owned_tv,
 };
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{
-    Dict, EvalArg, Failed, List, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t,
+    Dict, EvalArg, Failed, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
 
@@ -52,11 +52,11 @@ pub(crate) unsafe fn eval_list(
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
-    let list: *mut List = if evaluate {
-        tv_list_alloc(kListLenShouldKnow as ptrdiff_t)
-    } else {
-        null_mut()
-    };
+    // The one reference to the list being built. A path that gives up
+    // drops it, which is what upstream's `tv_list_free` on a list still at
+    // refcount zero was.
+    let held = evaluate.then(|| tv_list_alloc(kListLenShouldKnow as ptrdiff_t));
+    let list = held.as_ref().map_or(null_mut(), ListRef::as_ptr);
     cur.skip(1);
 
     let ok = 'items: {
@@ -93,17 +93,15 @@ pub(crate) unsafe fn eval_list(
             break 'items false;
         }
         cur.skip(1);
-        if evaluate {
-            unsafe { tv_list_set_ret(result, list) };
-        }
         true
     };
 
     if ok {
+        result.write_list(held);
         return Ok(());
     }
     if evaluate {
-        unsafe { tv_list_free(list) };
+        drop(held);
     }
     Err(Failed)
 }

@@ -27,12 +27,13 @@ use crate::types::NUL;
 /// yet.
 pub(crate) unsafe fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
     let blob = args[0].blob_or_null();
-    unsafe { tv_list_alloc_ret(result, tv_blob_len(blob) as ptrdiff_t) };
+    tv_list_alloc_ret(result, unsafe { tv_blob_len(blob) } as ptrdiff_t);
     for i in 0..unsafe { tv_blob_len(blob) } {
         let l2 = tv_list_alloc(2);
-        unsafe { tv_list_append_list((*result).list_or_null(), l2) };
-        unsafe { tv_list_append_number(l2, i as VarNumber) };
-        unsafe { tv_list_append_number(l2, tv_blob_get(blob, i) as VarNumber) };
+        let at = l2.as_ptr();
+        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
+        unsafe { tv_list_append_number(at, i as VarNumber) };
+        unsafe { tv_list_append_number(at, tv_blob_get(blob, i) as VarNumber) };
     }
 }
 
@@ -54,15 +55,16 @@ pub(crate) unsafe fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
 /// yet.
 pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
     let l = args[0].list_or_null();
-    unsafe { tv_list_alloc_ret(result, tv_list_len(l) as ptrdiff_t) };
+    tv_list_alloc_ret(result, unsafe { tv_list_len(l) } as ptrdiff_t);
     if l.is_null() {
         return;
     }
     for (idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
         let l2 = tv_list_alloc(2);
-        unsafe { tv_list_append_list((*result).list_or_null(), l2) };
-        unsafe { tv_list_append_number(l2, idx as VarNumber) };
-        unsafe { tv_list_append_tv(l2, &li.li_tv) };
+        let at = l2.as_ptr();
+        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
+        unsafe { tv_list_append_number(at, idx as VarNumber) };
+        unsafe { tv_list_append_tv(at, &li.li_tv) };
     }
 }
 
@@ -76,7 +78,7 @@ pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
 pub(crate) unsafe fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     let mut p = args[0].string_or_null().cast_const();
 
-    unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     if p.is_null() {
         return; // null string behaves like an empty string
     }
@@ -88,9 +90,10 @@ pub(crate) unsafe fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
             break;
         }
         let l2 = tv_list_alloc(2);
-        unsafe { tv_list_append_list((*result).list_or_null(), l2) };
-        unsafe { tv_list_append_number(l2, idx) };
-        unsafe { tv_list_append_string(l2, p, len as ssize_t) };
+        let at = l2.as_ptr();
+        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
+        unsafe { tv_list_append_number(at, idx) };
+        unsafe { tv_list_append_string(at, p, len as ssize_t) };
         p = unsafe { p.offset(len as isize) };
         idx += 1;
     }
@@ -358,12 +361,12 @@ pub unsafe fn tv_dict_wrong_func_name(
 /// yet.
 pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListType) {
     if tv_check_for_dict_arg(args, 0).is_err() {
-        unsafe { tv_list_alloc_ret(result, 0) };
+        tv_list_alloc_ret(result, 0);
         return;
     }
 
     let d = args[0].dict_or_null();
-    unsafe { tv_list_alloc_ret(result, tv_dict_len(d) as ptrdiff_t) };
+    tv_list_alloc_ret(result, unsafe { tv_dict_len(d) } as ptrdiff_t);
     if d.is_null() {
         // NULL dict behaves like an empty dict
         return;
@@ -384,10 +387,10 @@ pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: Di
             kDict2ListItems => {
                 // items()
                 let sub_l = tv_list_alloc(2);
-                tv_item.write_list(sub_l);
-                unsafe { tv_list_ref(sub_l) };
-                unsafe { tv_list_append_string(sub_l, di_key, -1) };
-                unsafe { tv_list_append_tv(sub_l, &(*di).di_tv) };
+                let at = sub_l.as_ptr();
+                tv_item.write_list(Some(sub_l));
+                unsafe { tv_list_append_string(at, di_key, -1) };
+                unsafe { tv_list_append_tv(at, &(*di).di_tv) };
             }
             _ => {}
         }

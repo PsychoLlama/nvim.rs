@@ -174,9 +174,9 @@ pub(crate) unsafe fn get_clipboard(
     let regname = name as c_char;
     // SAFETY: a fresh list; `regname` outlives the append, and the provider
     // call below owns `args` from here on.
-    unsafe { tv_list_append_string(args, &raw const regname, 1) };
+    unsafe { tv_list_append_string(args.as_ptr(), &raw const regname, 1) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
-    let result = unsafe { eval_call_provider(provider, method, args, false) };
+    let result = unsafe { eval_call_provider(provider, method, Some(args), false) };
 
     // Show a message on error unless the provider already indicated failure.
     let mut errmsg = true;
@@ -308,19 +308,20 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
     for i in 0..reg.y_size {
         let line = unsafe { *reg.y_array.add(i) };
-        unsafe { tv_list_append_string(lines, line.data(), line.len() as ssize_t) };
+        unsafe { tv_list_append_string(lines.as_ptr(), line.data(), line.len() as ssize_t) };
     }
     if trailing {
-        unsafe { tv_list_append_string(lines, core::ptr::null(), 0) };
+        unsafe { tv_list_append_string(lines.as_ptr(), core::ptr::null(), 0) };
     }
 
     let args = tv_list_alloc(3);
-    unsafe { tv_list_append_list(args, lines) };
-    unsafe { tv_list_append_string(args, &raw const regtype, 1) };
+    let into = args.as_ptr();
+    unsafe { tv_list_append_list(into, Some(lines)) };
+    unsafe { tv_list_append_string(into, &raw const regtype, 1) };
     let regname = [name as c_char];
-    unsafe { tv_list_append_string(args, regname.as_ptr(), 1) };
+    unsafe { tv_list_append_string(into, regname.as_ptr(), 1) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
-    unsafe { eval_call_provider(provider, method, args, true) };
+    unsafe { eval_call_provider(provider, method, Some(args), true) };
 }
 
 /// Start a batch: defer provider updates until the matching

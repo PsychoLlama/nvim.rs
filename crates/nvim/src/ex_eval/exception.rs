@@ -45,7 +45,7 @@ use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::drawscreen::state::cmdline_row;
-use crate::eval::typval::{tv_list_ref, tv_list_unref};
+use crate::eval::typval::{ListRef, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
@@ -67,8 +67,8 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
 use crate::types::{
-    CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, List, MsgList, NUL, Vv,
-    int64_t, ptrdiff_t,
+    CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, MsgList, NUL, Vv, int64_t,
+    ptrdiff_t,
 };
 use ::libc::{strcat, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -456,8 +456,8 @@ pub(super) unsafe fn throw_exception(
         unsafe { (*excp).throw_lnum = sourcing_lnum() };
     }
 
-    unsafe { (*excp).stacktrace = stacktrace_create() };
-    unsafe { tv_list_ref((*excp).stacktrace) };
+    // The exception owns the stack trace it was thrown with.
+    unsafe { (*excp).stacktrace = stacktrace_create().map_or(ptr::null_mut(), ListRef::into_raw) };
 
     unsafe { verbose_exception(c"Exception thrown: %s", (*excp).value) };
 
@@ -571,11 +571,13 @@ unsafe fn set_exception_vars(excp: *mut Exception) {
     if excp.is_null() {
         unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
-        unsafe { set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<List>()) };
+        unsafe { set_vim_var_list(Vv::Stacktrace, None) };
         return;
     }
     unsafe { set_vim_var_string(Vv::Exception, (*excp).value, -1) };
-    unsafe { set_vim_var_list(Vv::Stacktrace, (*excp).stacktrace) };
+    // SAFETY: the exception's own stack trace; `v:stacktrace` takes a
+    // reference of its own.
+    unsafe { set_vim_var_list(Vv::Stacktrace, ListRef::retained((*excp).stacktrace)) };
     if unsafe { *(*excp).throw_name } == NUL as c_char {
         // `throw_name` is unset for an exception from a typed command.
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };

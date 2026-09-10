@@ -8,6 +8,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::ListRef;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -142,7 +143,11 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `args` is a live command and `cmd` points into its argument, writable in
 /// place.
-pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bool) -> *mut List {
+pub unsafe fn heredoc_get(
+    args: *mut ExArg,
+    mut cmd: *mut c_char,
+    script_get: bool,
+) -> Option<ListRef> {
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
     let mut ea = unsafe { Ea::new(args) };
@@ -161,7 +166,7 @@ pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bo
         unsafe { *nl_ptr = NUL as c_char };
     } else if ea.ea_getline.is_none() {
         emsg_static(e_cannot_use_heredoc_here);
-        return ptr::null_mut();
+        return None;
     }
 
     // Whether `at` starts with the four-letter `word` as a whole word.
@@ -211,7 +216,7 @@ pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bo
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let p = unsafe { c_str(p) };
             semsg!("E488: Trailing characters: {p}");
-            return ptr::null_mut();
+            return None;
         }
         unsafe { *p = NUL as c_char };
         // `islower` here is the locale's, not ASCII's: `_ISlower` is the
@@ -221,19 +226,20 @@ pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bo
         if !script_get && c_int::from(class) & _ISlower as c_int != 0 {
             let msg = c"E221: Marker cannot start with lower case letter";
             emsg_static(msg);
-            return ptr::null_mut();
+            return None;
         }
     } else if script_get {
         // An embedded script with no marker takes '.'.
         marker = dot.as_ptr() as *mut c_char;
     } else {
         emsg_static(c"E172: Missing marker");
-        return ptr::null_mut();
+        return None;
     }
 
     let mut theline: *mut c_char = ptr::null_mut();
     let mut eval_failed = false;
-    let l = tv_list_alloc(0);
+    let list = tv_list_alloc(0);
+    let l = list.as_ptr();
     loop {
         if heredoc_in_string {
             if unsafe { *line_arg } == NUL as c_char {
@@ -328,8 +334,9 @@ pub unsafe fn heredoc_get(args: *mut ExArg, mut cmd: *mut c_char, script_get: bo
     unsafe { xfree(text_indent.cast()) };
 
     if eval_failed {
-        unsafe { tv_list_free(l) };
-        return ptr::null_mut();
+        // The partly built list goes with the handle, which is its only
+        // reference.
+        return None;
     }
-    l
+    Some(list)
 }

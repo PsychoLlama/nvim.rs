@@ -450,13 +450,13 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
         let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
         for i in 0..(*reg).y_size {
             let line = *(*reg).y_array.add(i);
-            tv_list_append_string(list, line.data(), line.len() as c_int as ssize_t);
+            tv_list_append_string(list.as_ptr(), line.data(), line.len() as c_int as ssize_t);
         }
-        tv_list_set_lock(list, VarLock::Fixed);
+        tv_list_set_lock(list.as_ptr(), VarLock::Fixed);
         list
     };
     // SAFETY: `dict` is `v:event`'s, the key is a literal of the length given.
-    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list) };
+    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, Some(list)) };
 
     let mut buf: [c_char; 67] = [0; 67];
     // SAFETY: `reg` is live, and `buf` is 67 writable bytes -- more than one.

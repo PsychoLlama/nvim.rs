@@ -42,7 +42,7 @@ const NUMBUFLEN: usize = 65;
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
+    tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     // SAFETY: the argument was converted to a NUL-terminated string.
     let bytes = unsafe { cstr::bytes_at(numbuf.string(&args[0])) };
     let mut at = 0;

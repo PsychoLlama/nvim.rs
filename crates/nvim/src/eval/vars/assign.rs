@@ -139,9 +139,8 @@ pub unsafe fn ex_let(args: *mut ExArg) {
         // A here-document.
         // SAFETY: a live command and the text past the "=<<".
         let l = unsafe { heredoc_get(args, expr.add(3), false) };
-        if !l.is_null() {
-            // SAFETY: a live local and the list just built.
-            unsafe { tv_list_set_ret(&mut rettv, l) };
+        if let Some(l) = l {
+            rettv.write_list(Some(l));
             if ea.skip == 0 {
                 let op = [b'=' as c_char, NUL as c_char];
                 assign(&mut rettv, op.as_ptr());
@@ -270,14 +269,14 @@ pub unsafe fn ex_let_vars(
             // The rest of the list, which may be empty, goes to the
             // variable after the ';', as a list of its own.
             let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
+            let into = rest_list.as_ptr();
             // SAFETY: a live list, re-read each step.
             while at < unsafe { tv_list_items(l) }.len() {
                 let tv = &raw const unsafe { tv_list_items(l) }[at].li_tv;
-                unsafe { tv_list_append_tv(rest_list, &*tv) };
+                unsafe { tv_list_append_tv(into, &*tv) };
                 at += 1;
             }
-            let mut ltv = TypVal::List(rest_list);
-            unsafe { tv_list_ref(rest_list) };
+            let mut ltv = TypVal::List(Some(rest_list));
 
             // SAFETY: `arg` is inside the caller's string and `ltv` a live
             // local.

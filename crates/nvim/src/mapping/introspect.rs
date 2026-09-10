@@ -309,7 +309,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         .first()
         .is_some_and(|tv| unsafe { tv_get_bool(tv) } != 0);
     // SAFETY: as above.
-    unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
+    tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     let cur = Buf::current();
 
     // Do it twice: once for global maps and once for local maps.

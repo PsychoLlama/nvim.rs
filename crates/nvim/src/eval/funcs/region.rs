@@ -482,10 +482,12 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 /// buffer -- the caller's `BufferSwap` has already put it there.
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     let pair = tv_list_alloc(2);
-    unsafe { tv_list_append_list(result.list_or_null(), pair) };
+    let into = pair.as_ptr();
+    unsafe { tv_list_append_list(result.list_or_null(), Some(pair)) };
     for p in [p1, p2] {
-        let l = tv_list_alloc(4);
-        unsafe { tv_list_append_list(pair, l) };
+        let pos = tv_list_alloc(4);
+        let l = pos.as_ptr();
+        unsafe { tv_list_append_list(into, Some(pos)) };
         unsafe { tv_list_append_number(l, Buf::current().handle as VarNumber) };
         unsafe { tv_list_append_number(l, p.lnum as VarNumber) };
         unsafe { tv_list_append_number(l, p.col as VarNumber) };

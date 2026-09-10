@@ -57,7 +57,8 @@ pub(super) unsafe fn add_mark(
     // `tv_list_append_dict` on.
     let d = unsafe { tv_dict_alloc() };
     unsafe { tv_list_append_dict(l, d) };
-    let lpos = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+    let lpos = held.as_ptr();
     unsafe { tv_list_append_number(lpos, VarNumber::from(bufnr)) };
     unsafe { tv_list_append_number(lpos, VarNumber::from(pos.lnum)) };
     // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
@@ -75,7 +76,8 @@ pub(super) unsafe fn add_mark(
     };
     unsafe { tv_list_append_number(lpos, VarNumber::from(pos.coladd)) };
     if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) }.is_err()
-        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) }.is_err()
+        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), Some(held)) }
+            .is_err()
         || (!fname.is_null()
             && unsafe { tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) }
                 .is_err())

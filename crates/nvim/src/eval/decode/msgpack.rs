@@ -27,7 +27,7 @@ use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
     Di, TV_INITIAL_VALUE, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_hi2di,
     tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_iter, tv_list_alloc, tv_list_append_list,
-    tv_list_append_number, tv_list_append_owned_tv, tv_list_ref,
+    tv_list_append_number, tv_list_append_owned_tv,
 };
 use crate::memory::{xfree, xmallocz};
 use crate::mpack::conv::{
@@ -70,13 +70,12 @@ unsafe fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
         return;
     }
     let list = tv_list_alloc(4);
-    unsafe { tv_list_ref(list) };
-    let val_tv = TypVal::List(list);
-    unsafe { create_special_dict(result, kMPInteger, val_tv) };
-    unsafe { tv_list_append_number(list, 1) };
-    unsafe { tv_list_append_number(list, ((val >> 62) & 0x3) as VarNumber) };
-    unsafe { tv_list_append_number(list, ((val >> 31) & 0x7fff_ffff) as VarNumber) };
-    unsafe { tv_list_append_number(list, (val & 0x7fff_ffff) as VarNumber) };
+    let into = list.as_ptr();
+    unsafe { create_special_dict(result, kMPInteger, TypVal::List(Some(list))) };
+    unsafe { tv_list_append_number(into, 1) };
+    unsafe { tv_list_append_number(into, ((val >> 62) & 0x3) as VarNumber) };
+    unsafe { tv_list_append_number(into, ((val >> 31) & 0x7fff_ffff) as VarNumber) };
+    unsafe { tv_list_append_number(into, (val & 0x7fff_ffff) as VarNumber) };
 }
 
 /// A node has opened: work out where its value belongs, and decode it if the
@@ -169,9 +168,9 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         }
         MPACK_TOKEN_ARRAY => {
             let list = tv_list_alloc(len as ptrdiff_t);
-            unsafe { tv_list_ref(list) };
-            unsafe { ptr::write(result, TypVal::List(list)) };
-            unsafe { (*node).data[1].p = list.cast() };
+            let into = list.as_ptr();
+            unsafe { ptr::write(result, TypVal::List(Some(list))) };
+            unsafe { (*node).data[1].p = into.cast() };
         }
         // Whether this can be a Dict is not knowable yet, so the pairs
         // are decoded into a flat `[key, value] * length` scratch array.
@@ -293,14 +292,14 @@ unsafe extern "C-unwind" fn typval_parse_exit(
         // list of strings rather than a blob, as upstream's TODO notes.
         MPACK_TOKEN_EXT => {
             let list = tv_list_alloc(2);
-            unsafe { tv_list_ref(list) };
-            unsafe { tv_list_append_number(list, (*node).tok.data.ext_type as VarNumber) };
+            let into = list.as_ptr();
+            unsafe { tv_list_append_number(into, (*node).tok.data.ext_type as VarNumber) };
             let ext_val_list = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
-            unsafe { tv_list_append_list(list, ext_val_list) };
-            let val_tv = TypVal::List(list);
-            unsafe { create_special_dict(&mut *result, kMPExt, val_tv) };
+            let ext_into = ext_val_list.as_ptr();
+            unsafe { tv_list_append_list(into, Some(ext_val_list)) };
+            unsafe { create_special_dict(&mut *result, kMPExt, TypVal::List(Some(list))) };
             let bytes = unsafe { (*node).data[1].p }.cast();
-            unsafe { encode_list_write(ext_val_list.cast(), bytes, len) };
+            unsafe { encode_list_write(ext_into.cast(), bytes, len) };
             unsafe { xfree((*node).data[1].p) };
             unsafe { (*node).data[1].p = ptr::null_mut() };
         }
@@ -313,10 +312,11 @@ unsafe extern "C-unwind" fn typval_parse_exit(
                 let list = unsafe { decode_create_map_special_dict(&mut *result, n) };
                 for i in 0..len {
                     let kv_pair = tv_list_alloc(2);
-                    unsafe { tv_list_append_list(list, kv_pair) };
+                    let into = kv_pair.as_ptr();
+                    unsafe { tv_list_append_list(list, Some(kv_pair)) };
                     let (k, v) = (&raw const pairs[i * 2], &raw const pairs[i * 2 + 1]);
-                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(k)) };
-                    unsafe { tv_list_append_owned_tv(kv_pair, ptr::read(v)) };
+                    unsafe { tv_list_append_owned_tv(into, ptr::read(k)) };
+                    unsafe { tv_list_append_owned_tv(into, ptr::read(v)) };
                 }
             }
             unsafe { xfree((*node).data[1].p) };

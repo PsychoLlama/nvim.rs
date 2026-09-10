@@ -15,7 +15,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
     tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove, tv_list_alloc,
-    tv_list_append_number, tv_list_iter, tv_list_len, tv_list_ref,
+    tv_list_append_number, tv_list_iter, tv_list_len,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -240,7 +240,8 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let rv = tv_list_alloc(count as isize);
+    let held = tv_list_alloc(count as isize);
+    let rv = held.as_ptr();
     for i in 0..count {
         let chan = unsafe { *jobs.add(i as usize) };
         if chan.is_null() {
@@ -259,8 +260,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if busy {
         ui_busy_stop();
     }
-    unsafe { tv_list_ref(rv) };
-    result.write_list(rv);
+    result.write_list(Some(held));
 }
 
 /// Variables a pty job must not inherit: they describe *our* terminal, and

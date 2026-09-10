@@ -422,7 +422,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         time_msg_at(c"reading ShaDa");
     }
     if get_vim_var_list(Vv::Oldfiles).is_null() {
-        unsafe { set_vim_var_list(Vv::Oldfiles, tv_list_alloc(0)) };
+        unsafe { set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0))) };
     }
 
     unsafe { handle_quickfix(&raw mut params) };

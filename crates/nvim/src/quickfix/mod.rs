@@ -44,7 +44,7 @@ use crate::eval::typval::{
     tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
     tv_dict_get_string_alloc, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free,
     tv_dict_unref, tv_free, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_dict, tv_list_len, tv_list_ref,
+    tv_list_append_dict, tv_list_len,
 };
 use crate::eval::vars::set_internal_string_var;
 use crate::eval::window::{find_win_by_nr_or_id, win_by_id};

@@ -26,7 +26,7 @@ use super::*;
 use crate::autocmd::{apply_autocmds, event_ignored, has_event};
 use crate::buffer::BufRef;
 use crate::eval::typval::{
-    tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc, tv_dict_extend,
+    ListRef, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc, tv_dict_extend,
     tv_dict_set_keys_readonly, tv_dict_unref, tv_list_alloc, tv_list_append_owned_tv,
 };
 use crate::eval::{get_v_event, restore_v_event};
@@ -356,10 +356,11 @@ pub fn may_trigger_win_scrolled_resized() {
         return;
     }
 
-    let mut windows_list = ptr::null_mut::<List>();
+    let mut windows_list = None;
     if trigger_resize {
-        windows_list = tv_list_alloc(size_count as ptrdiff_t);
-        scan_windows(&mut Scan::Winlist(windows_list));
+        let held = tv_list_alloc(size_count as ptrdiff_t);
+        scan_windows(&mut Scan::Winlist(held.as_ptr()));
+        windows_list = Some(held);
     }
     let mut scroll_dict = ptr::null_mut::<Dict>();
     if trigger_scroll {
@@ -384,7 +385,7 @@ pub fn may_trigger_win_scrolled_resized() {
 }
 
 /// Fire `WinResized` with `v:event.windows` set to the resized windows.
-fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
+fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let mut save = SaveVEvent::default();
     // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
     let v_event = unsafe { get_v_event(&raw mut save) };

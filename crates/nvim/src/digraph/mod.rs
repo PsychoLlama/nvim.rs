@@ -403,10 +403,11 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
     let l2 = tv_list_alloc(2);
-    unsafe { tv_list_append_list(l, l2) };
-    unsafe { tv_list_append_string(l2, chars.as_ptr() as *const c_char, -1) };
+    let into = l2.as_ptr();
+    unsafe { tv_list_append_list(l, Some(l2)) };
+    unsafe { tv_list_append_string(into, chars.as_ptr() as *const c_char, -1) };
     unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };
-    unsafe { tv_list_append_string(l2, buf.as_ptr() as *const c_char, -1) };
+    unsafe { tv_list_append_string(into, buf.as_ptr() as *const c_char, -1) };
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
@@ -420,10 +421,7 @@ unsafe fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
     // SAFETY: `result` is a valid return slot, so the list it is given owns
     // itself from here on.
-    let list = unsafe {
-        tv_list_alloc_ret(result, capacity);
-        (*result).list_or_null()
-    };
+    let list = tv_list_alloc_ret(result, capacity);
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
             if got_int.get() {

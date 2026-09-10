@@ -14,7 +14,7 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, callback_free, index_of, tv_check_for_buffer_arg, tv_check_for_list_arg,
+    ListRef, NumBuf, callback_free, index_of, tv_check_for_buffer_arg, tv_check_for_list_arg,
     tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
     tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list, tv_dict_add_nr,
     tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback, tv_dict_has_key,
@@ -377,8 +377,10 @@ unsafe fn get_matches_in_str(
         let matchlen = unsafe { end.offset_from(start) } as c_int;
         let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
         if submatches {
-            let sml = tv_list_alloc(NSUBEXP as isize - 1);
-            let _ = unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, sml) };
+            let submatch_list = tv_list_alloc(NSUBEXP as isize - 1);
+            // A borrow of the list the dictionary owns from here on.
+            let sml = submatch_list.as_ptr();
+            let _ = unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, Some(submatch_list)) };
             for i in 1..NSUBEXP as usize {
                 if unsafe { (*rmp).endp[i] }.is_null() {
                     unsafe { tv_list_append_string(sml, c"".as_ptr(), 0) };
@@ -613,7 +615,7 @@ struct FuzzyItem {
     /// Whether the pattern occurs literally at the first matched position.
     exact: bool,
     /// The matching positions, for `matchfuzzypos()`.
-    positions: Option<*mut List>,
+    positions: Option<ListRef>,
 }
 
 /// The item's string, as `Request::source` says to find it. A callback's
@@ -715,7 +717,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                     // in the match, i.e. all but the word separators.
                     let placed = matched_char_count(pattern, request.matchseq);
                     for at in matches.iter().take(placed) {
-                        unsafe { tv_list_append_number(positions, *at as VarNumber) };
+                        unsafe { tv_list_append_number(positions.as_ptr(), *at as VarNumber) };
                     }
                     positions
                 });
@@ -764,7 +766,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
         let positions = unsafe { nested_list(fmatchlist, -2) };
         for item in &mut found {
             let list = item.positions.take().expect("fuzzy: positions were kept");
-            unsafe { tv_list_append_list(positions, list) };
+            unsafe { tv_list_append_list(positions, Some(list)) };
         }
         let scores = unsafe { nested_list(fmatchlist, -1) };
         for item in &found {
@@ -850,10 +852,10 @@ unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool)
     } else {
         kListLenUnknown as isize
     };
-    let result = unsafe { tv_list_alloc_ret(result, len) };
+    let result = tv_list_alloc_ret(result, len);
     if retmatchpos {
         for _ in 0..3 {
-            unsafe { tv_list_append_list(result, tv_list_alloc(kListLenUnknown as isize)) };
+            unsafe { tv_list_append_list(result, Some(tv_list_alloc(kListLenUnknown as isize))) };
         }
     }
     let request = Request {

@@ -337,6 +337,7 @@ typedef char *(*LineGetterFn)(int, void *, int, bool);
 typedef LineGetterFn LineGetter;
 typedef int32_t LineNr;
 typedef int ListLenSpecials;
+typedef List *ListRef;
 typedef loop Loop;
 typedef int LuaRef;
 typedef unsigned int LuaRetMode;
@@ -1506,7 +1507,7 @@ struct TypVal {
     VarNumber number_;
     char *string_;
     char *func_;
-    List *list_;
+    ListRef list_;
     Dict *dict_;
     Float float_;
     BoolVarValue bool_;

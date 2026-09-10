@@ -362,18 +362,17 @@ pub unsafe fn tv_dict_add(d: *mut Dict, item: *mut DictItem) -> Result<(), Faile
 /// Add `list` to `d` under `key`, taking a reference to it.
 ///
 /// # Safety
-/// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
-/// and `list` is null or a live list. A reference to `list` is taken on
-/// success and dropped again on failure.
+/// `d` points at a live dictionary and `key` is readable for `key_len`
+/// bytes. The dictionary takes the handle over, and a failure releases it
+/// with the item.
 pub unsafe fn tv_dict_add_list(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    list: *mut List,
+    list: Option<ListRef>,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv.write_list(list) };
-    unsafe { tv_list_ref(list) };
     unsafe { add_or_free(d, item) }
 }
 

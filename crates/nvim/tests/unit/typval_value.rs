@@ -12,7 +12,7 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy,
+    ListRef, tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy,
     tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
     tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
     tv_list_append_number, tv_list_first, value_check_lock,
@@ -50,7 +50,9 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         VAR_FLOAT => TypVal::Float(f64::from_bits(bits as u64)),
         VAR_STRING => TypVal::String(p.cast()),
         VAR_FUNC => TypVal::Func(p.cast()),
-        VAR_LIST => TypVal::List(p.cast()),
+        // SAFETY: a made-up address the case never follows; the value is
+        // a `ManuallyDrop`, so the handle is never released.
+        VAR_LIST => TypVal::List(unsafe { ListRef::owning(p.cast()) }),
         VAR_DICT => TypVal::Dict(p.cast()),
         VAR_PARTIAL => TypVal::Partial(p.cast()),
         VAR_BLOB => TypVal::Blob(p.cast()),
@@ -1186,10 +1188,7 @@ fn number_rows(number: &CString) -> Vec<Row> {
             TypVal::Func(ptr::null_mut()),
             Some("E703: Using a Funcref as a Number"),
         ),
-        row(
-            TypVal::List(ptr::null_mut()),
-            Some("E745: Using a List as a Number"),
-        ),
+        row(TypVal::List(None), Some("E745: Using a List as a Number")),
         row(
             TypVal::Dict(ptr::null_mut()),
             Some("E728: Using a Dictionary as a Number"),
@@ -1320,7 +1319,7 @@ fn getting_a_float_accepts_only_numbers() {
                 0.0,
             ),
             (
-                ManuallyDrop::new(TypVal::List(ptr::null_mut())),
+                ManuallyDrop::new(TypVal::List(None)),
                 Some("E893: Using a List as a Float"),
                 0.0,
             ),
@@ -1395,7 +1394,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::List(ptr::null_mut())),
+                ManuallyDrop::new(TypVal::List(None)),
                 Some("E730: Using a List as a String"),
                 None,
             ),

@@ -20,8 +20,8 @@ use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
-    callback_free, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc, tv_list_append_string,
-    tv_list_ref,
+    ListRef, callback_free, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
+    tv_list_append_string,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -44,8 +44,8 @@ use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL, FuncCallEntry,
-    FuncExe, List, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope,
-    ptrdiff_t, size_t, ssize_t, uint64_t,
+    FuncExe, NUL, ScriptCtx, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, caller_scope, ptrdiff_t,
+    size_t, ssize_t, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live, Win};
@@ -187,13 +187,13 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut 
         emsg_static(e_invarg);
         return;
     }
-    let args: *mut List = tv_list_alloc(1 as ptrdiff_t);
+    let args = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: `VAR_STRING` says the value holds a string, and
     // -1 asks the callee to measure it.
-    unsafe { tv_list_append_string(args, arg.string_or_null(), -1 as ssize_t) };
+    unsafe { tv_list_append_string(args.as_ptr(), arg.string_or_null(), -1 as ssize_t) };
     let method = c"eval".as_ptr() as *mut c_char;
-    // SAFETY: `name` and `method` are NUL-terminated and `args` is live.
-    *ret = unsafe { eval_call_provider(name, method, args, false) };
+    // SAFETY: `name` and `method` are NUL-terminated.
+    *ret = unsafe { eval_call_provider(name, method, Some(args), false) };
 }
 
 /// Call `provider#<name>#Call(method, arguments)`.
@@ -203,12 +203,15 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut 
 /// `provider_caller_scope` first, because the provider runs Vimscript that
 /// may ask about any of it.
 ///
+/// The argument list is handed over: the array holds it for the length of
+/// the call and releases it afterwards.
+///
 /// # Safety
-/// `provider` and `method` must be NUL-terminated; `arguments` valid.
+/// `provider` and `method` must be NUL-terminated.
 pub unsafe fn eval_call_provider(
     provider: *mut c_char,
     method: *mut c_char,
-    arguments: *mut List,
+    arguments: Option<ListRef>,
     discard: bool,
 ) -> TypVal {
     // SAFETY: the caller's promise -- `provider` is NUL-terminated.
@@ -245,12 +248,10 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    // The argument array holds the two values, so the reference is taken
-    // for the duration of the call and given back when the array drops --
-    // which is why the method name is duplicated rather than borrowed.
-    // SAFETY: the caller's promise -- `arguments` is a live List and
-    // `method` a NUL-terminated string.
-    unsafe { tv_list_ref(arguments) };
+    // The argument array holds the two values, so the caller's reference is
+    // given back when the array drops -- which is why the method name is
+    // duplicated rather than borrowed.
+    // SAFETY: the caller's promise -- `method` is NUL-terminated.
     let argvars = [
         TypVal::String(unsafe { xstrdup(method) }),
         TypVal::List(arguments),

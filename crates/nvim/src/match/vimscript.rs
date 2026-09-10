@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::{NumBuf, tv_list_items, tv_list_iter};
+use crate::eval::typval::{ListRef, NumBuf, tv_list_items, tv_list_iter};
 use crate::semsg;
 use crate::types::{Failed, MB_MAXCHAR, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
@@ -98,7 +98,7 @@ pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     let win = unsafe { get_optional_window(args, 0) };
-    let l = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    let l = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let Some(win) = win else {
         return;
     };
@@ -115,14 +115,16 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                 }
                 // A column of zero means the whole line, and is reported
                 // as a one-element list.
-                let sub = unsafe { tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 }) };
+                let held = unsafe { tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 }) };
+                let sub = held.as_ptr();
                 unsafe { tv_list_append_number(sub, (*llpos).lnum as VarNumber) };
                 if unsafe { (*llpos).col } > 0 {
                     unsafe { tv_list_append_number(sub, (*llpos).col as VarNumber) };
                     unsafe { tv_list_append_number(sub, (*llpos).len as VarNumber) };
                 }
                 let key = format!("pos{}", i + 1);
-                let _ = unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub) };
+                let _ =
+                    unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), Some(held)) };
             }
         } else {
             unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };
@@ -200,9 +202,10 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
-        let mut positions: *mut List = ::core::ptr::null_mut();
+        let mut held = None;
         if unsafe { find(d, "pattern") }.is_null() {
-            positions = tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1);
+            held = Some(tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1));
+            let positions = held.as_ref().expect("just built").as_ptr();
             for i in 1..MAX_SAVED_POS + 1 {
                 let key = format!("pos{i}");
                 let pos_di =
@@ -211,14 +214,14 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                     break;
                 }
                 if unsafe { (*pos_di).di_tv.v_type() } != VAR_LIST {
-                    // Leaks `positions` exactly as upstream does, and
-                    // leaves the earlier entries of the list already
-                    // restored — the validation above does not look
-                    // inside a `posN` key.
+                    // The earlier entries stay restored, as upstream's do:
+                    // the validation above does not look inside a `posN`
+                    // key. Upstream *also* leaked the position list here --
+                    // it took a reference per entry and gave one back --
+                    // which the handle no longer permits.
                     return;
                 }
                 unsafe { tv_list_append_tv(positions, &(*pos_di).di_tv) };
-                unsafe { tv_list_ref(positions) };
             }
         }
 
@@ -234,6 +237,9 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             unsafe { numbuf.string(&(*conceal_di).di_tv) }
         };
 
+        let positions = held
+            .as_ref()
+            .map_or(::core::ptr::null_mut(), ListRef::as_ptr);
         let added = if positions.is_null() {
             let pattern = unsafe { numbuf2.dict_string(d, c"pattern".as_ptr()) };
             let no_pos = ::core::ptr::null_mut();
@@ -242,9 +248,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         } else {
             let no_pat = ::core::ptr::null();
             // SAFETY: as above, with the positions list instead of a pattern.
-            let rc = unsafe { match_add(win, group, no_pat, priority, id, positions, conceal) };
-            unsafe { tv_list_unref(positions) };
-            rc
+            unsafe { match_add(win, group, no_pat, priority, id, positions, conceal) }
         };
         if added != id {
             match_add_failed = true;
@@ -366,7 +370,7 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let id = unsafe { tv_get_number(&args[0]) } as c_int;
     let is_excmd = (1..=3).contains(&id);
     // Any other id answers an empty list, not an error.
-    let l = unsafe { tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 }) };
+    let l = tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 });
     if !is_excmd {
         return;
     }

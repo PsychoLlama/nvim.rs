@@ -19,7 +19,7 @@
 )]
 
 use super::{
-    Container, DictRef, ListRef, char_len, check_lock, copy_tv, cstr_of_chk, err,
+    Container, DictArg, ListArg, char_len, check_lock, copy_tv, cstr_of_chk, err,
     err_not_countable, err_nr, number_of, starts_with_ic, string_bytes,
 };
 use crate::eval::typval::NumBuf;
@@ -95,7 +95,7 @@ fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> VarNumber {
 }
 
 /// How many items of `l` from index `idx` on equal `needle`.
-fn count_list(l: ListRef, needle: &TypVal, idx: int64_t, ic: bool) -> VarNumber {
+fn count_list(l: ListArg, needle: &TypVal, idx: int64_t, ic: bool) -> VarNumber {
     if l.len() == 0 {
         return 0;
     }
@@ -116,7 +116,7 @@ fn count_list(l: ListRef, needle: &TypVal, idx: int64_t, ic: bool) -> VarNumber 
 }
 
 /// How many values of `d` equal `needle`.
-fn count_dict(d: DictRef, needle: &TypVal, ic: bool) -> VarNumber {
+fn count_dict(d: DictArg, needle: &TypVal, ic: bool) -> VarNumber {
     if d.is_null() {
         return 0;
     }

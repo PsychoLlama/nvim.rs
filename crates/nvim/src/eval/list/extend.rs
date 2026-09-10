@@ -13,7 +13,9 @@
 
 use core::ffi::{CStr, c_int};
 
-use super::{Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, number_of};
+use super::{
+    Container, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, number_of,
+};
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{EvalFuncData, TypVal, VarLock, int64_t, uint8_t};
@@ -93,11 +95,15 @@ fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
     if !is_new && check_lock(l1.locked(), arg_errmsg) {
         return;
     }
+    // `extendnew()` splices into a copy, which this body owns until it
+    // becomes the answer: every way out below drops it.
+    let mut held = None;
     if is_new {
-        l1 = l1.copy();
-        if l1.is_null() {
+        let Some(copy) = l1.copy() else {
             return;
-        }
+        };
+        l1 = ListArg::of(copy.as_ptr());
+        held = Some(copy);
     }
 
     // The item to splice in before, or None for "at the end".  Every way out
@@ -116,16 +122,13 @@ fn extend_list(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
                 None => err_nr(e_list_index_out_of_range_nr, idx as int64_t),
             }
         }
-        if is_new {
-            l1.unref();
-        }
         return;
     };
 
     l1.extend_with(l2, before);
 
     if is_new {
-        *result = TypVal::List(l1.raw());
+        result.write_list(held);
     } else {
         copy_tv(&args[0], result);
     }

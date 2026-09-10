@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::ListRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -250,14 +251,10 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live list.
-pub unsafe fn set_vim_var_list(idx: Vv, val: *mut List) {
+pub unsafe fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.write_list(val);
-    if !val.is_null() {
-        // SAFETY: the caller's obligation -- a live list.
-        unsafe { tv_list_ref(val) };
-    }
 }
 
 /// Set `v:` variable `idx` to `val`, taking a reference to it and making its

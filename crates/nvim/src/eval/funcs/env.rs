@@ -14,7 +14,7 @@ use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_o
 use crate::cstr;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_str, tv_dict_find, tv_dict_get_bool, tv_list_alloc,
-    tv_list_append_allocated_string, tv_list_append_string, tv_list_ref,
+    tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
@@ -141,7 +141,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // `{list}` may already have made the answer a List; the empty
         // answer keeps whichever tag was chosen.
         if result.v_type() == VAR_LIST {
-            result.write_list(ptr::null_mut());
+            result.write_list(None);
         } else {
             result.write_string(ptr::null_mut());
         }
@@ -263,9 +263,9 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// path, each with the application name appended.
 fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
     let appname = get_appname(false);
-    let list = tv_list_alloc(kListLenShouldKnow as isize);
-    result.write_list(list);
-    unsafe { tv_list_ref(list) };
+    let held = tv_list_alloc(kListLenShouldKnow as isize);
+    let list = held.as_ptr();
+    result.write_list(Some(held));
     let dirs = stdpaths_get_xdg_var(xdg);
     if dirs.is_null() {
         return;

@@ -494,13 +494,14 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
     let has_matches = what_flag & CI_WHAT_MATCHES != 0;
     let has_completed = what_flag & CI_WHAT_COMPLETED != 0;
     if has_items || has_matches {
-        li = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
+        li = held.as_ptr();
         let key = if has_matches && !has_items {
             "matches"
         } else {
             "items"
         };
-        ret = unsafe { tv_dict_add_list(retdict, key.as_ptr().cast(), key.len(), li) };
+        ret = unsafe { tv_dict_add_list(retdict, key.as_ptr().cast(), key.len(), Some(held)) };
     }
     if ret.is_ok()
         && what_flag & CI_WHAT_SELECTED != 0

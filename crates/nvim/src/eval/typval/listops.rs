@@ -90,14 +90,12 @@ pub unsafe fn tv_list_append_owned_tv(l: *mut List, tv: TypVal) -> *mut TypVal {
     &raw mut items.last_mut().expect("the item just appended").li_tv
 }
 
-/// Append `itemlist` to `l`, taking a reference to it.
+/// Append `itemlist` to `l`, which takes the handle over.
 ///
 /// # Safety
-/// `l` must point at a live list, and `itemlist` is null or a live list. A
-/// reference to `itemlist` is taken.
-pub unsafe fn tv_list_append_list(l: *mut List, itemlist: *mut List) {
+/// `l` must point at a live list.
+pub unsafe fn tv_list_append_list(l: *mut List, itemlist: Option<ListRef>) {
     unsafe { tv_list_append_owned_tv(l, TypVal::List(itemlist)) };
-    unsafe { tv_list_ref(itemlist) };
 }
 
 /// Append `dict` to `l`, taking a reference to it.
@@ -166,20 +164,21 @@ pub unsafe fn tv_list_copy(
     orig: *mut List,
     deep: bool,
     copy_id: ::core::ffi::c_int,
-) -> *mut List {
+) -> Option<ListRef> {
     if orig.is_null() {
-        return ::core::ptr::null_mut();
+        return None;
     }
 
     let copy = tv_list_alloc(ptrdiff_t::try_from(unsafe { tv_list_len(orig) }).unwrap_or(-1));
-    unsafe { tv_list_ref(copy) };
+    // A borrow of the list the handle owns, for the items to go into.
+    let into = copy.as_ptr();
     if copy_id != 0 {
         // Do this before adding the items, because one of the items may
         // refer back to this list.
         // SAFETY: the caller's promise: a live list.
         let mut from = unsafe { Ls::new(orig) };
         from.lv_copy_id = copy_id;
-        from.lv_copylist = copy;
+        from.lv_copylist = into;
     }
     // By index: a deep copy runs `var_item_copy`, which can re-enter and
     // grow the very list being copied.  The count is taken once, as
@@ -195,16 +194,16 @@ pub unsafe fn tv_list_copy(
         let from = &unsafe { tv_list_items(orig) }[at].li_tv;
         if deep {
             if unsafe { var_item_copy(conv, from, &mut value, deep, copy_id) }.is_err() {
-                // `tv_list_copy_error`: the partial copy goes too.
-                unsafe { tv_list_unref(copy) };
-                return ::core::ptr::null_mut();
+                // `tv_list_copy_error`: the partial copy goes with the
+                // handle, which is the only reference to it.
+                return None;
             }
         } else {
             unsafe { tv_copy(from, &mut value) };
         }
-        unsafe { tv_list_append_owned_tv(copy, value) };
+        unsafe { tv_list_append_owned_tv(into, value) };
     }
-    copy
+    Some(copy)
 }
 
 /// Insert copies of `l2`'s items into `l1` at `bef`.
@@ -249,17 +248,19 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: &mut TypVal) -> R
     let mut val = unsafe { Tv::new(tv) };
     val.write_empty(VAR_LIST);
     let l = if l1.is_null() && l2.is_null() {
-        ::core::ptr::null_mut()
+        None
     } else if l1.is_null() {
         unsafe { tv_list_copy(::core::ptr::null(), l2, false, 0) }
     } else {
         let l = unsafe { tv_list_copy(::core::ptr::null(), l1, false, 0) };
-        if !l.is_null() && !l2.is_null() {
-            unsafe { tv_list_extend(l, l2, None) };
+        if let Some(ref l) = l
+            && !l2.is_null()
+        {
+            unsafe { tv_list_extend(l.as_ptr(), l2, None) };
         }
         l
     };
-    if l.is_null() && !(l1.is_null() && l2.is_null()) {
+    if l.is_none() && !(l1.is_null() && l2.is_null()) {
         return Err(Failed);
     }
     val.write_list(l);
@@ -321,7 +322,7 @@ pub unsafe fn tv_list_remove(
     }
     let cnt = last - first + 1;
     // SAFETY: `result` is the caller's return slot.
-    let tgt = unsafe { tv_list_alloc_ret(result, ptrdiff_t::try_from(cnt).unwrap_or(-1)) };
+    let tgt = tv_list_alloc_ret(result, ptrdiff_t::try_from(cnt).unwrap_or(-1));
     // SAFETY: a live list, a run of its items, and a fresh target list.
     unsafe { tv_list_move_range(l, first, last, tgt) };
 }

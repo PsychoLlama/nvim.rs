@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_iter,
+    ListRef, TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_iter,
 };
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
@@ -79,7 +79,7 @@ pub(crate) fn get_findfunc_callback() -> *mut Callback {
 /// `cmdcomplete` tells the callback whether this is completion (which may
 /// answer many names) or a real `:find` (which wants the one at `count`).
 /// The text lock is held across the call: the callback must not edit.
-pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut List {
+pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Option<ListRef> {
     let saved_sctx: ScriptCtx = current_sctx.get();
     // The pattern is the caller's, so the frame names it rather than
     // owning it.
@@ -96,7 +96,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     current_sctx.set(saved_sctx);
     drop(locked);
 
-    let mut retlist: *mut List = ptr::null_mut();
+    let mut retlist = None;
     if called as c_int == OK {
         if rettv.v_type() as c_uint == VAR_LIST as c_uint {
             retlist =
@@ -124,13 +124,12 @@ pub unsafe fn expand_findfunc(
 ) -> Result<(), Failed> {
     unsafe { *num_matches = 0 };
     unsafe { *files = ptr::null_mut() };
-    let l = call_findfunc(pat, kBoolVarTrue);
-    if l.is_null() {
+    let Some(held) = call_findfunc(pat, kBoolVarTrue) else {
         return Err(Failed);
-    }
+    };
+    let l = held.as_ptr();
     let len = tv_list_len(l);
     if len == 0 {
-        tv_list_free(l);
         return Err(Failed);
     }
     // Sized by the list length, filled only with the entries that are
@@ -144,7 +143,6 @@ pub unsafe fn expand_findfunc(
         }
     }
     unsafe { *num_matches = idx };
-    tv_list_free(l);
     Ok(())
 }
 
@@ -165,7 +163,8 @@ pub(crate) unsafe fn findfunc_find_file(
     let saved = unsafe { *findarg.add(findarg_len) };
     unsafe { *findarg.add(findarg_len) = NUL as c_char };
 
-    let fname_list = call_findfunc(findarg, kBoolVarFalse);
+    let held = call_findfunc(findarg, kBoolVarFalse);
+    let fname_list = held.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr);
     let fname_count = tv_list_len(fname_list);
     if fname_count == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -181,9 +180,7 @@ pub(crate) unsafe fn findfunc_find_file(
             ret_fname = unsafe { xstrdup((*li).li_tv.string_or_null()) };
         }
     }
-    if !fname_list.is_null() {
-        tv_list_free(fname_list);
-    }
+    drop(held);
     unsafe { *findarg.add(findarg_len) = saved };
     ret_fname
 }
@@ -434,12 +431,6 @@ fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> Result
 fn os_dirname(buf: *mut c_char, len: size_t) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::os::fs::os_dirname(buf, len) }
-}
-
-/// `tv_list_free()` as checked code.
-fn tv_list_free(l: *mut List) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::typval::tv_list_free(l) }
 }
 
 /// `tv_list_len()` as checked code.

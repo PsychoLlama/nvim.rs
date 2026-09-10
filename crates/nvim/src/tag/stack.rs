@@ -296,8 +296,10 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
         unsafe { add_str(retdict, c"user_data", tag.user_data) };
     }
 
-    let pos = tv_list_alloc(4);
-    let _ = unsafe { tv_dict_add_list(retdict, c"from".as_ptr(), c"from".count_bytes(), pos) };
+    let held = tv_list_alloc(4);
+    let pos = held.as_ptr();
+    let (from, from_len) = (c"from".as_ptr(), c"from".count_bytes());
+    let _ = unsafe { tv_dict_add_list(retdict, from, from_len, Some(held)) };
     let mark = &tag.fmark;
     let str_m = if mark.fnum != -1 {
         mark.fnum as VarNumber
@@ -326,8 +328,10 @@ pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
     unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
     unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
 
-    let items = tv_list_alloc(2);
-    let _ = unsafe { tv_dict_add_list(retdict, c"items".as_ptr(), c"items".count_bytes(), items) };
+    let held = tv_list_alloc(2);
+    let items = held.as_ptr();
+    let (key, key_len) = (c"items".as_ptr(), c"items".count_bytes());
+    let _ = unsafe { tv_dict_add_list(retdict, key, key_len, Some(held)) };
     for entry in stack.entries() {
         let d = unsafe { tv_dict_alloc() };
         unsafe { tv_list_append_dict(items, d) };

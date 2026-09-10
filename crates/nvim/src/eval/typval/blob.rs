@@ -351,7 +351,7 @@ pub unsafe fn tv_blob_remove(
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
 pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }

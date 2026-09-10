@@ -97,7 +97,7 @@ pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
             unsafe { xfree(tv.string_or_func_name().cast()) };
         }
         VAR_BLOB => unsafe { tv_blob_unref(tv.blob_or_null()) },
-        VAR_LIST => unsafe { tv_list_unref(tv.list_or_null()) },
+        VAR_LIST => drop(tv.take_list()),
         VAR_DICT => unsafe { tv_dict_unref(tv.dict_or_null()) },
         _ => {}
     }
@@ -143,11 +143,9 @@ impl Clone for TypVal {
                 }
                 TypVal::Blob(b)
             }
-            TypVal::List(l) => {
-                // SAFETY: as above; `tv_list_ref` tolerates NULL.
-                unsafe { tv_list_ref(l) };
-                TypVal::List(l)
-            }
+            // The handle's own `Clone` is the reference: one more owner of
+            // the same list, and `v:_null_list` counts nothing.
+            TypVal::List(ref list) => TypVal::List(list.clone()),
             TypVal::Dict(d) => {
                 // SAFETY: as above, for a dictionary.
                 if let Some(dict) = unsafe { d.as_mut() } {

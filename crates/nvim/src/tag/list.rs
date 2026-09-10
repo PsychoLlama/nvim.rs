@@ -361,7 +361,8 @@ pub(crate) unsafe fn add_llist_tags(
 ) -> Result<(), Failed> {
     // The list's title outlives `set_errorlist`, so it is this frame's.
     let mut title = [0 as c_char; IOSIZE as usize];
-    let list = tv_list_alloc(0);
+    let held = tv_list_alloc(0);
+    let list = held.as_ptr();
     let mut tagp = TagParts::default();
 
     for i in 0..num_matches {
@@ -427,7 +428,6 @@ pub(crate) unsafe fn add_llist_tags(
             ptr::null_mut(),
         )
     };
-    unsafe { tv_list_free(list) };
     Ok(())
 }
 

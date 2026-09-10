@@ -28,6 +28,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::ListRef;
 use crate::memory::handoff::owned_cstr;
 use core::mem::ManuallyDrop;
 
@@ -347,11 +348,12 @@ unsafe fn stacktrace_push_item(
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
 /// outermost first.
-pub fn stacktrace_create() -> *mut List {
+pub fn stacktrace_create() -> Option<ListRef> {
     // A copy of the stack, because building the dicts below runs arbitrary
     // allocation and it is not worth holding the cell's borrow across it.
     let stack = exestack.with(|stack| stack.clone());
-    let l = tv_list_alloc(stack.len().cast_signed());
+    let list = tv_list_alloc(stack.len().cast_signed());
+    let l = list.as_ptr();
 
     for entry in &stack {
         match entry.es_type {
@@ -403,7 +405,7 @@ pub fn stacktrace_create() -> *mut List {
             _ => {}
         }
     }
-    l
+    Some(list)
 }
 
 /// The path a frame's defining script was read from, or `""` when it has none
@@ -421,6 +423,5 @@ unsafe fn script_path(sctx: ScriptCtx) -> CString {
 
 /// `getstacktrace()` function
 pub fn f_getstacktrace(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the caller's return slot.
-    unsafe { tv_list_set_ret(result, stacktrace_create()) };
+    result.write_list(stacktrace_create());
 }

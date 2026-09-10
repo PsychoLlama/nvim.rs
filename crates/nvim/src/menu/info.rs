@@ -187,10 +187,11 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict)
     if menu_name.is_empty() {
         // All the top-level menus, skipping PopUp[nvoci].
         let list = list_alloc();
-        dict_add_list(dict, c"submenus", list);
+        let into = list.as_ptr();
+        dict_add_list(dict, c"submenus", Some(list));
         for top in menu.siblings() {
             if !is_hidden(top.dname()) {
-                list_append_str(list, top.dname());
+                list_append_str(into, top.dname());
             }
         }
         return;
@@ -228,9 +229,10 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict)
 
     // Otherwise all the submenu display names.
     let list = list_alloc();
-    dict_add_list(dict, c"submenus", list);
+    let into = list.as_ptr();
+    dict_add_list(dict, c"submenus", Some(list));
     for child in children.siblings() {
-        list_append_str(list, child.dname());
+        list_append_str(into, child.dname());
     }
 }
 

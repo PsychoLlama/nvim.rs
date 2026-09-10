@@ -28,8 +28,9 @@ use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
-    tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc,
-    tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find, tv_list_len,
+    ListRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add,
+    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find,
+    tv_list_len,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
@@ -137,7 +138,7 @@ impl Tv {
             Tv::Float(f) => TypVal::Float(*f),
             Tv::Str(s) => TypVal::String(unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast()),
             Tv::NullStr => TypVal::String(ptr::null_mut()),
-            Tv::NullList => TypVal::List(ptr::null_mut()),
+            Tv::NullList => TypVal::List(None),
             Tv::NullDict => TypVal::Dict(ptr::null_mut()),
             Tv::NullBlob => TypVal::Blob(ptr::null_mut()),
             Tv::Blob(bytes) => {
@@ -149,15 +150,15 @@ impl Tv {
                 TypVal::Blob(b)
             }
             Tv::List(items) => {
-                let l = tv_list_alloc(items.len() as isize);
-                unsafe { (*l).lv_refcount = Refcount::ONE };
+                let list = tv_list_alloc(items.len() as isize);
+                let l = list.as_ptr();
                 path.push(Container::List(l));
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
                     unsafe { tv_list_append_owned_tv(l, item_tv) };
                 }
                 path.pop();
-                TypVal::List(l)
+                TypVal::List(Some(list))
             }
             Tv::Dict(entries) => {
                 let d = unsafe { tv_dict_alloc() };
@@ -180,10 +181,9 @@ impl Tv {
             Tv::Cycle(up) => {
                 // The container is already live and gains a reference.
                 match path[*up] {
-                    Container::List(l) => {
-                        unsafe { (*l).lv_refcount.retain() };
-                        TypVal::List(l)
-                    }
+                    // SAFETY: the container is already live, and this is
+                    // a second reference to it.
+                    Container::List(l) => TypVal::List(unsafe { ListRef::retained(l) }),
                     Container::Dict(d) => {
                         unsafe { (*d).dv_refcount.retain() };
                         TypVal::Dict(d)
@@ -259,7 +259,7 @@ pub(crate) trait Payload {
 impl Payload for TypVal {
     fn list(&self) -> *mut List {
         match self {
-            TypVal::List(l) => *l,
+            TypVal::List(l) => l.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr),
             other => panic!("not a list: v_type {}", other.v_type()),
         }
     }
@@ -379,7 +379,10 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
         TypVal::Func(s) => Tv::Func(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
         TypVal::Blob(b) if b.is_null() => Tv::NullBlob,
         TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(*b) }),
-        TypVal::List(l) => unsafe { read_list_at(*l, path) },
+        TypVal::List(l) => {
+            let at: *const List = l.as_ref().map_or(ptr::null(), |l| l.as_ptr().cast_const());
+            unsafe { read_list_at(at, path) }
+        }
         TypVal::Dict(d) => unsafe { read_dict_at(*d, path) },
         TypVal::Partial(pt) => Tv::Partial(Box::new(unsafe { read_partial(*pt, path) })),
     }

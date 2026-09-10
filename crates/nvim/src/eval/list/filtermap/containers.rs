@@ -30,7 +30,7 @@ use core::ptr;
 
 use super::{FilterMap, filter_map_one};
 use crate::eval::list::{
-    BlobRef, DictRef, ListRef, TvRef, UNKNOWN_TV, char_len, check_fixed, check_lock, check_ro,
+    BlobArg, DictArg, ListArg, TvRef, UNKNOWN_TV, char_len, check_fixed, check_lock, check_ro,
     clear_tv, clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string,
     set_key_type, string_bytes, string_tv,
 };
@@ -46,7 +46,7 @@ use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber,
 /// stepped over.  `filter()`'s own removal only leaves a tombstone in a slot
 /// the cursor has already passed.
 pub(crate) fn filter_map_dict(
-    d: DictRef,
+    d: DictArg,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &TypVal,
@@ -59,7 +59,7 @@ pub(crate) fn filter_map_dict(
         return;
     }
 
-    let d_ret = (filtermap == FilterMap::MapNew).then(|| DictRef::alloc_ret(result));
+    let d_ret = (filtermap == FilterMap::MapNew).then(|| DictArg::alloc_ret(result));
 
     let prev_lock = d.lock();
     if prev_lock == VarLock::Unlocked {
@@ -115,7 +115,7 @@ pub(crate) fn filter_map_dict(
 /// byte that moved down is the next one visited.  `v:key` keeps counting up
 /// regardless, which is why there are two counters.
 pub(crate) fn filter_map_blob(
-    blob_arg: BlobRef,
+    blob_arg: BlobArg,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &TypVal,
@@ -248,14 +248,14 @@ pub(crate) fn filter_map_string(
 /// successor, after the callback has returned; a successor remembered from
 /// before the call would be a freed pointer.
 pub(crate) fn filter_map_list(
-    l: ListRef,
+    l: ListArg,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &TypVal,
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.write_list(ptr::null_mut());
+        result.write_list(None);
     }
     if l.is_null() || (filtermap == FilterMap::Filter && check_lock(l.locked(), arg_errmsg)) {
         return;

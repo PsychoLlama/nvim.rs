@@ -28,7 +28,7 @@ pub fn assert_error(message: &[u8]) {
     let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
     if tv.v_type() != VAR_LIST || tv.list_or_null().is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
-        unsafe { set_vim_var_list(Vv::Errors, tv_list_alloc(1)) };
+        unsafe { set_vim_var_list(Vv::Errors, Some(tv_list_alloc(1))) };
     }
     // A message that was never appended to used to be a null `ga_data`, and
     // `tv_list_append_string` tells that apart from a zero-length buffer: the

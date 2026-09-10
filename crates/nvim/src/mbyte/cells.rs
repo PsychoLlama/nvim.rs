@@ -436,12 +436,13 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
 /// `[first, last, width]`.
 pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
-    unsafe { tv_list_alloc_ret(result, rows.len() as ptrdiff_t) };
+    tv_list_alloc_ret(result, rows.len() as ptrdiff_t);
     for row in &rows {
         let entry = tv_list_alloc(3);
-        unsafe { tv_list_append_number(entry, row.first) };
-        unsafe { tv_list_append_number(entry, row.last) };
-        unsafe { tv_list_append_number(entry, row.width as VarNumber) };
-        unsafe { tv_list_append_list((*result).list_or_null(), entry) };
+        let into = entry.as_ptr();
+        unsafe { tv_list_append_number(into, row.first) };
+        unsafe { tv_list_append_number(into, row.last) };
+        unsafe { tv_list_append_number(into, row.width as VarNumber) };
+        unsafe { tv_list_append_list((*result).list_or_null(), Some(entry)) };
     }
 }

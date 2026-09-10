@@ -37,7 +37,7 @@
 
 use neovim::channel::reader::{callback_reader_free, callback_reader_start, reader_lines};
 use neovim::eval::gc::rooted_lists;
-use neovim::eval::typval::{tv_list_alloc, tv_list_free, tv_list_ref, tv_list_unref};
+use neovim::eval::typval::tv_list_alloc;
 use neovim::types::{CallbackReader, kListLenUnknown};
 
 use crate::support::tv::{self, Tv};
@@ -69,9 +69,8 @@ fn delivered(chunks: &[&[u8]]) -> Vec<Tv> {
             // `channel_callback_call`: build the list, then drop what it was
             // built from.
             let list = reader_lines(at);
-            tv_list_ref(list);
-            out.push(tv::read_list(list));
-            tv_list_unref(list);
+            out.push(tv::read_list(list.as_ptr()));
+            drop(list);
             (*at).buffer.clear();
         }
         callback_reader_free(at);
@@ -189,9 +188,8 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
         }
         assert_eq!((*at).buffer.len(), "one\ntwo".len());
         let list = reader_lines(at);
-        tv_list_ref(list);
-        let got = tv::read_list(list);
-        tv_list_unref(list);
+        let got = tv::read_list(list.as_ptr());
+        drop(list);
         (*at).buffer.clear();
         callback_reader_free(at);
         got
@@ -222,7 +220,8 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     // referenced, so nothing but the final `tv_list_free` can free it.
     unsafe {
         let before = rooted_lists();
-        let sentinel = tv_list_alloc(kListLenUnknown as isize);
+        let held = tv_list_alloc(kListLenUnknown as isize);
+        let sentinel = held.as_ptr();
         let with_sentinel = rooted_lists();
         assert_eq!(with_sentinel.len(), before.len() + 1);
         assert!(
@@ -236,9 +235,8 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
             // `channel_callback_call` around a callback that reads the list
             // and keeps no reference to it.
             let list = reader_lines(at);
-            tv_list_ref(list);
-            let _ = tv::read_list(list);
-            tv_list_unref(list);
+            let _ = tv::read_list(list.as_ptr());
+            drop(list);
             (*at).buffer.clear();
             assert_eq!(
                 rooted_lists(),
@@ -248,7 +246,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
         }
         callback_reader_free(at);
 
-        tv_list_free(sentinel);
+        drop(held);
         assert!(
             !rooted_lists().contains(&sentinel),
             "freeing a list leaves it registered",
@@ -268,29 +266,35 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
     // SAFETY: as above. The stored reference is released before the list is
     // freed, so this case owns everything it allocates.
     unsafe {
-        let sentinel = tv_list_alloc(kListLenUnknown as isize);
+        let held = tv_list_alloc(kListLenUnknown as isize);
+        let sentinel = held.as_ptr();
         let with_sentinel = rooted_lists();
         assert!(with_sentinel.contains(&sentinel));
 
         callback_reader_start(at, stdout.as_ptr());
         (*at).buffer.extend_from_slice(b"one\n");
+        // The reference `channel_callback_call` holds for the length of the
+        // callback.
         let list = reader_lines(at);
-        tv_list_ref(list);
+        let at_list = list.as_ptr();
         // The callback stores it -- `let g:saved = a:data`, one more
         // reference than `channel_callback_call` is about to drop.
-        tv_list_ref(list);
-        tv_list_unref(list);
+        let stored = list.clone();
+        drop(list);
         (*at).buffer.clear();
         callback_reader_free(at);
 
         assert!(
-            rooted_lists().contains(&list),
+            rooted_lists().contains(&at_list),
             "a stored list was freed anyway"
         );
-        assert_eq!(tv::read_list(list), Tv::List(vec![line("one"), opened()]));
+        assert_eq!(
+            tv::read_list(at_list),
+            Tv::List(vec![line("one"), opened()])
+        );
 
-        tv_list_unref(list);
+        drop(stored);
         assert_eq!(rooted_lists(), with_sentinel);
-        tv_list_free(sentinel);
+        drop(held);
     }
 }

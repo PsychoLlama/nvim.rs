@@ -73,16 +73,17 @@ unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
     let dict = unsafe { tv_dict_alloc() };
     let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
     let windows = tv_list_alloc(hint);
+    let into = windows.as_ptr();
     let append = |handle: Handle| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
+        unsafe { tv_list_append_number(into, VarNumber::from(handle)) };
     };
     for wp in windows_in_tab(tabpage) {
         append(wp.handle);
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
     let (wins, vars) = (c"windows", c"variables");
-    let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), windows) };
+    let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), Some(windows)) };
     let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tabpage.tp_vars) };
     dict
 }
@@ -95,7 +96,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // is expected when *no* tab page was named.
     let one = !args.is_empty();
     let hint = if one { kListLenMayKnow as ptrdiff_t } else { 1 };
-    let list = unsafe { tv_list_alloc_ret(result, hint) };
+    let list = tv_list_alloc_ret(result, hint);
     let wanted = if one {
         let n = number_as_int(arg_number_chk(args, 0));
         match find_tabpage(n) {
@@ -127,7 +128,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
-    let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
+    let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let wanted = if !args.is_empty() {
         match win_by_id(number_as_int(arg_number(args, 0))) {
             Some(wp) => Some(wp),
@@ -171,8 +172,9 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
         l
     } else {
         let nested = tv_list_alloc(2);
-        unsafe { tv_list_append_list(l, nested) };
-        nested
+        let into = nested.as_ptr();
+        unsafe { tv_list_append_list(l, Some(nested)) };
+        into
     };
     let word = |s: &CStr| {
         // SAFETY: a live list and a NUL-terminated string.
@@ -194,10 +196,11 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
         c"col"
     });
     let win_list = tv_list_alloc(kListLenUnknown as ptrdiff_t);
-    unsafe { tv_list_append_list(fr_list, win_list) };
+    let into = win_list.as_ptr();
+    unsafe { tv_list_append_list(fr_list, Some(win_list)) };
     for child in fr.children() {
         // SAFETY: a live child frame and the live list just built.
-        unsafe { get_framelayout(child, win_list, false) };
+        unsafe { get_framelayout(child, into, false) };
     }
 }
 
@@ -205,7 +208,7 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
 pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
-    let list = unsafe { tv_list_alloc_ret(result, 2) };
+    let list = tv_list_alloc_ret(result, 2);
     let tp = if args.is_empty() {
         TabPage::current()
     } else {

@@ -63,8 +63,9 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let Some(buf) = buf else {
         return;
     };
-    let l = tv_list_alloc(buf.b_changelistlen as isize);
-    unsafe { tv_list_append_list(out, l) };
+    let entries = tv_list_alloc(buf.b_changelistlen as isize);
+    let l = entries.as_ptr();
+    unsafe { tv_list_append_list(out, Some(entries)) };
 
     // The index is this window's if it is showing the buffer, and
     // otherwise the one remembered for this window in the buffer's
@@ -99,8 +100,9 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     };
     unsafe { cleanup_jumplist(wp, true) };
-    let l = tv_list_alloc(wp.w_jumplistlen as isize);
-    unsafe { tv_list_append_list(out, l) };
+    let entries = tv_list_alloc(wp.w_jumplistlen as isize);
+    let l = entries.as_ptr();
+    unsafe { tv_list_append_list(out, Some(entries)) };
     unsafe { tv_list_append_number(out, wp.w_jumplistidx as VarNumber) };
     for i in 0..wp.w_jumplistlen {
         let entry = &wp.w_jumplist[i as usize];
@@ -192,7 +194,7 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; each name the walk
     // answers is NUL-terminated and lives until the next round.
-    let out = unsafe { tv_list_alloc_ret(result, kListLenUnknown as isize) };
+    let out = tv_list_alloc_ret(result, kListLenUnknown as isize);
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
         unsafe { tv_list_append_string(out, name.as_ptr(), -1) };

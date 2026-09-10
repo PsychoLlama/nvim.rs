@@ -28,7 +28,7 @@ use crate::eval::decode::{decode_create_map_special_dict, decode_string};
 use crate::eval::typval::{
     TV_INITIAL_VALUE, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_find,
     tv_dict_item_alloc_len, tv_list_alloc, tv_list_append_list, tv_list_append_owned_tv,
-    tv_list_last, tv_list_len, tv_list_ref,
+    tv_list_last, tv_list_len,
 };
 use crate::eval::typval_encode::InlineStack;
 use crate::eval::userfunc::register_luafunc;
@@ -146,13 +146,14 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: &mut TypVal) -> bo
                         // A map special dictionary's `_VAL` is a list of
                         // two-element [key, value] lists.
                         let kv_pair = tv_list_alloc(2);
+                        let into = kv_pair.as_ptr();
                         let s_tv = decode_string(s, len, true, false);
-                        tv_list_append_owned_tv(kv_pair, s_tv);
+                        tv_list_append_owned_tv(into, s_tv);
                         // The value is not there yet; append a slot to fill.
-                        tv_list_append_owned_tv(kv_pair, TV_INITIAL_VALUE);
+                        tv_list_append_owned_tv(into, TV_INITIAL_VALUE);
                         stack.push(cur);
-                        tv_list_append_list((*cur.tv).list_or_null(), kv_pair);
-                        cur = TVPopStackItem::leaf(&mut (*tv_list_last(kv_pair)).li_tv);
+                        tv_list_append_list((*cur.tv).list_or_null(), Some(kv_pair));
+                        cur = TVPopStackItem::leaf(&mut (*tv_list_last(into)).li_tv);
                     } else {
                         let di = tv_dict_item_alloc_len(s, len);
                         if tv_dict_add((*cur.tv).dict_or_null(), di).is_err() {
@@ -233,10 +234,9 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: &mut TypVal) -> bo
 
                         match table_props.type_0 {
                             kObjectTypeArray => {
-                                (*cur.tv)
-                                    .write_list(tv_list_alloc(table_props.maxidx.cast_signed()));
+                                let fresh = tv_list_alloc(table_props.maxidx.cast_signed());
+                                (*cur.tv).write_list(Some(fresh));
                                 (*(*cur.tv).list_or_null()).lua_table_ref = table_ref;
-                                tv_list_ref((*cur.tv).list_or_null());
                                 cur.list_len = table_props.maxidx;
                                 if table_props.maxidx != 0 {
                                     cur.container = true;

@@ -29,8 +29,8 @@ use crate::eval::typval::{
     tv_dict_set_keys_readonly, tv_dict_set_ret, tv_dict_unref, tv_dict_watcher_notify, tv_free,
     tv_get_bool_chk, tv_get_number, tv_get_number_chk, tv_get_string_buf_chk, tv_ht_iter,
     tv_item_lock, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_string,
-    tv_list_append_tv, tv_list_find_nr, tv_list_find_str, tv_list_free, tv_list_len,
-    tv_list_locked, tv_list_ref, tv_list_set_lock, tv_list_set_ret, value_check_lock,
+    tv_list_append_tv, tv_list_find_nr, tv_list_find_str, tv_list_len, tv_list_locked,
+    tv_list_set_lock, value_check_lock,
 };
 use crate::eval::userfunc::{
     find_hi_in_scoped_ht, find_var_in_scoped_ht, function_exists, get_current_funccal_dict,
