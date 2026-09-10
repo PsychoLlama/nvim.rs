@@ -140,10 +140,9 @@ pub(crate) unsafe fn eval_index(
     if !evaluate {
         return Ok(());
     }
-    let one = if empty1 { null_mut() } else { &raw mut var1 };
-    let two = if empty2 { null_mut() } else { &raw mut var2 };
-    // SAFETY: the two index expressions this frame just evaluated.
-    let (one, two) = unsafe { (Some(&*one), Some(&*two)) };
+    // An empty half of a `[a:b]` is *absent*, not an unset value.
+    let one = (!empty1).then_some(&var1);
+    let two = (!empty2).then_some(&var2);
     let res = unsafe { eval_index_inner(result, range, one, two, false, key, keylen, verbose) };
     if !empty1 {
         unsafe { tv_clear(&mut var1) };
